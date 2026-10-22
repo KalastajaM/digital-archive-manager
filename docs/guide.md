@@ -371,6 +371,10 @@ The screens:
   preview, with a narrow form beside it: name, folder, tags, the tray as a segmented
   control, tray fields, collections, note). ⌘-click and ⇧-click select several; the batch
   form appears for more than one.
+  Tags are chips, as on a filed file's details (Enter or a comma adds one, the tags in use
+  are suggested as you type); the batch form's tags go on every file. **Ask AI** is the
+  sparkle button on the card's action row, and **Preview** (↩) and **File it** (⌘↩) have
+  tooltips saying what they do.
   A missing name or folder is flagged on its own field (and focused). In the folder field
   the first suggestion is active as you type: **Enter** takes it, **↑/↓** move, **Esc**
   closes. "Planned changes" appear after the form (stuck to the bottom of the form column),
@@ -389,7 +393,9 @@ The screens:
   (only while one of the item's files is still in the inbox: it marks the item done and
   opens that file in the Inbox, where you file it), and the selected file's own buttons:
   Ask AI, Move to To Delete and "Take this file off the item" (the file stays where it
-  is). Every button has a tooltip. A dated tray (To action) leads with the title and the
+  is). Every button has a tooltip; the eye in the item's header is Quick Look (Space).
+  The tray list and the header no longer show a "needs a due date" chip (the field says
+  "needs a …" itself; Today keeps its chip). A dated tray (To action) leads with the title and the
   date, above the summary. Under the title, "1 file · Add another file…" attaches another
   file to the item (several files show as tabs, with the same link at their end); **Add
   file** in the list column's toolbar searches the index and makes a new item in the tray
@@ -703,25 +709,26 @@ Activity** (see "The app: sidebar and screens").
 ### Trays
 
 A tray is a to-do list of scanned documents: once a scan is filed into a tray, the paper
-can go. Three trays are seeded from `defaults/trays/` into `config/trays/`:
+can go. Four trays are seeded from `defaults/trays/` into `config/trays/`:
 
 | Tray | For | Fields | Reminders |
 | --- | --- | --- | --- |
 | **To pay** | bills | `payee` (prefilled from a rule's `then.payee`), `due_date` (required), `amount`, `iban`, `reference`, prefilled from the scan; copy buttons on amount, IBAN and reference; "Mark paid" asks for `paid_on` (default today) | 3 days before, on the day, and once when overdue; Today shows the open total |
 | **To action** | things to do by a date (e.g. "no water on inspection day") | `action_date` (required) | 1 day before and on the day |
 | **To read** | reading with no date | none | one nudge when an item has waited 30 days |
+| **Follow up** | things you wait on from others (a delivery, a reply, a refund) | `check_by` (optional date), `waiting_for`; "Received" asks for `received_on` (default today) | on the check date and once when it is overdue; an item without a date has no reminders and sits after the dated ones |
 
 An item has a title (the file name without its date prefix, editable), one or more files,
 its fields, a note and a checklist, and a history; "Reopen" undoes "Mark paid"/"Done".
 
 **Add a tray**: put a YAML file (one tray per file) in `config/trays/`, e.g.
-`config/trays/40-to-sign.yaml`. It is read when `dam serve` (or any `dam` command) starts: restart
+`config/trays/50-to-sign.yaml`. It is read when `dam serve` (or any `dam` command) starts: restart
 `dam serve` after changing a tray file.
 
 ```yaml
 id: to-sign                   # starts with a letter or digit; then a-z, 0-9, - and _
 name: To sign
-order: 4                      # position in the nav and on Today
+order: 5                      # position in the nav and on Today
 item_title: "{name} ({date:%d.%m})"   # {name}; {date:...} needs date_field
 fields:
   sign_by:  { type: date, required: true }
@@ -747,6 +754,13 @@ Field types: `text`, `date`, `money`, `iban`, `reference`, `checkbox`. A file wi
 mistake is reported (file and line, in the UI and by `dam trays`) and skipped; the other
 trays keep working. If you remove a tray file, its items stay in the database and show as
 "tray removed".
+
+**New default trays.** A tray file added to `defaults/trays/` in a later version (such as
+`40-follow-up.yaml`) is copied into `config/trays/` once, the first time the app starts
+with it, unless you already have a tray with that id. The names offered so far are kept in
+`<data dir>/tray-defaults-seeded.json`, so a tray file you delete stays deleted and is not
+offered again; the three original files count as offered already. To get one back, copy it
+from `defaults/trays/`.
 
 **Picking up new defaults.** Seeded tray files are yours: a newer `defaults/trays/`
 file (for example the `copy: true` on `amount`, or the **payee** field) is never copied
@@ -776,7 +790,8 @@ value for a new field until you set one.
 The front page (`/`): a greeting and the date, then a card per tray, the inbox and the
 extras (described under "The app: sidebar and screens"). Bill and item rows carry their
 key fields, copy buttons, the first part of the note and the done button; items missing a
-required date show "needs a due date". Today also shows a banner while `##. Ongoing` or
+required date show "needs a due date" (a date field that is not `required`, like Follow
+up's `check_by`, never does). Today also shows a banner while `##. Ongoing` or
 `##. Important` holds anything not managed (a message and a **Convert** button; every
 screen shows its banners the same way, inside the content column), tray file errors, and
 the result of the last reminder check. The collections card lists only the open
@@ -1192,7 +1207,12 @@ in `settings.yaml` switches AI off too.
   index, no tokens): the best 8 snippets from allowed files, shown in the sheet with the
   question before anything goes out. If nothing matches, the sheet says "Nothing in the
   archive matches" and nothing can be sent (it costs nothing). The answer has numbered
-  citations; click one to open that file in Quick Look. Answers are kept for this session
+  citations; click one to open that file in Quick Look. **Save to notes…** under an answer
+  lists its sources with a checkbox each (all ticked to begin with: the answer was drawn
+  from all of them); confirming appends the date, the question, the answer and the cited
+  sources to each ticked file's note, below any note it has (`POST
+  /api/notes/{kind}/{target}/append`, one atomic write; a note over 10,000 characters
+  refuses it and stays as it was), and a toast says where it went. Answers are kept for this session
   only (not saved), apart from the call log.
 
 ### What is sent, and what never is

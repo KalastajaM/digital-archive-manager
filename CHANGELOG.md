@@ -37,12 +37,22 @@ All notable changes are listed here. The format follows
 - A collection's selected file shows a multi-page PDF one page at a time, with Previous
   and Next page; a collection without groups but with two or more files hints at "New
   group".
+- A new default tray, **Follow up**, for things you wait on from others (a delivery, a
+  reply, a refund): an optional check date, who you wait on, and "Received" to finish. Its
+  items without a date have no reminders. A default tray file added in a later version is
+  copied into an existing install once; a tray file you deleted stays deleted.
+- Ask: **Save to notes…** under an answer adds the question, answer, date and sources to
+  the note of the source files you tick, below any note they have. New
+  `POST /api/notes/{kind}/{target}/append`.
 - Tray items: "Add file" in the list column puts a file you search for in the tray as a
   new item; "Add another file…" under an item's title attaches a file to that item.
 - Activity: creating a folder is a kind of change of its own, "New folders".
 
 ### Fixed
 
+- After adding a group to a collection, **New group** could not add another straight
+  away: the click only saved the previous group's name. It now adds the next group.
+- A tray date that is optional no longer makes Today call an item without one "undated".
 - The "What will be sent" sheet now says what closing it does while the answer is on its
   way: it is still saved, and pressing the same button again shows it at no cost.
 - Links and folders the app made in Google Drive are no longer flagged "looks different"
@@ -50,6 +60,13 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Inbox: the tags field (review card and multi-file card) is the chip field with tag
+  suggestions used on a filed file's details; Ask AI is the sparkle icon button; Preview,
+  File it and File N have tooltips saying what they do.
+- Tray items: the header shows the Quick Look eye button (tooltip "Quick Look (Space)")
+  instead of a text link and key hint, and the "needs a due date" chip is gone from the
+  tray list and the item header. Quick Look buttons on Today's Starred card and on
+  Convert Ongoing also name Space.
 - Ask AI is an icon button on each screen's action row (Browse, a collection's selected
   file, a tray item) instead of a text button beside the file name.
 - A collection's selected file: Quick Look is an icon button; the built-in ★ Ongoing and
