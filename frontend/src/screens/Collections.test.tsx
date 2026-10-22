@@ -529,6 +529,20 @@ describe("Collection groups, summary and attention", () => {
   const grouped = (routes: Routes = {}) =>
     renderCollections("/collections/7", { "GET /api/collections/7": { body: GROUPED }, ...routes });
 
+  it("hides an empty Ungrouped, and shows it as a drop target only while files are dragged", async () => {
+    const allGrouped: Collection = { ...GROUPED, members: GROUPED.members.map((m) => ({ ...m, group_id: m.group_id ?? 1 })) };
+    renderCollections("/collections/7", { "GET /api/collections/7": { body: allGrouped } });
+    await within(panel()).findByRole("region", { name: "Quotes" });
+    expect(within(tree()).queryByRole("region", { name: "Ungrouped" })).toBeNull();
+    const drag = new Event("dragstart", { bubbles: true }) as DragEvent;
+    Object.defineProperty(drag, "dataTransfer", { value: { types: ["application/x-dam-files"] } });
+    act(() => void document.dispatchEvent(drag));
+    const target = await within(tree()).findByRole("region", { name: "Ungrouped" });
+    expect(target).toHaveTextContent("Drop here to take files out of their group.");
+    act(() => void document.dispatchEvent(new Event("dragend")));
+    await waitFor(() => expect(within(tree()).queryByRole("region", { name: "Ungrouped" })).toBeNull());
+  });
+
   it("shows the groups as a tree with their file counts and summaries, and Ungrouped last", async () => {
     const { user } = grouped();
     const quotes = await within(panel()).findByRole("region", { name: "Quotes" });

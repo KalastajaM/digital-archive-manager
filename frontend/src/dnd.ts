@@ -236,3 +236,25 @@ export function useDropTarget<T = string[]>({ accept, onDrop, read }: DropOption
   }
   return { props, over: state.over, refusal: state.refusal };
 }
+
+/** Whether documents are being dragged in this page right now (a drag started here,
+ * until it is dropped or cancelled): drop targets that only exist for a drag, such as an
+ * empty "Ungrouped", show while it lasts. */
+export function useFilesDragging(): boolean {
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    const start = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes(DRAG_TYPE)) setDragging(true);
+    };
+    const stop = () => setDragging(false);
+    document.addEventListener("dragstart", start);
+    document.addEventListener("dragend", stop);
+    document.addEventListener("drop", stop);
+    return () => {
+      document.removeEventListener("dragstart", start);
+      document.removeEventListener("dragend", stop);
+      document.removeEventListener("drop", stop);
+    };
+  }, []);
+  return dragging;
+}

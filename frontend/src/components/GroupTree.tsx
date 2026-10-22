@@ -16,7 +16,7 @@ import { type CSSProperties, type KeyboardEvent, type ReactNode, useEffect, useR
 import { useNavigate } from "react-router-dom";
 import { AIProposal } from "./ai/AIProposal";
 import { type Collection, type CollectionChange, type DirEntry, errorText, type Group, type GroupChange, type Member, type MemberAttention, useBrowse } from "../api/client";
-import { setDragFiles, useDropTarget } from "../dnd";
+import { setDragFiles, useDropTarget, useFilesDragging } from "../dnd";
 import { formatDate, plural } from "../format";
 import { visible } from "../text";
 import { useFileLaunch } from "./FileLaunch";
@@ -661,6 +661,8 @@ export function GroupTree({
   const top = tree.children.get(null) ?? [];
   const ungrouped = tree.members.get(null) ?? [];
   const ungroupedOpen = !folded.has(UNGROUPED);
+  // An empty Ungrouped says nothing; it shows only as a drop target while files are dragged.
+  const dragging = useFilesDragging();
   return (
     <section className="group-tree" aria-label="Members">
       {c.members.length === 0 && c.groups.length === 0 && (
@@ -669,7 +671,7 @@ export function GroupTree({
       {top.map((g, i) => renderGroup(g, top, i))}
       {/* without groups the members are a plain list: "Ungrouped" would say nothing */}
       {c.groups.length === 0 && ungrouped.length > 0 && <ul className="group-files group-plain">{rows(ungrouped)}</ul>}
-      {c.groups.length > 0 && (
+      {c.groups.length > 0 && (ungrouped.length > 0 || dragging) && (
         <section className="group group-ungrouped" aria-label="Ungrouped">
           <Header
             label="Ungrouped"
@@ -681,7 +683,7 @@ export function GroupTree({
           />
           {ungroupedOpen && (
             <div className="group-body">
-              {ungrouped.length > 0 ? <ul className="group-files">{rows(ungrouped)}</ul> : <p className="group-empty">Nothing ungrouped.</p>}
+              {ungrouped.length > 0 ? <ul className="group-files">{rows(ungrouped)}</ul> : <p className="group-empty">Drop here to take files out of their group.</p>}
             </div>
           )}
         </section>
