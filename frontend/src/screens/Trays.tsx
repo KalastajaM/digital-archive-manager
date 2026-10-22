@@ -19,8 +19,9 @@ import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { Toolbar } from "../components/ui/Toolbar";
 import { UrgencyTag } from "../components/UrgencyTag";
 import { useQuickPut } from "../components/useQuickPut";
+import { RemoveItemSheet } from "../components/RemoveItemSheet";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
-import { dayOf, formatField, formatMoney, plural } from "../format";
+import { dayOf, formatField, formatMoney } from "../format";
 import { isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
 import { setDragFiles } from "../dnd";
 import { publishSelection } from "../selection";
@@ -35,6 +36,7 @@ const KEYS: [string[], string][] = [
   [["↑", "↓"], "move"],
   [["Enter"], "open"],
   [["d"], "done"],
+  [["⌫"], "remove from tray"],
   [["Space"], "Quick Look"],
 ];
 /** A bill's tray also opens the barcode in Pay mode with one key. */
@@ -103,14 +105,13 @@ function Row({
         {kind === "waiting" && open && (
           <span className="tray-row-age">{waited(daysBetween(dayOf(item.created), today))}</span>
         )}
-        <span className="tray-row-meta">
-          {item.has_note && (
+        {item.has_note && (
+          <span className="tray-row-meta">
             <span className="note-icon" role="img" aria-label="Has a note" title="Has a note">
               ✎
             </span>
-          )}
-          {plural(item.files.length, "file")}
-        </span>
+          </span>
+        )}
       </div>
     </article>
   );
@@ -139,6 +140,8 @@ export default function Trays({ today: fixed }: { today?: string }) {
   // "Add file": search the index and put the chosen file in this tray as a new item
   const [addingFile, setAddingFile] = useState(false);
   const quickPut = useQuickPut();
+  // ⌫ on the selected item asks before removing it from the tray
+  const [removing, setRemoving] = useState<TrayItem | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const focusRow = useRef(false);
   // A done form belongs to the item it was opened on: another item closes it, so coming
@@ -246,6 +249,9 @@ export default function Trays({ today: fixed }: { today?: string }) {
       if ((e.target as HTMLElement).closest?.(OWN_ENTER)) return; // a focused control acts itself
       if (current) setCursor({ view, index });
       open(current);
+    } else if (e.key === "Backspace") {
+      if (!current || !picked) return;
+      setRemoving(current);
     } else if (e.key === "d") {
       if (!current || !picked || current.state !== "open" || !tray) return;
       open(current);
@@ -388,6 +394,16 @@ export default function Trays({ today: fixed }: { today?: string }) {
       </section>
       {quickLook.view}
       {trash.view}
+      {removing && (
+        <RemoveItemSheet
+          item={removing}
+          onClose={() => setRemoving(null)}
+          onRemoved={() => {
+            if (removing.id === opened) setSearch(query(state, null));
+            setRemoving(null);
+          }}
+        />
+      )}
     </div>
   );
 }

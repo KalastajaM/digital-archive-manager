@@ -360,7 +360,9 @@ The screens:
   the two columns by their size (your own order, once you move a card, wins).
   **To pay** has the open total and each
   bill with its payee, amount and an urgency tag (red overdue, orange within 3 days, grey
-  later). **Inbox** has the count, the age of the oldest document, a bar for this week,
+  later). Each tray row has a round checkbox before its title that marks the item done
+  (a toast with Undo); where the tray's done action asks for fields (Mark paid), it opens
+  that small form instead. **Inbox** has the count, the age of the oldest document, a bar for this week,
   last week and older (by arrival in `##. Organize`) and **Found in the inbox**:
   documents whose scan says they belong in a tray, each with **Put in <tray>**. Then
   **To action**, **To read**, the open collections that have to-dos (open checklist
@@ -383,8 +385,8 @@ The screens:
   and the list and form stay side by side down to 761 px; narrower, everything stacks.
   Detected fields name their sources in plain words ("file date", "date in the text",
   "barcode", "rule …", "similar files"), and several amounts are told apart (a Total,
-  then "Other amount 1, 2"). A tray's required field left empty does not block filing: it
-  says "Optional — without it the item is marked …".
+  then "Other amount 1, 2"). A tray's required field left empty does not block filing, and
+  nothing nags about it.
 - **A tray** (`To pay`, `To action`, `To read`): the list with Open/Done, and the selected
   item beside it (`↑`/`↓` move the highlight *and* open the item). A bill shows its title,
   a big amount, then rows with their own Copy button (payee, IBAN, reference, amount, due
@@ -394,9 +396,14 @@ The screens:
   opens that file in the Inbox, where you file it), and the selected file's own buttons:
   Ask AI, Move to To Delete and "Take this file off the item" (the file stays where it
   is). Every button has a tooltip; the eye in the item's header is Quick Look (Space).
-  The tray list and the header no longer show a "needs a due date" chip (the field says
-  "needs a …" itself; Today keeps its chip). A dated tray (To action) leads with the title and the
-  date, above the summary. Under the title, "1 file · Add another file…" attaches another
+  Nothing says "needs a …" for a required field left empty, anywhere (the field just stays
+  empty; the API still reports `missing_required` and the "No date" level). Tray list
+  rows show no file count. A dated tray (To action) leads with the title, then one row with the date field (narrow), its urgency
+  tag and **Mark done** (right-aligned, with **Mark done and file…** when shown), above the
+  summary. The action row has **Move to tray ▾** (open items) and **Remove from tray**,
+  which asks first and deletes the item with its note, checklist and history (open or
+  done; the files are never touched, so there is no Undo). `⌫` on the selected row does the
+  same. Under the title, "1 file · Add another file…" attaches another
   file to the item (several files show as tabs, with the same link at their end); **Add
   file** in the list column's toolbar searches the index and makes a new item in the tray
   for the file you pick, which opens.
@@ -423,7 +430,10 @@ The screens:
   the list's width (or focus it and use `←`/`→`); the breadcrumb stays on one line and
   shortens its middle folders with an ellipsis. With two panes the active one has an accent
   top edge and a tinted header.
-- **Activity**: a timeline of every journaled batch, newest first, under day headers
+- **Activity**: a timeline of every journaled batch, newest first (each card is collapsed
+  to its top part; the chevron or a click on the title row opens its operations, **Expand
+  all** / **Collapse all** sets the default, remembered in this browser, and a search
+  shows the cards open), under day headers
   (**Today**, **Yesterday**, then the date). Each batch is titled with what you did and
   to what ("Filed Offer of Näkymä into 80. Misc", "Moved 20250822_… to To Delete",
   "Starred X.xlsx", "Undo of …", "Automatic ##. Ongoing update"). The title is the
@@ -482,6 +492,7 @@ Single-letter keys work when the focus is not in a text field (Esc leaves one).
 | Inbox | `u` | Undo the last filing |
 | Trays | `Enter` | Open the item |
 | Trays | `d` | Done (Mark paid in To pay) |
+| Trays | `⌫` | Remove the item from the tray (asks first) |
 | Trays (To pay) | `b` | Show the large barcode (Pay mode) |
 | Browse | `Enter` | Open the folder or file |
 | Browse | `⌫` | Up one folder |
@@ -501,7 +512,7 @@ invalid one shows why it is not allowed.
 
 | Drop on | What happens |
 | --- | --- |
-| A tray in the sidebar | Creates an item per file, prefilled from its scan, like **Put in <tray>**. The file stays where it is (in the inbox, it is filed later). The toast has **Open** and **Take back**. A file that already has an open item in that tray gets none ("already in To pay"). |
+| A tray in the sidebar | Creates an item per file, prefilled from its scan, like **Put in <tray>**. The file stays where it is (in the inbox, it is filed later). The toast has **Open** and **Take back**. A file that already has an open item in that tray gets none ("already in To pay"). A file whose open item is in another tray has that item moved here instead (see Trays); the toast says "Moved to …" and its Undo moves it back. |
 | A collection in the sidebar | Adds the files as members, ungrouped. No confirm (it only changes the app's own links in `##. Ongoing`); the toast shows the result. Refused for a closed collection or when all files are already members. |
 | A collection in the sidebar, dragged onto another collection (or onto the **Collections** caption) | Moves the collection inside the other one (or to the top level), with everything under it. No confirm (only the app's own links and folders in `##. Ongoing` change); the toast shows the result, with **Open** for the batch. Refused with a reason when it would make a cycle, the target is closed, or it is already there. |
 | A group inside a collection | Adds the files to that group, or moves them there if they are already members. |
@@ -717,6 +728,19 @@ can go. Four trays are seeded from `defaults/trays/` into `config/trays/`:
 | **To action** | things to do by a date (e.g. "no water on inspection day") | `action_date` (required) | 1 day before and on the day |
 | **To read** | reading with no date | none | one nudge when an item has waited 30 days |
 | **Follow up** | things you wait on from others (a delivery, a reply, a refund) | `check_by` (optional date), `waiting_for`; "Done" asks for nothing more | on the check date and once when it is overdue; an item without a date has no reminders and sits after the dated ones |
+
+**One tray per item.** A file's open item lives in exactly one tray. "Put in tray" (the
+file's menu, the Inbox's "Then put it in", the quick-put keys, a drop on a tray) for a
+file that already has an open item in another tray **moves that item**: it is the same
+item, so title, note, checklist, history and files stay, and its history says "Moved from
+To action to Follow up". It leaves the old tray's list. Field values are kept by name:
+the ones the new tray also has carry over; the others stay in the item's data, hidden, so
+moving back restores them; the date is recomputed from the new tray's date field. The
+same happens from **Move to tray ▾** on the item (`POST /api/items/{id}/move`). Undo in
+the toast (or undoing the filing) moves it back (`POST /api/items/{id}/undo-move`, only
+while the move is the item's latest change). A file whose item is already **done** gets a
+new open item as before; the done item and its history stay. A file already open in the
+target tray is skipped ("already in …").
 
 An item has a title (the file name without its date prefix, editable), one or more files,
 its fields, a note and a checklist, and a history; "Reopen" undoes "Mark paid"/"Done".
@@ -1036,6 +1060,10 @@ filing it): a plain-text note and a checklist. They live in the database only; t
 documents are never modified. A filing note goes on the tray item when you chose a tray,
 else on the file, and never overwrites an existing note. Notes and checklists you edit
 yourself are not removed by undoing a filing; ones the filing created are.
+
+A checklist row is edited by clicking its text (Enter or leaving the field saves, Esc
+cancels). Drag a row by its grip to reorder, or press Option-Up / Option-Down on a focused
+row; the delete button shows on hover or focus.
 
 ### Check once on your real Drive
 

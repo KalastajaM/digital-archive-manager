@@ -48,6 +48,22 @@ All notable changes are listed here. The format follows
   new item; "Add another file…" under an item's title attaches a file to that item.
 - Activity: creating a folder is a kind of change of its own, "New folders".
 
+- A file lives in one tray: putting a file that has an open item in another tray into a
+  tray moves that item (history says "Moved from … to …", Undo moves it back) instead of
+  making a second one. The item has a **Move to tray** menu. New
+  `POST /api/items/quick` fields `moved` and `moved_from`, `POST /api/items/{id}/move` and
+  `/undo-move`.
+- **Remove from tray** on an item (and `⌫` on the selected row) deletes it, open or done,
+  after a confirm; the files stay where they are. New `POST /api/items/{id}/remove`.
+- Checklist rows: click the text to edit, drag by the grip or press Option-Up/Down to
+  reorder, delete button on hover; the Edit and arrow buttons are gone.
+- Today's tray rows have a round checkbox before the title that marks the item done, with
+  Undo (a tray whose done action asks for fields opens its form).
+- A dated tray item shows its date field, urgency tag and Mark done on one row; the
+  separate read-only date line is gone.
+- Activity cards are collapsible (collapsed by default), with Expand all / Collapse all
+  remembered per browser; a search shows them open.
+
 ### Fixed
 
 - After adding a group to a collection, **New group** could not add another straight
@@ -60,6 +76,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- No more "needs a …" text for an empty required field on tray items (Today cards, the
+  item's fields, the filing form). The tray list rows no longer show a file count.
+- More space between the tag box and the Collections line in the file panel.
 - Inbox: the tags field (review card and multi-file card) is the chip field with tag
   suggestions used on a filed file's details; Ask AI is the sparkle icon button; Preview,
   File it and File N have tooltips saying what they do.
