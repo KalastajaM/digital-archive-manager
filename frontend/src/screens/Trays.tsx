@@ -325,6 +325,7 @@ export default function Trays({ today: fixed }: { today?: string }) {
             <>
             <button
               type="button"
+              className="tray-add-file"
               data-tip="Add another file to the tray"
               disabled={!tray}
               aria-expanded={addingFile}

@@ -1759,3 +1759,6 @@ button.danger { color: var(--red-text); }
 .entry-new-field { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 2px 0; }
 .entry-new-field input { width: 100%; }
 .entry-new-field .error { margin: 2px 0 0; font-size: var(--fs-sm); }
+
+/* The list header is narrow: "Add file" stays on one line. */
+.tray-add-file { white-space: nowrap; flex: none; }
