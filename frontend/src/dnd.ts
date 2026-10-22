@@ -255,7 +255,9 @@ export function useDropTarget<T = string[]>({ accept, onDrop, read }: DropOption
       if (verdict === null || verdict === false) return;
       e.preventDefault(); // without it the drop never fires
       e.stopPropagation();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = verdict === true ? "move" : "none";
+      // A drop effect the drag does not allow cancels the drop in a real browser (the row
+      // still highlights): a folder drag allows only "copy" (it is never moved).
+      if (e.dataTransfer) e.dataTransfer.dropEffect = verdict !== true ? "none" : e.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
     },
     onDragLeave: (e) => {
       if (depth.current === 0) return; // not ours: let an enclosing target count it

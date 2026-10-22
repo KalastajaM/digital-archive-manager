@@ -84,6 +84,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- Dropping a folder from Browse on a collection in the sidebar now adds it; the row lit up
+  but the browser cancelled the drop.
 - After adding a group to a collection, **New group** could not add another straight
   away: the click only saved the previous group's name. It now adds the next group.
 - A tray date that is optional no longer makes Today call an item without one "undated".
