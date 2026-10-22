@@ -467,9 +467,9 @@ function MemberRow({
             {m.path && <FitText mode="path" className="member-folder" text={visible(folderOf(m.path) || "(top)")} />}
           </span>
           <span className="member-tags">
-            {m.is_dir && <span className="badge">folder</span>}
-            {m.missing && <span className="badge badge-error">file missing</span>}
-            {!m.missing && m.quarantined && <span className="badge badge-error">in ##. To Delete</span>}
+            {m.is_dir && <Tag tone="grey">folder</Tag>}
+            {m.missing && <Tag tone="red">file missing</Tag>}
+            {!m.missing && m.quarantined && <Tag tone="red">in ##. To Delete</Tag>}
             {attentionTags(attention).map((t) => (
               <Tag key={t.key} tone={t.tone}>
                 {t.text}

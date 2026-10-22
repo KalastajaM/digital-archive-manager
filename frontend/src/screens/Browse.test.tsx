@@ -1772,7 +1772,7 @@ describe("Selection, folders and layout (UI review)", () => {
     setup(null);
     await screen.findByText("readme.txt");
     const hint = document.querySelector(".browse-keys")!;
-    expect(hint).toHaveClass("inbox-keys");
+    expect(hint).toHaveClass("key-hints");
     expect(within(hint as HTMLElement).getByText("Quick Look", { exact: false })).toBeInTheDocument();
     expect(hint.querySelectorAll(".key-group").length).toBeGreaterThan(5);
   });

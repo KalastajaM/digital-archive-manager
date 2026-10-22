@@ -10,7 +10,7 @@ const OURS = "data-overflow-title";
 function clipped(target: Element | null): HTMLElement | null {
   let el = target instanceof HTMLElement ? target : null;
   for (let i = 0; el && i < 4; i++, el = el.parentElement) {
-    if (el.hasAttribute("title") && !el.hasAttribute(OURS)) return null; // its own tooltip wins
+    if ((el.hasAttribute("title") && !el.hasAttribute(OURS)) || el.hasAttribute("data-tip")) return null; // its own tooltip wins
     if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).textOverflow === "ellipsis") return el;
   }
   return null;

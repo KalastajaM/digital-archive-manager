@@ -64,13 +64,14 @@ import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
 import { Breakable } from "../components/PlanPreview";
+import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { FileActions, LinkBadges } from "./FileActions";
 import { useSearch } from "./useSearch";
 
 /** One row of the folder listing or of the search results. */
-const KEYS: [string[], string][] = [
-  [["j", "k"], "move"],
-  [["Enter"], "open"],
+const KEYS: KeyHint[] = [
+  [["↑", "↓"], "move"],
+  [["↩"], "open"],
   [["⌫"], "up"],
   [["Space"], "Quick Look"],
   [["⌘", "⇧"], "click to select"],
@@ -1408,19 +1409,7 @@ export default function Browse() {
           </>
         )}
       </div>
-      <p className="hint inbox-keys browse-keys">
-        {KEYS.map(([keys, what]) => (
-          <span key={what} className="key-group">
-            {keys.map((k, i) => (
-              <Fragment key={k}>
-                {i > 0 && "/"}
-                <kbd>{k}</kbd>
-              </Fragment>
-            ))}{" "}
-            {what}
-          </span>
-        ))}
-      </p>
+      <KeyHints hints={KEYS} className="browse-keys" />
       {quickLook.view}
       {move.view}
       {moveTo && (

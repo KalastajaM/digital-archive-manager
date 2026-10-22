@@ -70,14 +70,14 @@ export function TrayPicker({
   const options: SegmentedOption<string>[] = trays.map((t, i) => {
     const key = shortcuts && i < 9 ? String(i + 1) : undefined;
     const name = visible(t.name);
-    return { value: t.id, label: name, title: key ? `${name} (${key})` : name, shortcut: key };
+    return { value: t.id, label: name, title: key ? `${name} ${key}` : name, shortcut: key };
   });
   if (showNone) {
     options.push({
       value: NONE,
       label: "Nothing",
       ariaLabel: "Nothing (just file)",
-      title: shortcuts ? "Nothing: just file it (0)" : "Nothing: just file it",
+      title: shortcuts ? "Nothing: just file it 0" : "Nothing: just file it",
       shortcut: shortcuts ? "0" : undefined,
     });
   }

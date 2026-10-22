@@ -360,7 +360,7 @@ describe("Trays", () => {
     await user.keyboard("k");
     expect(where()).toBe("/trays/to-pay?item=1");
     // the hint strip of a bill tray names the barcode key
-    expect(document.querySelector(".inbox-keys")).toHaveTextContent("large barcode");
+    expect(document.querySelector(".key-hints")).toHaveTextContent("large barcode");
   });
 
   it("j/k never fire while typing", async () => {

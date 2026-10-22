@@ -119,7 +119,7 @@ describe("Collections list", () => {
     const r = await screen.findByRole("article", { name: "Sauna⟨U+202E⟩x" });
     expect(within(r).getByRole("link", { name: "Sauna⟨U+202E⟩x" })).toHaveAttribute("href", "/collections/7");
     expect(r).toHaveTextContent("3 files · 2 open checks");
-    expect(within(r).getByText("Not managed: a user file")).toHaveClass("badge-warn");
+    expect(within(r).getByText("Not managed: a user file")).toHaveClass("tag-orange");
     expect(calls.find((c) => c.url.startsWith("/api/collections?"))!.url).toBe("/api/collections?state=open");
 
     await user.click(screen.getByRole("button", { name: "Closed" }));

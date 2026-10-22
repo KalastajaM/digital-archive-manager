@@ -16,7 +16,7 @@ import {
 import { visible } from "../../text";
 import { ConfirmPlan } from "../PlanPreview";
 import { Tag } from "../ui/Tag";
-import { euro } from "./SendSheet";
+import { euro } from "../../format";
 import { AIHint, type AIResultInfo, useAISend, useAIState } from "./useAI";
 
 export const REPLACE_QUESTION = "Replace your summary with the AI one? Your text is not kept.";

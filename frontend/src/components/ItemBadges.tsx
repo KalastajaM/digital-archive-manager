@@ -1,6 +1,7 @@
 /** Labels and badges for a tray item, from what the API says about it (its level and
  * file state). Shared by Today and the Trays screen. */
 import type { AttentionItem } from "../api/client";
+import { Tag } from "./ui/Tag";
 
 export type Level = AttentionItem["level"];
 export type FileState = AttentionItem["file_state"];
@@ -25,7 +26,7 @@ export function ItemBadges({ fileState }: { fileState: FileState }) {
   if (!fileBadge) return null;
   return (
     <p className="badges">
-      <span className="badge badge-error">{fileBadge}</span>
+      <Tag tone="red">{fileBadge}</Tag>
     </p>
   );
 }

@@ -14,13 +14,12 @@ import { FOUND_SHOWN, InboxCard } from "../components/today/InboxCard";
 import { StarredCard } from "../components/today/StarredCard";
 import { Banner } from "../components/Banner";
 import { ImportantBanner } from "../components/ImportantBanner";
-import { DAY_MS } from "../components/today/time";
 import { type TrayCardInfo, TrayCard, trayCards } from "../components/today/TrayCard";
 import { Card } from "../components/ui/Card";
 import { Tag } from "../components/ui/Tag";
 import { CARD_DRAG_TYPE, type CardLayout, type Place, useCardLayout } from "../components/useCardLayout";
 import { DRAG_TYPE } from "../dnd";
-import { localToday, plural, shortDate } from "../format";
+import { clockTime, dayWord, localToday, longDate, plural, shortDate } from "../format";
 import { visible } from "../text";
 
 /** "Good morning" (5–11), "Good afternoon" (12–17), "Good evening" otherwise. */
@@ -28,19 +27,6 @@ export function greeting(hour: number): string {
   if (hour >= 5 && hour < 12) return "Good morning";
   if (hour >= 12 && hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-const LONG_DATE = new Intl.DateTimeFormat("en-GB", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
-
-/** "2026-10-20" → "Tuesday 20 October". */
-export function longDate(iso: string): string {
-  const at = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? Date.parse(`${iso}T00:00:00Z`) : Number.NaN;
-  return Number.isNaN(at) ? visible(iso) : LONG_DATE.format(new Date(at));
 }
 
 /** The open collections with something to do: open checklist entries, or files still
@@ -94,13 +80,8 @@ function CollectionsCard({ data, frame }: { data: TodayData; frame: CardFrame })
 function lastChecked(at: string, today: string): string {
   const when = new Date(at);
   if (Number.isNaN(when.getTime())) return visible(at);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const time = `${pad(when.getHours())}:${pad(when.getMinutes())}`;
-  const day = localToday(when);
-  const yesterday = localToday(new Date(Date.parse(`${today}T12:00:00`) - DAY_MS));
-  if (day === today) return `today at ${time}`;
-  if (day === yesterday) return `yesterday at ${time}`;
-  return `${shortDate(when.getTime() / 1000)} at ${time}`;
+  const time = clockTime(when);
+  return `${dayWord(localToday(when), today) ?? shortDate(when.getTime() / 1000)} at ${time}`;
 }
 
 function RemindersCard({ data, today, frame }: { data: TodayData; today: string; frame: CardFrame }) {
@@ -393,7 +374,7 @@ export default function Today({ today: fixed }: { today?: string }) {
       <header className="today-header">
         <h1>{greeting(clock.hour)}</h1>
         <p className="today-hero">{heroLine(waiting)}</p>
-        <p className="today-date">{longDate(today)}</p>
+        <p className="today-date">{visible(longDate(today))}</p>
         <button type="button" className="link-button today-reset" onClick={() => layout.reset()}>
           Reset layout
         </button>
