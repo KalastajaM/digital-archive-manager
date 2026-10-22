@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 # What a batch is, for the Activity filter. Each batch falls in exactly one (first match).
-KINDS = ("undo", "trash", "marks", "convert", "collections", "rename", "filed", "other")
+KINDS = ("undo", "trash", "marks", "convert", "collections", "folders", "rename", "filed", "other")
 STATUSES = ("undone", "undoable", "done", "attention")  # attention: failed or interrupted
 ORIGINS = ("ui", "cli", "auto")  # auto: the automatic Ongoing/Important sync ("workflow")
 _ORIGIN_VALUE = {"ui": "ui", "cli": "cli", "auto": SYNC_ORIGIN}
@@ -132,6 +132,12 @@ class ActivityService:
                 "marks",
             ),
             (label.like("Converted %"), "convert"),
+            # New folder (and a layout's folders): only folders made, not by the Ongoing sync
+            (
+                (batch_origin != SYNC_ORIGIN)
+                & (or_(label.like("Created the folder %"), count(o.kind != "mkdir") == 0)),
+                "folders",
+            ),
             (
                 or_(
                     label.like("%collection%"),

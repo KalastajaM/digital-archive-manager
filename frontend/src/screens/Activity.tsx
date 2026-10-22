@@ -523,6 +523,7 @@ const KIND_OPTIONS: [string, string][] = [
   ["filed", "Filing and moves"],
   ["rename", "Renames"],
   ["collections", "Collections"],
+  ["folders", "New folders"],
   ["marks", "Stars and Important"],
   ["trash", "Moved to To Delete"],
   ["convert", "Conversions"],

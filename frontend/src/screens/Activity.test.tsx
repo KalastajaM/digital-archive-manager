@@ -634,6 +634,15 @@ describe("Activity search and filters", () => {
     expect(where()).toBe("/activity?q=lasku&kind=rename&status=undoable&origin=cli&when=7d");
   });
 
+  it("New folders is a kind of change of its own", async () => {
+    const calls = api();
+    const user = userEvent.setup();
+    renderWithProviders(<Activity />);
+    await screen.findByRole("article", { name: "Batch b1" });
+    await user.selectOptions(screen.getByLabelText("Kind of change"), "New folders");
+    await waitFor(() => expect(lastParams(calls).get("kind")).toBe("folders"));
+  });
+
   it("starts from the URL (?file= is a search), clears everything with Clear filters", async () => {
     const calls = api();
     const user = userEvent.setup();

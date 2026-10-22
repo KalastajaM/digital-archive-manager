@@ -203,3 +203,26 @@ def test_shape_is_still_a_list_of_batches(client, app):
     _seed(app)
     first = client.get("/api/activity", params={"limit": 1}).json()
     assert isinstance(first, list) and first[0]["batch_id"] == "failed" and first[0]["ops"]
+
+
+def test_new_folder_batches_are_their_own_kind(client, app):
+    _batch(
+        app,
+        "mk",
+        T0 + 20,
+        [("mkdir", None, "10. Financial/New")],
+        label="Created the folder New in 10. Financial",
+    )
+    _batch(app, "mk-unlabelled", T0 + 21, [("mkdir", None, "a"), ("mkdir", None, "a/b")])
+    _batch(app, "mk-sync", T0 + 22, [("mkdir", None, "##. Ongoing/Trip")], origin="workflow")
+    _batch(
+        app,
+        "mk-and-move",
+        T0 + 23,
+        [("mkdir", None, "d"), ("move", "x.pdf", "d/x.pdf")],
+        label="Filed x.pdf into d",
+    )
+    assert set(ids(client, kind="folders")) == {"mk", "mk-unlabelled"}
+    assert "mk-sync" in ids(client, kind="collections")  # the automatic sync stays there
+    assert "mk-and-move" in ids(client, kind="filed")
+    assert "mk" not in ids(client, kind="filed")
