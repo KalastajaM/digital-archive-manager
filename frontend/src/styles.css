@@ -790,13 +790,19 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .file-meta-head { margin-bottom: var(--sp-3); min-width: 0; }
 .file-meta-title { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; }
 .file-meta-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
-.file-meta-title .file-meta-ask { margin-left: auto; flex: none; }
 .file-meta-rename { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .file-meta-rename input { flex: 1; min-width: 0; font-size: var(--fs-lg); font-weight: 600; }
 .file-meta-ext { color: var(--muted); font-size: var(--fs-lg); }
 .file-meta-head .current-path { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--sp-1); }
 .file-meta-head .current-path code { min-width: 0; }
 .file-tags { margin-top: var(--sp-3); }
+.tag-field-wrap { position: relative; }
+.tag-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20; list-style: none; margin: 0; padding: 3px; background: var(--panel); border: 0.5px solid var(--hairline); border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
+.tag-suggest li { display: flex; justify-content: space-between; gap: var(--sp-2); padding: 3px var(--sp-2); border-radius: var(--r-sm); cursor: default; overflow-wrap: anywhere; }
+.tag-suggest li:hover { background: var(--hover); }
+.tag-suggest li.active { background: var(--selected-strong); color: var(--selected-strong-text); }
+.tag-suggest-count { color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; align-self: center; }
+.tag-suggest li.active .tag-suggest-count { color: inherit; opacity: 0.8; }
 .tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px 6px; border: 0.5px solid var(--hairline); border-radius: var(--r-md); background: var(--panel); }
 .tag-field:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
 .tag-field.disabled { opacity: 0.6; }
@@ -1085,7 +1091,12 @@ dialog.sheet.barcode-sheet { width: fit-content; max-width: 96vw; }
 .barcode-mismatch p { margin: 0 0 var(--sp-2); }
 .barcode-mismatch-title { font-weight: 600; }
 
-.item-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-4) 0; }
+.item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-4) 0; }
+.item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
+button[data-tip] { position: relative; }
+.item-files-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: var(--sp-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
+.item-files-line .tabs { margin-bottom: 0; }
+.item-files-line .link-button[data-tip]::after { white-space: normal; width: max-content; max-width: 280px; }
 .item-done { margin: var(--sp-4) 0; color: var(--muted); }
 .item-detail .done-form { margin: var(--sp-4) 0; }
 .item-dated .checklist { margin: 0 0 var(--sp-4); padding: var(--sp-3); background: var(--panel); border-radius: var(--r-lg); box-shadow: var(--shadow-card); }
@@ -1183,6 +1194,10 @@ main:has(> .collections-index), main:has(> .collection-page) { padding: 0; min-h
 .attention-chip .tag { display: inline-block; max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 
 /* The group tree. */
+/* The members scroll on their own, so the note and checklist below stay within reach. */
+.collection-members { max-height: max(55vh, 12rem); overflow-y: auto; overscroll-behavior: contain; margin-bottom: var(--sp-4); }
+.collection-members > .group-tree { margin-bottom: 0; }
+.group-hint { margin: 0 0 var(--sp-2); }
 .group-tree { margin-bottom: var(--sp-4); }
 .group-tree > .hint { margin: var(--sp-2) 0; }
 .group-header { position: relative; display: flex; align-items: center; gap: var(--sp-2); padding: 3px var(--sp-1) 3px 0; margin-top: var(--sp-2); border-radius: var(--r-md); }
@@ -1257,7 +1272,9 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 
 .collection-inspector { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); border-left: 0.5px solid var(--separator); padding: var(--sp-4); }
 .collection-inspector .empty-state { height: 100%; }
-.inspector-thumb { display: flex; justify-content: center; align-items: center; height: 220px; margin-bottom: var(--sp-4); background: var(--panel-2); border-radius: var(--r-lg); padding: var(--sp-3); }
+.inspector-preview { margin-bottom: var(--sp-4); }
+.inspector-pager { display: flex; justify-content: center; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--muted); }
+.inspector-thumb { display: flex; justify-content: center; align-items: center; height: 220px; background: var(--panel-2); border-radius: var(--r-lg); padding: var(--sp-3); }
 .inspector-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; background: var(--paper); box-shadow: var(--shadow-card); border-radius: 2px; }
 .collection-inspector .file-details { margin-bottom: var(--sp-4); }
 .inspector-group select { width: 100%; }

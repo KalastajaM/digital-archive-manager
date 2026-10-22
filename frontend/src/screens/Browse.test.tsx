@@ -531,7 +531,7 @@ describe("Selected file", () => {
     expect(rename).toBeDisabled();
     expect(rename.closest("span")).toHaveAttribute("data-tip", "Links cannot be renamed or moved");
     expect(within(preview).getByRole("button", { name: "Move file to…" })).toBeDisabled();
-    expect(within(preview).getByRole("textbox", { name: "Add a tag to link.pdf" })).toBeDisabled();
+    expect(within(preview).getByRole("combobox", { name: "Add a tag to link.pdf" })).toBeDisabled();
   });
 
   it("badges under the file name link to its open items and collections", async () => {

@@ -1364,7 +1364,15 @@ export default function Browse() {
                     {(meta) => (
                       <>
                         {meta.header}
-                        <FilePreview file={previewOf(previewed)} extraTools={meta.marks} />
+                        <FilePreview
+                          file={previewOf(previewed)}
+                          extraTools={
+                            <>
+                              {meta.marks}
+                              {meta.ask}
+                            </>
+                          }
+                        />
                         {meta.tags}
                       </>
                     )}

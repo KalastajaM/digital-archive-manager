@@ -4,6 +4,8 @@ type Props = {
   icon: ReactNode;
   /** The accessible name; also the tooltip (with the shortcut after it). */
   label: string;
+  /** A longer tooltip than ``label`` (which stays the accessible name). */
+  tip?: string;
   /** Shown in the tooltip, e.g. "⌘N". */
   shortcut?: string;
   onClick?: MouseEventHandler<HTMLButtonElement>;
@@ -19,14 +21,14 @@ type Props = {
 
 /** A toolbar icon button: a Lucide icon, named by ``label``, with a tooltip on hover
  * and keyboard focus (CSS reads ``data-tip``). */
-export function IconButton({ icon, label, shortcut, onClick, disabled, pressed, tipSide, className, disabledReason }: Props) {
+export function IconButton({ icon, label, tip, shortcut, onClick, disabled, pressed, tipSide, className, disabledReason }: Props) {
   const button = (
     <button
       type="button"
       className={className ? `icon-button ${className}` : "icon-button"}
       aria-label={label}
       aria-pressed={pressed}
-      data-tip={shortcut ? `${label} ${shortcut}` : label}
+      data-tip={shortcut ? `${tip ?? label} ${shortcut}` : (tip ?? label)}
       data-tip-side={tipSide === "above" ? "above" : undefined}
       onClick={onClick}
       disabled={disabled}

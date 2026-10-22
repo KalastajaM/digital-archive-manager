@@ -196,6 +196,61 @@ describe("Collection detail", () => {
     expect(await within(panel()).findByText("plan refused: x")).toBeInTheDocument();
   });
 
+  it("the inspector shows a PDF one page at a time with a pager; the end of the document is found by asking for the next page", async () => {
+    const { user } = renderCollections("/collections/7");
+    await within(panel()).findByRole("region", { name: "Members" });
+    const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
+    const page = () => within(inspector).getByRole("img", { name: /^Page \d+$/ });
+    expect(page()).toHaveAttribute("src", "/api/files/f1/page/1.png?w=400");
+    const pager = within(inspector).getByRole("group", { name: "Pages" });
+    expect(within(pager).getByRole("button", { name: "Previous page" })).toBeDisabled();
+    expect(pager).toHaveTextContent("Page 1");
+    await user.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(page()).toHaveAttribute("src", "/api/files/f1/page/2.png?w=400");
+    expect(pager).toHaveTextContent("Page 2");
+    await user.click(within(pager).getByRole("button", { name: "Previous page" }));
+    expect(page()).toHaveAttribute("src", "/api/files/f1/page/1.png?w=400");
+    // a page past the end fails to load: back to the last page, which is now known
+    await user.click(within(pager).getByRole("button", { name: "Next page" }));
+    fireEvent.error(page());
+    expect(page()).toHaveAttribute("src", "/api/files/f1/page/1.png?w=400");
+    expect(within(inspector).queryByRole("group", { name: "Pages" })).not.toBeInTheDocument(); // one page: no pager
+  });
+
+  it("Quick Look is an icon button with a tooltip; the members scroll in their own box; no Ask AI by the name", async () => {
+    renderCollections("/collections/7");
+    const members = await within(panel()).findByRole("region", { name: "Members" });
+    expect(members.closest(".collection-members")).not.toBeNull();
+    const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
+    expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look (Space)");
+    const actions = inspector.querySelector(".inspector-actions")!;
+    expect(within(actions as HTMLElement).getByRole("button", { name: "Ask AI" })).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
+    expect(inspector.querySelector(".file-meta-title")!.querySelector("[aria-label='Ask AI']")).toBeNull();
+  });
+
+  it("a collection with files but no groups hints at New group, which does what the toolbar icon does", async () => {
+    const created: Group = { id: 9, collection_id: 7, parent_id: null, name: "New group", position: 0, summary: "" };
+    let now = SAUNA;
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/collections/7": () => ({ body: now }),
+      "POST /api/collections/7/groups": () => {
+        now = { ...SAUNA, groups: [created] };
+        return { body: changeOf(now) };
+      },
+    });
+    const hint = await within(panel()).findByText(/^Group files:/);
+    await user.click(within(hint.closest("p")!).getByRole("button", { name: "New group" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(1));
+    await waitFor(() => expect(within(panel()).queryByText(/^Group files:/)).not.toBeInTheDocument());
+  });
+
+  it("the toolbar's New group icon says what groups are for", async () => {
+    renderCollections("/collections/7");
+    await within(panel()).findByRole("region", { name: "Members" });
+    const icon = within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" });
+    expect(icon).toHaveAttribute("data-tip", "New group: sort files into groups");
+  });
+
   it("the inspector has a resizable splitter", async () => {
     renderCollections("/collections/7");
     await within(panel()).findByRole("region", { name: "Members" });

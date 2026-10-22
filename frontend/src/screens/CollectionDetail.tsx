@@ -15,7 +15,7 @@
  * own collections above its members. "Move to…" (the keyboard way of a sidebar drag)
  * and "New collection inside…" are in the ⋯ menu; a move runs at once, as group
  * changes do, and shows the batch that ran. */
-import { Eye, FolderOpen, FolderPlus, Layers, MoreHorizontal, Share } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FolderOpen, FolderPlus, Layers, MoreHorizontal, Share } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -112,17 +112,58 @@ const ICON = { size: 18, strokeWidth: 1.75 } as const;
 const STILL_RUNNING = "Another change is still running. Try again when it is done.";
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
 
-/** The selected file's first page (a PDF) or the image itself, small; nothing else. */
+/** The selected file as the inspector shows it: an image itself, or a PDF one page at a
+ * time (the pager steps through it; the page count is found by asking for the page
+ * after the shown one, as FilePreview does). Nothing else. */
 // One element for every selection, its image swapped in place: a thumbnail remounted per
 // file (keyed by it) was left behind on the page each time, stacking one per click.
 function Thumbnail({ member }: { member: Pick<Member, "drive_id" | "path" | "is_dir" | "missing"> }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // The page being shown, for the file it was reached on (another file starts at page 1).
+  const [nav, setNav] = useState<{ id: string; page: number; last: number | null }>({ id: "", page: 1, last: null });
+  const here = nav.id === member.drive_id ? nav : { id: member.drive_id, page: 1, last: null };
   const ext = member.path && !member.is_dir && !member.missing ? extOf(member.path) : null;
-  const src = ext === "pdf" ? pageUrl(member.drive_id, 1, 400) : ext && IMAGE_EXTS.has(ext) ? rawUrl(member.drive_id) : null;
+  const isPdf = ext === "pdf";
+  const src = isPdf ? pageUrl(member.drive_id, here.page, 400) : ext && IMAGE_EXTS.has(ext) ? rawUrl(member.drive_id) : null;
   if (!src || failedSrc === src) return null;
+  const go = (page: number) => setNav({ ...here, page });
+  // The image is known to exist once loaded: is there a page after it?
+  const probeNext = () => {
+    if (here.last !== null) return;
+    const probe = new Image();
+    const { id, page } = here;
+    probe.onerror = () => setNav((n) => (n.id === id ? { ...n, last: page } : { id, page, last: page }));
+    probe.src = pageUrl(member.drive_id, page + 1, 400);
+  };
+  const paged = isPdf && (here.page > 1 || here.last === null || here.last > 1);
   return (
-    <div className="inspector-thumb">
-      <img src={src} alt="" onError={() => setFailedSrc(src)} />
+    <div className="inspector-preview">
+      <div className="inspector-thumb">
+        <img
+          src={src}
+          alt={isPdf ? `Page ${here.page}` : ""}
+          onLoad={isPdf ? probeNext : undefined}
+          onError={() => {
+            if (isPdf && here.page > 1) setNav({ id: here.id, page: here.page - 1, last: here.page - 1 });
+            else setFailedSrc(src);
+          }}
+        />
+      </div>
+      {paged && (
+        <div className="inspector-pager" role="group" aria-label="Pages">
+          <IconButton icon={<ChevronLeft size={16} />} label="Previous page" disabled={here.page <= 1} onClick={() => go(here.page - 1)} />
+          <span>
+            Page {here.page}
+            {here.last !== null && ` of ${here.last}`}
+          </span>
+          <IconButton
+            icon={<ChevronRight size={16} />}
+            label="Next page"
+            disabled={here.last !== null && here.page >= here.last}
+            onClick={() => go(here.page + 1)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -592,7 +633,8 @@ function NewChildSheet({
 }
 
 /** The selected member: its details, its group (the keyboard way to move it), Quick
- * Look and removing it from the collection. */
+ * Look and removing it from the collection (not offered in the built-in ones, whose
+ * ★ / ! toggle is that). */
 function Inspector({
   member,
   groups,
@@ -601,16 +643,15 @@ function Inspector({
   onRemove,
   onQuickLook,
   onTrash,
-  removeLabel = "Remove from collection",
 }: {
   /** Trash for the selected file. */
   onTrash: () => void;
-  removeLabel?: string;
   member: Member | null;
   groups: { group: Group; path: string }[];
   busy: boolean;
   onGroup: (gid: number | null) => void;
-  onRemove: () => void;
+  /** Takes the file out of the collection (none: the built-in collections). */
+  onRemove?: () => void;
   onQuickLook?: () => void;
 }) {
   const selectId = useId();
@@ -623,11 +664,57 @@ function Inspector({
     );
   }
   const name = memberName(member);
+  /** The ★ ! Ask AI Trash Quick Look row (``ask``: only a file that can be edited has it). */
+  const actions = (ask?: ReactNode) => (
+    <div className="inspector-actions">
+      <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} />
+      {ask}
+      <TrashButton disabled={busy} disabledReason={trashRefusal(member)} onClick={onTrash} />
+      {onQuickLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="(Space)" onClick={onQuickLook} />}
+      {member.is_dir && member.path && !member.missing && (
+        <button type="button" onClick={() => navigate(`/browse?path=${encodeURIComponent(member.path!)}`)}>
+          Show in Browse
+        </button>
+      )}
+      {onRemove && (
+        <button type="button" aria-label={`Remove ${name} from the collection`} disabled={busy} onClick={onRemove}>
+          Remove from collection
+        </button>
+      )}
+    </div>
+  );
+  const notice = (member.missing || member.quarantined) && (
+    <p className="notice">{member.missing ? "The file is missing." : "The file is in ##. To Delete."}</p>
+  );
+  // without groups there is nothing to choose (and no "Ungrouped" to show)
+  const group = groups.length > 0 && (
+    <div className="field inspector-group">
+      <label htmlFor={selectId}>Group</label>
+      <select
+        id={selectId}
+        value={member.group_id === null ? "" : String(member.group_id)}
+        disabled={busy}
+        onChange={(e) => onGroup(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        <option value="">Ungrouped</option>
+        {groups.map(({ group, path }) => (
+          <option key={group.id} value={group.id}>
+            {visible(path)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
   return (
     <aside className="collection-inspector" aria-label="Selected file">
       <Thumbnail member={member} />
       {member.path && (member.missing || member.quarantined) ? (
-        <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path }} />
+        <>
+          <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path }} />
+          {notice}
+          {group}
+          {actions()}
+        </>
       ) : member.path ? (
         <FileMeta key={member.drive_id} file={{ ...member, name }} disabled={busy}>
           {(meta) => (
@@ -635,56 +722,18 @@ function Inspector({
               {meta.header}
               {meta.tags}
               <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path ?? "" }} identity={false} />
+              {group}
+              {actions(meta.ask)}
             </>
           )}
         </FileMeta>
       ) : (
-        <p className="hint">{name} is not in the index.</p>
+        <>
+          <p className="hint">{name} is not in the index.</p>
+          {group}
+          {actions()}
+        </>
       )}
-      {(member.missing || member.quarantined) && (
-        <p className="notice">{member.missing ? "The file is missing." : "The file is in ##. To Delete."}</p>
-      )}
-      {/* without groups there is nothing to choose (and no "Ungrouped" to show) */}
-      {groups.length > 0 && (
-        <div className="field inspector-group">
-          <label htmlFor={selectId}>Group</label>
-          <select
-            id={selectId}
-            value={member.group_id === null ? "" : String(member.group_id)}
-            disabled={busy}
-            onChange={(e) => onGroup(e.target.value === "" ? null : Number(e.target.value))}
-          >
-            <option value="">Ungrouped</option>
-            {groups.map(({ group, path }) => (
-              <option key={group.id} value={group.id}>
-                {visible(path)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div className="inspector-actions">
-        <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} />
-        <TrashButton disabled={busy} disabledReason={trashRefusal(member)} onClick={onTrash} />
-        {onQuickLook && (
-          <button type="button" onClick={onQuickLook}>
-            <Eye size={14} aria-hidden="true" /> Quick Look
-          </button>
-        )}
-        {member.is_dir && member.path && !member.missing && (
-          <button type="button" onClick={() => navigate(`/browse?path=${encodeURIComponent(member.path!)}`)}>
-            Show in Browse
-          </button>
-        )}
-        <button
-          type="button"
-          aria-label={removeLabel === "Remove from collection" ? `Remove ${name} from the collection` : `${removeLabel}: ${name}`}
-          disabled={busy}
-          onClick={onRemove}
-        >
-          {removeLabel}
-        </button>
-      </div>
     </aside>
   );
 }
@@ -713,9 +762,7 @@ function EntryInspector({
       <div className="inspector-actions">
         <MarkToggles driveId={entry.drive_id} name={entry.name} marks={entry.marks} />
         <TrashButton disabled={busy} disabledReason={deletionRefusal(entry.path, entry.marks)} onClick={onTrash} />
-        <button type="button" onClick={onQuickLook}>
-          <Eye size={14} aria-hidden="true" /> Quick Look
-        </button>
+        <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="(Space)" onClick={onQuickLook} />
         <LaunchButtons launch={launch} />
       </div>
     </aside>
@@ -1090,7 +1137,9 @@ export default function CollectionDetail({
     setChosen(next.drive_id);
     setBrowsed(null);
     requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(".group-tree li[aria-current] .member-row")?.focus();
+      const row = document.querySelector<HTMLElement>(".group-tree li[aria-current] .member-row");
+      row?.focus();
+      row?.scrollIntoView?.({ block: "nearest" }); // the list scrolls on its own
     });
   };
   useKeydown((e) => {
@@ -1229,7 +1278,7 @@ export default function CollectionDetail({
           actions={
             <>
               {builtin !== "starred" && (
-                <IconButton icon={<FolderPlus {...ICON} />} label="New group" disabled={busy} onClick={() => void newGroup()} />
+                <IconButton icon={<FolderPlus {...ICON} />} label="New group" tip="New group: sort files into groups" disabled={busy} onClick={() => void newGroup()} />
               )}
               <span className="menu-wrap" ref={finderRef}>
                 <IconButton icon={<FolderOpen {...ICON} />} label="Show in Finder" pressed={finder} onClick={() => setFinder((f) => !f)} />
@@ -1312,6 +1361,15 @@ export default function CollectionDetail({
           />
           <Attention members={c.members} attention={attention.data} onSelect={select} />
           {!builtin && <ChildCollections id={id} all={allCollections.data ?? []} />}
+          {builtin !== "starred" && c.groups.length === 0 && c.members.length >= 2 && (
+            <p className="hint group-hint">
+              Group files:{" "}
+              <button type="button" className="link-button" disabled={busy} onClick={() => void newGroup()}>
+                New group
+              </button>
+            </p>
+          )}
+          <div className="collection-members">
           <GroupTree
             collection={c}
             attention={attentionBy}
@@ -1327,6 +1385,7 @@ export default function CollectionDetail({
             actions={{ run, save, remove: setRemoving }}
             proposals={groupProposals}
           />
+          </div>
           {result && <LastChange title={result.title} result={result.change} onDismiss={() => setResult(null)} />}
           <div className="collection-notes">
             <SavedNote kind="collection" target={String(id)} label="Note" />
@@ -1347,8 +1406,7 @@ export default function CollectionDetail({
           const where = gid === null ? "Ungrouped" : (c.groups.find((g) => g.id === gid)?.name ?? "");
           void run({ op: "members", id, drive_ids: [selected.drive_id], group_id: gid }, `Moved to ${where}`);
         }}
-        onRemove={() => selected && void removeMember(selected)}
-        removeLabel={builtin === "starred" ? "Unstar" : builtin === "important" ? "Remove from Important" : undefined}
+        onRemove={builtin ? undefined : () => selected && void removeMember(selected)}
         onQuickLook={selected && looks.includes(selected) ? quickLook.open : undefined}
         onTrash={trashSelected}
       />

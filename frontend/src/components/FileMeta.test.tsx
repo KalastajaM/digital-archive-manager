@@ -53,6 +53,7 @@ function Harness({ file = FILE, disabled }: { file?: MetaFile; disabled?: boolea
         <>
           {meta.header}
           <div data-testid="toolbar">{meta.marks}</div>
+          <div data-testid="actions">{meta.ask}</div>
           {meta.tags}
         </>
       )}
@@ -77,7 +78,7 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}, props: Parameters<ty
 
 // enabled once the file's record (and so its tags) has loaded
 const tagBox = async () => {
-  const box = await screen.findByRole("textbox", { name: "Add a tag to scan⟨U+202E⟩.pdf" });
+  const box = await screen.findByRole("combobox", { name: "Add a tag to scan⟨U+202E⟩.pdf" });
   await waitFor(() => expect(box).toBeEnabled());
   return box;
 };
@@ -89,7 +90,10 @@ describe("layout", () => {
     expect(screen.getByRole("heading", { name: "scan⟨U+202E⟩.pdf" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rename" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Move file to…" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Ask AI" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("actions")).getByRole("button", { name: "Ask AI" })).toHaveAttribute(
+      "data-tip",
+      "Ask AI to suggest a name, folder and tags",
+    );
     expect(within(screen.getByTestId("toolbar")).getByRole("button", { name: "Star" })).toBeInTheDocument();
     expect(within(screen.getByTestId("toolbar")).getByRole("button", { name: "Mark Important" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Remove tag bank" })).toBeInTheDocument();
@@ -249,6 +253,61 @@ describe("Tags", () => {
   });
 });
 
+describe("Tag suggestions", () => {
+  const TAGS = [
+    { name: "bank", files: 9 },
+    { name: "bills", files: 4 },
+    { name: "Billing", files: 2 },
+  ];
+  const suggest = (calls: Call[]) => calls.filter((c) => c.url.startsWith("/api/tags"));
+
+  it("lists existing tags for what is typed, minus the file's own; ↑ ↓ and Enter add the chosen one", async () => {
+    const { user, calls } = setup({ "GET /api/tags": { body: TAGS } });
+    const box = await tagBox();
+    await user.type(box, "b");
+    const list = await screen.findByRole("listbox", { name: "Existing tags" });
+    expect(suggest(calls)[0].url).toContain("prefix=b");
+    // "bank" is on the file already
+    expect(within(list).getAllByRole("option").map((o) => o.textContent)).toEqual(["bills4", "Billing2"]);
+    expect(box).toHaveAttribute("aria-expanded", "true");
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    expect(within(list).getAllByRole("option")[1]).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{ArrowUp}{Enter}");
+    await waitFor(() => expect(sent(calls, "PUT", "/api/files/d1/tags")).toHaveLength(1));
+    expect(sent(calls, "PUT", "/api/files/d1/tags")[0].body).toEqual({ tags: ["bank", "power", "bills"] });
+    expect(box).toHaveValue("");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("Enter with nothing chosen adds the typed text; Esc closes the list and keeps the text", async () => {
+    const { user, calls } = setup({ "GET /api/tags": { body: TAGS } });
+    const box = await tagBox();
+    await user.type(box, "bi");
+    await screen.findByRole("listbox");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(box).toHaveValue("bi");
+    await user.type(box, "{Enter}");
+    await waitFor(() => expect(sent(calls, "PUT", "/api/files/d1/tags")).toHaveLength(1));
+    expect(sent(calls, "PUT", "/api/files/d1/tags")[0].body).toEqual({ tags: ["bank", "power", "bi"] });
+  });
+
+  it("a click on a suggestion adds it", async () => {
+    const { user, calls } = setup({ "GET /api/tags": { body: TAGS } });
+    await user.type(await tagBox(), "bil");
+    await user.click(await screen.findByRole("option", { name: /^Billing/ }));
+    await waitFor(() => expect(sent(calls, "PUT", "/api/files/d1/tags")).toHaveLength(1));
+    expect(sent(calls, "PUT", "/api/files/d1/tags")[0].body).toEqual({ tags: ["bank", "power", "Billing"] });
+  });
+
+  it("asks nothing while the input is empty", async () => {
+    const { user, calls } = setup({ "GET /api/tags": { body: TAGS } });
+    await user.click(await tagBox());
+    expect(suggest(calls)).toHaveLength(0);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+});
+
 describe("what cannot be edited", () => {
   it.each([
     [{ drive_id: "x", path: "a/l", is_link: true }, "Links cannot be renamed or moved"],
@@ -265,8 +324,9 @@ describe("what cannot be edited", () => {
     expect(move).toBeDisabled();
     expect(move.closest("span")).toHaveAttribute("data-tip", why);
     expect(screen.getByRole("button", { name: "Ask AI" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ask AI" }).closest("span")).toHaveAttribute("data-tip", why);
     expect(screen.getByRole("region", { name: "Tags" })).toHaveAttribute("title", why);
-    expect(screen.getByRole("textbox", { name: /^Add a tag to/ })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: /^Add a tag to/ })).toBeDisabled();
   });
 
   it("everything waits while another change is under way", async () => {
@@ -296,7 +356,7 @@ describe("Ask AI", () => {
 
   it("is off, saying how to turn it on, while AI is off", async () => {
     setup({ "GET /api/ai/status": { body: { ...STATUS_ON, enabled: false } } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Ask AI" })).toHaveAttribute("title", expect.stringContaining("AI is off")));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Ask AI" }).closest("span")).toHaveAttribute("data-tip", expect.stringContaining("AI is off")));
     expect(screen.getByRole("button", { name: "Ask AI" })).toBeDisabled();
   });
 
