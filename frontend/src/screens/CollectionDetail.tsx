@@ -848,6 +848,9 @@ export default function CollectionDetail({
   const [result, setResult] = useState<{ title: string; change: CollectionChange } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false); // a disabled button can lag a click
+  const groupWork = useRef<Promise<unknown> | null>(null); // the running group change, for New group to wait on
+  const creatingGroup = useRef(false); // New group twice at once adds one
+  const latestGroups = useRef<{ all: Group[]; top: Group[] }>({ all: [], top: [] }); // as last rendered
   const busy =
     preview.isPending || change.isPending || members.isPending || groupChange.isPending || setParent.isPending || trash.busy;
 
@@ -935,7 +938,12 @@ export default function CollectionDetail({
     inFlight.current = true;
     setError(null);
     try {
-      const r = await groupChange.mutateAsync(g);
+      const work = groupChange.mutateAsync(g);
+      groupWork.current = work.then(
+        () => undefined,
+        () => undefined,
+      );
+      const r = await work;
       report(`${done}: what happened in ${rootName}`, done, r);
       return r;
     } catch (e) {
@@ -1177,6 +1185,7 @@ export default function CollectionDetail({
   const isOpen = c.state === "open";
   const paths = groupPaths(c);
   const tree = treeOf(c);
+  latestGroups.current = { all: c.groups, top: tree.children.get(null) ?? [] };
   const attentionBy = new Map((attention.data ?? []).map((a) => [a.drive_id, a]));
 
   const rename = (text: string) => {
@@ -1193,12 +1202,27 @@ export default function CollectionDetail({
     });
   };
   const newGroup = async () => {
-    const before = new Set(c.groups.map((g) => g.id));
-    const nameFor = freeName(tree.children.get(null) ?? []);
-    const r = await run({ op: "create", id, name: nameFor, parent_id: null }, `Added the group ${nameFor}`);
-    const made = r?.collection.groups.find((g) => !before.has(g.id));
-    if (made) setRenamingGroup(made.id);
+    if (creatingGroup.current) return;
+    creatingGroup.current = true;
+    try {
+      // The click that leaves a group's name field also saves that name: this one
+      // waits for it (the button stays enabled meanwhile, or the click would be lost).
+      while (inFlight.current && groupWork.current) {
+        await groupWork.current;
+        await new Promise((resolve) => setTimeout(resolve, 0)); // the page shows the saved name
+      }
+      const before = new Set(latestGroups.current.all.map((g) => g.id));
+      const nameFor = freeName(latestGroups.current.top);
+      const r = await run({ op: "create", id, name: nameFor, parent_id: null }, `Added the group ${nameFor}`);
+      const made = r?.collection.groups.find((g) => !before.has(g.id));
+      if (made) setRenamingGroup(made.id);
+    } finally {
+      creatingGroup.current = false;
+    }
   };
+  // New group stays clickable while a group change (the name just typed) is saving:
+  // it waits for it, and a disabled button would swallow the click that blurred the field.
+  const addBusy = busy && !groupChange.isPending;
   const toggle = (key: FoldKey) =>
     setFolded((f) => {
       const next = new Set(f);
@@ -1278,7 +1302,7 @@ export default function CollectionDetail({
           actions={
             <>
               {builtin !== "starred" && (
-                <IconButton icon={<FolderPlus {...ICON} />} label="New group" tip="New group: sort files into groups" disabled={busy} onClick={() => void newGroup()} />
+                <IconButton icon={<FolderPlus {...ICON} />} label="New group" tip="New group: sort files into groups" disabled={addBusy} onClick={() => void newGroup()} />
               )}
               <span className="menu-wrap" ref={finderRef}>
                 <IconButton icon={<FolderOpen {...ICON} />} label="Show in Finder" pressed={finder} onClick={() => setFinder((f) => !f)} />
@@ -1364,7 +1388,7 @@ export default function CollectionDetail({
           {builtin !== "starred" && c.groups.length === 0 && c.members.length >= 2 && (
             <p className="hint group-hint">
               Group files:{" "}
-              <button type="button" className="link-button" disabled={busy} onClick={() => void newGroup()}>
+              <button type="button" className="link-button" disabled={addBusy} onClick={() => void newGroup()}>
                 New group
               </button>
             </p>

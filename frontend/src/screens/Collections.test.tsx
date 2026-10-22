@@ -637,6 +637,64 @@ describe("Collection groups, summary and attention", () => {
     expect(patches(calls, "/api/collection-groups/9")[0].body).toEqual({ name: "Receipts" });
   });
 
+  it("groups can be added one after another, while the last one's name is still being edited", async () => {
+    let now = GROUPED;
+    const { calls, user } = grouped({
+      "GET /api/collections/7": () => ({ body: now }),
+      "POST /api/collections/7/groups": (req) => {
+        const id = 100 + now.groups.length;
+        const created: Group = { id, collection_id: 7, parent_id: null, name: (req.body as { name?: string } | undefined)?.name ?? "?", position: now.groups.length, summary: "" };
+        now = { ...now, groups: [...now.groups, created] };
+        return { body: changeOf(now) };
+      },
+    });
+    await within(panel()).findByRole("region", { name: "Quotes" });
+    const add = () => user.click(within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" }));
+    await add();
+    await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(1));
+    expect(await within(panel()).findByRole("textbox", { name: "Group name" })).toHaveFocus();
+    // the name is left as it is: the next click must add another group, not just close the input
+    await add();
+    await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(2));
+    expect(await within(panel()).findByRole("textbox", { name: "Group name" })).toHaveFocus();
+    await add();
+    await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(3));
+    expect(posts(calls, "/api/collections/7/groups").map((c) => (c.body as { name: string }).name)).toEqual([
+      "New group",
+      "New group 2",
+      "New group 3",
+    ]);
+  });
+
+  it("typing a name for the new group and then clicking New group adds the next one", async () => {
+    let now = GROUPED;
+    const { calls, user } = grouped({
+      "GET /api/collections/7": () => ({ body: now }),
+      "POST /api/collections/7/groups": (req) => {
+        const id = 100 + now.groups.length;
+        const created: Group = { id, collection_id: 7, parent_id: null, name: (req.body as { name?: string } | undefined)?.name ?? "?", position: now.groups.length, summary: "" };
+        now = { ...now, groups: [...now.groups, created] };
+        return { body: changeOf(now) };
+      },
+      "PATCH /api/collection-groups/103": (req) => {
+        now = { ...now, groups: now.groups.map((g) => (g.id === 103 ? { ...g, name: (req.body as { name?: string } | undefined)?.name ?? g.name } : g)) };
+        return { body: changeOf(now) };
+      },
+    });
+    await within(panel()).findByRole("region", { name: "Quotes" });
+    const add = () => user.click(within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" }));
+    await add();
+    const input = await within(panel()).findByRole("textbox", { name: "Group name" });
+    await user.clear(input);
+    await user.type(input, "Receipts");
+    await add(); // the click that blurs the input saves the name, and still adds the next group
+    await waitFor(() => expect(patches(calls, "/api/collection-groups/103")).toHaveLength(1));
+    await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(2));
+    expect(await within(panel()).findByRole("textbox", { name: "Group name" })).toHaveFocus();
+    await add();
+    await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(3));
+  });
+
   it("a group renames inline: Enter on its name, or a double-click; Esc cancels", async () => {
     const { calls, user } = grouped({
       "PATCH /api/collection-groups/3": { body: changeOf(GROUPED) },
