@@ -1871,6 +1871,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/exclude-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Ai Exclude Folders
+         * @description Save the excluded folders (the whole list) to settings.yaml and use them at once;
+         *     answers the new status. 400 for a bad entry, 409 if the file could not be written.
+         */
+        put: operations["ai_exclude_folders_api_ai_exclude_folders_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/log": {
         parameters: {
             query?: never;
@@ -2177,6 +2198,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AIExcludeIn
+         * @description The whole list of excluded folders (archive paths), saved to ``ai.exclude_folders``
+         *     in settings.yaml; it replaces the defaults.
+         */
+        AIExcludeIn: {
+            /** Folders */
+            folders: string[];
+        };
         /** AILogOut */
         AILogOut: {
             /** Rows */
@@ -2263,6 +2293,11 @@ export interface components {
             };
             /** Exclude Folders */
             exclude_folders: string[];
+            /**
+             * Exclude Missing
+             * @default []
+             */
+            exclude_missing: string[];
         };
         /**
          * ActiveArchiveOut
@@ -14353,6 +14388,102 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AIStateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIStatusOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    ai_exclude_folders_api_ai_exclude_folders_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIExcludeIn"];
             };
         };
         responses: {

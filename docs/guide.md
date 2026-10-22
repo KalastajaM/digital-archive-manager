@@ -437,7 +437,8 @@ Without a key the AI buttons are hidden and a hint says how to turn it on (see
   goes out only when you click **Send**.
 - **Extracted text only**, never the file itself, and only limited amounts of it.
 - **Excluded folders** (by default medical, work and other people's documents) are never
-  sent, with no override.
+  sent, with no override. See and change them in **Activity → AI → Excluded folders**:
+  adding one applies at once; removing one asks first.
 - **AI never acts.** Its answers only fill in suggestions; you decide what to take.
 
 **Costs.** A monthly budget (€5 by default) blocks a call before sending if it could go

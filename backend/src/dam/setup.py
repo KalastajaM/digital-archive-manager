@@ -475,3 +475,103 @@ def write_layout_settings(
             f.write(original)
         raise
     return target
+
+
+# -- the AI excluded folders in the settings file -------------------------------------
+
+_AI_LINE = re.compile(r"^ai[ \t]*:(?P<rest>[^\n]*)$", re.MULTILINE)
+_EXCLUDE_KEY = re.compile(r"^(?P<indent>[ \t]+)exclude_folders[ \t]*:(?P<rest>[^\n]*)$")
+
+
+def _value_of(rest: str) -> str:
+    """What follows a ``key:`` on its line, without a trailing comment."""
+    return re.sub(r"(^|[ \t])#.*$", "", rest).strip()
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def _exclude_lines(indent: str, folders: list[str]) -> list[str]:
+    if not folders:
+        return [f"{indent}exclude_folders: []"]
+    return [f"{indent}exclude_folders:"] + [
+        f"{indent}  - {json.dumps(f, ensure_ascii=False)}" for f in folders
+    ]
+
+
+def with_ai_exclude_folders(text: str, folders: list[str]) -> str:
+    """``text`` (a settings file, ``\\n`` newlines) with ``ai.exclude_folders`` set to
+    ``folders``; everything else, comments included, as it was. No active ``ai:``
+    section: one is added at the end. A section written inline (``ai: {...}``) is refused
+    (ValueError): it has to be edited by hand."""
+    m = _AI_LINE.search(text)
+    if m is None:
+        return text.rstrip("\n") + "\n" + "\n".join(["ai:", *_exclude_lines("  ", folders)]) + "\n"
+    if _value_of(m.group("rest")):
+        raise ValueError(
+            "the ai: section is written inline; edit exclude_folders in settings.yaml by hand"
+        )
+    lines = text.split("\n")
+    start = text[: m.start()].count("\n")  # the ai: line
+    end = start + 1  # the section: indented, blank or comment lines up to the next key
+    while end < len(lines) and (not lines[end].strip() or lines[end][:1] in " \t#"):
+        if lines[end][:1] == "#":  # a top-level comment ends it unless the section goes on after it
+            nxt = end + 1
+            while nxt < len(lines) and lines[nxt][:1] == "#":
+                nxt += 1
+            if nxt >= len(lines) or lines[nxt][:1] not in " \t":
+                break
+        end += 1
+    body = range(start + 1, end)
+    keys = [i for i in body if lines[i].strip() and not lines[i].lstrip().startswith("#")]
+    child = lines[keys[0]][: _indent(lines[keys[0]])] if keys else "  "
+    # the section's own key (one level in), not a deeper one of the same name
+    mine = [i for i in keys if lines[i][: _indent(lines[i])] == child]
+    at = next((i for i in mine if _EXCLUDE_KEY.match(lines[i])), None)
+    if at is None:  # first in the section
+        return "\n".join(lines[: start + 1] + _exclude_lines(child, folders) + lines[start + 1 :])
+    stop = at + 1
+    rest = _EXCLUDE_KEY.match(lines[at]).group("rest")
+    comment = re.search(r"(?:^|[ \t])(#.*)$", rest)
+    new = _exclude_lines(child, folders)
+    if comment:  # the key line's own comment stays
+        new[0] += f"  {comment.group(1)}"
+    if not _value_of(rest):  # a block list: its items
+        while stop < end and (not lines[stop].strip() or _indent(lines[stop]) > len(child) or (
+            lines[stop].lstrip().startswith("-") and _indent(lines[stop]) == len(child)
+        )):
+            stop += 1
+        while stop > at + 1 and not lines[stop - 1].strip():  # keep blank lines after it
+            stop -= 1
+    return "\n".join(lines[:at] + new + lines[stop:])
+
+
+def write_ai_exclude_folders(app_paths: AppPaths, folders: list[str]) -> Path:
+    """Set ``ai.exclude_folders`` in the settings file to ``folders`` (already cleaned),
+    replacing the defaults. Comments elsewhere are kept; the file it replaces is saved as
+    a ``.bak-<time>`` copy. Verified by reading the settings back; restored on failure."""
+    app_paths.ensure()
+    target = settings_path(app_paths)
+    original = target.read_bytes()
+    nl = newline_of(original)
+    text = original.decode("utf-8").replace("\r\n", "\n")
+    new = with_ai_exclude_folders(text, folders)
+    if new == text:
+        return target
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    try:
+        with open(target.with_name(f"{target.name}.bak-{stamp}"), "xb") as fh:
+            fh.write(original)
+    except FileExistsError:
+        pass  # a backup from this very second exists already
+    try:
+        with open(target, "w", encoding="utf-8", newline=nl) as f:
+            f.write(new)
+        if load_settings(app_paths).ai.exclude_folders != folders:
+            raise OSError("the settings did not read back as written")
+    except (OSError, ValueError, yaml.YAMLError):
+        with open(target, "wb") as f:
+            f.write(original)
+        raise
+    return target

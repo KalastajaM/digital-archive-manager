@@ -1282,6 +1282,17 @@ export const useAISwitch = () => {
   });
 };
 
+/** Save the AI excluded folders (the whole list: it replaces the defaults in
+ * settings.yaml); they apply at once. Answers the new status. */
+export const useAIExcludeFolders = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (folders: string[]) => put<AIStatus>("/api/ai/exclude-folders", { folders }),
+    onSuccess: (status) => client.setQueryData([...keys.ai, "status"], status),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.ai }),
+  });
+};
+
 const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];
 
 /** A file's saved summaries (``{ai, user}``, each with ``outdated``). */

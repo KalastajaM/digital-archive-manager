@@ -493,7 +493,12 @@ effort (`ai.effort`, default `low`), the output limits and the excluded folders.
 - **Time limit**: 60 s plus 1 s per 500 estimated input tokens and 1 s per 50 output
   tokens allowed, rounded up to 10 s and capped at 3 minutes.
 - **Excluded folders**: `ai.exclude_folders`, default `50. Medical`, `70. Work`,
-  `90. Other People`.
+  `90. Other People`; paths from the archive root, each covering everything inside it
+  (case and Unicode form ignored). Activity → AI edits the list (`PUT
+  /api/ai/exclude-folders`): it writes the whole list to `settings.yaml` (replacing the
+  defaults, keeping other settings and comments, with a `.bak-<time>` copy of the old
+  file) and applies at once, no restart. A request previewed before a folder was
+  excluded is refused at Send.
 
 **Demos: `DAM_AI_FAKE=1`.** For demos and tests only, `DAM_AI_FAKE=1` replaces the
 provider with a deterministic fake. It makes **no network calls**, counts as having a key,

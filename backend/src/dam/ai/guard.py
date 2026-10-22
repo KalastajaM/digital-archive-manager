@@ -3,10 +3,12 @@ validation and the prompt-injection framing. Pure functions: the service applies
 """
 
 import math
+import re
 from typing import Any
 
 from dam.config import AISettings
 from dam.ops.guards import fold_parts, is_under
+from dam.services.errors import InvalidRequest
 
 # text limits (spec §2.2 and the plan's Global Constraints)
 DOC_CHARS = 12_000  # per document (filing, summaries)
@@ -44,6 +46,34 @@ def excluded_folder(rel: str, exclude_folders: list[str]) -> str | None:
 
 def is_excluded(rel: str, exclude_folders: list[str]) -> bool:
     return excluded_folder(rel, exclude_folders) is not None
+
+
+def clean_exclude_folders(folders: list[str]) -> list[str]:
+    """The excluded folders as the settings keep them: archive paths, trimmed, with no
+    leading or trailing ``/`` and no empty parts; a duplicate (case and NFC folded) is
+    dropped, the first spelling kept. InvalidRequest for an empty entry, a path outside
+    the archive (absolute, ``~``, a drive letter) or one with ``.`` / ``..`` parts."""
+    out: list[str] = []
+    seen: set[tuple[str, ...]] = set()
+    for raw in folders:
+        entry = raw.strip().replace("\\", "/")
+        if entry.startswith(("/", "~")) or re.match(r"^[A-Za-z]:", entry):
+            raise InvalidRequest(
+                f"{raw!r} is not a folder in the archive: give its path from the archive root"
+            )
+        parts = [p.strip() for p in entry.split("/") if p.strip()]
+        if not parts:
+            raise InvalidRequest("A folder name is empty")
+        if any(p in (".", "..") for p in parts):
+            raise InvalidRequest(
+                f"{raw!r} is not a folder in the archive: . and .. are not allowed"
+            )
+        clean = "/".join(parts)
+        key = fold_parts(clean)
+        if key not in seen:
+            seen.add(key)
+            out.append(clean)
+    return out
 
 
 def estimate_tokens(chars: int) -> int:
