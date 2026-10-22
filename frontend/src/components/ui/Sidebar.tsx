@@ -42,7 +42,7 @@ import { plural } from "../../format";
 import { visible } from "../../text";
 import { changeToast } from "../collectionText";
 import { ArchiveSwitcher } from "../ArchiveSwitcher";
-import { ImportantGlyph } from "../MarkIcons";
+import { ImportantGlyph, StarGlyph } from "../MarkIcons";
 import {
   childrenOf,
   collectionMoveRunning,
@@ -349,6 +349,7 @@ function CollectionsSection({ list }: { list: CollectionRow[] }) {
   return (
     <Section title="Collections" to="/collections" dropProps={top.props}>
       <ImportantRow />
+      <StarredRow />
       {(kids.get(null) ?? []).map((c) => (
         <CollectionNode key={c.id} c={c} kids={kids} folds={folds} collect={collect} mover={mover} />
       ))}
@@ -368,6 +369,23 @@ function ImportantRow() {
           <ImportantGlyph large />
         </span>
         <span className="sidebar-label">Important</span>
+        {n > 0 && <span className="sidebar-count">{n}</span>}
+      </NavLink>
+    </li>
+  );
+}
+
+/** The ★ Starred row, under Important: the ★ Ongoing built-in's collection page. */
+function StarredRow() {
+  const starred = useBuiltin("starred");
+  const n = starred.data?.members.length ?? 0;
+  return (
+    <li>
+      <NavLink to="/starred" className="sidebar-row" aria-label={n ? `Starred (${n})` : "Starred"}>
+        <span className="sidebar-icon sidebar-starred" aria-hidden="true">
+          <StarGlyph size={16} />
+        </span>
+        <span className="sidebar-label">Starred</span>
         {n > 0 && <span className="sidebar-count">{n}</span>}
       </NavLink>
     </li>

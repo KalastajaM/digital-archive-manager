@@ -312,7 +312,7 @@ describe("Trays", () => {
     expect(tag).toHaveAttribute("title", "Overdue · 15.10.2026");
     expect(bill).toHaveTextContent("Northpower Oy");
     expect(bill).toHaveTextContent("84,20 €");
-    expect(bill).toHaveTextContent("2 files");
+    expect(bill).not.toHaveTextContent("2 files");
     expect(within(bill).getByRole("img", { name: "Has a note" })).toBeInTheDocument();
     expect(within(bill).queryByRole("button")).not.toBeInTheDocument();
     expect(within(row("Water⟨U+202E⟩bill")).getByText("30 Nov")).toHaveClass("tag-grey");
@@ -611,12 +611,13 @@ describe("Item detail", () => {
     expect(within(hit).getByRole("img", { name: "Starred" })).toBeInTheDocument();
   });
 
-  it("checklist: Enter adds, the checkbox toggles, edit, remove and move go to the API", async () => {
+  it("checklist: Enter adds, the checkbox toggles, inline edit, reorder (keys and drag) and delete go to the API", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/checklist/item/1": { body: { id: 13, text: "Photo", done: false, position: 2 } },
       "PATCH /api/checklist/11": { status: 204, body: null },
       "POST /api/checklist/11/move": { status: 204, body: null },
       "POST /api/checklist/12/remove": { status: 204, body: null },
+      "POST /api/checklist/12/move": { status: 204, body: null },
     });
     const list = await within(await screen.findByRole("region", { name: "Item" })).findByRole("region", {
       name: "Checklist",
@@ -631,21 +632,81 @@ describe("Item detail", () => {
     await waitFor(() => expect(sent(calls, "PATCH", "/api/checklist/11")).toHaveLength(1));
     expect(sent(calls, "PATCH", "/api/checklist/11")[0].body).toEqual({ done: true });
 
-    await user.click(within(list).getByRole("button", { name: "Move Check meter down" }));
+    // reorder: Option-Down on the focused row, and a drop on another row
+    const text = within(list).getByRole("button", { name: "Check meter" });
+    text.focus();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
     await waitFor(() => expect(sent(calls, "POST", "/api/checklist/11/move")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/checklist/11/move")[0].body).toEqual({ position: 1 });
-    expect(within(list).getByRole("button", { name: "Move Check meter up" })).toBeDisabled();
-    expect(within(list).getByRole("button", { name: "Move Pay⟨U+202E⟩it down" })).toBeDisabled();
+    expect(await within(list).findByRole("status")).toHaveTextContent("moved to position 2");
+    const rows = within(list).getAllByRole("listitem");
+    const dt = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(rows[1], { dataTransfer: dt });
+    fireEvent.dragOver(rows[0], { dataTransfer: dt });
+    fireEvent.drop(rows[0], { dataTransfer: dt });
+    await waitFor(() => expect(sent(calls, "POST", "/api/checklist/12/move")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/checklist/12/move")[0].body).toEqual({ position: 0 });
+    expect(within(list).queryByRole("button", { name: /Move .* (up|down)/ })).not.toBeInTheDocument();
 
-    await user.click(within(list).getByRole("button", { name: "Remove Pay⟨U+202E⟩it" }));
+    await user.click(within(list).getByRole("button", { name: "Delete Pay⟨U+202E⟩it" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/checklist/12/remove")).toHaveLength(1));
 
-    await user.click(within(list).getByRole("button", { name: "Edit Check meter" }));
+    // click the text to edit: Esc cancels, Enter saves
+    await user.click(within(list).getByRole("button", { name: "Check meter" }));
+    await user.keyboard("{Escape}");
+    expect(within(list).queryByLabelText("Edit checklist entry")).not.toBeInTheDocument();
+    expect(sent(calls, "PATCH", "/api/checklist/11")).toHaveLength(1);
+    await user.click(within(list).getByRole("button", { name: "Check meter" }));
     const edit = within(list).getByLabelText("Edit checklist entry");
     await user.clear(edit);
     await user.type(edit, "Read meter{Enter}");
     await waitFor(() => expect(sent(calls, "PATCH", "/api/checklist/11")).toHaveLength(2));
     expect(sent(calls, "PATCH", "/api/checklist/11")[1].body).toEqual({ text: "Read meter" });
+  });
+
+  it("Move to tray moves the item (same item), follows it to the other tray and Undo moves it back", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "POST /api/items/1/move": { body: { ...BILL, tray_id: "to-action", tray_name: "To action" } },
+      "POST /api/items/1/undo-move": { body: BILL },
+    });
+    await screen.findByRole("region", { name: "Checklist" });
+    await user.click(await within(detail()).findByRole("button", { name: "Move to tray" }));
+    const menu = await screen.findByRole("menu", { name: "Move to tray" });
+    expect(within(menu).queryByRole("menuitem", { name: "To pay" })).not.toBeInTheDocument();
+    await user.click(within(menu).getByRole("menuitem", { name: "To action" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/move")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/1/move")[0].body).toEqual({ tray: "to-action" });
+    await waitFor(() => expect(where()).toBe("/trays/to-action?item=1"));
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/undo-move")).toHaveLength(1));
+    await waitFor(() => expect(where()).toBe("/trays/to-pay?item=1"));
+  });
+
+  it("Remove from tray asks first, then deletes the item and closes the panel; Cancel does nothing", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "POST /api/items/1/remove": { status: 204, body: null },
+    });
+    await screen.findByRole("region", { name: "Checklist" });
+    await user.click(await within(detail()).findByRole("button", { name: "Remove from tray" }));
+    let dialog = await screen.findByRole("dialog", { name: /^Remove .* from To pay\?/ });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(sent(calls, "POST", "/api/items/1/remove")).toHaveLength(0);
+    await user.click(await within(detail()).findByRole("button", { name: "Remove from tray" }));
+    dialog = await screen.findByRole("dialog", { name: /^Remove .* from To pay\?/ });
+    await user.click(within(dialog).getByRole("button", { name: "Remove from tray" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/remove")).toHaveLength(1));
+    await waitFor(() => expect(where()).toBe("/trays/to-pay"));
+  });
+
+  it("Backspace on the selected row asks to remove it from the tray", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "POST /api/items/1/remove": { status: 204, body: null },
+    });
+    await screen.findByRole("article", { name: "Northpower sähkö" });
+    await user.keyboard("{Backspace}");
+    const dialog = await screen.findByRole("dialog", { name: /^Remove .* from To pay\?/ });
+    await user.click(within(dialog).getByRole("button", { name: "Remove from tray" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/remove")).toHaveLength(1));
   });
 
   it("renders the history with relative dates and changed values", async () => {
@@ -863,9 +924,15 @@ describe("To action and To read", () => {
   it("To action shows its title and date fields first, then the summary, with the date and checklist up top", async () => {
     renderTrays("/trays/to-action?item=4");
     const panel = await screen.findByRole("region", { name: "Item" });
-    const when = await within(panel).findByRole("group", { name: "Due" });
-    expect(when).toHaveTextContent("22.10.2026");
-    expect(within(when).getByText("in 3 days")).toHaveClass("tag-orange");
+    const date = await within(panel).findByLabelText(/^Due/);
+    // the date field, its tag and Mark done share one row; no separate read-only date line
+    const dateRow = date.closest(".item-date-row") as HTMLElement;
+    expect(dateRow).not.toBeNull();
+    expect(date).toHaveValue("2026-10-22");
+    expect(within(dateRow).getByText("in 3 days")).toHaveClass("tag-orange");
+    expect(within(dateRow).getByRole("button", { name: "Mark done" })).toBeInTheDocument();
+    expect(panel.querySelector(".item-when")).toBeNull();
+    expect(within(panel).queryByRole("group", { name: "Due" })).not.toBeInTheDocument();
     const checklist = await within(panel).findByRole("region", { name: "Checklist" });
     const title = within(panel).getByLabelText("Title");
     // the title and date come before the summary and the checklist

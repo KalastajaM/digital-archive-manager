@@ -38,7 +38,7 @@ All notable changes are listed here. The format follows
   and Next page; a collection without groups but with two or more files hints at "New
   group".
 - A new default tray, **Follow up**, for things you wait on from others (a delivery, a
-  reply, a refund): an optional check date, who you wait on, and "Received" to finish. Its
+  reply, a refund): an optional check date, who you wait on, and a plain "Done" to finish. Its
   items without a date have no reminders. A default tray file added in a later version is
   copied into an existing install once; a tray file you deleted stays deleted.
 - Ask: **Save to notes…** under an answer adds the question, answer, date and sources to
@@ -47,6 +47,28 @@ All notable changes are listed here. The format follows
 - Tray items: "Add file" in the list column puts a file you search for in the tray as a
   new item; "Add another file…" under an item's title attaches a file to that item.
 - Activity: creating a folder is a kind of change of its own, "New folders".
+
+- A file lives in one tray: putting a file that has an open item in another tray into a
+  tray moves that item (history says "Moved from … to …", Undo moves it back) instead of
+  making a second one. The item has a **Move to tray** menu. New
+  `POST /api/items/quick` fields `moved` and `moved_from`, `POST /api/items/{id}/move` and
+  `/undo-move`.
+- **Remove from tray** on an item (and `⌫` on the selected row) deletes it, open or done,
+  after a confirm; the files stay where they are. New `POST /api/items/{id}/remove`.
+- Checklist rows: click the text to edit, drag by the grip or press Option-Up/Down to
+  reorder, delete button on hover; the Edit and arrow buttons are gone.
+- A **Starred** row under Important in the sidebar, with its count, opens the ★ Ongoing
+  collection page (`/starred`). Inside the Starred card and page the ★ is no longer
+  repeated on every row (the ! stays), and likewise the ! inside the Important page.
+- Today: the cards' ⋯ menus are gone. Reorder by dragging or with ⌥↑ / ⌥↓ on a card's
+  header (announced to screen readers); **Reset layout** is a button under the date.
+- Today's tray rows (all of them, also items due later) have a round checkbox before the
+  title that marks the item done at once with the done fields' defaults, with Undo. A
+  done field that is required and has no default opens its small form.
+- A dated tray item shows its date field, urgency tag and Mark done on one row; the
+  separate read-only date line is gone.
+- Activity cards are collapsible (collapsed by default), with Expand all / Collapse all
+  remembered per browser; a search shows them open.
 
 ### Fixed
 
@@ -76,10 +98,13 @@ All notable changes are listed here. The format follows
   Quick Look say "files", not "documents"; the folder picker calls the deletion folder To
   Delete; the preview toggle on the review card has its own icon instead of the Quick Look
   eye.
+- No more "needs a …" text for an empty required field on tray items (Today cards, the
+  item's fields, the filing form). The tray list rows no longer show a file count.
+- More space between the tag box and the Collections line in the file panel.
 - Inbox: the tags field (review card and multi-file card) is the chip field with tag
   suggestions used on a filed file's details; Ask AI is the sparkle icon button; Preview,
   File it and File N have tooltips saying what they do.
-- Tray items: the header shows the Quick Look eye button (tooltip "Quick Look (Space)")
+- Tray items: the header shows the Quick Look eye button (tooltip "Quick Look Space")
   instead of a text link and key hint, and the "needs a due date" chip is gone from the
   tray list and the item header. Quick Look buttons on Today's Starred card and on
   Convert Ongoing also name Space.

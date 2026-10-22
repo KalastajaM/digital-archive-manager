@@ -4,7 +4,7 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { Eye, Unlink, X } from "lucide-react";
+import { CircleMinus, Eye, Unlink, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -21,6 +21,8 @@ import {
   useItemHistory,
   useItemReopen,
   useItemUpdate,
+  useMoveItem,
+  useUndoMoveItem,
 } from "../api/client";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { Barcode, type PayFact } from "../components/Barcode";
@@ -37,6 +39,8 @@ import { amountField } from "../components/today/TrayCard";
 import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
 import { TipButton } from "../components/ui/TipButton";
+import { Menu, type MenuEntry } from "../components/ui/Menu";
+import { RemoveItemSheet } from "../components/RemoveItemSheet";
 import { UrgencyTag } from "../components/UrgencyTag";
 import { useAutoSave } from "../components/useAutoSave";
 import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, groupIban, plural } from "../format";
@@ -106,7 +110,11 @@ function fieldText(def: FieldDef, item: Item, name: string): string | boolean {
   return editText(def, raw) ?? raw;
 }
 
-function Fields({ item, tray }: { item: Item; tray: TrayDef | undefined }) {
+/** A dated tray's date field sits on one row with its urgency tag (after the input) and
+ * the done buttons (right-aligned); ``Fields`` puts ``dateRow`` around that field. */
+type DateRow = { tag: ReactNode; actions: ReactNode };
+
+function Fields({ item, tray, dateRow }: { item: Item; tray: TrayDef | undefined; dateRow?: DateRow }) {
   const update = useItemUpdate();
   const saveTitle = async (value: string | boolean) =>
     (await update.mutateAsync({ id: item.id, title: String(value) })).title;
@@ -131,7 +139,7 @@ function Fields({ item, tray }: { item: Item; tray: TrayDef | undefined }) {
           return fieldText(def, stored, name);
         };
         const label = visible(fieldLabel(name));
-        return (
+        const field = (
           <EditableField
             key={name}
             label={def.required ? `${label} (required)` : label}
@@ -141,11 +149,17 @@ function Fields({ item, tray }: { item: Item; tray: TrayDef | undefined }) {
             hint={
               invalid ? (
                 <p className="hint">invalid for this field type: kept as stored until you set a new value</p>
-              ) : item.missing_required.includes(name) ? (
-                <p className="hint">needs a {label}</p>
               ) : null
             }
           />
+        );
+        if (!dateRow || name !== tray?.date_field) return field;
+        return (
+          <div className="item-date-row" key={name}>
+            {field}
+            {dateRow.tag}
+            <span className="item-date-actions">{dateRow.actions}</span>
+          </div>
         );
       })}
     </div>
@@ -302,6 +316,8 @@ function eventText(event: ItemEvent, tray: TrayDef | undefined, names: Map<strin
       return `File added: ${fileName()}`;
     case "file_removed":
       return `File removed: ${fileName()}`;
+    case "moved":
+      return `Moved from ${String(data.from_name ?? "another tray")} to ${String(data.to_name ?? "another tray")}`;
   }
 }
 
@@ -486,6 +502,9 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const [tab, setTab] = useState(0);
   const [adding, setAdding] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const moveItem = useMoveItem();
+  const undoMove = useUndoMoveItem();
   const actionsRef = useRef<HTMLDivElement>(null);
   const list = files.data ?? [];
   const shown: ItemFile | undefined = list[Math.min(tab, list.length - 1)];
@@ -506,6 +525,28 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     e.preventDefault();
     trashFile(shown);
   });
+  /** Move this item to another tray: it goes on being shown there, with an Undo. */
+  const moveTo = async (target: TrayDef) => {
+    const from = item.tray_id;
+    try {
+      const moved = await moveItem.mutateAsync({ id: item.id, tray: target.id });
+      navigate(`/trays/${encodeURIComponent(target.id)}?item=${item.id}`);
+      toast({
+        kind: "info",
+        text: `Moved to ${visible(target.name)}: ${visible(moved.title)}`,
+        action: {
+          label: "Undo",
+          run: () =>
+            void undoMove.mutateAsync(item.id).then(
+              () => navigate(`/trays/${encodeURIComponent(from)}?item=${item.id}`),
+              (e) => toast({ kind: "error", text: `Could not move it back: ${visible(errorText(e))}` }),
+            ),
+        },
+      });
+    } catch (e) {
+      toast({ kind: "error", text: `Could not move ${visible(item.title)}: ${visible(errorText(e))}` });
+    }
+  };
   /** Take a file off the item (DB only: the file stays where it is), with Undo: the
    * link holds nothing but the two ids, so adding it back restores it. */
   const takeOff = async (f: ItemFile) => {
@@ -530,7 +571,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   // the same words on the button and on the form's submit ("Mark paid and file…")
   const doneText = markLabel(doneLabel);
   const fileLabel = `${doneText} and file…`;
-  const dateField = tray?.date_field;
   const amount = amountField(tray);
   const amountValue = amount ? item.fields[amount] : undefined;
   const firstPath = list.find((f) => f.path)?.path;
@@ -568,32 +608,57 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     </button>
   );
 
+  const doneButtons =
+    open && !doneMode ? (
+      <>
+        <TipButton
+          className="primary"
+          tip="Mark this item done; it moves to the Done list"
+          disabled={tray === undefined}
+          disabledReason={TRAYS_LOADING}
+          onClick={() => setDone("done")}
+        >
+          {visible(doneText)}
+        </TipButton>
+        {anyInInbox && (
+          <TipButton
+            tip="Mark this item done, then open its file in the Inbox to file it"
+            disabled={tray === undefined}
+            disabledReason={TRAYS_LOADING}
+            onClick={() => setDone("file")}
+          >
+            {visible(fileLabel)}
+          </TipButton>
+        )}
+      </>
+    ) : null;
+
   /** Mark done / Done and file…, and the shown file's own actions (``ask`` is its Ask AI). */
   const actionRow = (ask?: ReactNode) => (
     <div className="item-actions" ref={actionsRef}>
-      {open && !doneMode && (
-        <>
-          <TipButton
-            className="primary"
-            tip="Mark this item done; it moves to the Done list"
-            disabled={tray === undefined}
-            disabledReason={TRAYS_LOADING}
-            onClick={() => setDone("done")}
-          >
-            {visible(doneText)}
-          </TipButton>
-          {anyInInbox && (
-            <TipButton
-              tip="Mark this item done, then open its file in the Inbox to file it"
-              disabled={tray === undefined}
-              disabledReason={TRAYS_LOADING}
-              onClick={() => setDone("file")}
-            >
-              {visible(fileLabel)}
-            </TipButton>
-          )}
-        </>
-      )}
+      {kind !== "dated" && doneButtons}
+      <span className="item-tray-actions" role="group" aria-label="This item">
+        {open && (
+          // The pull-down shows no tooltip of its own; the wrapper carries it.
+          <span className="button-wrap" data-tip="Move this item to another tray">
+            <Menu
+              label="Move to tray"
+              text="Move to tray"
+              icon={null}
+              className="file-action-menu"
+              entries={moveEntries}
+            />
+          </span>
+        )}
+        {/* Not a bin: removing from the tray deletes nothing (the bin is To Delete). */}
+        <IconButton
+          icon={<CircleMinus />}
+          label="Remove from tray"
+          tip="Remove from this tray (the files stay where they are)"
+          disabled={moveItem.isPending}
+          onClick={() => setRemoving(true)}
+        />
+      </span>
       {shown && (
         <span className="item-file-actions" role="group" aria-label="This file">
           {ask}
@@ -615,10 +680,29 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     </div>
   );
 
-  const fields = <Fields key={item.id} item={item} tray={tray} />;
+  const dateRow: DateRow | undefined =
+    kind === "dated"
+      ? { tag: open && item.date ? <UrgencyTag date={item.date} today={today} /> : null, actions: doneButtons }
+      : undefined;
+  const fields = <Fields key={item.id} item={item} tray={tray} dateRow={dateRow} />;
+  const moveEntries: MenuEntry[] = [...trays.values()]
+    .filter((t) => t.id !== item.tray_id)
+    .map((t) => ({ label: visible(t.name), disabled: moveItem.isPending, onSelect: () => void moveTo(t) }));
+  if (moveEntries.length === 0) moveEntries.push({ label: "No other trays", disabled: true, onSelect: () => {} });
 
   return (
     <div className={`item-detail item-${kind}`}>
+      {removing && (
+        <RemoveItemSheet
+          item={item}
+          onClose={() => setRemoving(false)}
+          onRemoved={() => {
+            setRemoving(false);
+            toast({ kind: "info", text: `Removed from ${visible(item.tray_name)}: ${visible(item.title)}` });
+            onClose();
+          }}
+        />
+      )}
       <header className="item-header">
         <div className="item-heading">
           <h2 id={headingId}>{visible(item.title)}</h2>
@@ -678,13 +762,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         />
       )}
       {kind === "dated" && fields}
-      {kind === "dated" && item.date && (
-        <div className="item-when" role="group" aria-label={visible(fieldLabel(dateField ?? "date"))}>
-          <span className="item-when-label">{visible(fieldLabel(dateField ?? "date"))}</span>
-          <span className="item-when-date">{formatDate(item.date)}</span>
-          {open && <UrgencyTag date={item.date} today={today} />}
-        </div>
-      )}
       {kind === "waiting" && open && (
         <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>
       )}

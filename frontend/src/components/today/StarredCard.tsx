@@ -64,7 +64,7 @@ function StarredRow({ m, onLook }: { m: Member; onLook?: () => void }) {
         title={m.path ? visible(m.path) : undefined}
       >
         {name}
-        <MarkIcons marks={m.marks} />
+        <MarkIcons marks={m.marks} omit="starred" />
       </span>
       {m.missing && <span className="hint">missing</span>}
       {!m.missing && m.quarantined && <span className="hint">in ##. To Delete</span>}
@@ -152,7 +152,6 @@ export function StarredCard({ frame }: { frame: CardFrame }) {
       className="today-card today-card-compact"
       fold={frame.fold}
       headerProps={frame.headerProps}
-      actions={frame.menu}
     >
       {starred.isError ? (
         <p className="error">Could not load the starred files. {visible(errorText(starred.error))}</p>

@@ -89,6 +89,7 @@ describe("Sidebar", () => {
       ["To read (4)", "/trays/to-read"],
       ["Collections", "/collections"],
       ["Important", "/important"],
+      ["Starred", "/starred"],
       ["Legal", "/collections/1"],
       ["Tax 2026", "/collections/2"],
       ["Browse", "/browse"],

@@ -1,13 +1,14 @@
 /** A tray's card on Today and its rows: what needs attention in full (fields, copy
- * buttons, Done), later items compact, with urgency tags and amounts. */
+ * buttons), later items compact, each with a round checkbox that marks it done, with urgency tags and amounts. */
 import { BookOpen, CircleCheck, Euro, Hourglass, ListTodo, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { AttentionItem, Item, Today as TodayData, TrayCount, TrayDef } from "../../api/client";
+import { type AttentionItem, errorText, type Item, type Today as TodayData, type TrayCount, type TrayDef, useItemDone, useItemReopen } from "../../api/client";
 import { dayOf, fieldLabel, fieldWord, formatField, formatMoney, plural } from "../../format";
 import { visible } from "../../text";
 import { CopyButton } from "../CopyButton";
 import { DoneForm } from "../DoneForm";
 import { ItemBadges } from "../ItemBadges";
+import { useToast } from "../Toasts";
 import { Card } from "../ui/Card";
 import { urgency, UrgencyTag } from "../UrgencyTag";
 import type { CardFrame } from "./frame";
@@ -67,6 +68,13 @@ const hasValue = (v: unknown) => v != null && v !== "";
 /** An attention entry, or an open item dated later (no level) from Today's open items. */
 export type Row = Omit<AttentionItem, "level"> & { level: AttentionItem["level"] | null };
 
+/** The checkbox's name: "Mark <title> done", or with the tray's own done label ("Mark
+ * paid" gives "Mark <title> paid", "Read" gives "Mark <title> read"). */
+export function doneName(title: string, label: string): string {
+  const word = label.replace(/^mark\s+/i, "").toLowerCase();
+  return `Mark ${title} ${word}`;
+}
+
 export function TrayRow({
   entry,
   full,
@@ -78,7 +86,7 @@ export function TrayRow({
   setFormOpen,
 }: {
   entry: Row;
-  /** It needs attention: fields, copy buttons and Done are shown (later items stay compact). */
+  /** It needs attention: fields and copy buttons are shown (later items stay compact). */
   full: boolean;
   kind: Kind;
   tray: TrayDef | undefined;
@@ -105,13 +113,60 @@ export function TrayRow({
       : visible(formatField(defs[n]?.type, item.fields[n]));
   const tone = item.date ? urgency(item.date, today).tone : level === "undated" ? "orange" : "grey";
   const age = daysBetween(dayOf(item.created), today);
+  const doneFields = tray?.done?.fields ?? {};
+  const markDone = useItemDone();
+  const reopen = useItemReopen();
+  const toast = useToast();
+  const title = visible(item.title);
+  const checkName = doneName(title, visible(doneLabel));
+  const doneWord = visible(doneLabel).replace(/^mark\s+/i, "").toLowerCase();
+  // Completes at once, sending each done field's default (paid_on: today); only a done
+  // field that is required and has no default opens the small form.
+  const needsForm = Object.values(doneFields).some((f) => f.required && f.type !== "checkbox" && !f.default);
+  const defaults = Object.fromEntries(
+    Object.entries(doneFields).flatMap(([n, f]): [string, string | boolean][] =>
+      f.type === "checkbox" ? [[n, false]] : f.default === "today" ? [[n, today]] : [],
+    ),
+  );
+  const onCheck = async () => {
+    if (needsForm) {
+      setFormOpen(!formOpen);
+      return;
+    }
+    try {
+      await markDone.mutateAsync({ id: item.id, fields: defaults });
+    } catch (err) {
+      toast({ kind: "error", text: `Could not mark ${title} ${doneWord}: ${visible(errorText(err))}` });
+      return;
+    }
+    toast({
+      kind: "info",
+      text: `Marked ${doneWord}: ${title}`,
+      action: {
+        label: "Undo",
+        run: () =>
+          void reopen.mutateAsync(item.id).then(
+            () => toast({ kind: "info", text: `Reopened: ${title}` }),
+            (err) => toast({ kind: "error", text: `Could not reopen ${title}: ${visible(errorText(err))}` }),
+          ),
+      },
+    });
+  };
 
   return (
     <article
       className={`today-row attention attention-${level ?? "later"}${full ? "" : " today-row-compact"}`}
       aria-label={visible(item.title)}
     >
-      {kind !== "waiting" && <span className={`today-dot today-dot-${tone}`} aria-hidden="true" />}
+      <input
+        type="checkbox"
+        className={`round-check round-check-${tone}`}
+        aria-label={checkName}
+        data-tip={checkName}
+        checked={markDone.isPending}
+        disabled={traysUnknown || markDone.isPending}
+        onChange={() => void onCheck()}
+      />
       <div className="today-row-main">
         <p className="today-row-title">
           <Link to={`/trays/${enc(entry.tray)}?item=${item.id}`}>{visible(item.title)}</Link>
@@ -128,29 +183,19 @@ export function TrayRow({
           </p>
         )}
         {entry.note_excerpt && <p className="attention-note">Note: {visible(entry.note_excerpt)}</p>}
-        <ItemBadges
-          level={level}
-          missingRequired={entry.missing_required}
-          dateField={tray?.date_field}
-          fileState={entry.file_state}
-        />
-        {full && (
+        <ItemBadges fileState={entry.file_state} />
+        {full && copyable.length > 0 && (
           <div className="attention-actions">
             {copyable.map((n) => (
               <CopyButton key={n} value={item.fields[n] as string} type={defs[n].type} label={fieldWord(n)} />
             ))}
-            {!formOpen && (
-              <button type="button" className="primary" disabled={traysUnknown} onClick={() => setFormOpen(true)}>
-                {visible(doneLabel)}
-              </button>
-            )}
           </div>
         )}
         {formOpen && (
           <DoneForm
             item={item}
             label={doneLabel}
-            fields={tray?.done?.fields ?? {}}
+            fields={doneFields}
             today={today}
             onClose={() => setFormOpen(false)}
           />
@@ -214,7 +259,7 @@ export function TrayCard({
   traysUnknown: boolean;
   formFor: number | null;
   setFormFor: (id: number | null) => void;
-  /** Today's layout: folding, the ⋯ menu, dragging (none when shown on its own). */
+  /** Today's layout: folding, dragging (none when shown on its own). */
   frame?: CardFrame;
 }) {
   const folded = frame?.fold.folded ?? false;
@@ -247,12 +292,9 @@ export function TrayCard({
       fold={frame?.fold}
       headerProps={frame?.headerProps}
       actions={
-        <>
-          <Link className="card-link" to={`/trays/${enc(info.id)}`} aria-label={`Show all in ${name}`}>
-            Show all
-          </Link>
-          {frame?.menu}
-        </>
+        <Link className="card-link" to={`/trays/${enc(info.id)}`} aria-label={`Show all in ${name}`}>
+          Show all
+        </Link>
       }
     >
       {(big || parts.length > 0) && (

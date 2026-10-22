@@ -62,9 +62,10 @@ def test_quick_skips_files_already_in_tray(client, app, scans):
     assert body["skipped"] == ["s1"]
     assert [i["files"] for i in body["created"]] == [["s2"]]
     assert len(app.trays.list("to-pay")) == 2
-    # another tray is fine
+    # another tray: the file's item moves there (one tray per file), none is created
     r = post(client, "/api/items/quick", {"tray": "to-read", "drive_ids": ["s1"]})
-    assert r.json()["skipped"] == [] and len(r.json()["created"]) == 1
+    assert r.json()["skipped"] == [] and r.json()["created"] == []
+    assert [i["tray_id"] for i in r.json()["moved"]] == ["to-read"]
 
 
 def test_quick_errors(client, scans):
@@ -100,7 +101,7 @@ def test_quick_with_fields_uses_them_instead_of_the_prefill(client, app, scans):
     # a stale client (the row still offering Put in) gets "already in", not a second item
     r = post(client, "/api/items/quick", body)
     assert r.status_code == 200, r.text
-    assert r.json() == {"created": [], "skipped": ["s1"]}
+    assert r.json() == {"created": [], "skipped": ["s1"], "moved": [], "moved_from": {}}
     assert len(app.trays.list("to-pay")) == 1
     # fields are for one file; unknown fields and bad values are refused
     r = post(client, "/api/items/quick", {**body, "tray": "to-read", "drive_ids": ["s1", "s2"]})
@@ -144,7 +145,7 @@ def test_discard_removes_the_item_rows(client, app, scans):
     [item] = post(client, "/api/items/quick", {"tray": "to-pay", "drive_ids": ["s1"]}).json()[
         "created"
     ]
-    other = post(client, "/api/items/quick", {"tray": "to-read", "drive_ids": ["s1"]}).json()
+    other = post(client, "/api/items/quick", {"tray": "to-read", "drive_ids": ["s2"]}).json()
     other_id = other["created"][0]["id"]
     with app.engine.begin() as conn:
         conn.execute(

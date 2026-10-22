@@ -43,6 +43,14 @@ const TO_ACTION: TrayDef = {
   done: { label: "Done", fields: {} },
 };
 const TRAYS = { trays: [TO_PAY, TO_ACTION], errors: [] };
+// a tray whose done action needs a value the user must give (no default)
+const ASKS = {
+  trays: [
+    { ...TO_PAY, done: { label: "Mark paid", fields: { paid_on: { type: "date", required: true, copy: false, default: null } } } },
+    TO_ACTION,
+  ],
+  errors: [],
+};
 
 function item(id: number, overrides: Partial<Item> = {}): Item {
   return {
@@ -353,7 +361,8 @@ describe("Today", () => {
     expect(within(action).getByText("today")).toHaveClass("tag-orange");
     expect(action).toHaveTextContent("Note: fill⟨U+202E⟩buckets the evening before");
     expect(bill).not.toHaveTextContent("Note:");
-    expect(within(action).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(within(action).getByRole("checkbox", { name: "Mark Water pipe inspection done" })).toBeInTheDocument();
+    expect(within(action).queryByRole("button", { name: "Done" })).not.toBeInTheDocument();
 
     const soon = row("Kotihoito lasku");
     expect(soon).toHaveClass("attention-soon");
@@ -361,7 +370,7 @@ describe("Today", () => {
     expect(within(soon).getByText("file missing")).toBeInTheDocument();
 
     const undated = row("Bill⟨U+202E⟩gpj.exe");
-    expect(within(undated).getByText("needs a due date")).toBeInTheDocument();
+    expect(within(undated).queryByText(/needs a/)).not.toBeInTheDocument();
     expect(within(undated).getByText(/To Delete/)).toBeInTheDocument();
   });
 
@@ -425,7 +434,7 @@ describe("Today", () => {
     const names = within(bill)
       .getAllByRole("button")
       .map((b) => b.textContent);
-    expect(names).toEqual(["Copy amount", "Copy IBAN", "Copy reference", "Mark paid"]);
+    expect(names).toEqual(["Copy amount", "Copy IBAN", "Copy reference"]);
     // the action has no copy fields; the soon bill has only an amount
     expect(within(row("Water pipe inspection")).queryByRole("button", { name: /^Copy/ })).not.toBeInTheDocument();
     expect(within(row("Kotihoito lasku")).getAllByRole("button", { name: /^Copy/ })).toHaveLength(1);
@@ -439,7 +448,7 @@ describe("Today", () => {
     expect(within(bill).getByRole("status")).toHaveTextContent("Copied");
   });
 
-  it("Mark paid asks for the done fields (paid on = today); Enter posts them and the row goes", async () => {
+  it("ticking a bill completes it at once with the done defaults (paid on = today); Undo reopens", async () => {
     let done = false;
     const { calls, user } = renderToday({
       "GET /api/today": () => ({
@@ -458,45 +467,71 @@ describe("Today", () => {
       "POST /api/items/1/reopen": { body: BILL },
     });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
-    const form = within(bill).getByRole("form", { name: "Mark paid" });
-    const paidOn = within(form).getByLabelText("Paid on");
-    expect(paidOn).toHaveValue(DAY);
-    expect(paidOn).toHaveFocus();
-    expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
-    await user.keyboard("{Enter}");
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
+    expect(within(bill).queryByRole("form")).not.toBeInTheDocument();
     await waitFor(() => expect(posts(calls, "/api/items/1/done")).toHaveLength(1));
     expect(posts(calls, "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: DAY } });
     await waitFor(() => expect(screen.queryByRole("article", { name: "Northpower sähkö" })).not.toBeInTheDocument());
 
-    expect(toasts()).toHaveTextContent(/Mark paid: Northpower sähkö/);
-    await user.click(within(toasts()).getByRole("button", { name: "Reopen" }));
+    expect(toasts()).toHaveTextContent(/Marked paid: Northpower sähkö/);
+    await user.click(within(toasts()).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(posts(calls, "/api/items/1/reopen")).toHaveLength(1));
     expect(await within(toasts()).findByText("Reopened: Northpower sähkö")).toBeInTheDocument();
   });
 
-  it("Esc closes the done form without posting; a tray without done fields confirms by its button", async () => {
-    const { calls, user } = renderToday({ "POST /api/items/2/done": { body: { ...ACTION, state: "done" } } });
+  it("a done field that is required and has no default opens the small form", async () => {
+    const { calls, user } = renderToday({
+      "GET /api/trays": { body: ASKS },
+      "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
+    });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
+    const form = within(bill).getByRole("form", { name: "Mark paid" });
+    const paidOn = within(form).getByLabelText("Paid on");
+    expect(paidOn).toHaveFocus();
+    expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
+    fireEvent.change(paidOn, { target: { value: DAY } });
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(posts(calls, "/api/items/1/done")).toHaveLength(1));
+    expect(posts(calls, "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: DAY } });
+  });
+
+  it("a compact (later) row can be ticked off too", async () => {
+    const { calls, user } = renderToday({ "POST /api/items/5/done": { body: { ...LATER, state: "done" } } });
+    await screen.findByRole("article", { name: LATER.title });
+    const later = row(LATER.title);
+    expect(later).toHaveClass("today-row-compact");
+    await user.click(within(later).getByRole("checkbox", { name: `Mark ${LATER.title} paid` }));
+    await waitFor(() => expect(posts(calls, "/api/items/5/done")).toHaveLength(1));
+    expect(posts(calls, "/api/items/5/done")[0].body).toEqual({ fields: { paid_on: DAY } });
+  });
+
+  it("Esc closes the done form without posting; a tray without done fields completes at once, with Undo", async () => {
+    const { calls, user } = renderToday({
+      "GET /api/trays": { body: ASKS },
+      "POST /api/items/2/done": { body: { ...ACTION, state: "done" } },
+      "POST /api/items/2/reopen": { body: ACTION },
+    });
+    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.keyboard("{Escape}");
     expect(within(bill).queryByRole("form")).not.toBeInTheDocument();
     expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
 
     const action = row("Water pipe inspection");
-    await user.click(within(action).getByRole("button", { name: "Done" }));
-    const form = within(action).getByRole("form", { name: "Done" });
-    const confirm = within(form).getByRole("button", { name: "Done" });
-    expect(confirm).toHaveFocus();
-    await user.keyboard("{Enter}");
+    await user.click(within(action).getByRole("checkbox", { name: "Mark Water pipe inspection done" }));
+    expect(within(action).queryByRole("form")).not.toBeInTheDocument();
     await waitFor(() => expect(posts(calls, "/api/items/2/done")).toHaveLength(1));
     expect(posts(calls, "/api/items/2/done")[0].body).toEqual({ fields: {} });
+    expect(await within(toasts()).findByText("Marked done: Water pipe inspection")).toBeInTheDocument();
+    await user.click(within(toasts()).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/items/2/reopen")).toHaveLength(1));
   });
 
   it("Esc closes the done form even when the focus has left it", async () => {
-    const { user } = renderToday();
+    const { user } = renderToday({ "GET /api/trays": { body: ASKS } });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.click(screen.getByRole("heading", { level: 1 }));
     expect(within(bill).getByLabelText("Paid on")).not.toHaveFocus();
     await user.keyboard("{Escape}");
@@ -506,13 +541,16 @@ describe("Today", () => {
   it("Done stays disabled when the tray settings cannot be loaded", async () => {
     renderToday({ "GET /api/trays": { status: 500, body: { error: "x" } } });
     expect(await screen.findByText(/Tray settings could not be loaded/)).toBeInTheDocument();
-    expect(within(row("Northpower sähkö")).getByRole("button", { name: "Done" })).toBeDisabled();
+    expect(within(row("Northpower sähkö")).getByRole("checkbox", { name: /^Mark Northpower sähkö/ })).toBeDisabled();
   });
 
   it("a failed done keeps the form and shows the error", async () => {
-    const { user } = renderToday({ "POST /api/items/1/done": { status: 400, body: { error: "paid_on: expected a date" } } });
+    const { user } = renderToday({
+      "GET /api/trays": { body: ASKS },
+      "POST /api/items/1/done": { status: 400, body: { error: "paid_on: expected a date" } },
+    });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.keyboard("{Enter}");
     expect(await within(bill).findByRole("alert")).toHaveTextContent("paid_on: expected a date");
     expect(within(bill).getByRole("form", { name: "Mark paid" })).toBeInTheDocument();
@@ -798,33 +836,35 @@ describe("Today card layout", () => {
     expect(within(card("Inbox")).getByRole("button", { name: "Collapse Inbox" })).toBeInTheDocument();
   });
 
-  it("Move up and Move down in a card's ⋯ menu reorder the cards, kept after a remount; Reset layout restores", async () => {
+  const foldButton = (name: string) => header(name).querySelector<HTMLButtonElement>("button")!;
+  const altKey = (user: ReturnType<typeof userEvent.setup>, key: "ArrowUp" | "ArrowDown") =>
+    user.keyboard(`{Alt>}{${key}}{/Alt}`);
+
+  it("cards have no ⋯ menu; Option-Up and Option-Down on a header reorder them, announced and kept after a remount; Reset layout is on the page", async () => {
     const { user, view } = renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
     expect(order()).toEqual(DEFAULT_ORDER);
+    expect(screen.queryByRole("button", { name: /^More for/ })).not.toBeInTheDocument();
 
-    await user.click(within(card("Inbox")).getByRole("button", { name: "More for Inbox" }));
-    expect(screen.getByRole("menuitem", { name: "Move up" })).toBeDisabled();
-    await user.click(screen.getByRole("menuitem", { name: "Move down" }));
+    foldButton("Inbox").focus();
+    await altKey(user, "ArrowUp"); // already first: nothing moves
+    expect(order()).toEqual(DEFAULT_ORDER);
+    await altKey(user, "ArrowDown");
     expect(order()).toEqual(["To action", "Inbox", "To⟨U+200B⟩read", "Collections to do", "Reminders", "To pay", "Starred"]);
-    // the focus stays with the moved card's menu, so the keys can move it again
-    expect(document.activeElement).toBe(within(card("Inbox")).getByRole("button", { name: "More for Inbox" }));
+    expect(document.body).toHaveTextContent("Inbox moved down");
+    // the focus stays with the moved card's header, so the keys can move it again
+    expect(document.activeElement).toBe(foldButton("Inbox"));
 
-    await user.click(within(card("Collections to do")).getByRole("button", { name: "More for Collections to do" }));
-    await user.click(screen.getByRole("menuitem", { name: "Move up" }));
+    foldButton("Collections to do").focus();
+    await altKey(user, "ArrowUp");
     expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "To pay", "Starred"]);
-
-    await user.click(within(card("Starred")).getByRole("button", { name: "More for Starred" }));
-    expect(screen.getByRole("menuitem", { name: "Move down" })).toBeDisabled();
-    await user.keyboard("{Escape}");
 
     view.unmount();
     renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
     expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "To pay", "Starred"]);
 
-    await user.click(within(card("Inbox")).getByRole("button", { name: "More for Inbox" }));
-    await user.click(screen.getByRole("menuitem", { name: "Reset layout" }));
+    await user.click(screen.getByRole("button", { name: "Reset layout" }));
     expect(order()).toEqual(DEFAULT_ORDER);
     expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
   });
@@ -863,20 +903,19 @@ describe("Today card layout", () => {
     ]);
   });
 
-  it("Move down past the bottom of a column puts the focus on the card's menu in the next column", async () => {
+  it("Option-Down past the bottom of a column puts the focus on the card's header in the next column", async () => {
     const { user } = renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(card("Reminders")).getByRole("button", { name: "More for Reminders" }));
-    await user.click(screen.getByRole("menuitem", { name: "Move down" }));
+    foldButton("Reminders").focus();
+    await altKey(user, "ArrowDown");
     expect(order()).toEqual(DEFAULT_ORDER); // the same page order, but in the other column
     const columns = document.querySelectorAll<HTMLElement>(".today-col");
     expect(columns[1].contains(card("Reminders"))).toBe(true); // a new element in the other column
-    expect(document.activeElement).toBe(within(card("Reminders")).getByRole("button", { name: "More for Reminders" }));
-    await user.click(screen.getByRole("button", { name: "More for Reminders" })); // it opens again: keys go on
-    await user.click(screen.getByRole("menuitem", { name: "Move up" }));
+    expect(document.activeElement).toBe(foldButton("Reminders"));
+    await altKey(user, "ArrowUp"); // the keys go on
     expect(order()).toEqual(DEFAULT_ORDER);
     expect(columns[0].contains(card("Reminders"))).toBe(true);
-    expect(document.activeElement).toBe(within(card("Reminders")).getByRole("button", { name: "More for Reminders" }));
+    expect(document.activeElement).toBe(foldButton("Reminders"));
   });
 
   it("a drop in the gap between two cards lands between them (the nearest slot by height)", async () => {
@@ -1040,6 +1079,8 @@ describe("Starred card and the Important notice (stars)", () => {
       "FinancialPlanning_Management.xlsx",
     ]);
     expect(within(rows[2]).getByRole("img", { name: "Important" })).toBeInTheDocument();
+    // the whole card is the starred list: no ★ on its rows
+    expect(within(list).queryByRole("img", { name: "Starred" })).not.toBeInTheDocument();
     // a folder is shown in Finder only: no Quick Look, no Open
     expect(within(rows[0]).queryByRole("button", { name: "Quick Look" })).toBeNull();
     expect(within(rows[0]).queryByRole("button", { name: "Open" })).toBeNull();

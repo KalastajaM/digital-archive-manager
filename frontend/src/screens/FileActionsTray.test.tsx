@@ -15,13 +15,14 @@ const TRAYS = [
 ];
 const ITEM = { id: 42, tray_id: "to-pay", tray_name: "To pay", title: "Gas bill", state: "open" } as unknown as Item;
 
-function setup(items: Item[] = []) {
+function setup(items: Item[] = [], quick: object = { created: [{ ...ITEM, id: 50, tray_id: "to-read", tray_name: "To read" }], skipped: [] }) {
   const calls = mockFetch({
     "GET /api/trays": { body: { trays: TRAYS, errors: [] } },
     "GET /api/files/d7/links": { body: { items, collections: [], note: "" } },
     "GET /api/notes/file/d7": { body: { text: "" } },
     "GET /api/ai/status": { body: { enabled: false } },
-    "POST /api/items/quick": { body: { created: [{ ...ITEM, id: 50, tray_id: "to-read", tray_name: "To read" }], skipped: [] } },
+    "POST /api/items/quick": { body: quick },
+    "POST /api/items/42/undo-move": { body: ITEM },
     "POST /api/items/42/discard": { status: 204, body: null },
   });
   renderWithProviders(
@@ -58,6 +59,17 @@ describe("Put in tray menu", () => {
     await user.click(screen.getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/items/quick")).toHaveLength(1));
     expect(calls.find((c) => c.url === "/api/items/quick")!.body).toEqual({ tray: "to-pay", drive_ids: ["d7"] });
+  });
+
+  it("choosing another tray moves the file's item there and says so; Undo moves it back", async () => {
+    const moved = { ...ITEM, tray_id: "to-read", tray_name: "To read" };
+    const { calls, user } = setup([ITEM], { created: [], skipped: [], moved: [moved], moved_from: { "42": "to-pay" } });
+    await user.click(await screen.findByRole("button", { name: "Put in tray" }));
+    await waitFor(() => expect(screen.getByRole("menuitemcheckbox", { name: "To pay" })).toHaveAttribute("aria-checked", "true"));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "To read" }));
+    expect(await screen.findByText("Moved to To read: Gas bill")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(calls.filter((c) => c.url === "/api/items/42/undo-move")).toHaveLength(1));
   });
 
   it("works from the keyboard: arrows move, Esc closes and keeps the focus on the button", async () => {

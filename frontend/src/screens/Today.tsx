@@ -1,8 +1,8 @@
 /** Today, the front page: a greeting, then a card per tray (what needs attention first,
  * with urgency tags), the inbox's age and what its scans found, and the extras. Each
  * card folds to its headline and can be dragged by its header to another place (or
- * moved with Move up / Move down in its ⋯ menu); see ``useCardLayout``. */
-import { Bell, Ellipsis, Layers } from "lucide-react";
+ * moved with ⌥↑ / ⌥↓ on its header); see ``useCardLayout``. */
+import { Bell, Layers } from "lucide-react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { errorText, type Today as TodayData, useToday, useTrays } from "../api/client";
@@ -17,7 +17,6 @@ import { ImportantBanner } from "../components/ImportantBanner";
 import { DAY_MS } from "../components/today/time";
 import { type TrayCardInfo, TrayCard, trayCards } from "../components/today/TrayCard";
 import { Card } from "../components/ui/Card";
-import { Menu } from "../components/ui/Menu";
 import { Tag } from "../components/ui/Tag";
 import { CARD_DRAG_TYPE, type CardLayout, type Place, useCardLayout } from "../components/useCardLayout";
 import { DRAG_TYPE } from "../dnd";
@@ -61,12 +60,9 @@ function CollectionsCard({ data, frame }: { data: TodayData; frame: CardFrame })
       fold={frame.fold}
       headerProps={frame.headerProps}
       actions={
-        <>
-          <Link className="card-link" to="/collections" aria-label="Show all collections">
-            Show all
-          </Link>
-          {frame.menu}
-        </>
+        <Link className="card-link" to="/collections" aria-label="Show all collections">
+          Show all
+        </Link>
       }
     >
       {frame.fold.folded ? (
@@ -117,7 +113,6 @@ function RemindersCard({ data, today, frame }: { data: TodayData; today: string;
       className="today-card today-card-compact"
       fold={frame.fold}
       headerProps={frame.headerProps}
-      actions={frame.menu}
     >
       <p className="today-sub">
         {reminders.last_run ? `Last checked ${lastChecked(reminders.last_run, today)}` : "Not checked yet."}
@@ -326,15 +321,16 @@ export default function Today({ today: fixed }: { today?: string }) {
     hiddenCards,
   );
   const drag = useCardDrag(layout);
-  // After Move up / Move down the card may land in another column (a new element):
-  // the focus goes back to its ⋯ button so the keys can move it on.
+  // After a keyboard move the card may land in another column (a new element): the
+  // focus goes back to its header button so the keys can move it on.
   const refocus = useRef<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   useEffect(() => {
     const id = refocus.current;
     if (id === null) return;
     refocus.current = null;
     const slot = [...document.querySelectorAll<HTMLElement>(".today-slot")].find((el) => el.dataset.cardId === id);
-    slot?.querySelector<HTMLButtonElement>(".card-menu > button")?.focus();
+    slot?.querySelector<HTMLButtonElement>(".card-header button")?.focus();
   }, [layout.columns]);
 
   if (data.isPending) return <p className="busy today-loading">Loading…</p>;
@@ -349,35 +345,19 @@ export default function Today({ today: fixed }: { today?: string }) {
 
   const frame = (id: string, title: string): CardFrame => ({
     fold: { folded: layout.collapsed(id), onToggle: () => layout.toggle(id) },
-    headerProps: drag.header(id),
-    menu: (
-      <Menu
-        label={`More for ${title}`}
-        icon={<Ellipsis size={16} />}
-        align="end"
-        className="card-menu"
-        entries={[
-          {
-            label: "Move up",
-            disabled: !layout.canMove(id, -1),
-            onSelect: () => {
-              refocus.current = id;
-              layout.move(id, -1);
-            },
-          },
-          {
-            label: "Move down",
-            disabled: !layout.canMove(id, 1),
-            onSelect: () => {
-              refocus.current = id;
-              layout.move(id, 1);
-            },
-          },
-          "separator",
-          { label: "Reset layout", onSelect: () => layout.reset() },
-        ]}
-      />
-    ),
+    headerProps: {
+      ...drag.header(id),
+      // Option-Up / Option-Down with the focus in a card's header moves the card on.
+      onKeyDown: (e) => {
+        if (!e.altKey || e.metaKey || e.ctrlKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+        const by = e.key === "ArrowUp" ? -1 : 1;
+        e.preventDefault();
+        if (!layout.canMove(id, by)) return;
+        refocus.current = id;
+        layout.move(id, by);
+        setAnnouncement(`${title} moved ${by < 0 ? "up" : "down"}`);
+      },
+    },
   });
   const render = (id: string) => {
     if (id === "inbox") return <InboxCard data={data.data} frame={frame(id, "Inbox")} />;
@@ -414,6 +394,12 @@ export default function Today({ today: fixed }: { today?: string }) {
         <h1>{greeting(clock.hour)}</h1>
         <p className="today-hero">{heroLine(waiting)}</p>
         <p className="today-date">{longDate(today)}</p>
+        <button type="button" className="link-button today-reset" onClick={() => layout.reset()}>
+          Reset layout
+        </button>
+        <p className="visually-hidden" role="status">
+          {announcement}
+        </p>
       </header>
       <Notices data={data.data} traysError={trays.isError ? errorText(trays.error) : null} />
       <div className="today-grid" data-dragging={drag.dragging !== null || undefined}>

@@ -87,6 +87,7 @@ describe("App shell", () => {
       ["Trays", "/trays"],
       ["Collections", "/collections"],
       ["Important", "/important"],
+      ["Starred", "/starred"],
       ["Browse", "/browse"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],

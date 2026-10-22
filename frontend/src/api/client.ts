@@ -778,6 +778,34 @@ export const useDiscardItem = () => {
   });
 };
 
+/** Move an open item to another tray (the same item; DB only). */
+export const useMoveItem = () => {
+  const refresh = useRefreshQuick();
+  return useMutation({
+    mutationFn: ({ id, tray }: { id: number; tray: string }) => post<Item>(`/api/items/${id}/move`, { tray }),
+    onSettled: refresh,
+  });
+};
+
+/** Put a just-moved item back in its old tray; 409 once it was changed since. */
+export const useUndoMoveItem = () => {
+  const refresh = useRefreshQuick();
+  return useMutation({
+    mutationFn: (id: number) => post<Item>(`/api/items/${id}/undo-move`),
+    onSettled: refresh,
+  });
+};
+
+/** Remove an item (open or done) from its tray: the item, note, checklist and history
+ * are deleted, the files are not touched. */
+export const useRemoveItem = () => {
+  const refresh = useRefreshQuick();
+  return useMutation({
+    mutationFn: (id: number) => post<void>(`/api/items/${id}/remove`),
+    onSettled: refresh,
+  });
+};
+
 export const useCreateItem = () => {
   const refresh = useRefreshTrays();
   return useMutation({

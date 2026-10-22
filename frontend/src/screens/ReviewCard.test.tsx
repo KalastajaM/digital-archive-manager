@@ -804,10 +804,10 @@ describe("ReviewCard", () => {
       expect(screen.getAllByText("found in scan")).toHaveLength(3);
 
       // Editing a field drops its "found in scan"; a required field left empty is
-      // flagged, not blocked.
+      // neither blocked nor nagged about.
       fireEvent.change(field(/^Due date/), { target: { value: "" } });
       expect(screen.getAllByText("found in scan")).toHaveLength(2);
-      expect(screen.getByText(/Optional — without it the item is marked “needs a due date”/)).toBeInTheDocument();
+      expect(screen.queryByText(/needs a due date/)).not.toBeInTheDocument();
     });
 
     it("the file request carries tray, fields, collections and note exactly as shown", async () => {

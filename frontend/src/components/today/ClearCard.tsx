@@ -18,7 +18,6 @@ export function ClearCard({ trays, frame }: { trays: ClearTray[]; frame: CardFra
       className="today-card today-card-compact"
       fold={frame.fold}
       headerProps={frame.headerProps}
-      actions={frame.menu}
     >
       {!frame.fold.folded && (
         <p className="today-sub today-clear">

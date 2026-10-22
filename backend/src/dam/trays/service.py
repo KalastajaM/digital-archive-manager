@@ -15,7 +15,17 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import Connection, Engine, and_, delete, insert, literal_column, select, update
+from sqlalchemy import (
+    Connection,
+    Engine,
+    and_,
+    delete,
+    func,
+    insert,
+    literal_column,
+    select,
+    update,
+)
 
 from dam.core.naming import fix_mojibake
 from dam.db.engine import write_tx
@@ -35,6 +45,7 @@ log = logging.getLogger(__name__)
 
 REMOVED_TRAY_NAME = "(removed tray)"
 CHANGED_SINCE_CREATED = "item was changed — mark it done instead"
+CHANGED_SINCE_MOVED = "item was changed since it moved"
 STATES = ("open", "done")
 _DATE_PREFIX = re.compile(r"^[0-9]{8}_", re.ASCII)
 
@@ -65,7 +76,7 @@ class Item:
 @dataclass
 class ItemEvent:
     """One line of an item's history: ``kind`` is created | edited | done | reopened |
-    file_added | file_removed; ``data`` holds what changed (stored JSON forms)."""
+    file_added | file_removed | moved; ``data`` holds what changed (stored JSON forms)."""
 
     id: int
     at: float
@@ -75,11 +86,15 @@ class ItemEvent:
 
 @dataclass
 class QuickResult:
-    """``create_quick``: the items created, and the files skipped because they already
-    have an open item in that tray."""
+    """``create_quick``: the items created, the existing open items moved into the tray
+    from another one (a file lives in one tray), and the files skipped because they
+    already have an open item in that tray."""
 
     created: list[Item]
     skipped: list[str]
+    moved: list[Item] = field(default_factory=list)
+    # the tray each moved item came from (tray id), by item id, for the undo toast
+    moved_from: dict[int, str] = field(default_factory=dict)
 
 
 def _is_blank(raw: object) -> bool:
@@ -466,7 +481,9 @@ class TrayService:
     ) -> QuickResult:
         """One item per file in ``tray_id``, each with the file's scan prefill ("Put in
         <tray>"; DB only, the file stays where it is). A file that already has an open
-        item in that tray is skipped, never given a second one. A folder is refused.
+        item in that tray is skipped, never given a second one. A file that has an open
+        item in another tray gets that item moved here instead (see ``move``); a file
+        whose items are all done gets a new open item. A folder is refused.
 
         ``fields`` (one file only: an AI suggestion, exactly as shown) are that item's
         values instead of the prefill; the same checks apply."""
@@ -488,18 +505,157 @@ class TrayService:
             prefill = self.prefill_for(drive_id) if self.prefill_for else {}
             values[drive_id] = self._values(tray, self.filing_fields(tray.id, {}, prefill))
         skipped: list[str] = []
+        moved_from: dict[int, str] = {}
         with write_tx(self.engine) as conn:
             already = self._open_trays(conn, drive_ids)
             new_ids: list[int] = []
             for drive_id in drive_ids:
                 if tray.id in already.get(drive_id, []):
                     skipped.append(drive_id)
-                else:
-                    new_ids.append(
-                        self._insert(conn, tray, [drive_id], values[drive_id], None, None)
-                    )
+                    continue
+                elsewhere = self._open_item_of(conn, drive_id)
+                if elsewhere is not None:
+                    if elsewhere.id not in moved_from:
+                        self._move(conn, elsewhere, tray, None, {})
+                        moved_from[elsewhere.id] = elsewhere.tray_id
+                    continue
+                new_ids.append(self._insert(conn, tray, [drive_id], values[drive_id], None, None))
             created = [self._get(conn, i) for i in new_ids]
-        return QuickResult(created, skipped)
+            moved = [self._get(conn, i) for i in moved_from]
+        self._date_changed(list(moved_from))
+        return QuickResult(created, skipped, moved, moved_from)
+
+    @staticmethod
+    def _open_item_of(conn: Connection, drive_id: str):
+        """The oldest open item the file belongs to (any tray), or None."""
+        return conn.execute(
+            select(items)
+            .join(item_files, item_files.c.item_id == items.c.id)
+            .where(items.c.state == "open", item_files.c.drive_id == drive_id)
+            .order_by(items.c.created, items.c.id)
+            .limit(1)
+        ).first()
+
+    def move(self, item_id: int, tray_id: str) -> Item:
+        """Move an open item to another tray: the same item (title, note, checklist,
+        history and files stay), with a "moved" line in its history.
+
+        Field values are kept by name: the ones the target tray also has carry over (a
+        value its type cannot parse is flagged invalid, as after any tray edit); the
+        others stay in the item's data, hidden, so moving back restores them. The date
+        is recomputed from the target tray's date field. Refused for a done item, and
+        when one of the item's files already has an open item in the target tray.
+        ``on_date_changed`` runs after the commit (the target tray has its own reminders).
+        """
+        tray = self._tray(tray_id)
+        with write_tx(self.engine) as conn:
+            row = self._row(conn, item_id)
+            if row.state != "open":
+                raise InvalidRequest("Only an open item can move to another tray")
+            if row.tray_id == tray.id:
+                return self._get(conn, item_id)
+            clash = conn.execute(
+                select(items.c.id)
+                .join(item_files, item_files.c.item_id == items.c.id)
+                .where(
+                    items.c.state == "open",
+                    items.c.tray_id == tray.id,
+                    item_files.c.drive_id.in_(
+                        select(item_files.c.drive_id).where(item_files.c.item_id == item_id)
+                    ),
+                )
+                .limit(1)
+            ).first()
+            if clash is not None:
+                raise Conflict(f"A file of this item is already in {tray.name}")
+            self._move(conn, row, tray, None, {})
+            item = self._get(conn, item_id)
+        self._date_changed([item_id])
+        return item
+
+    def _move(self, conn: Connection, row, tray: TrayDef, batch_id: str | None, extra: dict):
+        """Re-home ``row`` (an open item) in ``tray``; ``extra``: field values (parsed)
+        that override the carried-over ones."""
+        values, invalid = _load(tray.fields, row.fields)
+        for name, value in extra.items():
+            values[name] = value
+            invalid.discard(name)
+        stored = _dump(tray.fields, values, invalid)
+        conn.execute(
+            update(items)
+            .where(items.c.id == row.id)
+            .values(tray_id=tray.id, fields=stored, date=_date_of(tray, values, invalid))
+        )
+        src = self._find_tray(row.tray_id)
+        data = {
+            "from": row.tray_id,
+            "from_name": src.name if src else REMOVED_TRAY_NAME,
+            "to": tray.id,
+            "to_name": tray.name,
+        }
+        if batch_id is not None:
+            data["batch_id"] = batch_id
+        self._event(conn, row.id, "moved", data)
+
+    def move_in_filing(
+        self, drive_id: str, tray_id: str, fields: dict, batch_id: str | None
+    ) -> Item | None:
+        """Filing a file into a tray: move the file's open item from another tray here,
+        with the values typed in the filing form on top (``fields`` as ``filing_fields``
+        returns them). None if the file has no open item in another tray."""
+        tray = self._tray(tray_id)
+        extra = self._values(tray, fields)
+        with write_tx(self.engine) as conn:
+            row = self._open_item_of(conn, drive_id)
+            if row is None or row.tray_id == tray.id:
+                return None
+            self._move(conn, row, tray, batch_id, extra)
+            item = self._get(conn, row.id)
+        self._date_changed([item.id])
+        return item
+
+    def undo_move(self, item_id: int) -> Item:
+        """Put a just-moved item back in the tray it came from (the toast's Undo). Only
+        while its latest history line is that move; otherwise ``Conflict``."""
+        with write_tx(self.engine) as conn:
+            row = self._row(conn, item_id)
+            last = conn.execute(
+                select(item_events)
+                .where(item_events.c.item_id == item_id)
+                .order_by(item_events.c.at.desc(), item_events.c.id.desc())
+                .limit(1)
+            ).first()
+            if (
+                row.state != "open"
+                or last is None
+                or last.kind != "moved"
+                or last.data.get("to") != row.tray_id
+                or last.data.get("undo")
+            ):
+                raise Conflict(CHANGED_SINCE_MOVED)
+            self._move_back(conn, row, last.data)
+            item = self._get(conn, item_id)
+        self._date_changed([item_id])
+        return item
+
+    def _move_back(self, conn: Connection, row, moved: dict) -> None:
+        tray = self._find_tray(moved["from"])
+        if tray is None:
+            raise Conflict("The tray it came from no longer exists")
+        values, invalid = _load(tray.fields, row.fields)
+        conn.execute(
+            update(items)
+            .where(items.c.id == row.id)
+            .values(tray_id=tray.id, date=_date_of(tray, values, invalid))
+        )
+        data = {
+            "from": moved["to"],
+            "from_name": moved["to_name"],
+            "to": tray.id,
+            "to_name": tray.name,
+            "undo": True,
+        }
+        self._event(conn, row.id, "moved", data)
 
     def update(self, item_id: int, fields: dict | None, title: str | None) -> Item:
         """Edit the title and/or some fields (a blank value clears that field).
@@ -659,7 +815,8 @@ class TrayService:
             return self._get(conn, item_id)
 
     def remove_created_by(self, batch_id: str) -> int:
-        """Delete (DB only) the items a batch created, with everything hanging off them.
+        """Delete (DB only) the items a batch created, with everything hanging off them,
+        and move the items a filing in the batch moved into a tray back where they were.
 
         Used when that batch is undone. Notes and checklist rows point at items without a
         foreign key, so they are deleted here explicitly.
@@ -671,7 +828,31 @@ class TrayService:
                 ).scalars()
             )
             self._delete_items(conn, ids)
-            return len(ids)
+            # items a filing in this batch moved into a tray go back where they were
+            batch = func.json_extract(item_events.c.data, "$.batch_id")
+            moves = conn.execute(
+                select(item_events)
+                .where(item_events.c.kind == "moved", batch == batch_id)
+                .order_by(item_events.c.id.desc())
+            ).all()
+            back: list[int] = []
+            for ev in moves:
+                row = conn.execute(select(items).where(items.c.id == ev.item_id)).first()
+                if row is None or row.state != "open" or row.tray_id != ev.data["to"]:
+                    continue
+                if self._find_tray(ev.data["from"]) is None:
+                    continue
+                self._move_back(conn, row, ev.data)
+                back.append(row.id)
+        self._date_changed(back)
+        return len(ids) + len(back)
+
+    def delete_item(self, item_id: int) -> None:
+        """Remove an item from its tray, open or done (DB only: the files are not touched).
+        The item, its history, note, checklist and reminder records are deleted."""
+        with write_tx(self.engine) as conn:
+            self._row(conn, item_id)
+            self._delete_items(conn, [item_id])
 
     def discard(self, item_id: int) -> None:
         """Take back a just-created item (the toast's "take it back"): delete it (DB

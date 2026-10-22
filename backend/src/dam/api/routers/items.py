@@ -12,6 +12,7 @@ from dam.api.schemas import (
     ItemCreateBody,
     ItemEventOut,
     ItemFileOut,
+    ItemMoveBody,
     ItemOut,
     ItemPatchBody,
     QuickBody,
@@ -33,10 +34,36 @@ def create_item(app: AppDep, body: ItemCreateBody):
 @router.post("/items/quick", response_model=QuickOut)
 def quick(app: AppDep, body: QuickBody):
     """ "Put in <tray>": an item per file with its scan prefill; files that already have
-    an open item in that tray are skipped. DB only: the files stay where they are."""
+    an open item in that tray are skipped, and a file with an open item in another tray
+    gets that item moved here. DB only: the files stay where they are."""
     for drive_id in body.drive_ids:
         live_record(app, drive_id)
-    return app.trays.create_quick(body.tray, body.drive_ids, body.fields)
+    result = app.trays.create_quick(body.tray, body.drive_ids, body.fields)
+    return {
+        "created": result.created,
+        "skipped": result.skipped,
+        "moved": result.moved,
+        "moved_from": {str(k): v for k, v in result.moved_from.items()},
+    }
+
+
+@router.post("/items/{item_id}/move", response_model=ItemOut)
+def move_item(app: AppDep, item_id: int, body: ItemMoveBody):
+    """Move an open item to another tray (same item; 409 if its file is already there)."""
+    return app.trays.move(item_id, body.tray)
+
+
+@router.post("/items/{item_id}/undo-move", response_model=ItemOut)
+def undo_move(app: AppDep, item_id: int):
+    """Put a just-moved item back (409 once it was changed since)."""
+    return app.trays.undo_move(item_id)
+
+
+@router.post("/items/{item_id}/remove", status_code=204, response_class=Response)
+def remove_item(app: AppDep, item_id: int) -> Response:
+    """Remove an item from its tray, open or done (DB only: the files are not touched)."""
+    app.trays.delete_item(item_id)
+    return Response(status_code=204)
 
 
 @router.post("/items/{item_id}/discard", status_code=204, response_class=Response)
