@@ -384,12 +384,24 @@ The screens:
 - **A tray** (`To pay`, `To action`, `To read`): the list with Open/Done, and the selected
   item beside it (`↑`/`↓` move the highlight *and* open the item). A bill shows its title,
   a big amount, then rows with their own Copy button (payee, IBAN, reference, amount, due
-  date with its tag), the bank barcode, and **Mark paid** (the tray's done button),
-  **Mark paid & file it…** and **Note**.
+  date with its tag), the bank barcode, and one action row: **Mark paid** (the tray's done
+  button, **Mark done** where the tray has no label of its own), **Mark paid and file…**
+  (only while one of the item's files is still in the inbox: it marks the item done and
+  opens that file in the Inbox, where you file it), and the selected file's own buttons:
+  Ask AI, Move to To Delete and "Take this file off the item" (the file stays where it
+  is). Every button has a tooltip. A dated tray (To action) leads with the title and the
+  date, above the summary. Under the title, "1 file · Add another file…" attaches another
+  file to the item (several files show as tabs, with the same link at their end); **Add
+  file** in the list column's toolbar searches the index and makes a new item in the tray
+  for the file you pick, which opens.
 - **Collections** and **a collection**: the summary, a **Needs attention** strip (members
   in an open tray item or still in the inbox), where it sits ("In Houses › …"), its
   **child collections** with their counts, the groups (see Groups below), notes and a
-  checklist; the selected file's name, folder, group and other collections on the right.
+  checklist; the selected file on the right: a PDF one page at a time (with a pager under
+  it), its name, folder, tags, group and a row of buttons (★, !, Ask AI, Move to To
+  Delete, an eye for Quick Look, and Remove from collection, which the built-in ★ and !
+  collections leave out: the ★ / ! button is that). The member list has its own scrollbar
+  on a big collection, so the note and checklist stay within reach.
   The subtitle counts what the collection holds the same way as the list does ("1 folder · 23 files"); a group header counts its own members ("3 files, 1 folder").
 - **Browse**: the archive's folders with search, **New folder** (toolbar and ⇧⌘N: a name row in
   the folder you are in; right-click on a folder for "New folder inside…"; made at once and
@@ -570,6 +582,10 @@ On the command line: `dam errors [--all] [--retry]`.
   any file with an executable bit, plus Windows and Linux program, script and shortcut
   types such as `.exe .bat .ps1 .lnk .desktop`) with 409 "Won't open apps or scripts from the
   archive — use Show in Finder"; Reveal still works for them.
+- `GET /api/tags?prefix=&limit=` lists the tags in use with the number of files that have
+  each (`[{"name", "files"}]`), those starting with `prefix` (case and accents ignored),
+  most used first then by name, at most `limit` (default 8, up to 50): the tag field's
+  suggestions.
 - `GET /api/files/{drive_id}/thumb.png?width=300..2000` (default 1200) is a Quick Look
   thumbnail of any file type, rendered at the step at or above the width (600, 1200 or
   2000 px): `qlmanage -t -s <step> -o <dir> <file>` with a 20 s timeout, at most two at
@@ -852,7 +868,8 @@ status), as always.
 
 A collection's files can be arranged in **groups, nested to any depth**, plus an implicit
 **Ungrouped** (shown only when the collection has groups). **+ Group** (the toolbar's
-"New group") adds one; each group's **⋯** menu
+"New group") adds one (a collection that has no groups yet but two or more files shows
+"Group files: New group" above the list); each group's **⋯** menu
 has Rename, a summary, New subgroup, Move up / Move down and **Remove group…**, and the
 chevron folds it. Removing a group moves its files and subgroups to its parent; it never
 removes a file or a membership. A file has at most one group per collection (it can still
@@ -1114,9 +1131,12 @@ folder and tags, and you decide **per item** which ones to take:
 collection page, a tray item's file). The pencil beside the name renames it (the
 extension stays), the folder icon beside the path moves it, and the tags under the preview
 are chips: Enter or a comma adds one, **×** or Backspace in the empty field removes one,
-and tags are written at once. A new name or folder is shown as a plan first (a name already
+and tags are written at once. While you type, the tags already in use that start with the
+text are listed (most used first, at most eight): **↑/↓** choose, **Enter** adds the
+chosen one, **Esc** closes the list. A new name or folder is shown as a plan first (a name already
 taken gets `_2`), applied only when you confirm, and the toast has **Undo**. **Ask AI** puts
-its suggestions as chips you take one by one. ★ and ! are in the preview's toolbar. Files in
+its suggestions as chips you take one by one (the sparkle button sits beside ★ and !,
+on each screen's action row). ★ and ! are in the preview's toolbar. Files in
 `##. Ongoing` and `##. To Delete`, folders and links cannot be edited here.
 
 ## AI (optional)

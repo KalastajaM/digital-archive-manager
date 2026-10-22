@@ -32,13 +32,34 @@ All notable changes are listed here. The format follows
 - Browse: a "Collection" menu (a tree of the open collections, with ★ Ongoing and
   ! Important) replaces the filter icon; a folder member brings its contents at any depth.
 
+- Tag suggestions: the tag field lists the tags already in use that start with what you
+  type (most used first), with arrow keys, Enter and Esc. New `GET /api/tags`.
+- A collection's selected file shows a multi-page PDF one page at a time, with Previous
+  and Next page; a collection without groups but with two or more files hints at "New
+  group".
+- Tray items: "Add file" in the list column puts a file you search for in the tray as a
+  new item; "Add another file…" under an item's title attaches a file to that item.
+- Activity: creating a folder is a kind of change of its own, "New folders".
+
 ### Fixed
 
+- The "What will be sent" sheet now says what closing it does while the answer is on its
+  way: it is still saved, and pressing the same button again shows it at no cost.
 - Links and folders the app made in Google Drive are no longer flagged "looks different"
   after Drive re-writes them.
 
 ### Changed
 
+- Ask AI is an icon button on each screen's action row (Browse, a collection's selected
+  file, a tray item) instead of a text button beside the file name.
+- A collection's selected file: Quick Look is an icon button; the built-in ★ Ongoing and
+  ! Important no longer repeat the ★ / ! toggle as "Unstar" / "Remove from Important";
+  the member list scrolls in its own box.
+- Tray items: "Done" reads "Mark done" and "Done & file it…" reads "Done and file…"
+  (shown only while a file of the item is in the inbox), both with tooltips; the Note
+  button is gone; the selected file's buttons (Ask AI, Move to To Delete, "Take this file
+  off the item") share the action row; one-file items no longer repeat the path above the
+  file; a dated item (To action) leads with its title and date.
 - A plan with a single step is shown as a sentence, not a numbered list.
 - Text that is cut off shows in full on hover; folder paths are shortened in the middle,
   keeping the last folder.
