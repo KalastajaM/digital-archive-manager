@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus } from "lucide-react";
 import {
+  type DragEvent,
   Fragment,
   type MouseEvent,
   type ReactNode,
@@ -57,13 +58,13 @@ import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { Toolbar } from "../components/ui/Toolbar";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
-import { type DropTarget, dragSelection, setDragFiles, useDropTarget } from "../dnd";
+import { type DropTarget, dragSelection, setDragFiles, setDragFolder, useDropTarget } from "../dnd";
 import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
 import { Breakable } from "../components/PlanPreview";
-import { FilePanel } from "./FilePanel";
+import { FilePanel, FolderPanel } from "./FilePanel";
 import { useSearch } from "./useSearch";
 
 /** One row of the folder listing or of the search results. */
@@ -254,8 +255,10 @@ type RowProps = {
   showPath: boolean;
   /** The Files view: the folder, date and size columns. */
   columns?: boolean;
-  /** The ids a drag of this row carries; null: the row is not draggable. */
+  /** The ids a drag of this row carries; null: the row is not draggable (as files). */
   dragIds: (() => string[]) | null;
+  /** A folder row's own drag (to a collection), instead of ``dragIds``. */
+  onDragStart?: (e: DragEvent<HTMLLIElement>) => void;
   /** The archive paths of dragged ids (unknown ones leave the drag without paths). */
   dragPaths?: (ids: string[]) => string[];
   onToggle: () => void;
@@ -275,6 +278,7 @@ function EntryRow({
   columns = false,
   dragIds,
   dragPaths,
+  onDragStart,
   onToggle,
   onClick,
   dropProps,
@@ -302,14 +306,15 @@ function EntryRow({
     <li
       className={cls || undefined}
       aria-current={current ? "true" : undefined}
-      draggable={dragIds ? true : undefined}
+      draggable={dragIds || onDragStart ? true : undefined}
       onDragStart={
-        dragIds
+        onDragStart ??
+        (dragIds
           ? (e) => {
               const ids = dragIds();
               setDragFiles(e, ids, visible(item.name), dragPaths?.(ids));
             }
-          : undefined
+          : undefined)
       }
       onContextMenu={onContextMenu}
       {...dropProps}
@@ -343,10 +348,32 @@ function EntryRow({
   );
 }
 
-/** A folder row: never dragged, a drop target (files dropped here move into it). */
-function FolderRow({ drop, ...row }: Omit<RowProps, "dropProps" | "dragIds"> & { drop: DropProps }) {
+/** A folder row: a drop target (files dropped here move into it). It drags only as a
+ * folder, which only a collection in the sidebar takes (``collectable``: its area allows
+ * that); it is never moved by a drag. */
+function FolderRow({ drop, collectable, ...row }: Omit<RowProps, "dropProps" | "dragIds"> & { drop: DropProps; collectable: boolean }) {
   const target = useDropTarget(drop);
-  return <EntryRow {...row} dragIds={null} dropProps={target.props} />;
+  const { item } = row;
+  return (
+    <EntryRow
+      {...row}
+      dragIds={null}
+      onDragStart={collectable ? (e) => setDragFolder(e, item.drive_id, visible(item.name)) : undefined}
+      dropProps={target.props}
+    />
+  );
+}
+
+/** Why a folder cannot be added to a collection (null: it can): the app's own areas. */
+export function folderCollectRefusal(
+  path: string,
+  special: { quarantine: string; ongoing: string; important: string } | undefined,
+): string | null {
+  if (!special) return "The special folders are not known yet";
+  for (const area of [special.quarantine, special.ongoing, special.important]) {
+    if (isUnder(path, area)) return `Folders in ${visible(area)} can't be added to a collection`;
+  }
+  return null;
 }
 
 const fold = (s: string) => s.normalize("NFC").toLowerCase();
@@ -885,6 +912,9 @@ export default function Browse() {
   // (A row nobody has picked yet is not highlighted, and shows no detail.)
   const previewed: Item | null =
     !split && sel.touched && currentItem && !currentItem.is_dir && !gone.has(currentItem.drive_id) ? currentItem : null;
+  // a folder on the cursor shows its own panel: its collections and Add to collection
+  const folderShown: Item | null =
+    !split && sel.touched && currentItem?.is_dir && !gone.has(currentItem.drive_id) ? currentItem : null;
   const open = (pane: PaneId, item: Item | undefined) => {
     if (item?.is_dir) go(pane, item.path);
   };
@@ -1208,7 +1238,15 @@ export default function Browse() {
                     e.preventDefault();
                     setMenu({ x: e.clientX, y: e.clientY, path: item.path, name: item.name });
                   };
-                  return <FolderRow key={item.drive_id} {...row} drop={folderDrop(item)} onContextMenu={onContextMenu} />;
+                  return (
+                    <FolderRow
+                      key={item.drive_id}
+                      {...row}
+                      drop={folderDrop(item)}
+                      collectable={folderCollectRefusal(item.path, specialFolders) === null}
+                      onContextMenu={onContextMenu}
+                    />
+                  );
                 }
                 const movable = sourceRefusal(item.path) === null;
                 const dragIds = () => {
@@ -1366,15 +1404,13 @@ export default function Browse() {
                     },
                   }}
                 />
+              ) : folderShown ? (
+                <FolderPanel folder={folderShown} refusal={folderCollectRefusal(folderShown.path, specialFolders)} />
               ) : (
                 <EmptyState
                   icon={<File size={40} strokeWidth={1.25} />}
                   title="No file selected"
-                  hint={
-                    sel.touched && currentItem?.is_dir
-                      ? "Press Enter to open this folder, or select a file to see its preview and details."
-                      : "Select a file to see its preview and details."
-                  }
+                  hint="Select a file to see its preview and details."
                 />
               )}
             </section>

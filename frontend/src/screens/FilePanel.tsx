@@ -6,7 +6,9 @@
 import type { ReactNode } from "react";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
-import { type BackToInbox, FileActions, LinkBadges } from "./FileActions";
+import { Breakable } from "../components/PlanPreview";
+import { visible } from "../text";
+import { type BackToInbox, FileActions, FolderActions, LinkBadges } from "./FileActions";
 
 export function FilePanel({
   file,
@@ -53,6 +55,33 @@ export function FilePanel({
       </div>
       {extras}
       <FileActions key={file.drive_id} driveId={file.drive_id} backToInbox={backToInbox} />
+    </div>
+  );
+}
+
+/** A selected folder in Browse: its name and path, the collections it is in (× takes
+ * it out) and Add to collection. A folder in a collection brings everything in it,
+ * including what is added later. ``refusal``: why it cannot be added (the app's areas). */
+export function FolderPanel({ folder, refusal }: { folder: { drive_id: string; name: string; path: string }; refusal: string | null }) {
+  return (
+    <div className="file-panel folder-panel">
+      <header className="file-meta-head">
+        <div className="file-meta-title">
+          <h2>{visible(folder.name)}</h2>
+        </div>
+        <p className="current-path">
+          <code>
+            <Breakable text={folder.path} />
+          </code>
+        </p>
+      </header>
+      <p className="hint">
+        Added to a collection, a folder brings everything in it, also what is put in it later. Enter opens it.
+      </p>
+      <div className="browse-detail-actions">
+        <LinkBadges driveId={folder.drive_id} />
+      </div>
+      <FolderActions key={folder.drive_id} driveId={folder.drive_id} refusal={refusal} />
     </div>
   );
 }

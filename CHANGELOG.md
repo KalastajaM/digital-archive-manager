@@ -21,6 +21,11 @@ All notable changes are listed here. The format follows
 - A filed file's name, folder and tags are edited in place (rename, move, tag chips and
   Ask AI chips), replacing the Edit details dialog.
 - Browse: select all, and batch star and Important.
+- Folders join collections from Browse: a selected folder shows its collections and Add
+  to collection, and a folder can be dragged onto a collection in the sidebar. A folder
+  in a collection brings everything in it, also files put in it later. Folders in
+  ##. To Delete, ##. Ongoing and ##. Important cannot be added, and a dragged folder is
+  only ever taken by a collection (never moved or put in a tray).
 - A × on a file's collection badges (in Browse and in a collection) takes the file out of
   that collection, with Undo (back into its group too). Only where the file is itself a
   member of an open collection; ★ Starred and ! Important keep their toggles.
