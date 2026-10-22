@@ -75,6 +75,13 @@ function renderCollections(path = "/collections", routes: Routes = {}) {
     "GET /api/checklist/collection/7": { body: [] },
     "GET /api/notes/collection/8": { body: { text: "" } },
     "GET /api/checklist/collection/8": { body: [] },
+    // the selected file's panel (as in Browse): its summary and note
+    ...Object.fromEntries(
+      ["f1", "f2", "f3", "d1"].flatMap((id) => [
+        [`GET /api/files/${id}/summary`, { body: { ai: null, user: null } }],
+        [`GET /api/notes/file/${id}`, { body: { text: "" } }],
+      ]),
+    ),
     ...routes,
   });
   const user = userEvent.setup();
@@ -196,25 +203,18 @@ describe("Collection detail", () => {
     expect(await within(panel()).findByText("plan refused: x")).toBeInTheDocument();
   });
 
-  it("the inspector shows a PDF one page at a time with a pager; the end of the document is found by asking for the next page", async () => {
-    const { user } = renderCollections("/collections/7");
+  it("the inspector is Browse's file panel (rename, preview, tags, Put in tray, Add to collection, summary, note) plus the collection's own", async () => {
+    renderCollections("/collections/7");
     await within(panel()).findByRole("region", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
-    const page = () => within(inspector).getByRole("img", { name: /^Page \d+$/ });
-    expect(page()).toHaveAttribute("src", "/api/files/f1/page/1.png?w=400");
-    const pager = within(inspector).getByRole("group", { name: "Pages" });
-    expect(within(pager).getByRole("button", { name: "Previous page" })).toBeDisabled();
-    expect(pager).toHaveTextContent("Page 1");
-    await user.click(within(pager).getByRole("button", { name: "Next page" }));
-    expect(page()).toHaveAttribute("src", "/api/files/f1/page/2.png?w=400");
-    expect(pager).toHaveTextContent("Page 2");
-    await user.click(within(pager).getByRole("button", { name: "Previous page" }));
-    expect(page()).toHaveAttribute("src", "/api/files/f1/page/1.png?w=400");
-    // a page past the end fails to load: back to the last page, which is now known
-    await user.click(within(pager).getByRole("button", { name: "Next page" }));
-    fireEvent.error(page());
-    expect(page()).toHaveAttribute("src", "/api/files/f1/page/1.png?w=400");
-    expect(within(inspector).queryByRole("group", { name: "Pages" })).not.toBeInTheDocument(); // one page: no pager
+    expect(within(inspector).getByRole("heading", { level: 2, name: "quote.pdf" })).toBeInTheDocument();
+    for (const name of ["Rename", "Move file to…", "Put in tray", "Add to collection…", "Quick Look", "Move to To Delete"]) {
+      expect(within(inspector).getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(within(inspector).getByRole("region", { name: "Tags" })).toBeInTheDocument();
+    expect(within(inspector).getByRole("textbox", { name: "Note on this file" })).toBeInTheDocument();
+    const own = within(inspector).getByRole("region", { name: "In this collection" });
+    expect(within(own).getByRole("button", { name: "Remove quote.pdf from the collection" })).toBeInTheDocument();
   });
 
   it("Quick Look is an icon button with a tooltip; the members scroll in their own box; no Ask AI by the name", async () => {
@@ -223,8 +223,8 @@ describe("Collection detail", () => {
     expect(members.closest(".collection-members")).not.toBeNull();
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look Space");
-    const actions = inspector.querySelector(".inspector-actions")!;
-    expect(within(actions as HTMLElement).getByRole("button", { name: "Ask AI" })).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
+    // Ask AI is in the preview's toolbar, as in Browse (not by the name)
+    expect(await within(inspector).findByRole("button", { name: "Ask AI" })).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
     expect(inspector.querySelector(".file-meta-title")!.querySelector("[aria-label='Ask AI']")).toBeNull();
   });
 
@@ -254,7 +254,7 @@ describe("Collection detail", () => {
   it("the inspector has a resizable splitter", async () => {
     renderCollections("/collections/7");
     await within(panel()).findByRole("region", { name: "Members" });
-    expect(screen.getByRole("separator", { name: "Resize the inspector" })).toHaveAttribute("aria-valuenow", "270");
+    expect(screen.getByRole("separator", { name: "Resize the inspector" })).toHaveAttribute("aria-valuenow", "380");
   });
 
   it("the selected file has Rename and Move to… inline; a folder member has them disabled", async () => {
@@ -462,7 +462,7 @@ describe("Collection detail", () => {
         body: changeOf({ ...SAUNA, publish: { ongoing: false }, ongoing_rel: null }, { batch: batch(CLOSE_PLAN) }),
       },
     });
-    await user.click(await within(panel()).findByRole("button", { name: "Show in Finder" }));
+    await user.click((await within(panel()).findAllByRole("button", { name: "Show in Finder" }))[0]); // the toolbar's
     expect(await within(panel()).findByText(`${ONG}/Sauna`)).toBeInTheDocument(); // the Finder hint
     await user.click(within(panel()).getByRole("button", { name: "More actions" }));
     const toggle = within(screen.getByRole("menu")).getByRole("menuitemcheckbox", { name: "Show in ##. Ongoing" });
@@ -1116,7 +1116,7 @@ describe("Parent collections", () => {
   it("a collection hidden with its parent says so in the Finder popover instead of advice", async () => {
     const status = `Not shown: its parent collection 'Houses' is not shown in ${ONG}`;
     const { user } = sauna({ "GET /api/collections/7": { body: { ...IN_HOUSES, ongoing_rel: null, ongoing_status: status } } });
-    await user.click(await within(panel()).findByRole("button", { name: "Show in Finder" }));
+    await user.click((await within(panel()).findAllByRole("button", { name: "Show in Finder" }))[0]); // the toolbar's
     const popover = within(panel()).getByRole("group", { name: "Show in Finder" });
     expect(popover).toHaveTextContent(status);
     expect(popover).not.toHaveTextContent("Turn on");

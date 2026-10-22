@@ -4,15 +4,18 @@
  * collection adds a link in ##. Ongoing through the Ongoing sync. That needs no
  * preview (app-owned links only, journaled, undone by removing the member again), but
  * the batch that ran is shown under the actions. */
+import { X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  type Collection,
   type CollectionChange,
   errorText,
   useCollectionMembers,
   useCollections,
   useCreateCollection,
   useFileLinks,
+  useGroupChange,
   useTrays,
 } from "../api/client";
 import { SummaryBox } from "../components/ai/SummaryBox";
@@ -27,15 +30,43 @@ import { useQuickPut } from "../components/useQuickPut";
 import { visible } from "../text";
 
 /** Badges under the file name: its open items (→ the item in its tray) and its
- * collections (→ the collection). */
+ * collections (→ the collection). A collection the file is itself a member of (not only
+ * through a folder), open and not a built-in, has a × that takes the file out of it (as
+ * Remove from collection does: the file stays where it is), with Undo in the toast
+ * (back in its group too). */
 export function LinkBadges({ driveId }: { driveId: string }) {
   const links = useFileLinks(driveId);
+  const members = useCollectionMembers();
+  const groupChange = useGroupChange();
+  const toast = useToast();
+  const inFlight = useRef(false);
   if (links.isError) {
     return <p className="hint">Its trays and collections could not be loaded: {visible(errorText(links.error))}</p>;
   }
   const items = links.data?.items ?? [];
   const collections = links.data?.collections ?? [];
   if (items.length === 0 && collections.length === 0) return null;
+  const remove = async (c: Collection, groupId: number | null) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const name = visible(c.name);
+    try {
+      const result = await members.mutateAsync({ id: c.id, remove: driveId });
+      const undo = async () => {
+        try {
+          await members.mutateAsync({ id: c.id, add: [driveId] });
+          if (groupId !== null) await groupChange.mutateAsync({ op: "members", id: c.id, drive_ids: [driveId], group_id: groupId });
+        } catch (e) {
+          toast({ kind: "error", text: `Could not add it back to ${name}: ${visible(errorText(e))}` });
+        }
+      };
+      toast({ ...changeToast(`Removed from ${name}`, result), actions: [{ label: "Undo", run: () => void undo() }] });
+    } catch (e) {
+      toast({ kind: "error", text: `Could not remove it from ${name}: ${visible(errorText(e))}` });
+    } finally {
+      inFlight.current = false;
+    }
+  };
   return (
     <ul className="badges link-badges" aria-label="In trays and collections">
       {items.map((i) => (
@@ -45,14 +76,30 @@ export function LinkBadges({ driveId }: { driveId: string }) {
           </Link>
         </li>
       ))}
-      {collections.map((c) => (
-        <li key={`c${c.id}`}>
-          <Link className="badge" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
-            {visible(c.name)}
-            {c.state === "closed" && " (closed)"}
-          </Link>
-        </li>
-      ))}
+      {collections.map((c) => {
+        const member = c.members.find((m) => m.drive_id === driveId);
+        const removable = member !== undefined && c.state === "open" && c.kind == null;
+        return (
+          <li key={`c${c.id}`} className={removable ? "badge-removable" : undefined}>
+            <Link className="badge" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
+              {visible(c.name)}
+              {c.state === "closed" && " (closed)"}
+            </Link>
+            {removable && (
+              <button
+                type="button"
+                className="badge-remove"
+                aria-label={`Remove from ${visible(c.name)}`}
+                data-tip={`Remove from ${visible(c.name)} (the file stays where it is)`}
+                disabled={members.isPending}
+                onClick={() => void remove(c, member.group_id)}
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

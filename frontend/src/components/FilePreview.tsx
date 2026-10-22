@@ -574,18 +574,21 @@ function LinkPreview({
   const detail = useFileDetail(file.drive_id);
   const navigate = useNavigate();
   const launch = useFileLaunch(file.drive_id);
-  if (detail.isPending) {
+  // the screen's tools (★ / !, the bin…) stay while the link is loading or failed to
+  if (detail.isPending || detail.isError) {
     return (
-      <p className="hint" role="status">
-        Loading the link…
-      </p>
-    );
-  }
-  if (detail.isError) {
-    return (
-      <p className="error" role="alert">
-        Could not load the link: {visible(errorText(detail.error))}
-      </p>
+      <>
+        {extraTools && <PreviewTools>{extraTools}</PreviewTools>}
+        {detail.isPending ? (
+          <p className="hint" role="status">
+            Loading the link…
+          </p>
+        ) : (
+          <p className="error" role="alert">
+            Could not load the link: {visible(errorText(detail.error))}
+          </p>
+        )}
+      </>
     );
   }
   const d = detail.data;

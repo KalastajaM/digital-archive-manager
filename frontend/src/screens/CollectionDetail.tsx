@@ -15,7 +15,7 @@
  * own collections above its members. "Move to…" (the keyboard way of a sidebar drag)
  * and "New collection inside…" are in the ⋯ menu; a move runs at once, as group
  * changes do, and shows the batch that ran. */
-import { ChevronLeft, ChevronRight, Eye, FolderOpen, FolderPlus, Layers, Ellipsis, Share } from "lucide-react";
+import { Eye, FolderOpen, FolderPlus, Layers, Ellipsis, Share } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -32,8 +32,6 @@ import {
   type Group,
   type GroupChange,
   type Member,
-  pageUrl,
-  rawUrl,
   type ResolvedOp,
   useCollection,
   useCollectionAttention,
@@ -69,7 +67,6 @@ import {
 } from "../components/collectionTree";
 import { CopyButton } from "../components/CopyButton";
 import { FileDetails } from "../components/FileDetails";
-import { LaunchButtons, useFileLaunch } from "../components/FileLaunch";
 import {
   attentionTags,
   type FoldKey,
@@ -101,6 +98,7 @@ import { useAutoGrow } from "../components/useAutoGrow";
 import { useAutoSave } from "../components/useAutoSave";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { FileMeta } from "../components/FileMeta";
+import { FilePanel } from "./FilePanel";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { dayOf, formatSize, plural } from "../format";
 import { isShortcut, useKeydown } from "../keyboard";
@@ -112,63 +110,7 @@ type Pending = { action: CollectionAction; ops: ResolvedOp[]; title: string; lab
 
 const ICON = { size: 18, strokeWidth: 1.75 } as const;
 const STILL_RUNNING = "Another change is still running. Try again when it is done.";
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
 
-/** The selected file as the inspector shows it: an image itself, or a PDF one page at a
- * time (the pager steps through it; the page count is found by asking for the page
- * after the shown one, as FilePreview does). Nothing else. */
-// One element for every selection, its image swapped in place: a thumbnail remounted per
-// file (keyed by it) was left behind on the page each time, stacking one per click.
-function Thumbnail({ member }: { member: Pick<Member, "drive_id" | "path" | "is_dir" | "missing"> }) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  // The page being shown, for the file it was reached on (another file starts at page 1).
-  const [nav, setNav] = useState<{ id: string; page: number; last: number | null }>({ id: "", page: 1, last: null });
-  const here = nav.id === member.drive_id ? nav : { id: member.drive_id, page: 1, last: null };
-  const ext = member.path && !member.is_dir && !member.missing ? extOf(member.path) : null;
-  const isPdf = ext === "pdf";
-  const src = isPdf ? pageUrl(member.drive_id, here.page, 400) : ext && IMAGE_EXTS.has(ext) ? rawUrl(member.drive_id) : null;
-  if (!src || failedSrc === src) return null;
-  const go = (page: number) => setNav({ ...here, page });
-  // The image is known to exist once loaded: is there a page after it?
-  const probeNext = () => {
-    if (here.last !== null) return;
-    const probe = new Image();
-    const { id, page } = here;
-    probe.onerror = () => setNav((n) => (n.id === id ? { ...n, last: page } : { id, page, last: page }));
-    probe.src = pageUrl(member.drive_id, page + 1, 400);
-  };
-  const paged = isPdf && (here.page > 1 || here.last === null || here.last > 1);
-  return (
-    <div className="inspector-preview">
-      <div className="inspector-thumb">
-        <img
-          src={src}
-          alt={isPdf ? `Page ${here.page}` : ""}
-          onLoad={isPdf ? probeNext : undefined}
-          onError={() => {
-            if (isPdf && here.page > 1) setNav({ id: here.id, page: here.page - 1, last: here.page - 1 });
-            else setFailedSrc(src);
-          }}
-        />
-      </div>
-      {paged && (
-        <div className="inspector-pager" role="group" aria-label="Pages">
-          <IconButton icon={<ChevronLeft size={16} />} label="Previous page" disabled={here.page <= 1} onClick={() => go(here.page - 1)} />
-          <span>
-            Page {here.page}
-            {here.last !== null && ` of ${here.last}`}
-          </span>
-          <IconButton
-            icon={<ChevronRight size={16} />}
-            label="Next page"
-            disabled={here.last !== null && here.page >= here.last}
-            onClick={() => go(here.page + 1)}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 const extOf = (path: string) => {
   const name = path.slice(path.lastIndexOf("/") + 1);
   return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null;
@@ -634,9 +576,12 @@ function NewChildSheet({
   );
 }
 
-/** The selected member: its details, its group (the keyboard way to move it), Quick
- * Look and removing it from the collection (not offered in the built-in ones, whose
- * ★ / ! toggle is that). */
+/** The selected member. A file in the index gets the shared file panel (as in Browse),
+ * with the bin and Quick Look in its preview's toolbar and, before the shared actions,
+ * its group (the keyboard way to move it) and Remove from collection (not offered in the
+ * built-in ones, whose ★ / ! toggle is that). A folder, a missing file, one in To Delete
+ * or one not in the index has nothing to preview or edit: its details and the same
+ * collection controls. */
 function Inspector({
   member,
   groups,
@@ -666,27 +611,12 @@ function Inspector({
     );
   }
   const name = memberName(member);
-  /** The ★ ! Ask AI Trash Quick Look row (``ask``: only a file that can be edited has it). */
-  const actions = (ask?: ReactNode) => (
-    <div className="inspector-actions">
-      <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} />
-      {ask}
-      <TrashButton disabled={busy} disabledReason={trashRefusal(member)} onClick={onTrash} />
-      {onQuickLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
-      {member.is_dir && member.path && !member.missing && (
-        <button type="button" onClick={() => navigate(`/browse?path=${encodeURIComponent(member.path!)}`)}>
-          Show in Browse
-        </button>
-      )}
-      {onRemove && (
-        <button type="button" aria-label={`Remove ${name} from the collection`} disabled={busy} onClick={onRemove}>
-          Remove from collection
-        </button>
-      )}
-    </div>
-  );
-  const notice = (member.missing || member.quarantined) && (
-    <p className="notice">{member.missing ? "The file is missing." : "The file is in ##. To Delete."}</p>
+  const trashButton = <TrashButton disabled={busy} disabledReason={trashRefusal(member)} onClick={onTrash} />;
+  const quickLookButton = onQuickLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />;
+  const removeButton = onRemove && (
+    <button type="button" aria-label={`Remove ${name} from the collection`} disabled={busy} onClick={onRemove}>
+      Remove from collection
+    </button>
   );
   // without groups there is nothing to choose (and no "Ungrouped" to show)
   const group = groups.length > 0 && (
@@ -707,9 +637,54 @@ function Inspector({
       </select>
     </div>
   );
+
+  if (member.path && !member.is_dir && !member.missing && !member.quarantined) {
+    return (
+      <aside className="collection-inspector" aria-label="Selected file">
+        <FilePanel
+          file={{ ...member, name }}
+          preview={{ drive_id: member.drive_id, path: member.path, ext: extOf(member.path), is_link: member.is_link }}
+          disabled={busy}
+          tools={
+            <>
+              {trashButton}
+              {quickLookButton}
+            </>
+          }
+          extras={
+            (group || removeButton) && (
+              <section className="inspector-collection" aria-label="In this collection">
+                {group}
+                {removeButton && <div className="inspector-actions">{removeButton}</div>}
+              </section>
+            )
+          }
+        />
+      </aside>
+    );
+  }
+
+  /** The ★ ! Ask AI Trash Quick Look row, with Show in Browse for a folder (``ask``: only
+   * an entry that can be edited has it). */
+  const actions = (ask?: ReactNode) => (
+    <div className="inspector-actions">
+      <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} />
+      {ask}
+      {trashButton}
+      {quickLookButton}
+      {member.is_dir && member.path && !member.missing && (
+        <button type="button" onClick={() => navigate(`/browse?path=${encodeURIComponent(member.path!)}`)}>
+          Show in Browse
+        </button>
+      )}
+      {removeButton}
+    </div>
+  );
+  const notice = (member.missing || member.quarantined) && (
+    <p className="notice">{member.missing ? "The file is missing." : "The file is in ##. To Delete."}</p>
+  );
   return (
     <aside className="collection-inspector" aria-label="Selected file">
-      <Thumbnail member={member} />
       {member.path && (member.missing || member.quarantined) ? (
         <>
           <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path }} />
@@ -718,11 +693,11 @@ function Inspector({
           {actions()}
         </>
       ) : member.path ? (
+        // a folder: its name and path (its Rename and Move to… say why they are off)
         <FileMeta key={member.drive_id} file={{ ...member, name }} disabled={busy}>
           {(meta) => (
             <>
               {meta.header}
-              {meta.tags}
               <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path ?? "" }} identity={false} />
               {group}
               {actions(meta.ask)}
@@ -741,8 +716,7 @@ function Inspector({
 }
 
 /** A file inside a folder member, selected in the list: it is not a member itself, so
- * there is no group or removing, but its preview, details, marks, Trash, Quick Look and
- * Open / Show in Finder are as for a member. */
+ * there is no group or removing; otherwise the shared file panel, as for a member. */
 function EntryInspector({
   entry,
   busy,
@@ -754,19 +728,21 @@ function EntryInspector({
   onTrash: () => void;
   onQuickLook: () => void;
 }) {
-  const launch = useFileLaunch(entry.drive_id);
   const folder = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
   return (
     <aside className="collection-inspector" aria-label="Selected file">
-      <Thumbnail member={{ drive_id: entry.drive_id, path: entry.path, is_dir: false, missing: false }} />
-      <FileDetails file={{ drive_id: entry.drive_id, name: null, path: entry.path }} />
-      <p className="hint">In the folder {visible(folder)}, which is in this collection. The file itself is not a member.</p>
-      <div className="inspector-actions">
-        <MarkToggles driveId={entry.drive_id} name={entry.name} marks={entry.marks} />
-        <TrashButton disabled={busy} disabledReason={deletionRefusal(entry.path, entry.marks)} onClick={onTrash} />
-        <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
-        <LaunchButtons launch={launch} />
-      </div>
+      <FilePanel
+        file={entry}
+        preview={{ drive_id: entry.drive_id, path: entry.path, ext: extOf(entry.path), is_link: entry.is_link }}
+        disabled={busy}
+        intro={<p className="hint">In the folder {visible(folder)}, which is in this collection. The file itself is not a member.</p>}
+        tools={
+          <>
+            <TrashButton disabled={busy} disabledReason={deletionRefusal(entry.path, entry.marks)} onClick={onTrash} />
+            <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
+          </>
+        }
+      />
     </aside>
   );
 }
@@ -796,7 +772,7 @@ export default function CollectionDetail({
 }) {
   const local = useLocalToday();
   const today = fixed ?? local;
-  const split = useSplitWidth(archiveKey("dam.collection.inspectorwidth"), { min: 230, max: 560, initial: 270, unit: "px", edge: "end" });
+  const split = useSplitWidth(archiveKey("dam.collection.inspectorwidth"), { min: 230, max: Infinity, initial: 380, unit: "px", edge: "end" });
   const query = useCollection(id);
   // where a change of this collection shows: ! Important publishes to its own folder
   const rootName = query.data?.kind === "important" ? "##. Important" : "##. Ongoing";

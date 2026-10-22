@@ -21,6 +21,9 @@ All notable changes are listed here. The format follows
 - A filed file's name, folder and tags are edited in place (rename, move, tag chips and
   Ask AI chips), replacing the Edit details dialog.
 - Browse: select all, and batch star and Important.
+- A × on a file's collection badges (in Browse and in a collection) takes the file out of
+  that collection, with Undo (back into its group too). Only where the file is itself a
+  member of an open collection; ★ Starred and ! Important keep their toggles.
 - A Trays page: the sidebar's Trays caption now lists every tray with its open, overdue
   and total figures, as Collections does, instead of opening the first tray.
 - A search scope bar, a tray menu ("Put in tray"), and a collection browser.
@@ -99,6 +102,11 @@ All notable changes are listed here. The format follows
   sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
 - Collections and Activity: the toolbar's right-hand controls line up with the right edge
   of the list or timeline.
+- Selecting a file in a collection shows the same panel as in Browse: the full preview,
+  Put in tray, Add to collection, Back to inbox, the summary and the note, with the
+  collection's own Group and Remove from collection added. The panel starts wider and can
+  be dragged as wide as you like (the list keeps 320px). A link's bin and ★ / ! stay
+  while its preview loads.
 - A tray item's panel: Quick Look, Move to tray (now an icon) and Remove from tray sit
   together with the file's icons on its action row, instead of a Move to tray pull-down at
   the left and Quick Look in the header. Dragging the item onto a tray in the sidebar

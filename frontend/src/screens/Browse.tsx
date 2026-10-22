@@ -24,9 +24,8 @@ import {
   useStatus,
 } from "../api/client";
 import { childrenOf } from "../components/collectionTree";
-import { FileMeta } from "../components/FileMeta";
 import { FitText } from "../components/FitText";
-import { FilePreview, type PreviewFile } from "../components/FilePreview";
+import type { PreviewFile } from "../components/FilePreview";
 import { BUILTIN_LABEL, ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
 import {
@@ -64,7 +63,7 @@ import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
 import { Breakable } from "../components/PlanPreview";
-import { FileActions, LinkBadges } from "./FileActions";
+import { FilePanel } from "./FilePanel";
 import { useSearch } from "./useSearch";
 
 /** One row of the folder listing or of the search results. */
@@ -1351,47 +1350,22 @@ export default function Browse() {
             <Splitter split={listSplit} label="Resize the list" />
             <section className="browse-preview" aria-label="Preview">
               {previewed ? (
-                <>
-                  <FileMeta
-                    key={`meta-${previewed.drive_id}`}
-                    file={{
-                      ...previewed,
-                      marks: [...items.left, ...items.right].find((i) => i.drive_id === previewed.drive_id)?.marks ?? previewed.marks,
-                    }}
-                    disabled={locked}
-                  >
-                    {(meta) => (
-                      <>
-                        {meta.header}
-                        <FilePreview
-                          file={previewOf(previewed)}
-                          extraTools={
-                            <>
-                              {meta.marks}
-                              {meta.ask}
-                            </>
-                          }
-                        />
-                        {meta.tags}
-                      </>
-                    )}
-                  </FileMeta>
-                  <div className="browse-detail-actions">
-                    <LinkBadges driveId={previewed.drive_id} />
-                  </div>
-                  <FileActions
-                    key={previewed.drive_id}
-                    driveId={previewed.drive_id}
-                    backToInbox={{
-                      refusal: inboxRefusal([previewed.path], inbox) ?? (locked ? MOVE_BUSY : null),
-                      run: () => {
-                        if (inbox && !inboxRefusal([previewed.path], inbox)) {
-                          startRequest(backToInbox([previewed.drive_id], inbox));
-                        }
-                      },
-                    }}
-                  />
-                </>
+                <FilePanel
+                  file={{
+                    ...previewed,
+                    marks: [...items.left, ...items.right].find((i) => i.drive_id === previewed.drive_id)?.marks ?? previewed.marks,
+                  }}
+                  preview={previewOf(previewed)}
+                  disabled={locked}
+                  backToInbox={{
+                    refusal: inboxRefusal([previewed.path], inbox) ?? (locked ? MOVE_BUSY : null),
+                    run: () => {
+                      if (inbox && !inboxRefusal([previewed.path], inbox)) {
+                        startRequest(backToInbox([previewed.drive_id], inbox));
+                      }
+                    },
+                  }}
+                />
               ) : (
                 <EmptyState
                   icon={<File size={40} strokeWidth={1.25} />}

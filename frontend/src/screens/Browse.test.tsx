@@ -550,6 +550,39 @@ describe("Selected file", () => {
     ]);
   });
 
+  it("a × on a collection badge takes the file out of that collection; Undo adds it back into its group", async () => {
+    const member = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", is_dir: false, missing: false, quarantined: false, group_id: 3, marks: [] };
+    const direct = { ...SAUNA, members: [member] };
+    const { calls, user } = setup("10. Financial/Banks", {
+      "GET /api/files/f1/links": {
+        body: {
+          items: [],
+          collections: [
+            direct,
+            { ...SAUNA, id: 8, name: "Old", state: "closed", members: [member] }, // closed: no ×
+            { ...SAUNA, id: 9, name: "Houses", members: [{ ...member, drive_id: "d1", is_dir: true }] }, // through a folder: no ×
+            { ...SAUNA, id: 10, name: "Ongoing", kind: "starred", members: [member] }, // built in: its ★ toggle does it
+          ],
+          note: "",
+        },
+      },
+      "POST /api/collections/7/members/remove": { body: { collection: SAUNA, batch: null, problems: [] } },
+      "POST /api/collections/7/members": { body: { collection: direct, batch: null, problems: [] } },
+      "POST /api/collections/7/members/group": { body: { collection: direct, batch: null, problems: [] } },
+    });
+    const preview = await openFile(user);
+    const badges = await within(preview).findByRole("list", { name: "In trays and collections" });
+    expect(within(badges).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Remove from Sauna"]);
+    await user.click(within(badges).getByRole("button", { name: "Remove from Sauna" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members/remove")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members/remove")[0].body).toEqual({ drive_id: "f1" });
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members")[0].body).toEqual({ drive_ids: ["f1"] });
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members/group")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members/group")[0].body).toEqual({ drive_ids: ["f1"], group_id: 3 });
+  });
+
   it("Put in tray is a menu of the trays: one pick puts the file in it", async () => {
     const { calls, user } = setup("10. Financial/Banks", {
       "GET /api/trays": { body: { trays: [TO_PAY, TO_READ], errors: [] } },
