@@ -8,6 +8,8 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Help in the sidebar: the user guide inside the app, with its contents alongside, so you
+  can jump to any section. It works offline.
 - Activity: search, filters and paging (server-side), with the filter bar kept in the URL.
 - An Index sheet (opened from the status line) with totals per state and the files that
   could not be read; the status line now says "searchable", "waiting" and "not readable".
@@ -96,6 +98,9 @@ All notable changes are listed here. The format follows
   filter, its page title, the collection picker and Convert Ongoing), matching the
   sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
 - Collections: the Open/Closed switch lines up with the right edge of the list.
+- The user guide is rewritten for people using the app. Installing, the command line,
+  config files and technical details moved to a new technical reference
+  (`docs/reference.md`).
 - Buttons follow one order and wording across the app: Cancel comes before Save in the
   detected-field editor and in Save to notes (which Esc now closes); "Don't offer these"
   stands at the left of the tray settings sheet; the Barcode and Export sheets close with
