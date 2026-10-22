@@ -1,7 +1,7 @@
 import { CONFIRM_KEY_DELAY_MS } from "../components/PlanPreview";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BatchSummary, JournalEntry } from "../api/client";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { type Call, deferred, mockFetch, renderWithProviders as renderBare, undoButton } from "../test-utils";
@@ -21,6 +21,9 @@ function Where() {
   const l = useLocation();
   return <output aria-label="location">{l.pathname + l.search}</output>;
 }
+
+beforeEach(() => localStorage.clear());
+const expandAll = async () => userEvent.setup().click(await screen.findByRole("button", { name: "Expand all" }));
 
 /** Activity in a router (its search and filters live in the URL), at ``url``. */
 function renderWithProviders(ui: React.ReactElement, url = "/activity") {
@@ -100,6 +103,7 @@ describe("Activity", () => {
     const user = userEvent.setup();
     renderWithProviders(<Activity />);
     await screen.findByRole("article", { name: "Batch b1" });
+    await expandAll();
     const articles = screen.getAllByRole("article");
     expect(articles.map((a) => a.getAttribute("aria-label"))).toEqual(["Batch b1", "Batch b2", "Batch b3"]);
     expect(within(batchArticle("b1")).getByText("10. Financial/Banks/2026-10-01 lasku.pdf")).toBeInTheDocument();
@@ -274,6 +278,59 @@ describe("Activity", () => {
     expect(posts(calls, "/api/activity/b1/undo")).toHaveLength(1);
   });
 
+  describe("collapsible cards", () => {
+    const two = () =>
+      api({ "GET /api/activity": { body: [batch("c1", [row("c1", { src: "A/x.pdf", dst: "B/x.pdf" })]), batch("c2", [row("c2", { id: 9, src: "A/y.pdf", dst: "B/y.pdf" })])] } });
+    const toggleOf = (id: string) => within(batchArticle(id)).getByRole("button", { name: /operations of/ });
+
+    it("starts collapsed: the top part and Undo only; a click on the title row or the chevron toggles one card", async () => {
+      two();
+      const user = userEvent.setup();
+      renderWithProviders(<Activity />);
+      await screen.findByRole("article", { name: "Batch c1" });
+      expect(toggleOf("c1")).toHaveAttribute("aria-expanded", "false");
+      expect(within(batchArticle("c1")).queryByRole("list")).not.toBeInTheDocument();
+      expect(within(batchArticle("c1")).getByRole("button", { name: "Undo" })).toBeInTheDocument();
+      await user.click(toggleOf("c1"));
+      expect(toggleOf("c1")).toHaveAttribute("aria-expanded", "true");
+      expect(within(batchArticle("c1")).getByRole("list")).toBeInTheDocument();
+      expect(toggleOf("c2")).toHaveAttribute("aria-expanded", "false");
+      await user.click(batchArticle("c1").querySelector(".batch-title")!);
+      expect(toggleOf("c1")).toHaveAttribute("aria-expanded", "false");
+      toggleOf("c2").focus();
+      await user.keyboard("{Enter}");
+      expect(toggleOf("c2")).toHaveAttribute("aria-expanded", "true");
+    });
+
+    it("Expand all and Collapse all apply to every card; single toggles override afterwards; the default is remembered", async () => {
+      two();
+      const user = userEvent.setup();
+      const first = renderWithProviders(<Activity />);
+      await user.click(await screen.findByRole("button", { name: "Expand all" }));
+      expect(toggleOf("c1")).toHaveAttribute("aria-expanded", "true");
+      expect(toggleOf("c2")).toHaveAttribute("aria-expanded", "true");
+      await user.click(toggleOf("c2"));
+      expect(toggleOf("c1")).toHaveAttribute("aria-expanded", "true");
+      expect(toggleOf("c2")).toHaveAttribute("aria-expanded", "false");
+      // a fresh page remembers "expanded"
+      first.unmount();
+      renderWithProviders(<Activity />);
+      await screen.findByRole("article", { name: "Batch c1" });
+      expect(toggleOf("c2")).toHaveAttribute("aria-expanded", "true");
+      await user.click(screen.getByRole("button", { name: "Collapse all" }));
+      expect(toggleOf("c1")).toHaveAttribute("aria-expanded", "false");
+      expect(toggleOf("c2")).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("a search shows every card expanded", async () => {
+      two();
+      renderWithProviders(<Activity />, "/activity?q=x.pdf");
+      await screen.findByRole("article", { name: "Batch c1" });
+      expect(toggleOf("c1")).toHaveAttribute("aria-expanded", "true");
+      expect(within(batchArticle("c1")).getByRole("list")).toBeInTheDocument();
+    });
+  });
+
   it("shows hidden characters in op paths", async () => {
     api({
       "GET /api/activity": {
@@ -281,6 +338,7 @@ describe("Activity", () => {
       },
     });
     renderWithProviders(<Activity />);
+    await expandAll();
     expect(await screen.findByText("a⟨U+202E⟩fdp.exe")).toBeInTheDocument();
   });
 
@@ -421,6 +479,7 @@ describe("Activity", () => {
     api({ "GET /api/activity": { body: [batch("m1", many), batch("m2", [row("m2", { id: 9 })])] } });
     renderWithProviders(<Activity />);
     const article = await screen.findByRole("article", { name: "Batch m1" });
+    await expandAll();
     const details = article.querySelector("details")!;
     expect(details).not.toHaveAttribute("open");
     expect(details.querySelector("summary")).toHaveTextContent("4 moves");
@@ -464,6 +523,7 @@ describe("journal rows", () => {
       },
     });
     renderWithProviders(<Activity />);
+    await expandAll();
     const rows = within(await screen.findByRole("article", { name: "Batch w2" })).getAllByRole("listitem");
     expect(rows[0]).toHaveTextContent(/^Remove link##\. Ongoing\/C\/a\.pdf/);
     expect(rows[0]).toHaveTextContent("(was a link to 30. Home/a.pdf)");

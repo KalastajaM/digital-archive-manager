@@ -2,7 +2,7 @@
  * ("Today", "Yesterday", then the date), each with its own Undo. Search and filters
  * (kept in the URL) narrow it on the server, a page at a time. Recovery sits on top
  * when something was interrupted. */
-import { History, MousePointerClick, RefreshCw, Terminal, Undo2 } from "lucide-react";
+import { ChevronRight, History, MousePointerClick, RefreshCw, Terminal, Undo2 } from "lucide-react";
 import { Link, useInRouterContext, useSearchParams } from "react-router-dom";
 import { Fragment, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
@@ -11,6 +11,7 @@ import {
   type AITask,
   type BatchSummary,
   type CollectionRow,
+  archiveKey,
   errorText,
   type JournalEntry,
   useActivity,
@@ -249,9 +250,13 @@ type BatchProps = {
   words: string[];
   undoBusy: boolean;
   onUndo: () => void;
+  /** Showing the operations below the top part (collapsed: the top part only). */
+  expanded: boolean;
+  onToggle: () => void;
 };
 
-function Batch({ b, title, collections, roots, words, undoBusy, onUndo }: BatchProps) {
+function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded, onToggle }: BatchProps) {
+  const detailsId = useId();
   const ops = acted(b.ops);
   const interrupted = b.ops.some((r) => r.state === "planned");
   // The server decides what can be undone; automatic Ongoing syncs never can.
@@ -267,7 +272,23 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo }: BatchP
         {ORIGIN_ICON[b.origin] ?? <History size={14} />}
       </span>
       <div className="batch-main">
-        <header className="batch-header">
+        {/* a click on the title row (not on its links or buttons) toggles; the chevron is the keyboard way */}
+        <header
+          className="batch-header"
+          onClick={(e) => {
+            if (!(e.target as HTMLElement).closest("a, button, summary, input")) onToggle();
+          }}
+        >
+          <button
+            type="button"
+            className="batch-toggle"
+            aria-expanded={expanded}
+            aria-controls={detailsId}
+            aria-label={`${expanded ? "Hide" : "Show"} the operations of ${title}`}
+            onClick={onToggle}
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
           <span className="batch-title">
             <Highlight text={title} words={words} />
           </span>
@@ -308,14 +329,17 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo }: BatchP
             )}
           </span>
         </header>
-        {b.ops.length > OPS_OPEN_MAX ? (
-          <details className="batch-ops">
-            <summary>{opsSummary(b.ops.map((r) => r.kind))}</summary>
-            <JournalList entries={b.ops} />
-          </details>
-        ) : (
-          <JournalList entries={b.ops} />
-        )}
+        <div id={detailsId} hidden={!expanded}>
+          {expanded &&
+            (b.ops.length > OPS_OPEN_MAX ? (
+              <details className="batch-ops">
+                <summary>{opsSummary(b.ops.map((r) => r.kind))}</summary>
+                <JournalList entries={b.ops} />
+              </details>
+            ) : (
+              <JournalList entries={b.ops} />
+            ))}
+        </div>
       </div>
     </article>
   );
@@ -332,9 +356,11 @@ type DayProps = {
   words: string[];
   undoBusy: boolean;
   onUndo: (b: BatchSummary) => void;
+  isExpanded: (batchId: string) => boolean;
+  onToggle: (batchId: string) => void;
 };
 
-function Day({ label, roots, all, collections, toDelete, batches, words, undoBusy, onUndo }: DayProps) {
+function Day({ label, roots, all, collections, toDelete, batches, words, undoBusy, onUndo, isExpanded, onToggle }: DayProps) {
   const id = useId();
   return (
     <section className="timeline-day" aria-labelledby={id}>
@@ -352,6 +378,8 @@ function Day({ label, roots, all, collections, toDelete, batches, words, undoBus
               words={words}
               undoBusy={undoBusy}
               onUndo={() => onUndo(b)}
+              expanded={isExpanded(b.batch_id)}
+              onToggle={() => onToggle(b.batch_id)}
             />
           </li>
         ))}
@@ -578,6 +606,18 @@ function FilterMenu({ label, value, options, onChange }: FilterMenuProps) {
 /** Journaled batches, newest first, each with Undo; recovery when something is pending.
  * The AI view lists the AI calls instead. The search and filters live in the URL
  * (?q=&kind=&status=&origin=&when=; ?file= opens it searched for a file). */
+const EXPANDED_KEY = "dam.activity.expanded.v1";
+
+/** Whether cards open expanded by default, kept per viewer (this browser) like the
+ * Today layout; collapsed when nothing is stored or storage is unavailable. */
+function readExpandedDefault(): boolean {
+  try {
+    return localStorage.getItem(archiveKey(EXPANDED_KEY)) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function Activity() {
   const [view, setView] = useState<View>("changes");
   const [params, setParams] = useSearchParams();
@@ -613,6 +653,25 @@ export default function Activity() {
   const filter: ActivityFilter = { q: urlQ, kind: filters.kind, status: filters.status, origin: filters.origin, since };
   const filtered = Boolean(urlQ || filters.kind || filters.status || filters.origin || filters.when);
   const words = urlQ.split(/\s+/).filter(Boolean);
+
+  // Cards start collapsed (or as "Expand all" last left them); a toggle overrides the
+  // default for that card until the default is changed. A search shows every card open,
+  // so the matched text is in view.
+  const [expandAll, setExpandAll] = useState(readExpandedDefault);
+  const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
+  const searching = urlQ !== "";
+  const isExpanded = (id: string) => searching || (overrides.get(id) ?? expandAll);
+  const toggle = (id: string) => setOverrides((o) => new Map(o).set(id, !isExpanded(id)));
+  const toggleAll = () => {
+    const next = !expandAll;
+    setExpandAll(next);
+    setOverrides(new Map());
+    try {
+      localStorage.setItem(archiveKey(EXPANDED_KEY), next ? "1" : "0");
+    } catch {
+      // no storage: the choice lasts until the page closes
+    }
+  };
 
   const activity = useActivity(filter);
   const folders = useStatus().data?.special_folders;
@@ -666,6 +725,8 @@ export default function Activity() {
             words={words}
             undoBusy={undo.pending}
             onUndo={(b) => undo.open({ batchId: b.batch_id })}
+            isExpanded={isExpanded}
+            onToggle={toggle}
           />
         ))}
         {activity.hasNextPage && (
@@ -704,6 +765,17 @@ export default function Activity() {
             : undefined
         }
         actions={
+          <>
+          {view === "changes" && count > 0 && (
+            <button
+              type="button"
+              disabled={searching}
+              data-tip={searching ? "Search results are shown open" : undefined}
+              onClick={toggleAll}
+            >
+              {expandAll || searching ? "Collapse all" : "Expand all"}
+            </button>
+          )}
           <Segmented<View>
             ariaLabel="Show"
             value={view}
@@ -713,6 +785,7 @@ export default function Activity() {
               { value: "ai", label: "AI" },
             ]}
           />
+          </>
         }
         search={view === "changes" ? searchBox : undefined}
       />
