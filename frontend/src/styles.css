@@ -1615,6 +1615,9 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 .ask-cite:hover:not(:disabled) { background: var(--accent-soft); }
 .ask-sources { margin: 0 0 var(--sp-2); padding-left: 0; list-style: none; display: grid; gap: 2px; font-size: var(--fs-sm); }
 .ask-quote { display: block; margin: 0 0 var(--sp-1) var(--sp-4); color: var(--muted); overflow-wrap: anywhere; }
+.ask-save { margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 0.5px solid var(--hairline); border-radius: var(--r-md); display: grid; gap: var(--sp-1); }
+.ask-save legend { padding: 0 var(--sp-1); font-size: var(--fs-sm); color: var(--muted); }
+.ask-save label { overflow-wrap: anywhere; }
 .ask-cost { margin: 0; }
 .ai-month { margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
 .ai-month h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }

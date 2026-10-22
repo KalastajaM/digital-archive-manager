@@ -106,6 +106,60 @@ describe("Ask", () => {
     expect(screen.getByLabelText("Question")).toHaveValue("");
   });
 
+  describe("Save to notes", () => {
+    const answered = async (extra: Parameters<typeof mockFetch>[0] = {}) => {
+      const calls = setup(STATUS_ON, undefined, {
+        "POST /api/notes/file/b1/append": { body: { text: "saved" } },
+        "POST /api/notes/file/b2/append": { body: { text: "saved" } },
+        ...extra,
+      });
+      const { user, sheet } = await ask();
+      await user.click(within(sheet).getByRole("button", { name: "Send" }));
+      const answer = await screen.findByRole("article", { name: "When is the Northpower bill due?" });
+      return { calls, user, answer };
+    };
+
+    it("appends the question, answer, date and sources to the notes of the sources left ticked", async () => {
+      const { calls, user, answer } = await answered();
+      await user.click(within(answer).getByRole("button", { name: "Save to notes…" }));
+      const boxes = within(answer).getAllByRole("checkbox");
+      expect(boxes).toHaveLength(2);
+      expect(boxes.every((b) => (b as HTMLInputElement).checked)).toBe(true); // all ticked to begin with
+      await user.click(within(answer).getByRole("checkbox", { name: "northpower2.pdf" })); // leave one out
+      await user.click(within(answer).getByRole("button", { name: "Save to notes" }));
+      await waitFor(() => expect(posts(calls, "/api/notes/file/b1/append")).toHaveLength(1));
+      expect(posts(calls, "/api/notes/file/b2/append")).toHaveLength(0);
+      const text = (posts(calls, "/api/notes/file/b1/append")[0].body as { text: string }).text;
+      expect(text).toMatch(/^Answer from Ask, \d{1,2}\.\d{1,2}\.\d{4}\n/);
+      expect(text).toContain("Question: When is the Northpower bill due?");
+      expect(text).toContain("Answer: It is due on 15.11.2026 [1]");
+      expect(text).toContain("Sources: [1] northpower.pdf, [2] northpower2.pdf");
+      expect(await screen.findByText("Added the answer to the note of northpower.pdf")).toBeInTheDocument();
+      expect(within(answer).queryByRole("checkbox")).toBeNull();
+    });
+
+    it("Cancel adds nothing, and Save needs a source ticked", async () => {
+      const { calls, user, answer } = await answered();
+      await user.click(within(answer).getByRole("button", { name: "Save to notes…" }));
+      for (const box of within(answer).getAllByRole("checkbox")) await user.click(box);
+      expect(within(answer).getByRole("button", { name: "Save to notes" })).toBeDisabled();
+      await user.click(within(answer).getByRole("button", { name: "Cancel" }));
+      expect(within(answer).queryByRole("checkbox")).toBeNull();
+      expect(posts(calls, "/api/notes/file/b1/append")).toHaveLength(0);
+    });
+
+    it("a note that cannot take it is reported, the other still saved", async () => {
+      const { calls, user, answer } = await answered({
+        "POST /api/notes/file/b1/append": { status: 400, body: { error: "The note would be over 10000 characters; nothing was added" } },
+      });
+      await user.click(within(answer).getByRole("button", { name: "Save to notes…" }));
+      await user.click(within(answer).getByRole("button", { name: "Save to notes" }));
+      await waitFor(() => expect(posts(calls, "/api/notes/file/b2/append")).toHaveLength(1));
+      expect(await screen.findByText(/Could not add the answer to the note of northpower\.pdf: The note would be over/)).toBeInTheDocument();
+      expect(await screen.findByText("Added the answer to the note of northpower2.pdf")).toBeInTheDocument();
+    });
+  });
+
   it("a citation opens Quick Look on that file", async () => {
     setup();
     const { user, sheet } = await ask();

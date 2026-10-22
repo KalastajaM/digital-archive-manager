@@ -3,11 +3,12 @@
  * will be sent" sheet with the question and the snippets; nothing is sent before Send.
  * "Nothing in the archive matches" is a blocked prepare: it costs nothing. Each answer
  * has numbered citations; one opens Quick Look on that file. Answers are kept for this
- * session only (never saved), newest first. */
+ * session only (never saved), newest first; "Save to notes…" appends one to the note of
+ * the sources chosen. */
 import { useQueryClient } from "@tanstack/react-query";
 import { MessageCircleQuestion } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { type AskAnswer, type AskEntry, errorText, type FileDetail, get, useAskSession } from "../api/client";
+import { type AskAnswer, type AskEntry, errorText, type FileDetail, get, useAppendNote, useAskSession } from "../api/client";
 import { euro } from "../components/ai/SendSheet";
 import { AIHint, useAISend, useAIState } from "../components/ai/useAI";
 import { useToast } from "../components/Toasts";
@@ -16,6 +17,7 @@ import { Tag } from "../components/ui/Tag";
 import { Toolbar } from "../components/ui/Toolbar";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { MarkIcons } from "../components/MarkIcons";
+import { formatDate, localToday } from "../format";
 import { visible } from "../text";
 
 const QUESTION_MAX = 1000;
@@ -46,6 +48,97 @@ function AnswerText({ entry, onCite }: { entry: AskEntry; onCite: (index: number
   return <p className="ask-answer-text">{parts}</p>;
 }
 
+/** What is added to a file's note: the question, the answer, today's date and the sources. */
+export function noteText(entry: AskEntry, today = localToday()): string {
+  const sources = entry.answer.citations.map((c, i) => `[${i + 1}] ${c.name}`).join(", ");
+  return [
+    `Answer from Ask, ${formatDate(today)}`,
+    `Question: ${entry.question}`,
+    `Answer: ${entry.answer.answer.trim()}`,
+    ...(sources ? [`Sources: ${sources}`] : []),
+  ].join("\n");
+}
+
+/** "Save to notes…": choose which of the listed sources get the answer in their note
+ * (all of them to begin with: the answer was drawn from every one of them, and
+ * unticking is quicker than ticking), then confirm. Appended below any note there. */
+function SaveToNotes({ entry }: { entry: AskEntry }) {
+  const toast = useToast();
+  const append = useAppendNote();
+  const headingId = useId();
+  // one box per file, even when the answer cites a file twice
+  const files = entry.answer.citations.filter((c, i, all) => all.findIndex((x) => x.drive_id === c.drive_id) === i);
+  const [open, setOpen] = useState(false);
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  if (files.length === 0) return null;
+  const start = () => {
+    setChosen(new Set(files.map((c) => c.drive_id)));
+    setOpen(true);
+  };
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    const text = noteText(entry);
+    const saved: string[] = [];
+    for (const c of files.filter((f) => chosen.has(f.drive_id))) {
+      try {
+        await append.mutateAsync({ kind: "file", target: c.drive_id, text });
+        saved.push(c.name);
+      } catch (e) {
+        toast({ kind: "error", text: `Could not add the answer to the note of ${visible(c.name)}: ${visible(errorText(e))}` });
+      }
+    }
+    setBusy(false);
+    if (saved.length > 0) {
+      const where = saved.length <= 2 ? saved.map(visible).join(" and ") : `${saved.length} files`;
+      toast({ kind: "info", text: `Added the answer to the note of ${where}` });
+      setOpen(false);
+    }
+  };
+  if (!open) {
+    return (
+      <div className="actions">
+        <button type="button" data-tip="Add the question and answer to the note of the sources you choose" onClick={start}>
+          Save to notes…
+        </button>
+      </div>
+    );
+  }
+  return (
+    <fieldset className="ask-save" aria-labelledby={headingId}>
+      <legend id={headingId}>Add this answer to the note of:</legend>
+      {files.map((c) => (
+        <label key={c.drive_id}>
+          <input
+            type="checkbox"
+            checked={chosen.has(c.drive_id)}
+            disabled={busy}
+            onChange={(e) =>
+              setChosen((old) => {
+                const next = new Set(old);
+                if (e.target.checked) next.add(c.drive_id);
+                else next.delete(c.drive_id);
+                return next;
+              })
+            }
+          />{" "}
+          {visible(c.name)}
+        </label>
+      ))}
+      <p className="hint">It goes below any note the file has, with the question, the date and the sources.</p>
+      <div className="actions">
+        <button type="button" className="primary" disabled={busy || chosen.size === 0} onClick={() => void save()}>
+          Save to notes
+        </button>
+        <button type="button" disabled={busy} onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
 function Answer({ entry, onCite }: { entry: AskEntry; onCite: (index: number) => void }) {
   const headingId = useId();
   const rejected = Object.values(entry.answer.rejected ?? {});
@@ -69,6 +162,7 @@ function Answer({ entry, onCite }: { entry: AskEntry; onCite: (index: number) =>
         </ol>
       )}
       {rejected.length > 0 && <p className="hint">{rejected.map(visible).join("; ")}</p>}
+      <SaveToNotes entry={entry} />
       <p className="hint ask-cost">
         {entry.cached ? <Tag tone="blue">from earlier</Tag> : `Cost: ${euro(entry.costEur)}`}
       </p>

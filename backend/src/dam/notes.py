@@ -79,34 +79,69 @@ class NotesService:
         """Store the note (surrounding whitespace stripped); blank text removes it."""
         _kind(kind)
         text = check_note(text)
-        where = (notes.c.target_kind == kind, notes.c.target_id == target_id)
         with write_tx(self.engine) as conn:
             if not text:
-                conn.execute(delete(notes).where(*where))
-                return
-            stmt = sqlite_insert(notes).values(
-                target_kind=kind,
-                target_id=target_id,
-                text=text,
-                updated=time.time(),
-                created_by_batch=batch_id,
-            )
-            # A note a batch did not create is never taken over by a batch (NULL
-            # owner, or the owner stays); a user edit (batch_id None) clears the owner,
-            # so undoing the original filing never deletes text the user wrote since.
-            conn.execute(
-                stmt.on_conflict_do_update(
-                    index_elements=["target_kind", "target_id"],
-                    set_={
-                        "text": stmt.excluded.text,
-                        "updated": stmt.excluded.updated,
-                        "created_by_batch": case(
-                            (stmt.excluded.created_by_batch.is_(None), None),
-                            else_=notes.c.created_by_batch,
-                        ),
-                    },
+                conn.execute(
+                    delete(notes).where(notes.c.target_kind == kind, notes.c.target_id == target_id)
                 )
+                return
+            self._upsert(conn, kind, target_id, text, batch_id)
+
+    @staticmethod
+    def _upsert(
+        conn: Connection, kind: str, target_id: str, text: str, batch_id: str | None
+    ) -> None:
+        stmt = sqlite_insert(notes).values(
+            target_kind=kind,
+            target_id=target_id,
+            text=text,
+            updated=time.time(),
+            created_by_batch=batch_id,
+        )
+        # A note a batch did not create is never taken over by a batch (NULL
+        # owner, or the owner stays); a user edit (batch_id None) clears the owner,
+        # so undoing the original filing never deletes text the user wrote since.
+        conn.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["target_kind", "target_id"],
+                set_={
+                    "text": stmt.excluded.text,
+                    "updated": stmt.excluded.updated,
+                    "created_by_batch": case(
+                        (stmt.excluded.created_by_batch.is_(None), None),
+                        else_=notes.c.created_by_batch,
+                    ),
+                },
             )
+        )
+
+    def append(self, kind: str, target_id: str, text: str) -> str:
+        """Add ``text`` below the existing note (a blank line between), in one write
+        transaction so a concurrent edit is never lost; returns the whole note.
+
+        Never overwrites: a result over ``NOTE_MAX`` is refused and the note stays as it
+        was. Blank text changes nothing.
+        """
+        _kind(kind)
+        text = check_note(text)
+        with write_tx(self.engine) as conn:
+            current = (
+                conn.execute(
+                    select(notes.c.text).where(
+                        notes.c.target_kind == kind, notes.c.target_id == target_id
+                    )
+                ).scalar_one_or_none()
+                or ""
+            )
+            if not text:
+                return current
+            combined = f"{current}\n\n{text}" if current.strip() else text
+            if len(combined) > NOTE_MAX:
+                raise InvalidRequest(
+                    f"The note would be over {NOTE_MAX} characters; nothing was added"
+                )
+            self._upsert(conn, kind, target_id, combined, None)
+        return combined
 
     def add_if_absent(
         self, kind: str, target_id: str, text: str, batch_id: str | None = None

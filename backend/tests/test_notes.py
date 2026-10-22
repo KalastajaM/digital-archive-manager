@@ -62,6 +62,31 @@ def test_invalid_kind_and_caps(svc):
         svc.add_check("file", "d", "   ")
 
 
+def test_append_adds_below_the_note_and_never_overwrites(engine, svc):
+    assert svc.append("file", "d1", "first") == "first"  # no note yet
+    assert svc.append("file", "d1", "  second \n") == "first\n\nsecond"
+    assert svc.get("file", "d1") == "first\n\nsecond"
+    assert svc.append("file", "d1", "   ") == "first\n\nsecond"  # blank: unchanged
+    assert svc.append("file", "other", "x") == "x"
+    assert count(engine, notes) == 2
+
+
+def test_append_over_the_limit_is_refused_and_keeps_the_note(svc):
+    svc.set("file", "d1", "a" * (NOTE_MAX - 5))
+    with pytest.raises(InvalidRequest):
+        svc.append("file", "d1", "b" * 10)
+    assert svc.get("file", "d1") == "a" * (NOTE_MAX - 5)
+    with pytest.raises(InvalidRequest):
+        svc.append("sideways", "d1", "x")
+
+
+def test_append_clears_a_batch_owner_like_a_user_edit(engine, svc):
+    svc.set("file", "d1", "from filing", batch_id="b1")
+    svc.append("file", "d1", "mine")
+    assert svc.remove_created_by("b1") == 0
+    assert svc.get("file", "d1") == "from filing\n\nmine"
+
+
 def test_remove_created_by_only_matching_notes(engine, svc):
     svc.set("file", "a", "one", batch_id="b1")
     svc.set("file", "b", "two", batch_id="b2")

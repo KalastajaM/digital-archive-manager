@@ -1038,6 +1038,21 @@ export const useSetNote = () => {
   });
 };
 
+/** Add text below a note's existing text (one request: the server does the read and the
+ * write together, so nothing typed meanwhile is lost). */
+export const useAppendNote = () => {
+  const client = useQueryClient();
+  const refresh = useRefreshTrays();
+  return useMutation({
+    mutationFn: ({ kind, target, text }: { kind: NoteKind; target: string; text: string }) =>
+      post<{ text: string }>(`/api/notes/${kind}/${enc(target)}/append`, { text }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.notes });
+      return refresh();
+    },
+  });
+};
+
 export const useChecklist = (kind: NoteKind, target: string) =>
   useQuery({
     queryKey: [...keys.checklist, kind, target],

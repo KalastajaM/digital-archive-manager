@@ -34,6 +34,13 @@ def set_note(app: AppDep, kind: Kind, target: str, body: NoteBody) -> dict:
     return {"text": app.notes.get(kind, target)}
 
 
+@router.post("/notes/{kind}/{target}/append", response_model=NoteOut)
+def append_note(app: AppDep, kind: Kind, target: str, body: NoteBody) -> dict:
+    """Add the text below the existing note (atomic: no read-modify-write in the client)."""
+    check_target(app, kind, target)
+    return {"text": app.notes.append(kind, target, body.text)}
+
+
 # The routes on one checklist entry come first: ``{check_id:int}`` only matches digits,
 # so ``/checklist/file/<drive id>`` never reaches them.
 

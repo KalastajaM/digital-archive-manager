@@ -381,6 +381,17 @@ def test_notes(client, app, files):
     assert r.status_code == 400
 
 
+def test_notes_append(client, app, files):
+    r = post(client, "/api/notes/file/f1/append", {"text": "first"})
+    assert r.status_code == 200 and r.json() == {"text": "first"}
+    r = post(client, "/api/notes/file/f1/append", {"text": "second"})
+    assert r.json() == {"text": "first\n\nsecond"}
+    assert client.get("/api/notes/file/f1").json() == {"text": "first\n\nsecond"}
+    assert post(client, "/api/notes/file/nope/append", {"text": "x"}).status_code == 404
+    assert post(client, "/api/notes/file/f1/append", {"text": "x" * 10_001}).status_code == 400
+    assert client.get("/api/notes/file/f1").json() == {"text": "first\n\nsecond"}
+
+
 def test_checklist(client, app, files):
     cid = post(client, "/api/collections", {"name": "Sauna"}).json()["id"]
     url = f"/api/checklist/collection/{cid}"
