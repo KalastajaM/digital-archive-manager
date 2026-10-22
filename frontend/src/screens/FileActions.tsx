@@ -72,7 +72,7 @@ export function LinkBadges({ driveId }: { driveId: string }) {
     <ul className="badges link-badges" aria-label="In trays and collections">
       {items.map((i) => (
         <li key={`i${i.id}`}>
-          <Link className="badge" to={`/trays/${encodeURIComponent(i.tray_id)}?item=${i.id}`}>
+          <Link className="tag tag-grey" to={`/trays/${encodeURIComponent(i.tray_id)}?item=${i.id}`}>
             {visible(i.tray_name)}: {visible(i.title)}
           </Link>
         </li>
@@ -82,7 +82,7 @@ export function LinkBadges({ driveId }: { driveId: string }) {
         const removable = member !== undefined && c.state === "open" && c.kind == null;
         return (
           <li key={`c${c.id}`} className={removable ? "badge-removable" : undefined}>
-            <Link className="badge" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
+            <Link className="tag tag-grey" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
               {visible(c.name)}
               {c.state === "closed" && " (closed)"}
             </Link>

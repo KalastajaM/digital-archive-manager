@@ -25,6 +25,6 @@ describe("FileActions", () => {
     const box = await screen.findByRole("region", { name: "Summary" });
     expect(await within(box).findByText("Home insurance policy")).toBeInTheDocument();
     expect(within(box).getByRole("list", { name: "Key facts" })).toHaveTextContent("312 €");
-    expect(await within(box).findByRole("button", { name: "Summarize with AI" })).toBeInTheDocument();
+    expect(await within(box).findByRole("button", { name: "Summarize with AI…" })).toBeInTheDocument();
   });
 });

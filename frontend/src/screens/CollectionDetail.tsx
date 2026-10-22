@@ -15,7 +15,7 @@
  * own collections above its members. "Move to…" (the keyboard way of a sidebar drag)
  * and "New collection inside…" are in the ⋯ menu; a move runs at once, as group
  * changes do, and shows the batch that ran. */
-import { Eye, FolderOpen, FolderPlus, Layers, Ellipsis, Share } from "lucide-react";
+import { Ellipsis, Eye, FolderOpen, FolderPlus, Layers, Share, Sparkles } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -221,53 +221,39 @@ function Export({ id, onBusy }: { id: number; onBusy?: (busy: boolean) => void }
   );
 }
 
-function RenameForm({
-  name,
-  busy,
-  onSave,
-  onCancel,
-}: {
-  name: string;
-  busy: boolean;
-  onSave: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const id = useId();
+/** The collection's name, renamed in place in the toolbar (as in Finder): Enter
+ * previews the rename (it can rename its ##. Ongoing folder), Esc cancels, and leaving
+ * the field keeps what was typed there (an unchanged name just closes it). */
+function RenameField({ name, busy, onSave, onCancel }: { name: string; busy: boolean; onSave: (name: string) => void; onCancel: () => void }) {
   const [text, setText] = useState(name);
   const input = useRef<HTMLInputElement>(null);
   // opens with the whole name selected: typing replaces it
   useEffect(() => input.current?.select(), []);
   return (
-    <div className="field rename">
-      <label htmlFor={id}>New name</label>
-      <input
-        id={id}
-        ref={input}
-        value={text}
-        autoFocus
-        maxLength={COLLECTION_NAME_MAX}
-        spellCheck={false}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onSave(text);
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            onCancel();
-          }
-        }}
-      />
-      <div className="actions">
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="button" className="primary" disabled={busy} onClick={() => onSave(text)}>
-          Rename
-        </button>
-      </div>
-    </div>
+    <input
+      ref={input}
+      className="toolbar-rename"
+      aria-label="Collection name"
+      value={text}
+      autoFocus
+      disabled={busy}
+      maxLength={COLLECTION_NAME_MAX}
+      spellCheck={false}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        if (text.trim() === name) onCancel();
+      }}
+      onKeyDown={(e) => {
+        e.stopPropagation(); // page shortcuts never see keys typed here
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onSave(text);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    />
   );
 }
 
@@ -645,12 +631,8 @@ function Inspector({
           file={{ ...member, name }}
           preview={{ drive_id: member.drive_id, path: member.path, ext: extOf(member.path), is_link: member.is_link }}
           disabled={busy}
-          tools={
-            <>
-              {trashButton}
-              {quickLookButton}
-            </>
-          }
+          view={quickLookButton}
+          tools={trashButton}
           extras={
             (group || removeButton) && (
               <section className="inspector-collection" aria-label="In this collection">
@@ -664,14 +646,14 @@ function Inspector({
     );
   }
 
-  /** The ★ ! Ask AI Trash Quick Look row, with Show in Browse for a folder (``ask``: only
-   * an entry that can be edited has it). */
+  /** The Quick Look ★ ! Ask AI Trash row, the app's one order, with Show in Browse for a
+   * folder (``ask``: only an entry that can be edited has it). */
   const actions = (ask?: ReactNode) => (
     <div className="inspector-actions">
+      {quickLookButton}
       <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} />
       {ask}
       {trashButton}
-      {quickLookButton}
       {member.is_dir && member.path && !member.missing && (
         <button type="button" onClick={() => navigate(`/browse?path=${encodeURIComponent(member.path!)}`)}>
           Show in Browse
@@ -736,12 +718,8 @@ function EntryInspector({
         preview={{ drive_id: entry.drive_id, path: entry.path, ext: extOf(entry.path), is_link: entry.is_link }}
         disabled={busy}
         intro={<p className="hint">In the folder {visible(folder)}, which is in this collection. The file itself is not a member.</p>}
-        tools={
-          <>
-            <TrashButton disabled={busy} disabledReason={deletionRefusal(entry.path, entry.marks)} onClick={onTrash} />
-            <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
-          </>
-        }
+        view={<IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
+        tools={<TrashButton disabled={busy} disabledReason={deletionRefusal(entry.path, entry.marks)} onClick={onTrash} />}
       />
     </aside>
   );
@@ -851,7 +829,7 @@ export default function CollectionDetail({
     if (mounted.current) renameBack.current(from, to);
     else {
       navigate(`/collections/${id}`);
-      toast({ kind: "info", text: `Use ⋯ › Rename… to rename it back to ${to}` });
+      toast({ kind: "info", text: `Use ⋯ › Rename to rename it back to ${to}` });
     }
   };
 
@@ -1210,7 +1188,7 @@ export default function CollectionDetail({
 
   const openChildren = (allCollections.data ?? []).some((x) => x.parent_id === id && x.state === "open");
   const more: MenuEntry[] = [
-    { label: "Rename…", disabled: busy, onSelect: () => setRenaming(true) },
+    { label: "Rename", disabled: busy, onSelect: () => setRenaming(true) },
     { label: "Move to…", disabled: busy, onSelect: () => setMovingTo(true) },
     // a closed collection takes no new collection (the server refuses a closed parent)
     { label: "New collection inside…", disabled: busy || !isOpen, onSelect: () => setNewChild(true) },
@@ -1276,6 +1254,7 @@ export default function CollectionDetail({
       <div className="collection-main">
         <Toolbar
           title={name}
+          titleEditor={renaming ? <RenameField name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} /> : undefined}
           subtitle={subtitle}
           actions={
             <>
@@ -1330,7 +1309,6 @@ export default function CollectionDetail({
         <div className="collection-body">
           {banner}
           {!builtin && <Where c={c} all={allCollections.data ?? []} />}
-          {renaming && <RenameForm name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} />}
           {c.ongoing_status && <Banner message={visible(c.ongoing_status)} />}
           {error && (
             <p className="error" role="alert">
@@ -1344,8 +1322,9 @@ export default function CollectionDetail({
             save={save}
             ai={
               ai.on && (
-                <button type="button" disabled={summarize.busy} onClick={() => summarize.ask({ collection_id: id })}>
-                  Summarize with AI
+                <button type="button" className="ai-action" disabled={summarize.busy} onClick={() => summarize.ask({ collection_id: id })}>
+                  <Sparkles size={14} aria-hidden="true" />
+                  Summarize with AI…
                 </button>
               )
             }
@@ -1482,6 +1461,7 @@ export default function CollectionDetail({
           ops={[]}
           busy={groupChange.isPending}
           confirmLabel="Remove group"
+          danger
           onConfirm={async () => {
             // Closed either way, as ``apply`` does: a refusal or an error shows on the page.
             const g = removing;

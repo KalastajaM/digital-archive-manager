@@ -37,6 +37,14 @@ describe("overflow titles", () => {
     expect(el.title).toBe("20. Houses/00. Hillside");
   });
 
+  it("leaves a control with its own CSS tooltip alone", () => {
+    remove = installOverflowTitles();
+    const el = cell("To pay this month", { overflow: true });
+    el.setAttribute("data-tip", "To pay this month 1");
+    hover(el);
+    expect(el.hasAttribute("title")).toBe(false);
+  });
+
   it("adds nothing to text that fits or is not ellipsized", () => {
     remove = installOverflowTitles();
     const fits = cell("short.pdf", { overflow: false });

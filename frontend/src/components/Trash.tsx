@@ -155,6 +155,7 @@ export function useTrash({ onTrashed, onUndone, inlineMessage = false }: Options
     <ConfirmPlan
       planKey={confirm.batchId}
       title={`${TRASH_LABEL}?`}
+      danger
       intro={
         <>
           <p>

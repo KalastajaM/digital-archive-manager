@@ -38,6 +38,7 @@ import { visible } from "../text";
 import BatchCard from "./BatchCard";
 import ReviewCard from "./ReviewCard";
 import { followUpLines, speaker, useFiling } from "./useFiling";
+import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { MarkIcons } from "../components/MarkIcons";
 
 const MAX_NAMES = 5;
@@ -74,19 +75,19 @@ function addedTo(result: FileItResult, requests: FileRequest[], trays: TrayDef[]
 const uniqueTags = (requests: FileRequest[]) => [...new Set(requests.flatMap((r) => r.tags ?? []))];
 
 /** The list's key hints: keys, then what they do. */
-const KEYS: [string[], string][] = [
+const KEYS: KeyHint[] = [
   [["↑", "↓"], "move"],
-  [["⇧", "↑↓"], "select several"],
-  [["⌘", "click"], "add or remove"],
+  [["⇧↑", "⇧↓"], "select several"],
+  [["⌘"], "click to add or remove"],
   [["Space"], "Quick Look"],
-  [["Enter"], "preview"],
-  [["⌘", "Enter"], "file it"],
+  [["↩"], "preview"],
+  [["⌘↩"], "file it"],
   [["n"], "name"],
   [["f"], "folder"],
   [["1–9"], "tray"],
   [["0"], "no tray"],
   [["u"], "undo"],
-  [["⌘", "⌫"], "move to To Delete"],
+  [["⌘⌫"], "move to To Delete"],
 ];
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
@@ -465,16 +466,7 @@ export default function Inbox() {
             })}
           </ul>
         )}
-        <p className="hint inbox-keys">
-          {KEYS.map(([keys, what]) => (
-            <span key={what} className="key-group">
-              {keys.map((k) => (
-                <kbd key={k}>{k}</kbd>
-              ))}{" "}
-              {what}
-            </span>
-          ))}
-        </p>
+        <KeyHints hints={KEYS} />
       </nav>
       <Splitter split={split} label="Resize the list" />
       <section className="inbox-card" aria-label="Review">

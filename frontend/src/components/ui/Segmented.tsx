@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 export type SegmentedOption<T extends string> = {
   value: T;
   label: ReactNode;
+  /** The tooltip (a CSS tip, like ``IconButton``'s). */
   title?: string;
   /** The accessible name when the label is shortened (it must start with the label). */
   ariaLabel?: string;
@@ -28,7 +29,7 @@ export function Segmented<T extends string>({ options, value, onChange, ariaLabe
           type="button"
           className="segmented-option"
           aria-pressed={o.value === value}
-          title={o.title}
+          data-tip={o.title}
           aria-label={o.ariaLabel}
           aria-keyshortcuts={o.shortcut}
           onClick={() => onChange(o.value)}
@@ -38,7 +39,7 @@ export function Segmented<T extends string>({ options, value, onChange, ariaLabe
               {o.shortcut}
             </kbd>
           )}
-          {o.label}
+          <span className="segmented-label">{o.label}</span>
         </button>
       ))}
     </div>

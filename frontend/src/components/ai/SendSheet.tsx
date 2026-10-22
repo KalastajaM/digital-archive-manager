@@ -7,16 +7,10 @@
 import type { AIPrepared, AIStatus } from "../../api/client";
 import { visible, visibleText } from "../../text";
 import { useArmedConfirm } from "../PlanPreview";
+import { euro } from "../../format";
 import { Sheet } from "../ui/Sheet";
 import { Tag } from "../ui/Tag";
 import { AIWait, secondsText } from "./AIWait";
-
-/** Euros as the app writes money ("1,25 €"); amounts under a cent keep four decimals. */
-export function euro(n: number): string {
-  if (n > 0 && n < 0.0001) return "< 0,0001 €";
-  const digits = n !== 0 && Math.abs(n) < 0.01 ? 4 : 2;
-  return `${n.toFixed(digits).replace(".", ",")} €`;
-}
 
 /** One value of an answer, as plain text (hidden characters shown). */
 function plain(value: unknown): string {

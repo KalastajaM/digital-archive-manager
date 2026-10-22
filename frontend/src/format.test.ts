@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyText, formatSize, plural } from "./format";
+import { copyText, dayWord, euro, formatSize, longDate, plural, shortCalendarDate } from "./format";
 
 describe("formatSize", () => {
   it("uses bytes, then one decimal below 10, whole numbers above", () => {
@@ -30,5 +30,26 @@ describe("copyText", () => {
     expect(copyText("date", "2026-01-05")).toBe("5.1.2026");
     expect(copyText("iban", "FI21 1234 5600 0007 85")).toBe("FI2112345600000785");
     expect(copyText("money", "1234.50")).toBe("1234,50");
+  });
+});
+
+describe("money and dates", () => {
+  it("euro writes a decimal comma and keeps four decimals under a cent", () => {
+    expect(euro(1.25)).toBe("1,25 €");
+    expect(euro(0.0042)).toBe("0,0042 €");
+    expect(euro(0.00001)).toBe("< 0,0001 €");
+  });
+
+  it("dayWord says today and yesterday, across a month end", () => {
+    expect(dayWord("2026-11-01", "2026-11-01")).toBe("today");
+    expect(dayWord("2026-10-31", "2026-11-01")).toBe("yesterday");
+    expect(dayWord("2026-10-30", "2026-11-01")).toBeNull();
+  });
+
+  it("calendar dates read the same in every time zone", () => {
+    expect(longDate("2026-10-20")).toBe("Tuesday 20 October");
+    expect(shortCalendarDate("2026-11-12", "2026-10-23")).toBe("12 Nov");
+    expect(shortCalendarDate("2027-01-05", "2026-10-23")).toBe("5 Jan 2027");
+    expect(longDate("soon")).toBe("soon");
   });
 });

@@ -251,7 +251,7 @@ describe("SendSheet: closing and failed prepares", () => {
 
 describe("euro", () => {
   it("writes euros as the app writes money, small amounts with four decimals", async () => {
-    const { euro } = await import("./SendSheet");
+    const { euro } = await import("../../format");
     expect(euro(0)).toBe("0,00 €");
     expect(euro(5)).toBe("5,00 €");
     expect(euro(1.25)).toBe("1,25 €");

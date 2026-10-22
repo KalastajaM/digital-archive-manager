@@ -9,6 +9,7 @@ import { COLLECTION_NAME_MAX } from "../components/CollectionPicker";
 import { sentence } from "../components/collectionText";
 import { childrenOf, countsOf, PATH_SEP, pathOf } from "../components/collectionTree";
 import { EmptyState } from "../components/ui/EmptyState";
+import { Tag } from "../components/ui/Tag";
 import { Segmented } from "../components/ui/Segmented";
 import { Toolbar } from "../components/ui/Toolbar";
 import { visible } from "../text";
@@ -86,7 +87,7 @@ function Row({ c, href, collections, where }: { c: CollectionRow; href: string; 
         </p>
         {c.summary && <p className="collection-row-summary">{visible(c.summary)}</p>}
       </div>
-      {c.ongoing_status && <span className="badge badge-warn">{sentence(visible(c.ongoing_status))}</span>}
+      {c.ongoing_status && <Tag tone="orange">{sentence(visible(c.ongoing_status))}</Tag>}
       <ChevronRight className="collection-row-chevron" size={14} aria-hidden="true" />
     </article>
   );
