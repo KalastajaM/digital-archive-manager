@@ -38,6 +38,7 @@ import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
 import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
+import { Tag } from "../components/ui/Tag";
 import { TipButton } from "../components/ui/TipButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { RemoveItemSheet } from "../components/RemoveItemSheet";
@@ -673,6 +674,13 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       {shown && (
         <span className="item-file-actions" role="group" aria-label="This file">
           {ask}
+          <IconButton
+            icon={<Unlink />}
+            label="Take this file off the item (the file stays where it is)"
+            disabled={change.isPending}
+            onClick={() => void takeOff(shown)}
+          />
+          {/* the bin last, as everywhere */}
           {canTrash(shown) && (
             <TrashButton
               disabled={trash.busy}
@@ -680,12 +688,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
               onClick={() => trashFile(shown)}
             />
           )}
-          <IconButton
-            icon={<Unlink />}
-            label="Take this file off the item (the file stays where it is)"
-            disabled={change.isPending}
-            onClick={() => void takeOff(shown)}
-          />
         </span>
       )}
     </div>
@@ -748,7 +750,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
               <button key={f.drive_id} type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
                 {nameOf(f)}
                 <MarkIcons marks={f.marks} />
-                {FILE_BADGE[f.state] && <span className="badge badge-error">{FILE_BADGE[f.state]}</span>}
+                {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
               </button>
             ))}
           </div>
@@ -758,7 +760,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         files.isSuccess && (
           <p className="item-files-line">
             <span>{plural(list.length, "file")}</span>
-            {list.length === 1 && FILE_BADGE[list[0].state] && <span className="badge badge-error">{FILE_BADGE[list[0].state]}</span>}
+            {list.length === 1 && FILE_BADGE[list[0].state] && <Tag tone="red">{FILE_BADGE[list[0].state]}</Tag>}
             <span aria-hidden="true">·</span>
             {addButton}
           </p>

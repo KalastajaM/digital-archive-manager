@@ -452,6 +452,11 @@ describe("Sidebar collection tree", () => {
     const dt = folder();
     fireEvent.dragEnter(row, { dataTransfer: dt });
     expect(row).toHaveAttribute("data-drop", "over");
+    // the folder drag allows only "copy": a "move" drop effect would make a real browser
+    // cancel the drop (the row highlighted, nothing added)
+    fireEvent.dragOver(row, { dataTransfer: dt });
+    expect(dt.effectAllowed).toBe("copy");
+    expect(dt.dropEffect).toBe("copy");
     fireEvent.drop(row, { dataTransfer: dt });
     await waitFor(() => expect(posts(calls, "/api/collections/7/members")).toHaveLength(1));
     expect(posts(calls, "/api/collections/7/members")[0].body).toEqual({ drive_ids: ["d9"] });

@@ -255,6 +255,9 @@ type DialogProps = {
   title?: string;
   intro?: ReactNode;
   confirmLabel?: string;
+  /** The confirm button is red: the plan removes something from the app (red is kept
+   * for this last step; menus and first steps stay plain). */
+  danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -283,6 +286,7 @@ function ConfirmDialog({
   title = "Confirm changes",
   intro,
   confirmLabel = "Confirm",
+  danger,
   children,
   onConfirm,
   onCancel,
@@ -300,7 +304,7 @@ function ConfirmDialog({
           <button ref={armed.cancelRef} type="button" onClick={onCancel} autoFocus>
             Cancel
           </button>
-          <button type="button" className="primary" onClick={onConfirm} disabled={busy}>
+          <button type="button" className={danger ? "primary danger" : "primary"} onClick={onConfirm} disabled={busy}>
             {confirmLabel}
             <span className="button-key" aria-hidden="true">
               ⌘↩

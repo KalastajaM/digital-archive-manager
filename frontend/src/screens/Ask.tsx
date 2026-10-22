@@ -9,7 +9,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MessageCircleQuestion } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { type AskAnswer, type AskEntry, errorText, type FileDetail, get, useAppendNote, useAskSession } from "../api/client";
-import { euro } from "../components/ai/SendSheet";
 import { AIHint, useAISend, useAIState } from "../components/ai/useAI";
 import { useToast } from "../components/Toasts";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -17,7 +16,7 @@ import { Tag } from "../components/ui/Tag";
 import { Toolbar } from "../components/ui/Toolbar";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { MarkIcons } from "../components/MarkIcons";
-import { formatDate, localToday } from "../format";
+import { euro, formatDate, localToday } from "../format";
 import { visible } from "../text";
 
 const QUESTION_MAX = 1000;

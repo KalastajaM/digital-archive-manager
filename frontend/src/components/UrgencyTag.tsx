@@ -1,6 +1,6 @@
 /** The coloured date tag on bill and action rows: red overdue, orange within
  * ``SOON_DAYS`` (as the API's "soon" level), grey later. */
-import { formatDate } from "../format";
+import { formatDate, shortCalendarDate } from "../format";
 import { visible } from "../text";
 import { Tag, type TagTone } from "./ui/Tag";
 
@@ -9,13 +9,6 @@ export const SOON_DAYS = 3;
 
 const DAY_MS = 86_400_000;
 const utcDay = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? Date.parse(`${iso}T00:00:00Z`) : Number.NaN);
-const SHORT = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-const SHORT_YEAR = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 export type Urgency = { text: string; tone: Extract<TagTone, "red" | "orange" | "grey"> };
 
@@ -28,9 +21,7 @@ export function urgency(date: string, today: string): Urgency {
   if (days === 0) return { text: "today", tone: "orange" };
   if (days === 1) return { text: "tomorrow", tone: "orange" };
   if (days <= SOON_DAYS) return { text: `in ${days} days`, tone: "orange" };
-  const at = new Date(utcDay(date));
-  const sameYear = date.slice(0, 4) === today.slice(0, 4);
-  return { text: (sameYear ? SHORT : SHORT_YEAR).format(at), tone: "grey" };
+  return { text: shortCalendarDate(date, today), tone: "grey" };
 }
 
 const PREFIX: Record<Urgency["tone"], string> = { red: "Overdue · ", orange: "", grey: "" };

@@ -124,3 +124,52 @@ export function shortDate(seconds: number, now = new Date()): string {
   const date = new Date(seconds * 1000);
   return (date.getFullYear() === now.getFullYear() ? SHORT_DATE : SHORT_DATE_YEAR).format(date);
 }
+
+/** A number with a decimal comma: (1.25, 2) → "1,25". */
+export const decimal = (n: number, digits: number) => n.toFixed(digits).replace(".", ",");
+
+/** Euros as the app writes money ("1,25 €"); amounts under a cent keep four decimals. */
+export function euro(n: number): string {
+  if (n > 0 && n < 0.0001) return "< 0,0001 €";
+  return `${decimal(n, n !== 0 && Math.abs(n) < 0.01 ? 4 : 2)} €`;
+}
+
+/** "today", "yesterday" or null, for a "YYYY-MM-DD" day against today's. */
+export function dayWord(day: string, today: string): "today" | "yesterday" | null {
+  if (day === today) return "today";
+  const before = localToday(new Date(Date.parse(`${today}T12:00:00`) - 86_400_000));
+  return day === before ? "yesterday" : null;
+}
+
+const LONG_DAY = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" });
+const LONG_DAY_YEAR = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const CLOCK = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const SHORT_WHEN = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const UTC_LONG_DAY = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+const UTC_SHORT = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const UTC_SHORT_YEAR = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** A moment as "Sunday 18 October" (this year) or "Saturday 18 October 2025", local time. */
+export const longDay = (at: Date, now = new Date()) =>
+  (at.getFullYear() === now.getFullYear() ? LONG_DAY : LONG_DAY_YEAR).format(at).replace(",", "");
+
+/** A moment's local time: "14:30". */
+export const clockTime = (at: Date) => CLOCK.format(at);
+
+/** A moment as "20 Oct, 14:30" (log rows). */
+export const shortWhen = (at: Date) => SHORT_WHEN.format(at);
+
+const calendarDay = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(Date.parse(`${iso}T00:00:00Z`)) : null);
+
+/** A "YYYY-MM-DD" date as "Tuesday 20 October"; anything else as is. */
+export function longDate(iso: string): string {
+  const at = calendarDay(iso);
+  return at ? UTC_LONG_DAY.format(at).replace(",", "") : iso;
+}
+
+/** A "YYYY-MM-DD" date as "12 Nov" in today's year, "5 Jan 2027" otherwise; anything else as is. */
+export function shortCalendarDate(iso: string, today: string): string {
+  const at = calendarDay(iso);
+  if (!at) return iso;
+  return (iso.slice(0, 4) === today.slice(0, 4) ? UTC_SHORT : UTC_SHORT_YEAR).format(at);
+}

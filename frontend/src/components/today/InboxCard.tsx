@@ -3,7 +3,8 @@
  * the count, age and bar show; open, the first ``FOUND_SHOWN`` found files and "Show N
  * more". With AI on, "Not recognised: N files — Ask AI" lists the inbox files without a
  * rule guess, each with its own Ask AI (the "What will be sent" sheet first). */
-import { Inbox as InboxIcon } from "lucide-react";
+import { Inbox as InboxIcon, Sparkles } from "lucide-react";
+import { IconButton } from "../ui/IconButton";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -116,14 +117,14 @@ function AskRow({
           ))}
       </div>
       {!answer ? (
-        <button
-          type="button"
-          aria-label={`Ask AI about ${visible(name)}`}
+        <IconButton
+          icon={<Sparkles />}
+          label={`Ask AI about ${visible(name)}`}
+          tip="Ask AI to suggest a name, folder and tags"
+          className="tip-end"
           disabled={ai.busy}
           onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
-        >
-          Ask AI
-        </button>
+        />
       ) : tray && already ? (
         <span className="hint">Already in {visible(tray.name)}</span>
       ) : tray ? (

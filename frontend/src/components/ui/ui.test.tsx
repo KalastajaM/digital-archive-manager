@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mockFetch, renderWithProviders } from "../../test-utils";
 import { Card } from "./Card";
 import { EmptyState } from "./EmptyState";
+import { KeyHints } from "../KeyHints";
 import { IconButton } from "./IconButton";
 import { Menu } from "./Menu";
 import { Segmented } from "./Segmented";
@@ -150,6 +151,15 @@ describe("IconButton", () => {
   });
 });
 
+describe("KeyHints", () => {
+  it("shows alternatives with a slash and a chord as one key", () => {
+    renderWithProviders(<KeyHints hints={[[["↑", "↓"], "move"], [["⌘↩"], "file it"], [[], "drag to move"]]} />);
+    const line = document.querySelector(".key-hints")!;
+    expect(line).toHaveTextContent("↑/↓ move⌘↩ file itdrag to move");
+    expect(line.querySelectorAll("kbd")).toHaveLength(3);
+  });
+});
+
 describe("TipButton", () => {
   it("has its tip while usable, and the reason (on a wrap) while disabled", () => {
     const { rerender } = renderWithProviders(
@@ -187,6 +197,15 @@ describe("Segmented", () => {
     expect(within(group).getByRole("button", { name: "To read" })).toHaveAttribute("aria-pressed", "false");
     await userEvent.setup().click(within(group).getByRole("button", { name: "To read" }));
     expect(onChange).toHaveBeenCalledWith("read");
+  });
+
+  it("shows an option's tip as a CSS tooltip, not a native title", () => {
+    renderWithProviders(
+      <Segmented ariaLabel="Scope" options={[{ value: "all", label: "Everywhere", title: "The whole archive" }]} value="all" onChange={() => {}} />,
+    );
+    const option = screen.getByRole("button", { name: "Everywhere" });
+    expect(option).toHaveAttribute("data-tip", "The whole archive");
+    expect(option).not.toHaveAttribute("title");
   });
 });
 

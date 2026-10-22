@@ -1,8 +1,10 @@
 /** The selected file's side panel, the same in Browse and in a collection: its name and
  * folder (editable), the preview with ★ / ! and Ask AI in its toolbar, the tags, its
  * trays and collections, then Put in tray, Add to collection, the summary and the note.
- * A screen adds its own: ``tools`` in the preview's toolbar, ``intro`` under the name
- * and ``extras`` before the shared actions (a collection's group and Remove). */
+ * A screen adds its own: ``view`` and ``tools`` in the preview's toolbar, ``intro`` under
+ * the name and ``extras`` before the shared actions (a collection's group and Remove).
+ * The toolbar keeps the app's one order: view (Open, Show in Finder, ``view``: Quick
+ * Look), then ★ / !, then Ask AI, then ``tools`` (the bin last). */
 import type { ReactNode } from "react";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
@@ -14,6 +16,7 @@ export function FilePanel({
   file,
   preview,
   disabled = false,
+  view,
   tools,
   intro,
   extras,
@@ -24,6 +27,7 @@ export function FilePanel({
   preview: PreviewFile;
   /** Another change is under way: editing is off. */
   disabled?: boolean;
+  view?: ReactNode;
   tools?: ReactNode;
   intro?: ReactNode;
   extras?: ReactNode;
@@ -40,6 +44,7 @@ export function FilePanel({
               file={preview}
               extraTools={
                 <>
+                  {view}
                   {meta.marks}
                   {meta.ask}
                   {tools}

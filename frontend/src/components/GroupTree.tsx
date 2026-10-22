@@ -467,9 +467,9 @@ function MemberRow({
             {m.path && <FitText mode="path" className="member-folder" text={visible(folderOf(m.path) || "(top)")} />}
           </span>
           <span className="member-tags">
-            {m.is_dir && <span className="badge">folder</span>}
-            {m.missing && <span className="badge badge-error">file missing</span>}
-            {!m.missing && m.quarantined && <span className="badge badge-error">in ##. To Delete</span>}
+            {m.is_dir && <Tag tone="grey">folder</Tag>}
+            {m.missing && <Tag tone="red">file missing</Tag>}
+            {!m.missing && m.quarantined && <Tag tone="red">in ##. To Delete</Tag>}
             {attentionTags(attention).map((t) => (
               <Tag key={t.key} tone={t.tone}>
                 {t.text}
@@ -622,7 +622,7 @@ export function GroupTree({
       { label: "Move up", disabled: index === 0, onSelect: () => move(-1) },
       { label: "Move down", disabled: index === siblings.length - 1, onSelect: () => move(1) },
       "separator",
-      { label: "Remove group…", danger: true, onSelect: () => actions.remove(g) },
+      { label: "Remove group…", onSelect: () => actions.remove(g) },
     ];
     return (
       <section key={g.id} className="group" aria-label={name}>

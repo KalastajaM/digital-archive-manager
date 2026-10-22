@@ -12,7 +12,8 @@ import { formatMoney, groupIban } from "../format";
 import { setDragFiles } from "../dnd";
 import { CARD_DRAG_TYPE, LAYOUT_KEY } from "../components/useCardLayout";
 import { type Call, dataTransfer, mockFetch, quarantineRoute, renderWithProviders } from "../test-utils";
-import Today, { greeting, longDate } from "./Today";
+import { longDate } from "../format";
+import Today, { greeting } from "./Today";
 
 const DAY = "2026-10-19";
 const DAY_S = Date.parse(`${DAY}T12:00:00`) / 1000;

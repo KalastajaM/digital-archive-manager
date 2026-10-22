@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck } from "lucide-react";
-import { useState } from "react";
+import { CircleAlert, CircleCheck, Pencil } from "lucide-react";
+import { useRef, useState } from "react";
 import {
   type Archive,
   type ArchiveForgotten,
@@ -14,6 +14,7 @@ import {
 import { fileManagerName } from "../fileManager";
 import { visible } from "../text";
 import { ArchiveSwatches } from "./ArchiveSwatches";
+import { IconButton } from "./ui/IconButton";
 import { Sheet } from "./ui/Sheet";
 import { TipButton } from "./ui/TipButton";
 
@@ -34,6 +35,8 @@ function ArchiveRow({ archive, all, onForgotten }: { archive: Archive; all: Arch
   const client = useQueryClient();
   const manager = fileManagerName() ?? "file manager";
   const [name, setName] = useState(archive.name);
+  const [renaming, setRenaming] = useState(false);
+  const cancelled = useRef(false); // Esc: a blur that follows saves nothing
   const [problem, setProblem] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const others = all.filter((a) => a.id !== archive.id);
@@ -64,30 +67,54 @@ function ArchiveRow({ archive, all, onForgotten }: { archive: Archive; all: Arch
     }
   };
   const label = visible(archive.name);
+  // Renamed in place (as in Finder): Enter or leaving the field saves, Esc cancels.
+  const saveName = () => {
+    setRenaming(false);
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
+    if (changed) void attempt(() => updateArchive(archive.id, { name: name.trim() }));
+    else setName(archive.name);
+  };
   return (
     <li className="archive-row">
       <div className="archive-row-head">
         <span className="archive-dot" style={{ background: archive.color }} aria-hidden="true" />
-        <strong>{label}</strong>
+        {renaming ? (
+          <input
+            type="text"
+            className="archive-rename"
+            aria-label={`Name of ${label}`}
+            value={name}
+            maxLength={40}
+            autoFocus
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation(); // the sheet stays open
+                cancelled.current = true;
+                setName(archive.name);
+                setRenaming(false);
+              }
+            }}
+          />
+        ) : (
+          <>
+            <strong>{label}</strong>
+            <IconButton icon={<Pencil />} label="Rename" onClick={() => setRenaming(true)} />
+          </>
+        )}
         {archive.current && <span className="archive-this">this window</span>}
         {archive.in_use_elsewhere && (
           <span className="archive-this">open in another window{archive.port ? ` (port ${archive.port})` : ""}</span>
         )}
-      </div>
-      <div className="archive-edit">
-        <input
-          type="text"
-          aria-label={`Name of ${label}`}
-          value={name}
-          maxLength={40}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && changed) void attempt(() => updateArchive(archive.id, { name: name.trim() }));
-          }}
-        />
-        <button type="button" disabled={!changed} onClick={() => void attempt(() => updateArchive(archive.id, { name: name.trim() }))}>
-          Rename
-        </button>
       </div>
       <ArchiveSwatches
         value={archive.color}
@@ -124,7 +151,7 @@ function ArchiveRow({ archive, all, onForgotten }: { archive: Archive; all: Arch
             <button type="button" onClick={() => setConfirming(false)}>
               Keep it
             </button>
-            <button type="button" className="danger" disabled={archive.current && !instead} onClick={() => void forget()}>
+            <button type="button" className="primary danger" disabled={archive.current && !instead} onClick={() => void forget()}>
               Forget {label}
             </button>
           </div>

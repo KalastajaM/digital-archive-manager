@@ -29,20 +29,21 @@ import { setDragFiles } from "../dnd";
 import { publishSelection } from "../selection";
 import { visible } from "../text";
 import ItemDetail, { AddFile, type DoneMode, doneFieldsText, itemKind, ReopenButton } from "./ItemDetail";
+import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { MarkIcons } from "../components/MarkIcons";
 
 /** Where the done form is open: the item, and which button opened it. */
 type DoneAt = { id: number; mode: DoneMode } | null;
 
-const KEYS: [string[], string][] = [
+const KEYS: KeyHint[] = [
   [["↑", "↓"], "move"],
-  [["Enter"], "open"],
+  [["↩"], "open"],
   [["d"], "done"],
   [["⌫"], "remove from tray"],
   [["Space"], "Quick Look"],
 ];
 /** A bill's tray also opens the barcode in Pay mode with one key. */
-const BILL_KEYS: [string[], string][] = [[["b"], "large barcode"]];
+const BILL_KEYS: KeyHint[] = [[["b"], "large barcode"]];
 
 /** A list row, as Mail lists messages: title and payee, the urgency tag and amount (or
  * how long it has waited) on the right, then any badges. Copying and Done are in the
@@ -434,16 +435,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
         ))}
         {tray && <TrayDefaultsBanner key={tray.id} tray={tray} />}
         {body}
-        <p className="hint inbox-keys">
-          {(tray && itemKind(tray) === "bill" ? [...KEYS, ...BILL_KEYS] : KEYS).map(([keys, what]) => (
-            <span key={what} className="key-group">
-              {keys.map((k) => (
-                <kbd key={k}>{k}</kbd>
-              ))}{" "}
-              {what}
-            </span>
-          ))}
-        </p>
+        <KeyHints hints={tray && itemKind(tray) === "bill" ? [...KEYS, ...BILL_KEYS] : KEYS} />
       </section>
       <Splitter split={split} label="Resize the list" />
       <section className="trays-detail" aria-label="Item">

@@ -98,9 +98,9 @@ export default function Viewer() {
         }
         actions={
           <>
+            {toggle}
             {record && <MarkToggles driveId={record.drive_id} name={name} marks={record.marks} />}
             {record && <TrashButton disabled={trash.busy} disabledReason={trashRefusal} onClick={trashIt} />}
-            {toggle}
           </>
         }
       />

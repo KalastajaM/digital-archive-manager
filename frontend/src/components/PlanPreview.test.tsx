@@ -149,6 +149,14 @@ describe("toasts", () => {
 });
 
 describe("ConfirmPlan", () => {
+  it("only a removal's confirm button is red", async () => {
+    const { ConfirmPlan } = await import("./PlanPreview");
+    const { rerender } = render(<ConfirmPlan planKey="a" ops={[]} confirmLabel="Move" onConfirm={() => {}} onCancel={() => {}} />);
+    expect(screen.getByRole("button", { name: /^Move/ })).not.toHaveClass("danger");
+    rerender(<ConfirmPlan planKey="a" ops={[]} confirmLabel="Remove group" danger onConfirm={() => {}} onCancel={() => {}} />);
+    expect(screen.getByRole("button", { name: /^Remove group/ })).toHaveClass("primary", "danger");
+  });
+
   it("a new plan in the open dialog starts the keyboard delay again", async () => {
     const { ConfirmPlan, CONFIRM_KEY_DELAY_MS } = await import("./PlanPreview");
     const real = performance.now.bind(performance);

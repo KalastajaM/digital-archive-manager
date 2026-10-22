@@ -88,6 +88,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- Dropping a folder from Browse on a collection in the sidebar now adds it; the row lit up
+  but the browser cancelled the drop.
 - After adding a group to a collection, **New group** could not add another straight
   away: the click only saved the previous group's name. It now adds the next group.
 - A tray date that is optional no longer makes Today call an item without one "undated".
@@ -106,6 +108,22 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Renaming works the same way everywhere, as in Finder: the name turns into a field in
+  place, Enter saves, Esc cancels. A collection is renamed in its title (no separate
+  form, and the ⋯ menu says Rename), an archive in Manage archives with a pencil button.
+  A rename that changes a folder on disk still shows its preview first.
+- A file's actions come in one order on every screen: view (Quick Look, Open, Show in
+  Finder), then the star and Important, then Ask AI, and the To Delete bin last. Quick
+  Look's Close button moved to the right end of its bar.
+- Red is kept for the last step of a removal: the confirm button of Move to To Delete,
+  Remove group and Forget archive. Menus no longer show red items.
+- Ask AI on a single file is always the sparkle button with the same tooltip, also on
+  Today's "Not recognised" list; Summarize with AI… carries the sparkle and an ellipsis
+  because it opens the What will be sent sheet.
+- Key hints under Browse, the Inbox and Trays look the same: arrows for moving, ↩ for
+  Enter and one key for a shortcut (⌘↩).
+- Tooltips on segmented choices (Folders/Files, This folder/Everywhere, the tray picker)
+  now look like every other tooltip.
 - The starred built-in collection is called "★ Starred" everywhere (the Browse collection
   filter, its page title, the collection picker and Convert Ongoing), matching the
   sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.

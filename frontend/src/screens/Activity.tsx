@@ -22,7 +22,7 @@ import {
   usePendingRecovery,
 } from "../api/client";
 import { ExcludedFolders } from "../components/ai/ExcludedFolders";
-import { Budget, euro } from "../components/ai/SendSheet";
+import { Budget } from "../components/ai/SendSheet";
 import { TASK_LABEL, useAIState } from "../components/ai/useAI";
 import { JournalList } from "../components/JournalList";
 import { RecoveryPanel } from "../components/Recovery";
@@ -33,7 +33,7 @@ import { Segmented } from "../components/ui/Segmented";
 import { Tag, type TagTone } from "../components/ui/Tag";
 import { TipButton } from "../components/ui/TipButton";
 import { Toolbar } from "../components/ui/Toolbar";
-import { plural } from "../format";
+import { clockTime, dayWord, decimal, euro, localToday, longDay, plural, shortWhen } from "../format";
 import { visible } from "../text";
 
 /** Rows whose act happened (what undo reverts). */
@@ -157,20 +157,12 @@ export function Highlight({ text, words }: { text: string; words: string[] }) {
   return <>{parts}</>;
 }
 
-const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" });
-const DAY_YEAR = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-
-const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-
 /** A day header in local time: "Today", "Yesterday", "Sunday 18 October" (this year)
  * or "Saturday 18 October 2025". */
 export function dayLabel(seconds: number, now = new Date()): string {
   const when = new Date(seconds * 1000);
-  if (dayKey(when) === dayKey(now)) return "Today";
-  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  if (dayKey(when) === dayKey(yesterday)) return "Yesterday";
-  return (when.getFullYear() === now.getFullYear() ? DAY : DAY_YEAR).format(when).replace(",", "");
+  const word = dayWord(localToday(when), localToday(now));
+  return word ? word.charAt(0).toUpperCase() + word.slice(1) : longDay(when, now);
 }
 
 /** The two folders the app publishes into (the server's names; these defaults until
@@ -298,8 +290,8 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded
             {state}
           </Tag>
           {origin && <span className="batch-origin">{origin}</span>}
-          <time dateTime={at.toISOString()} title={at.toLocaleString()}>
-            {TIME.format(at)}
+          <time dateTime={at.toISOString()} title={`${longDay(at)}, ${clockTime(at)}`}>
+            {clockTime(at)}
           </time>
           <span className="batch-actions">
             {sync ? (
@@ -401,8 +393,6 @@ function byDay(batches: BatchSummary[], now: Date): [string, BatchSummary[]][] {
   return days;
 }
 
-const WHEN = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-
 const OUTCOME: Record<AILogRow["outcome"], [string, TagTone]> = {
   ok: ["sent", "green"],
   cached: ["from earlier", "blue"],
@@ -413,7 +403,7 @@ const OUTCOME: Record<AILogRow["outcome"], [string, TagTone]> = {
 /** How long a call took: "850 ms" under a second, else seconds with one decimal. */
 function duration(ms: number): string {
   if (ms < 1000) return `${Math.max(0, Math.round(ms))} ms`;
-  return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+  return `${decimal(ms / 1000, 1)} s`;
 }
 
 /** The on/off switch (ai-state.json, as ``dam ai --on/--off``): one change at a time. */
@@ -510,7 +500,7 @@ function AIActivity() {
             return (
               <tr key={r.id}>
                 <td>
-                  <time dateTime={at.toISOString()}>{WHEN.format(at)}</time>
+                  <time dateTime={at.toISOString()}>{shortWhen(at)}</time>
                 </td>
                 <td>{TASK_LABEL[r.task as AITask] ?? visible(r.task)}</td>
                 <td>
