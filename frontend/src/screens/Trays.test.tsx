@@ -867,7 +867,7 @@ describe("Bill view", () => {
     const done = await within(panel).findByRole("button", { name: "Mark paid" });
     expect(within(panel).queryByRole("button", { name: "Note" })).not.toBeInTheDocument();
     expect(done).toHaveAttribute("data-tip", "Mark this item done; it moves to the Done list");
-    expect(within(panel).getByRole("button", { name: "Mark paid and file…" })).toHaveAttribute(
+    expect(await within(panel).findByRole("button", { name: "Mark paid and file…" })).toHaveAttribute(
       "data-tip",
       "Mark this item done, then open its file in the Inbox to file it",
     );
@@ -887,7 +887,10 @@ describe("Bill view", () => {
     expect(within(mine).getByRole("button", { name: "Ask AI" })).toBeInTheDocument();
     expect(within(mine).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
     expect(within(mine).getByRole("button", { name: /^Take this file off the item/ })).toBeInTheDocument();
-    expect(mine.parentElement).toContainElement(within(panel).getByRole("button", { name: "Mark paid" }));
+    // the done buttons sit in the fields row at the top, not on the action row
+    expect(mine.parentElement).not.toContainElement(within(panel).getByRole("button", { name: "Mark paid" }));
+    const top = within(panel).getByLabelText("Title").closest(".item-fields") as HTMLElement;
+    expect(within(top).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
   });
 
   it("Mark paid and file…: done, then the inbox with the file selected when it is still in the inbox", async () => {
@@ -925,12 +928,20 @@ describe("To action and To read", () => {
     renderTrays("/trays/to-action?item=4");
     const panel = await screen.findByRole("region", { name: "Item" });
     const date = await within(panel).findByLabelText(/^Due/);
-    // the date field, its tag and Mark done share one row; no separate read-only date line
-    const dateRow = date.closest(".item-date-row") as HTMLElement;
-    expect(dateRow).not.toBeNull();
+    // title, the date field (tag right after the input) and Mark done share one row; no separate read-only date line
+    const row = date.closest(".item-fields") as HTMLElement;
+    expect(row).not.toBeNull();
     expect(date).toHaveValue("2026-10-22");
-    expect(within(dateRow).getByText("in 3 days")).toHaveClass("tag-orange");
-    expect(within(dateRow).getByRole("button", { name: "Mark done" })).toBeInTheDocument();
+    expect(within(row).getByLabelText("Title")).toBeInTheDocument();
+    const tag = within(row).getByText("in 3 days");
+    expect(tag).toHaveClass("tag-orange");
+    expect(date.nextElementSibling).toBe(tag);
+    const mark = within(row).getByRole("button", { name: "Mark done" });
+    expect(mark.closest(".item-actions")).toBeNull();
+    // keyboard order: title, the fields, then the done buttons
+    const title0 = within(row).getByLabelText("Title");
+    expect(title0.compareDocumentPosition(date) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(date.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(panel.querySelector(".item-when")).toBeNull();
     expect(within(panel).queryByRole("group", { name: "Due" })).not.toBeInTheDocument();
     const checklist = await within(panel).findByRole("region", { name: "Checklist" });
@@ -948,6 +959,15 @@ describe("To action and To read", () => {
     expect(sauna).toHaveTextContent("3 weeks");
     const panel = screen.getByRole("region", { name: "Item" });
     expect(await within(panel).findByText("Waiting 3 weeks")).toBeInTheDocument();
+  });
+
+  it("To read: Mark done is in the fields row with the title, not on the action row", async () => {
+    renderTrays("/trays/to-read?item=5");
+    const panel = await screen.findByRole("region", { name: "Item" });
+    const mark = await within(panel).findByRole("button", { name: "Mark done" });
+    const row = within(panel).getByLabelText("Title").closest(".item-fields") as HTMLElement;
+    expect(row).toContainElement(mark);
+    expect(mark.closest(".item-actions")).toBeNull();
   });
 });
 

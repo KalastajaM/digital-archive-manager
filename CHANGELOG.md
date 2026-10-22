@@ -98,6 +98,7 @@ All notable changes are listed here. The format follows
   Quick Look say "files", not "documents"; the folder picker calls the deletion folder To
   Delete; the preview toggle on the review card has its own icon instead of the Quick Look
   eye.
+- The item panel's title, fields and the done buttons ("Mark done", "Mark paid and file…") sit on one row that wraps only when the panel is narrow, in every tray; the title takes the spare width and a date's "in 3 days" tag follows the date.
 - No more "needs a …" text for an empty required field on tray items (Today cards, the
   item's fields, the filing form). The tray list rows no longer show a file count.
 - More space between the tag box and the Collections line in the file panel.
