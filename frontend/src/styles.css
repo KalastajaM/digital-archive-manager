@@ -1177,7 +1177,8 @@ button.check-text { padding: 0; min-height: 0; border: none; background: transpa
 .app:has(.collections-index) .content, .app:has(.collection-page) .content { height: 100%; }
 main:has(> .collections-index), main:has(> .collection-page) { padding: 0; min-height: 0; display: flex; }
 .collections-index { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
-.collections-index .toolbar { padding: 0 var(--sp-5); }
+/* The toolbar's line runs full width, but its actions end where the 760px list ends. */
+.collections-index .toolbar { padding: 0 max(var(--sp-5), calc(100% - 760px - var(--sp-5))) 0 var(--sp-5); }
 .collections-index-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4) var(--sp-5) var(--sp-8); }
 .collections-index-body > * { max-width: 760px; }
 .collections-index .empty-state { margin-top: var(--sp-8); }

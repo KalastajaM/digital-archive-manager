@@ -83,6 +83,7 @@ import {
   visibleMembers,
 } from "../components/GroupTree";
 import { LastChange } from "../components/LastChange";
+import { BUILTIN_LABEL } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
 import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
 import { RelativeDate, useLocalToday } from "../components/RelativeDate";
@@ -1176,10 +1177,10 @@ export default function CollectionDetail({
       </p>
     );
   }
-  // The built-in ★ Ongoing / ! Important: no rename, close, publish or parent actions
+  // The built-in ★ Starred / ! Important: no rename, close, publish or parent actions
   // (the server refuses them too); ★ has no groups either.
   const builtin = c.kind ?? null;
-  const name = builtin === "starred" ? "★ Ongoing" : builtin === "important" ? "! Important" : visible(c.name);
+  const name = builtin ? BUILTIN_LABEL[builtin] : visible(c.name);
   const builtinRoot =
     builtin === "important" ? status.data?.special_folders.important : builtin === "starred" ? status.data?.special_folders.ongoing : undefined;
   const published = c.publish.ongoing === true;

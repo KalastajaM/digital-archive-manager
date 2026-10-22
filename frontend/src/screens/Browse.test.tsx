@@ -1327,7 +1327,7 @@ describe("Collection filter and Files view", () => {
     expect(button).toHaveTextContent("Collection");
     await user.click(button);
     // All files, the built-ins, then the open collections as a tree (Sauna is inside Houses)
-    await waitFor(() => expect(menuItems().map((o) => o.textContent)).toEqual(["✓All files", "★ Ongoing", "! Important", "Houses", "Sauna"]));
+    await waitFor(() => expect(menuItems().map((o) => o.textContent)).toEqual(["✓All files", "★ Starred", "! Important", "Houses", "Sauna"]));
     expect(menuItems()[0]).toHaveAttribute("aria-checked", "true");
     expect(menuItems()[4].style.paddingLeft).toBe("calc(18px)"); // indented under Houses
     await user.click(screen.getByRole("menuitemcheckbox", { name: "Sauna" }));
@@ -1359,10 +1359,10 @@ describe("Collection filter and Files view", () => {
     await screen.findByText("a.pdf");
     expect(await screen.findByRole("button", { name: "Collection: Sauna" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Collection: Sauna" }));
-    await user.click(await screen.findByRole("menuitemcheckbox", { name: "★ Ongoing" }));
+    await user.click(await screen.findByRole("menuitemcheckbox", { name: "★ Starred" }));
     expect(where().get("collection")).toBe("50");
-    expect(await screen.findByRole("button", { name: "Collection: ★ Ongoing" })).toHaveTextContent("★ Ongoing");
-    await user.click(screen.getByRole("button", { name: "Collection: ★ Ongoing" }));
+    expect(await screen.findByRole("button", { name: "Collection: ★ Starred" })).toHaveTextContent("★ Starred");
+    await user.click(screen.getByRole("button", { name: "Collection: ★ Starred" }));
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });

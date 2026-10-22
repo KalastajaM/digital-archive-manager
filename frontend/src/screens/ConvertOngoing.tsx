@@ -185,7 +185,7 @@ function EntryRow({ entry, look, inFlight, locked, onActive, onSkip, onConverted
   const preview = useConvertPreview();
   const convert = useConvert();
   const [name, setName] = useState(entry.suggested_name);
-  // "Star it": a link or a real file becomes a ★ Ongoing file instead (a real folder
+  // "Star it": a link or a real file becomes a starred file instead (a real folder
   // cannot be starred: it becomes a collection). A single file defaults to Star it, a
   // folder (or a link to one) to a collection: no one-file collections by default.
   const canStar = entry.kind !== "folder";
@@ -288,7 +288,7 @@ function EntryRow({ entry, look, inFlight, locked, onActive, onSkip, onConverted
           </label>
           <label>
             <input type="radio" name={choiceName} checked={star} onChange={() => edit(() => setStar(true))} />
-            Star it (★ Ongoing)
+            Star it (★ Starred)
           </label>
         </div>
       )}
@@ -296,8 +296,8 @@ function EntryRow({ entry, look, inFlight, locked, onActive, onSkip, onConverted
         {star ? (
           <p className="hint ongoing-star-hint">
             {entry.kind === "link"
-              ? "Its file becomes a ★ Ongoing file; the app's own link takes this one's place."
-              : "The file moves to the archive folder below and becomes a ★ Ongoing file, linked from here."}
+              ? "Its file becomes a starred file; the app's own link takes this one's place."
+              : "The file moves to the archive folder below and becomes a starred file, linked from here."}
           </p>
         ) : (
         <div className="ongoing-collection-fields" role="group" aria-labelledby={groupId}>
@@ -389,7 +389,7 @@ function EntryRow({ entry, look, inFlight, locked, onActive, onSkip, onConverted
             <>
               <p>
                 {pending.body.star
-                  ? "Star it: becomes a ★ Ongoing file"
+                  ? "Star it: becomes a starred file"
                   : pending.plan.existing
                   ? `Add to existing collection ‘${visible(pending.plan.collection)}’ (${plural(pending.plan.existing_members, "file")})`
                   : `New collection ‘${visible(pending.plan.collection)}’`}

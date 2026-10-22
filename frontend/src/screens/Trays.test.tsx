@@ -175,7 +175,7 @@ function Where() {
 
 type Routes = Parameters<typeof mockFetch>[0];
 
-function renderTrays(path = "/trays", routes: Routes = {}) {
+function renderTrays(path = "/trays/to-pay", routes: Routes = {}) {
   const calls = mockFetch({
     "GET /api/trays": { body: TRAYS },
     "GET /api/trays/to-pay/items": (call) => ({
@@ -264,7 +264,27 @@ describe("Add file in the tray list", () => {
 });
 
 describe("Trays", () => {
-  it("shows the first tray by default, named in the list toolbar; the sidebar picks the tray (no tab row)", async () => {
+  it("/trays (the sidebar's caption) lists the trays with their open counts, each a link", async () => {
+    renderTrays("/trays", {
+      "GET /api/today": {
+        body: {
+          overview: {
+            inbox: 0,
+            collections: [],
+            trays: [{ tray_id: "to-pay", name: "To pay", open: 3, overdue: 1, sum: "312.70", waiting_long: 0 }],
+          },
+        },
+      },
+    });
+    const list = await screen.findByRole("list", { name: "Trays" });
+    expect(within(list).getAllByRole("article").map((a) => a.getAttribute("aria-label")).slice(0, 2)).toEqual(["To pay", "To action"]);
+    expect(within(list).getAllByRole("article")).toHaveLength(3);
+    expect(within(list).getByRole("link", { name: "To pay" })).toHaveAttribute("href", "/trays/to-pay");
+    await waitFor(() => expect(within(list).getByRole("article", { name: "To pay" })).toHaveTextContent("3 open · 1 overdue · 312,70 €"));
+    expect(screen.queryByRole("region", { name: "Tray items" })).not.toBeInTheDocument();
+  });
+
+  it("shows the tray named in the list toolbar; the sidebar picks the tray (no tab row)", async () => {
     const { calls } = renderTrays();
     expect(await screen.findByRole("article", { name: "Northpower sähkö" })).toBeInTheDocument();
     expect(calls.some((c) => c.url === "/api/trays/to-pay/items?state=open")).toBe(true);

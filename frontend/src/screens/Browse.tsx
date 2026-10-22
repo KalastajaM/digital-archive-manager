@@ -27,7 +27,7 @@ import { childrenOf } from "../components/collectionTree";
 import { FileMeta } from "../components/FileMeta";
 import { FitText } from "../components/FitText";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
-import { ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
+import { BUILTIN_LABEL, ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
 import {
   anyMoveRunning,
@@ -520,8 +520,7 @@ export default function Browse() {
   // The collection filter's menu button: "Collection", or the chosen one's name.
   const filterName = (id: number) => {
     const c = collections.data?.find((x) => x.id === id);
-    if (c?.kind === "starred") return "★ Ongoing";
-    if (c?.kind === "important") return "! Important";
+    if (c?.kind) return BUILTIN_LABEL[c.kind];
     return c ? c.name : collections.isPending ? "…" : `Collection ${id}`;
   };
   /** "All files", the built-ins, then the open collections as a tree (a closed one only
