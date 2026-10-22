@@ -74,6 +74,8 @@ export function Budget({ status, estimate }: { status: AIStatus | undefined; est
 type Props = {
   /** The task's name ("Suggest filing"). */
   task: string;
+  /** The button that opened the sheet (named in the note about closing it). */
+  askButton: string;
   prepared: AIPrepared;
   status: AIStatus | undefined;
   busy: boolean;
@@ -91,6 +93,7 @@ type Props = {
 
 export function SendSheet({
   task,
+  askButton,
   prepared,
   status,
   busy,
@@ -171,7 +174,8 @@ export function SendSheet({
       {sending && busy && <AIWait model={prepared.model} limitS={prepared.timeout_s} />}
       {sending && (
         <p className="notice">
-          Sent: the answer is paid for and will be saved. Closing does not stop it; Ask AI shows it again for free.
+          Sent. You can close this: the answer is paid for and is saved when it arrives, and closing does not stop it.
+          Press “{askButton}” again and choose “Use this” to see it, at no extra cost.
         </p>
       )}
       {prepareError !== null && (

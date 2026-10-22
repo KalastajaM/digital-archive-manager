@@ -201,6 +201,7 @@ describe("SendSheet: closing and failed prepares", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Send" }));
     const close = await within(dialog).findByRole("button", { name: "Close (already sent)" });
     expect(within(dialog).getByText(/the answer is paid for/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Press “Ask AI” again and choose “Use this”.*no extra cost/)).toBeInTheDocument();
     fireEvent.click(close);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(await screen.findByText(ALREADY_SENT)).toBeInTheDocument();

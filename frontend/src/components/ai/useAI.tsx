@@ -21,6 +21,14 @@ export const TASK_LABEL: Record<AITask, string> = {
   "ask-archive": "Ask the archive",
 };
 
+/** The button that starts each task, as the sheet's "press it again" note names it. */
+const ASK_BUTTON: Record<AITask, string> = {
+  "suggest-filing": "Ask AI",
+  "summarize-document": "Summarize with AI",
+  "summarize-collection": "Summarize with AI",
+  "ask-archive": "Ask…",
+};
+
 /** ``on``: AI buttons are shown. ``off``: the status says AI is off (no key, or switched
  * off), so the "Turn on AI" hint is shown. Neither while the status is unknown. */
 export function useAIState() {
@@ -148,6 +156,7 @@ export function useAISend<T = Record<string, unknown>>(
     <SendSheet
       key={open.seq}
       task={TASK_LABEL[task]}
+      askButton={ASK_BUTTON[task]}
       prepared={open.prepared}
       status={status.data}
       busy={busy}
