@@ -152,7 +152,6 @@ export function StarredCard({ frame }: { frame: CardFrame }) {
       className="today-card today-card-compact"
       fold={frame.fold}
       headerProps={frame.headerProps}
-      actions={frame.menu}
     >
       {starred.isError ? (
         <p className="error">Could not load the starred files. {visible(errorText(starred.error))}</p>

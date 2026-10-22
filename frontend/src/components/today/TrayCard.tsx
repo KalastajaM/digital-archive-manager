@@ -259,7 +259,7 @@ export function TrayCard({
   traysUnknown: boolean;
   formFor: number | null;
   setFormFor: (id: number | null) => void;
-  /** Today's layout: folding, the ⋯ menu, dragging (none when shown on its own). */
+  /** Today's layout: folding, dragging (none when shown on its own). */
   frame?: CardFrame;
 }) {
   const folded = frame?.fold.folded ?? false;
@@ -292,12 +292,9 @@ export function TrayCard({
       fold={frame?.fold}
       headerProps={frame?.headerProps}
       actions={
-        <>
-          <Link className="card-link" to={`/trays/${enc(info.id)}`} aria-label={`Show all in ${name}`}>
-            Show all
-          </Link>
-          {frame?.menu}
-        </>
+        <Link className="card-link" to={`/trays/${enc(info.id)}`} aria-label={`Show all in ${name}`}>
+          Show all
+        </Link>
       }
     >
       {(big || parts.length > 0) && (

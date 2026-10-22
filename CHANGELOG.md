@@ -57,6 +57,8 @@ All notable changes are listed here. The format follows
   after a confirm; the files stay where they are. New `POST /api/items/{id}/remove`.
 - Checklist rows: click the text to edit, drag by the grip or press Option-Up/Down to
   reorder, delete button on hover; the Edit and arrow buttons are gone.
+- Today: the cards' ⋯ menus are gone. Reorder by dragging or with ⌥↑ / ⌥↓ on a card's
+  header (announced to screen readers); **Reset layout** is a button under the date.
 - Today's tray rows (all of them, also items due later) have a round checkbox before the
   title that marks the item done at once with the done fields' defaults, with Undo. A
   done field that is required and has no default opens its small form.

@@ -193,15 +193,10 @@ export function InboxCard({ data, frame }: { data: TodayData; frame?: CardFrame 
       fold={frame?.fold}
       headerProps={frame?.headerProps}
       actions={
-        (stats.count > 0 || frame) && (
-          <>
-            {stats.count > 0 && (
-              <Link className="card-link" to="/inbox">
-                Start filing
-              </Link>
-            )}
-            {frame?.menu}
-          </>
+        stats.count > 0 && (
+          <Link className="card-link" to="/inbox">
+            Start filing
+          </Link>
         )
       }
     >

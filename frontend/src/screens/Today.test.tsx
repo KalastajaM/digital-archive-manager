@@ -836,33 +836,35 @@ describe("Today card layout", () => {
     expect(within(card("Inbox")).getByRole("button", { name: "Collapse Inbox" })).toBeInTheDocument();
   });
 
-  it("Move up and Move down in a card's ⋯ menu reorder the cards, kept after a remount; Reset layout restores", async () => {
+  const foldButton = (name: string) => header(name).querySelector<HTMLButtonElement>("button")!;
+  const altKey = (user: ReturnType<typeof userEvent.setup>, key: "ArrowUp" | "ArrowDown") =>
+    user.keyboard(`{Alt>}{${key}}{/Alt}`);
+
+  it("cards have no ⋯ menu; Option-Up and Option-Down on a header reorder them, announced and kept after a remount; Reset layout is on the page", async () => {
     const { user, view } = renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
     expect(order()).toEqual(DEFAULT_ORDER);
+    expect(screen.queryByRole("button", { name: /^More for/ })).not.toBeInTheDocument();
 
-    await user.click(within(card("Inbox")).getByRole("button", { name: "More for Inbox" }));
-    expect(screen.getByRole("menuitem", { name: "Move up" })).toBeDisabled();
-    await user.click(screen.getByRole("menuitem", { name: "Move down" }));
+    foldButton("Inbox").focus();
+    await altKey(user, "ArrowUp"); // already first: nothing moves
+    expect(order()).toEqual(DEFAULT_ORDER);
+    await altKey(user, "ArrowDown");
     expect(order()).toEqual(["To action", "Inbox", "To⟨U+200B⟩read", "Collections to do", "Reminders", "To pay", "Starred"]);
-    // the focus stays with the moved card's menu, so the keys can move it again
-    expect(document.activeElement).toBe(within(card("Inbox")).getByRole("button", { name: "More for Inbox" }));
+    expect(document.body).toHaveTextContent("Inbox moved down");
+    // the focus stays with the moved card's header, so the keys can move it again
+    expect(document.activeElement).toBe(foldButton("Inbox"));
 
-    await user.click(within(card("Collections to do")).getByRole("button", { name: "More for Collections to do" }));
-    await user.click(screen.getByRole("menuitem", { name: "Move up" }));
+    foldButton("Collections to do").focus();
+    await altKey(user, "ArrowUp");
     expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "To pay", "Starred"]);
-
-    await user.click(within(card("Starred")).getByRole("button", { name: "More for Starred" }));
-    expect(screen.getByRole("menuitem", { name: "Move down" })).toBeDisabled();
-    await user.keyboard("{Escape}");
 
     view.unmount();
     renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
     expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "To pay", "Starred"]);
 
-    await user.click(within(card("Inbox")).getByRole("button", { name: "More for Inbox" }));
-    await user.click(screen.getByRole("menuitem", { name: "Reset layout" }));
+    await user.click(screen.getByRole("button", { name: "Reset layout" }));
     expect(order()).toEqual(DEFAULT_ORDER);
     expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
   });
@@ -901,20 +903,19 @@ describe("Today card layout", () => {
     ]);
   });
 
-  it("Move down past the bottom of a column puts the focus on the card's menu in the next column", async () => {
+  it("Option-Down past the bottom of a column puts the focus on the card's header in the next column", async () => {
     const { user } = renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(card("Reminders")).getByRole("button", { name: "More for Reminders" }));
-    await user.click(screen.getByRole("menuitem", { name: "Move down" }));
+    foldButton("Reminders").focus();
+    await altKey(user, "ArrowDown");
     expect(order()).toEqual(DEFAULT_ORDER); // the same page order, but in the other column
     const columns = document.querySelectorAll<HTMLElement>(".today-col");
     expect(columns[1].contains(card("Reminders"))).toBe(true); // a new element in the other column
-    expect(document.activeElement).toBe(within(card("Reminders")).getByRole("button", { name: "More for Reminders" }));
-    await user.click(screen.getByRole("button", { name: "More for Reminders" })); // it opens again: keys go on
-    await user.click(screen.getByRole("menuitem", { name: "Move up" }));
+    expect(document.activeElement).toBe(foldButton("Reminders"));
+    await altKey(user, "ArrowUp"); // the keys go on
     expect(order()).toEqual(DEFAULT_ORDER);
     expect(columns[0].contains(card("Reminders"))).toBe(true);
-    expect(document.activeElement).toBe(within(card("Reminders")).getByRole("button", { name: "More for Reminders" }));
+    expect(document.activeElement).toBe(foldButton("Reminders"));
   });
 
   it("a drop in the gap between two cards lands between them (the nearest slot by height)", async () => {

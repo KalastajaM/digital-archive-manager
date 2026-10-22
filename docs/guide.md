@@ -357,7 +357,9 @@ The screens:
   nothing overdue", or "All clear" when nothing does) and the date, then cards. Trays
   with nothing open are folded into one **Clear** card ("To pay, To action and To read
   are clear"), so the cards with content get the room; the cards are dealt out between
-  the two columns by their size (your own order, once you move a card, wins).
+  the two columns by their size (your own order, once you move a card, wins). Drag a card
+  by its header, or press ⌥↑ / ⌥↓ with the focus on it; **Reset layout** under the date
+  restores the default order and folds. Cards have no ⋯ menu.
   **To pay** has the open total and each
   bill with its payee, amount and an urgency tag (red overdue, orange within 3 days, grey
   later). Each tray row has a round checkbox before its title that marks the item done
