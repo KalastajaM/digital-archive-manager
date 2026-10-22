@@ -48,7 +48,9 @@ describe("Excluded folders (Activity → AI)", () => {
 
     await user.click(within(section).getByRole("button", { name: "Stop excluding 50. Medical" }));
     dialog = await screen.findByRole("dialog", { name: "Stop excluding 50. Medical?" });
-    await user.click(within(dialog).getByRole("button", { name: "Stop excluding" }));
+    const confirm = within(dialog).getByRole("button", { name: "Stop excluding" });
+    expect(confirm).toHaveClass("danger"); // the last step of a removal is red
+    await user.click(confirm);
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
     expect(puts(calls)[0].body).toEqual({ folders: ["70. Work"] });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

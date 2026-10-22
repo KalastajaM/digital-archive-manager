@@ -84,6 +84,7 @@ export function ExcludedFolders({ status }: { status: AIStatus }) {
           ops={[]}
           busy={save.isPending}
           confirmLabel="Stop excluding"
+          danger
           onConfirm={async () => {
             const folder = removing;
             await write(folders.filter((f) => f !== folder));
