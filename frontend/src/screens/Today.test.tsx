@@ -353,7 +353,8 @@ describe("Today", () => {
     expect(within(action).getByText("today")).toHaveClass("tag-orange");
     expect(action).toHaveTextContent("Note: fill⟨U+202E⟩buckets the evening before");
     expect(bill).not.toHaveTextContent("Note:");
-    expect(within(action).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(within(action).getByRole("checkbox", { name: "Mark Water pipe inspection done" })).toBeInTheDocument();
+    expect(within(action).queryByRole("button", { name: "Done" })).not.toBeInTheDocument();
 
     const soon = row("Kotihoito lasku");
     expect(soon).toHaveClass("attention-soon");
@@ -425,7 +426,7 @@ describe("Today", () => {
     const names = within(bill)
       .getAllByRole("button")
       .map((b) => b.textContent);
-    expect(names).toEqual(["Copy amount", "Copy IBAN", "Copy reference", "Mark paid"]);
+    expect(names).toEqual(["Copy amount", "Copy IBAN", "Copy reference"]);
     // the action has no copy fields; the soon bill has only an amount
     expect(within(row("Water pipe inspection")).queryByRole("button", { name: /^Copy/ })).not.toBeInTheDocument();
     expect(within(row("Kotihoito lasku")).getAllByRole("button", { name: /^Copy/ })).toHaveLength(1);
@@ -458,7 +459,7 @@ describe("Today", () => {
       "POST /api/items/1/reopen": { body: BILL },
     });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     const form = within(bill).getByRole("form", { name: "Mark paid" });
     const paidOn = within(form).getByLabelText("Paid on");
     expect(paidOn).toHaveValue(DAY);
@@ -475,28 +476,31 @@ describe("Today", () => {
     expect(await within(toasts()).findByText("Reopened: Northpower sähkö")).toBeInTheDocument();
   });
 
-  it("Esc closes the done form without posting; a tray without done fields confirms by its button", async () => {
-    const { calls, user } = renderToday({ "POST /api/items/2/done": { body: { ...ACTION, state: "done" } } });
+  it("Esc closes the done form without posting; a tray without done fields completes at once, with Undo", async () => {
+    const { calls, user } = renderToday({
+      "POST /api/items/2/done": { body: { ...ACTION, state: "done" } },
+      "POST /api/items/2/reopen": { body: ACTION },
+    });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.keyboard("{Escape}");
     expect(within(bill).queryByRole("form")).not.toBeInTheDocument();
     expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
 
     const action = row("Water pipe inspection");
-    await user.click(within(action).getByRole("button", { name: "Done" }));
-    const form = within(action).getByRole("form", { name: "Done" });
-    const confirm = within(form).getByRole("button", { name: "Done" });
-    expect(confirm).toHaveFocus();
-    await user.keyboard("{Enter}");
+    await user.click(within(action).getByRole("checkbox", { name: "Mark Water pipe inspection done" }));
+    expect(within(action).queryByRole("form")).not.toBeInTheDocument();
     await waitFor(() => expect(posts(calls, "/api/items/2/done")).toHaveLength(1));
     expect(posts(calls, "/api/items/2/done")[0].body).toEqual({ fields: {} });
+    expect(await within(toasts()).findByText("Marked done: Water pipe inspection")).toBeInTheDocument();
+    await user.click(within(toasts()).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/items/2/reopen")).toHaveLength(1));
   });
 
   it("Esc closes the done form even when the focus has left it", async () => {
     const { user } = renderToday();
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.click(screen.getByRole("heading", { level: 1 }));
     expect(within(bill).getByLabelText("Paid on")).not.toHaveFocus();
     await user.keyboard("{Escape}");
@@ -506,13 +510,13 @@ describe("Today", () => {
   it("Done stays disabled when the tray settings cannot be loaded", async () => {
     renderToday({ "GET /api/trays": { status: 500, body: { error: "x" } } });
     expect(await screen.findByText(/Tray settings could not be loaded/)).toBeInTheDocument();
-    expect(within(row("Northpower sähkö")).getByRole("button", { name: "Done" })).toBeDisabled();
+    expect(within(row("Northpower sähkö")).getByRole("checkbox", { name: /^Mark Northpower sähkö/ })).toBeDisabled();
   });
 
   it("a failed done keeps the form and shows the error", async () => {
     const { user } = renderToday({ "POST /api/items/1/done": { status: 400, body: { error: "paid_on: expected a date" } } });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Mark paid" }));
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.keyboard("{Enter}");
     expect(await within(bill).findByRole("alert")).toHaveTextContent("paid_on: expected a date");
     expect(within(bill).getByRole("form", { name: "Mark paid" })).toBeInTheDocument();
