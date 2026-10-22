@@ -97,7 +97,8 @@ All notable changes are listed here. The format follows
 - The starred built-in collection is called "★ Starred" everywhere (the Browse collection
   filter, its page title, the collection picker and Convert Ongoing), matching the
   sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
-- Collections: the Open/Closed switch lines up with the right edge of the list.
+- Collections and Activity: the toolbar's right-hand controls line up with the right edge
+  of the list or timeline.
 - The user guide is rewritten for people using the app. Installing, the command line,
   config files and technical details moved to a new technical reference
   (`docs/reference.md`).

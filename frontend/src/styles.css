@@ -853,6 +853,9 @@ main:has(> .help) { padding: 0; min-height: 0; display: flex; }
 }
 
 .activity .toolbar-search { width: 220px; }
+/* The toolbar's and filter bar's lines run full width; their content ends where the
+ * 880px timeline ends (as on the Collections index). */
+.activity > .toolbar, .activity .activity-filters { padding-right: max(var(--sp-5), calc(100% - 880px - var(--sp-5))); }
 .activity .search input { width: 100%; }
 .activity-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-5); border-bottom: 0.5px solid var(--hairline); font-size: var(--fs-sm); }
 .activity-clear { background: none; border: 0; box-shadow: none; padding: 0 var(--sp-1); color: var(--accent); cursor: pointer; }
