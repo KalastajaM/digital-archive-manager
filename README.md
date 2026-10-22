@@ -99,12 +99,15 @@ settings, and switch between them from the top of the sidebar.
 | Desktop notifications, daily reminder job | ✓ | e-mail only for now | e-mail only for now |
 | Collection links in the `Ongoing` folder | ✓ | needs Developer Mode | ✓ |
 
-Details, and what is planned, are in the [user guide](docs/guide.md#platform-support).
+Details are in the [technical reference](docs/reference.md#platform-support).
 
 ## Documentation
 
-- [User guide](docs/guide.md) — every screen, keyboard shortcuts, rules, trays,
-  collections, reminders, the optional AI, configuration and the safety model
+- [User guide](docs/guide.md): how dam works, every screen, keyboard shortcuts, trays,
+  collections, reminders, the optional AI and what dam never does (also under Help in
+  the app)
+- [Technical reference](docs/reference.md): install, the command line, config files and
+  rules, the API and the safety model in detail
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md) — development setup, tests and the safety rules every
   change must keep

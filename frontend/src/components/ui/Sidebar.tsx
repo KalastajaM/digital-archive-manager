@@ -2,6 +2,7 @@ import {
   BookOpen,
   ChevronRight,
   CircleCheck,
+  CircleHelp,
   Euro,
   Hourglass,
   FolderTree,
@@ -454,6 +455,7 @@ export function Sidebar({ footer }: Props) {
             <Row to="/browse" icon={FolderTree} label="Browse" />
             <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
             <Row to="/activity" icon={History} label="Activity" />
+            <Row to="/help" icon={CircleHelp} label="Help" />
           </Section>
         </ul>
       </nav>

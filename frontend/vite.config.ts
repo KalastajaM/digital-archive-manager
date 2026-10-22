@@ -10,6 +10,8 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Help bundles ../docs/guide.md (the one copy of the guide), outside this folder
+    fs: { allow: [".", "../docs"] },
     proxy: {
       "/api": { target: "http://127.0.0.1:8765", changeOrigin: true },
     },

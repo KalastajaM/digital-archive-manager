@@ -95,6 +95,7 @@ describe("Sidebar", () => {
       ["Browse", "/browse"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
+      ["Help", "/help"],
     ]);
     expect(within(nav).getByRole("link", { name: "Inbox (3)" })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: "Today (3)" })).not.toHaveAttribute("aria-current");

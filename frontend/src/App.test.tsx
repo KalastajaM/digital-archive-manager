@@ -91,6 +91,7 @@ describe("App shell", () => {
       ["Browse", "/browse"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
+      ["Help", "/help"],
     ]);
     expect(within(nav).getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page");
     expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)$/ })).toBeInTheDocument();
