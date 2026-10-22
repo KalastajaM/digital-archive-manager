@@ -770,6 +770,16 @@ class ItemBarcodeOut(BaseModel):
 class QuickOut(BaseModel):
     created: list[ItemOut]
     skipped: list[str]  # drive ids that already had an open item in that tray
+    # open items of other trays moved into this one (a file lives in one tray), and the
+    # tray id each came from, by item id (as a string key), for the Undo
+    moved: list[ItemOut]
+    moved_from: dict[str, str]
+
+
+class ItemMoveBody(_In):
+    """Move an open item to another tray."""
+
+    tray: str
 
 
 class ItemFileOut(BaseModel):
@@ -796,7 +806,7 @@ class TrayItemOut(ItemOut):
 class ItemEventOut(BaseModel):
     id: int
     at: float
-    kind: Literal["created", "edited", "done", "reopened", "file_added", "file_removed"]
+    kind: Literal["created", "edited", "done", "reopened", "file_added", "file_removed", "moved"]
     data: dict[str, Any]
 
 

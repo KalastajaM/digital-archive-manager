@@ -298,6 +298,7 @@ class InboxService:
             fields = self.trays.filing_fields(
                 req.tray, req.tray_fields, self.prefill_for(req.drive_id)
             )
+            # already in this tray: refused (an open item in another tray is moved here later)
             if req.tray in self.trays.open_trays([req.drive_id]).get(req.drive_id, []):
                 name = next((t.name for t in self.trays.defs() if t.id == req.tray), req.tray)
                 raise InvalidRequest(f"already in {name}")
@@ -321,9 +322,11 @@ class InboxService:
         item_id: int | None = None
         if follow.tray is not None:
             try:
-                item = self.trays.create(
-                    follow.tray, [drive_id], follow.fields, None, batch_id=batch_id
-                )
+                item = self.trays.move_in_filing(drive_id, follow.tray, follow.fields, batch_id)
+                if item is None:
+                    item = self.trays.create(
+                        follow.tray, [drive_id], follow.fields, None, batch_id=batch_id
+                    )
                 item_id = item.id
                 outcome.items.append(item_id)
             except Exception as e:

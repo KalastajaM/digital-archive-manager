@@ -237,3 +237,19 @@ def test_suggested_name_repairs_mojibake(app, fake_archive):
     [entry] = app.inbox.list()
     assert "Näkymä_Työelämäpalvelut" in entry.suggestion.name
     assert "Ã" not in entry.suggestion.name
+
+
+def test_filing_into_another_tray_moves_the_files_open_item(app, fake_archive):
+    add_scan(app, fake_archive, "a.pdf", "id-a", NORTHPOWER_BILL)
+    item = app.trays.create("to-pay", ["id-a"], {}, None)
+    outcome = app.inbox.file_it(
+        [FileRequest("id-a", "a.pdf", BANKS, tray="follow-up", tray_fields={"waiting_for": "Bob"})]
+    )
+    assert outcome.items == [item.id]
+    assert app.trays.list("to-pay") == []
+    [moved] = app.trays.list("follow-up")
+    assert moved.id == item.id and moved.fields["waiting_for"] == "Bob"
+    # undoing the filing puts the item back where it was
+    app.activity.undo(outcome.batch.batch_id)
+    assert [i.id for i in app.trays.list("to-pay")] == [item.id]
+    assert app.trays.list("follow-up") == []
