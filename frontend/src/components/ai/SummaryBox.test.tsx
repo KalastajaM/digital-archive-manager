@@ -38,7 +38,7 @@ function setup(summary: FileSummaries, status: AIStatus = STATUS_ON) {
 }
 
 async function summarize() {
-  await userEvent.click(await screen.findByRole("button", { name: "Summarize with AI" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Summarize with AI…" }));
   const sheet = await screen.findByRole("dialog", { name: "What will be sent" });
   await userEvent.click(within(sheet).getByRole("button", { name: "Send" }));
   return screen.findByRole("region", { name: "AI summary" });
@@ -58,7 +58,7 @@ describe("SummaryBox", () => {
     expect(await screen.findByText("Old AI text")).toBeInTheDocument();
     expect(screen.getByText(OUTDATED)).toBeInTheDocument();
     expect(screen.getByText("by AI")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Summarize again" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Summarize again…" })).toBeInTheDocument();
   });
 
   it("an AI answer is only a proposal until Use this summary saves it", async () => {
@@ -192,7 +192,7 @@ describe("SummaryBox", () => {
     setup(NONE, { ...STATUS_ON, enabled: false, switched_on: false });
     // switched off (the key is there): the hint points at the switch
     expect(await screen.findByText(/Turn on AI/)).toHaveTextContent("Activity → AI, or dam ai --on");
-    expect(screen.queryByRole("button", { name: "Summarize with AI" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Summarize with AI…" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Write a summary" })).toBeInTheDocument();
   });
 });

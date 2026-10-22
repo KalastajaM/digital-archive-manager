@@ -682,6 +682,13 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       {shown && (
         <span className="item-file-actions" role="group" aria-label="This file">
           {ask}
+          <IconButton
+            icon={<Unlink />}
+            label="Take this file off the item (the file stays where it is)"
+            disabled={change.isPending}
+            onClick={() => void takeOff(shown)}
+          />
+          {/* the bin last, as everywhere */}
           {canTrash(shown) && (
             <TrashButton
               disabled={trash.busy}
@@ -689,12 +696,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
               onClick={() => trashFile(shown)}
             />
           )}
-          <IconButton
-            icon={<Unlink />}
-            label="Take this file off the item (the file stays where it is)"
-            disabled={change.isPending}
-            onClick={() => void takeOff(shown)}
-          />
         </span>
       )}
     </div>

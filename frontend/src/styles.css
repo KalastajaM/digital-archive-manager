@@ -132,8 +132,7 @@ kbd {
 .archive-row { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border: 0.5px solid var(--separator); border-radius: var(--r-lg); }
 .archive-row-head { display: flex; align-items: center; gap: var(--sp-2); }
 .archive-this { font-size: var(--fs-xs); color: var(--muted); }
-.archive-edit { display: flex; gap: var(--sp-2); }
-.archive-edit input { flex: 1; min-width: 0; }
+.archive-rename { flex: 1; min-width: 0; font-weight: 600; }
 .archive-path { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
 .archive-path-label { color: var(--muted); }
 .archive-path code { overflow-wrap: anywhere; }
@@ -685,7 +684,7 @@ dialog.quicklook[open] { animation: quicklook-in var(--motion) var(--ease); }
 @keyframes quicklook-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
 dialog.quicklook:focus { outline: none; }
 .quicklook-bar {
-  flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
+  flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
   min-height: 44px; padding: 0 var(--sp-3);
   border-bottom: 0.5px solid var(--separator); background: var(--panel);
 }
@@ -796,6 +795,8 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .file-meta-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 .file-meta-rename { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .file-meta-rename input { flex: 1; min-width: 0; font-size: var(--fs-lg); font-weight: 600; }
+/* A name renamed in place in a toolbar: the field takes the title's size and place. */
+.toolbar-rename { flex: 1; min-width: 0; font-size: var(--fs-lg); font-weight: 700; }
 .file-meta-ext { color: var(--muted); font-size: var(--fs-lg); }
 .file-meta-head .current-path { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--sp-1); }
 .file-meta-head .current-path code { min-width: 0; }
@@ -1191,7 +1192,7 @@ main:has(> .collections-index), main:has(> .collection-page) { padding: 0; min-h
 .collection-main .toolbar-title h2 { overflow: hidden; text-overflow: ellipsis; }
 .collection-main .toolbar-actions { flex: none; }
 .collection-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) var(--sp-5) var(--sp-8); }
-.collection-body > .notice, .collection-body > .error, .collection-body > .rename { margin-top: 0; margin-bottom: var(--sp-3); }
+.collection-body > .notice, .collection-body > .error { margin-top: 0; margin-bottom: var(--sp-3); }
 .collection-where { margin: 0 0 var(--sp-3); color: var(--muted); font-size: var(--fs-sm); }
 .collection-where a { color: var(--text-2); text-decoration: none; }
 .collection-where a:hover { text-decoration: underline; }
@@ -1311,7 +1312,6 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 @keyframes menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .menu-item { display: flex; align-items: center; gap: 4px; width: 100%; padding: 3px 10px 3px 4px; border: none; background: transparent; box-shadow: none; text-align: left; font-weight: 400; min-height: 22px; border-radius: var(--r-sm); white-space: nowrap; color: var(--text); }
 .menu-item:hover:not(:disabled), .menu-item:focus-visible { background: var(--selected-strong); color: var(--selected-strong-text); outline: none; }
-.menu-item-danger { color: var(--red-text); }
 .menu-item-text { display: flex; flex-direction: column; align-items: flex-start; }
 .menu-reason { font-size: var(--fs-xs); color: var(--muted); }
 .menu-item:disabled .menu-reason { color: inherit; }
@@ -1778,7 +1778,9 @@ dialog.sheet.folder-browser { --tree-indent: var(--sp-4); width: min(520px, calc
 .new-folder-preview { min-height: 3em; margin-top: var(--sp-2); }
 dialog.sheet.setup-folders { max-width: 640px; }
 .menu-context { min-width: 220px; }
-button.danger { color: var(--red-text); }
+/* Red is for the last step of a removal only (a confirm sheet's button), never a menu. */
+button.primary.danger { background: var(--red); color: var(--on-accent); }
+button.primary.danger:hover:not(:disabled), button.primary.danger:active:not(:disabled) { background: var(--red); filter: brightness(0.92); }
 /* Browse "New folder": the inline name row at the top of the list */
 .entries li.entry-new-row { padding-right: var(--sp-2); min-height: 28px; }
 .entry-new-row .entry-icon { flex: none; }
@@ -1788,3 +1790,5 @@ button.danger { color: var(--red-text); }
 
 /* The list header is narrow: "Add file" stays on one line. */
 .tray-add-file { white-space: nowrap; flex: none; }
+/* An AI action with its own words ("Summarize with AI…"): the sparkle before the text. */
+button.ai-action { display: inline-flex; align-items: center; gap: 4px; }

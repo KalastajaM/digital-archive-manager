@@ -335,8 +335,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
         subtitle={visible(folderOf(entry.record.path))}
         actions={
           <>
-            <MarkToggles driveId={entry.record.drive_id} name={fileName} marks={entry.record.marks} />
-            {trash && <TrashButton disabled={filing.busy || trash.busy} onClick={trash.run} />}
+            {/* the app's one order: view, marks, Ask AI, the bin last; then this card's own steps */}
             <IconButton
               className="preview-toggle"
               icon={showPreview ? <PanelRightClose /> : <PanelRightOpen />}
@@ -344,6 +343,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               pressed={showPreview}
               onClick={() => setShowPreview((v) => !v)}
             />
+            <MarkToggles driveId={entry.record.drive_id} name={fileName} marks={entry.record.marks} />
             {aiState.on && (
               <IconButton
                 icon={<Sparkles />}
@@ -353,6 +353,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
                 onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
               />
             )}
+            {trash && <TrashButton disabled={filing.busy || trash.busy} onClick={trash.run} />}
             <TipButton
               className="tip-end"
               tip="Show exactly what will move, before anything changes ↩"

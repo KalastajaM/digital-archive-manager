@@ -20,8 +20,6 @@ export type MenuEntry =
       reason?: string;
       /** A toggle: shown with a check mark (``menuitemcheckbox``). */
       checked?: boolean;
-      /** A destructive-looking entry (red text); it must still ask before acting. */
-      danger?: boolean;
       /** A colour dot before the label (an archive's colour). */
       swatch?: string;
       /** A glyph before the label (the check mark's place is kept, so labels line up). */
@@ -157,7 +155,7 @@ export function Menu({ label, icon, entries, align = "start", className, text, t
                   type="button"
                   role={entry.checked === undefined ? "menuitem" : "menuitemcheckbox"}
                   aria-checked={entry.checked}
-                  className={entry.danger ? "menu-item menu-item-danger" : "menu-item"}
+                  className="menu-item"
                   disabled={entry.disabled}
                   aria-describedby={entry.disabled && entry.reason ? `${menuId}-why-${i}` : undefined}
                   tabIndex={-1}

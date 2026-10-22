@@ -153,6 +153,8 @@ describe("Quick Look in the inbox", () => {
     await user.keyboard(" ");
     const ql = screen.getByRole("dialog", { name: "Quick Look: scan001.pdf" });
     expect(within(ql).getByRole("button", { name: "Previous file" })).toBeDisabled();
+    // Close is the last control, at the far right
+    expect(within(ql.querySelector<HTMLElement>(".quicklook-bar")!).getAllByRole("button").at(-1)).toHaveAccessibleName("Close");
     await user.click(within(ql).getByRole("button", { name: "Next file" }));
     expect(screen.getByRole("dialog", { name: "Quick Look: scan002.pdf" })).toBeInTheDocument();
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));

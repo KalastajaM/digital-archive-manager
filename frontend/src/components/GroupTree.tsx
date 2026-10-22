@@ -622,7 +622,7 @@ export function GroupTree({
       { label: "Move up", disabled: index === 0, onSelect: () => move(-1) },
       { label: "Move down", disabled: index === siblings.length - 1, onSelect: () => move(1) },
       "separator",
-      { label: "Remove group…", danger: true, onSelect: () => actions.remove(g) },
+      { label: "Remove group…", onSelect: () => actions.remove(g) },
     ];
     return (
       <section key={g.id} className="group" aria-label={name}>

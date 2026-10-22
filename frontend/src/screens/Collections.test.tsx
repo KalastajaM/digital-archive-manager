@@ -380,8 +380,8 @@ describe("Collection detail", () => {
         body: changeOf({ ...SAUNA, name: (call.body as { name: string }).name }),
       }),
     });
-    await fromMenu(user, "Rename…");
-    const input = within(panel()).getByRole("textbox", { name: "New name" });
+    await fromMenu(user, "Rename");
+    const input = within(panel()).getByRole("textbox", { name: "Collection name" });
     await user.clear(input);
     await user.type(input, "Quiet{Enter}");
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1));
@@ -389,8 +389,8 @@ describe("Collection detail", () => {
     expect(calls.filter((c) => c.method === "PATCH")[0].body).toEqual({ name: "Quiet" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    await fromMenu(user, "Rename…");
-    const again = within(panel()).getByRole("textbox", { name: "New name" });
+    await fromMenu(user, "Rename");
+    const again = within(panel()).getByRole("textbox", { name: "Collection name" });
     await user.clear(again);
     await user.type(again, "Spa{Enter}");
     const dialog = await screen.findByRole("dialog", { name: "Rename Sauna to Spa?" });
@@ -404,8 +404,8 @@ describe("Collection detail", () => {
 
   it("the rename field opens with the whole name selected", async () => {
     const { user } = renderCollections("/collections/7");
-    await fromMenu(user, "Rename…");
-    const input = within(panel()).getByRole("textbox", { name: "New name" }) as HTMLInputElement;
+    await fromMenu(user, "Rename");
+    const input = within(panel()).getByRole("textbox", { name: "Collection name" }) as HTMLInputElement;
     expect(input.selectionStart).toBe(0);
     expect(input.selectionEnd).toBe("Sauna".length);
   });
@@ -415,8 +415,8 @@ describe("Collection detail", () => {
       "POST /api/collections/7/rename/preview": { body: [] },
       "PATCH /api/collections/7": (call) => ({ body: changeOf({ ...SAUNA, name: (call.body as { name: string }).name }) }),
     });
-    await fromMenu(user, "Rename…");
-    const input = within(panel()).getByRole("textbox", { name: "New name" });
+    await fromMenu(user, "Rename");
+    const input = within(panel()).getByRole("textbox", { name: "Collection name" });
     await user.clear(input);
     await user.type(input, "Quiet{Enter}");
     const toast = await screen.findByText("Renamed to Quiet");
@@ -445,12 +445,14 @@ describe("Collection detail", () => {
       "POST /api/collections/7/rename/preview": { body: [] },
       "PATCH /api/collections/7": { status: 400, body: { error: "a collection named ‮Spa exists" } },
     });
-    await fromMenu(user, "Rename…");
-    const input = within(panel()).getByRole("textbox", { name: "New name" });
+    await fromMenu(user, "Rename");
+    const input = within(panel()).getByRole("textbox", { name: "Collection name" });
     await user.clear(input);
     await user.type(input, "Spa{Enter}");
     expect(await within(panel()).findByRole("alert")).toHaveTextContent("⟨U+202E⟩Spa exists");
-    expect(within(panel()).getByRole("textbox", { name: "New name" })).toHaveValue("Spa");
+    expect(within(panel()).getByRole("textbox", { name: "Collection name" })).toHaveValue("Spa");
+    // Esc gives up: the name stays as it was
+    await user.type(within(panel()).getByRole("textbox", { name: "Collection name" }), "{Escape}");
     expect(within(panel()).getByRole("heading", { name: "Sauna" })).toBeInTheDocument();
   });
 
@@ -997,7 +999,7 @@ describe("Collection AI summaries", () => {
   };
 
   async function summarize(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(await within(panel()).findByRole("button", { name: "Summarize with AI" }));
+    await user.click(await within(panel()).findByRole("button", { name: "Summarize with AI…" }));
     const sheet = await screen.findByRole("dialog", { name: "What will be sent" });
     // the skipped members are shown in the sheet, never sent
     expect(within(sheet).getByRole("list", { name: "Left out" })).toHaveTextContent("lab.pdf");
@@ -1069,7 +1071,7 @@ describe("Collection AI summaries", () => {
   it("with AI off there is no Summarize button", async () => {
     ai(GROUPED, { "GET /api/ai/status": { body: { ...STATUS_ON, enabled: false, has_key: false } } });
     expect(await within(panel()).findByText(/Turn on AI/)).toBeInTheDocument();
-    expect(within(panel()).queryByRole("button", { name: "Summarize with AI" })).not.toBeInTheDocument();
+    expect(within(panel()).queryByRole("button", { name: "Summarize with AI…" })).not.toBeInTheDocument();
   });
 });
 

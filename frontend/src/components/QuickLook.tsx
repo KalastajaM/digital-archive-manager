@@ -70,7 +70,6 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
       }}
     >
       <div className="quicklook-bar">
-        <IconButton icon={<X />} label="Close" shortcut="Space" onClick={onClose} />
         <div className="quicklook-title">
           <h2>{name}</h2>
           <span className="quicklook-count">
@@ -96,6 +95,8 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
             disabled={index >= files.length - 1}
             onClick={() => onIndex(index + 1)}
           />
+          {/* Close at the far right, as in every pane with one */}
+          <IconButton icon={<X />} label="Close" shortcut="Space" className="tip-end" onClick={onClose} />
         </div>
       </div>
       <DialogStatus status={status} />

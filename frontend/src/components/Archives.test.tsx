@@ -237,16 +237,29 @@ describe("Manage archives", () => {
       "PATCH /api/archives/test": (call) => ({ body: { ...TEST, ...(call.body as object) } }),
     });
     const dialog = await open(user);
-    const name = await within(dialog).findByLabelText("Name of Test");
+    // renamed in place: the pencil opens the field, Enter saves
+    await user.click((await within(dialog).findAllByRole("button", { name: "Rename" }))[1]);
+    const name = within(dialog).getByLabelText("Name of Test");
     await user.clear(name);
-    await user.type(name, "Playground");
-    await user.click(within(dialog).getAllByRole("button", { name: "Rename" })[1]);
+    await user.type(name, "Playground{Enter}");
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1));
     expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ name: "Playground" });
     const swatches = within(dialog).getByRole("group", { name: "Colour of Test" });
     await user.click(within(swatches).getByRole("button", { name: "Teal" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2));
     expect(calls.filter((c) => c.method === "PATCH")[1].body).toEqual({ color: "#1f8a8a" });
+  });
+
+  it("Esc in the name field keeps the name and the sheet open", async () => {
+    const { user, calls } = renderSwitcher({});
+    const dialog = await open(user);
+    await user.click((await within(dialog).findAllByRole("button", { name: "Rename" }))[1]);
+    const name = within(dialog).getByLabelText("Name of Test");
+    await user.clear(name);
+    await user.type(name, "Scrapped{Escape}");
+    expect(within(dialog).queryByLabelText("Name of Test")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
   });
 
   it("forgetting explains that nothing is deleted, and then says where the folders are", async () => {

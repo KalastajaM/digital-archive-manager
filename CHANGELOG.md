@@ -90,6 +90,22 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Renaming works the same way everywhere, as in Finder: the name turns into a field in
+  place, Enter saves, Esc cancels. A collection is renamed in its title (no separate
+  form, and the ⋯ menu says Rename), an archive in Manage archives with a pencil button.
+  A rename that changes a folder on disk still shows its preview first.
+- A file's actions come in one order on every screen: view (Quick Look, Open, Show in
+  Finder), then the star and Important, then Ask AI, and the To Delete bin last. Quick
+  Look's Close button moved to the right end of its bar.
+- Red is kept for the last step of a removal: the confirm button of Move to To Delete,
+  Remove group and Forget archive. Menus no longer show red items.
+- Ask AI on a single file is always the sparkle button with the same tooltip, also on
+  Today's "Not recognised" list; Summarize with AI… carries the sparkle and an ellipsis
+  because it opens the What will be sent sheet.
+- Key hints under Browse, the Inbox and Trays look the same: arrows for moving, ↩ for
+  Enter and one key for a shortcut (⌘↩).
+- Tooltips on segmented choices (Folders/Files, This folder/Everywhere, the tray picker)
+  now look like every other tooltip.
 - Buttons follow one order and wording across the app: Cancel comes before Save in the
   detected-field editor and in Save to notes (which Esc now closes); "Don't offer these"
   stands at the left of the tray settings sheet; the Barcode and Export sheets close with

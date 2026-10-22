@@ -3,6 +3,7 @@
  * "Summarize with AI" opens the "What will be sent" sheet; the answer is only a
  * proposal until "Use this summary" saves it. A current summary the user wrote is never
  * replaced without the confirm sheet. Edit saves the user's own text. */
+import { Sparkles } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import {
   ApiError,
@@ -210,8 +211,9 @@ export function SummaryBox({ driveId, heading = "Summary" }: { driveId: string; 
       {editing === null && (
         <div className="actions summary-actions">
           {ai.on && !proposal && (
-            <button type="button" disabled={send.busy} onClick={askAI}>
-              {shown?.saved.outdated ? "Summarize again" : "Summarize with AI"}
+            <button type="button" className="ai-action" disabled={send.busy} onClick={askAI}>
+              <Sparkles size={14} aria-hidden="true" />
+              {shown?.saved.outdated ? "Summarize again…" : "Summarize with AI…"}
             </button>
           )}
           {query.data && (

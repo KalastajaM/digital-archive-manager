@@ -782,7 +782,7 @@ describe("Bill view", () => {
     expect(panel.querySelector(".bill-amount")).toHaveTextContent("84,20 €");
     const summary = await within(panel).findByRole("region", { name: "Summary" });
     expect(await within(summary).findByText("No summary yet.")).toBeInTheDocument();
-    expect(await within(summary).findByRole("button", { name: "Summarize with AI" })).toBeInTheDocument();
+    expect(await within(summary).findByRole("button", { name: "Summarize with AI…" })).toBeInTheDocument();
     // two files: the first is summarized, the selector picks another
     const select = within(panel).getByLabelText("Summary of");
     expect(select).toHaveValue("f1");
@@ -801,7 +801,7 @@ describe("Bill view", () => {
     });
     const panel = await screen.findByRole("region", { name: "Item" });
     expect(await within(panel).findByText("No file to summarize.")).toBeInTheDocument();
-    expect(within(panel).queryByRole("button", { name: "Summarize with AI" })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Summarize with AI…" })).not.toBeInTheDocument();
   });
 
   it("copy rows: payee, IBAN, reference, amount and due date (with its urgency tag), each copying the raw value", async () => {
