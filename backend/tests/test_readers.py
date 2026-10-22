@@ -13,6 +13,7 @@ from alembic.config import Config
 from sqlalchemy import select, text
 
 from dam.db.engine import MIGRATIONS_DIR, write_tx
+from dam.extract import ocr
 from dam.db.tables import files
 from dam.extract import default_registry
 from dam.extract.base import UnsupportedContent
@@ -158,6 +159,7 @@ def test_iwork_without_preview_or_not_a_zip(tmp_path):
 
 
 @pytest.mark.ocr
+@pytest.mark.skipif(ocr.engine() is None, reason="no OCR engine (Apple Vision or Tesseract)")
 def test_keynote_preview_image_is_ocrd(tmp_path):
     from PIL import Image, ImageDraw, ImageFont
 
