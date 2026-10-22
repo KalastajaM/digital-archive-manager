@@ -251,6 +251,7 @@ describe("the Important page and its sidebar row", () => {
     // the ! toggle is the way out: no second "Remove from Important" button
     expect(within(selected).queryByRole("button", { name: /^Remove from Important/ })).not.toBeInTheDocument();
     const memberRow = within(page).getAllByText("deed.pdf").find((el) => el.closest(".member-row"))!;
-    expect(within(memberRow.closest(".member-row")! as HTMLElement).getByRole("img", { name: "Important" })).toBeInTheDocument();
+    // inside the ! Important page the ! on each row would repeat the page: left out
+    expect(within(memberRow.closest(".member-row")! as HTMLElement).queryByRole("img", { name: "Important" })).not.toBeInTheDocument();
   });
 });

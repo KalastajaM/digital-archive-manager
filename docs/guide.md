@@ -341,7 +341,9 @@ setting. The sidebar, from the top:
 - **Inbox**, with its count;
 - **Trays**: one row per tray, in tray order, each with its open count;
 - **Collections**: **Important** first (the built-in collection of documents that must
-  always be easy to find), then the open ones as a **tree** (a parent collection's
+  always be easy to find) and **Starred** (the ★ Ongoing collection, with its count; its
+  page keeps the title "★ Ongoing" and, like Important's page, leaves out the mark it is
+  about on each row), then the open ones as a **tree** (a parent collection's
   children nest under it, A–Z on each level; the chevron at a parent's right end folds
   it, and the folds are remembered). The caption opens the list with "New collection"
   and the closed ones;

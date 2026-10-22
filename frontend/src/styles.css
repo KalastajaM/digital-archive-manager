@@ -1662,6 +1662,7 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 .icon-button.mark-toggle.mark-important, .icon-button.mark-toggle.mark-important[aria-pressed="true"] { color: var(--red-text); background: var(--red-bg); }
 .entries li.checked .mark-icon, .member[aria-current="true"] .mark-icon, .inbox-list li.highlighted .mark-icon, .tray-items > li[aria-current="true"] .mark-icon { color: inherit; }
 .sidebar-important { display: inline-flex; color: var(--red-text); }
+.sidebar-starred { display: inline-flex; color: var(--orange); }
 .starred-list li { flex-direction: row; align-items: center; gap: var(--sp-2); }
 .starred-list .starred-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .starred-list .starred-name[data-quicklook]:focus-visible { outline: 2px solid var(--focus-ring); border-radius: var(--r-sm); }

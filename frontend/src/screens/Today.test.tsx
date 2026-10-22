@@ -1079,6 +1079,8 @@ describe("Starred card and the Important notice (stars)", () => {
       "FinancialPlanning_Management.xlsx",
     ]);
     expect(within(rows[2]).getByRole("img", { name: "Important" })).toBeInTheDocument();
+    // the whole card is the starred list: no ★ on its rows
+    expect(within(list).queryByRole("img", { name: "Starred" })).not.toBeInTheDocument();
     // a folder is shown in Finder only: no Quick Look, no Open
     expect(within(rows[0]).queryByRole("button", { name: "Quick Look" })).toBeNull();
     expect(within(rows[0]).queryByRole("button", { name: "Open" })).toBeNull();

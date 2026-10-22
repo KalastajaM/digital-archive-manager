@@ -352,6 +352,22 @@ describe("Sidebar collection tree", () => {
     expect(await screen.findByText("Moved Sauna into Car (recreated 60 links)")).toBeInTheDocument();
   });
 
+  it("has Starred under Important in Collections, with its count, opening /starred", async () => {
+    const members = [{ drive_id: "a" }, { drive_id: "b" }, { drive_id: "c" }];
+    const { user } = setup({
+      "GET /api/marks/collection/starred": { body: { id: 1, name: "Ongoing", kind: "starred", members, groups: [] } },
+      "GET /api/marks/collection/important": { body: { id: 2, name: "Important", kind: "important", members: [{ drive_id: "p" }], groups: [] } },
+    });
+    const starred = await within(nav()).findByRole("link", { name: "Starred (3)" });
+    expect(starred).toHaveTextContent("Starred");
+    expect(starred).toHaveTextContent("3");
+    const rows = within(nav()).getAllByRole("link");
+    const important = rows.indexOf(within(nav()).getByRole("link", { name: "Important (1)" }));
+    expect(rows.indexOf(starred)).toBe(important + 1);
+    await user.click(starred);
+    expect(screen.getByTestId("where")).toHaveTextContent("/starred");
+  });
+
   it("dropping a collection on the Collections header moves it to the top level", async () => {
     const { calls } = setup({ "PATCH /api/collections/7/parent": { body: moved(IN_HOUSES, null) } }, TREE);
     await within(nav()).findByRole("link", { name: "Sauna" });

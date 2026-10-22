@@ -64,7 +64,7 @@ function StarredRow({ m, onLook }: { m: Member; onLook?: () => void }) {
         title={m.path ? visible(m.path) : undefined}
       >
         {name}
-        <MarkIcons marks={m.marks} />
+        <MarkIcons marks={m.marks} omit="starred" />
       </span>
       {m.missing && <span className="hint">missing</span>}
       {!m.missing && m.quarantined && <span className="hint">in ##. To Delete</span>}

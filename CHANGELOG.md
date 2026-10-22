@@ -57,6 +57,9 @@ All notable changes are listed here. The format follows
   after a confirm; the files stay where they are. New `POST /api/items/{id}/remove`.
 - Checklist rows: click the text to edit, drag by the grip or press Option-Up/Down to
   reorder, delete button on hover; the Edit and arrow buttons are gone.
+- A **Starred** row under Important in the sidebar, with its count, opens the ★ Ongoing
+  collection page (`/starred`). Inside the Starred card and page the ★ is no longer
+  repeated on every row (the ! stays), and likewise the ! inside the Important page.
 - Today: the cards' ⋯ menus are gone. Reorder by dragging or with ⌥↑ / ⌥↓ on a card's
   header (announced to screen readers); **Reset layout** is a button under the date.
 - Today's tray rows (all of them, also items due later) have a round checkbox before the

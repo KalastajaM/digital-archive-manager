@@ -24,7 +24,7 @@ import { Menu, type MenuEntry } from "./ui/Menu";
 import { Tag, type TagTone } from "./ui/Tag";
 import { SaveState } from "./SavedNote";
 import { useAutoSave } from "./useAutoSave";
-import { MarkIcons } from "./MarkIcons";
+import { MarkIcons, OmitMark } from "./MarkIcons";
 import { FitText } from "./FitText";
 
 /** The fold key of "Ungrouped". */
@@ -664,6 +664,7 @@ export function GroupTree({
   // An empty Ungrouped says nothing; it shows only as a drop target while files are dragged.
   const dragging = useFilesDragging();
   return (
+    <OmitMark.Provider value={c.kind === "starred" ? "starred" : c.kind === "important" ? "important" : null}>
     <section className="group-tree" aria-label="Members">
       {c.members.length === 0 && c.groups.length === 0 && (
         <p className="hint">No files yet. Add files from Browse or when filing.</p>
@@ -689,6 +690,7 @@ export function GroupTree({
         </section>
       )}
     </section>
+    </OmitMark.Provider>
   );
 }
 

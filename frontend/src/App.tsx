@@ -15,6 +15,7 @@ import Collections from "./screens/Collections";
 import ConvertImportant from "./screens/ConvertImportant";
 import ConvertOngoing from "./screens/ConvertOngoing";
 import Important from "./screens/Important";
+import Starred from "./screens/Starred";
 import Inbox from "./screens/Inbox";
 import Today from "./screens/Today";
 import Viewer from "./screens/Viewer";
@@ -128,6 +129,7 @@ function Shell() {
             <Route path="/trays/:trayId?" element={<Trays />} />
             <Route path="/collections/:id?" element={<Collections />} />
             <Route path="/ongoing" element={<ConvertOngoing />} />
+            <Route path="/starred" element={<Starred />} />
             <Route path="/important" element={<Important />} />
             <Route path="/important/convert" element={<ConvertImportant />} />
             <Route path="/browse" element={<Browse />} />

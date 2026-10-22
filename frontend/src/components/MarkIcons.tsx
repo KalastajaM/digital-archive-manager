@@ -1,6 +1,7 @@
 /** A file's ★ Ongoing and ! Important icons, after its name in any row (spec §2: the
  * icon follows the file). Nothing for a file with no marks. */
 import { Star } from "lucide-react";
+import { createContext, useContext } from "react";
 import type { Mark } from "../api/client";
 
 export const MARK_LABEL: Record<Mark, string> = { starred: "Starred", important: "Important" };
@@ -21,8 +22,16 @@ export function StarGlyph({ size = 14, filled = true }: { size?: number; filled?
   return <Star size={size} strokeWidth={1.75} fill={filled ? "currentColor" : "none"} aria-hidden="true" />;
 }
 
-export function MarkIcons({ marks }: { marks: readonly Mark[] | null | undefined }) {
-  if (!marks || marks.length === 0) return null;
+/** The mark a whole list is already about (the ★ Ongoing or ! Important collection): its
+ * icon would repeat on every row, so rows inside leave it out. */
+export const OmitMark = createContext<Mark | null>(null);
+
+export function MarkIcons({ marks, omit }: { marks: readonly Mark[] | null | undefined; omit?: Mark }) {
+  const inherited = useContext(OmitMark);
+  const skip = omit ?? inherited;
+  const shown = marks?.filter((m) => m !== skip);
+  if (!shown || shown.length === 0) return null;
+  marks = shown;
   return (
     <span className="mark-icons">
       {marks.includes("starred") && (
