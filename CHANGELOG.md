@@ -21,6 +21,14 @@ All notable changes are listed here. The format follows
 - A filed file's name, folder and tags are edited in place (rename, move, tag chips and
   Ask AI chips), replacing the Edit details dialog.
 - Browse: select all, and batch star and Important.
+- Folders join collections from Browse: a selected folder shows its collections and Add
+  to collection, and a folder can be dragged onto a collection in the sidebar. A folder
+  in a collection brings everything in it, also files put in it later. Folders in
+  ##. To Delete, ##. Ongoing and ##. Important cannot be added, and a dragged folder is
+  only ever taken by a collection (never moved or put in a tray).
+- A × on a file's collection badges (in Browse and in a collection) takes the file out of
+  that collection, with Undo (back into its group too). Only where the file is itself a
+  member of an open collection; ★ Starred and ! Important keep their toggles.
 - A Trays page: the sidebar's Trays caption now lists every tray with its open, overdue
   and total figures, as Collections does, instead of opening the first tray.
 - A search scope bar, a tray menu ("Put in tray"), and a collection browser.
@@ -97,7 +105,17 @@ All notable changes are listed here. The format follows
 - The starred built-in collection is called "★ Starred" everywhere (the Browse collection
   filter, its page title, the collection picker and Convert Ongoing), matching the
   sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
-- Collections: the Open/Closed switch lines up with the right edge of the list.
+- Collections and Activity: the toolbar's right-hand controls line up with the right edge
+  of the list or timeline.
+- Selecting a file in a collection shows the same panel as in Browse: the full preview,
+  Put in tray, Add to collection, Back to inbox, the summary and the note, with the
+  collection's own Group and Remove from collection added. The panel starts wider and can
+  be dragged as wide as you like (the list keeps 320px). A link's bin and ★ / ! stay
+  while its preview loads.
+- A tray item's panel: Quick Look, Move to tray (now an icon) and Remove from tray sit
+  together with the file's icons on its action row, instead of a Move to tray pull-down at
+  the left and Quick Look in the header. Dragging the item onto a tray in the sidebar
+  still moves it too.
 - The user guide is rewritten for people using the app. Installing, the command line,
   config files and technical details moved to a new technical reference
   (`docs/reference.md`).

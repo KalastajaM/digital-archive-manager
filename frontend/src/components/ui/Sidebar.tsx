@@ -35,6 +35,7 @@ import {
   draggedLabel,
   draggedPaths,
   readDragCollection,
+  readDragFolder,
   readDragFiles,
   setDragCollection,
   useDropTarget,
@@ -192,9 +193,13 @@ function useDropBackToInbox() {
 /** What a collection row takes: files (added as members) or another collection (moved
  * inside it). A drag is one or the other, never both (see ``dnd``). */
 type Dragged = { kind: "files"; ids: string[] } | { kind: "collection"; id: number };
+/** What a collection row takes: files, or a folder from Browse (as one member, so
+ * everything in it belongs), or another collection. */
 const readFilesOrCollection = (e: Parameters<typeof readDragFiles>[0]): Dragged | null => {
   const id = readDragCollection(e);
   if (id !== null) return { kind: "collection", id };
+  const folder = readDragFolder(e);
+  if (folder !== null) return { kind: "files", ids: [folder] };
   const ids = readDragFiles(e);
   return ids === null ? null : { kind: "files", ids };
 };

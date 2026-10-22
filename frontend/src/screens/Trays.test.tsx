@@ -702,6 +702,18 @@ describe("Item detail", () => {
     await waitFor(() => expect(where()).toBe("/trays/to-pay?item=1"));
   });
 
+  it("Quick Look, Move to tray and Remove from tray are icons together in the action row, not in the header", async () => {
+    renderTrays("/trays/to-pay?item=1");
+    await screen.findByRole("region", { name: "Checklist" });
+    const group = await within(detail()).findByRole("group", { name: "This item" });
+    expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Quick Look",
+      "Move to tray",
+      "Remove from tray",
+    ]);
+    expect(within(detail().querySelector(".item-header") as HTMLElement).queryByRole("button", { name: "Quick Look" })).toBeNull();
+  });
+
   it("Remove from tray asks first, then deletes the item and closes the panel; Cancel does nothing", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/items/1/remove": { status: 204, body: null },
