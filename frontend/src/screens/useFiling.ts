@@ -126,6 +126,9 @@ export type Filing = ReturnType<typeof useFiling>;
 /** An error (or notice) for the files it concerns: shown only on their card. */
 export type Message = { ids: string[]; text: string; kind: "error" | "notice" };
 
+/** Preview and File while a preview or a filing is in flight. */
+export const FILING_BUSY = "Still working on the last preview or filing";
+
 export const FORM_CHANGED = "Form changed — press File it again";
 
 const idsOf = (requests: FileRequest[]) => requests.map((r) => r.drive_id);

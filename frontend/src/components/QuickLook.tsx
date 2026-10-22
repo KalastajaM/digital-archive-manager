@@ -84,14 +84,14 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
           {trash && <TrashButton disabled={trash.busy} disabledReason={trash.refusal} onClick={trash.run} />}
           <IconButton
             icon={<ChevronLeft />}
-            label="Previous document"
+            label="Previous file"
             shortcut="←"
             disabled={index <= 0}
             onClick={() => onIndex(index - 1)}
           />
           <IconButton
             icon={<ChevronRight />}
-            label="Next document"
+            label="Next file"
             shortcut="→"
             disabled={index >= files.length - 1}
             onClick={() => onIndex(index + 1)}

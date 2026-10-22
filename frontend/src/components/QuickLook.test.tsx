@@ -137,7 +137,7 @@ describe("Quick Look in the inbox", () => {
   it("Space on one of its own buttons presses that button instead of closing", async () => {
     const { user } = await setup();
     await user.keyboard(" ");
-    const next = within(screen.getByRole("dialog")).getByRole("button", { name: "Next document" });
+    const next = within(screen.getByRole("dialog")).getByRole("button", { name: "Next file" });
     await user.click(next);
     expect(screen.getByRole("dialog", { name: "Quick Look: scan002.pdf" })).toBeInTheDocument();
     expect(next).toHaveFocus();
@@ -152,8 +152,8 @@ describe("Quick Look in the inbox", () => {
     const { user } = await setup();
     await user.keyboard(" ");
     const ql = screen.getByRole("dialog", { name: "Quick Look: scan001.pdf" });
-    expect(within(ql).getByRole("button", { name: "Previous document" })).toBeDisabled();
-    await user.click(within(ql).getByRole("button", { name: "Next document" }));
+    expect(within(ql).getByRole("button", { name: "Previous file" })).toBeDisabled();
+    await user.click(within(ql).getByRole("button", { name: "Next file" }));
     expect(screen.getByRole("dialog", { name: "Quick Look: scan002.pdf" })).toBeInTheDocument();
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
     expect(quickLook()).not.toBeInTheDocument();

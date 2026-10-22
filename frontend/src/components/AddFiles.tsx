@@ -11,14 +11,6 @@ import { useUndoConfirm } from "./UndoConfirm";
 /** The biggest file the inbox takes (the server's limit, ``MAX_COPY_BYTES``). */
 export const MAX_UPLOAD_MB = 200;
 
-/** Finder, File Explorer, or the generic words, for text that names the file manager. */
-export function fileManagerName(): string {
-  const platform = typeof navigator === "undefined" ? "" : `${navigator.platform} ${navigator.userAgent}`;
-  if (/mac/i.test(platform)) return "Finder";
-  if (/win/i.test(platform)) return "Explorer";
-  return "your file manager";
-}
-
 export function useAddFiles(): { choose: () => void; busy: boolean; view: ReactNode } {
   const upload = useUploadToInbox();
   const toast = useToast();

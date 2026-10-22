@@ -155,11 +155,11 @@ function FieldEditor({
         <input aria-label="Label" value={label} placeholder="Label" maxLength={60} onChange={(e) => setLabel(e.target.value)} />
       )}
       <ValueInput kind={kind} value={value} label={`Value of ${name}`} onChange={setValue} autoFocus={!adding} />
-      <button type="button" className="primary" onClick={save} disabled={busy}>
-        Save
-      </button>
       <button type="button" onClick={onCancel}>
         Cancel
+      </button>
+      <button type="button" className="primary" onClick={save} disabled={busy}>
+        Save
       </button>
     </div>
   );

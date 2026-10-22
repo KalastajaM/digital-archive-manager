@@ -11,10 +11,11 @@ import {
   updateArchive,
   useArchives,
 } from "../api/client";
+import { fileManagerName } from "../fileManager";
 import { visible } from "../text";
 import { ArchiveSwatches } from "./ArchiveSwatches";
-import { fileManagerName } from "./archivePalette";
 import { Sheet } from "./ui/Sheet";
+import { TipButton } from "./ui/TipButton";
 
 function PathRow({ label, path, onShow, manager }: { label: string; path: string | null; onShow: () => void; manager: string }) {
   return (
@@ -31,7 +32,7 @@ function PathRow({ label, path, onShow, manager }: { label: string; path: string
 /** One archive in the list: rename, colour, where its folders are, forget. */
 function ArchiveRow({ archive, all, onForgotten }: { archive: Archive; all: Archive[]; onForgotten: (r: ArchiveForgotten) => void }) {
   const client = useQueryClient();
-  const manager = fileManagerName();
+  const manager = fileManagerName() ?? "file manager";
   const [name, setName] = useState(archive.name);
   const [problem, setProblem] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -130,14 +131,9 @@ function ArchiveRow({ archive, all, onForgotten }: { archive: Archive; all: Arch
         </div>
       ) : (
         <div className="archive-forget-actions">
-          <button
-            type="button"
-            disabled={others.length === 0}
-            title={others.length === 0 ? "This is your only archive" : undefined}
-            onClick={() => setConfirming(true)}
-          >
+          <TipButton disabled={others.length === 0} disabledReason="This is your only archive" onClick={() => setConfirming(true)}>
             Forget…
-          </button>
+          </TipButton>
           {others.length === 0 && <span className="first-run-hint">It is your only archive.</span>}
         </div>
       )}

@@ -54,6 +54,11 @@ describe("Put in tray menu", () => {
     await waitFor(() => expect(screen.getByRole("menuitemcheckbox", { name: "To pay" })).toHaveAttribute("aria-checked", "true"));
     await user.click(screen.getByRole("menuitem", { name: "Remove from To pay" }));
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/items/42/discard")).toHaveLength(1));
+    // Undo puts the file in the tray again
+    expect(await screen.findByText("Taken back: Gas bill")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(calls.filter((c) => c.url === "/api/items/quick")).toHaveLength(1));
+    expect(calls.find((c) => c.url === "/api/items/quick")!.body).toEqual({ tray: "to-pay", drive_ids: ["d7"] });
   });
 
   it("choosing another tray moves the file's item there and says so; Undo moves it back", async () => {

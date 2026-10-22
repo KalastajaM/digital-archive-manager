@@ -30,6 +30,7 @@ import { useUndoConfirm } from "../components/UndoConfirm";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Segmented } from "../components/ui/Segmented";
 import { Tag, type TagTone } from "../components/ui/Tag";
+import { TipButton } from "../components/ui/TipButton";
 import { Toolbar } from "../components/ui/Toolbar";
 import { plural } from "../format";
 import { visible } from "../text";
@@ -312,15 +313,14 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded
                 )}
               </span>
             ) : (
-              <button
-                type="button"
+              <TipButton
                 disabled={blocked || undoBusy}
-                title={b.is_undo ? "An undo cannot be undone" : b.undone ? "Already undone" : undefined}
+                disabledReason={b.is_undo ? "An undo cannot be undone" : b.undone ? "Already undone" : undoBusy ? "Another undo is still running" : null}
                 aria-describedby={interrupted ? `${b.batch_id}-interrupted` : undefined}
                 onClick={onUndo}
               >
                 Undo
-              </button>
+              </TipButton>
             )}
             {interrupted && (
               <span id={`${b.batch_id}-interrupted`} className="batch-note">

@@ -68,7 +68,7 @@ export default function Viewer() {
   else if (detail.isError) {
     body = (
       <p className="error" role="alert">
-        Could not load this document. {visible(errorText(detail.error))}
+        Could not load this file. {visible(errorText(detail.error))}
       </p>
     );
   } else {

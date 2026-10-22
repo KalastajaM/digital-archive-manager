@@ -26,6 +26,7 @@ import {
 } from "../api/client";
 import { isShortcutIn, useKeydown } from "../keyboard";
 import { openViewer } from "../selection";
+import { inFileManager } from "../fileManager";
 import { visible, visibleText } from "../text";
 import { LaunchButtons, useFileLaunch } from "./FileLaunch";
 import { IconButton } from "./ui/IconButton";
@@ -266,7 +267,7 @@ function NoPreview({ path, onOpen }: { path: string; onOpen: () => void }) {
       <p>No preview</p>
       <p>
         {/* a double click here selects the path (to copy it) instead of opening the file */}
-        Open it in Finder: <code onDoubleClick={(e) => e.stopPropagation()}>{visible(path)}</code>
+        Open it {inFileManager()}: <code onDoubleClick={(e) => e.stopPropagation()}>{visible(path)}</code>
       </p>
     </div>
   );

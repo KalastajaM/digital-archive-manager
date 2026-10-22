@@ -106,7 +106,17 @@ function SaveToNotes({ entry }: { entry: AskEntry }) {
     );
   }
   return (
-    <fieldset className="ask-save" aria-labelledby={headingId}>
+    <fieldset
+      className="ask-save"
+      aria-labelledby={headingId}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !busy) {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       <legend id={headingId}>Add this answer to the note of:</legend>
       {files.map((c) => (
         <label key={c.drive_id}>
@@ -128,11 +138,11 @@ function SaveToNotes({ entry }: { entry: AskEntry }) {
       ))}
       <p className="hint">It goes below any note the file has, with the question, the date and the sources.</p>
       <div className="actions">
-        <button type="button" className="primary" disabled={busy || chosen.size === 0} onClick={() => void save()}>
-          Save to notes
-        </button>
         <button type="button" disabled={busy} onClick={() => setOpen(false)}>
           Cancel
+        </button>
+        <button type="button" className="primary" disabled={busy || chosen.size === 0} onClick={() => void save()}>
+          Save to notes
         </button>
       </div>
     </fieldset>

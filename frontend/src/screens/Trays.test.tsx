@@ -576,6 +576,11 @@ describe("Item detail", () => {
     await user.click(takeOff);
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files/remove")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/items/1/files/remove")[0].body).toEqual({ drive_id: "f2" });
+    // the toast's Undo adds the file back
+    expect(await screen.findByText("Taken off the item: receipt.png")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f2" });
 
     const attach = within(panel).getByRole("button", { name: "Add another file…" });
     expect(attach).toHaveAttribute("data-tip", expect.stringContaining("Attach another file to this item"));
@@ -584,8 +589,8 @@ describe("Item detail", () => {
     const add = await within(panel).findByRole("button", { name: /meter\.pdf/ });
     expect(within(panel).queryByRole("button", { name: /^Add northpower\.pdf/ })).not.toBeInTheDocument();
     await user.click(add);
-    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(1));
-    expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f7" });
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(2));
+    expect(sent(calls, "POST", "/api/items/1/files")[1].body).toEqual({ drive_id: "f7" });
   });
 
   it("the item's file tabs and Add another file… hits show ★ / !; the toggles are in the shown file's toolbar", async () => {
@@ -599,7 +604,7 @@ describe("Item detail", () => {
     const tabs = await within(panel).findByRole("tablist", { name: "Files" });
     expect(within(within(tabs).getAllByRole("tab")[0]).getByRole("img", { name: "Important" })).toBeInTheDocument();
     // the toggle is in the toolbar of the shown file's preview
-    expect(within(panel).getByRole("button", { name: "Important (click to unmark)" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     await user.click(within(panel).getByRole("button", { name: "Add another file…" }));
     await user.type(within(panel).getByLabelText("Find a file"), "meter");
     const hit = (await within(panel).findByRole("button", { name: /meter\.pdf/ })).closest("li")!;
@@ -995,7 +1000,7 @@ describe("Quick Look and the selection in a tray", () => {
     const { user } = renderTrays("/trays/to-pay?item=1");
     const eye = await screen.findByRole("button", { name: "Quick Look" });
     expect(eye).toHaveClass("icon-button");
-    expect(eye).toHaveAttribute("data-tip", "Quick Look (Space)");
+    expect(eye).toHaveAttribute("data-tip", "Quick Look Space");
     expect(document.querySelector(".item-header kbd")).toBeNull();
     expect(screen.queryByText("Quick Look", { selector: ".link-button" })).toBeNull();
     await user.click(eye);

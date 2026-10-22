@@ -10,6 +10,7 @@ import { type ReactNode, useMemo, useRef } from "react";
 import type { BatchResult } from "../api/client";
 import { dialogOpen, isTyping } from "../keyboard";
 import { type DeletionMessage, useMarkForDeletion } from "../screens/useMarkForDeletion";
+import { inFileManager } from "../fileManager";
 import { visible } from "../text";
 import { ConfirmPlan } from "./PlanPreview";
 import { undoAction, useBlockToastActions, useToast } from "./Toasts";
@@ -160,7 +161,7 @@ export function useTrash({ onTrashed, onUndone, inlineMessage = false }: Options
             {one ? "It moves" : `These ${confirm.ids.length} move`} into{" "}
             <code>{visible(confirm.ops.find((op) => op.kind === "quarantine")?.dst.split("/")[0] ?? "")}</code>,
             keeping {one ? "its" : "their"} path. Nothing is deleted: Undo puts {one ? "it" : "them"} back, and you
-            empty the folder in Finder.
+            empty the folder {inFileManager()}.
           </p>
           {links.current && <p className="notice">A link moves the link; its target stays.</p>}
         </>

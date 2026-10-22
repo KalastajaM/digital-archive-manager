@@ -359,6 +359,8 @@ dialog.sheet[open] { animation: sheet-in var(--motion) var(--ease); }
   border-top: 0.5px solid var(--separator);
 }
 .sheet-footer button { min-width: 72px; }
+/* A third action ("Don't offer these") stands apart at the left, as on a Mac. */
+.sheet-footer > .footer-start { margin-right: auto; }
 
 /* ---- Card, tag, empty state ------------------------------------------------------- */
 .card { background: var(--panel); border-radius: var(--r-xl); box-shadow: var(--shadow-card); padding: var(--sp-4); }

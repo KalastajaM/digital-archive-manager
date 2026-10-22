@@ -11,6 +11,7 @@ import { Segmented } from "./Segmented";
 import { Sheet } from "./Sheet";
 import { Sidebar } from "./Sidebar";
 import { Tag } from "./Tag";
+import { TipButton } from "./TipButton";
 import { Toolbar } from "./Toolbar";
 
 const STATUS = {
@@ -145,6 +146,27 @@ describe("IconButton", () => {
   it("can be disabled", () => {
     renderWithProviders(<IconButton icon={<svg />} label="Undo" onClick={() => {}} disabled />);
     expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+  });
+});
+
+describe("TipButton", () => {
+  it("has its tip while usable, and the reason (on a wrap) while disabled", () => {
+    const { rerender } = renderWithProviders(
+      <TipButton className="primary tip-end" tip="Move it ⌘↩" disabledReason="Still busy">
+        File it
+      </TipButton>,
+    );
+    const button = screen.getByRole("button", { name: "File it" });
+    expect(button).toHaveAttribute("data-tip", "Move it ⌘↩");
+    expect(button.parentElement).not.toHaveClass("button-wrap");
+    rerender(
+      <TipButton className="primary tip-end" tip="Move it ⌘↩" disabled disabledReason="Still busy">
+        File it
+      </TipButton>,
+    );
+    const wrap = screen.getByRole("button", { name: "File it" }).parentElement!;
+    expect(wrap).toHaveClass("button-wrap", "tip-end");
+    expect(wrap).toHaveAttribute("data-tip", "Still busy");
   });
 });
 

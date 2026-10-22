@@ -222,7 +222,7 @@ describe("Collection detail", () => {
     const members = await within(panel()).findByRole("region", { name: "Members" });
     expect(members.closest(".collection-members")).not.toBeNull();
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
-    expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look (Space)");
+    expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look Space");
     const actions = inspector.querySelector(".inspector-actions")!;
     expect(within(actions as HTMLElement).getByRole("button", { name: "Ask AI" })).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
     expect(inspector.querySelector(".file-meta-title")!.querySelector("[aria-label='Ask AI']")).toBeNull();
@@ -866,8 +866,17 @@ describe("Collection groups, summary and attention", () => {
     await user.click(within(quotes).getByText("Two offers⟨U+202E⟩"));
     const line = within(quotes).getAllByRole("textbox", { name: "Summary of Quotes" })[0];
     expect(line).toHaveValue("Two offers‮"); // the raw text, to edit
+    // Esc cancels the edit: nothing is sent and the stored summary stays
     await user.clear(line);
-    await user.type(line, "Three offers{Enter}");
+    await user.type(line, "Scrapped{Escape}");
+    expect(within(quotes).queryByRole("textbox", { name: "Summary of Quotes" })).not.toBeInTheDocument();
+    expect(within(quotes).getByText("Two offers⟨U+202E⟩")).toBeInTheDocument();
+    expect(patches(calls, "/api/collection-groups/1")).toHaveLength(0);
+
+    await user.click(within(quotes).getByText("Two offers⟨U+202E⟩"));
+    const edit = within(quotes).getAllByRole("textbox", { name: "Summary of Quotes" })[0];
+    await user.clear(edit);
+    await user.type(edit, "Three offers{Enter}");
     await waitFor(() => expect(patches(calls, "/api/collection-groups/1")).toHaveLength(1));
     expect(patches(calls, "/api/collection-groups/1")[0].body).toEqual({ summary: "Three offers" });
   });

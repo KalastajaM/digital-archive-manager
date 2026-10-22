@@ -59,7 +59,7 @@ function specialOf(
   if (!folders) return null;
   const root = (area: string) => fold(path) === fold(area.replace(/^\/+|\/+$/g, ""));
   if (isUnder(path, folders.quarantine)) {
-    return { label: "Trash", refused: true, root: root(folders.quarantine), area: folders.quarantine };
+    return { label: "To Delete", refused: true, root: root(folders.quarantine), area: folders.quarantine };
   }
   if (isUnder(path, folders.ongoing)) {
     return { label: "★ Ongoing, kept by the app", refused: true, root: root(folders.ongoing), area: folders.ongoing };

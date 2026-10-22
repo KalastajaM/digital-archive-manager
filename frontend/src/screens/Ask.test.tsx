@@ -183,7 +183,7 @@ describe("Ask", () => {
     expect(within(cited).getByRole("img", { name: "Important" })).toBeInTheDocument();
     await user.click(within(answer).getByRole("button", { name: "Source 1: northpower.pdf" }));
     const look = await screen.findByRole("dialog", { name: /northpower\.pdf/ });
-    await user.click(await within(look).findByRole("button", { name: "Important (click to unmark)" }));
+    await user.click(await within(look).findByRole("button", { name: "Unmark Important" }));
     await waitFor(() => expect(posts(calls, "/api/marks/unimportant")).toHaveLength(1));
     await waitFor(() => expect(within(cited).queryByRole("img", { name: "Important" })).toBeNull());
   });

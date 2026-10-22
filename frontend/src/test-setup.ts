@@ -23,6 +23,9 @@ if (typeof URL.createObjectURL !== "function") {
   URL.revokeObjectURL = () => {};
 }
 
+// The app names the file manager by platform (fileManager.ts); tests read it as a Mac.
+Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
+
 import { afterEach } from "vitest";
 
 // Forget keys a test pressed without releasing (keyboard.ts tracks held keys).

@@ -185,7 +185,7 @@ describe("Barcode", () => {
       const { user } = renderBarcode(OK);
       await user.click(await screen.findByRole("button", { name: /^Show large barcode/ }));
       expect(full()).toBeInTheDocument();
-      await user.click(within(full()).getByRole("button", { name: "Close" }));
+      await user.click(within(full()).getByRole("button", { name: "Done" }));
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
   });

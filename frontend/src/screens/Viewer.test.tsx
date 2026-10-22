@@ -151,9 +151,9 @@ describe("viewer window", () => {
     const user = userEvent.setup();
     renderViewer();
     const bar = screen.getByRole("banner");
-    expect(await within(bar).findByRole("button", { name: "Important (click to unmark)" })).toBeInTheDocument();
+    expect(await within(bar).findByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     await user.click(within(bar).getByRole("button", { name: "Star" }));
-    expect(await within(bar).findByRole("button", { name: "Starred (click to unstar)" })).toBeInTheDocument();
+    expect(await within(bar).findByRole("button", { name: "Remove the star" })).toBeInTheDocument();
   });
 });
 

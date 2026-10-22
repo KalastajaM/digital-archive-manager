@@ -1104,7 +1104,7 @@ describe("Two panes", () => {
 });
 
 describe("Move to…", () => {
-  it("⌘⇧M opens a folder picker for the selected files, then previews, confirms and applies", async () => {
+  it("⇧⌘M opens a folder picker for the selected files, then previews, confirms and applies", async () => {
     const { calls, user } = setup("10. Financial/Banks", {
       "GET /api/folders": { body: ["10. Financial", "13. Taxes"] },
       "POST /api/browse/move/preview": {
@@ -1501,7 +1501,7 @@ describe("marks in Browse (stars)", () => {
     await waitFor(() => expect(posts(calls, "/api/marks/star")).toHaveLength(1));
     expect(posts(calls, "/api/marks/star")[0].body).toEqual({ drive_ids: ["f1"] });
     await waitFor(() => expect(within(screen.getByRole("button", { name: /^a\.pdf/ }).closest("li")!).getByRole("img", { name: "Starred" })).toBeInTheDocument());
-    expect(within(preview).getByRole("button", { name: "Starred (click to unstar)" })).toBeInTheDocument();
+    expect(within(preview).getByRole("button", { name: "Remove the star" })).toBeInTheDocument();
   });
 
   it("with two panes the active pane's toolbar has the toggles of the file it is on", async () => {
@@ -1518,7 +1518,7 @@ describe("marks in Browse (stars)", () => {
     await user.click(within(bar).getByRole("button", { name: "Mark Important" }));
     await waitFor(() => expect(posts(calls, "/api/marks/important")).toHaveLength(1));
     expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["f0"] });
-    expect(within(bar).getByRole("button", { name: "Important (click to unmark)" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     expect(within(right.querySelector<HTMLElement>(".pane-bar")!).queryByRole("button", { name: /Important/ })).toBeNull();
     localStorage.clear();
   });

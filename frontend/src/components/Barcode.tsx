@@ -166,8 +166,8 @@ function FullSize({
       footer={
         <>
           <CopyButton value={code} label="barcode number" />
-          <button type="button" onClick={onClose}>
-            Close
+          <button type="button" className="primary" onClick={onClose}>
+            Done
           </button>
         </>
       }

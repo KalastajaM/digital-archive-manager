@@ -213,11 +213,11 @@ function DefaultsSheet({ tray, onClose }: { tray: TrayDef; onClose: () => void }
       onClose={onClose}
       footer={
         <>
+          <button type="button" className="footer-start" disabled={busy || leftOut.length === 0} onClick={dismiss}>
+            Don't offer these
+          </button>
           <button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" disabled={busy || leftOut.length === 0} onClick={dismiss}>
-            Don't offer these
           </button>
           <span className="button-wrap" data-tip={busy ? "Still saving the last change" : (whyNot ?? undefined)}>
             <button type="button" className="primary" disabled={busy || whyNot !== null} onClick={update}>

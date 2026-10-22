@@ -88,7 +88,10 @@ function PutInTrayMenu({ driveId }: { driveId: string }) {
     for (const item of open) {
       entries.push({
         label: `Remove from ${visible(item.tray_name)}`,
-        onSelect: () => void quick.takeBack([item], visible(item.tray_name)),
+        onSelect: () =>
+          void quick.takeBack([item], visible(item.tray_name), () =>
+            void quick.put({ tray: item.tray_id, trayName: item.tray_name, ids: [driveId], name: null }),
+          ),
       });
     }
   }

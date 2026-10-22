@@ -47,7 +47,7 @@ describe("MarkToggles", () => {
     await user.click(star);
     await waitFor(() => expect(posts(calls, "/api/marks/star")).toHaveLength(1));
     expect(posts(calls, "/api/marks/star")[0].body).toEqual({ drive_ids: ["d1"] });
-    const on = await screen.findByRole("button", { name: "Starred (click to unstar)" });
+    const on = await screen.findByRole("button", { name: "Remove the star" });
     expect(on).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByText("Starred a⟨U+202E⟩.pdf")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Undo" }));
@@ -68,10 +68,10 @@ describe("MarkToggles", () => {
     });
     await waitFor(() => expect(posts(calls, "/api/marks/important")).toHaveLength(1));
     held.resolve({ body: CHANGE });
-    expect(await screen.findByRole("button", { name: "Important (click to unmark)" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     expect(posts(calls, "/api/marks/important")).toHaveLength(1);
     expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["d1"] });
-    expect(screen.getByRole("button", { name: "Starred (click to unstar)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove the star" })).toBeInTheDocument();
   });
 
   it("! marks Important (ungrouped) and the toast's Unmark unmarks it again", async () => {
@@ -105,13 +105,13 @@ describe("MarkToggles", () => {
     await user.click(screen.getByRole("button", { name: "refresh" }));
     await user.click(undo);
     expect(await screen.findByRole("button", { name: "Star" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: "Important (click to unmark)" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Unmark Important" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("without marks from the caller it reads them from the file's record", async () => {
     mockFetch({ "GET /api/files/d1": { body: record(["important"]) } });
     renderWithProviders(<MarkToggles driveId="d1" name="a.pdf" />);
-    expect(await screen.findByRole("button", { name: "Important (click to unmark)" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Star" })).toBeInTheDocument();
   });
 
@@ -139,7 +139,7 @@ describe("MarkToggles", () => {
     const ql = screen.getByRole("dialog", { name: "Quick Look: a.pdf" });
     await user.click(await within(ql).findByRole("button", { name: "Star" }));
     expect(await within(ql).findByText("Starred a.pdf")).toBeInTheDocument();
-    expect(within(ql).getByRole("button", { name: "Starred (click to unstar)" })).toBeInTheDocument();
+    expect(within(ql).getByRole("button", { name: "Remove the star" })).toBeInTheDocument();
   });
 });
 

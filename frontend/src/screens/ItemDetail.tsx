@@ -36,8 +36,9 @@ import { RelativeDate } from "../components/RelativeDate";
 import { SavedNote, SaveState } from "../components/SavedNote";
 import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
-import { useToast } from "../components/Toasts";
+import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
+import { TipButton } from "../components/ui/TipButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { RemoveItemSheet } from "../components/RemoveItemSheet";
 import { UrgencyTag } from "../components/UrgencyTag";
@@ -259,6 +260,8 @@ export function AddFile({
     </div>
   );
 }
+
+const TRAYS_LOADING = "The trays are still loading";
 
 const ADD_FILE_TIP =
   "Attach another file to this item, such as a reminder or a reply. They share one title, date and checklist and are marked done together. The file is not moved.";
@@ -564,13 +567,22 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       toast({ kind: "error", text: `Could not move ${visible(item.title)}: ${visible(errorText(e))}` });
     }
   };
+  /** Take a file off the item (DB only: the file stays where it is), with Undo: the
+   * link holds nothing but the two ids, so adding it back restores it. */
   const takeOff = async (f: ItemFile) => {
     setFileError(null);
     try {
       await change.mutateAsync({ id: item.id, driveId: f.drive_id, remove: true });
     } catch (e) {
       setFileError(errorText(e));
+      return;
     }
+    const name = f.path ? visible(baseName(f.path)) : "the file";
+    const putBack = () =>
+      change.mutateAsync({ id: item.id, driveId: f.drive_id }).catch((e: unknown) => {
+        toast({ kind: "error", text: `Could not put ${name} back: ${visible(errorText(e))}` });
+      });
+    toast({ kind: "info", text: `Taken off the item: ${name}`, action: undoAction(() => void putBack()) });
   };
 
   const tray = trays.get(item.tray_id);
@@ -619,24 +631,24 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const doneButtons =
     open && !doneMode ? (
       <>
-        <button
-          type="button"
+        <TipButton
           className="primary"
-          data-tip="Mark this item done; it moves to the Done list"
+          tip="Mark this item done; it moves to the Done list"
           disabled={tray === undefined}
+          disabledReason={TRAYS_LOADING}
           onClick={() => setDone("done")}
         >
           {visible(doneText)}
-        </button>
+        </TipButton>
         {anyInInbox && (
-          <button
-            type="button"
-            data-tip="Mark this item done, then open its file in the Inbox to file it"
+          <TipButton
+            tip="Mark this item done, then open its file in the Inbox to file it"
             disabled={tray === undefined}
+            disabledReason={TRAYS_LOADING}
             onClick={() => setDone("file")}
           >
             {visible(fileLabel)}
-          </button>
+          </TipButton>
         )}
       </>
     ) : null;
@@ -729,7 +741,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             {item.invalid_fields.includes(amount!) ? visible(amountValue) : visible(formatMoney(amountValue))}
           </div>
         )}
-        {onQuickLook && firstPath && <IconButton icon={<Eye />} label="Quick Look" shortcut="(Space)" onClick={onQuickLook} />}
+        {onQuickLook && firstPath && <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
         <IconButton icon={<X />} label="Close" onClick={onClose} />
       </header>
       {files.isError && (

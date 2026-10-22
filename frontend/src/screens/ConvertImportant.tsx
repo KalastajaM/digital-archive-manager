@@ -31,6 +31,7 @@ import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
 import { useBlockToastActions, useToast } from "../components/Toasts";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { EmptyState } from "../components/ui/EmptyState";
+import { TipButton } from "../components/ui/TipButton";
 import { Toolbar } from "../components/ui/Toolbar";
 import { plural } from "../format";
 import { visible } from "../text";
@@ -173,15 +174,9 @@ function EntryRow({ entry, look, inFlight, locked, onActive, onSkip, onConverted
         <button type="button" disabled={busy} onClick={onSkip}>
           Skip
         </button>
-        <button
-          type="button"
-          className="primary"
-          disabled={notReady !== null || busy}
-          title={notReady ?? undefined}
-          onClick={() => void start()}
-        >
+        <TipButton className="primary" disabled={notReady !== null || busy} disabledReason={notReady} onClick={() => void start()}>
           Preview
-        </button>
+        </TipButton>
       </div>
       {error && (
         <p className="error" role="alert">

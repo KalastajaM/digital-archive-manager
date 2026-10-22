@@ -53,7 +53,7 @@ describe("the empty inbox", () => {
     const calls = renderInbox(true, { "POST /api/folders/reveal": { status: 204, body: null } });
     expect(await screen.findByText("The inbox is empty.")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("##. Organize")).toBeInTheDocument());
-    expect(screen.getByText(/Put new documents in/)).toHaveTextContent(/drag them there in .+, or point your scanner at it/);
+    expect(screen.getByText(/Put new files in/)).toHaveTextContent(/drag them there in .+, or point your scanner at it/);
     await user.click(screen.getByRole("button", { name: /^Show (in |folder)/ }));
     await waitFor(() => expect(posts(calls, "/api/folders/reveal")).toHaveLength(1));
     expect(posts(calls, "/api/folders/reveal")[0].body).toEqual({ path: "##. Organize" });
