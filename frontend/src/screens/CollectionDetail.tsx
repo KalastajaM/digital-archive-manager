@@ -113,14 +113,16 @@ const STILL_RUNNING = "Another change is still running. Try again when it is don
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
 
 /** The selected file's first page (a PDF) or the image itself, small; nothing else. */
+// One element for every selection, its image swapped in place: a thumbnail remounted per
+// file (keyed by it) was left behind on the page each time, stacking one per click.
 function Thumbnail({ member }: { member: Pick<Member, "drive_id" | "path" | "is_dir" | "missing"> }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const ext = member.path && !member.is_dir && !member.missing ? extOf(member.path) : null;
   const src = ext === "pdf" ? pageUrl(member.drive_id, 1, 400) : ext && IMAGE_EXTS.has(ext) ? rawUrl(member.drive_id) : null;
-  if (!src || failed) return null;
+  if (!src || failedSrc === src) return null;
   return (
     <div className="inspector-thumb">
-      <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />
+      <img src={src} alt="" onError={() => setFailedSrc(src)} />
     </div>
   );
 }
@@ -623,7 +625,7 @@ function Inspector({
   const name = memberName(member);
   return (
     <aside className="collection-inspector" aria-label="Selected file">
-      <Thumbnail key={member.drive_id} member={member} />
+      <Thumbnail member={member} />
       {member.path && (member.missing || member.quarantined) ? (
         <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path }} />
       ) : member.path ? (
@@ -705,7 +707,7 @@ function EntryInspector({
   const folder = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
   return (
     <aside className="collection-inspector" aria-label="Selected file">
-      <Thumbnail key={entry.drive_id} member={{ drive_id: entry.drive_id, path: entry.path, is_dir: false, missing: false }} />
+      <Thumbnail member={{ drive_id: entry.drive_id, path: entry.path, is_dir: false, missing: false }} />
       <FileDetails file={{ drive_id: entry.drive_id, name: null, path: entry.path }} />
       <p className="hint">In the folder {visible(folder)}, which is in this collection. The file itself is not a member.</p>
       <div className="inspector-actions">
