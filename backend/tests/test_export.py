@@ -457,9 +457,19 @@ def test_contents_alone_over_cap_lists_no_members(app_paths, paths, fake_archive
         (fake_archive.root / f"m{i:04d}.pdf").write_bytes(data)
     monkeypatch.setattr(ex, "MAX_PAGES", 60)
     files = [rec(f"m{i:04d}.pdf") for i in range(3000)]
-    t0 = time.monotonic()
+    members_added = []
+    real_append = ex._append_pdf
+
+    def counting_append(body, blob):
+        if blob == data:  # a member's bytes
+            members_added.append(1)
+        return real_append(body, blob)
+
+    monkeypatch.setattr(ex, "_append_pdf", counting_append)
     out, notes = build_pdf(app_paths, paths, files, "huge")
-    assert time.monotonic() - t0 < 5
+    # members stop being opened at the page cap, not after all 3000 (counted, not timed:
+    # CI runners vary in speed)
+    assert len(members_added) <= 60
     assert pdf_pages(out) == 60
     assert len(notes) == 3000
     assert all(n.endswith("not included: page limit") for n in notes)
