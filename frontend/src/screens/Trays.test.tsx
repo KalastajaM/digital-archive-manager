@@ -229,6 +229,40 @@ const sent = (calls: Call[], method: string, url: string) => calls.filter((c) =>
 const row = (title: string) => screen.getByRole("article", { name: title });
 const detail = () => screen.getByRole("region", { name: "Item" });
 
+describe("Add file in the tray list", () => {
+  it("searches the index and puts the chosen file in the tray as a new item, which opens", async () => {
+    const created = item(11, { title: "Meter reading", files: ["f7"], first_file: { ...NORTHPOWER_FILE, drive_id: "f7" } });
+    const { calls, user } = renderTrays("/trays/to-pay", {
+      "GET /api/search": {
+        body: [
+          { drive_id: "f1", path: "10. Financial/Banks/northpower.pdf", name: "northpower.pdf", snippet: "", rank: 1 },
+          { drive_id: "f7", path: "10. Financial/Banks/meter.pdf", name: "meter.pdf", snippet: "", rank: 2 },
+        ],
+      },
+      "POST /api/items/quick": { body: { created: [created], skipped: [] } },
+      "GET /api/items/11": { body: created },
+      "GET /api/items/11/files": { body: [] },
+      "GET /api/items/11/history": { body: [] },
+      "GET /api/notes/item/11": { body: { text: "" } },
+      "GET /api/checklist/item/11": { body: [] },
+    });
+    await screen.findByRole("article", { name: "Northpower sähkö" });
+    const list = screen.getByRole("region", { name: "Tray items" });
+    const add = within(list).getByRole("button", { name: "Add file" });
+    expect(add).toHaveAttribute("data-tip", "Add another file to the tray");
+    await user.click(add);
+    await user.type(within(list).getByLabelText("Find a file"), "meter");
+    // a file that already has an item here (northpower.pdf) is not offered again
+    expect(await within(list).findByRole("button", { name: /meter\.pdf/ })).toBeInTheDocument();
+    expect(within(list).queryByRole("button", { name: /^Add northpower\.pdf/ })).not.toBeInTheDocument();
+    await user.click(within(list).getByRole("button", { name: /meter\.pdf/ }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/quick")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/quick")[0].body).toEqual({ tray: "to-pay", drive_ids: ["f7"] });
+    await waitFor(() => expect(where()).toBe("/trays/to-pay?item=11"));
+    expect(within(list).queryByLabelText("Find a file")).not.toBeInTheDocument();
+  });
+});
+
 describe("Trays", () => {
   it("shows the first tray by default, named in the list toolbar; the sidebar picks the tray (no tab row)", async () => {
     const { calls } = renderTrays();
@@ -521,7 +555,7 @@ describe("Item detail", () => {
     expect(amount).toHaveValue("905");
   });
 
-  it("shows the files with tabs, badges and Remove; Add file… searches and posts", async () => {
+  it("shows the files with tabs and badges; Take this file off the item and Add another file… post", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/search": {
         body: [
@@ -534,13 +568,18 @@ describe("Item detail", () => {
     });
     const panel = await screen.findByRole("region", { name: "Item" });
     const tabs = await within(panel).findByRole("tablist", { name: "Files" });
-    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["northpower.pdf", "receipt.png"]);
+    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["northpower.pdf", "receipt.pngfile in ##. To Delete"]);
     expect(within(panel).getByText("file in ##. To Delete")).toBeInTheDocument();
-    await user.click(within(panel).getByRole("button", { name: "Remove receipt.png" }));
+    await user.click(within(tabs).getByRole("tab", { name: /receipt\.png/ }));
+    const takeOff = within(panel).getByRole("button", { name: "Take this file off the item (the file stays where it is)" });
+    expect(takeOff).toHaveAttribute("data-tip", "Take this file off the item (the file stays where it is)");
+    await user.click(takeOff);
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files/remove")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/items/1/files/remove")[0].body).toEqual({ drive_id: "f2" });
 
-    await user.click(within(panel).getByRole("button", { name: "Add file…" }));
+    const attach = within(panel).getByRole("button", { name: "Add another file…" });
+    expect(attach).toHaveAttribute("data-tip", expect.stringContaining("Attach another file to this item"));
+    await user.click(attach);
     await user.type(within(panel).getByLabelText("Find a file"), "meter");
     const add = await within(panel).findByRole("button", { name: /meter\.pdf/ });
     expect(within(panel).queryByRole("button", { name: /^Add northpower\.pdf/ })).not.toBeInTheDocument();
@@ -549,7 +588,7 @@ describe("Item detail", () => {
     expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f7" });
   });
 
-  it("the item's file tabs and Add file… hits show ★ / !; the file rows have the toggles only", async () => {
+  it("the item's file tabs and Add another file… hits show ★ / !; the toggles are in the shown file's toolbar", async () => {
     const { user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/items/1/files": { body: [{ ...FILES[0], marks: ["important"] }, FILES[1]] },
       "GET /api/search": {
@@ -559,12 +598,9 @@ describe("Item detail", () => {
     const panel = await screen.findByRole("region", { name: "Item" });
     const tabs = await within(panel).findByRole("tablist", { name: "Files" });
     expect(within(within(tabs).getAllByRole("tab")[0]).getByRole("img", { name: "Important" })).toBeInTheDocument();
-    const rows = panel.querySelectorAll<HTMLElement>(".file-list > li");
-    expect(within(rows[0]).getByRole("img", { name: "Important" })).toBeInTheDocument(); // the row only shows it
-    expect(within(rows[0]).queryByRole("button", { name: "Important (click to unmark)" })).toBeNull();
     // the toggle is in the toolbar of the shown file's preview
     expect(within(panel).getByRole("button", { name: "Important (click to unmark)" })).toBeInTheDocument();
-    await user.click(within(panel).getByRole("button", { name: "Add file…" }));
+    await user.click(within(panel).getByRole("button", { name: "Add another file…" }));
     await user.type(within(panel).getByLabelText("Find a file"), "meter");
     const hit = (await within(panel).findByRole("button", { name: /meter\.pdf/ })).closest("li")!;
     expect(within(hit).getByRole("img", { name: "Starred" })).toBeInTheDocument();
@@ -757,37 +793,56 @@ describe("Bill view", () => {
     expect(within(panel).getByText(BARCODE_CODE)).toBeInTheDocument();
   });
 
-  it("Note puts the focus in the note", async () => {
-    const { user } = renderTrays("/trays/to-pay?item=1");
+  it("has no Note button (the note is on the page), and every action button has a tooltip", async () => {
+    renderTrays("/trays/to-pay?item=1", {
+      "GET /api/items/1/files": { body: [{ ...NORTHPOWER_FILE, drive_id: "i1", path: "##. Organize/x.pdf", in_inbox: true }] },
+    });
     const panel = await screen.findByRole("region", { name: "Item" });
-    await user.click(await within(panel).findByRole("button", { name: "Note" }));
-    expect(within(panel).getByLabelText("Note (optional)")).toHaveFocus();
+    const done = await within(panel).findByRole("button", { name: "Mark paid" });
+    expect(within(panel).queryByRole("button", { name: "Note" })).not.toBeInTheDocument();
+    expect(done).toHaveAttribute("data-tip", "Mark this item done; it moves to the Done list");
+    expect(within(panel).getByRole("button", { name: "Mark paid and file…" })).toHaveAttribute(
+      "data-tip",
+      "Mark this item done, then open its file in the Inbox to file it",
+    );
   });
 
-  it("Mark paid & file it…: done, then the inbox with the file selected when it is still in the inbox", async () => {
+  it("Mark done is the default label; Done and file… is offered only while a file is in the inbox", async () => {
+    renderTrays("/trays/to-action?item=4");
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await within(panel).findByRole("button", { name: "Mark done" });
+    expect(within(panel).queryByRole("button", { name: /and file/ })).not.toBeInTheDocument();
+  });
+
+  it("the selected file's actions are on the action row: Ask AI, Move to To Delete and Take this file off", async () => {
+    renderTrays("/trays/to-pay?item=1");
+    const panel = await screen.findByRole("region", { name: "Item" });
+    const mine = await within(panel).findByRole("group", { name: "This file" });
+    expect(within(mine).getByRole("button", { name: "Ask AI" })).toBeInTheDocument();
+    expect(within(mine).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
+    expect(within(mine).getByRole("button", { name: /^Take this file off the item/ })).toBeInTheDocument();
+    expect(mine.parentElement).toContainElement(within(panel).getByRole("button", { name: "Mark paid" }));
+  });
+
+  it("Mark paid and file…: done, then the inbox with the file selected when it is still in the inbox", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
       "GET /api/items/1/files": { body: [FILES[1], { ...NORTHPOWER_FILE, drive_id: "i1", path: "##. Organize/x.pdf", in_inbox: true }] },
     });
     const panel = await screen.findByRole("region", { name: "Item" });
-    await user.click(await within(panel).findByRole("button", { name: "Mark paid & file it…" }));
+    await user.click(await within(panel).findByRole("button", { name: "Mark paid and file…" }));
     const form = within(panel).getByRole("form", { name: "Mark paid" });
-    await user.click(within(form).getByRole("button", { name: "Mark paid & file it…" }));
+    await user.click(within(form).getByRole("button", { name: "Mark paid and file…" }));
     await waitFor(() => expect(where()).toBe("/inbox?file=i1"));
     expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(1);
     expect(screen.getByText("Inbox screen")).toBeInTheDocument();
   });
 
-  it("Mark paid & file it… on a filed file: done, and a toast says there is nothing to file", async () => {
-    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
-      "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
-    });
+  it("Mark paid and file… is not offered when no file of the item is in the inbox", async () => {
+    renderTrays("/trays/to-pay?item=1");
     const panel = await screen.findByRole("region", { name: "Item" });
-    await user.click(await within(panel).findByRole("button", { name: "Mark paid & file it…" }));
-    await user.keyboard("{Enter}");
-    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(1));
-    expect(await screen.findByText("Nothing to file: Northpower sähkö has no file left in the inbox.")).toBeInTheDocument();
-    expect(where()).toBe("/trays/to-pay?item=1");
+    await within(panel).findByRole("button", { name: "Mark paid" });
+    expect(within(panel).queryByRole("button", { name: "Mark paid and file…" })).not.toBeInTheDocument();
   });
 
   it("a non-bill tray has no payment details or barcode", async () => {
@@ -796,12 +851,11 @@ describe("Bill view", () => {
     await within(panel).findByRole("heading", { name: "Water pipe inspection" });
     expect(within(panel).queryByRole("list", { name: "Payment details" })).not.toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith("/barcode"))).toBe(false);
-    expect(within(panel).getByRole("button", { name: "Done & file it…" })).toBeInTheDocument();
   });
 });
 
 describe("To action and To read", () => {
-  it("To action shows its date and checklist up top", async () => {
+  it("To action shows its title and date fields first, then the summary, with the date and checklist up top", async () => {
     renderTrays("/trays/to-action?item=4");
     const panel = await screen.findByRole("region", { name: "Item" });
     const when = await within(panel).findByRole("group", { name: "Due" });
@@ -809,7 +863,10 @@ describe("To action and To read", () => {
     expect(within(when).getByText("in 3 days")).toHaveClass("tag-orange");
     const checklist = await within(panel).findByRole("region", { name: "Checklist" });
     const title = within(panel).getByLabelText("Title");
-    expect(checklist.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // the title and date come before the summary and the checklist
+    expect(title.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const summary = within(panel).getByRole("region", { name: "Summary" });
+    expect(title.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(await within(checklist).findByText("Check meter")).toBeInTheDocument();
   });
 
@@ -1122,19 +1179,19 @@ describe("Tray defaults update", () => {
 
 describe("Trash on a tray item's files", () => {
   const quarantines = (calls: Call[]) => sent(calls, "POST", "/api/quarantine").map((c) => c.body);
-  const rows = (panel: HTMLElement) => panel.querySelectorAll<HTMLElement>(".file-list > li");
 
-  it("a file row's bin moves that file to ##. To Delete through the confirm; Undo restores; one in ##. To Delete has none", async () => {
+  it("the action row's bin moves the shown file to ##. To Delete through the confirm; Undo restores; one in ##. To Delete has none", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/quarantine": quarantineRoute({ f1: NORTHPOWER_FILE.path! }),
       "POST /api/activity/q1/undo/preview": { body: [] },
       "POST /api/activity/q1/undo": { body: { batch_id: "u1", dry_run: false, done: [], failed: null, error: null, index_error: null } },
     });
     const panel = await screen.findByRole("region", { name: "Item" });
-    await within(panel).findByRole("tablist", { name: "Files" });
-    const [northpower, receipt] = rows(panel);
-    expect(within(receipt).queryByRole("button", { name: "Move to To Delete" })).toBeNull();
-    await user.click(within(northpower).getByRole("button", { name: "Move to To Delete" }));
+    const tabs = await within(panel).findByRole("tablist", { name: "Files" });
+    await user.click(within(tabs).getByRole("tab", { name: /receipt\.png/ }));
+    await waitFor(() => expect(within(panel).queryByRole("button", { name: "Move to To Delete" })).toBeNull());
+    await user.click(within(tabs).getByRole("tab", { name: /northpower\.pdf/ }));
+    await user.click(await within(panel).findByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     await user.click(within(dialog).getByRole("button", { name: "Move to To Delete" }));
     await user.click(await screen.findByRole("button", { name: "Undo" }));
@@ -1146,13 +1203,13 @@ describe("Trash on a tray item's files", () => {
     ]);
   });
 
-  it("⌘⌫ on a focused file row trashes that file (a plain ⌫ does not); a file marked Important is refused with the reason", async () => {
+  it("⌘⌫ with the focus on the action row trashes the shown file (a plain ⌫ does not); a file marked Important is refused with the reason", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/quarantine": IMPORTANT_REFUSED(NORTHPOWER_FILE.path!),
     });
     const panel = await screen.findByRole("region", { name: "Item" });
     await within(panel).findByRole("tablist", { name: "Files" });
-    within(rows(panel)[0]).getByRole("button", { name: "Remove northpower.pdf" }).focus();
+    (await within(panel).findByRole("button", { name: /^Take this file off the item/ })).focus();
     await user.keyboard("{Backspace}");
     await new Promise((r) => setTimeout(r, 10));
     expect(quarantines(calls)).toHaveLength(0);

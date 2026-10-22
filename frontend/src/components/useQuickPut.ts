@@ -55,10 +55,11 @@ export function useQuickPut() {
     });
   };
 
-  /** Put ``ids`` in the tray; resolves when the toast is shown. */
-  const put = async ({ tray, trayName: rawTray, ids, name, fields }: QuickPut) => {
+  /** Put ``ids`` in the tray; resolves when the toast is shown, with the items created
+   * (none: all were in the tray already, or it failed). */
+  const put = async ({ tray, trayName: rawTray, ids, name, fields }: QuickPut): Promise<Item[]> => {
     const key = `${tray}\n${ids.join("\n")}`;
-    if (putting.current.has(key)) return;
+    if (putting.current.has(key)) return [];
     putting.current.add(key);
     const trayName = visible(rawTray);
     const what = ids.length === 1 && name !== null ? visible(name) : plural(ids.length, "file");
@@ -68,7 +69,7 @@ export function useQuickPut() {
       const { created, skipped } = result;
       if (created.length === 0) {
         toast({ kind: "info", text: `${what}: already in ${trayName}`, actions: [openTray] });
-        return;
+        return [];
       }
       const back = { label: "Undo", run: () => void takeBack(created, trayName) };
       if (ids.length === 1 && created.length === 1) {
@@ -78,7 +79,7 @@ export function useQuickPut() {
           text: `Put in ${trayName}: ${visible(item.title)}`,
           actions: [{ label: "Open", run: () => navigate(`/trays/${enc(tray)}?item=${item.id}`) }, back],
         });
-        return;
+        return created;
       }
       const already = skipped.length > 0 ? ` (${skipped.length} already in it)` : "";
       toast({
@@ -86,8 +87,10 @@ export function useQuickPut() {
         text: `Put ${plural(created.length, "file")} in ${trayName}${already}`,
         actions: [openTray, back],
       });
+      return created;
     } catch (err) {
       toast({ kind: "error", text: `Could not put ${what} in ${trayName}: ${visible(errorText(err))}` });
+      return [];
     } finally {
       putting.current.delete(key);
     }

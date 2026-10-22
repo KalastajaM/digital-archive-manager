@@ -18,13 +18,14 @@ import { Segmented } from "../components/ui/Segmented";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { Toolbar } from "../components/ui/Toolbar";
 import { UrgencyTag } from "../components/UrgencyTag";
+import { useQuickPut } from "../components/useQuickPut";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { dayOf, formatField, formatMoney, plural } from "../format";
 import { isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
 import { setDragFiles } from "../dnd";
 import { publishSelection } from "../selection";
 import { visible } from "../text";
-import ItemDetail, { type DoneMode, doneFieldsText, itemKind, ReopenButton } from "./ItemDetail";
+import ItemDetail, { AddFile, type DoneMode, doneFieldsText, itemKind, ReopenButton } from "./ItemDetail";
 import { MarkIcons } from "../components/MarkIcons";
 
 /** Where the done form is open: the item, and which button opened it. */
@@ -140,6 +141,9 @@ export default function Trays({ today: fixed }: { today?: string }) {
   const list = useMemo(() => (trayId ? (items.data ?? []) : []), [trayId, items.data]);
   const opened = Number(search.get("item")) || null;
   const [doneAt, setDoneAt] = useState<DoneAt>(null);
+  // "Add file": search the index and put the chosen file in this tray as a new item
+  const [addingFile, setAddingFile] = useState(false);
+  const quickPut = useQuickPut();
   const listRef = useRef<HTMLUListElement>(null);
   const focusRow = useRef(false);
   // A done form belongs to the item it was opened on: another item closes it, so coming
@@ -318,6 +322,16 @@ export default function Trays({ today: fixed }: { today?: string }) {
           title={visible(tray?.name ?? trayId)}
           subtitle={subtitle}
           actions={
+            <>
+            <button
+              type="button"
+              data-tip="Add another file to the tray"
+              disabled={!tray}
+              aria-expanded={addingFile}
+              onClick={() => setAddingFile((a) => !a)}
+            >
+              Add file
+            </button>
             <Segmented
               ariaLabel="Show"
               value={state}
@@ -327,8 +341,20 @@ export default function Trays({ today: fixed }: { today?: string }) {
                 { value: "done", label: "Done" },
               ]}
             />
+            </>
           }
         />
+        {addingFile && tray && (
+          <AddFile
+            taken={list.flatMap((i) => i.files)}
+            choose={async (hit) => {
+              const [created] = await quickPut.put({ tray: tray.id, trayName: tray.name, ids: [hit.drive_id], name: hit.name });
+              // the new item is open in the panel (it is in the open list, so show that)
+              if (created) setSearch(query("open", created.id));
+            }}
+            onDone={() => setAddingFile(false)}
+          />
+        )}
         {trays.data.errors.map((e) => (
           <p key={e.file} className="hint tray-error">
             Tray file skipped — {visible(e.file)}: {visible(e.message)}

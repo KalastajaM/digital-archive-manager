@@ -1,10 +1,10 @@
 /** One tray item: its files (preview), title and fields (saved on blur or Enter), note,
- * checklist, history, and Done/Reopen. A bill (a tray with an IBAN field) leads with its
+ * checklist, history, and Mark done/Reopen. A bill (a tray with an IBAN field) leads with its
  * amount, copy rows and the bank barcode; a dated item with its date and checklist; an
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Unlink, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -38,7 +38,7 @@ import { useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
 import { UrgencyTag } from "../components/UrgencyTag";
 import { useAutoSave } from "../components/useAutoSave";
-import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, groupIban } from "../format";
+import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, groupIban, plural } from "../format";
 import { visible } from "../text";
 import { useSearch } from "./useSearch";
 import { FileMeta } from "../components/FileMeta";
@@ -151,21 +151,33 @@ function Fields({ item, tray }: { item: Item; tray: TrayDef | undefined }) {
   );
 }
 
-/** "Add file…": search the index and add a hit to the item (the file stays put). */
-function AddFile({ item, onDone }: { item: Item; onDone: () => void }) {
+/** Search the index and choose a hit (``choose`` does what choosing means: attach the
+ * file to an item, or put it in a tray; the file stays put either way). ``taken``: hits
+ * to leave out. Esc closes it. */
+export function AddFile({
+  taken,
+  choose,
+  onDone,
+}: {
+  taken: string[];
+  choose: (hit: { drive_id: string; name: string }) => Promise<unknown>;
+  onDone: () => void;
+}) {
   const id = useId();
   const [query, setQuery] = useState("");
   const search = useSearch(query.trim());
-  const change = useItemFileChange();
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hits = (search.hits ?? []).filter((h) => !item.files.includes(h.drive_id));
-  const add = async (driveId: string) => {
+  const hits = (search.hits ?? []).filter((h) => !taken.includes(h.drive_id));
+  const add = async (hit: { drive_id: string; name: string }) => {
     setError(null);
+    setBusy(true);
     try {
-      await change.mutateAsync({ id: item.id, driveId });
+      await choose(hit);
       onDone();
     } catch (e) {
       setError(errorText(e));
+      setBusy(false);
     }
   };
   return (
@@ -181,6 +193,7 @@ function AddFile({ item, onDone }: { item: Item; onDone: () => void }) {
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.preventDefault();
+            e.stopPropagation();
             onDone();
           }
         }}
@@ -195,7 +208,7 @@ function AddFile({ item, onDone }: { item: Item; onDone: () => void }) {
         <ul className="entries">
           {hits.map((h) => (
             <li key={h.drive_id}>
-              <button type="button" className="entry" disabled={change.isPending} onClick={() => void add(h.drive_id)}>
+              <button type="button" className="entry" disabled={busy} onClick={() => void add(h)}>
                 <span className="entry-name">Add {visible(h.name)}</span>
                 <MarkIcons marks={h.marks} />
                 <code className="entry-path">{visible(h.path)}</code>
@@ -213,122 +226,8 @@ function AddFile({ item, onDone }: { item: Item; onDone: () => void }) {
   );
 }
 
-function Files({ item }: { item: Item }) {
-  const files = useItemFiles(item.id);
-  const change = useItemFileChange();
-  const [tab, setTab] = useState(0);
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const list = files.data ?? [];
-  const shown: ItemFile | undefined = list[Math.min(tab, list.length - 1)];
-  const nameOf = (f: ItemFile) => visible(f.path ? baseName(f.path) : f.drive_id);
-  // Trash (the row's bin, ⌘⌫ on a focused row): that file. It stays one of the item's
-  // files, shown as in ##. To Delete; Undo puts it back.
-  const trash = useTrash();
-  const toast = useToast();
-  const canTrash = (f: ItemFile) => !!f.path && f.state === "ok";
-  const trashFile = (f: ItemFile) => {
-    if (!canTrash(f)) return;
-    const refusal = deletionRefusal(f.path!, f.marks);
-    if (refusal) toast({ kind: "info", text: refusal });
-    else trash.start([f.drive_id]);
-  };
-  const listRef = useRef<HTMLUListElement>(null);
-  useKeydown((e) => {
-    if (!isTrashKey(e) || !(e.target instanceof Element)) return;
-    const row = e.target.closest<HTMLElement>("li[data-file]");
-    if (!row || !listRef.current?.contains(row)) return;
-    const f = list.find((x) => x.drive_id === row.dataset.file);
-    if (!f) return;
-    e.preventDefault();
-    trashFile(f);
-  });
-
-  const remove = async (f: ItemFile) => {
-    setError(null);
-    try {
-      await change.mutateAsync({ id: item.id, driveId: f.drive_id, remove: true });
-    } catch (e) {
-      setError(errorText(e));
-    }
-  };
-
-  return (
-    <div className="item-files">
-      {files.isError && (
-        <p className="error" role="alert">
-          Could not load the files. {visible(errorText(files.error))}
-        </p>
-      )}
-      {list.length > 1 && (
-        <div className="tabs" role="tablist" aria-label="Files">
-          {list.map((f, i) => (
-            <button
-              key={f.drive_id}
-              type="button"
-              role="tab"
-              aria-selected={f === shown}
-              onClick={() => setTab(i)}
-            >
-              {nameOf(f)}
-              <MarkIcons marks={f.marks} />
-            </button>
-          ))}
-        </div>
-      )}
-      <ul ref={listRef} className="file-list">
-        {list.map((f) => (
-          <li key={f.drive_id} data-file={f.drive_id}>
-            <code>{visible(f.path ?? f.drive_id)}</code>
-            {/* the ★ / ! toggles are in the shown file's preview toolbar */}
-            <MarkIcons marks={f.marks} />
-            {FILE_BADGE[f.state] && <span className="badge badge-error">{FILE_BADGE[f.state]}</span>}
-            {canTrash(f) && (
-              <TrashButton disabled={trash.busy} disabledReason={deletionRefusal(f.path!, f.marks)} onClick={() => trashFile(f)} />
-            )}
-            <button
-              type="button"
-              aria-label={`Remove ${nameOf(f)}`}
-              disabled={change.isPending}
-              onClick={() => void remove(f)}
-            >
-              Remove
-            </button>
-          </li>
-        ))}
-      </ul>
-      {error && (
-        <p className="error" role="alert">
-          {visible(error)}
-        </p>
-      )}
-      {adding ? (
-        <AddFile item={item} onDone={() => setAdding(false)} />
-      ) : (
-        <div className="actions">
-          <button type="button" onClick={() => setAdding(true)}>
-            Add file…
-          </button>
-        </div>
-      )}
-      {shown?.path &&
-        (shown.state === "missing" ? (
-          <p className="notice">This file is missing from the archive.</p>
-        ) : (
-          <FileMeta key={shown.drive_id} file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }} disabled={trash.busy}>
-            {(meta) => (
-              <>
-                {meta.header}
-                <FilePreview file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }} extraTools={meta.marks} />
-                {meta.tags}
-              </>
-            )}
-          </FileMeta>
-        ))}
-      {trash.view}
-    </div>
-  );
-}
+const ADD_FILE_TIP =
+  "Attach another file to this item, such as a reminder or a reply. They share one title, date and checklist and are marked done together. The file is not moved.";
 
 /** The summary box of the item's first file (spec §7.2), with a file selector when the
  * item has several. With no file there is nothing to summarize (no AI button). */
@@ -463,7 +362,7 @@ export function itemKind(tray: TrayDef | undefined): ItemKind {
   return tray?.date_field ? "dated" : "waiting";
 }
 
-/** Done from the button (``done``) or "<done label> & file it…" (``file``). */
+/** Done from the button (``done``) or "<done label> and file…" (``file``). */
 export type DoneMode = "done" | "file";
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && v !== "";
@@ -546,16 +445,7 @@ function PaymentDetails({ item, tray, today }: { item: Item; tray: TrayDef; toda
   );
 }
 
-export default function ItemDetail({
-  id,
-  trays,
-  today,
-  done: doneMode,
-  setDone,
-  onClose,
-  onQuickLook,
-}: {
-  id: number;
+type ItemProps = {
   trays: Map<string, TrayDef>;
   today: string;
   /** The done form is open (and for which button), or not. */
@@ -564,15 +454,10 @@ export default function ItemDetail({
   onClose: () => void;
   /** Opens Quick Look on the item's file (the tray list's). */
   onQuickLook?: () => void;
-}) {
+};
+
+export default function ItemDetail({ id, ...rest }: ItemProps & { id: number }) {
   const query = useItem(id);
-  const files = useItemFiles(id);
-  const client = useQueryClient();
-  const navigate = useNavigate();
-  const toast = useToast();
-  const noteRef = useRef<HTMLDivElement>(null);
-  const filing = useRef(false); // synchronous: one look for the inbox file per done
-  const headingId = useId();
   if (query.isPending) return <p>Loading…</p>;
   if (query.isError) {
     return (
@@ -581,12 +466,58 @@ export default function ItemDetail({
       </p>
     );
   }
-  const item = query.data;
+  return <ItemBody item={query.data} {...rest} />;
+}
+
+/** "Mark done" unless the tray names its own done label ("Mark paid"). */
+const markLabel = (doneLabel: string) => (doneLabel === "Done" ? "Mark done" : doneLabel);
+
+function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuickLook }: ItemProps & { item: Item }) {
+  const files = useItemFiles(item.id);
+  const change = useItemFileChange();
+  const client = useQueryClient();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const filing = useRef(false); // synchronous: one look for the inbox file per done
+  const headingId = useId();
+  const [tab, setTab] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const list = files.data ?? [];
+  const shown: ItemFile | undefined = list[Math.min(tab, list.length - 1)];
+  const nameOf = (f: ItemFile) => visible(f.path ? baseName(f.path) : f.drive_id);
+  // Trash (the action row's bin, ⌘⌫ with the focus on that row): the shown file. It stays
+  // one of the item's files, shown as in ##. To Delete; Undo puts it back.
+  const trash = useTrash();
+  const canTrash = (f: ItemFile) => !!f.path && f.state === "ok";
+  const trashFile = (f: ItemFile) => {
+    if (!canTrash(f)) return;
+    const refusal = deletionRefusal(f.path!, f.marks);
+    if (refusal) toast({ kind: "info", text: refusal });
+    else trash.start([f.drive_id]);
+  };
+  useKeydown((e) => {
+    if (!isTrashKey(e) || !(e.target instanceof Element) || !shown) return;
+    if (!actionsRef.current?.contains(e.target)) return;
+    e.preventDefault();
+    trashFile(shown);
+  });
+  const takeOff = async (f: ItemFile) => {
+    setFileError(null);
+    try {
+      await change.mutateAsync({ id: item.id, driveId: f.drive_id, remove: true });
+    } catch (e) {
+      setFileError(errorText(e));
+    }
+  };
+
   const tray = trays.get(item.tray_id);
   const kind = itemKind(tray);
   const doneLabel = tray?.done?.label ?? "Done";
-  // the same words on the button and on the form's submit ("Mark paid & file it…")
-  const fileLabel = `${doneLabel} & file it…`;
+  // the same words on the button and on the form's submit ("Mark paid and file…")
+  const doneText = markLabel(doneLabel);
+  const fileLabel = `${doneText} and file…`;
   const dateField = tray?.date_field;
   const needsDate =
     item.state === "open" &&
@@ -594,11 +525,12 @@ export default function ItemDetail({
     (item.missing_required.includes(dateField) || item.invalid_fields.includes(dateField));
   const amount = amountField(tray);
   const amountValue = amount ? item.fields[amount] : undefined;
-  const firstPath = files.data?.find((f) => f.path)?.path;
+  const firstPath = list.find((f) => f.path)?.path;
   const open = item.state === "open";
+  const anyInInbox = list.some((f) => f.in_inbox);
 
-  /** After "<done label> & file it…": the inbox with the item's file selected, if one is still
-   * there; else say there is nothing to file. */
+  /** After "<done> and file…": the inbox with the item's file selected, if one is still
+   * there; else say there is nothing to file. The file is filed from the inbox, not here. */
   const fileIt = async () => {
     if (filing.current) return;
     filing.current = true;
@@ -613,12 +545,69 @@ export default function ItemDetail({
       filing.current = false;
     }
   };
-  const focusNote = () => {
-    const note = noteRef.current?.querySelector("textarea");
-    note?.focus();
-    note?.scrollIntoView({ block: "nearest" });
-  };
   const checklist = <Checklist kind="item" target={String(item.id)} />;
+
+  const addLabel = list.length > 0 ? "Add another file…" : "Add a file…";
+  const addButton = (
+    <button
+      type="button"
+      className="link-button"
+      data-tip={ADD_FILE_TIP}
+      aria-expanded={adding}
+      onClick={() => setAdding((a) => !a)}
+    >
+      {addLabel}
+    </button>
+  );
+
+  /** Mark done / Done and file…, and the shown file's own actions (``ask`` is its Ask AI). */
+  const actionRow = (ask?: ReactNode) => (
+    <div className="item-actions" ref={actionsRef}>
+      {open && !doneMode && (
+        <>
+          <button
+            type="button"
+            className="primary"
+            data-tip="Mark this item done; it moves to the Done list"
+            disabled={tray === undefined}
+            onClick={() => setDone("done")}
+          >
+            {visible(doneText)}
+          </button>
+          {anyInInbox && (
+            <button
+              type="button"
+              data-tip="Mark this item done, then open its file in the Inbox to file it"
+              disabled={tray === undefined}
+              onClick={() => setDone("file")}
+            >
+              {visible(fileLabel)}
+            </button>
+          )}
+        </>
+      )}
+      {shown && (
+        <span className="item-file-actions" role="group" aria-label="This file">
+          {ask}
+          {canTrash(shown) && (
+            <TrashButton
+              disabled={trash.busy}
+              disabledReason={deletionRefusal(shown.path!, shown.marks)}
+              onClick={() => trashFile(shown)}
+            />
+          )}
+          <IconButton
+            icon={<Unlink />}
+            label="Take this file off the item (the file stays where it is)"
+            disabled={change.isPending}
+            onClick={() => void takeOff(shown)}
+          />
+        </span>
+      )}
+    </div>
+  );
+
+  const fields = <Fields key={item.id} item={item} tray={tray} />;
 
   return (
     <div className={`item-detail item-${kind}`}>
@@ -651,12 +640,49 @@ export default function ItemDetail({
         )}
         <IconButton icon={<X />} label="Close" onClick={onClose} />
       </header>
+      {files.isError && (
+        <p className="error" role="alert">
+          Could not load the files. {visible(errorText(files.error))}
+        </p>
+      )}
+      {/* one file: a count and the way to attach another; several: the files as tabs */}
+      {list.length > 1 ? (
+        <div className="item-files-line">
+          <div className="tabs" role="tablist" aria-label="Files">
+            {list.map((f, i) => (
+              <button key={f.drive_id} type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
+                {nameOf(f)}
+                <MarkIcons marks={f.marks} />
+                {FILE_BADGE[f.state] && <span className="badge badge-error">{FILE_BADGE[f.state]}</span>}
+              </button>
+            ))}
+          </div>
+          {addButton}
+        </div>
+      ) : (
+        files.isSuccess && (
+          <p className="item-files-line">
+            <span>{plural(list.length, "file")}</span>
+            {list.length === 1 && FILE_BADGE[list[0].state] && <span className="badge badge-error">{FILE_BADGE[list[0].state]}</span>}
+            <span aria-hidden="true">·</span>
+            {addButton}
+          </p>
+        )
+      )}
+      {adding && (
+        <AddFile
+          taken={item.files}
+          choose={(hit) => change.mutateAsync({ id: item.id, driveId: hit.drive_id })}
+          onDone={() => setAdding(false)}
+        />
+      )}
       <ItemBadges
         level={needsDate ? "undated" : null}
         missingRequired={open ? item.missing_required : []}
         dateField={dateField}
         fileState="ok"
       />
+      {kind === "dated" && fields}
       {kind === "dated" && item.date && (
         <div className="item-when" role="group" aria-label={visible(fieldLabel(dateField ?? "date"))}>
           <span className="item-when-label">{visible(fieldLabel(dateField ?? "date"))}</span>
@@ -681,35 +707,54 @@ export default function ItemDetail({
           {item.done_fields && Object.keys(item.done_fields).length > 0 && ` · ${visible(doneFieldsText(item, tray))}`}{" "}
           <ReopenButton item={item} />
         </p>
-      ) : doneMode ? (
-        <DoneForm
-          item={item}
-          label={doneLabel}
-          submitLabel={doneMode === "file" ? fileLabel : undefined}
-          fields={tray?.done?.fields ?? {}}
-          today={today}
-          onClose={() => setDone(null)}
-          onDone={doneMode === "file" ? () => void fileIt() : undefined}
-        />
       ) : (
-        <div className="item-actions">
-          <button type="button" className="primary" disabled={tray === undefined} onClick={() => setDone("done")}>
-            {visible(doneLabel)}
-          </button>
-          <button type="button" disabled={tray === undefined} onClick={() => setDone("file")}>
-            {visible(fileLabel)}
-          </button>
-          <button type="button" onClick={focusNote}>
-            Note
-          </button>
-        </div>
+        doneMode && (
+          <DoneForm
+            item={item}
+            label={doneText}
+            submitLabel={doneMode === "file" ? fileLabel : undefined}
+            fields={tray?.done?.fields ?? {}}
+            today={today}
+            onClose={() => setDone(null)}
+            onDone={doneMode === "file" ? () => void fileIt() : undefined}
+          />
+        )
       )}
-      {kind === "dated" && checklist}
-      <Files item={item} />
-      <Fields key={item.id} item={item} tray={tray} />
-      <div ref={noteRef}>
-        <SavedNote kind="item" target={String(item.id)} />
+      {/* not before the files are known: the action row is rebuilt when the shown file is first found */}
+      <div className="item-files">
+        {files.isPending ? null : shown?.path && shown.state !== "missing" ? (
+          <FileMeta key={shown.drive_id} file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }} disabled={trash.busy}>
+            {(meta) => (
+              <>
+                {actionRow(meta.ask)}
+                {fileError && (
+                  <p className="error" role="alert">
+                    {visible(fileError)}
+                  </p>
+                )}
+                {kind === "dated" && checklist}
+                {meta.header}
+                <FilePreview file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }} extraTools={meta.marks} />
+                {meta.tags}
+              </>
+            )}
+          </FileMeta>
+        ) : (
+          <>
+            {actionRow()}
+            {fileError && (
+              <p className="error" role="alert">
+                {visible(fileError)}
+              </p>
+            )}
+            {kind === "dated" && checklist}
+            {shown?.state === "missing" && <p className="notice">This file is missing from the archive.</p>}
+          </>
+        )}
+        {trash.view}
       </div>
+      {kind !== "dated" && fields}
+      <SavedNote kind="item" target={String(item.id)} />
       {kind !== "dated" && checklist}
       <History item={item} tray={tray} today={today} />
     </div>
