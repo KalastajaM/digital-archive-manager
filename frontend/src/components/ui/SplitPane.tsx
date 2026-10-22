@@ -4,7 +4,8 @@
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject, useRef, useState } from "react";
 
 export type SplitOptions = {
-  /** Smallest and largest width, in ``unit``. */
+  /** Smallest and largest width, in ``unit``. ``max`` may be ``Infinity`` (px): then only
+   * the other pane's minimum limits it. */
   min: number;
   max: number;
   /** The width when nothing is remembered, and the one a double-click restores. */
@@ -121,7 +122,7 @@ export function Splitter({ split, label }: { split: Split; label: string }) {
       aria-orientation="vertical"
       aria-label={label}
       aria-valuemin={opts.min}
-      aria-valuemax={opts.max}
+      aria-valuemax={Number.isFinite(opts.max) ? opts.max : undefined}
       aria-valuenow={width}
       tabIndex={0}
       title="Drag to resize, double-click to reset"

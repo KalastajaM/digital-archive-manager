@@ -4,7 +4,7 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleMinus, Eye, Unlink, X } from "lucide-react";
+import { ArrowRightLeft, CircleMinus, Eye, Unlink, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -654,22 +654,14 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       </>
     ) : null;
 
-  /** Move / Remove from tray, and the shown file's own actions (``ask`` is its Ask AI). */
+  /** Quick Look, Move to / Remove from tray, then the shown file's own actions (``ask`` is
+   * its Ask AI): one cluster of icons at the right. */
   const actionRow = (ask?: ReactNode) => (
     <div className="item-actions" ref={actionsRef}>
       <span className="item-tray-actions" role="group" aria-label="This item">
-        {open && (
-          // The pull-down shows no tooltip of its own; the wrapper carries it.
-          <span className="button-wrap" data-tip="Move this item to another tray">
-            <Menu
-              label="Move to tray"
-              text="Move to tray"
-              icon={null}
-              className="file-action-menu"
-              entries={moveEntries}
-            />
-          </span>
-        )}
+        {onQuickLook && firstPath && <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
+        {/* also by dragging the item onto a tray in the sidebar; this is the way without a mouse */}
+        {open && <Menu label="Move to tray" icon={<ArrowRightLeft />} entries={moveEntries} align="end" />}
         {/* Not a bin: removing from the tray deletes nothing (the bin is To Delete). */}
         <IconButton
           icon={<CircleMinus />}
@@ -743,7 +735,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             {item.invalid_fields.includes(amount!) ? visible(amountValue) : visible(formatMoney(amountValue))}
           </div>
         )}
-        {onQuickLook && firstPath && <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
         <IconButton icon={<X />} label="Close" onClick={onClose} />
       </header>
       {files.isError && (

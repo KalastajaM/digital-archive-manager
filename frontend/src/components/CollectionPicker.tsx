@@ -1,6 +1,7 @@
 import { Ellipsis } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { errorText, useCollections, useCollectionsWithMarked } from "../api/client";
+import { BUILTIN_LABEL } from "./MarkIcons";
 import { visible } from "../text";
 import { CollectionBrowser } from "./CollectionBrowser";
 import { pathLabel } from "./collectionTree";
@@ -23,7 +24,6 @@ export function pendingCollection(text: string): string | null {
 
 type Option = { kind: "existing" | "create" | "all" | "marked"; name: string; label: string };
 
-const MARK_GLYPH = { starred: "★", important: "!" } as const;
 
 type Props = {
   value: string[];
@@ -42,7 +42,7 @@ type Props = {
   autoFocus?: boolean;
   /** Esc in the field when its list is closed (a picker opened from a button). */
   onEscape?: () => void;
-  /** With ``single``: the built-in ★ Ongoing and ! Important as well, under a "Marked"
+  /** With ``single``: the built-in ★ Starred and ! Important as well, under a "Marked"
    * heading (the Browse collection filter only; every other picker leaves them out). */
   marked?: boolean;
 };
@@ -75,12 +75,12 @@ export function CollectionPicker({
     () => (collections.data ?? []).filter((c) => c.kind == null && c.state === "open"),
     [collections.data],
   );
-  // The built-ins as the server lists them (★ first), "★ Ongoing" and "! Important"
+  // The built-ins as the server lists them (★ first), "★ Starred" and "! Important"
   const markedRows = useMemo((): Option[] => {
     if (!marked) return [];
     const rows = (collections.data ?? []).filter((c) => c.kind != null);
     rows.sort((a, b) => (a.kind === "starred" ? 0 : 1) - (b.kind === "starred" ? 0 : 1));
-    return rows.map((c) => ({ kind: "marked", name: c.name, label: `${MARK_GLYPH[c.kind!]} ${c.name}` }));
+    return rows.map((c) => ({ kind: "marked", name: c.name, label: BUILTIN_LABEL[c.kind!] }));
   }, [marked, collections.data]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);

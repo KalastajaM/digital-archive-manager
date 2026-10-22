@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CollectionChange, CollectionRow, DirEntry, FileLinks, Item, ResolvedOp, SearchHit, TrayDef } from "../api/client";
 import { type Call, dataTransfer, deferred, IMPORTANT_REFUSED, mockFetch, quarantineRoute, renderWithProviders, undoButton } from "../test-utils";
 import { FILES_MOVED_EVENT } from "../components/MoveTo";
-import Browse from "./Browse";
+import Browse, { folderCollectRefusal } from "./Browse";
 
 function dir(path: string, drive_id = `id-${path}`): DirEntry {
   return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id, marks: [] };
@@ -550,6 +550,66 @@ describe("Selected file", () => {
     ]);
   });
 
+  it("a folder on the cursor shows its own panel: its path, its collections and Add to collection", async () => {
+    const { calls, user } = setup("10. Financial", {
+      "GET /api/files/id-10.%20Financial%2FBanks/links": { body: { items: [], collections: [SAUNA], note: "" } },
+      "POST /api/collections/7/members": { body: { collection: SAUNA, batch: null, problems: [] } },
+    });
+    await user.click(await screen.findByRole("button", { name: "Banks" })); // opens the folder
+    await screen.findByText("a.pdf");
+    await user.keyboard("{Backspace}"); // back: the cursor is on Banks
+    const preview = await screen.findByRole("region", { name: "Preview" });
+    expect(await within(preview).findByRole("heading", { level: 2, name: "Banks" })).toBeInTheDocument();
+    expect(preview.querySelector(".current-path")).toHaveTextContent("10. Financial/Banks");
+    expect(within(preview).getByText(/brings everything in it/)).toBeInTheDocument();
+    expect(await within(preview).findByRole("link", { name: "Sauna" })).toBeInTheDocument();
+    expect(within(preview).queryByRole("button", { name: "Put in tray" })).toBeNull(); // a folder: collections only
+    await user.click(within(preview).getByRole("button", { name: "Add to collection…" }));
+    expect(within(preview).getByRole("region", { name: "Add to collection" })).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0); // nothing until a collection is picked
+  });
+
+  it("folders in the app's own areas cannot be added to a collection", () => {
+    const special = { quarantine: "##. To Delete", ongoing: "##. Ongoing", important: "##. Important" };
+    expect(folderCollectRefusal("10. Financial/Banks", special)).toBeNull();
+    expect(folderCollectRefusal("##. To Delete/old", special)).toBe("Folders in ##. To Delete can't be added to a collection");
+    expect(folderCollectRefusal("##. ongoing/Sauna", special)).toBe("Folders in ##. Ongoing can't be added to a collection");
+    expect(folderCollectRefusal("##. Important", special)).toBe("Folders in ##. Important can't be added to a collection");
+  });
+
+  it("a × on a collection badge takes the file out of that collection; Undo adds it back into its group", async () => {
+    const member = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", is_dir: false, missing: false, quarantined: false, group_id: 3, marks: [] };
+    const direct = { ...SAUNA, members: [member] };
+    const { calls, user } = setup("10. Financial/Banks", {
+      "GET /api/files/f1/links": {
+        body: {
+          items: [],
+          collections: [
+            direct,
+            { ...SAUNA, id: 8, name: "Old", state: "closed", members: [member] }, // closed: no ×
+            { ...SAUNA, id: 9, name: "Houses", members: [{ ...member, drive_id: "d1", is_dir: true }] }, // through a folder: no ×
+            { ...SAUNA, id: 10, name: "Ongoing", kind: "starred", members: [member] }, // built in: its ★ toggle does it
+          ],
+          note: "",
+        },
+      },
+      "POST /api/collections/7/members/remove": { body: { collection: SAUNA, batch: null, problems: [] } },
+      "POST /api/collections/7/members": { body: { collection: direct, batch: null, problems: [] } },
+      "POST /api/collections/7/members/group": { body: { collection: direct, batch: null, problems: [] } },
+    });
+    const preview = await openFile(user);
+    const badges = await within(preview).findByRole("list", { name: "In trays and collections" });
+    expect(within(badges).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Remove from Sauna"]);
+    await user.click(within(badges).getByRole("button", { name: "Remove from Sauna" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members/remove")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members/remove")[0].body).toEqual({ drive_id: "f1" });
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members")[0].body).toEqual({ drive_ids: ["f1"] });
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members/group")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members/group")[0].body).toEqual({ drive_ids: ["f1"], group_id: 3 });
+  });
+
   it("Put in tray is a menu of the trays: one pick puts the file in it", async () => {
     const { calls, user } = setup("10. Financial/Banks", {
       "GET /api/trays": { body: { trays: [TO_PAY, TO_READ], errors: [] } },
@@ -797,13 +857,13 @@ describe("Drag and drop in Browse", () => {
     }
   });
 
-  it("files are draggable, folders are not", async () => {
+  it("files drag as files; a folder drags only as a folder (for a collection), never as files", async () => {
     setup("");
     const folder = rowOf(await screen.findByRole("list", { name: "Folder contents" }), "13. Taxes");
-    expect(folder).not.toHaveAttribute("draggable", "true");
+    expect(folder).toHaveAttribute("draggable", "true");
     const dt = dataTransfer();
     fireEvent.dragStart(folder, { dataTransfer: dt });
-    expect(dt.types).toEqual([]);
+    expect(dt.types).toEqual(["application/x-dam-folder"]);
     const file = rowOf(listing(), "readme.txt");
     expect(file).toHaveAttribute("draggable", "true");
     expect(JSON.parse(dragFrom(file).data["application/x-dam-files"])).toEqual({ ids: ["f0"] });
@@ -1181,7 +1241,7 @@ describe("Move to…", () => {
     await user.click(await screen.findByRole("button", { name: "Banks" })); // opens the folder
     await screen.findByText("a.pdf");
     await user.keyboard("{Backspace}");
-    await screen.findByText("Banks");
+    await within(listing()).findByText("Banks");
     expect(screen.getByRole("button", { name: "Move to…" })).toBeDisabled();
     await user.keyboard("{Meta>}{Shift>}m{/Shift}{/Meta}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -1327,7 +1387,7 @@ describe("Collection filter and Files view", () => {
     expect(button).toHaveTextContent("Collection");
     await user.click(button);
     // All files, the built-ins, then the open collections as a tree (Sauna is inside Houses)
-    await waitFor(() => expect(menuItems().map((o) => o.textContent)).toEqual(["✓All files", "★ Ongoing", "! Important", "Houses", "Sauna"]));
+    await waitFor(() => expect(menuItems().map((o) => o.textContent)).toEqual(["✓All files", "★ Starred", "! Important", "Houses", "Sauna"]));
     expect(menuItems()[0]).toHaveAttribute("aria-checked", "true");
     expect(menuItems()[4].style.paddingLeft).toBe("calc(18px)"); // indented under Houses
     await user.click(screen.getByRole("menuitemcheckbox", { name: "Sauna" }));
@@ -1359,10 +1419,10 @@ describe("Collection filter and Files view", () => {
     await screen.findByText("a.pdf");
     expect(await screen.findByRole("button", { name: "Collection: Sauna" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Collection: Sauna" }));
-    await user.click(await screen.findByRole("menuitemcheckbox", { name: "★ Ongoing" }));
+    await user.click(await screen.findByRole("menuitemcheckbox", { name: "★ Starred" }));
     expect(where().get("collection")).toBe("50");
-    expect(await screen.findByRole("button", { name: "Collection: ★ Ongoing" })).toHaveTextContent("★ Ongoing");
-    await user.click(screen.getByRole("button", { name: "Collection: ★ Ongoing" }));
+    expect(await screen.findByRole("button", { name: "Collection: ★ Starred" })).toHaveTextContent("★ Starred");
+    await user.click(screen.getByRole("button", { name: "Collection: ★ Starred" }));
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });

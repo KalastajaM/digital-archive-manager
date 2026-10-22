@@ -565,10 +565,10 @@ main:has(> .inbox) { padding: 0; min-height: 0; display: flex; }
 .preview-fill > .text-figure, .preview-fill > .thumb-figure { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .preview-fill .text-preview, .preview-fill .thumb-frame { flex: 1; min-height: 0; max-height: none; }
 .preview-fill .zoom-frame { --zoom-max: 100%; flex: 1; min-height: 0; max-height: none; }
-/* Browse: the toolbar, the name, the zoom bar and the page bar share the height, so Fit still shows the whole page */
-.browse-preview .zoom-frame { --zoom-max: max(18rem, calc(100vh - 22rem)); }
+/* The file panel (Browse, a collection): the toolbar, the name, the zoom bar and the page bar share the height, so Fit still shows the whole page */
+.file-panel .zoom-frame { --zoom-max: max(18rem, calc(100vh - 22rem)); }
 .zoom-probe { position: absolute; top: 0; left: 0; width: 0; height: var(--zoom-max); visibility: hidden; pointer-events: none; }
-.preview-pane img, .browse-preview img, .quicklook img, .viewer img { height: auto; box-shadow: var(--shadow-card); border-radius: 2px; background: var(--paper); }
+.preview-pane img, .file-panel img, .quicklook img, .viewer img { height: auto; box-shadow: var(--shadow-card); border-radius: 2px; background: var(--paper); }
 /* Browse pane tools (collection filter, Folders/Files) and the Files view */
 .pane-tools { margin-left: auto; display: flex; align-items: center; gap: var(--sp-1); flex: none; }
 .pane-tools .segmented-option { padding: 1px var(--sp-2); }
@@ -829,7 +829,36 @@ main:has(> .activity), main:has(> .ongoing-convert), main:has(> .ask) { padding:
 .activity-body > .banner { margin: 0 0 var(--sp-4); }
 .activity .empty-state, .ongoing-body > .empty-state { margin-top: var(--sp-6); }
 
+/* ---- Help: the guide's contents beside it, each scrolling on its own ---- */
+.app:has(.help) .content { height: 100%; }
+main:has(> .help) { padding: 0; min-height: 0; display: flex; }
+.help { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.help-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 15rem minmax(0, 1fr); }
+.help-toc { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-3) var(--sp-2) var(--sp-8); border-right: 0.5px solid var(--hairline); }
+.help-toc ul { list-style: none; margin: 0; padding: 0; }
+.help-toc a { display: block; padding: 3px var(--sp-2); border-radius: var(--r-sm); color: var(--text-2); text-decoration: none; font-size: var(--fs-md); }
+.help-toc .help-toc-sub a { padding-left: var(--sp-5); color: var(--muted); font-size: var(--fs-sm); }
+.help-toc a:hover { background: var(--hover); }
+.help-toc a[aria-current] { background: var(--selected); color: var(--accent); }
+.help-article { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) var(--sp-6) var(--sp-8); line-height: 1.55; }
+.help-article > * { max-width: 46rem; }
+.help-article h2 { margin: var(--sp-8) 0 var(--sp-2); font-size: var(--fs-xl); scroll-margin-top: var(--sp-4); }
+.help-article h2:first-of-type { margin-top: var(--sp-2); }
+.help-article h3 { margin: var(--sp-5) 0 var(--sp-1); font-size: var(--fs-lg); scroll-margin-top: var(--sp-4); }
+.help-article li + li { margin-top: var(--sp-1); }
+.help-article table { border-collapse: collapse; margin: var(--sp-3) 0; font-size: var(--fs-sm); }
+.help-article th, .help-article td { padding: var(--sp-1) var(--sp-2); border-bottom: 0.5px solid var(--separator); text-align: left; vertical-align: top; }
+.help-article th { color: var(--muted); font-weight: 600; }
+.help-article code { padding: 0 3px; border-radius: var(--r-sm); background: var(--panel-2); }
+@media (max-width: 760px) {
+  .help-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .help-toc { max-height: 30vh; border-right: none; border-bottom: 0.5px solid var(--hairline); }
+}
+
 .activity .toolbar-search { width: 220px; }
+/* The toolbar's and filter bar's lines run full width; their content ends where the
+ * 880px timeline ends (as on the Collections index). */
+.activity > .toolbar, .activity .activity-filters { padding-right: max(var(--sp-5), calc(100% - 880px - var(--sp-5))); }
 .activity .search input { width: 100%; }
 .activity-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-5); border-bottom: 0.5px solid var(--hairline); font-size: var(--fs-sm); }
 .activity-clear { background: none; border: 0; box-shadow: none; padding: 0 var(--sp-1); color: var(--accent); cursor: pointer; }
@@ -1099,8 +1128,8 @@ dialog.sheet.barcode-sheet { width: fit-content; max-width: 96vw; }
 
 .item-done-buttons { margin-left: auto; display: flex; gap: var(--sp-2); margin-top: calc(var(--fs-xs) * 1.5 + 3px); /* level with the inputs, not their labels */ }
 .item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-4) 0; }
-.item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
-.item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
+.item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
+.item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
 button[data-tip] { position: relative; }
 .item-files-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: var(--sp-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
 .item-files-line .tabs { margin-bottom: 0; }
@@ -1151,7 +1180,8 @@ button.check-text { padding: 0; min-height: 0; border: none; background: transpa
 .app:has(.collections-index) .content, .app:has(.collection-page) .content { height: 100%; }
 main:has(> .collections-index), main:has(> .collection-page) { padding: 0; min-height: 0; display: flex; }
 .collections-index { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
-.collections-index .toolbar { padding: 0 var(--sp-5); }
+/* The toolbar's line runs full width, but its actions end where the 760px list ends. */
+.collections-index .toolbar { padding: 0 max(var(--sp-5), calc(100% - 760px - var(--sp-5))) 0 var(--sp-5); }
 .collections-index-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4) var(--sp-5) var(--sp-8); }
 .collections-index-body > * { max-width: 760px; }
 .collections-index .empty-state { margin-top: var(--sp-8); }
@@ -1185,7 +1215,7 @@ main:has(> .collections-index), main:has(> .collection-page) { padding: 0; min-h
 /* One collection: the content and the selected file's inspector. */
 .collection-page { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .collection-page > .placeholder, .collection-page > .error { margin: var(--sp-5); }
-.collection { --split: 270px; flex: 1; min-width: 0; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--split); }
+.collection { --split: 380px; flex: 1; min-width: 0; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--split); }
 .collection-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--panel); }
 .collection-main .toolbar { padding: 0 var(--sp-5); }
 .collection-main .toolbar-title { min-width: 0; flex: 1; }
@@ -1300,6 +1330,7 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 .inspector-thumb { display: flex; justify-content: center; align-items: center; height: 220px; background: var(--panel-2); border-radius: var(--r-lg); padding: var(--sp-3); }
 .inspector-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; background: var(--paper); box-shadow: var(--shadow-card); border-radius: 2px; }
 .collection-inspector .file-details { margin-bottom: var(--sp-4); }
+.inspector-collection { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
 .inspector-group select { width: 100%; }
 .inspector-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .inspector-actions button { display: inline-flex; align-items: center; gap: 6px; }
@@ -1331,6 +1362,11 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 .export .tray-filter label { display: inline-flex; gap: var(--sp-1); align-items: center; margin-right: var(--sp-4); }
 .link-badges { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
 .link-badges a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+/* A collection badge with its ×: one pill, the × at its right end */
+.link-badges .badge-removable { display: inline-flex; align-items: stretch; }
+.link-badges .badge-removable .tag { border-radius: 5px 0 0 5px; padding-right: 3px; }
+.badge-remove { display: inline-flex; align-items: center; padding: 0 5px 0 3px; border: 0; box-shadow: none; border-radius: 0 5px 5px 0; background: var(--grey-bg); color: var(--muted); cursor: pointer; min-height: 0; }
+.badge-remove:hover:not(:disabled) { color: var(--text); }
 .file-actions .actions { justify-content: flex-start; }
 .file-action { background: var(--panel-2); border-radius: var(--r-lg); padding: var(--sp-2); margin-bottom: var(--sp-3); }
 .file-action .actions { justify-content: flex-end; }

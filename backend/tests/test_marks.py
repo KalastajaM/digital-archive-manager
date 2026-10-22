@@ -258,7 +258,7 @@ def test_builtins_refuse_changes(svc):
     assert svc.get(other.id).parent_id is None
 
 
-STAR_REFUSAL = "'Ongoing' is built in: use the ★ Ongoing mark instead"
+STAR_REFUSAL = "'Ongoing' is built in: use the ★ Starred mark instead"
 IMPORTANT_NAME_REFUSAL = "'Important' is built in: use the ! Important mark instead"
 
 

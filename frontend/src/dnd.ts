@@ -9,12 +9,17 @@
  *
  * A collection dragged in the sidebar carries ``application/x-dam-collection`` = JSON
  * ``{id}`` and nothing else: a files target never sees it as files, and a collection
- * target never takes a drag of files or a Today card (``application/x-dam-card``). */
+ * target never takes a drag of files or a Today card (``application/x-dam-card``).
+ *
+ * A folder dragged from Browse carries ``application/x-dam-folder`` = JSON ``{id}`` and
+ * nothing else: only a collection takes it (as a folder member). Files targets (folders,
+ * trays, the Inbox) never see it, so a folder is never moved or put in a tray by a drop. */
 import { type DragEvent as ReactDragEvent, useEffect, useRef, useState } from "react";
 import { CARD_DRAG_TYPE } from "./components/useCardLayout";
 
 export const DRAG_TYPE = "application/x-dam-files";
 export const COLLECTION_DRAG_TYPE = "application/x-dam-collection";
+export const FOLDER_DRAG_TYPE = "application/x-dam-folder";
 
 type AnyDragEvent = DragEvent | ReactDragEvent;
 
@@ -22,6 +27,7 @@ let dragging: string[] | null = null;
 let draggingLabel: string | null = null;
 let draggingPaths: string[] | null = null;
 let draggingCollection: number | null = null;
+let draggingFolder: string | null = null;
 let listening = false;
 
 function forgetOnEnd() {
@@ -32,6 +38,7 @@ function forgetOnEnd() {
     draggingLabel = null;
     draggingPaths = null;
     draggingCollection = null;
+    draggingFolder = null;
   };
   document.addEventListener("dragend", clear, true);
   document.addEventListener("drop", () => setTimeout(clear, 0), true);
@@ -61,6 +68,7 @@ export function setDragFiles(e: AnyDragEvent, ids: string[], label: string, path
   dt.effectAllowed = "copyMove";
   dragging = [...ids];
   draggingCollection = null;
+  draggingFolder = null;
   draggingLabel = label;
   draggingPaths = paths && paths.length === ids.length ? [...paths] : null;
   forgetOnEnd();
@@ -117,8 +125,44 @@ export function setDragCollection(e: AnyDragEvent, id: number, label: string) {
   draggingLabel = null;
   draggingPaths = null;
   draggingCollection = id;
+  draggingFolder = null;
   forgetOnEnd();
   if (typeof dt.setDragImage === "function") dt.setDragImage(dragImage(label), 12, 12);
+}
+
+/** Start a drag of the folder ``id`` (its drive id); ``label`` (its name) is the drag
+ * image and what a drop's toast calls it. */
+export function setDragFolder(e: AnyDragEvent, id: string, label: string) {
+  const dt = e.dataTransfer;
+  if (!dt) return;
+  if (typeof dt.clearData === "function") dt.clearData();
+  dt.setData(FOLDER_DRAG_TYPE, JSON.stringify({ id }));
+  dt.effectAllowed = "copy";
+  dragging = null;
+  draggingLabel = label;
+  draggingPaths = null;
+  draggingCollection = null;
+  draggingFolder = id;
+  forgetOnEnd();
+  if (typeof dt.setDragImage === "function") dt.setDragImage(dragImage(label), 12, 12);
+}
+
+/** The folder (drive id) a drag carries, or null when it is not a folder drag. */
+export function readDragFolder(e: AnyDragEvent): string | null {
+  const dt = e.dataTransfer;
+  if (!dt) return null;
+  const types = Array.from(dt.types ?? []);
+  if (!types.includes(FOLDER_DRAG_TYPE) || types.includes(DRAG_TYPE) || types.includes(CARD_DRAG_TYPE)) return null;
+  const raw = dt.getData(FOLDER_DRAG_TYPE);
+  if (raw) {
+    try {
+      const id = (JSON.parse(raw) as { id?: unknown })?.id;
+      return typeof id === "string" && id !== "" ? id : null;
+    } catch {
+      return null; // not ours
+    }
+  }
+  return draggingFolder;
 }
 
 function parseCollection(raw: string): number | null {

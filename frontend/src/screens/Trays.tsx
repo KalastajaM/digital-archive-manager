@@ -2,7 +2,7 @@
  * selected item beside it (a bill: amount, copy rows and the bank barcode).
  * ``/trays/<tray>?item=<id>`` opens that item (Today links here). Space opens Quick
  * Look on the selected row's file, and the viewer window follows the selection. */
-import { Inbox as InboxIcon } from "lucide-react";
+import { ChevronRight, Inbox as InboxIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { archiveKey, errorText, type ItemState, type TrayDef, type TrayItem, useItems, useToday, useTrays } from "../api/client";
@@ -14,6 +14,7 @@ import { RelativeDate, useLocalToday } from "../components/RelativeDate";
 import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
 import { EmptyState } from "../components/ui/EmptyState";
+import { trayIcon } from "../components/ui/Sidebar";
 import { Segmented } from "../components/ui/Segmented";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { TipButton } from "../components/ui/TipButton";
@@ -121,8 +122,76 @@ function Row({
 
 const hasText = (v: unknown): v is string => typeof v === "string" && v !== "";
 
+/** ``/trays`` is the index (the sidebar's Trays caption): each tray with its open count,
+ * as the Collections index lists collections. ``/trays/<id>`` is one tray's page. */
+export default function Trays({ today }: { today?: string }) {
+  const params = useParams();
+  return params.trayId ? <TrayPage today={today} /> : <TrayIndex />;
+}
+
+function TrayIndex() {
+  const trays = useTrays();
+  const overview = useToday().data?.overview;
+  const defs = trays.data?.trays ?? [];
+
+  let body: ReactNode;
+  if (trays.isPending) body = <p className="placeholder">Loading…</p>;
+  else if (trays.isError) {
+    body = (
+      <p className="error" role="alert">
+        Could not load the trays. {visible(errorText(trays.error))}
+      </p>
+    );
+  } else if (defs.length === 0) body = <EmptyState icon={<InboxIcon size={40} strokeWidth={1.25} />} title="No trays are set up." />;
+  else {
+    body = (
+      <ul className="collection-list" aria-label="Trays">
+        {defs.map((t) => {
+          const Icon = trayIcon(t);
+          const count = overview?.trays.find((c) => c.tray_id === t.id);
+          const meta = count
+            ? [
+                `${count.open} open`,
+                count.overdue > 0 ? `${count.overdue} overdue` : null,
+                t.summary && count.sum != null && count.open > 0 ? formatMoney(count.sum) : null,
+              ].filter(Boolean).join(" · ")
+            : null;
+          return (
+            <li key={t.id}>
+              <article className="collection-row" aria-label={visible(t.name)}>
+                <Icon className="collection-row-icon" size={18} strokeWidth={1.75} aria-hidden="true" />
+                <div className="collection-row-main">
+                  <p className="collection-row-title">
+                    <Link to={`/trays/${encodeURIComponent(t.id)}`}>{visible(t.name)}</Link>
+                  </p>
+                  {meta && <p className="collection-row-meta">{meta}</p>}
+                </div>
+                <ChevronRight className="collection-row-chevron" size={14} aria-hidden="true" />
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="collections-index trays-index">
+      <Toolbar title="Trays" />
+      <div className="collections-index-body">
+        {trays.data?.errors.map((e) => (
+          <p key={e.file} className="hint tray-error">
+            Tray file skipped — {visible(e.file)}: {visible(e.message)}
+          </p>
+        ))}
+        {body}
+      </div>
+    </div>
+  );
+}
+
 /** ``today`` is the local date (kept current) unless given (tests pass a fixed one). */
-export default function Trays({ today: fixed }: { today?: string }) {
+function TrayPage({ today: fixed }: { today?: string }) {
   const local = useLocalToday();
   const today = fixed ?? local;
   const split = useSplitWidth(archiveKey("dam.trays.listwidth"), { min: 220, max: 520, initial: 295, unit: "px" });

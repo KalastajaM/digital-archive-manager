@@ -11,6 +11,7 @@ import Activity from "./screens/Activity";
 import Ask from "./screens/Ask";
 import Browse from "./screens/Browse";
 import FirstRun from "./screens/FirstRun";
+import Help from "./screens/Help";
 import Collections from "./screens/Collections";
 import ConvertImportant from "./screens/ConvertImportant";
 import ConvertOngoing from "./screens/ConvertOngoing";
@@ -135,6 +136,7 @@ function Shell() {
             <Route path="/browse" element={<Browse />} />
             <Route path="/ask" element={<Ask />} />
             <Route path="/activity" element={<Activity />} />
+            <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

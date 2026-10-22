@@ -578,16 +578,16 @@ describe("ConvertOngoing", () => {
       });
       const r = await row("Tax 2025");
       // a single file defaults to Star it: no collection form until "A collection" is chosen
-      expect(within(r).getByRole("radio", { name: "Star it (★ Ongoing)" })).toBeChecked();
+      expect(within(r).getByRole("radio", { name: "Star it (★ Starred)" })).toBeChecked();
       expect(within(r).queryByLabelText("Collection name")).toBeNull();
       await user.click(within(r).getByRole("radio", { name: "A collection" }));
       await user.clear(within(r).getByLabelText("Collection name"));
       expect(within(r).getByRole("button", { name: "Preview" })).toBeDisabled(); // a collection needs a name
-      await user.click(within(r).getByRole("radio", { name: "Star it (★ Ongoing)" }));
+      await user.click(within(r).getByRole("radio", { name: "Star it (★ Starred)" }));
       expect(within(r).queryByLabelText("Collection name")).toBeNull();
       await user.click(within(r).getByRole("button", { name: "Preview" }));
       const d = await dialog();
-      expect(within(d).getByText("Star it: becomes a ★ Ongoing file")).toBeInTheDocument();
+      expect(within(d).getByText("Star it: becomes a starred file")).toBeInTheDocument();
       await user.click(within(d).getByRole("button", { name: "Star" }));
       await waitFor(() => expect(posts(calls, "/api/ongoing/convert")).toHaveLength(1));
       const body = { rel: taxLink.rel, collection: "", destination: null, star: true, to_inbox: false };
@@ -598,7 +598,7 @@ describe("ConvertOngoing", () => {
     it("a real file needs its archive folder; a real folder cannot be starred", async () => {
       const { calls, user } = setup([file, folder], { "POST /api/ongoing/preview": { body: STAR_PLAN } });
       const f = await row("2026_Plan");
-      await user.click(within(f).getByRole("radio", { name: "Star it (★ Ongoing)" }));
+      await user.click(within(f).getByRole("radio", { name: "Star it (★ Starred)" }));
       const preview = within(f).getByRole("button", { name: "Preview" });
       expect(preview).toBeDisabled();
       await user.type(within(f).getByLabelText("Archive folder (required)"), "10. Financial/Taxes");
@@ -617,7 +617,7 @@ describe("ConvertOngoing", () => {
     it("a link to a folder can be starred (the server stars its target folder); a real folder cannot", async () => {
       const folderLink: OngoingEntry = { ...base, rel: `${ONG}/Tilly`, suggested_name: "Tilly", target_rel: "40. Family/Tilly", drive_id: "d-tilly", is_dir: true };
       setup([folderLink, folder]);
-      expect(within(await row("Tilly")).getByRole("radio", { name: "Star it (★ Ongoing)" })).toBeInTheDocument();
+      expect(within(await row("Tilly")).getByRole("radio", { name: "Star it (★ Starred)" })).toBeInTheDocument();
       expect(within(await row("Taxes")).queryByRole("radio", { name: /Star it/ })).toBeNull();
     });
 

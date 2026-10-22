@@ -1,18 +1,22 @@
 /** What Browse offers for the selected file: badges for its open tray items and
- * collections, "Put in tray" (a menu), "Add to collection…" and its own note. All of it is
+ * collections, "Put in tray" (a menu), "Add to collection…" and its own note (a folder:
+ * Add to collection only). All of it is
  * database-only (the file stays where it is), except that adding to a published
  * collection adds a link in ##. Ongoing through the Ongoing sync. That needs no
  * preview (app-owned links only, journaled, undone by removing the member again), but
  * the batch that ran is shown under the actions. */
-import { useRef, useState } from "react";
+import { X } from "lucide-react";
+import { type ReactNode, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  type Collection,
   type CollectionChange,
   errorText,
   useCollectionMembers,
   useCollections,
   useCreateCollection,
   useFileLinks,
+  useGroupChange,
   useTrays,
 } from "../api/client";
 import { SummaryBox } from "../components/ai/SummaryBox";
@@ -27,15 +31,43 @@ import { useQuickPut } from "../components/useQuickPut";
 import { visible } from "../text";
 
 /** Badges under the file name: its open items (→ the item in its tray) and its
- * collections (→ the collection). */
+ * collections (→ the collection). A collection the file is itself a member of (not only
+ * through a folder), open and not a built-in, has a × that takes the file out of it (as
+ * Remove from collection does: the file stays where it is), with Undo in the toast
+ * (back in its group too). */
 export function LinkBadges({ driveId }: { driveId: string }) {
   const links = useFileLinks(driveId);
+  const members = useCollectionMembers();
+  const groupChange = useGroupChange();
+  const toast = useToast();
+  const inFlight = useRef(false);
   if (links.isError) {
     return <p className="hint">Its trays and collections could not be loaded: {visible(errorText(links.error))}</p>;
   }
   const items = links.data?.items ?? [];
   const collections = links.data?.collections ?? [];
   if (items.length === 0 && collections.length === 0) return null;
+  const remove = async (c: Collection, groupId: number | null) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const name = visible(c.name);
+    try {
+      const result = await members.mutateAsync({ id: c.id, remove: driveId });
+      const undo = async () => {
+        try {
+          await members.mutateAsync({ id: c.id, add: [driveId] });
+          if (groupId !== null) await groupChange.mutateAsync({ op: "members", id: c.id, drive_ids: [driveId], group_id: groupId });
+        } catch (e) {
+          toast({ kind: "error", text: `Could not add it back to ${name}: ${visible(errorText(e))}` });
+        }
+      };
+      toast({ ...changeToast(`Removed from ${name}`, result), actions: [{ label: "Undo", run: () => void undo() }] });
+    } catch (e) {
+      toast({ kind: "error", text: `Could not remove it from ${name}: ${visible(errorText(e))}` });
+    } finally {
+      inFlight.current = false;
+    }
+  };
   return (
     <ul className="badges link-badges" aria-label="In trays and collections">
       {items.map((i) => (
@@ -45,14 +77,30 @@ export function LinkBadges({ driveId }: { driveId: string }) {
           </Link>
         </li>
       ))}
-      {collections.map((c) => (
-        <li key={`c${c.id}`}>
-          <Link className="tag tag-grey" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
-            {visible(c.name)}
-            {c.state === "closed" && " (closed)"}
-          </Link>
-        </li>
-      ))}
+      {collections.map((c) => {
+        const member = c.members.find((m) => m.drive_id === driveId);
+        const removable = member !== undefined && c.state === "open" && c.kind == null;
+        return (
+          <li key={`c${c.id}`} className={removable ? "badge-removable" : undefined}>
+            <Link className="tag tag-grey" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
+              {visible(c.name)}
+              {c.state === "closed" && " (closed)"}
+            </Link>
+            {removable && (
+              <button
+                type="button"
+                className="badge-remove"
+                aria-label={`Remove from ${visible(c.name)}`}
+                data-tip={`Remove from ${visible(c.name)} (the file stays where it is)`}
+                disabled={members.isPending}
+                onClick={() => void remove(c, member.group_id)}
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -164,7 +212,52 @@ function AddToCollection({
   );
 }
 
-type Panel = "collection" | null;
+/** "Add to collection…" (``button``) and what it opens and leaves (``view``: the picker,
+ * then the batch the last add ran in ##. Ongoing): for a file or a folder.
+ * ``refusal``: why it cannot be added (the button is off, saying so). */
+function useAddToCollectionAction(driveId: string, refusal: string | null = null): { button: ReactNode; view: ReactNode } {
+  const [picking, setPicking] = useState(false);
+  // The batch the last "Add to collection" ran in ##. Ongoing (links only), as returned.
+  const [added, setAdded] = useState<CollectionChange | null>(null);
+  const button = refusal ? (
+    <span className="button-wrap" data-tip={refusal}>
+      <button type="button" disabled>
+        Add to collection…
+      </button>
+    </span>
+  ) : (
+    <button type="button" aria-expanded={picking} onClick={() => setPicking((p) => !p)}>
+      Add to collection…
+    </button>
+  );
+  const view = (
+    <>
+      {picking && (
+        <AddToCollection
+          driveId={driveId}
+          onDone={(result) => {
+            setPicking(false);
+            setAdded(result);
+          }}
+          onCancel={() => setPicking(false)}
+        />
+      )}
+      {added && <LastChange title={`Added to ${added.collection.name}: what happened in ##. Ongoing`} result={added} />}
+    </>
+  );
+  return { button, view };
+}
+
+/** A selected folder's one action: Add to collection (everything in it then belongs). */
+export function FolderActions({ driveId, refusal }: { driveId: string; refusal: string | null }) {
+  const collect = useAddToCollectionAction(driveId, refusal);
+  return (
+    <div className="file-actions">
+      <div className="actions">{collect.button}</div>
+      {collect.view}
+    </div>
+  );
+}
 
 /** "Back to inbox": run by the screen's move flow (preview → confirm → Undo);
  * ``refusal`` says why it cannot run now (e.g. "Already in the inbox"). */
@@ -172,17 +265,12 @@ export type BackToInbox = { refusal: string | null; run: () => void };
 
 /** The selected file's actions and note (keyed by the file: another file starts afresh). */
 export function FileActions({ driveId, backToInbox }: { driveId: string; backToInbox?: BackToInbox }) {
-  const [panel, setPanel] = useState<Panel>(null);
-  // The batch the last "Add to collection" ran in ##. Ongoing (links only), as returned.
-  const [added, setAdded] = useState<CollectionChange | null>(null);
-  const toggle = (p: Exclude<Panel, null>) => setPanel((old) => (old === p ? null : p));
+  const collect = useAddToCollectionAction(driveId);
   return (
     <div className="file-actions">
       <div className="actions">
         <PutInTrayMenu driveId={driveId} />
-        <button type="button" aria-expanded={panel === "collection"} onClick={() => toggle("collection")}>
-          Add to collection…
-        </button>
+        {collect.button}
         {backToInbox &&
           (backToInbox.refusal ? (
             <span className="button-wrap" data-tip={backToInbox.refusal}>
@@ -196,17 +284,7 @@ export function FileActions({ driveId, backToInbox }: { driveId: string; backToI
             </button>
           ))}
       </div>
-      {panel === "collection" && (
-        <AddToCollection
-          driveId={driveId}
-          onDone={(result) => {
-            setPanel(null);
-            setAdded(result);
-          }}
-          onCancel={() => setPanel(null)}
-        />
-      )}
-      {added && <LastChange title={`Added to ${added.collection.name}: what happened in ##. Ongoing`} result={added} />}
+      {collect.view}
       <SummaryBox driveId={driveId} />
       <SavedNote kind="file" target={driveId} label="Note on this file" />
     </div>

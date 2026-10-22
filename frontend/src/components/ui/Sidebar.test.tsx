@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { CollectionRow, Item, Member, Status, TrayDef } from "../../api/client";
-import { setDragCollection, setDragFiles } from "../../dnd";
+import { setDragCollection, setDragFiles, setDragFolder } from "../../dnd";
 import { type Call, dataTransfer, deferred, mockFetch, renderWithProviders } from "../../test-utils";
 import { FILES_MOVED_EVENT, type FilesMovedDetail } from "../MoveTo";
 import { Sidebar, trayIcon } from "./Sidebar";
@@ -430,6 +430,33 @@ describe("Sidebar collection tree", () => {
     fireEvent.drop(car, { dataTransfer: dt });
     await new Promise((r) => setTimeout(r, 10));
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("a folder dropped on a collection is added as one member (protected drag: read from this window); trays and the Inbox ignore it", async () => {
+    const { calls } = setup({
+      "GET /api/status": { body: { inbox_count: 2, special_folders: SPECIAL } },
+      "POST /api/collections/7/members": { body: { collection: SAUNA, batch: null, problems: [], ongoing_status: null } },
+    });
+    const folder = () => {
+      const dt = dataTransfer({ protectedMode: true }); // hovering: only the types are readable
+      setDragFolder({ dataTransfer: dt } as unknown as DragEvent, "d9", "13. Taxes");
+      return dt;
+    };
+    const row = await within(nav()).findByRole("link", { name: "Sauna" });
+    for (const name of ["To pay", "Inbox (2)"]) {
+      const other = within(nav()).getByRole("link", { name });
+      expect(fireEvent.dragEnter(other, { dataTransfer: folder() })).toBe(true); // not taken
+      expect(other).not.toHaveAttribute("data-drop");
+      document.dispatchEvent(new Event("dragend"));
+    }
+    const dt = folder();
+    fireEvent.dragEnter(row, { dataTransfer: dt });
+    expect(row).toHaveAttribute("data-drop", "over");
+    fireEvent.drop(row, { dataTransfer: dt });
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members")[0].body).toEqual({ drive_ids: ["d9"] });
+    expect(await screen.findByText("Added 13. Taxes to Sauna")).toBeInTheDocument();
+    expect(calls.filter((c) => c.method !== "GET" && !c.url.startsWith("/api/collections/7/members"))).toHaveLength(0);
   });
 
   it("a collection drag is not taken by a tray, the Inbox or Today; files are not taken by the header", async () => {
