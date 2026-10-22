@@ -7,7 +7,7 @@
 **Your paperwork, filed and findable.** Digital Archive Manager (`dam`) is a local-first
 app for the documents you keep in Google Drive, OneDrive, Dropbox, iCloud Drive or any
 plain folder. It reads every document (with OCR for scans), suggests a name and a folder
-for each new one, keeps your bills and to-dos in trays, and lets you search everything —
+for each new one, keeps your bills and to-dos in trays, and lets you search everything,
 without ever deleting a file.
 
 <picture>
@@ -25,15 +25,17 @@ without ever deleting a file.
   dam and your archive is still just folders and files.
 - **Private.** Everything runs on your computer; the app only listens on `127.0.0.1`.
   The optional AI help sends text only when you click, after showing you exactly what will
-  be sent.
+  be sent, and never from the folders you exclude (by default medical, work and other people's
+  documents; change the list under Activity → AI).
 - **Fast filing.** New documents land in an inbox. dam reads them, proposes a name, a
   folder (from your rules, or from where similar files went) and tags, and files them with
   one key.
 - **Bills that pay themselves (almost).** Due dates, amounts, IBANs and references are
   picked up from the scan. The To pay tray shows what is due, with a copy button on every
-  field — and for Finnish bills a bank barcode to scan with your banking app.
+  field, and for Finnish bills a bank barcode to scan with your banking app.
 - **Collections for things in progress.** Group the documents of a house sale, a
-  renovation or a court case, with notes and a checklist, without moving them.
+  renovation or a court case, with notes and a checklist, without moving them. Add a whole
+  folder and everything in it belongs, including what you put in it later.
 
 <table>
   <tr>
@@ -41,16 +43,24 @@ without ever deleting a file.
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/paymode-dark.png"><img alt="Pay mode: payee, IBAN, reference, amount and a bank barcode in large type" src="docs/images/paymode-light.png"></picture></td>
   </tr>
   <tr>
-    <td align="center"><b>Today</b> — what needs you, at a glance</td>
-    <td align="center"><b>Pay mode</b> — check the details, scan, done</td>
+    <td align="center"><b>Today</b>: what needs you, at a glance</td>
+    <td align="center"><b>Pay mode</b>: check the details, scan, done</td>
   </tr>
   <tr>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/browse-dark.png"><img alt="Browse: folders, search and a preview of the selected file" src="docs/images/browse-light.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/activity-dark.png"><img alt="Activity: every change in plain words, each with its own Undo" src="docs/images/activity-light.png"></picture></td>
   </tr>
   <tr>
-    <td align="center"><b>Browse</b> — folders, full-text search, Quick Look</td>
-    <td align="center"><b>Activity</b> — every change, each with Undo</td>
+    <td align="center"><b>Browse</b>: folders, full-text search, Quick Look</td>
+    <td align="center"><b>Activity</b>: every change, each with Undo</td>
+  </tr>
+  <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/collection-dark.png"><img alt="A collection: its groups, what needs attention, and the selected file with its preview, group and actions" src="docs/images/collection-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/ai-settings-dark.png"><img alt="Activity, AI: this month's spend, the AI switch and the folders that are never sent" src="docs/images/ai-settings-light.png"></picture></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Collections</b>: a house sale in one place, nothing moved</td>
+    <td align="center"><b>AI settings</b>: spend, the switch and the folders never sent</td>
   </tr>
 </table>
 
@@ -74,8 +84,8 @@ On first start dam asks which folder is your archive. It finds the folders of Go
 Drive, OneDrive, Dropbox, iCloud Drive, Nextcloud and others for you, or you pick any
 folder. Then either:
 
-- **use an existing archive as it is** — dam indexes it and changes nothing until you ask, or
-- **start a new archive** — pick a starter layout (Household, Minimal or your own),
+- **use an existing archive as it is**: dam indexes it and changes nothing until you ask, or
+- **start a new archive**: pick a starter layout (Household, Minimal or your own),
   preview the folders, and create them (undoable, like everything else).
 
 **Just want to look around first?** Create a demo archive with made-up documents:
@@ -86,7 +96,7 @@ uv run dam archives add Demo --demo --folder /tmp/dam-demo-archive
 uv run dam --archive Demo serve --port 8766
 ```
 
-You can keep several archives — say your real one and a test one — each with its own
+You can keep several archives (say your real one and a test one), each with its own
 settings, and switch between them from the top of the sidebar.
 
 ## Platform support
@@ -109,7 +119,7 @@ Details are in the [technical reference](docs/reference.md#platform-support).
 - [Technical reference](docs/reference.md): install, the command line, config files and
   rules, the API and the safety model in detail
 - [Changelog](CHANGELOG.md)
-- [Contributing](CONTRIBUTING.md) — development setup, tests and the safety rules every
+- [Contributing](CONTRIBUTING.md): development setup, tests and the safety rules every
   change must keep
 - [Security policy](SECURITY.md)
 
