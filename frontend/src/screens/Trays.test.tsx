@@ -322,7 +322,7 @@ describe("Trays", () => {
     expect(within(later).getByText("file in ##. To Delete")).toBeInTheDocument();
     expect(within(later).queryByRole("img", { name: "Has a note" })).not.toBeInTheDocument();
     const undated = row("Kotihoito");
-    expect(within(undated).getByText("needs a due date")).toBeInTheDocument();
+    expect(within(undated).queryByText("needs a due date")).not.toBeInTheDocument();
     expect(within(undated).getByText("file missing")).toBeInTheDocument();
   });
 
@@ -901,6 +901,17 @@ describe("Quick Look and the selection in a tray", () => {
     const link = within(await screen.findByRole("article", { name: "Northpower sähkö" })).getByRole("link");
     act(() => link.focus());
     await user.keyboard(" ");
+    expect(quickLook()).toHaveAccessibleName("Quick Look: northpower.pdf");
+  });
+
+  it("the item header has the Quick Look eye with its tooltip, not a text link or a key hint", async () => {
+    const { user } = renderTrays("/trays/to-pay?item=1");
+    const eye = await screen.findByRole("button", { name: "Quick Look" });
+    expect(eye).toHaveClass("icon-button");
+    expect(eye).toHaveAttribute("data-tip", "Quick Look (Space)");
+    expect(document.querySelector(".item-detail kbd")).toBeNull();
+    expect(screen.queryByText("Quick Look", { selector: ".link-button" })).toBeNull();
+    await user.click(eye);
     expect(quickLook()).toHaveAccessibleName("Quick Look: northpower.pdf");
   });
 

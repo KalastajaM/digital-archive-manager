@@ -129,10 +129,6 @@ const useChip = async (user: ReturnType<typeof userEvent.setup>, label: RegExp) 
 
 /** The tag chips of the filing form's tags field, in order. */
 const tagList = () => Array.from(document.querySelectorAll(".tag-field .tag-token")).map((t) => t.firstChild?.textContent ?? "");
-/** Removes every tag chip. */
-const clearTags = async (user: ReturnType<typeof userEvent.setup>) => {
-  for (const b of screen.queryAllByRole("button", { name: /^Remove tag / })) await user.click(b);
-};
 
 describe("ReviewCard: Ask AI", () => {
   it("switching AI off hides its chips and the AI summary; the form keeps its values", async () => {

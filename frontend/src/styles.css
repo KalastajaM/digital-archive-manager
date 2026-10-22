@@ -1040,7 +1040,6 @@ li[aria-current="true"] .tag, li[aria-current="true"] .badge { background: var(-
 .item-sub { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .link-button { border: none; background: none; box-shadow: none; padding: 0; min-height: 0; color: var(--accent); font: inherit; cursor: pointer; }
 .link-button:hover:not(:disabled) { background: none; text-decoration: underline; }
-.link-button kbd { font-size: var(--fs-xs); }
 .button-key { margin-left: 6px; font-size: var(--fs-xs); opacity: 0.75; }
 .bill-amount { flex: none; font-size: var(--fs-title); font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .item-detail > .badges { margin-top: var(--sp-2); }

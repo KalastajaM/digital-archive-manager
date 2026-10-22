@@ -4,7 +4,7 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { Unlink, X } from "lucide-react";
+import { Eye, Unlink, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -29,7 +29,7 @@ import { CopyButton } from "../components/CopyButton";
 import { DoneForm } from "../components/DoneForm";
 import { editText, FieldInput } from "../components/FieldInput";
 import { FilePreview } from "../components/FilePreview";
-import { FILE_BADGE, ItemBadges } from "../components/ItemBadges";
+import { FILE_BADGE } from "../components/ItemBadges";
 import { RelativeDate } from "../components/RelativeDate";
 import { SavedNote, SaveState } from "../components/SavedNote";
 import { daysBetween, waited } from "../components/today/time";
@@ -519,10 +519,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const doneText = markLabel(doneLabel);
   const fileLabel = `${doneText} and file…`;
   const dateField = tray?.date_field;
-  const needsDate =
-    item.state === "open" &&
-    !!dateField &&
-    (item.missing_required.includes(dateField) || item.invalid_fields.includes(dateField));
   const amount = amountField(tray);
   const amountValue = amount ? item.fields[amount] : undefined;
   const firstPath = list.find((f) => f.path)?.path;
@@ -623,14 +619,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
                 <span className="item-file">{visible(baseName(firstPath))}</span>
               </>
             )}
-            {onQuickLook && firstPath && (
-              <>
-                {" · "}
-                <button type="button" className="link-button" onClick={onQuickLook}>
-                  Quick Look <kbd>Space</kbd>
-                </button>
-              </>
-            )}
           </p>
         </div>
         {kind === "bill" && typeof amountValue === "string" && amountValue !== "" && (
@@ -638,6 +626,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             {item.invalid_fields.includes(amount!) ? visible(amountValue) : visible(formatMoney(amountValue))}
           </div>
         )}
+        {onQuickLook && firstPath && <IconButton icon={<Eye />} label="Quick Look" shortcut="(Space)" onClick={onQuickLook} />}
         <IconButton icon={<X />} label="Close" onClick={onClose} />
       </header>
       {files.isError && (
@@ -676,12 +665,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           onDone={() => setAdding(false)}
         />
       )}
-      <ItemBadges
-        level={needsDate ? "undated" : null}
-        missingRequired={open ? item.missing_required : []}
-        dateField={dateField}
-        fileState="ok"
-      />
       {kind === "dated" && fields}
       {kind === "dated" && item.date && (
         <div className="item-when" role="group" aria-label={visible(fieldLabel(dateField ?? "date"))}>

@@ -21,24 +21,28 @@ export const FILE_BADGE: Record<FileState, string | null> = {
 };
 
 /** "needs a due date" (level undated), "needs <other required fields>", and the file
- * badge; nothing when there is nothing to say. */
+ * badge; nothing when there is nothing to say. ``showNeeds`` false leaves the "needs ..."
+ * badges out (the tray list and the item header say it in the fields instead). */
 export function ItemBadges({
   level,
   missingRequired,
   dateField,
   fileState,
+  showNeeds = true,
 }: {
   level: Level | null;
   missingRequired: string[];
   dateField: string | null | undefined;
   fileState: FileState;
+  showNeeds?: boolean;
 }) {
   const fileBadge = FILE_BADGE[fileState];
-  const otherMissing = missingRequired.filter((n) => !(level === "undated" && n === dateField));
-  if (level !== "undated" && otherMissing.length === 0 && !fileBadge) return null;
+  const otherMissing = showNeeds ? missingRequired.filter((n) => !(level === "undated" && n === dateField)) : [];
+  const undated = showNeeds && level === "undated";
+  if (!undated && otherMissing.length === 0 && !fileBadge) return null;
   return (
     <p className="badges">
-      {level === "undated" && <span className="badge badge-warn">needs a due date</span>}
+      {undated && <span className="badge badge-warn">needs a due date</span>}
       {otherMissing.length > 0 && (
         <span className="badge badge-warn">needs {otherMissing.map((n) => visible(fieldWord(n))).join(", ")}</span>
       )}

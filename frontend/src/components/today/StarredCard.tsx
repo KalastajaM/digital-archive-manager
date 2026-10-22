@@ -69,7 +69,7 @@ function StarredRow({ m, onLook }: { m: Member; onLook?: () => void }) {
       {m.missing && <span className="hint">missing</span>}
       {!m.missing && m.quarantined && <span className="hint">in ##. To Delete</span>}
       <span className="starred-actions" role="group" aria-label={`Open ${name}`}>
-        {onLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" onClick={onLook} />}
+        {onLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="(Space)" onClick={onLook} />}
         {(usable(m) || (m.is_dir && !m.missing)) && <LaunchButtons launch={launch} only={m.is_dir ? "reveal" : undefined} />}
         <IconButton
           icon={<StarGlyph size={16} filled={false} />}

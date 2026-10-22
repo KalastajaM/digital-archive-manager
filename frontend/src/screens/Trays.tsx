@@ -82,6 +82,7 @@ function Row({
           missingRequired={open ? item.missing_required : []}
           dateField={tray?.date_field}
           fileState={item.file_state}
+          showNeeds={false}
         />
         {!open && (
           <p className="tray-row-done">

@@ -103,7 +103,7 @@ function OpenButtons({ driveId, label, isDir, onLook }: { driveId: string; label
   const launch = useFileLaunch(driveId);
   return (
     <span className="ongoing-open" role="group" aria-label={label}>
-      {!isDir && onLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" onClick={onLook} />}
+      {!isDir && onLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="(Space)" onClick={onLook} />}
       <LaunchButtons launch={launch} only={isDir ? "reveal" : undefined} />
     </span>
   );
