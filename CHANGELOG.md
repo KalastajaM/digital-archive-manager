@@ -99,6 +99,10 @@ All notable changes are listed here. The format follows
   sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
 - Collections and Activity: the toolbar's right-hand controls line up with the right edge
   of the list or timeline.
+- A tray item's panel: Quick Look, Move to tray (now an icon) and Remove from tray sit
+  together with the file's icons on its action row, instead of a Move to tray pull-down at
+  the left and Quick Look in the header. Dragging the item onto a tray in the sidebar
+  still moves it too.
 - The user guide is rewritten for people using the app. Installing, the command line,
   config files and technical details moved to a new technical reference
   (`docs/reference.md`).

@@ -1128,8 +1128,8 @@ dialog.sheet.barcode-sheet { width: fit-content; max-width: 96vw; }
 
 .item-done-buttons { margin-left: auto; display: flex; gap: var(--sp-2); margin-top: calc(var(--fs-xs) * 1.5 + 3px); /* level with the inputs, not their labels */ }
 .item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-4) 0; }
-.item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
-.item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
+.item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
+.item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
 button[data-tip] { position: relative; }
 .item-files-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: var(--sp-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
 .item-files-line .tabs { margin-bottom: 0; }
