@@ -591,7 +591,7 @@ describe("ReviewCard", () => {
       "POST /api/inbox/file": { status: 409, body: { error: "source changed" } },
     });
     await user.click(screen.getByRole("button", { name: "File it" }));
-    expect(await screen.findByText(/scan001\.pdf: Conflict: source changed/)).toBeInTheDocument();
+    expect(await screen.findByText(/scan001\.pdf: source changed/)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 

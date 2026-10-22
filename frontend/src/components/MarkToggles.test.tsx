@@ -120,7 +120,7 @@ describe("MarkToggles", () => {
     const user = userEvent.setup();
     renderWithProviders(<MarkToggles driveId="d1" name="a.pdf" marks={[]} />);
     await user.click(screen.getByRole("button", { name: "Star" }));
-    expect(await screen.findByText(/Could not star a.pdf: Not found: file x/)).toBeInTheDocument();
+    expect(await screen.findByText(/Could not star a.pdf: file x/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Star" })).toHaveAttribute("aria-pressed", "false");
   });
 

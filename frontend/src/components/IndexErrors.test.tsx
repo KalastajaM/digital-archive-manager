@@ -166,7 +166,7 @@ describe("Index errors sheet", () => {
     fireEvent.click(all);
     await act(async () => held.resolve({ status: 400, body: { error: "index ‮locked" } }));
     expect(posts(calls, "/api/index/retry")).toHaveLength(1);
-    expect(await screen.findByText("Could not retry: Invalid request: index ⟨U+202E⟩locked")).toBeInTheDocument();
+    expect(await screen.findByText("Could not retry: index ⟨U+202E⟩locked")).toBeInTheDocument();
   });
 
   it("an empty list says so; Esc closes the sheet", async () => {

@@ -20,6 +20,7 @@ export function prepared(overrides: Partial<AIPrepared> = {}): AIPrepared {
     payload_text: "Document text:\n<document>\nNorthpower Oy lasku‮ 84,20 €\n</document>",
     files: ["d1"],
     estimate_eur: 0.0012,
+    timeout_s: 80,
     blocked: null,
     token: "tok-1",
     cached: null,

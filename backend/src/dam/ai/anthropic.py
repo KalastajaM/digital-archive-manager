@@ -2,9 +2,11 @@
 
 Structured output comes from ``output_config.format`` (a JSON schema): the response's
 text block is the JSON. (A forced ``tool_choice`` would be refused by the large model.)
-The client is built only here, only when a call is made, with a 60 s timeout and no
-retries: a retry after a timeout could bill the same call twice, and every call must
-match one preview the user confirmed. A timeout (or a connection lost after the request
+The client is built only here, only when a call is made, with no retries: a
+retry after a timeout could bill the same call twice, and every call must match one
+preview the user confirmed. How long a call may take comes with it (``timeout_s``,
+from ``guard.timeout_s``: 60 s for a small call, more for a large one, 3 min at most);
+the client's own 60 s is only the default. A timeout (or a connection lost after the request
 may have gone out) is a ``ProviderError`` with ``usage_unknown``; the service logs it
 at its worst-case estimate. Tests inject a fake client and an autouse fixture makes the
 real constructor fail.
@@ -19,11 +21,12 @@ import httpx2
 
 from dam.ai.provider import AIResult, ProviderError
 
-TIMEOUT_S = 60
+TIMEOUT_S = 60  # the client's default; each call passes its own limit
 MAX_RETRIES = 0  # never retried (a retry could bill a timed-out call twice)
 TIMEOUT_MESSAGE = "timeout: usage unknown"
 LOST_MESSAGE = "connection lost: usage unknown"
 MESSAGE_CHARS = 200
+_STATUS_KIND = {401: "auth", 403: "auth", 429: "rate_limit", 503: "overloaded", 529: "overloaded"}
 
 _KEY = re.compile(r"sk-ant-[A-Za-z0-9_-]+")
 
@@ -133,10 +136,18 @@ class AnthropicProvider:
         return self._client
 
     def complete(
-        self, *, model: str, system: str, user: str, schema: dict, max_tokens: int
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: dict,
+        max_tokens: int,
+        timeout_s: float | None = None,
     ) -> AIResult:
         try:
             response = self._get_client().messages.create(
+                timeout=timeout_s if timeout_s is not None else TIMEOUT_S,
                 model=model,
                 max_tokens=max_tokens,
                 system=system,
@@ -149,16 +160,20 @@ class AnthropicProvider:
         except anthropic.APIStatusError as e:
             detail = _safe_message(e)
             raise ProviderError(
-                f"API error {e.status_code}: {type(e).__name__}" + (f": {detail}" if detail else "")
+                f"API error {e.status_code}: {type(e).__name__}"
+                + (f": {detail}" if detail else ""),
+                kind=_STATUS_KIND.get(e.status_code, "other"),
             ) from None
         except anthropic.APITimeoutError:
             # the request may have reached the API and been billed: usage unknown
-            raise ProviderError(TIMEOUT_MESSAGE, usage_unknown=True) from None
+            raise ProviderError(TIMEOUT_MESSAGE, usage_unknown=True, kind="timeout") from None
         except anthropic.APIConnectionError as e:
             if isinstance(e.__cause__, httpx2.ConnectError):
                 # never connected (DNS, refused, TLS): nothing was sent
-                raise ProviderError(f"connection failed: {type(e).__name__}") from None
-            raise ProviderError(LOST_MESSAGE, usage_unknown=True) from None
+                raise ProviderError(
+                    f"connection failed: {type(e).__name__}", kind="connect"
+                ) from None
+            raise ProviderError(LOST_MESSAGE, usage_unknown=True, kind="lost") from None
         except anthropic.AnthropicError as e:
             raise ProviderError(f"{type(e).__name__}") from None
         # from here on the response was billed: every error carries its usage

@@ -200,7 +200,7 @@ describe("SendSheet: closing and failed prepares", () => {
     const dialog = await openSheet();
     fireEvent.click(within(dialog).getByRole("button", { name: "Send" }));
     const close = await within(dialog).findByRole("button", { name: "Close (already sent)" });
-    expect(within(dialog).getByRole("status")).toHaveTextContent("the answer is paid for");
+    expect(within(dialog).getByText(/the answer is paid for/)).toBeInTheDocument();
     fireEvent.click(close);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(await screen.findByText(ALREADY_SENT)).toBeInTheDocument();
@@ -256,5 +256,53 @@ describe("euro", () => {
     expect(euro(1.25)).toBe("1,25 €");
     expect(euro(0.0012)).toBe("0,0012 €");
     expect(euro(0.00002)).toBe("< 0,0001 €");
+  });
+});
+
+const TIMEOUT_TEXT =
+  "Claude didn't answer within 2 minutes, so the app stopped waiting. Nothing was changed. Try again. Up to 0,0024 € is counted this month in case it was charged.";
+
+describe("SendSheet: waiting for Claude", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("states the limit before sending", async () => {
+    setup(prepared({ timeout_s: 120 }));
+    const dialog = await openSheet();
+    expect(within(dialog).getByText("Gives up after")).toBeInTheDocument();
+    expect(within(dialog).getByText("2 min")).toBeInTheDocument();
+  });
+
+  it("shows a live status while the call runs: seconds tick, the limit is stated, a calm line follows", async () => {
+    const hold = deferred<{ body: unknown }>();
+    setup(prepared({ timeout_s: 140 }), () => hold.promise);
+    const dialog = await openSheet();
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+    const status = await within(dialog).findByRole("status");
+    expect(status).toHaveTextContent("Waiting for Claude (claude-haiku-5-5)… 0 s");
+    expect(status).toHaveTextContent("gives up after 2 min 20 s");
+    expect(status).not.toHaveTextContent("not stuck");
+    const send = within(dialog).getByRole("button", { name: "Waiting for Claude…" });
+    expect(send).toBeDisabled();
+    act(() => void vi.advanceTimersByTime(3000));
+    expect(status).toHaveTextContent("… 3 s");
+    act(() => void vi.advanceTimersByTime(9000));
+    expect(status).toHaveTextContent("… 12 s");
+    expect(status).toHaveTextContent("Larger requests can take a minute; the app is not stuck.");
+    act(() => void vi.advanceTimersByTime(60_000));
+    expect(status).toHaveTextContent("… 1 min 12 s");
+    vi.useRealTimers();
+    await act(async () => hold.resolve({ body: { data: { ok: 1 }, cost_eur: 0, cached: false } }));
+  });
+
+  it("a timeout reads in plain words, without a status name", async () => {
+    setup(prepared(), () => ({ status: 409, body: { error: TIMEOUT_TEXT } }) as { body: unknown });
+    const dialog = await openSheet();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send" }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent(TIMEOUT_TEXT);
+    expect(alert.textContent).not.toMatch(/Conflict|409|Error/);
+    // the status line is gone once the call has ended
+    expect(within(dialog).queryByText(/Waiting for Claude \(/)).not.toBeInTheDocument();
   });
 });

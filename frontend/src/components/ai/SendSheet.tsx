@@ -9,6 +9,7 @@ import { visible, visibleText } from "../../text";
 import { useArmedConfirm } from "../PlanPreview";
 import { Sheet } from "../ui/Sheet";
 import { Tag } from "../ui/Tag";
+import { AIWait, secondsText } from "./AIWait";
 
 /** Euros as the app writes money ("1,25 €"); amounts under a cent keep four decimals. */
 export function euro(n: number): string {
@@ -132,7 +133,7 @@ export function SendSheet({
             </>
           ) : (
             <button type="button" className="primary" onClick={onSend} disabled={!canSend}>
-              {busy ? "Sending…" : "Send"}
+              {busy ? "Waiting for Claude…" : "Send"}
             </button>
           )}
         </>
@@ -159,10 +160,17 @@ export function SendSheet({
                 : `at most ${euro(prepared.estimate_eur)}`}
           </dd>
         </div>
+        {!cached && prepared.blocked === null && (
+          <div>
+            <dt>Gives up after</dt>
+            <dd>{secondsText(prepared.timeout_s)}</dd>
+          </div>
+        )}
       </dl>
       <Budget status={status} estimate={cached ? 0 : prepared.estimate_eur} />
+      {sending && busy && <AIWait model={prepared.model} limitS={prepared.timeout_s} />}
       {sending && (
-        <p className="notice" role="status">
+        <p className="notice">
           Sent: the answer is paid for and will be saved. Closing does not stop it; Ask AI shows it again for free.
         </p>
       )}

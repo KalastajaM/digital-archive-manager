@@ -46,11 +46,49 @@ class Prepared:
     payload_text: str
     files: list[str]
     estimate_eur: float
+    # how long a send waits for the answer before giving up (seconds); shown, not signed
+    timeout_s: int
     blocked: str | None
     token: str
     cached: dict | None
     # shown with the preview, never sent (what the task left out and why)
     notes: list[str] = field(default_factory=list)
+
+
+_NOT_BILLED = {
+    "connect": "The app could not reach Claude. Check the internet connection and try again. "
+    "Nothing was sent or charged.",
+    "rate_limit": "Claude is asking to slow down (too many requests). Wait a minute and try "
+    "again. Nothing was changed or charged.",
+    "overloaded": "Claude is overloaded right now. Try again in a few minutes. Nothing was "
+    "changed or charged.",
+    "auth": "Claude did not accept the API key. Set it again with dam ai --set-key. "
+    "Nothing was changed or charged.",
+}
+
+
+def _failure_message(e: ProviderError) -> str:
+    """A failed call, in plain words for the person (the log keeps the technical text)."""
+    return _NOT_BILLED.get(e.kind) or f"AI call failed: {e}"
+
+
+def _unknown_usage_message(e: ProviderError, prepared: Prepared) -> str:
+    """A timeout or a connection lost mid-call: it may have been billed, so the month
+    counts it at its estimate."""
+    counted = (
+        f"Up to {guard.euro_text(prepared.estimate_eur)} is counted this month in case it "
+        "was charged."
+    )
+    if e.kind == "timeout":
+        limit = guard.duration_text(prepared.timeout_s)
+        return (
+            f"Claude didn't answer within {limit}, so the app stopped waiting. Nothing was "
+            f"changed. Try again. {counted}"
+        )
+    return (
+        "The connection to Claude was lost while waiting for the answer, so the app stopped "
+        f"waiting. Nothing was changed. Try again. {counted}"
+    )
 
 
 @dataclass(frozen=True)
@@ -271,10 +309,9 @@ class AIService:
         if blocked is None and not params.get("refresh"):
             cached = cache.get(self.app.engine, built.sha_key, task.id, model, task.prompt_version)
         chars = len(built.system) + len(built.user) + len(json.dumps(self._schema(task, built)))
+        input_tokens = guard.estimate_tokens(chars)
         try:
-            estimate = guard.cost_eur(
-                self.settings, model, guard.estimate_tokens(chars), max_tokens
-            )
+            estimate = guard.cost_eur(self.settings, model, input_tokens, max_tokens)
         except KeyError:
             estimate = 0.0
             if blocked is None and cached is None:
@@ -294,6 +331,7 @@ class AIService:
             payload_text=built.user,
             files=list(built.files),
             estimate_eur=estimate,
+            timeout_s=guard.timeout_s(input_tokens, max_tokens),
             blocked=blocked,
             token=self._token(task, model, built, max_tokens, estimate),
             cached=cached,
@@ -376,6 +414,7 @@ class AIService:
                 user=built.user,
                 schema=schema,
                 max_tokens=max_tokens,
+                timeout_s=prepared.timeout_s,
             )
         except ProviderError as e:
             if demo:
@@ -387,11 +426,9 @@ class AIService:
                 # the month figure (and the budget check) stays conservative
                 usage["cost_eur"] = prepared.estimate_eur
                 log.record(self.app.engine, **common, **usage, outcome="error", error=str(e))
-                raise Conflict(
-                    f"AI call failed: {e}; counted at its estimate €{prepared.estimate_eur:.4f}"
-                ) from None
+                raise Conflict(_unknown_usage_message(e, prepared)) from None
             log.record(self.app.engine, **common, **usage, outcome="error", error=str(e))
-            raise Conflict(f"AI call failed: {e}") from None
+            raise Conflict(_failure_message(e)) from None
         except Exception as e:
             # not a provider failure we know: the usage is unknown and the message may
             # carry anything (never logged or shown), so only the type is recorded

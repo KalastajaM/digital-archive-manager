@@ -973,9 +973,16 @@ def test_timeout_is_logged_at_its_estimate(ai_app):
     ai_app.ai.provider = AnthropicProvider(api_key="k", client=client)
     p = ai_app.ai.prepare("echo", {"text": "x"})
     assert p.estimate_eur > 0
-    with pytest.raises(Conflict, match="timeout: usage unknown"):
+    with pytest.raises(Conflict) as info:
         ai_app.ai.run(p.token)
+    # plain words: the limit this call had, nothing changed, the counted amount
+    message = str(info.value)
+    assert message.startswith(f"Claude didn't answer within {guard.duration_text(p.timeout_s)}")
+    assert "Nothing was changed. Try again." in message
+    assert f"Up to {guard.euro_text(p.estimate_eur)} is counted this month" in message
+    assert "timeout" not in message and "Conflict" not in message
     assert len(client.messages.requests) == 1
+    assert client.messages.requests[0]["timeout"] == p.timeout_s
     (row,) = rows(ai_app)
     assert (row["outcome"], row["error"]) == ("error", "timeout: usage unknown")
     assert row["cost_eur"] == pytest.approx(p.estimate_eur)
@@ -988,7 +995,7 @@ def test_connection_refused_costs_nothing(ai_app):
     client = FakeClient(_connection_error(httpx2.ConnectError("refused")))
     ai_app.ai.provider = AnthropicProvider(api_key="k", client=client)
     p = ai_app.ai.prepare("echo", {"text": "x"})
-    with pytest.raises(Conflict, match="connection failed"):
+    with pytest.raises(Conflict, match="could not reach Claude"):
         ai_app.ai.run(p.token)
     (row,) = rows(ai_app)
     assert row["cost_eur"] == 0
@@ -1157,3 +1164,74 @@ def test_cli_ai_commands_refresh_the_key(app_paths, echo, monkeypatch):
     r = CliRunner().invoke(cli, ["--data-dir", str(app_paths.data_dir), "ai", "--status"])
     assert r.exit_code == 0, r.output
     assert seen == [True]
+
+
+# -- the limit scales with the request, and failures read plainly ----------------------
+
+
+def test_timeout_limit_grows_with_the_request_and_is_capped():
+    assert guard.timeout_s(0, 0) == 60
+    assert guard.timeout_s(1_000, 700) == 80  # 60 + 2 + 14, rounded up to 10 s
+    assert guard.timeout_s(9_100, 3_000) == 140  # a 40-file collection summary
+    assert guard.timeout_s(10_000_000, 700) == 180  # capped
+    assert guard.timeout_s(0, 100_000) == 180
+    limits = [guard.timeout_s(n, 700) for n in range(0, 200_000, 5_000)]
+    assert limits == sorted(limits) and all(60 <= x <= 180 for x in limits)
+
+
+def test_duration_and_euro_text():
+    assert guard.duration_text(120) == "2 minutes"
+    assert guard.duration_text(60) == "1 minute"
+    assert guard.duration_text(140) == "2 minutes 20 seconds"
+    assert guard.duration_text(45) == "45 seconds"
+    assert guard.euro_text(0.0024) == "0,0024 €"
+    assert guard.euro_text(1.25) == "1,25 €"
+    assert guard.euro_text(0) == "0,00 €"
+
+
+def test_prepare_carries_the_limit_and_run_gives_it_to_the_provider(ai_app):
+    p = ai_app.ai.prepare("echo", {"text": "x"})
+    assert 60 <= p.timeout_s <= 180
+    ai_app.ai.run(p.token)
+    assert ai_app.ai.provider.timeouts == [p.timeout_s]
+
+
+def test_the_anthropic_client_gets_the_per_call_limit():
+    client = FakeClient(FakeResponse([FakeBlock("text", '{"echo": "x"}')]))
+    provider = AnthropicProvider(api_key="k", client=client)
+    provider.complete(
+        model="m", system="s", user="u", schema=ECHO_SCHEMA, max_tokens=5, timeout_s=150
+    )
+    provider.complete(model="m", system="s", user="u", schema=ECHO_SCHEMA, max_tokens=5)
+    assert [r["timeout"] for r in client.messages.requests] == [150, 60]
+
+
+@pytest.mark.parametrize(
+    ("kind", "words"),
+    [
+        ("connect", "could not reach Claude"),
+        ("rate_limit", "slow down"),
+        ("overloaded", "overloaded"),
+        ("auth", "API key"),
+    ],
+)
+def test_failures_not_billed_read_plainly(ai_app, kind, words):
+    def fail(**_kw):
+        raise ProviderError("API error 429: RateLimitError", kind=kind)
+
+    ai_app.ai.provider.reply = fail
+    p = ai_app.ai.prepare("echo", {"text": "x"})
+    with pytest.raises(Conflict) as info:
+        ai_app.ai.run(p.token)
+    assert words in str(info.value) and "API error" not in str(info.value)
+
+
+def test_connection_lost_reads_plainly_and_is_counted(ai_app):
+    def lost(**_kw):
+        raise ProviderError("connection lost: usage unknown", usage_unknown=True, kind="lost")
+
+    ai_app.ai.provider.reply = lost
+    p = ai_app.ai.prepare("echo", {"text": "x"})
+    with pytest.raises(Conflict, match="connection to Claude was lost") as info:
+        ai_app.ai.run(p.token)
+    assert "is counted this month" in str(info.value)

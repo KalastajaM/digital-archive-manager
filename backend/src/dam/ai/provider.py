@@ -14,7 +14,9 @@ class ProviderError(Exception):
     carried here so the call log can price it. ``usage_unknown``: the request may have
     reached the API but no answer came back (a timeout, a connection lost mid-call), so
     it may have been billed for an unknown amount; the service counts it at its
-    worst-case estimate."""
+    worst-case estimate. ``kind`` names the failure for a plain message: ``timeout``,
+    ``lost`` (connection lost mid-call), ``connect`` (never connected), ``rate_limit``,
+    ``overloaded``, ``auth`` or ``other``."""
 
     def __init__(
         self,
@@ -23,11 +25,13 @@ class ProviderError(Exception):
         input_tokens: int = 0,
         output_tokens: int = 0,
         usage_unknown: bool = False,
+        kind: str = "other",
     ) -> None:
         super().__init__(message)
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.usage_unknown = usage_unknown
+        self.kind = kind
 
 
 @dataclass(frozen=True)
@@ -39,8 +43,16 @@ class AIResult:
 
 class AIProvider(Protocol):
     def complete(
-        self, *, model: str, system: str, user: str, schema: dict, max_tokens: int
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: dict,
+        max_tokens: int,
+        timeout_s: float | None = None,
     ) -> AIResult:
         """One call: ``system`` and ``user`` text in, a JSON object shaped by ``schema``
-        out (the caller validates it again), with the real token usage."""
+        out (the caller validates it again), with the real token usage. ``timeout_s``:
+        how long to wait for the answer (the limit the preview showed)."""
         ...

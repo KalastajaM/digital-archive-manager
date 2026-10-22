@@ -1468,7 +1468,9 @@ dialog.sheet.tray-defaults { width: min(680px, calc(100vw - 32px)); }
 
 /* ---- AI (spec §2: the "What will be sent" sheet, markers in the forms) ------------- */
 dialog.sheet.ai-sheet { width: min(720px, 92vw); }
-.ai-facts { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: var(--sp-1) var(--sp-6); margin: 0 0 var(--sp-3); }
+.ai-wait { margin: 0 0 var(--sp-3); }
+.ai-wait p { margin: 0 0 var(--sp-1); }
+.ai-facts { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: var(--sp-1) var(--sp-6); margin: 0 0 var(--sp-3); }
 .ai-facts dt { color: var(--muted); font-size: var(--fs-xs); }
 .ai-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
 .ai-facts code, .ai-hint code { font-family: var(--font-mono); font-size: var(--fs-sm); }

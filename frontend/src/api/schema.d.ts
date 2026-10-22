@@ -3506,7 +3506,7 @@ export interface components {
          *     the worst-case estimate, why it is blocked (or null) and the token for ``run``.
          *     ``cached`` is an earlier result for the same input (running it costs nothing).
          *     ``notes`` say what was left out and why (excluded collection members); they are
-         *     shown, never sent.
+         *     shown, never sent. ``timeout_s``: how long a send waits before giving up.
          */
         PreparedOut: {
             /** Task */
@@ -3521,6 +3521,8 @@ export interface components {
             files: string[];
             /** Estimate Eur */
             estimate_eur: number;
+            /** Timeout S */
+            timeout_s: number;
             /** Blocked */
             blocked: string | null;
             /** Token */

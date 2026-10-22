@@ -51,10 +51,19 @@ class FakeProvider:
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.calls: list[dict] = []
+        self.timeouts: list[float | None] = []  # the limit each call was given
 
     def complete(
-        self, *, model: str, system: str, user: str, schema: dict, max_tokens: int
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: dict,
+        max_tokens: int,
+        timeout_s: float | None = None,
     ) -> AIResult:
+        self.timeouts.append(timeout_s)
         call = {
             "model": model,
             "system": system,

@@ -622,7 +622,7 @@ describe("Today", () => {
     await user.click(await within(toasts()).findByRole("button", { name: "Undo" }));
     expect(
       await within(toasts()).findByText(
-        "Could not take back Scan⟨U+202E⟩bill: Conflict: item was changed — mark it done instead",
+        "Could not take back Scan⟨U+202E⟩bill: item was changed — mark it done instead",
       ),
     ).toBeInTheDocument();
   });
@@ -645,7 +645,7 @@ describe("Today", () => {
     });
     await user.click(await screen.findByRole("button", { name: "Put in To pay" }));
     expect(
-      await within(toasts()).findByText("Could not put scan⟨U+202E⟩bill.pdf in To pay: Not found: no such tray"),
+      await within(toasts()).findByText("Could not put scan⟨U+202E⟩bill.pdf in To pay: no such tray"),
     ).toBeInTheDocument();
   });
 

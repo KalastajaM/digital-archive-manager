@@ -51,6 +51,43 @@ def estimate_tokens(chars: int) -> int:
     return math.ceil(chars / 3.5)
 
 
+# How long one call may take before the app stops waiting (never retried: a retry could
+# bill twice). 60 s for a small call, plus 1 s per 500 estimated input tokens and 1 s per
+# 50 output tokens allowed (the model's thinking counts there), rounded up to 10 s and
+# capped at 3 min. A summary of 40 files gets about 2 min 20 s.
+TIMEOUT_BASE_S = 60
+TIMEOUT_MAX_S = 180
+TIMEOUT_STEP_S = 10
+INPUT_TOKENS_PER_S = 500
+OUTPUT_TOKENS_PER_S = 50
+
+
+def timeout_s(input_tokens: int, max_tokens: int) -> int:
+    """The limit for a call of this estimated size, in whole seconds (60 to 180)."""
+    raw = TIMEOUT_BASE_S + input_tokens / INPUT_TOKENS_PER_S + max_tokens / OUTPUT_TOKENS_PER_S
+    stepped = math.ceil(raw / TIMEOUT_STEP_S) * TIMEOUT_STEP_S
+    return min(TIMEOUT_MAX_S, stepped)
+
+
+def duration_text(seconds: int) -> str:
+    """``120`` as "2 minutes", ``140`` as "2 minutes 20 seconds"."""
+    minutes, rest = divmod(seconds, 60)
+    parts = []
+    if minutes:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    if rest or not minutes:
+        parts.append(f"{rest} seconds" if rest != 1 else "1 second")
+    return " ".join(parts)
+
+
+def euro_text(n: float) -> str:
+    """Euros as the app writes money ("1,25 €"); amounts under a cent keep four decimals."""
+    if 0 < n < 0.0001:
+        return "< 0,0001 €"
+    digits = 4 if n != 0 and abs(n) < 0.01 else 2
+    return f"{n:.{digits}f}".replace(".", ",") + " €"
+
+
 def estimate_input_tokens(text: str) -> int:
     return estimate_tokens(len(text))
 

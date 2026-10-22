@@ -130,7 +130,8 @@ const STATUS_LABEL: Record<number, string> = {
   413: "Too large",
 };
 
-/** A non-2xx answer; ``message`` is ready to show (the API's ``error`` text included). */
+/** A non-2xx answer; ``message`` is ready to show: the API's ``error`` text alone, or a
+ * status label when it sent none. */
 export class ApiError extends Error {
   readonly status: number;
   /** The API's machine-readable reason, when it sends one (e.g. ``stale_preview``). */
@@ -140,7 +141,9 @@ export class ApiError extends Error {
   constructor(status: number, detail: string, code: string | null = null) {
     const label =
       status >= 500 ? "Internal error (see the dam log)" : (STATUS_LABEL[status] ?? `Error ${status}`);
-    super(detail ? `${label}: ${detail}` : label);
+    // a sentence from the server stands alone ("Conflict: ..." would be jargon); a
+    // server error keeps its label, which says where to look
+    super(detail ? (status >= 500 ? `${label}: ${detail}` : detail) : label);
     this.name = "ApiError";
     this.status = status;
     this.code = code;

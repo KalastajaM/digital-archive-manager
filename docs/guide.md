@@ -1211,9 +1211,16 @@ in `settings.yaml` switches AI off too.
   out) for questions. **Check these against Anthropic's current price list** and edit
   `ai.prices` and `ai.models` in `settings.yaml` when they change; the app cannot know.
 - **One call at a time.** Calls are sent one after the other, each one checked against
-  the budget right before it goes out. A call that never answers gives up after 60 s and
-  is not retried; a timeout is counted at its estimate (it may have been billed, and the
-  real usage is unknown), so the month's figure stays on the safe side.
+  the budget right before it goes out. How long a call may take depends on its size: 60 s
+  plus 1 s per 500 estimated input tokens and 1 s per 50 output tokens allowed, rounded
+  up to 10 s and capped at 3 minutes (a small question gets about 80 s, a summary of 40
+  files about 2 min 20 s). The "What will be sent" sheet states the limit ("Gives up
+  after") and, once you send, shows "Waiting for Claude" with the seconds counting up. A
+  call that never answers is not retried; the message says Claude didn't answer within
+  the limit, that nothing was changed, and that the estimate is counted this month (it
+  may have been billed, and the real usage is unknown), so the figure stays on the safe
+  side. Closing the sheet meanwhile does not stop the call; **Ask AI** shows its answer
+  again for free.
 - **The log**: every call is logged with its time, task, model, the files involved, the
   input and output tokens, the real cost, the outcome and its duration. See it in
   **Activity → AI** (with this month's total against the budget at the top) or with

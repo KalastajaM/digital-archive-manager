@@ -179,7 +179,7 @@ describe("Sidebar drops", () => {
     const dt = drag(["f1"]);
     fireEvent.dragEnter(row, { dataTransfer: dt });
     fireEvent.drop(row, { dataTransfer: dt });
-    expect(await screen.findByText("Could not put a.pdf in To pay: Invalid request: no such ⟨U+202E⟩tray")).toBeInTheDocument();
+    expect(await screen.findByText("Could not put a.pdf in To pay: no such ⟨U+202E⟩tray")).toBeInTheDocument();
   });
 
   it("dropping on a collection adds the files (ungrouped) and shows the Ongoing result", async () => {

@@ -873,7 +873,7 @@ describe("Drag and drop in Browse", () => {
     });
     await screen.findByText("readme.txt");
     dropOn(rowOf(listing(), "13. Taxes"), dragFrom(rowOf(listing(), "readme.txt")));
-    expect(await screen.findByText("Cannot move: Invalid request: the index is out of date: ⟨U+202E⟩rescan")).toBeInTheDocument();
+    expect(await screen.findByText("Cannot move: the index is out of date: ⟨U+202E⟩rescan")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(posts(calls, "/api/browse/move")).toHaveLength(0);
   });

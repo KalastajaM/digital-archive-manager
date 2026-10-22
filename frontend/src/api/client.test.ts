@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mockFetch } from "../test-utils";
-import { patch, post, put } from "./client";
+import { ApiError, errorText, patch, post, put } from "./client";
 
 describe("request", () => {
   it("PATCH and PUT send JSON like POST; a 204 answer gives undefined", async () => {
@@ -21,5 +21,24 @@ describe("request", () => {
       ["PUT", { text: "hi" }],
       ["POST", {}],
     ]);
+  });
+});
+
+describe("ApiError messages", () => {
+  it("a sentence from the server stands alone, without the status name", () => {
+    expect(errorText(new ApiError(409, "item was changed — mark it done instead"))).toBe(
+      "item was changed — mark it done instead",
+    );
+    expect(errorText(new ApiError(400, "no such tray"))).toBe("no such tray");
+    expect(errorText(new ApiError(404, "file x"))).toBe("file x");
+  });
+
+  it("without a sentence the status gets a plain label", () => {
+    expect(errorText(new ApiError(409, ""))).toBe("Conflict");
+    expect(errorText(new ApiError(418, ""))).toBe("Error 418");
+  });
+
+  it("a server error keeps its label, which says where to look", () => {
+    expect(errorText(new ApiError(500, "boom"))).toBe("Internal error (see the dam log): boom");
   });
 });

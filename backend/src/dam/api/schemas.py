@@ -1088,7 +1088,7 @@ class PreparedOut(BaseModel):
     the worst-case estimate, why it is blocked (or null) and the token for ``run``.
     ``cached`` is an earlier result for the same input (running it costs nothing).
     ``notes`` say what was left out and why (excluded collection members); they are
-    shown, never sent."""
+    shown, never sent. ``timeout_s``: how long a send waits before giving up."""
 
     task: str
     model: str
@@ -1096,6 +1096,7 @@ class PreparedOut(BaseModel):
     payload_text: str
     files: list[str]
     estimate_eur: float
+    timeout_s: int
     blocked: str | None
     token: str
     cached: dict[str, Any] | None
