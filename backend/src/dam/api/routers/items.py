@@ -62,7 +62,7 @@ def undo_move(app: AppDep, item_id: int):
 @router.post("/items/{item_id}/remove", status_code=204, response_class=Response)
 def remove_item(app: AppDep, item_id: int) -> Response:
     """Remove an item from its tray, open or done (DB only: the files are not touched)."""
-    app.trays.remove(item_id)
+    app.trays.delete_item(item_id)
     return Response(status_code=204)
 
 

@@ -361,8 +361,10 @@ The screens:
   **To pay** has the open total and each
   bill with its payee, amount and an urgency tag (red overdue, orange within 3 days, grey
   later). Each tray row has a round checkbox before its title that marks the item done
-  (a toast with Undo); where the tray's done action asks for fields (Mark paid), it opens
-  that small form instead. **Inbox** has the count, the age of the oldest document, a bar for this week,
+  at once, on every row (also a bill due later), with the done fields' defaults (paid on
+  today) and a toast with Undo; only a done field that is required and has no default opens
+  its small form. Done fields cannot be edited afterwards: Reopen the item and mark it
+  done again. **Inbox** has the count, the age of the oldest document, a bar for this week,
   last week and older (by arrival in `##. Organize`) and **Found in the inbox**:
   documents whose scan says they belong in a tray, each with **Put in <tray>**. Then
   **To action**, **To read**, the open collections that have to-dos (open checklist

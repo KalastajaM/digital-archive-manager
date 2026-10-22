@@ -847,7 +847,7 @@ class TrayService:
         self._date_changed(back)
         return len(ids) + len(back)
 
-    def remove(self, item_id: int) -> None:
+    def delete_item(self, item_id: int) -> None:
         """Remove an item from its tray, open or done (DB only: the files are not touched).
         The item, its history, note, checklist and reminder records are deleted."""
         with write_tx(self.engine) as conn:

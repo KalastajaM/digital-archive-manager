@@ -57,8 +57,9 @@ All notable changes are listed here. The format follows
   after a confirm; the files stay where they are. New `POST /api/items/{id}/remove`.
 - Checklist rows: click the text to edit, drag by the grip or press Option-Up/Down to
   reorder, delete button on hover; the Edit and arrow buttons are gone.
-- Today's tray rows have a round checkbox before the title that marks the item done, with
-  Undo (a tray whose done action asks for fields opens its form).
+- Today's tray rows (all of them, also items due later) have a round checkbox before the
+  title that marks the item done at once with the done fields' defaults, with Undo. A
+  done field that is required and has no default opens its small form.
 - A dated tray item shows its date field, urgency tag and Mark done on one row; the
   separate read-only date line is gone.
 - Activity cards are collapsible (collapsed by default), with Expand all / Collapse all

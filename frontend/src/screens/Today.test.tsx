@@ -43,6 +43,14 @@ const TO_ACTION: TrayDef = {
   done: { label: "Done", fields: {} },
 };
 const TRAYS = { trays: [TO_PAY, TO_ACTION], errors: [] };
+// a tray whose done action needs a value the user must give (no default)
+const ASKS = {
+  trays: [
+    { ...TO_PAY, done: { label: "Mark paid", fields: { paid_on: { type: "date", required: true, copy: false, default: null } } } },
+    TO_ACTION,
+  ],
+  errors: [],
+};
 
 function item(id: number, overrides: Partial<Item> = {}): Item {
   return {
@@ -440,7 +448,7 @@ describe("Today", () => {
     expect(within(bill).getByRole("status")).toHaveTextContent("Copied");
   });
 
-  it("Mark paid asks for the done fields (paid on = today); Enter posts them and the row goes", async () => {
+  it("ticking a bill completes it at once with the done defaults (paid on = today); Undo reopens", async () => {
     let done = false;
     const { calls, user } = renderToday({
       "GET /api/today": () => ({
@@ -460,24 +468,47 @@ describe("Today", () => {
     });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
     await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
-    const form = within(bill).getByRole("form", { name: "Mark paid" });
-    const paidOn = within(form).getByLabelText("Paid on");
-    expect(paidOn).toHaveValue(DAY);
-    expect(paidOn).toHaveFocus();
-    expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
-    await user.keyboard("{Enter}");
+    expect(within(bill).queryByRole("form")).not.toBeInTheDocument();
     await waitFor(() => expect(posts(calls, "/api/items/1/done")).toHaveLength(1));
     expect(posts(calls, "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: DAY } });
     await waitFor(() => expect(screen.queryByRole("article", { name: "Northpower sähkö" })).not.toBeInTheDocument());
 
-    expect(toasts()).toHaveTextContent(/Mark paid: Northpower sähkö/);
-    await user.click(within(toasts()).getByRole("button", { name: "Reopen" }));
+    expect(toasts()).toHaveTextContent(/Marked paid: Northpower sähkö/);
+    await user.click(within(toasts()).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(posts(calls, "/api/items/1/reopen")).toHaveLength(1));
     expect(await within(toasts()).findByText("Reopened: Northpower sähkö")).toBeInTheDocument();
   });
 
+  it("a done field that is required and has no default opens the small form", async () => {
+    const { calls, user } = renderToday({
+      "GET /api/trays": { body: ASKS },
+      "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
+    });
+    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
+    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
+    const form = within(bill).getByRole("form", { name: "Mark paid" });
+    const paidOn = within(form).getByLabelText("Paid on");
+    expect(paidOn).toHaveFocus();
+    expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
+    fireEvent.change(paidOn, { target: { value: DAY } });
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(posts(calls, "/api/items/1/done")).toHaveLength(1));
+    expect(posts(calls, "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: DAY } });
+  });
+
+  it("a compact (later) row can be ticked off too", async () => {
+    const { calls, user } = renderToday({ "POST /api/items/5/done": { body: { ...LATER, state: "done" } } });
+    await screen.findByRole("article", { name: LATER.title });
+    const later = row(LATER.title);
+    expect(later).toHaveClass("today-row-compact");
+    await user.click(within(later).getByRole("checkbox", { name: `Mark ${LATER.title} paid` }));
+    await waitFor(() => expect(posts(calls, "/api/items/5/done")).toHaveLength(1));
+    expect(posts(calls, "/api/items/5/done")[0].body).toEqual({ fields: { paid_on: DAY } });
+  });
+
   it("Esc closes the done form without posting; a tray without done fields completes at once, with Undo", async () => {
     const { calls, user } = renderToday({
+      "GET /api/trays": { body: ASKS },
       "POST /api/items/2/done": { body: { ...ACTION, state: "done" } },
       "POST /api/items/2/reopen": { body: ACTION },
     });
@@ -498,7 +529,7 @@ describe("Today", () => {
   });
 
   it("Esc closes the done form even when the focus has left it", async () => {
-    const { user } = renderToday();
+    const { user } = renderToday({ "GET /api/trays": { body: ASKS } });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
     await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.click(screen.getByRole("heading", { level: 1 }));
@@ -514,7 +545,10 @@ describe("Today", () => {
   });
 
   it("a failed done keeps the form and shows the error", async () => {
-    const { user } = renderToday({ "POST /api/items/1/done": { status: 400, body: { error: "paid_on: expected a date" } } });
+    const { user } = renderToday({
+      "GET /api/trays": { body: ASKS },
+      "POST /api/items/1/done": { status: 400, body: { error: "paid_on: expected a date" } },
+    });
     const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
     await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
     await user.keyboard("{Enter}");

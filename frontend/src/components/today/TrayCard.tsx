@@ -119,21 +119,29 @@ export function TrayRow({
   const toast = useToast();
   const title = visible(item.title);
   const checkName = doneName(title, visible(doneLabel));
-  // A tray whose done action asks for fields opens its small form; any other completes at once.
+  const doneWord = visible(doneLabel).replace(/^mark\s+/i, "").toLowerCase();
+  // Completes at once, sending each done field's default (paid_on: today); only a done
+  // field that is required and has no default opens the small form.
+  const needsForm = Object.values(doneFields).some((f) => f.required && f.type !== "checkbox" && !f.default);
+  const defaults = Object.fromEntries(
+    Object.entries(doneFields).flatMap(([n, f]): [string, string | boolean][] =>
+      f.type === "checkbox" ? [[n, false]] : f.default === "today" ? [[n, today]] : [],
+    ),
+  );
   const onCheck = async () => {
-    if (Object.keys(doneFields).length > 0) {
+    if (needsForm) {
       setFormOpen(!formOpen);
       return;
     }
     try {
-      await markDone.mutateAsync({ id: item.id, fields: {} });
+      await markDone.mutateAsync({ id: item.id, fields: defaults });
     } catch (err) {
-      toast({ kind: "error", text: `Could not mark ${title} done: ${visible(errorText(err))}` });
+      toast({ kind: "error", text: `Could not mark ${title} ${doneWord}: ${visible(errorText(err))}` });
       return;
     }
     toast({
       kind: "info",
-      text: `Marked done: ${title}`,
+      text: `Marked ${doneWord}: ${title}`,
       action: {
         label: "Undo",
         run: () =>
