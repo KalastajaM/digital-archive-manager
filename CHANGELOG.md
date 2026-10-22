@@ -32,6 +32,11 @@ All notable changes are listed here. The format follows
 - Browse: a "Collection" menu (a tree of the open collections, with ★ Ongoing and
   ! Important) replaces the filter icon; a folder member brings its contents at any depth.
 
+### Fixed
+
+- Links and folders the app made in Google Drive are no longer flagged "looks different"
+  after Drive re-writes them.
+
 ### Changed
 
 - A plan with a single step is shown as a sentence, not a numbered list.

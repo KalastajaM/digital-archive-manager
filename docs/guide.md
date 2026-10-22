@@ -617,23 +617,22 @@ If a previous run was interrupted, commands warn you to run `dam recover`.
   `##. To Delete`.
 - **"Is this still the folder/link the app made?" is answered by file identity.** The
   app records, right after it creates a folder or link, its device number, inode number
-  and **creation time**, and removes or touches it later only while all three still
-  match. The inode number alone is not enough: Linux file systems (ext4, tmpfs) reuse it
-  at once for a file created right after another is deleted. The creation time is the
+  and **creation time**. It removes or touches the entry later only while the device and
+  inode numbers still match, the kind is the same (folder or link) and, for a link, the
+  target is exactly the one it wrote. The creation time is kept but **not compared**:
+  Google Drive for desktop re-writes a newly created item a few seconds after it appears
+  (same inode, a later creation time), so a changed creation time alone is the app's own
+  entry. The app then stores the new creation time. A different inode, a different link
+  target or a different kind is "not the same": the entry is kept and reported, never
+  removed. A folder is also removed only while it is empty. The creation time is the
   macOS/Windows birth time; on Linux it is the `statx` birth time (ext4, xfs, btrfs,
-  recent tmpfs). Where a Linux file system reports none, a link falls back to its change
-  time (a link is never written after it is made, and a recreated one always gets a new
-  time), while a folder falls back to device and inode only, because a folder's change
-  time moves whenever something is added to or removed from it and using it would make
-  every folder you filled and emptied again look "swapped" (safe, but it would keep
-  undo from ever removing them). That last case is the one weak spot: on such a file
-  system a folder you delete and recreate within moments may go unnoticed; what could
-  then be removed is still only an empty folder inside `##. Ongoing`/`##. Important`
-  (or one this app made), never a file. Any recorded creation time that is different
-  from, or cannot be read for, the current entry means "not the same": it is kept and
-  reported, never removed. Identities are stored as text (Windows file indexes exceed
-  SQLite's integers); records from older versions have no creation time and are compared
-  on device and inode as before.
+  recent tmpfs), or for a link without one its change time. Because it is not compared,
+  a folder or link you delete and recreate so that it gets the same inode number
+  (Linux file systems reuse them at once) goes unnoticed for a folder, and for a link
+  only if its target is also exactly the same, which is harmless; what could be removed
+  is still only an empty folder inside `##. Ongoing`/`##. Important` (or one this app
+  made), never a file. Identities are stored as text (Windows file indexes exceed
+  SQLite's integers); records from older versions have no creation time.
 - **Every change is journaled and undoable.** Each move/rename/folder creation is
   recorded before it happens, in batches. `dam activity` / the Activity page list them;
   `dam undo` / the Undo button revert a whole batch. Undo first checks that each moved
@@ -1015,8 +1014,10 @@ archive:
    they keep it under Drive for desktop. Use a throwaway document and a new test
    collection: file the document into it, wait for Drive to finish syncing, then run
    `dam ongoing sync --dry-run`; it should show no operations. If it plans changes or the
-   collection shows "Needs attention", Drive changed the inode. An entry with the same name
-   and the same link target but a new inode is then left alone: the sync reports
+   collection shows "Needs attention", Drive changed the inode. (A changed creation time
+   with the same inode and link target is not a problem: Drive does that, and the app
+   accepts the entry as its own and updates the stored time.) An entry with the same name
+   and the same link target but a new inode is left alone: the sync reports
    "… looks different from before (Google Drive may have re-created it), so it was left
    as it is" and neither
    removes it nor publishes a `_2` beside it, and that collection is not synced until

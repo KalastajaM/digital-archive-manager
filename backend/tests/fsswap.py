@@ -1,40 +1,32 @@
 """Realistic "the user deleted it and put another in its place" for the tests.
 
-Linux file systems hand a freed inode number to the next file created, and stamp
-timestamps from a clock that ticks only every few milliseconds, so a delete followed
-at once by a create can produce an object with exactly the same identity. A person
-needs far longer than that between the two steps; ``recreate_*`` waits until the new
-object's identity differs from the old one's (a few ms at most) before returning.
+The app accepts an entry as its own when ``dev`` and ``ino`` match (the birth time is
+not compared; see ``dam.ops.identity.same_object``), so a replacement must have a new
+inode number. Linux file systems hand a freed inode number straight to the next file
+created, so ``recreate_*`` makes the new object while the old one still exists (it
+cannot share the old one's inode), then removes the old one and renames the new one
+into its place.
 """
 
 import os
-import time
 from pathlib import Path
 
-from dam.ops import identity
 
-_TRIES = 500
-
-
-def _until_different(path: Path, old: identity.Identity, make) -> None:
-    for _ in range(_TRIES):
-        make()
-        if identity.of_path(path) != old:
-            return
-        os.unlink(path) if path.is_symlink() else os.rmdir(path)
-        time.sleep(0.005)
-    raise AssertionError(f"could not make {path} look different from what it replaced")
+def _swap_name(path: Path) -> Path:
+    return path.with_name(path.name + ".swap")
 
 
 def recreate_dir(path: Path) -> None:
-    """Remove the empty folder ``path`` and make a new, empty one at the same path."""
-    old = identity.of_path(path)
+    """Replace the empty folder ``path`` with a new, empty one at the same path."""
+    new = _swap_name(path)
+    new.mkdir()
     os.rmdir(path)
-    _until_different(path, old, path.mkdir)
+    os.rename(new, path)
 
 
 def recreate_link(path: Path, target) -> None:
-    """Remove the link ``path`` and make a new link, to ``target``, at the same path."""
-    old = identity.of_path(path)
+    """Replace the link ``path`` with a new link, to ``target``, at the same path."""
+    new = _swap_name(path)
+    os.symlink(target, new)
     os.unlink(path)
-    _until_different(path, old, lambda: os.symlink(target, path))
+    os.rename(new, path)

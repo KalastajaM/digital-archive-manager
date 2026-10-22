@@ -33,8 +33,11 @@ its own ``ongoing_rel`` and ``ongoing_status``.
 Ownership is by identity. Every entry the publisher creates (its folder, its links) is
 recorded in ``ongoing_entries`` with the identity (``dam.ops.identity``) it has right after
 creation and, for a link, the exact readlink value written. An entry is the publisher's
-only while the record still matches: same rel, same dev/ino, same readlink value. A
-mismatch means someone else replaced it: the record is forgotten, the entry is never
+only while the record still matches: same rel, same kind, same dev/ino, same readlink
+value (the birth time is not compared: Google Drive for desktop re-writes a new item a
+few seconds after creating it, keeping the inode but giving it a new birth, so a birth
+that differs while the rest matches is the app's own entry; the stored birth is then
+refreshed). A mismatch means someone else replaced it: the record is forgotten, the entry is never
 touched, and the collection's ``ongoing_status`` says so for as long as the entry is
 there. Nothing else in ``##. Ongoing`` is ever touched either (real files, foreign
 links, folders, foreign links inside the collection's own folder); something foreign at
@@ -719,6 +722,8 @@ class OngoingPublisher:
         created), ``"gone"`` (nothing there, or something else: forget the record) or
         ``"moved"`` (same kind and, for a link, the same readlink value, but a new
         dev/ino: Drive may have re-enumerated it; neither forgotten nor touched).
+        Only dev/ino decide: a birth that differs (Drive re-writes new items) is still
+        ``"match"`` and the stored birth is refreshed (``_refresh_birth``).
         Any OSError other than "not there" propagates: unknown, never "gone"."""
         try:
             p = self.paths.abs(rec.rel)
@@ -737,7 +742,26 @@ class OngoingPublisher:
         )
         if not same:
             return "gone"
-        return "match" if identity.same(rec.ident, identity.of_stat(st, path=p)) else "moved"
+        now = identity.of_stat(st, path=p)
+        if not identity.same_object(rec.ident, now):
+            return "moved"
+        if not identity.same(rec.ident, now):
+            self._refresh_birth(rec, now)
+        return "match"
+
+    def _refresh_birth(self, rec: _Record, now: Identity) -> None:
+        """Store the birth the entry has now, so later checks (and the next sync's
+        note) go by the refreshed value. Best effort: a failed write changes nothing
+        (the entry still matches, and the next look tries again)."""
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(
+                    update(ongoing_entries)
+                    .where(ongoing_entries.c.id == rec.id)
+                    .values(st_birth=now.birth)
+                )
+        except Exception:  # noqa: BLE001
+            log.warning("could not refresh the stored birth of %s", rec.rel, exc_info=True)
 
     def _matches(self, rec: _Record) -> bool:
         """The entry at ``rec.rel`` is still exactly the one the publisher created.

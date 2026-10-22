@@ -967,6 +967,72 @@ def identity_problem(rel: str) -> str:
     )
 
 
+def set_births(app, birth):
+    """Pretend every recorded entry had another birth than it has now (as when Google
+    Drive re-writes a new item: same inode, later birth)."""
+    with app.engine.begin() as conn:
+        conn.execute(update(ongoing_entries).values(st_birth=birth))
+
+
+def test_a_changed_birth_with_the_same_inode_and_value_is_still_ours(app, fake_archive, two_files):
+    app.collections.on_change = None
+    sauna(app)
+    app.ongoing.sync()
+    before = records(app)
+    set_births(app, "b:1")
+    result = app.ongoing.sync()
+    assert result.problems == [] and result.batch is None
+    after = records(app)  # folder and both links: the stored birth is the current one
+    assert [(r.rel, r.st_dev, r.st_ino) for r in after] == [
+        (r.rel, r.st_dev, r.st_ino) for r in before
+    ]
+    for r in after:
+        assert identity.from_columns(r.st_dev, r.st_ino, r.st_birth) == identity.of_path(
+            fake_archive.root / r.rel
+        )
+    assert listing(ongoing(fake_archive) / "Sauna") == ["a.pdf", "b.pdf"]
+
+
+def test_a_top_link_with_a_changed_birth_is_still_ours(app, fake_archive):
+    folder(fake_archive, "Home/2026 Sauna", "d-sauna")
+    app.scan()
+    c = sauna(app, ["d-sauna"])
+    link = ongoing(fake_archive) / "Sauna"
+    set_births(app, "b:1")
+    assert app.ongoing.sync().problems == []
+    rec = records(app)[0]
+    assert identity.from_columns(rec.st_dev, rec.st_ino, rec.st_birth) == identity.of_path(link)
+    app.collections.close(c.id)  # managed again: the link is taken down
+    assert listing(ongoing(fake_archive)) == []
+
+
+def test_a_link_with_a_changed_target_is_not_ours_even_with_the_same_inode(app, fake_archive):
+    folder(fake_archive, "Home/2026 Sauna", "d-sauna")
+    folder(fake_archive, "Home/Other", "d-other")
+    app.scan()
+    sauna(app, ["d-sauna"])
+    link = ongoing(fake_archive) / "Sauna"
+    other = readlink(link).replace("2026 Sauna", "Other")
+    os.unlink(link)
+    os.symlink(other, link)
+    set_births(app, "b:1")
+    app.ongoing.sync()
+    assert readlink(link) == other  # the link is never touched
+    # the record was not taken as a match: it is forgotten, not refreshed
+    assert all(r.rel != f"{ONG}/Sauna" or r.st_birth != "b:1" for r in records(app))
+    assert not any(r.st_birth == "b:1" and r.link_value == other for r in records(app))
+
+
+def test_a_folder_with_a_changed_birth_is_still_ours(app, fake_archive, two_files):
+    app.collections.on_change = None
+    c = sauna(app)
+    app.ongoing.sync()
+    set_births(app, "b:1")
+    app.collections.close(c.id)
+    app.ongoing.sync()
+    assert listing(ongoing(fake_archive)) == [] and records(app) == []
+
+
 def test_link_with_new_identity_but_same_value_is_left_alone(app, fake_archive):
     folder(fake_archive, "Home/2026 Sauna", "d-sauna")
     app.scan()

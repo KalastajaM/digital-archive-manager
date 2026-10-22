@@ -14,7 +14,7 @@ from sqlalchemy import text
 
 from dam.db.engine import MIGRATIONS_DIR, make_engine, migrate, write_tx
 from dam.ops import identity
-from dam.ops.identity import Identity, same
+from dam.ops.identity import Identity, same, same_object
 from dam.ops.model import GuardError
 from dam.ops.primitives import remove_empty_dir
 from fsswap import recreate_dir, recreate_link
@@ -69,6 +69,16 @@ def test_same_needs_equal_dev_ino_and_equal_known_birth():
     assert not same(rec, Identity(1, 2, None))  # cannot be verified: never a match
     assert not same(rec, Identity(1, 2, "c:10"))  # a different kind of value
     assert not same(None, Identity(1, 2, "b:10"))
+
+
+def test_same_object_ignores_the_birth():
+    rec = Identity(1, 2, "b:10")
+    assert same_object(rec, Identity(1, 2, "b:11"))  # Drive re-wrote it: same inode
+    assert same_object(rec, Identity(1, 2, None))
+    assert same_object((1, 2), Identity(1, 2, "c:5"))
+    assert not same_object(rec, Identity(1, 3, "b:10"))
+    assert not same_object(rec, Identity(2, 2, "b:10"))
+    assert not same_object(None, Identity(1, 2, "b:10"))
 
 
 def test_a_record_without_birth_is_compared_on_dev_and_ino():
@@ -140,6 +150,25 @@ def test_remove_empty_dir_checks_the_fd_identity(tmp_path: Path):
         remove_empty_dir(root / "a", root, old)
     remove_empty_dir(root / "a", root, identity.of_path(root / "a"))
     assert not (root / "a").exists()
+
+
+def test_remove_empty_dir_accepts_a_folder_whose_birth_changed(tmp_path: Path):
+    root = tmp_path / "root"
+    (root / "a").mkdir(parents=True)
+    now = identity.of_path(root / "a")
+    old = Identity(now.dev, now.ino, "b:1")  # as recorded; Drive has re-written it since
+    remove_empty_dir(root / "a", root, old)
+    assert not (root / "a").exists()
+
+
+def test_remove_empty_dir_still_refuses_a_non_empty_folder_with_changed_birth(tmp_path: Path):
+    root = tmp_path / "root"
+    (root / "a").mkdir(parents=True)
+    (root / "a" / "f").write_text("x", encoding="utf-8")
+    now = identity.of_path(root / "a")
+    with pytest.raises(GuardError):
+        remove_empty_dir(root / "a", root, Identity(now.dev, now.ino, "b:1"))
+    assert (root / "a" / "f").exists()
 
 
 # -- migration 0024 -------------------------------------------------------------------

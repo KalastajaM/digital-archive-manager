@@ -236,7 +236,7 @@ def _removable(ex: Executor, rel: str, ident: identity.Identity, removed: set) -
         if (
             stat.S_ISLNK(st.st_mode)
             or not stat.S_ISDIR(st.st_mode)
-            or not identity.same(ident, identity.of_stat(st, path=p))
+            or not identity.same_object(ident, identity.of_stat(st, path=p))
         ):
             return False
         names = os.listdir(p)
@@ -332,7 +332,7 @@ def _check_unchanged(ex: Executor, row: JournalEntry, now_at: str) -> None:
         if (
             p.is_symlink()
             or not p.is_dir()
-            or not identity.same(_recorded_identity(ex, now_at), identity.of_path(p))
+            or not identity.same_object(_recorded_identity(ex, now_at), identity.of_path(p))
         ):
             raise OpFailed(
                 f"{now_at} is no longer the folder the app made, so this cannot be undone."

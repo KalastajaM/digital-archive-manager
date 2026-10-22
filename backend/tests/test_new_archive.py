@@ -236,6 +236,20 @@ def test_undo_leaves_a_folder_that_was_swapped_for_another(blank):
     assert "14. Vehicles" in result.batch.kept and folder.is_dir()
 
 
+@needs_dir_fd
+def test_undo_removes_a_folder_whose_birth_changed_but_inode_is_the_same(blank):
+    """Google Drive re-writes a new folder (same inode, later birth): still the app's."""
+    out = blank.layout.apply(household(blank, drop=("home",)))
+    archive = blank.test_archive
+    (archive / "13. Taxes" / "2025").mkdir()  # still refused: not empty
+    with blank.engine.begin() as conn:  # simulate the new birth through the stored value
+        conn.execute(made_folders.update().values(st_birth="b:1"))
+    result = blank.activity.undo(out.batch.batch_id)
+    assert result.batch.failed is None and result.batch.error is None
+    assert result.batch.kept == ["13. Taxes"]
+    assert names(archive) == ["13. Taxes"]
+
+
 def test_undo_never_removes_a_folder_that_was_not_recorded_as_made(blank):
     out = blank.layout.apply(household(blank))
     with blank.engine.begin() as conn:

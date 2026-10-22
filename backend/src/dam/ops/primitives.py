@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - platform dependent
 from dam.core.fs import resolve
 from dam.core.paths import nfc
 from dam.ops.identity import Identity, of_fd, of_stat
-from dam.ops.identity import same as same_identity
+from dam.ops.identity import same_object as same_identity
 from dam.ops.model import GuardError, OpFailed
 
 RENAME_EXCL = 0x4
@@ -261,8 +261,10 @@ def remove_empty_dir(path: Path, root_dir: Path, identity: Identity | None = Non
     ``root_dir`` (a publish root, ``##. Ongoing`` or ``##. Important``; at any depth,
     never ``root_dir`` itself), holds nothing but
     a genuine Finder ``.DS_Store`` (deleted first) and, when ``identity`` is given, is
-    still the folder with that identity (``dam.ops.identity``) (checked on the opened fd: a folder
-    swapped in since it was planned is refused, nothing removed).
+    still the folder with that identity (``dev``/``ino`` only; the birth time is not
+    compared, since Google Drive re-writes new folders, see ``identity.same_object``)
+    (checked on the opened fd: a folder swapped in since it was planned is refused,
+    nothing removed).
 
     Anything else in it (another name, a case variant, a subfolder, a ``.DS_Store``
     that is a folder, a link, hard-linked, without Finder's header or carrying a Drive

@@ -25,7 +25,12 @@ file index is an unsigned 64-bit number or more and does not fit a SQLite INTEGE
     Removal is still limited to empty folders inside the publish roots, so the worst
     case is the removal of an empty folder at a path the app owned.
 
-Comparison (``same``): ``dev`` and ``ino`` must be equal. When the recorded identity
+Comparison. ``same_object`` (the one the app acts on) needs only equal ``dev`` and
+``ino``: Google Drive for desktop re-writes a new item shortly after creating it, which
+keeps the inode but gives it a new birth time, so a changed birth alone is not a sign of
+a replacement. The caller also checks the kind and, for a link, its exact readlink value.
+``same`` is the strict form, kept for callers that want the birth too: ``dev`` and
+``ino`` must be equal and, when the recorded identity
 has a birth, the current one must have the same one: a different value, a different
 source, or none at all means "not the same", never a match by default. A recorded
 identity without a birth (a row from before migration 0024, or a platform that has
@@ -145,3 +150,21 @@ def same(recorded: Identity | tuple | None, current: Identity) -> bool:
     if rec.birth is None:
         return True
     return current.birth == rec.birth
+
+
+def same_object(recorded: Identity | tuple | None, current: Identity) -> bool:
+    """``current`` is at the same place in the file system as the recorded object:
+    ``dev`` and ``ino`` equal, the birth ignored.
+
+    This is what the app accepts as "its own" folder or link. Google Drive for desktop
+    re-writes a newly created item a few seconds after it appears (same inode, a later
+    birth time), so ``same`` would call the app's own entries foreign. Callers that
+    accept on this rule must check the rest themselves: the kind (link, folder, file),
+    and for a link its exact readlink value. A folder to be removed must also be empty.
+    The cost: an object deleted and recreated under a reused inode number is not told
+    apart by its birth any more (see the module doc for what that can reach).
+    """
+    if recorded is None:
+        return False
+    rec = recorded if isinstance(recorded, Identity) else Identity(*recorded)
+    return (rec.dev, rec.ino) == (current.dev, current.ino)
