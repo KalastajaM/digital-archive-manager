@@ -140,7 +140,7 @@ def _fold(name: str) -> str:
 # folded reserved name -> kind
 _RESERVED = {nfc(n).casefold(): k for k, n in BUILTINS.items()}
 # how the UI names each mark
-MARK_LABELS = {"starred": "★ Ongoing", "important": "! Important"}
+MARK_LABELS = {"starred": "★ Starred", "important": "! Important"}
 
 
 def check_name(name: object, what: str = "collection") -> str:

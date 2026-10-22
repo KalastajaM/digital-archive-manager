@@ -170,10 +170,10 @@ describe("the built-ins in pickers", () => {
     );
     await user.click(screen.getByRole("combobox", { name: "Collection" }));
     await user.keyboard("{ArrowDown}");
-    await waitFor(() => expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Sauna", "★ Ongoing", "! Important"]));
+    await waitFor(() => expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Sauna", "★ Starred", "! Important"]));
     // the heading sits right before the first built-in, and is not an option
     const texts = [...screen.getByRole("listbox").children].map((li) => li.textContent);
-    expect(texts).toEqual(["Sauna", "Marked", "★ Ongoing", "! Important"]);
+    expect(texts).toEqual(["Sauna", "Marked", "★ Starred", "! Important"]);
     expect(screen.getByText("Marked")).toHaveAttribute("role", "presentation");
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
     expect(chosen).toEqual([["Important"]]);

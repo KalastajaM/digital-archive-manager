@@ -19,6 +19,8 @@ All notable changes are listed here. The format follows
 - A filed file's name, folder and tags are edited in place (rename, move, tag chips and
   Ask AI chips), replacing the Edit details dialog.
 - Browse: select all, and batch star and Important.
+- A Trays page: the sidebar's Trays caption now lists every tray with its open, overdue
+  and total figures, as Collections does, instead of opening the first tray.
 - A search scope bar, a tray menu ("Put in tray"), and a collection browser.
 - New folder in the folder picker.
 - Folder members expand in a collection.
@@ -90,6 +92,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- The starred built-in collection is called "★ Starred" everywhere (the Browse collection
+  filter, its page title, the collection picker and Convert Ongoing), matching the
+  sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
+- Collections: the Open/Closed switch lines up with the right edge of the list.
 - Buttons follow one order and wording across the app: Cancel comes before Save in the
   detected-field editor and in Save to notes (which Esc now closes); "Don't offer these"
   stands at the left of the tray settings sheet; the Barcode and Export sheets close with

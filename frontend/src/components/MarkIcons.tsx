@@ -5,6 +5,9 @@ import { createContext, useContext } from "react";
 import type { Mark } from "../api/client";
 
 export const MARK_LABEL: Record<Mark, string> = { starred: "Starred", important: "Important" };
+/** A built-in collection as the UI names it: "★ Starred" (stored as "Ongoing", its
+ * folder in ``##. Ongoing``) and "! Important". */
+export const BUILTIN_LABEL: Record<Mark, string> = { starred: "★ Starred", important: "! Important" };
 
 /** The ! glyph of Important (also the sidebar row's and the toggle's icon): drawn, not
  * text, so it never becomes part of a name's text. */
