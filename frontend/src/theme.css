@@ -1,0 +1,176 @@
+/* Design tokens: the only source of colour, type, spacing, radius, shadow and motion.
+ * Screens use classes and these custom properties, never literal values.
+ * Light first; dark follows the system setting. */
+:root {
+  color-scheme: light dark;
+
+  /* Type */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+    Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  --fs-xs: 11px;   /* section captions, tags */
+  --fs-sm: 12px;   /* secondary text, counts */
+  --fs-md: 13px;   /* body */
+  --fs-lg: 15px;   /* toolbar titles */
+  --fs-xl: 17px;   /* sheet titles */
+  --fs-2xl: 22px;  /* big figures */
+  --fs-title: 26px; /* screen greeting */
+  --lh: 1.45;
+
+  /* Spacing (4 px grid) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Radii */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-xl: 12px;
+  --r-pill: 999px;
+
+  /* Layout */
+  --sidebar-w: 220px;
+  --sidebar-row-h: 28px;
+  --toolbar-h: 52px;
+  --icon-button-sm: 26px; /* small icon buttons in dense rows */
+
+  /* Motion */
+  --motion: 160ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* Surfaces */
+  --bg: #fbfbfd;
+  --panel: #ffffff;
+  --panel-2: #f5f5f7;
+  --field: #ffffff;
+  --sidebar-bg: rgb(236 236 240 / 0.86);
+  --sidebar-sel: rgb(0 0 0 / 0.08);
+  --hover: rgb(0 0 0 / 0.045);
+  --selected: #e8f1ff;
+  --selected-strong: #0071e3;
+  --selected-strong-text: #ffffff;
+  --selected-strong-muted: rgb(255 255 255 / 0.78); /* dimmed text on the strong selection */
+
+  /* Text */
+  --text: #1d1d1f;
+  --text-2: #3a3a3c;
+  --muted: #68686d; /* 4.5:1 or better on every light surface */
+  --muted-2: #515154;
+
+  /* Lines */
+  --border: rgb(0 0 0 / 0.14);
+  --border-strong: rgb(0 0 0 / 0.22);
+  --hairline: rgb(0 0 0 / 0.08);
+  --separator: #e5e5ea;
+  --meter-track: #e5e5ea; /* an empty bar (the AI budget) on a panel */
+
+  /* Accent */
+  --accent: #0066cc; /* accent text, icons and lines: 4.5:1 on the light surfaces */
+  --accent-fill: #0071e3; /* solid accent fills under --on-accent text (4.7:1) */
+  --accent-hover: #0058b0;
+  --on-accent: #ffffff; /* text on a solid accent or red fill, both schemes */
+  --paper: #ffffff; /* document previews stay white in dark mode */
+  --barcode-ink: #000000; /* bars stay black on --paper in both schemes, for scanners */
+  --accent-soft: rgb(10 132 255 / 0.12);
+  --focus-ring: rgb(10 132 255 / 0.45);
+
+  /* Semantic colours and their tag backgrounds */
+  --red: #ff3b30;
+  --red-text: #c4271c;
+  --red-bg: #ffe5e3;
+  --orange: #ff9500;
+  --orange-text: #a65b00;
+  --orange-bg: #fff0db;
+  --green: #34c759;
+  --green-text: #1f7a35;
+  --green-bg: #e3f6e8;
+  --blue-text: #0a64d6;
+  --blue-bg: #e8f1ff;
+  --grey-text: #6e6e73;
+  --grey-bg: #f2f2f7;
+
+  /* Legacy aliases used by the screen styles until each screen is redone */
+  --warn: var(--orange-text);
+  --warn-bg: var(--orange-bg);
+  --error: var(--red-text);
+  --error-bg: var(--red-bg);
+
+  /* Shadows */
+  --shadow-card: 0 0 0 0.5px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.06);
+  --shadow-button: 0 0.5px 1px rgb(0 0 0 / 0.08);
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.12);
+  --shadow-sheet: 0 24px 64px rgb(0 0 0 / 0.28), 0 0 0 0.5px rgb(0 0 0 / 0.15);
+  --shadow-toast: 0 10px 30px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.1);
+  --shadow-field: inset 0 0.5px 1px rgb(0 0 0 / 0.04);
+  --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.15), 0 0 0 0.5px rgb(0 0 0 / 0.08);
+  --highlight: rgb(255 255 255 / 0.3); /* the inner top edge of a glossy mark */
+  --backdrop: rgb(0 0 0 / 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e20;
+    --panel: #2a2a2d;
+    --panel-2: #323236;
+    --field: #1c1c1e;
+    --sidebar-bg: rgb(40 40 44 / 0.86);
+    --sidebar-sel: rgb(255 255 255 / 0.12);
+    --hover: rgb(255 255 255 / 0.06);
+    --selected: #1f3350;
+    --selected-strong: #0071e3;
+    --selected-strong-text: #ffffff;
+    --selected-strong-muted: rgb(255 255 255 / 0.78);
+
+    --text: #f5f5f7;
+    --text-2: #d1d1d6;
+    --muted: #a1a1a6;
+    --muted-2: #aeaeb2;
+
+    --border: rgb(255 255 255 / 0.16);
+    --border-strong: rgb(255 255 255 / 0.26);
+    --hairline: rgb(255 255 255 / 0.09);
+    --separator: #3a3a3c;
+    --meter-track: rgb(255 255 255 / 0.14);
+
+    --accent: #4aa2ff;
+    --accent-fill: #0071e3;
+    --accent-hover: #70b4ff;
+    --accent-soft: rgb(10 132 255 / 0.22);
+    --focus-ring: rgb(10 132 255 / 0.55);
+
+    --red: #ff453a;
+    --red-text: #ff6961;
+    --red-bg: rgb(255 69 58 / 0.2);
+    --orange: #ff9f0a;
+    --orange-text: #ffb340;
+    --orange-bg: rgb(255 159 10 / 0.2);
+    --green: #30d158;
+    --green-text: #5ee082;
+    --green-bg: rgb(48 209 88 / 0.2);
+    --blue-text: #6cb4ff;
+    --blue-bg: rgb(10 132 255 / 0.22);
+    --grey-text: #aeaeb2;
+    --grey-bg: rgb(255 255 255 / 0.1);
+
+    --shadow-card: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 1px 3px rgb(0 0 0 / 0.4);
+    --shadow-button: 0 0.5px 1px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+    --shadow-sheet: 0 24px 64px rgb(0 0 0 / 0.6), 0 0 0 0.5px rgb(255 255 255 / 0.14);
+    --shadow-toast: 0 10px 30px rgb(0 0 0 / 0.5), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+    --shadow-field: inset 0 0.5px 1px rgb(0 0 0 / 0.3);
+    --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 0.5px rgb(255 255 255 / 0.1);
+    --highlight: rgb(255 255 255 / 0.2);
+    --backdrop: rgb(0 0 0 / 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0ms;
+  }
+}

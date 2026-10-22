@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste personal documents, file names or paths that reveal private information.** Replace them with made-up names, and check any logs or screenshots first.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [macOS, Windows, Linux]
+    validations:
+      required: true
+  - type: dropdown
+    id: cloud
+    attributes:
+      label: Cloud provider of the archive folder
+      options: [Google Drive, OneDrive, Dropbox, iCloud Drive, Nextcloud, Local only, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: dam version
+      description: For example 0.1.0, or the commit you built from.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected and what happened
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines (optional)
+      description: |
+        The log is `logs/dam.log` in the data folder: macOS `~/Library/Application Support/DigitalArchiveManager/`, Windows `%LOCALAPPDATA%\DigitalArchiveManager`, Linux `~/.local/share/DigitalArchiveManager`. Paste only the relevant lines, with private names removed.
+      render: text

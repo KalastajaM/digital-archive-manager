@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an idea
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste personal documents, file names or paths that reveal private information.** Use made-up examples.
+        Note that dam never deletes files and every change must be previewed and undoable.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem do you want to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like dam to do?
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [macOS, Windows, Linux, All]
+  - type: dropdown
+    id: cloud
+    attributes:
+      label: Cloud provider (if relevant)
+      options: [Google Drive, OneDrive, Dropbox, iCloud Drive, Nextcloud, Local only, Other]
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered

@@ -1,0 +1,23 @@
+# A tray: one YAML mapping per file. Edit freely; an invalid file is reported and skipped.
+id: to-pay
+name: To pay
+order: 1                      # position in nav and Today
+item_title: "{name}"          # {name} = filed file name without date prefix; {date:%d.%m}
+fields:                       # shown on the item, editable
+  payee:     { type: text, prefill: payee, copy: true }   # prefill from a rule's then.payee
+  due_date:  { type: date, required: true, prefill: due_date }
+  amount:    { type: money, prefill: total, copy: true }
+  # iban and reference are the Finland example: Finnish bank barcodes (virtuaaliviivakoodi)
+  # fill them in from a scanned bill. Delete both lines if you do not use them.
+  iban:      { type: iban, prefill: iban, copy: true }
+  reference: { type: reference, prefill: reference, copy: true }
+date_field: due_date          # sorts the tray; drives reminders and "overdue"
+done:
+  label: Mark paid
+  fields:
+    paid_on: { type: date, default: today }
+reminders:
+  - { days_before: 3 }
+  - { days_before: 0 }
+  - { overdue: true }         # once when it becomes overdue
+summary: { sum: amount }      # "total 412,90 €" on Today

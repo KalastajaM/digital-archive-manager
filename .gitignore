@@ -1,0 +1,27 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+dist/
+openapi.json
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+.env
+.env.*
+!.env.example
+.claude/
+.superpowers/
+.uv-cache/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+# local data directories (a data dir holds the index, logs and your settings)
+DigitalArchiveManager/
+/data/
+/.dam-data/
+*.bak-*

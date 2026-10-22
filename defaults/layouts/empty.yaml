@@ -1,0 +1,8 @@
+# See household.yaml for the format.
+id: empty
+title: Empty
+description: "Only the special folders (inbox and the others). You make your own folders as you go."
+order: 3
+folders: []
+ai_exclude: []
+rules: []

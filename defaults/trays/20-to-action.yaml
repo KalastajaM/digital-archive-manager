@@ -1,0 +1,12 @@
+id: to-action
+name: To action
+order: 2
+item_title: "{name}"
+fields:
+  action_date: { type: date, required: true }
+date_field: action_date
+done:
+  label: Done
+reminders:
+  - { days_before: 1 }
+  - { days_before: 0 }

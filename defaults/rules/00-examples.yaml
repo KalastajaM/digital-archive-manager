@@ -1,0 +1,56 @@
+# EXAMPLES. These rules show the format; they use Finland as the example country (Finnish
+# and Swedish words in text_contains) and the sample folder layout of the demo archive.
+# Change the words and folders to your own, or delete what you do not need.
+#
+# Rules file: a YAML list of rules. Files in this folder load in name order;
+# for folder and name the first matching rule wins, tags from all matches are merged.
+#
+# when: all given conditions must match (each is optional)
+#   text_contains:    any of these words in the document text (case/diacritics-insensitive)
+#   filename_matches: regex searched in the file name (add (?i) yourself if wanted)
+#   folder_is:        folder the file currently sits in
+# then:
+#   folder / name:    templates using {doc_date:%Y%m%d}, {year} and {stem}
+#                     (name is the stem only; the extension is added automatically)
+#   tags:             tags to suggest
+
+# Finland example: a pharmacy ("apteekki") receipt in the inbox.
+- id: apteekki-receipts
+  when:
+    text_contains: ["apteekki"]
+    folder_is: "##. Organize"
+  then:
+    folder: "11. Bills & Receipts/{doc_date:%Y}"
+    name: "{doc_date:%Y%m%d}_Apteekki"
+    tags: ["receipt"]
+
+# Files medical documents into 50. Medical. To file them per person, add your own
+# rules that match each person's name and set folder: "50. Medical/<Name>". Put them
+# above this rule (the first matching rule wins), here or in a file that loads first.
+- id: medical-visits
+  when:
+    text_contains: ["terveysasema", "lääkäri", "sairaala", "hammaslääkäri"]
+    folder_is: "##. Organize"
+  then:
+    folder: "50. Medical"
+    tags: ["medical"]
+
+# Finland example: the tax authority (Verohallinto / Skatteförvaltningen).
+- id: tax-authority
+  when:
+    text_contains: ["verohallinto", "veroilmoitus", "skatteförvaltningen"]
+    folder_is: "##. Organize"
+  then:
+    folder: "13. Taxes"
+    name: "{doc_date:%Y%m%d}_Verohallinto"
+    tags: ["tax"]
+
+# Any country: an invoice or receipt by the words on it. Copy this one and adapt it.
+- id: generic-invoice
+  when:
+    text_contains: ["invoice", "receipt"]
+    folder_is: "##. Organize"
+  then:
+    folder: "11. Bills & Receipts/{doc_date:%Y}"
+    name: "{doc_date:%Y%m%d}_{stem}"
+    tags: ["invoice"]

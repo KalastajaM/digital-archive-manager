@@ -1,0 +1,19 @@
+# See household.yaml for the format.
+id: minimal
+title: Minimal
+description: "Three folders: Documents, Receipts and Other. Add more whenever you need them."
+order: 2
+folders:
+  - { key: documents, name: Documents }
+  - { key: receipts, name: Receipts }
+  - { key: other, name: Other }
+ai_exclude: []
+rules:
+  - id: receipts-and-invoices
+    when:
+      text_contains: ["invoice", "receipt", "order confirmation"]
+      folder_is: "<inbox>"
+    then:
+      folder: "<receipts>/{year}"
+      name: "{doc_date:%Y%m%d}_{stem}"
+      tags: ["receipt"]

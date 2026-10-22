@@ -1,0 +1,54 @@
+# Where your archive lives. dam does not guess: `dam init` (or the first-run screen in the
+# app) writes this line for you. To set it by hand, remove the # and use your own folder:
+# archive_root: "~/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/Digital Archive"  # macOS
+# archive_root: "C:/Users/you/OneDrive/Digital Archive"                                         # Windows
+# archive_root: "~/Dropbox/Digital Archive"                                                     # Linux
+special_folders:
+  inbox: "##. Organize"
+  ongoing: "##. Ongoing"
+  important: "##. Important"
+  quarantine: "##. To Delete"
+protected_paths:
+  - "##. Important"
+indexer_reads_per_minute: 30
+ops_throttle_ms: 250
+server_port: 8765
+# OCR languages, most likely first (e.g. add fi-FI for Finnish: Tesseract reads it, Apple Vision does not)
+ocr_languages:
+  - en-US
+# Reminders (macOS notification at this hour; e-mail to self is optional, off by default).
+# The e-mail password is kept in the macOS Keychain: dam remind --set-email-password
+# reminders:
+#   hour: 8
+#   mac: true
+#   email:
+#     to: me@example.org
+#     smtp_host: smtp.example.org
+#     smtp_port: 587          # 465 = implicit TLS; other ports use STARTTLS
+#     smtp_user: me@example.org
+#     starttls: true
+# AI (Phase 3): optional, on click only, with a preview of what is sent. The API key is
+# kept in the macOS Keychain (dam ai --set-key); on/off lives in <data dir>/ai-state.json
+# (dam ai --on / --off). Prices are USD per million tokens; costs are logged in EUR.
+# ai:
+#   enabled: true
+#   language: en
+#   effort: low                      # low | medium | high (thinking depth per call)
+#   models:
+#     small: claude-haiku-5-5          # filing suggestions, summaries
+#     large: claude-sonnet-5-5         # questions
+#   prices:
+#     claude-haiku-5-5: {input_usd_per_mtok: 0.10, output_usd_per_mtok: 0.50}
+#     claude-sonnet-5-5: {input_usd_per_mtok: 2, output_usd_per_mtok: 10}
+#   usd_to_eur: 0.92
+#   monthly_budget_eur: 5
+#   exclude_folders:                   # never sent, in any task (no override)
+#     - "50. Medical"
+#     - "70. Work"
+#     - "90. Other People"
+#   max_tokens:                        # the output is priced at this worst case
+#                                      # (thinking counts too: leave room for it)
+#     suggest-filing: 2500
+#     summarize-document: 1500
+#     summarize-collection: 3000
+#     ask-archive: 3000

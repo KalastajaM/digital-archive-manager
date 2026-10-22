@@ -1,0 +1,7 @@
+id: to-read
+name: To read
+order: 3
+item_title: "{name}"
+nudge_after_days: 30          # one gentle reminder when an item has waited this long
+done:
+  label: Read

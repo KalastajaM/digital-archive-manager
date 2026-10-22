@@ -1,0 +1,59 @@
+# A starter layout for the folders of a new archive. One YAML file per layout: add your own
+# next to this one (it shows up in the first-run screen and in Browse > New folders).
+#
+# folders:  the top-level folders, in order. `key` is a stable id the rules below use
+#           (<key> in a rule becomes the folder's final name, with its number if the
+#           numbered option is on). Remove a folder in the app and every rule that
+#           points at it is left out.
+# rules:    example filing rules written to config/rules when the archive has none yet.
+#           <inbox> is the inbox folder; <key> any folder above.
+# ai_exclude: keys of folders whose files are never sent to the AI helper.
+id: household
+title: Household
+description: "Finance, bills, insurance, taxes, home, vehicles, health, school, work and personal papers."
+order: 1
+folders:
+  - { key: finance, name: Finance }
+  - { key: bills, name: Bills & Receipts }
+  - { key: insurance, name: Insurance }
+  - { key: taxes, name: Taxes }
+  - { key: home, name: Home }
+  - { key: vehicles, name: Vehicles }
+  - { key: health, name: Health }
+  - { key: education, name: Education }
+  - { key: work, name: Work }
+  - { key: personal, name: Personal }
+  - { key: other, name: Other }
+ai_exclude: [health, work, personal]
+rules:
+  - id: receipts-and-invoices
+    when:
+      text_contains: ["invoice", "receipt", "order confirmation"]
+      folder_is: "<inbox>"
+    then:
+      folder: "<bills>/{year}"
+      name: "{doc_date:%Y%m%d}_{stem}"
+      tags: ["receipt"]
+  - id: tax-letters
+    when:
+      text_contains: ["tax return", "tax assessment", "tax notice", "tax office"]
+      folder_is: "<inbox>"
+    then:
+      folder: "<taxes>/{year}"
+      name: "{doc_date:%Y%m%d}_{stem}"
+      tags: ["tax"]
+  - id: insurance-papers
+    when:
+      text_contains: ["insurance policy", "policy number", "insurance certificate"]
+      folder_is: "<inbox>"
+    then:
+      folder: "<insurance>"
+      name: "{doc_date:%Y%m%d}_{stem}"
+      tags: ["insurance"]
+  - id: health-visits
+    when:
+      text_contains: ["prescription", "patient", "clinic", "hospital"]
+      folder_is: "<inbox>"
+    then:
+      folder: "<health>"
+      tags: ["medical"]

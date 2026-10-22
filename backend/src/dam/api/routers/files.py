@@ -1,0 +1,262 @@
+"""One file: its record and tags, its raw bytes, PDF page previews, Quick Look
+thumbnails, a text preview, and open/reveal in macOS."""
+
+import asyncio
+import mimetypes
+from dataclasses import asdict
+from typing import Annotated
+
+from fastapi import APIRouter, FastAPI, Query, Request, Response
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, JSONResponse
+
+from dam.api import preview
+from dam.api.deps import AppDep, live_record
+from dam.api.marks import with_record_marks
+from dam.api.schemas import (
+    ErrorBody,
+    FileDetailOut,
+    FileSuggestionsOut,
+    FileSummaryIn,
+    FileSummaryOut,
+    FileTagsIn,
+    FileTagsOut,
+    ScanFieldsIn,
+    ScanFieldsOut,
+    TextPreviewOut,
+)
+from dam.app import App
+from dam.index.repo import FileRecord
+from dam.services.errors import NotFound
+from dam.services.inbox import normalise_tags
+from dam.services.links import NO_LINK_PREVIEW, link_target
+from dam.services.preview import (
+    TEXT_MAX_BYTES,
+    THUMB_DEFAULT_WIDTH,
+    THUMB_MAX_WIDTH,
+    THUMB_MIN_WIDTH,
+)
+
+router = APIRouter(prefix="/api/files", tags=["files"])
+
+# Served bytes may be HTML or SVG from the archive: never sniffed, never run as the app.
+RAW_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "sandbox; default-src 'none'",
+}
+
+
+def shown_record(app: App, drive_id: str) -> FileRecord:
+    """What a preview of ``drive_id`` shows: the file itself or, for a link, the file
+    it stands for inside the archive (``services.links``); NotFound "no preview (link
+    to outside the archive)" for a link without one. The preview checks then apply to
+    that record (a regular file inside the archive, never a link or a folder)."""
+    rec = live_record(app, drive_id)
+    if not rec.is_link:
+        return rec
+    target = link_target(app.paths, app.repo, rec)
+    if target is None:
+        raise NotFound(NO_LINK_PREVIEW)
+    return target
+
+
+@router.get("/{drive_id}", response_model=FileDetailOut)
+def file_detail(app: AppDep, drive_id: str) -> dict:
+    """The record and tags; for a link, the file it stands for (``link_target_id`` and
+    ``link_target_inside``) or, when that is outside the archive or missing, where it
+    points (``link_target_path`` only)."""
+    rec = live_record(app, drive_id)
+    target = link_target(app.paths, app.repo, rec) if rec.is_link else None
+    if target is not None:
+        target_path: str | None = target.path
+    else:
+        target_path = rec.link_target if rec.is_link else None
+    detail = {
+        "record": asdict(rec),
+        "tags": app.tags.for_file(drive_id),
+        "link_target_id": target.drive_id if target else None,
+        "link_target_path": target_path,
+        "link_target_inside": target is not None,
+    }
+    return with_record_marks(app, [detail])[0]
+
+
+@router.get("/{drive_id}/suggestions", response_model=FileSuggestionsOut)
+def file_suggestions(app: AppDep, drive_id: str) -> dict:
+    """What the rules and the scan suggest for the file, wherever it is (each field
+    with its source). Nothing is applied: the UI offers each one as a chip."""
+    rec = live_record(app, drive_id)
+    found = app.inbox.suggestion(drive_id)
+    renamed = found.name != rec.name
+    return {
+        "name": found.name if renamed else None,
+        "name_source": found.name_source if renamed else None,
+        "folder": found.folder,
+        "folder_source": found.folder_source,
+        "tags": found.tags,
+        "tag_sources": found.tag_sources,
+        "sources": found.sources,
+    }
+
+
+@router.put("/{drive_id}/tags", response_model=FileTagsOut)
+def put_file_tags(app: AppDep, drive_id: str, body: FileTagsIn) -> dict:
+    """Set the file's tags exactly (trimmed, empty and repeated ones dropped)."""
+    live_record(app, drive_id)
+    app.tags.set_for_file(drive_id, normalise_tags(body.tags))
+    return {"tags": app.tags.for_file(drive_id)}
+
+
+@router.get("/{drive_id}/summary", response_model=FileSummaryOut)
+def file_summary(app: AppDep, drive_id: str) -> dict:
+    """The file's AI and user summaries (each null if none), flagged when outdated."""
+    live_record(app, drive_id)
+    return app.summaries.get(drive_id)
+
+
+@router.put(
+    "/{drive_id}/summary", response_model=FileSummaryOut, responses={409: {"model": ErrorBody}}
+)
+def put_file_summary(app: AppDep, drive_id: str, body: FileSummaryIn) -> dict:
+    """Save a summary ("Use this summary", or one the user typed). 409 when it would
+    overwrite a current user summary without ``replace``."""
+    live_record(app, drive_id)
+    return app.summaries.put(drive_id, body.source, body.summary, body.key_facts, body.replace)
+
+
+@router.get("/{drive_id}/fields", response_model=ScanFieldsOut)
+def file_fields(app: AppDep, drive_id: str) -> dict:
+    """The file's scan fields: the saved list, else the detected one."""
+    live_record(app, drive_id)
+    return app.scan_fields.get(drive_id)
+
+
+@router.put("/{drive_id}/fields", response_model=ScanFieldsOut)
+def put_file_fields(app: AppDep, drive_id: str, body: ScanFieldsIn) -> dict:
+    """Save the whole list; it replaces the detected one for this file."""
+    live_record(app, drive_id)
+    return app.scan_fields.put(drive_id, [f.model_dump() for f in body.fields])
+
+
+@router.delete("/{drive_id}/fields", response_model=ScanFieldsOut)
+def delete_file_fields(app: AppDep, drive_id: str) -> dict:
+    """ "Reset to detected": forget the saved list and return the detected one."""
+    live_record(app, drive_id)
+    return app.scan_fields.delete(drive_id)
+
+
+@router.get(
+    "/{drive_id}/raw",
+    response_class=FileResponse,
+    responses={200: {"content": {"application/octet-stream": {}}}},
+)
+def raw(app: AppDep, drive_id: str) -> FileResponse:
+    """The file's bytes (a link's: its target's inside the archive)."""
+    rec = shown_record(app, drive_id)
+    path = app.paths.abs(rec.path)
+    if rec.is_dir or rec.is_link or path.is_symlink() or not path.is_file():
+        raise NotFound(drive_id)
+    media_type = mimetypes.guess_type(rec.name or "")[0] or "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=rec.name,
+        content_disposition_type="inline",
+        headers=RAW_HEADERS,
+    )
+
+
+@router.get(
+    "/{drive_id}/page/{n}.png",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+def page_png(app: AppDep, drive_id: str, n: int, w: Annotated[int, Query()] = 900) -> Response:
+    """Page ``n`` (1-based) of a PDF as PNG; 404 for other file types (use ``raw``).
+    A link shows its target's pages."""
+    rec = shown_record(app, drive_id)
+    path = app.paths.abs(rec.path)
+    if rec.is_dir or rec.is_link or rec.ext != "pdf" or path.is_symlink() or not path.is_file():
+        raise NotFound(f"No page preview for {drive_id}")
+    png = preview.cached_page(app.app_paths.cache_dir / "pages", rec, path, n, w)
+    return Response(png, media_type="image/png", headers={"X-Content-Type-Options": "nosniff"})
+
+
+THUMB_SLOTS = 2  # thumbnail requests rendering (or reading the cache) at once
+THUMB_ACQUIRE_S = 2.0  # longest wait for a slot before answering 503 "busy"
+
+
+def _thumb_gate(api: FastAPI) -> asyncio.Semaphore:
+    """The API's thumbnail slots (one semaphore per API, made on its event loop)."""
+    gate = getattr(api.state, "thumb_gate", None)
+    if gate is None:
+        gate = api.state.thumb_gate = asyncio.Semaphore(THUMB_SLOTS)
+    return gate
+
+
+@router.get(
+    "/{drive_id}/thumb.png",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}, 503: {"model": ErrorBody}},
+)
+async def thumb_png(
+    request: Request,
+    app: AppDep,
+    drive_id: str,
+    width: Annotated[int, Query(ge=THUMB_MIN_WIDTH, le=THUMB_MAX_WIDTH)] = THUMB_DEFAULT_WIDTH,
+) -> Response:
+    """A Quick Look thumbnail of any file type (macOS); 404 "no preview" otherwise, 503
+    "busy" when no render slot frees up within 2 s (the client offers a retry). A
+    request whose client has gone (the selection moved on) is not rendered. A link
+    shows its target's."""
+    rec = await run_in_threadpool(shown_record, app, drive_id)
+    gate = _thumb_gate(request.app)
+    try:
+        await asyncio.wait_for(gate.acquire(), THUMB_ACQUIRE_S)
+    except TimeoutError:
+        return JSONResponse({"error": "busy"}, status_code=503)
+    try:
+        if await request.is_disconnected():
+            return Response(status_code=499)  # client closed the request; nobody reads this
+        png = await run_in_threadpool(app.previews.thumbnail, rec, width)
+    finally:
+        gate.release()
+    return Response(png, media_type="image/png", headers={"X-Content-Type-Options": "nosniff"})
+
+
+@router.get("/{drive_id}/text", response_model=TextPreviewOut)
+def text_preview(
+    app: AppDep, drive_id: str, max: Annotated[int, Query(ge=1, le=TEXT_MAX_BYTES)] = TEXT_MAX_BYTES
+) -> dict:
+    """The first ``max`` bytes (at most 200 KB) of a text-like file, as UTF-8 (a
+    link: its target's)."""
+    text, truncated = app.previews.text(shown_record(app, drive_id), max)
+    return {"text": text, "truncated": truncated}
+
+
+_NOT_MACOS = {501: {"model": ErrorBody}}  # only these routes can answer 501
+
+
+@router.post("/{drive_id}/open", status_code=204, response_class=Response, responses=_NOT_MACOS)
+def open_file(app: AppDep, drive_id: str) -> Response:
+    """Open the file in its default macOS app (501 elsewhere). A link opens its target
+    inside the archive, with every refusal applied to the target; 409 without one."""
+    rec = live_record(app, drive_id)
+    if rec.is_link:
+        app.launch.open_link(rec, link_target(app.paths, app.repo, rec))
+    else:
+        app.launch.open(rec)
+    return Response(status_code=204)
+
+
+@router.post("/{drive_id}/reveal", status_code=204, response_class=Response, responses=_NOT_MACOS)
+def reveal_file(app: AppDep, drive_id: str) -> Response:
+    """Show the file in a Finder window (501 elsewhere). A link shows its target inside
+    the archive or, without one, the link itself."""
+    rec = live_record(app, drive_id)
+    if rec.is_link:
+        app.launch.reveal_link(rec, link_target(app.paths, app.repo, rec))
+    else:
+        app.launch.reveal(rec)
+    return Response(status_code=204)

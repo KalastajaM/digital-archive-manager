@@ -1,0 +1,126 @@
+/** Browse: the select-all checkbox, ⌘A, the "N selected" count and the batch ★ / !. */
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { describe, expect, it } from "vitest";
+import type { DirEntry } from "../api/client";
+import { type Call, mockFetch, renderWithProviders } from "../test-utils";
+import Browse from "./Browse";
+
+const PATH = "10. Financial/Banks";
+const entry = (name: string, id: string, marks: DirEntry["marks"] = [], is_dir = false): DirEntry => ({
+  name,
+  path: `${PATH}/${name}`,
+  is_dir,
+  is_link: false,
+  size: 10,
+  mtime: 1,
+  drive_id: id,
+  marks,
+});
+const CHANGE = { collection: { id: 1, name: "Ongoing", kind: "starred", members: [], groups: [] }, batch: null, problems: [], ongoing_status: null };
+const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
+
+function setup(rows: DirEntry[], extra: Parameters<typeof mockFetch>[0] = {}) {
+  const calls = mockFetch({
+    "GET /api/browse": { body: rows },
+    "GET /api/activity": { body: [] },
+    "GET /api/status": { body: { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } } },
+    ...extra,
+  });
+  const user = userEvent.setup();
+  renderWithProviders(
+    <MemoryRouter initialEntries={[`/browse?path=${encodeURIComponent(PATH)}`]}>
+      <Routes>
+        <Route path="/browse" element={<Browse />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  return { calls, user };
+}
+
+const FILES = [entry("a.pdf", "f1"), entry("b.pdf", "f2")];
+const allBox = () => screen.getByRole("checkbox", { name: "Select all files" }) as HTMLInputElement;
+
+describe("Select all", () => {
+  it("the header checkbox checks every file, is mixed for some, and clears; the toolbar counts them", async () => {
+    const { user } = setup([entry("sub", "d1", [], true), ...FILES]);
+    await screen.findByText("a.pdf");
+    expect(allBox()).not.toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
+    expect(allBox()).not.toBeChecked();
+    expect(allBox().indeterminate).toBe(true);
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    await user.click(allBox()); // mixed → all
+    expect(screen.getByRole("checkbox", { name: "Select b.pdf" })).toBeChecked();
+    expect(allBox()).toBeChecked();
+    expect(screen.getByText("2 selected")).toBeInTheDocument(); // the folder is not counted
+    await user.click(allBox()); // all → none
+    expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Select a.pdf" })).not.toBeChecked();
+  });
+
+  it("⌘A checks all files, again clears them", async () => {
+    const { user } = setup(FILES);
+    await screen.findByText("a.pdf");
+    await user.keyboard("{Meta>}a{/Meta}");
+    expect(allBox()).toBeChecked();
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    await user.keyboard("{Meta>}a{/Meta}");
+    expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument();
+  });
+
+  it("⌘A in the search box is the text field's own select all", async () => {
+    const { user } = setup(FILES, { "GET /api/search": { body: [] } });
+    await screen.findByText("a.pdf");
+    await user.type(screen.getByRole("searchbox", { name: "Search" }), "x");
+    await user.keyboard("{Meta>}a{/Meta}");
+    expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Star and Important for the checked files", () => {
+  it("Star marks the checked files in one request when not all are starred", async () => {
+    const { calls, user } = setup([entry("a.pdf", "f1", ["starred"]), entry("b.pdf", "f2")], {
+      "POST /api/marks/star": { body: CHANGE },
+    });
+    await screen.findByText("a.pdf");
+    await user.click(allBox());
+    await user.click(screen.getByRole("button", { name: "Star" }));
+    await waitFor(() => expect(posts(calls, "/api/marks/star")).toHaveLength(1));
+    expect(posts(calls, "/api/marks/star")[0].body).toEqual({ drive_ids: ["f1", "f2"] });
+    expect(await screen.findByText("Starred 2 files")).toBeInTheDocument();
+    expect(posts(calls, "/api/marks/unstar")).toHaveLength(0);
+  });
+
+  it("with every checked file starred the button unstars them, and the toast undoes it", async () => {
+    const { calls, user } = setup([entry("a.pdf", "f1", ["starred"]), entry("b.pdf", "f2", ["starred"])], {
+      "POST /api/marks/unstar": { body: CHANGE },
+      "POST /api/marks/star": { body: CHANGE },
+    });
+    await screen.findByText("a.pdf");
+    await user.click(allBox());
+    await user.click(screen.getByRole("button", { name: "Remove the star" }));
+    await waitFor(() => expect(posts(calls, "/api/marks/unstar")).toHaveLength(1));
+    expect(posts(calls, "/api/marks/unstar")[0].body).toEqual({ drive_ids: ["f1", "f2"] });
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/marks/star")).toHaveLength(1));
+    expect(posts(calls, "/api/marks/star")[0].body).toEqual({ drive_ids: ["f1", "f2"] });
+  });
+
+  it("Mark Important marks the checked file", async () => {
+    const { calls, user } = setup(FILES, { "POST /api/marks/important": { body: CHANGE } });
+    await screen.findByText("a.pdf");
+    await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
+    await user.click(screen.getByRole("button", { name: "Mark Important" }));
+    await waitFor(() => expect(posts(calls, "/api/marks/important")).toHaveLength(1));
+    expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["f1"] });
+  });
+
+  it("both are disabled with nothing to act on", async () => {
+    setup(FILES);
+    await screen.findByText("a.pdf");
+    expect(screen.getByRole("button", { name: "Star" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mark Important" })).toBeDisabled();
+  });
+});
