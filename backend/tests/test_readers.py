@@ -13,9 +13,8 @@ from alembic.config import Config
 from sqlalchemy import select, text
 
 from dam.db.engine import MIGRATIONS_DIR, write_tx
-from dam.extract import ocr
 from dam.db.tables import files
-from dam.extract import default_registry
+from dam.extract import default_registry, ocr
 from dam.extract.base import UnsupportedContent
 from dam.extract.iwork import IworkExtractor
 from dam.extract.office import PptxExtractor, XlsExtractor, XlsxExtractor
