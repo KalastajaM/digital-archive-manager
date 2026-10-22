@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Activity → AI lists the excluded folders (never sent to AI) and lets you add or remove
+  them, with a folder picker; a folder not in the archive is marked. The change applies
+  at once and is saved in settings.yaml. Removing one asks first, since its documents
+  can then be sent.
 - Help in the sidebar: the user guide inside the app, with its contents alongside, so you
   can jump to any section. It works offline.
 - Activity: search, filters and paging (server-side), with the filter bar kept in the URL.

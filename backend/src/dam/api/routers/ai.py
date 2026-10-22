@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query
 from dam.api.deps import AppDep
 from dam.api.marks import with_marks
 from dam.api.schemas import (
+    AIExcludeIn,
     AILogOut,
     AIPrepareIn,
     AIRunIn,
@@ -32,6 +33,14 @@ def ai_status(app: AppDep) -> dict:
 def ai_state(app: AppDep, body: AIStateIn) -> dict:
     """Switch AI on or off (as ``dam ai --on/--off``); answers the new status."""
     app.ai.set_enabled(body.enabled)
+    return app.ai.status()
+
+
+@router.put("/exclude-folders", response_model=AIStatusOut)
+def ai_exclude_folders(app: AppDep, body: AIExcludeIn) -> dict:
+    """Save the excluded folders (the whole list) to settings.yaml and use them at once;
+    answers the new status. 400 for a bad entry, 409 if the file could not be written."""
+    app.ai.set_exclude_folders(body.folders)
     return app.ai.status()
 
 

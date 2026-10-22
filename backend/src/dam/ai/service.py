@@ -22,6 +22,7 @@ from dam.ai import cache, guard, keys, log
 from dam.ai.provider import AIProvider, AIResult, ProviderError
 from dam.ai.tasks import TASKS, AITask, Built
 from dam.services.errors import Conflict, InvalidRequest, NotFound
+from dam.setup import write_ai_exclude_folders
 
 if TYPE_CHECKING:
     from dam.app import App
@@ -209,6 +210,22 @@ class AIService:
         finally:
             self.invalidate_key()
 
+    def set_exclude_folders(self, folders: list[str]) -> None:
+        """Save the excluded folders to settings.yaml (``ai.exclude_folders``, replacing
+        the defaults) and use them from now on: every task reads the list per call, and a
+        payload prepared before is checked again when it is sent. InvalidRequest for a bad
+        entry; Conflict when the file cannot be written as asked (it is left as it was)."""
+        cleaned = guard.clean_exclude_folders(folders)
+        try:
+            write_ai_exclude_folders(self.app.app_paths, cleaned)
+        except ValueError as e:  # an inline ai: section, or yaml that does not read back
+            raise Conflict(f"Could not save the excluded folders: {e}") from None
+        except OSError as e:
+            raise Conflict(
+                f"Could not save the excluded folders to settings.yaml ({type(e).__name__})"
+            ) from None
+        self.settings.exclude_folders = cleaned
+
     def enabled(self, has_key: bool | None = None) -> bool:
         has_key = self.has_key() if has_key is None else has_key
         return self.settings.enabled and self.switched_on() and has_key
@@ -227,7 +244,15 @@ class AIService:
             "budget_eur": s.monthly_budget_eur,
             "models": {"small": s.models.small, "large": s.models.large},
             "exclude_folders": list(s.exclude_folders),
+            "exclude_missing": self._missing(s.exclude_folders),
         }
+
+    def _missing(self, folders: list[str]) -> list[str]:
+        """The excluded folders that are not folders in the archive now (a typo, or not
+        made yet); none while the archive cannot be listed (that is not the same)."""
+        if not self.app.archive_available:
+            return []
+        return [f for f in folders if not (self.app.paths.root / f).is_dir()]
 
     def recent(self, limit: int = 50) -> list[dict]:
         return log.recent(self.app.engine, limit)

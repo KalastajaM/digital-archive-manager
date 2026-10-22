@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
 from dam.ops.model import OpKind
 from dam.trays.model import TrayDef
@@ -1085,12 +1085,21 @@ class AIStatusOut(BaseModel):
     budget_eur: float
     models: dict[str, str]
     exclude_folders: list[str]
+    # the excluded folders that are not folders in the archive (empty while it is away)
+    exclude_missing: list[str] = []
 
 
 class AIStateIn(_In):
     """The on/off switch, stored in ``<data dir>/ai-state.json`` (never settings.yaml)."""
 
     enabled: StrictBool
+
+
+class AIExcludeIn(_In):
+    """The whole list of excluded folders (archive paths), saved to ``ai.exclude_folders``
+    in settings.yaml; it replaces the defaults."""
+
+    folders: list[StrictStr]
 
 
 class AIPrepareIn(_In):

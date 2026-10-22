@@ -10,6 +10,7 @@ export const STATUS_ON: AIStatus = {
   budget_eur: 5,
   models: { small: "claude-haiku-5-5", large: "claude-sonnet-5-5" },
   exclude_folders: ["50. Medical"],
+  exclude_missing: [],
 };
 
 export function prepared(overrides: Partial<AIPrepared> = {}): AIPrepared {

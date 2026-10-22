@@ -1682,6 +1682,14 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 .ai-month { margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
 .ai-month h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
 .ai-month .ai-budget { max-width: 28rem; }
+.ai-excluded { margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
+.ai-excluded h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.ai-excluded > .hint { margin: 0 0 var(--sp-2); }
+.ai-excluded-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; }
+.ai-excluded-list li { display: flex; align-items: center; gap: var(--sp-2); padding: 2px 0; }
+.ai-excluded-list li .hint { margin: 0; }
+.ai-excluded-add { display: flex; align-items: flex-end; gap: var(--sp-2); max-width: 36rem; }
+.ai-excluded-add .folder-picker { flex: 1; min-width: 0; }
 .ai-switch label { display: inline-flex; align-items: center; gap: var(--sp-1); font-weight: 500; }
 .ai-switch .hint { margin: var(--sp-1) 0 0; }
 .ai-switch code { font-family: var(--font-mono); font-size: var(--fs-sm); }

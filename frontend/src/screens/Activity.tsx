@@ -21,6 +21,7 @@ import {
   useAISwitch,
   usePendingRecovery,
 } from "../api/client";
+import { ExcludedFolders } from "../components/ai/ExcludedFolders";
 import { Budget, euro } from "../components/ai/SendSheet";
 import { TASK_LABEL, useAIState } from "../components/ai/useAI";
 import { JournalList } from "../components/JournalList";
@@ -472,7 +473,8 @@ function AISwitch() {
   );
 }
 
-/** Activity → AI: the month's spend against the budget, the switch, and every call. */
+/** Activity → AI: the month's spend against the budget, the switch, the excluded
+ * folders, and every call. */
 function AIActivity() {
   const { status } = useAIState();
   const log = useAILog();
@@ -538,6 +540,7 @@ function AIActivity() {
         {status ? <Budget status={status} estimate={0} /> : null}
         <AISwitch />
       </section>
+      {status && <ExcludedFolders status={status} />}
       {body}
     </div>
   );
