@@ -1,14 +1,14 @@
 import { FolderOpen, Inbox as InboxIcon, Upload } from "lucide-react";
 import { errorText, revealFolder } from "../api/client";
+import { fileManagerName, inFileManager } from "../fileManager";
 import { visible } from "../text";
-import { fileManagerName } from "./AddFiles";
 import { useToast } from "./Toasts";
 import { EmptyState } from "./ui/EmptyState";
 
 /** "Show in Finder" / "Show in Explorer" / "Show folder" (other file managers). */
 export function showLabel(): string {
   const fm = fileManagerName();
-  return fm === "your file manager" ? "Show folder" : `Show in ${fm}`;
+  return fm === null ? "Show folder" : `Show in ${fm}`;
 }
 
 type Props = {
@@ -32,7 +32,7 @@ export function InboxEmpty({ inbox, exists, onChoose, choosing, onSetup }: Props
         title="The inbox folder is not there yet."
         hint={
           <>
-            dam looks for new documents in <code>{name}</code>. Set up the folders to make it.
+            dam looks for new files in <code>{name}</code>. Set up the folders to make it.
           </>
         }
         action={
@@ -49,7 +49,7 @@ export function InboxEmpty({ inbox, exists, onChoose, choosing, onSetup }: Props
       title="The inbox is empty."
       hint={
         <>
-          Put new documents in <code>{name}</code> — drag them there in {fileManagerName()}, or point your scanner at it.
+          Put new files in <code>{name}</code> — drag them there {inFileManager()}, or point your scanner at it.
         </>
       }
       action={

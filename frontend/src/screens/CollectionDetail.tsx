@@ -15,7 +15,7 @@
  * own collections above its members. "Move to…" (the keyboard way of a sidebar drag)
  * and "New collection inside…" are in the ⋯ menu; a move runs at once, as group
  * changes do, and shows the batch that ran. */
-import { ChevronLeft, ChevronRight, Eye, FolderOpen, FolderPlus, Layers, MoreHorizontal, Share } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FolderOpen, FolderPlus, Layers, Ellipsis, Share } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -104,6 +104,7 @@ import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { dayOf, formatSize, plural } from "../format";
 import { isShortcut, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
+import { inFileManager, showInLabel } from "../fileManager";
 import { visible } from "../text";
 
 type Pending = { action: CollectionAction; ops: ResolvedOp[]; title: string; label: string; done: string };
@@ -670,7 +671,7 @@ function Inspector({
       <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} />
       {ask}
       <TrashButton disabled={busy} disabledReason={trashRefusal(member)} onClick={onTrash} />
-      {onQuickLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="(Space)" onClick={onQuickLook} />}
+      {onQuickLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
       {member.is_dir && member.path && !member.missing && (
         <button type="button" onClick={() => navigate(`/browse?path=${encodeURIComponent(member.path!)}`)}>
           Show in Browse
@@ -762,7 +763,7 @@ function EntryInspector({
       <div className="inspector-actions">
         <MarkToggles driveId={entry.drive_id} name={entry.name} marks={entry.marks} />
         <TrashButton disabled={busy} disabledReason={deletionRefusal(entry.path, entry.marks)} onClick={onTrash} />
-        <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="(Space)" onClick={onQuickLook} />
+        <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
         <LaunchButtons launch={launch} />
       </div>
     </aside>
@@ -1305,15 +1306,15 @@ export default function CollectionDetail({
                 <IconButton icon={<FolderPlus {...ICON} />} label="New group" tip="New group: sort files into groups" disabled={addBusy} onClick={() => void newGroup()} />
               )}
               <span className="menu-wrap" ref={finderRef}>
-                <IconButton icon={<FolderOpen {...ICON} />} label="Show in Finder" pressed={finder} onClick={() => setFinder((f) => !f)} />
+                <IconButton icon={<FolderOpen {...ICON} />} label={showInLabel()} pressed={finder} onClick={() => setFinder((f) => !f)} />
                 {finder && (
-                  <div className="popover finder-popover" role="group" aria-label="Show in Finder">
+                  <div className="popover finder-popover" role="group" aria-label={showInLabel()}>
                     {builtin ? (
                       <>
                         <p>
                           {builtin === "important" ? (
                             <>
-                              Open <code>{visible(builtinRoot ?? "##. Important")}</code> in Finder to see its links
+                              Open <code>{visible(builtinRoot ?? "##. Important")}</code> {inFileManager()} to see its links
                               {c.groups.length > 0 && ", a folder per group"}.
                             </>
                           ) : (
@@ -1328,7 +1329,7 @@ export default function CollectionDetail({
                     ) : c.ongoing_rel ? (
                       <>
                         <p>
-                          Open <code>{visible(c.ongoing_rel)}</code> in Finder to see its links{c.groups.length > 0 && ", a folder per group"}.
+                          Open <code>{visible(c.ongoing_rel)}</code> {inFileManager()} to see its links{c.groups.length > 0 && ", a folder per group"}.
                         </p>
                         <CopyButton value={c.ongoing_rel} label="path" />
                       </>
@@ -1345,7 +1346,7 @@ export default function CollectionDetail({
                 )}
               </span>
               <IconButton icon={<Share {...ICON} />} label="Export…" onClick={() => setExporting(true)} />
-              {!builtin && <Menu label="More actions" icon={<MoreHorizontal {...ICON} />} entries={more} align="end" />}
+              {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={more} align="end" />}
             </>
           }
         />
@@ -1444,7 +1445,7 @@ export default function CollectionDetail({
           if (!exportBusy) setExporting(false);
         }}
         footer={
-          <button type="button" disabled={exportBusy} onClick={() => setExporting(false)}>
+          <button type="button" className="primary" disabled={exportBusy} onClick={() => setExporting(false)}>
             Done
           </button>
         }

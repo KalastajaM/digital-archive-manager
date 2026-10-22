@@ -17,14 +17,6 @@ export function freeColor(used: string[]): string {
   return (free ?? ARCHIVE_COLORS[1]).value;
 }
 
-/** The name of the system's file manager, for "Show in …". */
-export function fileManagerName(): string {
-  const where = `${navigator.platform} ${navigator.userAgent}`;
-  if (/Mac/i.test(where)) return "Finder";
-  if (/Win/i.test(where)) return "Explorer";
-  return "file manager";
-}
-
 /** Archive "main" is the one every install starts with: it gets no colour band. */
 export const hasBand = (archive: { id: string } | null | undefined, count: number | undefined) =>
   !!archive && (count ?? 1) > 1 && archive.id !== "main";

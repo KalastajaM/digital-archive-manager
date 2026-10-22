@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { errorText, type Item, useDiscardItem, useQuickPutInTray } from "../api/client";
 import { plural } from "../format";
 import { visible } from "../text";
-import { useToast } from "./Toasts";
+import { undoAction, useToast } from "./Toasts";
 
 const enc = encodeURIComponent;
 
@@ -31,7 +31,9 @@ export function useQuickPut() {
   const putting = useRef(new Set<string>());
   const takingBack = useRef(new Set<number>());
 
-  const takeBack = async (items: Item[], trayName: string) => {
+  /** Discard the items (DB only). ``undo``, when given, is offered in the toast: it puts
+   * the file in the tray again (a take-back from a menu, not the Undo of a put). */
+  const takeBack = async (items: Item[], trayName: string, undo?: () => void) => {
     const mine = items.filter((it) => !takingBack.current.has(it.id));
     if (mine.length === 0) return;
     for (const it of mine) takingBack.current.add(it.id);
@@ -52,6 +54,7 @@ export function useQuickPut() {
     toast({
       kind: "info",
       text: mine.length === 1 ? `Taken back: ${visible(mine[0].title)}` : `Taken back ${plural(done, "item")} from ${trayName}`,
+      ...(undo ? { action: undoAction(undo) } : {}),
     });
   };
 

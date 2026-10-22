@@ -57,9 +57,25 @@ All notable changes are listed here. The format follows
   way: it is still saved, and pressing the same button again shows it at no cost.
 - Links and folders the app made in Google Drive are no longer flagged "looks different"
   after Drive re-writes them.
+- Disabled buttons now say why on hover: Preview and File it in the Inbox, Done on a tray
+  item, Add file on Trays, Preview on Convert Important, Forget… for your only archive and
+  Undo in Activity. Before, the reason never showed.
+- Esc while editing a group's summary cancels the edit; it used to save it.
+- Taking a file off a tray item, and Remove from a tray in the Put in tray menu, now offer
+  Undo in their message.
+- On Windows and Linux the app no longer says "Finder": Show in Explorer, or Show in file
+  manager.
 
 ### Changed
 
+- Buttons follow one order and wording across the app: Cancel comes before Save in the
+  detected-field editor and in Save to notes (which Esc now closes); "Don't offer these"
+  stands at the left of the tray settings sheet; the Barcode and Export sheets close with
+  Done; removing a star is "Remove the star" everywhere and unmarking is "Unmark
+  Important"; tooltips show shortcuts the same way (Quick Look Space, ⇧⌘M); the Inbox and
+  Quick Look say "files", not "documents"; the folder picker calls the deletion folder To
+  Delete; the preview toggle on the review card has its own icon instead of the Quick Look
+  eye.
 - Inbox: the tags field (review card and multi-file card) is the chip field with tag
   suggestions used on a filed file's details; Ask AI is the sparkle icon button; Preview,
   File it and File N have tooltips saying what they do.

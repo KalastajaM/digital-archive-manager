@@ -212,7 +212,7 @@ export function InboxCard({ data, frame }: { data: TodayData; frame?: CardFrame 
           <p className="today-figure">
             <span className="today-big">{stats.count}</span>{" "}
             <span className="today-sub">
-              {stats.count === 1 ? "document" : "documents"}
+              {stats.count === 1 ? "file" : "files"}
               {stats.oldest_days !== null && ` · oldest ${waited(stats.oldest_days)}`}
             </span>
             {stats.overdue > 0 && (

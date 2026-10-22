@@ -88,7 +88,7 @@ export function MarkToggles({ driveId, name, marks: given, tipSide }: Props) {
     <span className="mark-toggles" role="group" aria-label={`Marks of ${shown}`}>
       <IconButton
         icon={<StarGlyph size={16} filled={starred} />}
-        label={starred ? "Starred (click to unstar)" : "Star"}
+        label={starred ? "Remove the star" : "Star"}
         pressed={starred}
         tipSide={tipSide}
         className={starred ? "mark-toggle mark-starred" : "mark-toggle"}
@@ -98,7 +98,7 @@ export function MarkToggles({ driveId, name, marks: given, tipSide }: Props) {
       />
       <IconButton
         icon={<ImportantGlyph large />}
-        label={important ? "Important (click to unmark)" : "Mark Important"}
+        label={important ? "Unmark Important" : "Mark Important"}
         pressed={important}
         tipSide={tipSide}
         className={important ? "mark-toggle mark-important" : "mark-toggle"}

@@ -523,7 +523,7 @@ describe("Today", () => {
       "GET /api/today": { body: { ...TODAY, inbox_stats: { ...TODAY.inbox_stats, overdue: 1 } } },
     });
     const inbox = await screen.findByRole("region", { name: "Inbox" });
-    expect(inbox).toHaveTextContent("35 documents");
+    expect(inbox).toHaveTextContent("35 files");
     expect(inbox).toHaveTextContent("oldest 2 weeks");
     expect(within(inbox).getByText("1 overdue")).toHaveClass("tag-red");
     expect(within(inbox).getByRole("img", { name: "10 this week, 5 last week, 20 older" })).toBeInTheDocument();
@@ -778,7 +778,7 @@ describe("Today card layout", () => {
   it("the Inbox starts folded when more than 5 were found: the count and age bar, no Found list", async () => {
     const { user } = renderToday({ "GET /api/today": { body: { ...TODAY, found: foundN(7) } } });
     const inbox = await screen.findByRole("region", { name: "Inbox" });
-    expect(inbox).toHaveTextContent("35 documents");
+    expect(inbox).toHaveTextContent("35 files");
     expect(within(inbox).getByRole("img", { name: "10 this week, 5 last week, 20 older" })).toBeInTheDocument();
     expect(within(inbox).queryByRole("list", { name: "Found in the inbox" })).not.toBeInTheDocument();
     expect(within(inbox).queryByRole("button", { name: /^Put in/ })).not.toBeInTheDocument();
@@ -1058,7 +1058,7 @@ describe("Starred card and the Important notice (stars)", () => {
     });
     const list = await within(await screen.findByRole("region", { name: "Starred" })).findByRole("list", { name: "Starred files" });
     const row = within(list).getAllByRole("listitem")[1]; // 2026_Plan.xlsx
-    await user.click(within(row).getByRole("button", { name: "Unstar" }));
+    await user.click(within(row).getByRole("button", { name: "Remove the star" }));
     await waitFor(() => expect(posts(calls, "/api/marks/unstar")).toHaveLength(1));
     expect(posts(calls, "/api/marks/unstar")[0].body).toEqual({ drive_ids: ["a"] });
     await user.click(await within(toasts()).findByRole("button", { name: "Undo" }));
@@ -1072,7 +1072,7 @@ describe("Starred card and the Important notice (stars)", () => {
       "POST /api/marks/unstar": { body: { collection: STARRED, batch: null, problems: [], ongoing_status: null } },
     });
     const list = await within(await screen.findByRole("region", { name: "Starred" })).findByRole("list", { name: "Starred files" });
-    const button = within(within(list).getAllByRole("listitem")[1]).getByRole("button", { name: "Unstar" });
+    const button = within(within(list).getAllByRole("listitem")[1]).getByRole("button", { name: "Remove the star" });
     act(() => {
       button.click();
       button.click();

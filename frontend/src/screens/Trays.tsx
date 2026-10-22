@@ -16,6 +16,7 @@ import { amountField } from "../components/today/TrayCard";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Segmented } from "../components/ui/Segmented";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
+import { TipButton } from "../components/ui/TipButton";
 import { Toolbar } from "../components/ui/Toolbar";
 import { UrgencyTag } from "../components/UrgencyTag";
 import { useQuickPut } from "../components/useQuickPut";
@@ -324,16 +325,16 @@ export default function Trays({ today: fixed }: { today?: string }) {
           subtitle={subtitle}
           actions={
             <>
-            <button
-              type="button"
+            <TipButton
               className="tray-add-file"
-              data-tip="Add another file to the tray"
+              tip="Add another file to the tray"
               disabled={!tray}
+              disabledReason={trays.isPending ? "The trays are still loading" : "This tray no longer exists"}
               aria-expanded={addingFile}
               onClick={() => setAddingFile((a) => !a)}
             >
               Add file
-            </button>
+            </TipButton>
             <Segmented
               ariaLabel="Show"
               value={state}

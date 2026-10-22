@@ -486,8 +486,8 @@ Single-letter keys work when the focus is not in a text field (Esc leaves one).
 | Browse | `Enter` | Open the folder or file |
 | Browse | `⌫` | Up one folder |
 | Browse | ⌘-click, ⇧-click | Select several files |
-| Browse | ⌘⇧M | Move to… |
-| Browse | ⌘⇧N | New folder in the active pane's folder |
+| Browse | ⇧⌘M | Move to… |
+| Browse | ⇧⌘N | New folder in the active pane's folder |
 | Browse | ⌘[ / ⌘] | Back / forward in the active pane |
 | Confirm sheets | ⌘`Enter` | Confirm (only half a second after it opened, and after a key-up) |
 | Confirm sheets | Esc | Cancel (Cancel has the focus) |
@@ -508,7 +508,7 @@ invalid one shows why it is not allowed.
 | A folder in Browse (a folder row, or the other pane) | **A move, always behind the preview and confirm**: the sheet lists the exact moves (`_2` on a name collision, new folders), then the move is journaled and the toast has **Undo**. A drop never moves a file by itself. Refused for `##. To Delete` (use Mark for deletion), `##. Ongoing` and the archive's top. |
 
 Every drop has a keyboard or menu equivalent: the Inbox form, "Put in tray…" and "Add to
-collection…" on a file, the group menu, and **Move to…** (⌘⇧M) in Browse. Only files move;
+collection…" on a file, the group menu, and **Move to…** (⇧⌘M) in Browse. Only files move;
 folders can be browsed and dropped on, not dragged.
 
 **`dam move`** is the same move on the command line:

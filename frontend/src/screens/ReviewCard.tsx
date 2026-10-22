@@ -1,5 +1,6 @@
-import { Eye, EyeOff, Sparkles } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Sparkles } from "lucide-react";
 import { IconButton } from "../components/ui/IconButton";
+import { TipButton } from "../components/ui/TipButton";
 import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -35,7 +36,7 @@ import { fieldWord } from "../format";
 import { dialogOpen, isCmdEnter, isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
 import { visible } from "../text";
 import { LinkBadges } from "./FileActions";
-import { type Filing, followUpLines, withFollowUps } from "./useFiling";
+import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFiling";
 import { MarkToggles } from "../components/MarkToggles";
 import { TrashButton } from "../components/Trash";
 import {
@@ -338,7 +339,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
             {trash && <TrashButton disabled={filing.busy || trash.busy} onClick={trash.run} />}
             <IconButton
               className="preview-toggle"
-              icon={showPreview ? <EyeOff /> : <Eye />}
+              icon={showPreview ? <PanelRightClose /> : <PanelRightOpen />}
               label={showPreview ? "Hide preview" : "Show preview"}
               pressed={showPreview}
               onClick={() => setShowPreview((v) => !v)}
@@ -352,24 +353,24 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
                 onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
               />
             )}
-            <button
-              type="button"
+            <TipButton
               className="tip-end"
-              data-tip="Show exactly what will move, before anything changes (↩)"
+              tip="Show exactly what will move, before anything changes ↩"
               onClick={preview}
               disabled={filing.busy}
+              disabledReason={FILING_BUSY}
             >
               Preview
-            </button>
-            <button
-              type="button"
-              className="primary"
-              data-tip="Move it to the folder with the new name (⌘↩)"
+            </TipButton>
+            <TipButton
+              className="primary tip-end"
+              tip="Move it to the folder with the new name ⌘↩"
               onClick={fileIt}
               disabled={filing.busy}
+              disabledReason={FILING_BUSY}
             >
               File it
-            </button>
+            </TipButton>
           </>
         }
       />

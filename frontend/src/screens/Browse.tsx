@@ -75,8 +75,8 @@ const KEYS: [string[], string][] = [
   [["Space"], "Quick Look"],
   [["⌘", "⇧"], "click to select"],
   [["⌘A"], "select all"],
-  [["⌘⇧M"], "move to…"],
-  [["⌘⇧N"], "new folder"],
+  [["⇧⌘M"], "move to…"],
+  [["⇧⌘N"], "new folder"],
   [["⌘⌫"], "move to To Delete"],
   [[], "drag files onto a folder to move them"],
 ];
@@ -1280,7 +1280,7 @@ export default function Browse() {
             <IconButton
               icon={<FolderInput />}
               label="Move to…"
-              shortcut="⌘⇧M"
+              shortcut="⇧⌘M"
               disabled={moveTargets.length === 0 || moveBlocked !== null || locked}
               disabledReason={moveBlocked ?? undefined}
               onClick={openMoveTo}

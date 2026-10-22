@@ -18,11 +18,12 @@ import { TrayPicker } from "../components/TrayPicker";
 import { Toolbar } from "../components/ui/Toolbar";
 import { ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
 import { IconButton } from "../components/ui/IconButton";
+import { TipButton } from "../components/ui/TipButton";
 import { allMarked, type Markable, useBatchMark } from "../components/useBatchMark";
 import { addTags, FieldChips, type Offer, offersFor, parseTags, tagOffers, UseAll } from "../components/SuggestionChip";
 import { visible } from "../text";
 import { type CardTrash, FilingMessage, missing, useCardKeys, useTrayChoice } from "./ReviewCard";
-import { type Filing, followUpLines, withFollowUps } from "./useFiling";
+import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFiling";
 
 type Props = {
   entries: InboxEntry[];
@@ -32,6 +33,8 @@ type Props = {
   /** Trash for the whole batch (the inbox owns the flow). */
   trash?: CardTrash;
 };
+
+const ADDING_BUSY = "Still adding the files to the collections";
 
 /** Add files to collections by name (creating the ones that do not exist yet) without
  * filing them: the files stay in the inbox, to be filed one by one later. */
@@ -214,24 +217,24 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
             {trash && (
               <TrashButton count={entries.length} disabled={filing.busy || adding.busy || trash.busy} onClick={trash.run} />
             )}
-            <button
-              type="button"
+            <TipButton
               className="tip-end"
-              data-tip="Show exactly what will move, before anything changes (↩)"
+              tip="Show exactly what will move, before anything changes ↩"
               onClick={preview}
               disabled={filing.busy}
+              disabledReason={FILING_BUSY}
             >
               Preview
-            </button>
-            <button
-              type="button"
-              className="primary"
-              data-tip="Move them to the folder with their new names (⌘↩)"
+            </TipButton>
+            <TipButton
+              className="primary tip-end"
+              tip="Move them to the folder with their new names ⌘↩"
               onClick={fileIt}
               disabled={filing.busy || adding.busy}
+              disabledReason={filing.busy ? FILING_BUSY : ADDING_BUSY}
             >
               File {count}
-            </button>
+            </TipButton>
           </>
         }
       />

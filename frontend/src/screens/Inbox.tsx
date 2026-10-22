@@ -392,7 +392,7 @@ export default function Inbox() {
       <nav className="inbox-list" aria-label="Inbox">
         <Toolbar
           title="Inbox"
-          subtitle={plural(entries.length, "document")}
+          subtitle={plural(entries.length, "file")}
           actions={
             <IconButton
               icon={<Upload />}

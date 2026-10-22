@@ -18,6 +18,7 @@ import { AIProposal } from "./ai/AIProposal";
 import { type Collection, type CollectionChange, type DirEntry, errorText, type Group, type GroupChange, type Member, type MemberAttention, useBrowse } from "../api/client";
 import { setDragFiles, useDropTarget, useFilesDragging } from "../dnd";
 import { formatDate, plural } from "../format";
+import { showInLabel } from "../fileManager";
 import { visible } from "../text";
 import { useFileLaunch } from "./FileLaunch";
 import { Menu, type MenuEntry } from "./ui/Menu";
@@ -227,6 +228,7 @@ function SummaryLine({
     return r.collection.groups.find((g) => g.id === group.id)?.summary ?? summary;
   });
   const ref = useRef<HTMLInputElement>(null);
+  const cancelled = useRef(false); // Esc: the blur that follows keeps the stored summary
   useEffect(() => {
     if (editing) ref.current?.focus();
   }, [editing]);
@@ -242,13 +244,18 @@ function SummaryLine({
           maxLength={4000}
           onChange={(e) => auto.change(e.target.value)}
           onBlur={() => {
-            void auto.commit();
+            if (!cancelled.current) void auto.commit();
+            cancelled.current = false;
             setEditing(false);
           }}
           onKeyDown={(e) => {
             e.stopPropagation();
             if (e.key === "Enter" || e.key === "Escape") {
               e.preventDefault();
+              if (e.key === "Escape") {
+                cancelled.current = true;
+                auto.change(group.summary);
+              }
               ref.current?.blur();
             }
           }}
@@ -322,7 +329,7 @@ function FolderMenu({ driveId, path, name }: { driveId: string; path: string; na
   const launch = useFileLaunch(driveId);
   const entries: MenuEntry[] = [
     { label: "Show in Browse", onSelect: () => navigate(`/browse?path=${encodeURIComponent(path)}`) },
-    { label: "Show in Finder", disabled: launch.busy, onSelect: () => void launch.run("reveal") },
+    { label: showInLabel(), disabled: launch.busy, onSelect: () => void launch.run("reveal") },
   ];
   return <Menu label={`Actions for ${name}`} icon={<Ellipsis size={16} />} entries={entries} className="member-menu" />;
 }

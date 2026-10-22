@@ -6,6 +6,7 @@
 import { ExternalLink, FolderSearch } from "lucide-react";
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { ApiError, errorText, launchFile } from "../api/client";
+import { inFileManager, showInLabel } from "../fileManager";
 import { visible } from "../text";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
@@ -15,9 +16,9 @@ const ICON = { size: 16, strokeWidth: 1.75 } as const;
 export const LAUNCH_BUSY = "Still opening the last request";
 
 type How = "open" | "reveal";
-const FAILED: Record<How, string> = { open: "Could not open it", reveal: "Could not show it in Finder" };
+const FAILED: Record<How, () => string> = { open: () => "Could not open it", reveal: () => `Could not show it ${inFileManager()}` };
 
-const DONE: Record<How, string> = { open: "Opened", reveal: "Shown in Finder" };
+const DONE: Record<How, () => string> = { open: () => "Opened", reveal: () => `Shown ${inFileManager()}` };
 
 /** An outcome to show on a dialog's status line. */
 export type LaunchResult = { kind: "info" | "error"; text: string };
@@ -61,11 +62,11 @@ export function useFileLaunch(driveId: string, onResult?: Report) {
     setBusy(true);
     try {
       await launchFile(driveId, how);
-      report?.({ kind: "info", text: DONE[how] });
+      report?.({ kind: "info", text: DONE[how]() });
     } catch (e) {
       // A 409 is a full sentence already ("Won't open apps or scripts …").
       const reason = e instanceof ApiError && e.detail ? e.detail : errorText(e);
-      const text = visible(e instanceof ApiError && e.status === 409 ? reason : `${FAILED[how]}: ${reason}`);
+      const text = visible(e instanceof ApiError && e.status === 409 ? reason : `${FAILED[how]()}: ${reason}`);
       if (report) report({ kind: "error", text });
       else toast({ kind: "error", text });
     } finally {
@@ -100,7 +101,7 @@ export function LaunchButtons({ launch, tipSide, only }: Props) {
       )}
       <IconButton
         icon={<FolderSearch {...ICON} />}
-        label="Show in Finder"
+        label={showInLabel()}
         tipSide={tipSide}
         disabled={launch.busy}
         disabledReason={reason}
