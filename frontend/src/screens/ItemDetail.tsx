@@ -4,7 +4,7 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { Eye, Trash2, Unlink, X } from "lucide-react";
+import { CircleMinus, Eye, Unlink, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -627,16 +627,20 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       {kind !== "dated" && doneButtons}
       <span className="item-tray-actions" role="group" aria-label="This item">
         {open && (
-          <Menu
-            label="Move to tray"
-            text="Move to tray"
-            icon={null}
-            className="file-action-menu"
-            entries={moveEntries}
-          />
+          // The pull-down shows no tooltip of its own; the wrapper carries it.
+          <span className="button-wrap" data-tip="Move this item to another tray">
+            <Menu
+              label="Move to tray"
+              text="Move to tray"
+              icon={null}
+              className="file-action-menu"
+              entries={moveEntries}
+            />
+          </span>
         )}
+        {/* Not a bin: removing from the tray deletes nothing (the bin is To Delete). */}
         <IconButton
-          icon={<Trash2 />}
+          icon={<CircleMinus />}
           label="Remove from tray"
           tip="Remove from this tray (the files stay where they are)"
           disabled={moveItem.isPending}
