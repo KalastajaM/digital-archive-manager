@@ -1,21 +1,8 @@
 # Digital Archive Manager: user guide
 
-dam keeps a folder of personal documents tidy. You put new documents in an inbox folder;
-dam reads them (file names, text, and OCR for scans), suggests a name, a folder and tags
-for each, and moves a file only after you have seen exactly what will change. Bills and
-to-dos go into trays with reminders, related documents into collections, and everything
-dam does can be undone.
-
-The archive is an ordinary folder on your computer, for example inside Google Drive,
-OneDrive, Dropbox or iCloud Drive, or a plain local folder. dam runs on your own computer
-and opens in your browser; nothing is sent anywhere unless you turn on the optional AI
-and click to send something.
-
-Installing dam, the command line and the config files are in the
-[technical reference](reference.md).
-
 ## Contents
 
+- [What dam is](#what-dam-is)
 - [How dam works](#how-dam-works)
 - [Getting started](#getting-started)
 - [The window](#the-window)
@@ -36,6 +23,22 @@ Installing dam, the command line and the config files are in the
 - [Drag and drop](#drag-and-drop)
 - [What dam never does](#what-dam-never-does)
 - [Known limitations](#known-limitations)
+
+## What dam is
+
+dam keeps a folder of personal documents tidy. You put new documents in an inbox folder;
+dam reads them (file names, text, and OCR for scans), suggests a name, a folder and tags
+for each, and moves a file only after you have seen exactly what will change. Bills and
+to-dos go into trays with reminders, related documents into collections, and everything
+dam does can be undone.
+
+The archive is an ordinary folder on your computer, for example inside Google Drive,
+OneDrive, Dropbox or iCloud Drive, or a plain local folder. dam runs on your own computer
+and opens in your browser; nothing is sent anywhere unless you turn on the optional AI
+and click to send something.
+
+Installing dam, the command line and the config files are in the
+[technical reference](reference.md).
 
 ## How dam works
 

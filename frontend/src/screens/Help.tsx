@@ -56,7 +56,7 @@ export default function Help() {
   const toc = useMemo(() => headings(markdown), [markdown]);
   const { hash } = useLocation();
   const navigate = useNavigate();
-  const current = decodeURIComponent(hash.slice(1));
+  const current = decodeURIComponent(hash.slice(1)) || toc[0]?.id; // the first section, at the top
   const article = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -93,7 +93,7 @@ export default function Help() {
 
   return (
     <div className="help">
-      <Toolbar title="Help" subtitle="How dam works" />
+      <Toolbar title="Help" subtitle="User guide" />
       <div className="help-body">
         <nav className="help-toc" aria-label="Contents">
           <ul>

@@ -29,6 +29,12 @@ describe("Help", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Trays" })).toHaveAttribute("id", "trays");
   });
 
+  it("every word of the guide is under a section in the contents, so none hides above the first", () => {
+    expect(helpMarkdown(guide).trimStart()).toMatch(/^## /);
+    renderHelp();
+    expect(screen.getByRole("link", { name: "What dam is" })).toHaveAttribute("aria-current", "location");
+  });
+
   it("a contents entry marks its section as the current one", async () => {
     renderHelp();
     const link = screen.getByRole("link", { name: "Trays" });
