@@ -69,6 +69,35 @@ describe("New folder in the folder browser", () => {
     expect(change).toHaveBeenLastCalledWith("13. Taxes/Receipts");
   });
 
+  it("Choose right after typing a name makes the folder and chooses it (no Enter needed)", async () => {
+    const { user, change, sheet, tree, calls } = await setup("13. Taxes");
+    await user.click(newButton(sheet));
+    await user.type(within(tree).getByRole("textbox", { name: "New folder name" }), "Receipts");
+    await user.click(within(sheet).getByRole("button", { name: "Choose" }));
+    await vi.waitFor(() => expect(change).toHaveBeenLastCalledWith("13. Taxes/Receipts"));
+    const posts = calls.filter((c: Call) => c.method === "POST" && c.url === "/api/folders/new");
+    expect(posts.map((c) => c.body)).toEqual([{ parent: "13. Taxes", name: "Receipts" }]);
+  });
+
+  it("clicking elsewhere after typing a name makes the folder, like Finder", async () => {
+    const { user, sheet, tree, calls } = await setup("13. Taxes");
+    await user.click(newButton(sheet));
+    await user.type(within(tree).getByRole("textbox", { name: "New folder name" }), "Receipts");
+    await user.click(within(sheet).getByRole("searchbox", { name: "Filter folders" }));
+    expect(await within(tree).findByRole("treeitem", { name: "Receipts" })).toHaveAttribute("aria-selected", "true");
+    expect(calls.filter((c: Call) => c.method === "POST" && c.url === "/api/folders/new")).toHaveLength(1);
+  });
+
+  it("Choose with a refused name keeps the sheet open with the reason", async () => {
+    const { user, change, sheet, tree } = await setup("10. Financial");
+    await user.click(newButton(sheet));
+    await user.type(within(tree).getByRole("textbox", { name: "New folder name" }), "banks");
+    await user.click(within(sheet).getByRole("button", { name: "Choose" }));
+    expect(within(tree).getByRole("alert")).toHaveTextContent("already a folder named banks");
+    expect(change).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Choose a folder" })).toBeInTheDocument();
+  });
+
   it("shows the server's refusal under the name field and keeps it to fix", async () => {
     const { user, sheet, tree } = await setup("13. Taxes", {
       status: 400,

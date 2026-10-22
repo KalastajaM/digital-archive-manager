@@ -20,8 +20,6 @@ import {
   type Mark,
   useBrowseFiles,
   useCollectionsWithMarked,
-  useMark,
-  type MarkAction,
   useCreateFolder,
   useStatus,
 } from "../api/client";
@@ -48,6 +46,7 @@ import {
 } from "../components/MoveTo";
 import { isTrashKey, TRASH_BUSY, TrashButton, useTrash } from "../components/Trash";
 import { undoAction, useBlockToastActions, useToast } from "../components/Toasts";
+import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { useNewFolder } from "../components/NewFolder";
 import { useSetupFolders } from "../components/SetupFolders";
 import { ContextMenu } from "../components/ui/ContextMenu";
@@ -62,7 +61,7 @@ import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { type DropTarget, dragSelection, setDragFiles, useDropTarget } from "../dnd";
 import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
-import { formatSize, groupDigits, plural, shortDate } from "../format";
+import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
 import { Breakable } from "../components/PlanPreview";
 import { FileActions, LinkBadges } from "./FileActions";
@@ -831,44 +830,12 @@ export default function Browse() {
     else marking.start(markIds, { current: () => selection.current, links: markTargets.some((it) => it.is_link) });
   };
 
-  const starAll = moveTargets.length > 0 && moveTargets.every((it) => it.marks?.includes("starred"));
-  const importantAll = moveTargets.length > 0 && moveTargets.every((it) => it.marks?.includes("important"));
   // ★ and ! for the same rows as Move to…: all marked already → unmark; else mark all.
   // (Files that cannot be moved can still be marked.)
-  const mark = useMark();
-  const markInFlight = useRef(false);
-  const batchMark = async (kind: "star" | "important") => {
-    if (markInFlight.current || moveTargets.length === 0) return;
-    const key = kind === "star" ? "starred" : "important";
-    const ids = moveTargets.map((it) => it.drive_id);
-    const allMarked = moveTargets.every((it) => it.marks?.includes(key));
-    const action: MarkAction = allMarked ? (kind === "star" ? "unstar" : "unimportant") : kind;
-    const opposite: MarkAction = allMarked ? kind : kind === "star" ? "unstar" : "unimportant";
-    const what = moveTargets.length === 1 ? visible(moveTargets[0].name) : plural(moveTargets.length, "file");
-    const said = {
-      star: `Starred ${what}`,
-      unstar: `Removed the star from ${what}`,
-      important: `Marked ${what} as Important`,
-      unimportant: `${what}: no longer Important`,
-    };
-    const run = async (a: MarkAction, text: string, undo: MarkAction | null) => {
-      if (markInFlight.current) return;
-      markInFlight.current = true;
-      try {
-        await mark.mutateAsync({ action: a, ids });
-        toast({
-          kind: "info",
-          text,
-          action: undo ? { label: "Undo", run: () => void run(undo, said[undo], null) } : undefined,
-        });
-      } catch (e) {
-        toast({ kind: "error", text: `Could not change the marks: ${visible(errorText(e))}` });
-      } finally {
-        markInFlight.current = false;
-      }
-    };
-    await run(action, said[action], opposite);
-  };
+  const marks = useBatchMark();
+  const starAll = allMarked(moveTargets, "star");
+  const importantAll = allMarked(moveTargets, "important");
+  const batchMark = (kind: "star" | "important") => marks.run(kind, moveTargets);
   const startRequest = (request: MoveRequest) => {
     if (running()) {
       toast({ kind: "info", text: MOVE_BUSY }); // accept refuses this already; never silent
@@ -1322,14 +1289,14 @@ export default function Browse() {
               icon={<StarGlyph size={16} filled={starAll} />}
               label={starAll ? "Remove the star" : "Star"}
               pressed={starAll}
-              disabled={moveTargets.length === 0 || mark.isPending}
+              disabled={moveTargets.length === 0 || marks.busy}
               onClick={() => void batchMark("star")}
             />
             <IconButton
               icon={<ImportantGlyph large />}
               label={importantAll ? "Unmark Important" : "Mark Important"}
               pressed={importantAll}
-              disabled={moveTargets.length === 0 || mark.isPending}
+              disabled={moveTargets.length === 0 || marks.busy}
               onClick={() => void batchMark("important")}
             />
             <TrashButton

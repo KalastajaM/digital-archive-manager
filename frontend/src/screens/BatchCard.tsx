@@ -15,7 +15,9 @@ import { FolderPicker } from "../components/FolderPicker";
 import { PlanPreview } from "../components/PlanPreview";
 import { TrayPicker } from "../components/TrayPicker";
 import { Toolbar } from "../components/ui/Toolbar";
-import { MarkIcons } from "../components/MarkIcons";
+import { ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
+import { IconButton } from "../components/ui/IconButton";
+import { allMarked, type Markable, useBatchMark } from "../components/useBatchMark";
 import { addTags, FieldChips, type Offer, offersFor, parseTags, tagOffers, UseAll } from "../components/SuggestionChip";
 import { visible } from "../text";
 import { type CardTrash, FilingMessage, missing, useCardKeys, useTrayChoice } from "./ReviewCard";
@@ -178,6 +180,15 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
   const count = `${entries.length} file${entries.length === 1 ? "" : "s"}`;
   const tray = trays.tray;
   const alreadyIn = tray ? entries.filter((e) => e.open_trays.includes(tray.id)).length : 0;
+  // ★ and ! for the selection now, before filing (marks follow the file when it moves).
+  const marks = useBatchMark();
+  const markable: Markable[] = entries.map((e) => ({
+    drive_id: e.record.drive_id,
+    name: e.record.name ?? e.record.path,
+    marks: e.record.marks,
+  }));
+  const starAll = allMarked(markable, "star");
+  const importantAll = allMarked(markable, "important");
   return (
     <article className="batch-card" aria-label={`Batch of ${count}`}>
       <Toolbar
@@ -185,6 +196,20 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
         subtitle="each keeps its suggested name"
         actions={
           <>
+            <IconButton
+              icon={<StarGlyph size={16} filled={starAll} />}
+              label={starAll ? "Remove the star" : "Star"}
+              pressed={starAll}
+              disabled={marks.busy}
+              onClick={() => void marks.run("star", markable)}
+            />
+            <IconButton
+              icon={<ImportantGlyph large />}
+              label={importantAll ? "Unmark Important" : "Mark Important"}
+              pressed={importantAll}
+              disabled={marks.busy}
+              onClick={() => void marks.run("important", markable)}
+            />
             {trash && (
               <TrashButton count={entries.length} disabled={filing.busy || adding.busy || trash.busy} onClick={trash.run} />
             )}

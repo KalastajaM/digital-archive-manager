@@ -94,8 +94,10 @@ type Props = {
  * chosen (``refuse`` adds ``##. Important`` and the inbox for the conversions); nothing
  * can be chosen before the special folders are known (``/api/status``). Choosing only
  * sets the field; nothing moves before the usual preview. "New folder" (the footer's
- * left) adds a name field under the selected folder; Enter makes the folder on disk
- * right away (its own change in Activity, which can be undone there) and selects it. It
+ * left) adds a name field under the selected folder; Enter, or leaving the field with a
+ * name in it (Finder does the same), makes the folder on disk right away (its own change
+ * in Activity, which can be undone there) and selects it; Choose pressed while naming
+ * makes it first and chooses it. It
  * can sit over another sheet: no key press reaches the one underneath. */
 export function FolderBrowser({ value, onChoose, onCancel, refuse = NO_REFUSE }: Props) {
   const ids = useId();
@@ -109,6 +111,9 @@ export function FolderBrowser({ value, onChoose, onCancel, refuse = NO_REFUSE }:
   // Folders made here (full paths): in the tree at once, before the folder list is reloaded.
   const [made, setMade] = useState<string[]>([]);
   const create = useCreateFolder();
+  // A "New folder" on its way (Choose waits for it) and the folder it made last.
+  const adding = useRef<Promise<string | null> | null>(null);
+  const lastMade = useRef<string | null>(null);
   // What the last "New folder" did, until another row is chosen (a toast would sit under this sheet).
   const [note, setNote] = useState<string | null>(null);
   // The folder a new one is being named under (its name field is the row below it).
@@ -264,11 +269,19 @@ export function FolderBrowser({ value, onChoose, onCancel, refuse = NO_REFUSE }:
     return refusedHere(`${parent}/${name}`) ? "Files can't be filed into this folder." : null;
   };
   /** Make the folder on disk; the reason it was refused, or null once it is made. */
-  const addNew = async (parent: string, name: string): Promise<string | null> => {
+  const addNew = (parent: string, name: string): Promise<string | null> => {
+    const run = makeFolder(parent, name).finally(() => {
+      if (adding.current === run) adding.current = null;
+    });
+    adding.current = run;
+    return run;
+  };
+  const makeFolder = async (parent: string, name: string): Promise<string | null> => {
     try {
       const result = await create.mutateAsync({ parent, name });
       if (result.error || result.failed) return visible(result.error ?? "an operation failed");
       const folder = result.done[0]?.dst ?? `${parent}/${name}`;
+      lastMade.current = folder;
       setMade((old) => [...old, folder]);
       setNaming(null);
       setOpen(parent, true);
@@ -296,7 +309,20 @@ export function FolderBrowser({ value, onChoose, onCancel, refuse = NO_REFUSE }:
           <button type="button" onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className="primary" disabled={chosenRefused} onClick={() => choose(current?.path)}>
+          <button
+            type="button"
+            className="primary"
+            disabled={chosenRefused}
+            onClick={() => {
+              // Choose while naming: the field's blur has started making the folder; wait
+              // for it and choose it (a refused name stays in the field to fix).
+              const pending = adding.current;
+              if (!pending) return naming === null ? choose(current?.path) : undefined;
+              void pending.then((refused) => {
+                if (refused === null && lastMade.current) choose(lastMade.current);
+              });
+            }}
+          >
             Choose
           </button>
         </>
@@ -421,6 +447,22 @@ function NewFolderRow({
     ref.current?.focus();
     ref.current?.scrollIntoView?.({ block: "nearest" });
   }, []);
+  /** Make the folder named in the field; a refused name stays, with the reason. */
+  const commit = () => {
+    if (busy.current) return;
+    const name = text.trim();
+    const why = refusal(name);
+    if (why) {
+      setProblem(why);
+      return;
+    }
+    busy.current = true;
+    void onAdd(name).then((refused) => {
+      busy.current = false;
+      if (refused === null) done.current = true;
+      else setProblem(refused);
+    });
+  };
   return (
     <li role="none" className="folder-tree-new" style={{ paddingLeft: `calc(6px + ${level - 1} * var(--tree-indent))` }}>
       <span className="folder-tree-chevron" aria-hidden="true" />
@@ -438,6 +480,8 @@ function NewFolderRow({
         }}
         onBlur={() => {
           if (done.current || busy.current) return;
+          // Leaving the field keeps a name typed in it, like Finder; an empty field cancels.
+          if (text.trim()) return commit();
           done.current = true;
           onCancel();
         }}
@@ -445,19 +489,7 @@ function NewFolderRow({
           e.stopPropagation(); // the tree's arrows and the sheet's Esc are not for this field
           if (e.key === "Enter") {
             e.preventDefault();
-            if (busy.current) return;
-            const name = text.trim();
-            const why = refusal(name);
-            if (why) {
-              setProblem(why);
-              return;
-            }
-            busy.current = true;
-            void onAdd(name).then((refused) => {
-              busy.current = false;
-              if (refused === null) done.current = true;
-              else setProblem(refused);
-            });
+            commit();
           } else if (e.key === "Escape") {
             e.preventDefault(); // the sheet stays; only the field goes
             done.current = true;

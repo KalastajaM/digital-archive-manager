@@ -1600,6 +1600,22 @@ describe("Trash in the inbox", () => {
     ]);
   });
 
+  it("the batch card stars and marks Important every selected file in one request", async () => {
+    const change = { body: { collection: null, problems: [], batch: null, ongoing_status: null } };
+    const { calls, user } = await setup({ "POST /api/marks/star": change, "POST /api/marks/important": change });
+    await user.click(screen.getByRole("checkbox", { name: "Select scan001.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select scan002.pdf" }));
+    const card = screen.getByRole("article", { name: "Batch of 2 files" });
+    await user.click(within(card).getByRole("button", { name: "Star" }));
+    await user.click(within(card).getByRole("button", { name: "Mark Important" }));
+    await waitFor(() => expect(calls.filter((c) => c.url.startsWith("/api/marks/"))).toHaveLength(2));
+    expect(calls.filter((c) => c.url.startsWith("/api/marks/")).map((c) => [c.url, c.body])).toEqual([
+      ["/api/marks/star", { drive_ids: ["d1", "d2"] }],
+      ["/api/marks/important", { drive_ids: ["d1", "d2"] }],
+    ]);
+    expect(await screen.findByText("Starred 2 files")).toBeInTheDocument();
+  });
+
   it("a file marked Important is refused with the server's reason; the entry stays", async () => {
     const { calls, user } = await setup({ "POST /api/quarantine": IMPORTANT_REFUSED(PATHS.d1) });
     await user.click(screen.getByRole("button", { name: "Move to To Delete" }));
