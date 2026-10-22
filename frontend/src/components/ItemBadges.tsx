@@ -1,8 +1,6 @@
-/** Labels and badges for a tray item, from what the API says about it (its level,
- * missing required fields and file state). Shared by Today and the Trays screen. */
+/** Labels and badges for a tray item, from what the API says about it (its level and
+ * file state). Shared by Today and the Trays screen. */
 import type { AttentionItem } from "../api/client";
-import { fieldWord } from "../format";
-import { visible } from "../text";
 
 export type Level = AttentionItem["level"];
 export type FileState = AttentionItem["file_state"];
@@ -20,33 +18,14 @@ export const FILE_BADGE: Record<FileState, string | null> = {
   to_delete: "file in ##. To Delete",
 };
 
-/** "needs a due date" (level undated), "needs <other required fields>", and the file
- * badge; nothing when there is nothing to say. ``showNeeds`` false leaves the "needs ..."
- * badges out (the tray list and the item header say it in the fields instead). */
-export function ItemBadges({
-  level,
-  missingRequired,
-  dateField,
-  fileState,
-  showNeeds = true,
-}: {
-  level: Level | null;
-  missingRequired: string[];
-  dateField: string | null | undefined;
-  fileState: FileState;
-  showNeeds?: boolean;
-}) {
+/** The file badge (missing, or in ##. To Delete); nothing when the file is fine. A missing
+ * required field is not announced: the field simply stays empty. */
+export function ItemBadges({ fileState }: { fileState: FileState }) {
   const fileBadge = FILE_BADGE[fileState];
-  const otherMissing = showNeeds ? missingRequired.filter((n) => !(level === "undated" && n === dateField)) : [];
-  const undated = showNeeds && level === "undated";
-  if (!undated && otherMissing.length === 0 && !fileBadge) return null;
+  if (!fileBadge) return null;
   return (
     <p className="badges">
-      {undated && <span className="badge badge-warn">needs a due date</span>}
-      {otherMissing.length > 0 && (
-        <span className="badge badge-warn">needs {otherMissing.map((n) => visible(fieldWord(n))).join(", ")}</span>
-      )}
-      {fileBadge && <span className="badge badge-error">{fileBadge}</span>}
+      <span className="badge badge-error">{fileBadge}</span>
     </p>
   );
 }

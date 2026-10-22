@@ -361,7 +361,7 @@ describe("Today", () => {
     expect(within(soon).getByText("file missing")).toBeInTheDocument();
 
     const undated = row("Bill⟨U+202E⟩gpj.exe");
-    expect(within(undated).getByText("needs a due date")).toBeInTheDocument();
+    expect(within(undated).queryByText(/needs a/)).not.toBeInTheDocument();
     expect(within(undated).getByText(/To Delete/)).toBeInTheDocument();
   });
 

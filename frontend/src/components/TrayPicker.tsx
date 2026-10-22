@@ -2,7 +2,7 @@
  * file)", and the chosen tray's fields with the values found in the scan. */
 import { type ReactNode, useId } from "react";
 import type { TrayDef } from "../api/client";
-import { fieldLabel, fieldWord } from "../format";
+import { fieldLabel } from "../format";
 import { isShortcut, useKeydown } from "../keyboard";
 import { visible } from "../text";
 import { editText, FieldInput } from "./FieldInput";
@@ -31,7 +31,6 @@ export function prefillValues(tray: TrayDef, prefill: Record<string, string>): R
   return out;
 }
 
-const blank = (value: string | boolean | undefined) => typeof value === "string" && !value.trim();
 
 type PickerProps = {
   trays: TrayDef[];
@@ -111,9 +110,8 @@ type FieldsProps = {
   chips?: Record<string, ReactNode>;
 };
 
-/** The tray's item fields. A required field left empty does not block filing: the
- * item is created and flagged, which the hint says (so the label does not say
- * "required"). */
+/** The tray's item fields. A required field left empty does not block filing, and
+ * nothing nags about it. */
 export function TrayFields({ tray, values, found, onChange, chips }: FieldsProps) {
   const ids = useId();
   return (
@@ -128,9 +126,6 @@ export function TrayFields({ tray, values, found, onChange, chips }: FieldsProps
             <FieldInput id={id} def={def} value={value ?? ""} onChange={(v) => onChange(name, v)} />
             {found.has(name) && <span className="hint"> found in scan</span>}
             {chips?.[name]}
-            {def.required && blank(value) && (
-              <p className="hint">Optional — without it the item is marked “needs a {visible(fieldWord(name))}”</p>
-            )}
           </div>
         );
       })}

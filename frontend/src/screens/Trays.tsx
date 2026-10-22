@@ -77,13 +77,7 @@ function Row({
           <MarkIcons marks={item.first_file?.marks} />
         </p>
         {payee && <p className="tray-row-sub">{visible(payee)}</p>}
-        <ItemBadges
-          level={item.level}
-          missingRequired={open ? item.missing_required : []}
-          dateField={tray?.date_field}
-          fileState={item.file_state}
-          showNeeds={false}
-        />
+        <ItemBadges fileState={item.file_state} />
         {!open && (
           <p className="tray-row-done">
             Done{item.done_at !== null && (

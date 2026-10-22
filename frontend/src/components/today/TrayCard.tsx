@@ -128,12 +128,7 @@ export function TrayRow({
           </p>
         )}
         {entry.note_excerpt && <p className="attention-note">Note: {visible(entry.note_excerpt)}</p>}
-        <ItemBadges
-          level={level}
-          missingRequired={entry.missing_required}
-          dateField={tray?.date_field}
-          fileState={entry.file_state}
-        />
+        <ItemBadges fileState={entry.file_state} />
         {full && (
           <div className="attention-actions">
             {copyable.map((n) => (

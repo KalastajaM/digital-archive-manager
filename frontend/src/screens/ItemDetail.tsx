@@ -140,8 +140,6 @@ function Fields({ item, tray }: { item: Item; tray: TrayDef | undefined }) {
             hint={
               invalid ? (
                 <p className="hint">invalid for this field type: kept as stored until you set a new value</p>
-              ) : item.missing_required.includes(name) ? (
-                <p className="hint">needs a {label}</p>
               ) : null
             }
           />
