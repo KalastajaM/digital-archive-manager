@@ -1,6 +1,7 @@
+import json
 from pathlib import Path
 
-from dam.config import AppPaths, load_settings
+from dam.config import DEFAULTS_DIR, AppPaths, load_settings
 
 
 def test_appaths_uses_env(tmp_path, monkeypatch):
@@ -40,7 +41,12 @@ def test_ensure_seeds_trays(tmp_path):
         "10-to-pay.yaml",
         "20-to-action.yaml",
         "30-to-read.yaml",
+        "40-follow-up.yaml",
     ]
+    # a new install has been offered every default tray
+    assert "40-follow-up.yaml" in json.loads(
+        (tmp_path / "tray-defaults-seeded.json").read_text(encoding="utf-8")
+    )
 
 
 def test_ensure_adds_trays_to_existing_config_without_touching_it(tmp_path):
@@ -82,3 +88,33 @@ def test_ensure_keeps_a_dangling_symlink(tmp_path):
     link.symlink_to(tmp_path / "nowhere.yaml")
     paths.ensure()
     assert link.is_symlink() and not (tmp_path / "nowhere.yaml").exists()
+
+
+def test_ensure_offers_a_new_default_tray_once_to_an_existing_install(tmp_path):
+    paths = AppPaths(tmp_path)
+    trays = paths.config_dir / "trays"
+    trays.mkdir(parents=True)
+    (paths.config_dir / "settings.yaml").write_text("archive_root: /custom\n", encoding="utf-8")
+    (trays / "10-to-pay.yaml").write_text(
+        (DEFAULTS_DIR / "trays" / "10-to-pay.yaml").read_text(encoding="utf-8"), encoding="utf-8"
+    )  # to-action and to-read were removed on purpose
+    paths.ensure()
+    assert (trays / "40-follow-up.yaml").exists()
+    assert not (trays / "20-to-action.yaml").exists()
+    assert not (trays / "30-to-read.yaml").exists()
+    # removed again: it is not offered a second time
+    (trays / "40-follow-up.yaml").unlink()
+    paths.ensure()
+    assert not (trays / "40-follow-up.yaml").exists()
+
+
+def test_ensure_skips_a_default_tray_whose_id_the_user_already_has(tmp_path):
+    paths = AppPaths(tmp_path)
+    trays = paths.config_dir / "trays"
+    trays.mkdir(parents=True)
+    (paths.config_dir / "settings.yaml").write_text("archive_root: /custom\n", encoding="utf-8")
+    (trays / "my-waiting.yaml").write_text(
+        "id: follow-up\nname: Waiting\norder: 9\n", encoding="utf-8"
+    )
+    paths.ensure()
+    assert not (trays / "40-follow-up.yaml").exists()

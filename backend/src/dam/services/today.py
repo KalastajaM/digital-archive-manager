@@ -193,7 +193,9 @@ class TodayService:
         level = _level(item.date, today)
         if level is None and item.date is None:
             tray = next((t for t in self._tray_defs() if t.id == item.tray_id), None)
-            if tray is not None and tray.date_field is not None:
+            # only a required date is "missing"; an optional one (Follow up) may stay empty
+            date_def = tray.fields.get(tray.date_field) if tray and tray.date_field else None
+            if date_def is not None and date_def.required:
                 level = "undated"
         return level
 

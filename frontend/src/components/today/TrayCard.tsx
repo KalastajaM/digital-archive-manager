@@ -1,6 +1,6 @@
 /** A tray's card on Today and its rows: what needs attention in full (fields, copy
  * buttons, Done), later items compact, with urgency tags and amounts. */
-import { BookOpen, CircleCheck, Euro, ListTodo, type LucideIcon } from "lucide-react";
+import { BookOpen, CircleCheck, Euro, Hourglass, ListTodo, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { AttentionItem, Item, Today as TodayData, TrayCount, TrayDef } from "../../api/client";
 import { dayOf, fieldLabel, fieldWord, formatField, formatMoney, plural } from "../../format";
@@ -23,6 +23,7 @@ const KIND_ICON: Record<Kind, LucideIcon> = { money: Euro, dated: CircleCheck, w
 
 function trayIcon(info: TrayCardInfo): LucideIcon {
   const key = `${info.id} ${info.name}`.toLowerCase();
+  if (/follow|waiting|odota|seuranta/.test(key)) return Hourglass;
   if (/read|lue|luettava/.test(key)) return BookOpen;
   if (info.kind !== "dated" || /action|task|todo|tee|hoida/.test(key)) return KIND_ICON[info.kind];
   return ListTodo;

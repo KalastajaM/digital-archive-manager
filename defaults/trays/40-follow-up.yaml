@@ -1,0 +1,15 @@
+id: follow-up
+name: Follow up
+order: 4
+item_title: "{name}"
+fields:
+  check_by:    { type: date }         # optional: an item without a date is simply listed after the dated ones
+  waiting_for: { type: text }         # who or what you are waiting on
+date_field: check_by                  # sorts the tray; drives reminders and "overdue"
+done:
+  label: Received
+  fields:
+    received_on: { type: date, default: today }
+reminders:
+  - { days_before: 0 }
+  - { overdue: true }                 # once when it becomes overdue

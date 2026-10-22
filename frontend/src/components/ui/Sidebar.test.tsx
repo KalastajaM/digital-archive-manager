@@ -6,7 +6,7 @@ import type { CollectionRow, Item, Member, Status, TrayDef } from "../../api/cli
 import { setDragCollection, setDragFiles } from "../../dnd";
 import { type Call, dataTransfer, deferred, mockFetch, renderWithProviders } from "../../test-utils";
 import { FILES_MOVED_EVENT, type FilesMovedDetail } from "../MoveTo";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, trayIcon } from "./Sidebar";
 
 const TO_PAY: TrayDef = {
   id: "to-pay",
@@ -659,5 +659,16 @@ describe("Sidebar and Today counts", () => {
     rerender({ status: at(4, 10, 0) }); // indexing finished: "Found in the inbox" may have grown
     await waitFor(() => expect(todays()).toBe(3));
     await waitFor(() => expect(inboxes()).toBe(3));
+  });
+});
+
+describe("trayIcon", () => {
+  it("Follow up gets the hourglass, the others keep theirs", () => {
+    const tray = (id: string, name: string) => ({ ...TO_PAY, id, name });
+    const follow = trayIcon(tray("follow-up", "Follow up"));
+    expect(follow.displayName).toBe("Hourglass");
+    for (const [id, name] of [["to-pay", "To pay"], ["to-action", "To action"], ["to-read", "To read"]]) {
+      expect(trayIcon(tray(id, name))).not.toBe(follow);
+    }
   });
 });

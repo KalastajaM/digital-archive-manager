@@ -1,5 +1,6 @@
 """Application settings and data-directory paths."""
 
+import json
 import os
 import re
 import shutil
@@ -183,24 +184,77 @@ class AppPaths:
         # (only while the folder is absent, so removed tray files stay removed).
         if not os.path.lexists(self.config_dir / "trays"):
             _seed(DEFAULTS_DIR / "trays", self.config_dir / "trays")
+        self._seed_new_default_trays()
+
+    @property
+    def seeded_trays_path(self) -> Path:
+        return self._data_dir / "tray-defaults-seeded.json"
+
+    def _seed_new_default_trays(self) -> None:
+        """Copy a default tray file this install has not been offered before. The names
+        already handled are kept in ``tray-defaults-seeded.json``: a file the user
+        removed stays removed, and a newer default file (``40-follow-up.yaml``) arrives
+        once, unless a tray with the same id is already there under another name."""
+        trays_dir = self.config_dir / "trays"
+        defaults = sorted(p.name for p in (DEFAULTS_DIR / "trays").glob("*.yaml"))
+        try:
+            known = json.loads(self.seeded_trays_path.read_text(encoding="utf-8"))
+            if not isinstance(known, list):
+                raise ValueError
+        except FileNotFoundError:
+            # first run of this check: the trays that shipped before it were already
+            # offered (and may have been removed on purpose)
+            known = [n for n in defaults if n in _SHIPPED_BEFORE_SEEDING]
+        except (OSError, ValueError):
+            return  # unreadable record: seed nothing rather than guess
+        taken = {
+            m.group(1)
+            for p in trays_dir.glob("*.y*ml")
+            if p.is_file()
+            for m in [
+                re.search(r"^id:\s*([\w-]+)", p.read_text(encoding="utf-8", errors="replace"), re.M)
+            ]
+            if m
+        }
+        for name in defaults:
+            if name in known:
+                continue
+            source = DEFAULTS_DIR / "trays" / name
+            m = re.search(r"^id:\s*([\w-]+)", source.read_text(encoding="utf-8"), re.M)
+            if m and m.group(1) in taken:
+                known.append(name)  # the user has this tray already
+                continue
+            _copy_new(source, trays_dir / name)
+            known.append(name)
+        record = sorted(set(known))
+        if not self.seeded_trays_path.exists() or record != sorted(
+            set(json.loads(self.seeded_trays_path.read_text(encoding="utf-8")))
+        ):
+            self.seeded_trays_path.write_text(json.dumps(record), encoding="utf-8")
+
+
+_SHIPPED_BEFORE_SEEDING = ("10-to-pay.yaml", "20-to-action.yaml", "30-to-read.yaml")
+
+
+def _copy_new(path: Path, target: Path) -> None:
+    """Copy ``path`` to ``target`` unless something (even a dangling symlink) is there."""
+    if os.path.lexists(target):
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        # "x": exclusive create, also refuses to follow a symlink planted meanwhile
+        with path.open("rb") as source, target.open("xb") as copy:
+            shutil.copyfileobj(source, copy)
+    except FileExistsError:
+        pass
 
 
 def _seed(src: Path, dst: Path) -> None:
     """Copy the files of ``src`` into ``dst``; an existing entry (even a dangling
     symlink) is never overwritten."""
     for path in sorted(src.rglob("*")):
-        if not path.is_file():
-            continue
-        target = dst / path.relative_to(src)
-        if os.path.lexists(target):
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            # "x": exclusive create, also refuses to follow a symlink planted meanwhile
-            with path.open("rb") as source, target.open("xb") as copy:
-                shutil.copyfileobj(source, copy)
-        except FileExistsError:
-            continue
+        if path.is_file():
+            _copy_new(path, dst / path.relative_to(src))
 
 
 def load_settings(app_paths: AppPaths) -> Settings:

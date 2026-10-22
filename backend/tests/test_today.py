@@ -61,6 +61,23 @@ def test_attention_ignores_undated_items_of_trays_without_a_date(app, fake_archi
     assert app.today.attention(TODAY) == []
 
 
+def test_follow_up_tray_loads_and_its_date_is_optional(app, fake_archive):
+    tray = next(t for t in app.tray_defs if t.id == "follow-up")
+    assert tray.date_field == "check_by" and not tray.fields["check_by"].required
+    assert tray.done.label == "Received"
+    fake_archive.add(f"{BANKS}/f1.pdf", drive_id="f1")
+    fake_archive.add(f"{BANKS}/f2.pdf", drive_id="f2")
+    app.scan()
+    undated = app.trays.create("follow-up", ["f1"], {"waiting_for": "Posti"}, title=None)
+    late = app.trays.create(
+        "follow-up", ["f2"], {"check_by": (TODAY - timedelta(days=2)).isoformat()}, title=None
+    )
+    assert undated.missing_required == []  # no "needs a date"
+    # undated: not in attention; the dated one is overdue; undated sorts last in the tray
+    assert [(a.item.id, a.level) for a in app.today.attention(TODAY)] == [(late.id, "overdue")]
+    assert [i.id for i in app.trays.list("follow-up")] == [late.id, undated.id]
+
+
 def test_file_state_missing_and_to_delete(app, fake_archive):
     gone = bill(app, fake_archive, "g1", TODAY)
     trashed = bill(app, fake_archive, "t1", TODAY)
@@ -96,7 +113,7 @@ def test_overview_counts_sums_and_waiting(app, fake_archive):
     ov = app.today.overview(TODAY)
     assert ov.inbox == 1
     by_tray = {t.tray_id: t for t in ov.trays}
-    assert [t.tray_id for t in ov.trays] == ["to-pay", "to-action", "to-read"]
+    assert [t.tray_id for t in ov.trays] == ["to-pay", "to-action", "to-read", "follow-up"]
     assert by_tray["to-pay"].name == "To pay"
     assert (by_tray["to-pay"].open, by_tray["to-pay"].overdue) == (3, 1)
     assert by_tray["to-pay"].sum == Decimal("94.20")
@@ -175,7 +192,7 @@ def test_open_items_per_tray_by_date_undated_last_capped(app, fake_archive):
     read = app.trays.create("to-read", ["r9"], {}, title=None)
 
     got = {t.tray_id: [i.id for i in t.items] for t in app.today.open_items()}
-    assert list(got) == ["to-pay", "to-action", "to-read"]
+    assert list(got) == ["to-pay", "to-action", "to-read", "follow-up"]
     assert got["to-pay"] == [overdue.id, soon.id, later.id, undated.id]
     assert got["to-action"] == [] and got["to-read"] == [read.id]
 
@@ -191,7 +208,7 @@ def test_open_items_reads_no_files(app, fake_archive, monkeypatch):
     bill(app, fake_archive, "f1", TODAY)
     monkeypatch.setattr(app.today, "file_info", lambda item: (_ for _ in ()).throw(AssertionError))
     monkeypatch.setattr(app.today.repo, "get", lambda *a: (_ for _ in ()).throw(AssertionError))
-    assert [len(t.items) for t in app.today.open_items()] == [1, 0, 0]
+    assert [len(t.items) for t in app.today.open_items()] == [1, 0, 0, 0]
 
 
 def test_overview_counts_collection_members_still_in_the_inbox(app, fake_archive):

@@ -909,7 +909,7 @@ describe("Quick Look and the selection in a tray", () => {
     const eye = await screen.findByRole("button", { name: "Quick Look" });
     expect(eye).toHaveClass("icon-button");
     expect(eye).toHaveAttribute("data-tip", "Quick Look (Space)");
-    expect(document.querySelector(".item-detail kbd")).toBeNull();
+    expect(document.querySelector(".item-header kbd")).toBeNull();
     expect(screen.queryByText("Quick Look", { selector: ".link-button" })).toBeNull();
     await user.click(eye);
     expect(quickLook()).toHaveAccessibleName("Quick Look: northpower.pdf");

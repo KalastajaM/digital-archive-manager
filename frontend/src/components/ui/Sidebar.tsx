@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CircleCheck,
   Euro,
+  Hourglass,
   FolderTree,
   History,
   Inbox,
@@ -375,6 +376,7 @@ function ImportantRow() {
 
 export function trayIcon(tray: TrayDef): LucideIcon {
   const key = `${tray.id} ${tray.name}`.toLowerCase();
+  if (/follow|waiting|odota|seuranta/.test(key)) return Hourglass;
   if (/pay|bill|invoice|lasku|maksu/.test(key)) return Euro;
   if (/read|lue|luettava/.test(key)) return BookOpen;
   if (/action|task|todo|tee|hoida/.test(key)) return CircleCheck;
