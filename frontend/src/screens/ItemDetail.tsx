@@ -62,37 +62,46 @@ function EditableField({
   server,
   save,
   hint,
+  after,
+  size,
 }: {
   label: string;
   def: FieldDef;
   server: string | boolean;
   save: (value: string | boolean) => Promise<string | boolean>;
   hint?: ReactNode;
+  /** Beside the input, such as a date's urgency tag. */
+  after?: ReactNode;
+  /** The width class on the fields row: the title grows, the rest have a set width. */
+  size?: "title" | "date" | "text" | "money" | "checkbox";
 }) {
   const id = useId();
   const auto = useAutoSave(server, save);
   const checkbox = def.type === "checkbox";
   return (
-    <div className="field">
+    <div className={size ? `field field-${size}` : "field"}>
       <label htmlFor={id}>{label}</label>
-      <FieldInput
-        id={id}
-        def={def}
-        value={auto.shown}
-        onChange={(v) => {
-          auto.change(v);
-          if (checkbox) void auto.commit(v);
-        }}
-        onBlur={(e) => {
-          if (!checkbox) void auto.commit(e.currentTarget.value);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !checkbox) {
-            e.preventDefault();
-            void auto.commit(e.currentTarget.value);
-          }
-        }}
-      />
+      <div className="field-input">
+        <FieldInput
+          id={id}
+          def={def}
+          value={auto.shown}
+          onChange={(v) => {
+            auto.change(v);
+            if (checkbox) void auto.commit(v);
+          }}
+          onBlur={(e) => {
+            if (!checkbox) void auto.commit(e.currentTarget.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !checkbox) {
+              e.preventDefault();
+              void auto.commit(e.currentTarget.value);
+            }
+          }}
+        />
+        {after}
+      </div>
       {hint}
       <SaveState status={auto.status} />
     </div>
@@ -109,18 +118,33 @@ function fieldText(def: FieldDef, item: Item, name: string): string | boolean {
   return editText(def, raw) ?? raw;
 }
 
-/** A dated tray's date field sits on one row with its urgency tag (after the input) and
- * the done buttons (right-aligned); ``Fields`` puts ``dateRow`` around that field. */
-type DateRow = { tag: ReactNode; actions: ReactNode };
+const fieldSize = (type: string): "date" | "text" | "money" | "checkbox" =>
+  type === "date" ? "date" : type === "money" ? "money" : type === "checkbox" ? "checkbox" : "text";
 
-function Fields({ item, tray, dateRow }: { item: Item; tray: TrayDef | undefined; dateRow?: DateRow }) {
+/** The item's editable fields on one row that wraps only when the panel is narrow: the
+ * title (grows), then the tray's fields in order (a date with its urgency tag after it),
+ * then ``trailing`` (the done buttons) at the end. ``part``: a bill shows only the title
+ * in its top row and the other fields further down. */
+function Fields({
+  item,
+  tray,
+  tag,
+  trailing,
+  part = "all",
+}: {
+  item: Item;
+  tray: TrayDef | undefined;
+  tag?: ReactNode;
+  trailing?: ReactNode;
+  part?: "all" | "title" | "rest";
+}) {
   const update = useItemUpdate();
   const saveTitle = async (value: string | boolean) =>
     (await update.mutateAsync({ id: item.id, title: String(value) })).title;
   return (
     <div className="item-fields">
-      <EditableField label="Title" def={TITLE_DEF} server={item.title} save={saveTitle} />
-      {tray === undefined && Object.keys(item.fields).length > 0 && (
+      {part !== "rest" && <EditableField label="Title" def={TITLE_DEF} server={item.title} save={saveTitle} size="title" />}
+      {part !== "title" && tray === undefined && Object.keys(item.fields).length > 0 && (
         <p className="hint">
           The tray of this item was removed from the settings: its fields cannot be edited.{" "}
           {Object.entries(item.fields)
@@ -129,38 +153,34 @@ function Fields({ item, tray, dateRow }: { item: Item; tray: TrayDef | undefined
             .join(" · ")}
         </p>
       )}
-      {Object.entries(tray?.fields ?? {}).map(([name, def]) => {
-        const invalid = item.invalid_fields.includes(name);
-        // An invalid stored value is shown as text, so it stays readable until replaced.
-        const inputDef = invalid ? { ...def, type: "text" } : def;
-        const save = async (value: string | boolean) => {
-          const stored = await update.mutateAsync({ id: item.id, fields: { [name]: value } });
-          return fieldText(def, stored, name);
-        };
-        const label = visible(fieldLabel(name));
-        const field = (
-          <EditableField
-            key={name}
-            label={def.required ? `${label} (required)` : label}
-            def={inputDef}
-            server={fieldText(def, item, name)}
-            save={save}
-            hint={
-              invalid ? (
-                <p className="hint">invalid for this field type: kept as stored until you set a new value</p>
-              ) : null
-            }
-          />
-        );
-        if (!dateRow || name !== tray?.date_field) return field;
-        return (
-          <div className="item-date-row" key={name}>
-            {field}
-            {dateRow.tag}
-            <span className="item-date-actions">{dateRow.actions}</span>
-          </div>
-        );
-      })}
+      {part !== "title" &&
+        Object.entries(tray?.fields ?? {}).map(([name, def]) => {
+          const invalid = item.invalid_fields.includes(name);
+          // An invalid stored value is shown as text, so it stays readable until replaced.
+          const inputDef = invalid ? { ...def, type: "text" } : def;
+          const save = async (value: string | boolean) => {
+            const stored = await update.mutateAsync({ id: item.id, fields: { [name]: value } });
+            return fieldText(def, stored, name);
+          };
+          const label = visible(fieldLabel(name));
+          return (
+            <EditableField
+              key={name}
+              label={def.required ? `${label} (required)` : label}
+              def={inputDef}
+              size={fieldSize(inputDef.type)}
+              server={fieldText(def, item, name)}
+              save={save}
+              after={name === tray?.date_field ? tag : null}
+              hint={
+                invalid ? (
+                  <p className="hint">invalid for this field type: kept as stored until you set a new value</p>
+                ) : null
+              }
+            />
+          );
+        })}
+      {trailing && <div className="item-done-buttons">{trailing}</div>}
     </div>
   );
 }
@@ -621,10 +641,9 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       </>
     ) : null;
 
-  /** Mark done / Done and file…, and the shown file's own actions (``ask`` is its Ask AI). */
+  /** Move / Remove from tray, and the shown file's own actions (``ask`` is its Ask AI). */
   const actionRow = (ask?: ReactNode) => (
     <div className="item-actions" ref={actionsRef}>
-      {kind !== "dated" && doneButtons}
       <span className="item-tray-actions" role="group" aria-label="This item">
         {open && (
           // The pull-down shows no tooltip of its own; the wrapper carries it.
@@ -668,11 +687,11 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     </div>
   );
 
-  const dateRow: DateRow | undefined =
-    kind === "dated"
-      ? { tag: open && item.date ? <UrgencyTag date={item.date} today={today} /> : null, actions: doneButtons }
-      : undefined;
-  const fields = <Fields key={item.id} item={item} tray={tray} dateRow={dateRow} />;
+  const tag = open && item.date ? <UrgencyTag date={item.date} today={today} /> : null;
+  // a bill's fields below the facts are the rest; its top row is the title and the done buttons
+  const fields = (
+    <Fields key={item.id} item={item} tray={tray} tag={tag} trailing={doneButtons} part={kind === "bill" ? "title" : "all"} />
+  );
   const moveEntries: MenuEntry[] = [...trays.values()]
     .filter((t) => t.id !== item.tray_id)
     .map((t) => ({ label: visible(t.name), disabled: moveItem.isPending, onSelect: () => void moveTo(t) }));
@@ -749,7 +768,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           onDone={() => setAdding(false)}
         />
       )}
-      {kind === "dated" && fields}
+      {fields}
       {kind === "waiting" && open && (
         <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>
       )}
@@ -813,7 +832,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         )}
         {trash.view}
       </div>
-      {kind !== "dated" && fields}
+      {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
       <SavedNote kind="item" target={String(item.id)} />
       {kind !== "dated" && checklist}
       <History item={item} tray={tray} today={today} />

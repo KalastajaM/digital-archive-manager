@@ -1095,11 +1095,7 @@ dialog.sheet.barcode-sheet { width: fit-content; max-width: 96vw; }
 .barcode-mismatch p { margin: 0 0 var(--sp-2); }
 .barcode-mismatch-title { font-weight: 600; }
 
-.item-date-row { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: var(--sp-2); }
-.item-date-row .field { margin-bottom: var(--sp-3); }
-.item-date-row input[type="date"] { width: 9rem; }
-.item-date-row .tag { margin-bottom: calc(var(--sp-3) + 4px); }
-.item-date-actions { margin-left: auto; display: flex; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.item-done-buttons { margin-left: auto; display: flex; gap: var(--sp-2); margin-top: calc(var(--fs-xs) * 1.5 + 3px); /* level with the inputs, not their labels */ }
 .item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-4) 0; }
 .item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
@@ -1111,7 +1107,16 @@ button[data-tip] { position: relative; }
 .item-detail .done-form { margin: var(--sp-4) 0; }
 .item-dated .checklist { margin: 0 0 var(--sp-4); padding: var(--sp-3); background: var(--panel); border-radius: var(--r-lg); box-shadow: var(--shadow-card); }
 .tabs button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.item-fields { display: grid; gap: 0 var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); margin-top: var(--sp-3); }
+/* title, fields and done buttons on one row; wraps only when the panel is too narrow */
+.item-fields { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 var(--sp-3); margin-top: var(--sp-3); }
+.item-fields .field-title { flex: 1 1 14rem; min-width: min(14rem, 100%); }
+.item-fields .field-date { flex: none; }
+.item-fields .field-date input[type="date"] { width: 9rem; }
+.item-fields .field-text { flex: 0 1 12rem; min-width: 8rem; }
+.item-fields .field-money { flex: 0 1 9rem; min-width: 6rem; }
+.item-fields .field-checkbox { flex: none; }
+.item-fields .field-input { display: flex; align-items: center; gap: var(--sp-2); }
+.item-fields .field-input > input:not([type="checkbox"]):not([type="date"]) { min-width: 0; width: 100%; }
 .item-fields .hint, .item-fields .error { margin: 3px 0 0; }
 .save-state { color: var(--muted); font-size: var(--fs-xs); }
 .tabs { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-1); }
