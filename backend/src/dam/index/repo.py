@@ -14,6 +14,7 @@ from dam.core.paths import nfc
 from dam.db.engine import write_tx
 from dam.db.tables import file_barcodes, file_tags, file_text, files, item_files, items, tags
 from dam.extract.base import ExtractedText
+from dam.rules.model import fold
 
 
 def ext_of(name: str, is_dir: bool | None) -> str | None:
@@ -806,6 +807,23 @@ class TagRepo:
                 conn.execute(sqlite_insert(tags).values(name=name).on_conflict_do_nothing())
                 tag_id = conn.execute(select(tags.c.id).where(tags.c.name == name)).scalar_one()
                 conn.execute(sqlite_insert(file_tags).values(drive_id=drive_id, tag_id=tag_id))
+
+    def popular(self, prefix: str = "", limit: int = 8) -> list[tuple[str, int]]:
+        """Tags starting with ``prefix`` (case and accents ignored) with the number of files
+        that have each, most used first, then by name."""
+        used = func.count(file_tags.c.drive_id)
+        query = (
+            select(tags.c.name, used)
+            .join(file_tags, file_tags.c.tag_id == tags.c.id)
+            .group_by(tags.c.id)
+        )
+        folded = fold(prefix.strip())
+        if folded:
+            escaped = folded.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            query = query.where(func.dam_fold(tags.c.name).like(f"{escaped}%", escape="\\"))
+        with self.engine.connect() as conn:
+            rows = conn.execute(query.order_by(used.desc(), tags.c.name).limit(limit)).all()
+        return [(name, int(n)) for name, n in rows]
 
     def for_file(self, drive_id: str) -> list[str]:
         with self.engine.connect() as conn:

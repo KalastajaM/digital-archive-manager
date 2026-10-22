@@ -378,6 +378,13 @@ class FileTagsOut(BaseModel):
     tags: list[str]
 
 
+class TagCountOut(BaseModel):
+    """A tag in use and the number of files that have it."""
+
+    name: str
+    files: int
+
+
 class ScanFieldOut(BaseModel):
     kind: Literal[
         "doc_date", "due_date", "date", "total", "amount", "iban", "reference", "payee", "custom"

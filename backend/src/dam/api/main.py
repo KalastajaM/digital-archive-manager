@@ -23,6 +23,7 @@ from dam.api.routers import (
     ongoing,
     setup,
     system,
+    tags,
     today,
     trays,
 )
@@ -160,6 +161,7 @@ def create_api(
         ai,
         archives_router,
         setup,
+        tags,
     ):
         api.include_router(module.router)
     api.include_router(collections.groups_router)  # /api/collection-groups

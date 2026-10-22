@@ -1,5 +1,5 @@
 /** Typed JSON client for the dam API, plus TanStack Query hooks. */
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import type { components } from "./schema";
 
@@ -666,6 +666,17 @@ export const useFileSuggestions = (driveId: string) =>
     queryFn: () => get<FileSuggestions>(`/api/files/${enc(driveId)}/suggestions`),
   });
 
+/** The tags in use that start with ``prefix`` (most used first), for the tag field's
+ * suggestions; the previous list stays while the next one loads. */
+export const useTagSuggestions = (prefix: string, limit: number, enabled = true) =>
+  useQuery({
+    queryKey: ["tag-suggestions", prefix, limit],
+    queryFn: () => get<{ name: string; files: number }[]>(`/api/tags?${new URLSearchParams({ prefix, limit: String(limit) })}`),
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 10_000,
+  });
+
 /** Set a file's tags exactly (written directly: no preview, nothing journaled). */
 export const usePutFileTags = () => {
   const client = useQueryClient();
@@ -675,6 +686,7 @@ export const usePutFileTags = () => {
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.file });
       void client.invalidateQueries({ queryKey: keys.browse });
+      void client.invalidateQueries({ queryKey: ["tag-suggestions"] });
     },
   });
 };
