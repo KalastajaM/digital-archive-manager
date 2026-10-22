@@ -716,7 +716,7 @@ can go. Four trays are seeded from `defaults/trays/` into `config/trays/`:
 | **To pay** | bills | `payee` (prefilled from a rule's `then.payee`), `due_date` (required), `amount`, `iban`, `reference`, prefilled from the scan; copy buttons on amount, IBAN and reference; "Mark paid" asks for `paid_on` (default today) | 3 days before, on the day, and once when overdue; Today shows the open total |
 | **To action** | things to do by a date (e.g. "no water on inspection day") | `action_date` (required) | 1 day before and on the day |
 | **To read** | reading with no date | none | one nudge when an item has waited 30 days |
-| **Follow up** | things you wait on from others (a delivery, a reply, a refund) | `check_by` (optional date), `waiting_for`; "Received" asks for `received_on` (default today) | on the check date and once when it is overdue; an item without a date has no reminders and sits after the dated ones |
+| **Follow up** | things you wait on from others (a delivery, a reply, a refund) | `check_by` (optional date), `waiting_for`; "Done" asks for nothing more | on the check date and once when it is overdue; an item without a date has no reminders and sits after the dated ones |
 
 An item has a title (the file name without its date prefix, editable), one or more files,
 its fields, a note and a checklist, and a history; "Reopen" undoes "Mark paid"/"Done".

@@ -7,9 +7,7 @@ fields:
   waiting_for: { type: text }         # who or what you are waiting on
 date_field: check_by                  # sorts the tray; drives reminders and "overdue"
 done:
-  label: Received
-  fields:
-    received_on: { type: date, default: today }
+  label: Done
 reminders:
   - { days_before: 0 }
   - { overdue: true }                 # once when it becomes overdue

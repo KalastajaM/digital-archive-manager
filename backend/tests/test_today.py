@@ -64,7 +64,7 @@ def test_attention_ignores_undated_items_of_trays_without_a_date(app, fake_archi
 def test_follow_up_tray_loads_and_its_date_is_optional(app, fake_archive):
     tray = next(t for t in app.tray_defs if t.id == "follow-up")
     assert tray.date_field == "check_by" and not tray.fields["check_by"].required
-    assert tray.done.label == "Received"
+    assert tray.done.label == "Done"
     fake_archive.add(f"{BANKS}/f1.pdf", drive_id="f1")
     fake_archive.add(f"{BANKS}/f2.pdf", drive_id="f2")
     app.scan()

@@ -43,7 +43,7 @@ def test_defaults_load_without_errors():
     assert read.done.label == "Read"
     assert follow.date_field == "check_by" and not follow.fields["check_by"].required
     assert follow.fields["waiting_for"].type == "text"
-    assert follow.done.label == "Received" and follow.done.fields["received_on"].default == "today"
+    assert follow.done.label == "Done" and follow.done.fields == {}
     assert [(r.days_before, r.overdue) for r in follow.reminders] == [(0, None), (None, True)]
 
 

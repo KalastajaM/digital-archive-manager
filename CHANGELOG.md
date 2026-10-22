@@ -38,7 +38,7 @@ All notable changes are listed here. The format follows
   and Next page; a collection without groups but with two or more files hints at "New
   group".
 - A new default tray, **Follow up**, for things you wait on from others (a delivery, a
-  reply, a refund): an optional check date, who you wait on, and "Received" to finish. Its
+  reply, a refund): an optional check date, who you wait on, and a plain "Done" to finish. Its
   items without a date have no reminders. A default tray file added in a later version is
   copied into an existing install once; a tray file you deleted stays deleted.
 - Ask: **Save to notes…** under an answer adds the question, answer, date and sources to
