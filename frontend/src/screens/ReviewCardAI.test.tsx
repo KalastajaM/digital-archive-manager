@@ -127,6 +127,13 @@ const chip = (label: RegExp) => screen.getByRole("group", { name: label });
 const useChip = async (user: ReturnType<typeof userEvent.setup>, label: RegExp) =>
   user.click(within(chip(label)).getByRole("button", { name: "Use" }));
 
+/** The tag chips of the filing form's tags field, in order. */
+const tagList = () => Array.from(document.querySelectorAll(".tag-field .tag-token")).map((t) => t.firstChild?.textContent ?? "");
+/** Removes every tag chip. */
+const clearTags = async (user: ReturnType<typeof userEvent.setup>) => {
+  for (const b of screen.queryAllByRole("button", { name: /^Remove tag / })) await user.click(b);
+};
+
 describe("ReviewCard: Ask AI", () => {
   it("switching AI off hides its chips and the AI summary; the form keeps its values", async () => {
     const { user, client } = await setup();
@@ -158,6 +165,13 @@ describe("ReviewCard: Ask AI", () => {
     expect(screen.queryByText(/Turn on AI/)).not.toBeInTheDocument();
   });
 
+  it("Ask AI is the sparkle icon button with a tooltip", async () => {
+    await setup();
+    const button = await screen.findByRole("button", { name: "Ask AI" });
+    expect(button).toHaveClass("icon-button");
+    expect(button).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
+  });
+
   it("the answer becomes chips; the form stays as it was and nothing is filed", async () => {
     const { calls, user } = await setup();
     // before asking: the rules' values pre-fill the empty fields, so there is no chip
@@ -166,7 +180,7 @@ describe("ReviewCard: Ask AI", () => {
     expect(posts(calls, "/api/ai/suggest-filing/prepare")[0].body).toEqual({ params: { drive_id: "d1" } });
     expect(field("Name")).toHaveValue("scan001.pdf");
     expect(field("Folder")).toHaveValue("");
-    expect(field("Tags")).toHaveValue("invoice");
+    expect(tagList()).toEqual(["invoice"]);
     expect(screen.getByRole("button", { name: "Nothing (just file)", pressed: true })).toBeInTheDocument();
 
     // hidden characters are shown in a chip
@@ -199,12 +213,12 @@ describe("ReviewCard: Ask AI", () => {
     await useChip(user, /^Suggested Folder:/);
     expect(field("Folder")).toHaveValue("20. Home/Electricity");
     expect(field("Name")).toHaveValue("scan001.pdf");
-    expect(field("Tags")).toHaveValue("invoice");
+    expect(tagList()).toEqual(["invoice"]);
     expect(screen.getByRole("button", { name: "Nothing (just file)", pressed: true })).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: /^Suggested Folder:/ })).not.toBeInTheDocument();
 
     await useChip(user, /^Suggested tag: power/);
-    expect(field("Tags")).toHaveValue("invoice, power");
+    expect(tagList()).toEqual(["invoice", "power"]);
     expect(field("Name")).toHaveValue("scan001.pdf");
 
     // the rules' name comes back as a chip once the field is edited away from it
@@ -241,7 +255,7 @@ describe("ReviewCard: Ask AI", () => {
     await user.click(screen.getByRole("button", { name: "Use all" }));
     expect(field("Name")).toHaveValue("20261001_Northpower electricity bill\u202E.pdf");
     expect(field("Folder")).toHaveValue("20. Home/Electricity");
-    expect(field("Tags")).toHaveValue("invoice, power");
+    expect(tagList()).toEqual(["invoice", "power"]);
     expect(screen.getByRole("button", { name: "To pay", pressed: true })).toBeInTheDocument();
     expect(field(/^Due date/)).toHaveValue("2026-10-15");
     expect(field(/^Amount/)).toHaveValue("84,20");

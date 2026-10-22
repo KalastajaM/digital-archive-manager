@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Sparkles } from "lucide-react";
 import { IconButton } from "../components/ui/IconButton";
 import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -21,6 +21,7 @@ import { FilePreview } from "../components/FilePreview";
 import { editText } from "../components/FieldInput";
 import { FolderPicker } from "../components/FolderPicker";
 import { NoteEditor } from "../components/NoteEditor";
+import { TagInput } from "../components/TagInput";
 import { PlanPreview } from "../components/PlanPreview";
 import {
   blankValues,
@@ -343,18 +344,30 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               onClick={() => setShowPreview((v) => !v)}
             />
             {aiState.on && (
-              <button
-                type="button"
-                onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
+              <IconButton
+                icon={<Sparkles />}
+                label="Ask AI"
+                tip="Ask AI to suggest a name, folder and tags"
                 disabled={filing.busy || ai.busy}
-              >
-                Ask AI
-              </button>
+                onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
+              />
             )}
-            <button type="button" onClick={preview} disabled={filing.busy}>
+            <button
+              type="button"
+              className="tip-end"
+              data-tip="Show exactly what will move, before anything changes (↩)"
+              onClick={preview}
+              disabled={filing.busy}
+            >
               Preview
             </button>
-            <button type="button" className="primary" onClick={fileIt} disabled={filing.busy}>
+            <button
+              type="button"
+              className="primary"
+              data-tip="Move it to the folder with the new name (⌘↩)"
+              onClick={fileIt}
+              disabled={filing.busy}
+            >
               File it
             </button>
           </>
@@ -403,11 +416,12 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
           </div>
           <div className="field">
             <label htmlFor={`${ids}-tags`}>Tags</label>
-            <input
+            <TagInput
               id={`${ids}-tags`}
-              value={tags}
-              placeholder="comma, separated"
-              onChange={(e) => setTags(e.target.value)}
+              value={parseTags(tags)}
+              onChange={(next) => setTags(next.join(", "))}
+              disabled={filing.busy}
+              passCmdEnter
             />
             <FieldChips field="tag" offers={tagChips} disabled={filing.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
             {rejected("tags", "tags")}

@@ -8,14 +8,15 @@
  * moved (a link, a folder, one in ##. To Delete) gets the same controls disabled, the
  * reason as their tooltip. */
 import { FolderInput, Pencil, Sparkles } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { errorText, type FilingSuggestion, type Mark, useFileDetail, usePutFileTags, useTagSuggestions } from "../api/client";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { errorText, type FilingSuggestion, type Mark, useFileDetail, usePutFileTags } from "../api/client";
 import { visible } from "../text";
 import { useAISend, useAIState } from "./ai/useAI";
 import { MarkToggles } from "./MarkToggles";
 import { MoveToSheet, sourceRefusal, useMoveFlow } from "./MoveTo";
 import { Breakable } from "./PlanPreview";
 import { AI_SOURCE, aiNote, FieldChips, type Offer, offersFor, tagOffers } from "./SuggestionChip";
+import { TagInput } from "./TagInput";
 import { useBlockToastActions } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 
@@ -230,13 +231,7 @@ export function FileMeta({
   );
 }
 
-/** How many existing tags the field suggests at most. */
-const SUGGEST_MAX = 8;
-
-/** The tags as chips with × and an input at the end: Enter or a comma adds, ⌫ in the
- * empty input removes the last. Each change is written at once. While typing, the
- * existing tags that start with the text (most used first) are listed: ↑ ↓ choose, Enter
- * adds the chosen one, Esc closes the list. */
+/** A file's tags as a tag input; each change is written at once. */
 function TagsField({
   driveId,
   name,
@@ -253,7 +248,6 @@ function TagsField({
 }) {
   const detail = useFileDetail(driveId);
   const put = usePutFileTags();
-  const [text, setText] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   // what was last written, until the file's record shows it
   const [pending, setPending] = useState<string[] | null>(null);
@@ -290,117 +284,10 @@ function TagsField({
     if (added.length > 0) void write([...latest.current, ...added]);
   };
   const off = reason !== null || busy || saved === undefined;
-
-  // Suggestions: the tags in use that start with what is typed, minus the file's own.
-  const listId = useId();
-  const [focused, setFocused] = useState(false);
-  const [active, setActive] = useState(-1);
-  const [dismissed, setDismissed] = useState(false);
-  const typed = text.trim();
-  const found = useTagSuggestions(typed, Math.min(50, SUGGEST_MAX + tags.length), focused && !off && typed !== "");
-  const own = new Set(tags.map(fold));
-  const suggestions = typed === "" ? [] : (found.data ?? []).filter((t) => !own.has(fold(t.name))).slice(0, SUGGEST_MAX);
-  const listOpen = focused && !dismissed && suggestions.length > 0;
-  const chosen = listOpen && active >= 0 && active < suggestions.length ? suggestions[active] : null;
-  const take = (name: string) => {
-    add([name]);
-    setText("");
-    setActive(-1);
-  };
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    e.stopPropagation(); // page shortcuts never see keys typed here
-    if (listOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-      e.preventDefault();
-      const n = suggestions.length;
-      setActive((a) => (e.key === "ArrowDown" ? (a + 1) % n : a <= 0 ? n - 1 : a - 1));
-    } else if (e.key === "Escape" && listOpen) {
-      e.preventDefault();
-      setDismissed(true);
-      setActive(-1);
-    } else if (e.key === "Enter" && chosen) {
-      e.preventDefault();
-      take(chosen.name);
-    } else if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      add([text]);
-      setText("");
-    } else if (e.key === "Backspace" && text === "" && latest.current.length > 0) {
-      e.preventDefault();
-      void write(latest.current.slice(0, -1));
-    }
-  };
   const chips = tagOffers(tags.join(", "), offers);
   return (
     <section className="file-tags" aria-label="Tags" title={reason ?? undefined}>
-      <div className="tag-field-wrap">
-        <div className={off ? "tag-field disabled" : "tag-field"}>
-          {tags.map((t) => (
-            <span key={t} className="tag-token">
-              {visible(t)}
-              <button
-                type="button"
-                aria-label={`Remove tag ${visible(t)}`}
-                disabled={off}
-                onClick={() => void write(latest.current.filter((x) => x !== t))}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-          <input
-            aria-label={`Add a tag to ${visible(name)}`}
-            value={text}
-            placeholder={tags.length === 0 ? "Add a tag" : ""}
-            disabled={off}
-            spellCheck={false}
-            role="combobox"
-            aria-expanded={listOpen}
-            aria-controls={listOpen ? listId : undefined}
-            aria-autocomplete="list"
-            aria-activedescendant={chosen ? `${listId}-${active}` : undefined}
-            onFocus={() => setFocused(true)}
-            onChange={(e) => {
-              const v = e.target.value;
-              setDismissed(false);
-              setActive(-1);
-              if (v.includes(",")) {
-                // pasted or typed with commas: every part is a tag, the last stays being typed
-                const parts = v.split(",");
-                add(parts.slice(0, -1));
-                setText(parts[parts.length - 1]);
-              } else setText(v);
-            }}
-            onKeyDown={onKey}
-            onBlur={() => {
-              setFocused(false);
-              setActive(-1);
-              add([text]);
-              setText("");
-            }}
-          />
-        </div>
-        {listOpen && (
-          <ul id={listId} className="tag-suggest" role="listbox" aria-label="Existing tags">
-            {suggestions.map((t, i) => (
-              <li
-                key={t.name}
-                id={`${listId}-${i}`}
-                role="option"
-                aria-selected={i === active}
-                className={i === active ? "active" : undefined}
-                // mousedown, not click: the input keeps the focus (a blur would add the typed text)
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  take(t.name);
-                }}
-              >
-                {visible(t.name)}
-                <span className="tag-suggest-count">{t.files}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <TagInput value={tags} onChange={(next) => void write(next)} label={`Add a tag to ${visible(name)}`} disabled={off} />
       {problem && (
         <p className="error" role="alert">
           {visible(problem)}

@@ -175,12 +175,19 @@ async function setFolder(user: ReturnType<typeof userEvent.setup>, value: string
   return folder;
 }
 
+/** The tag chips of the filing form's tags field, in order. */
+const tagList = () => Array.from(document.querySelectorAll(".tag-field .tag-token")).map((t) => t.firstChild?.textContent ?? "");
+/** Removes every tag chip. */
+const clearTags = async (user: ReturnType<typeof userEvent.setup>) => {
+  for (const b of screen.queryAllByRole("button", { name: /^Remove tag / })) await user.click(b);
+};
+
 describe("ReviewCard", () => {
   it("renders the suggested name, folder, tags and detected fields", async () => {
     const { name } = await setup();
     expect(name).toHaveValue("2026-10-01 Kotihoito lasku.pdf");
     expect(screen.getByLabelText("Folder")).toHaveValue("20. Health/Kotihoito");
-    expect(screen.getByLabelText("Tags")).toHaveValue("invoice");
+    expect(tagList()).toEqual(["invoice"]);
     const fields = screen.getByRole("region", { name: "Detected fields" });
     expect(within(fields).getByText("1.10.2026")).toBeInTheDocument();
     expect(within(fields).getByText("123,45 €")).toBeInTheDocument();
@@ -1473,7 +1480,7 @@ describe("Suggestion chips (rules and scan)", () => {
     await user.clear(name);
     await user.type(name, "mine.pdf");
     await setFolder(user, "10. Financial/Banks");
-    await user.clear(screen.getByLabelText("Tags"));
+    await clearTags(user);
     const nameChip = chip(/^Suggested Name: 2026-10-01 Kotihoito lasku\.pdf \(rule kotihoito\)$/);
     expect(nameChip).toHaveTextContent("rule kotihoito");
     expect(chip(/^Suggested Folder: 20\. Health\/Kotihoito \(rule kotihoito\)$/)).toBeInTheDocument();
@@ -1482,7 +1489,7 @@ describe("Suggestion chips (rules and scan)", () => {
     await user.click(within(nameChip).getByRole("button", { name: "Use" }));
     expect(name).toHaveValue("2026-10-01 Kotihoito lasku.pdf");
     expect(screen.getByLabelText("Folder")).toHaveValue("10. Financial/Banks");
-    expect(screen.getByLabelText("Tags")).toHaveValue("");
+    expect(tagList()).toEqual([]);
     expect(screen.queryByRole("group", { name: /^Suggested Name/ })).not.toBeInTheDocument();
   });
 
@@ -1491,13 +1498,13 @@ describe("Suggestion chips (rules and scan)", () => {
     await user.clear(name);
     await user.type(name, "mine.pdf");
     await setFolder(user, "10. Financial/Banks");
-    await user.clear(screen.getByLabelText("Tags"));
+    await clearTags(user);
     await user.type(screen.getByLabelText("Tags"), "own");
     await user.click(screen.getByRole("button", { name: "Use all" }));
     noChips();
     expect(name).toHaveValue("2026-10-01 Kotihoito lasku.pdf");
     expect(screen.getByLabelText("Folder")).toHaveValue("20. Health/Kotihoito");
-    expect(screen.getByLabelText("Tags")).toHaveValue("own, invoice");
+    expect(tagList()).toEqual(["own", "invoice"]);
     await user.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
     expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([
@@ -1523,13 +1530,13 @@ describe("Suggestion chips (rules and scan)", () => {
     expect(screen.getByText("2 suggestions below the fields")).toBeInTheDocument();
 
     await user.click(within(power).getByRole("button", { name: "Use" }));
-    expect(screen.getByLabelText("Tags")).toHaveValue("power");
+    expect(tagList()).toEqual(["power"]);
     expect(screen.getByLabelText("Folder")).toHaveValue(""); // only that field
     await user.click(within(electricity).getByRole("button", { name: "Use" }));
     expect(screen.getByLabelText("Folder")).toHaveValue("30. Home/Electricity");
     await user.click(screen.getByRole("button", { name: "Use all" }));
     expect(screen.getByLabelText("Folder")).toHaveValue("20. Health/Kotihoito");
-    expect(screen.getByLabelText("Tags")).toHaveValue("power, invoice");
+    expect(tagList()).toEqual(["power", "invoice"]);
 
     await user.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
@@ -1538,6 +1545,55 @@ describe("Suggestion chips (rules and scan)", () => {
       { drive_id: "d1", name: "2026-10-01 Kotihoito lasku.pdf", folder: "20. Health/Kotihoito", tags },
       { drive_id: "d2", name: "2026-10-02 Sähkölasku.pdf", folder: "20. Health/Kotihoito", tags },
     ]);
+  });
+});
+
+describe("Tags field and action tooltips", () => {
+  const TAGS = [
+    { name: "bank", files: 9 },
+    { name: "bills", files: 4 },
+  ];
+
+  it("tags are chips; suggestions come from the existing tags; Enter adds, backspace removes", async () => {
+    const { calls, user } = await setup({ "GET /api/tags": { body: TAGS } });
+    expect(screen.queryByPlaceholderText("comma, separated")).not.toBeInTheDocument();
+    const box = screen.getByLabelText("Tags");
+    await user.type(box, "b");
+    const list = await screen.findByRole("listbox", { name: "Existing tags" });
+    expect(calls.some((c) => c.url.startsWith("/api/tags") && c.url.includes("prefix=b"))).toBe(true);
+    await user.click(within(list).getByRole("option", { name: /^bills/ }));
+    expect(tagList()).toEqual(["invoice", "bills"]);
+    await user.type(box, "2026{Enter}");
+    expect(tagList()).toEqual(["invoice", "bills", "2026"]);
+    await user.keyboard("{Backspace}");
+    expect(tagList()).toEqual(["invoice", "bills"]);
+  });
+
+  it("⌘↩ in the tags field files with the text being typed", async () => {
+    const { calls, user } = await setup({ "POST /api/inbox/preview": { body: SIMPLE_MOVE }, "POST /api/inbox/file": { body: fileResult() } });
+    await setFolder(user, "10. Financial/Banks");
+    await user.type(screen.getByLabelText("Tags"), "2026");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview").length + posts(calls, "/api/inbox/file").length).toBeGreaterThan(0));
+    const sent = [...posts(calls, "/api/inbox/preview"), ...posts(calls, "/api/inbox/file")][0].body as { requests?: { tags: string[] }[] };
+    const request = Array.isArray(sent) ? sent[0] : sent.requests![0];
+    expect(request.tags).toEqual(["invoice", "2026"]);
+  });
+
+  it("Preview and File it say what they do", async () => {
+    await setup();
+    expect(screen.getByRole("button", { name: "Preview" })).toHaveAttribute("data-tip", expect.stringContaining("before anything changes"));
+    expect(screen.getByRole("button", { name: "File it" })).toHaveAttribute("data-tip", expect.stringContaining("⌘↩"));
+  });
+
+  it("the batch card has the same tags field and tooltips", async () => {
+    const { user } = await setup();
+    await user.click(screen.getByRole("checkbox", { name: "Select scan001.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select scan002.pdf" }));
+    await user.type(screen.getByLabelText("Tags"), "2026{Enter}");
+    expect(tagList()).toEqual(["2026"]);
+    expect(screen.getByRole("button", { name: "File 2 files" })).toHaveAttribute("data-tip", expect.stringContaining("⌘↩"));
+    expect(screen.getByRole("button", { name: "Preview" })).toHaveAttribute("data-tip", expect.stringContaining("before anything changes"));
   });
 });
 
@@ -1678,7 +1734,7 @@ describe("Trash in the inbox", () => {
       await setup();
       expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
       expect(screen.getByRole("combobox", { name: "Folder" })).toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: "Tags" })).toBeInTheDocument();
+      expect(screen.getByRole("combobox", { name: "Tags" })).toBeInTheDocument();
       expect(screen.getByRole("textbox", { name: "Note (optional)" })).toBeInTheDocument();
       expect(screen.getByRole("combobox", { name: "Also add to collection" })).toBeInTheDocument();
     });

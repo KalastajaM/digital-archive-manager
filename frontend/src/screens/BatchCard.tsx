@@ -13,6 +13,7 @@ import { useToast } from "../components/Toasts";
 import { TrashButton } from "../components/Trash";
 import { FolderPicker } from "../components/FolderPicker";
 import { PlanPreview } from "../components/PlanPreview";
+import { TagInput } from "../components/TagInput";
 import { TrayPicker } from "../components/TrayPicker";
 import { Toolbar } from "../components/ui/Toolbar";
 import { ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
@@ -213,10 +214,22 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
             {trash && (
               <TrashButton count={entries.length} disabled={filing.busy || adding.busy || trash.busy} onClick={trash.run} />
             )}
-            <button type="button" onClick={preview} disabled={filing.busy}>
+            <button
+              type="button"
+              className="tip-end"
+              data-tip="Show exactly what will move, before anything changes (↩)"
+              onClick={preview}
+              disabled={filing.busy}
+            >
               Preview
             </button>
-            <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || adding.busy}>
+            <button
+              type="button"
+              className="primary"
+              data-tip="Move them to the folder with their new names (⌘↩)"
+              onClick={fileIt}
+              disabled={filing.busy || adding.busy}
+            >
               File {count}
             </button>
           </>
@@ -264,11 +277,13 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
           </div>
           <div className="field">
             <label htmlFor={`${ids}-tags`}>Tags</label>
-            <input
+            <TagInput
               id={`${ids}-tags`}
-              value={tags}
-              placeholder="comma, separated (added to every file)"
-              onChange={(e) => setTags(e.target.value)}
+              value={parseTags(tags)}
+              onChange={(next) => setTags(next.join(", "))}
+              placeholder="Add a tag (added to every file)"
+              disabled={filing.busy || adding.busy}
+              passCmdEnter
             />
             <FieldChips field="tag" offers={tagChips} disabled={filing.busy || adding.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
           </div>

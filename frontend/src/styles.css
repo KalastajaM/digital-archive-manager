@@ -290,7 +290,7 @@ main { flex: 1; padding: var(--sp-4) var(--sp-5); min-width: 0; }
 /* At a right edge (the last toolbar control, a group's ⋯, a folder field's …) the tooltip ends at the
  * control's right edge: never past the window. */
 .toolbar-actions > :last-child[data-tip]::after, .toolbar-actions > :last-child [data-tip]::after,
-.group-menu [data-tip]::after, .folder-picker-browse[data-tip]::after { left: auto; right: 0; transform: none; }
+.group-menu [data-tip]::after, .folder-picker-browse[data-tip]::after, .tip-end[data-tip]::after { left: auto; right: 0; transform: none; }
 /* Near the bottom of the window (toasts), the tooltip goes above the control instead. */
 [data-tip][data-tip-side="above"]::after { top: auto; bottom: calc(100% + 6px); --tip-from: 2px; }
 
