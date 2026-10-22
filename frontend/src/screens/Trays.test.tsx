@@ -606,12 +606,13 @@ describe("Item detail", () => {
     expect(within(hit).getByRole("img", { name: "Starred" })).toBeInTheDocument();
   });
 
-  it("checklist: Enter adds, the checkbox toggles, edit, remove and move go to the API", async () => {
+  it("checklist: Enter adds, the checkbox toggles, inline edit, reorder (keys and drag) and delete go to the API", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/checklist/item/1": { body: { id: 13, text: "Photo", done: false, position: 2 } },
       "PATCH /api/checklist/11": { status: 204, body: null },
       "POST /api/checklist/11/move": { status: 204, body: null },
       "POST /api/checklist/12/remove": { status: 204, body: null },
+      "POST /api/checklist/12/move": { status: 204, body: null },
     });
     const list = await within(await screen.findByRole("region", { name: "Item" })).findByRole("region", {
       name: "Checklist",
@@ -626,16 +627,31 @@ describe("Item detail", () => {
     await waitFor(() => expect(sent(calls, "PATCH", "/api/checklist/11")).toHaveLength(1));
     expect(sent(calls, "PATCH", "/api/checklist/11")[0].body).toEqual({ done: true });
 
-    await user.click(within(list).getByRole("button", { name: "Move Check meter down" }));
+    // reorder: Option-Down on the focused row, and a drop on another row
+    const text = within(list).getByRole("button", { name: "Check meter" });
+    text.focus();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
     await waitFor(() => expect(sent(calls, "POST", "/api/checklist/11/move")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/checklist/11/move")[0].body).toEqual({ position: 1 });
-    expect(within(list).getByRole("button", { name: "Move Check meter up" })).toBeDisabled();
-    expect(within(list).getByRole("button", { name: "Move Pay⟨U+202E⟩it down" })).toBeDisabled();
+    expect(await within(list).findByRole("status")).toHaveTextContent("moved to position 2");
+    const rows = within(list).getAllByRole("listitem");
+    const dt = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(rows[1], { dataTransfer: dt });
+    fireEvent.dragOver(rows[0], { dataTransfer: dt });
+    fireEvent.drop(rows[0], { dataTransfer: dt });
+    await waitFor(() => expect(sent(calls, "POST", "/api/checklist/12/move")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/checklist/12/move")[0].body).toEqual({ position: 0 });
+    expect(within(list).queryByRole("button", { name: /Move .* (up|down)/ })).not.toBeInTheDocument();
 
-    await user.click(within(list).getByRole("button", { name: "Remove Pay⟨U+202E⟩it" }));
+    await user.click(within(list).getByRole("button", { name: "Delete Pay⟨U+202E⟩it" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/checklist/12/remove")).toHaveLength(1));
 
-    await user.click(within(list).getByRole("button", { name: "Edit Check meter" }));
+    // click the text to edit: Esc cancels, Enter saves
+    await user.click(within(list).getByRole("button", { name: "Check meter" }));
+    await user.keyboard("{Escape}");
+    expect(within(list).queryByLabelText("Edit checklist entry")).not.toBeInTheDocument();
+    expect(sent(calls, "PATCH", "/api/checklist/11")).toHaveLength(1);
+    await user.click(within(list).getByRole("button", { name: "Check meter" }));
     const edit = within(list).getByLabelText("Edit checklist entry");
     await user.clear(edit);
     await user.type(edit, "Read meter{Enter}");

@@ -1109,10 +1109,16 @@ button[data-tip] { position: relative; }
 .file-list code { flex: 1; min-width: 0; }
 .item-files img { height: auto; box-shadow: var(--shadow-card); background: var(--paper); }
 .checks { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
-.check { display: flex; gap: var(--sp-1); align-items: center; margin-bottom: 2px; }
-.check-text { flex: 1; overflow-wrap: anywhere; }
+.check { display: flex; gap: var(--sp-1); align-items: center; margin-bottom: 2px; border-radius: var(--r-md); }
+.check-text { flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; }
+button.check-text { padding: 0; min-height: 0; border: none; background: transparent; box-shadow: none; font: inherit; color: inherit; cursor: text; }
 .check-done .check-text { color: var(--muted); text-decoration: line-through; }
-.check button { padding: 0 6px; min-height: 20px; }
+.check-grip { display: inline-flex; width: 14px; flex: none; color: var(--muted-2); cursor: grab; opacity: 0; }
+.check:hover .check-grip, .check:focus-within .check-grip { opacity: 1; }
+.check .check-delete { width: 22px; height: 22px; opacity: 0; }
+.check:hover .check-delete, .check:focus-within .check-delete { opacity: 1; }
+.check-dragging { opacity: 0.5; }
+.check-drop { box-shadow: 0 -2px 0 var(--accent); }
 .history ul { padding-left: var(--sp-4); margin: var(--sp-1) 0; }
 .history li { margin-bottom: 2px; overflow-wrap: anywhere; }
 .checklist, .history, .item-note { margin-top: var(--sp-4); }
