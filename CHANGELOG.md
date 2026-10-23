@@ -151,6 +151,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Settings has a row of sections at the top, grouped by what they apply to (this
+  archive, or this browser), and shows one section at a time, each at its own address.
+  Filing codes is now a short list, one line per code with its sticker and what it does;
+  click a code to edit it. Unsaved changes get a bar at the bottom with Save and Discard,
+  are kept when you leave Settings, and closing the window asks first. Print stickers
+  opens as a sheet from Filing codes, or from a code with that code ticked.
 - Print stickers says how many labels fit on the chosen sheet and, with codes chosen,
   how many sheets they take and how many labels stay empty on the last one. Plain paper
   now shows its size in the sheet list (65 per sheet, like the Avery L7651).

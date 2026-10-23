@@ -79,7 +79,7 @@ const SCREEN_SECTIONS: Record<string, string> = {
   "/browse": "browse",
   "/ask": "ai-optional",
   "/activity": "activity-and-undo",
-  "/settings": "settings",
+  "/settings/:section?": "settings",
   "/help": "how-dam-works",
   "/viewer/:driveId": "quick-look-and-the-viewer-window",
 };

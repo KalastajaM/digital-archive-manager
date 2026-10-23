@@ -137,7 +137,7 @@ function Shell() {
             <Route path="/browse" element={<Browse />} />
             <Route path="/ask" element={<Ask />} />
             <Route path="/activity" element={<Activity />} />
-            <Route path="/settings" element={<SettingsScreen />} />
+            <Route path="/settings/:section?" element={<SettingsScreen />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
