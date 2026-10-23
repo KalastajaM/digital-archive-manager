@@ -173,8 +173,6 @@ function CodeEditor({
   edit,
   onRemove,
   onDone,
-  printable,
-  onPrint,
 }: {
   r: Draft;
   i: number;
@@ -183,9 +181,6 @@ function CodeEditor({
   edit: (key: number, patch: Partial<Draft>) => void;
   onRemove: () => void;
   onDone: () => void;
-  /** Whether the code is saved as shown (printing uses the saved table). */
-  printable: boolean;
-  onPrint: () => void;
 }) {
   const same = confusedWith(r, rows);
   return (
@@ -310,11 +305,6 @@ function CodeEditor({
         <code>{"{doc_date:%Y%m%d}_Fortum"}</code> gives <code>20261015_Fortum.pdf</code>.
       </p>
       <div className="code-editor-actions">
-        <span className="button-wrap" data-tip={printable ? "Print stickers of this code" : "Save the code first: stickers print the saved table"}>
-          <button type="button" disabled={!printable} onClick={onPrint}>
-            Print…
-          </button>
-        </span>
         <button type="button" onClick={onDone}>
           Done
         </button>
@@ -333,7 +323,7 @@ export function FilingCodes() {
   const [open, setOpen] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<ResolvedOp[] | null>(null);
-  const [printing, setPrinting] = useState<{ code: string | null } | null>(null);
+  const [printing, setPrinting] = useState(false);
   const loaded = useRef(false);
 
   // The table is copied into the editor once (or the edits kept from before); later loads
@@ -400,7 +390,6 @@ export function FilingCodes() {
   const trayList = trays.data?.trays ?? [];
   const edit = (key: number, patch: Partial<Draft>) =>
     setRows((rs) => (rs ?? []).map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  const isSaved = (r: Draft) => saved.some((s) => JSON.stringify(toCode(s)) === JSON.stringify(toCode(r)));
 
   const doSave = async () => {
     setError(null);
@@ -494,7 +483,7 @@ export function FilingCodes() {
         <button type="button" onClick={addCode}>
           <Plus size={14} aria-hidden="true" /> Add a code
         </button>
-        <button type="button" onClick={() => setPrinting({ code: null })}>
+        <button type="button" onClick={() => setPrinting(true)}>
           Print stickers…
         </button>
       </div>
@@ -516,8 +505,6 @@ export function FilingCodes() {
                     setOpen(null);
                   }}
                   onDone={() => setOpen(null)}
-                  printable={isSaved(r)}
-                  onPrint={() => setPrinting({ code: r.code.trim().toUpperCase() })}
                 />
               </li>
             ) : (
@@ -550,8 +537,8 @@ export function FilingCodes() {
         </div>
       )}
       {printing && (
-        <Sheet open title="Print stickers" onClose={() => setPrinting(null)} footer={<button type="button" onClick={() => setPrinting(null)}>Close</button>}>
-          <PrintStickers initialCode={printing.code} />
+        <Sheet open title="Print stickers" onClose={() => setPrinting(false)} footer={<button type="button" onClick={() => setPrinting(false)}>Close</button>}>
+          <PrintStickers />
         </Sheet>
       )}
       {plan !== null && (

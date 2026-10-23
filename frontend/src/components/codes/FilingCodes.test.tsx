@@ -244,18 +244,13 @@ describe("Filing codes (Settings)", () => {
     await waitFor(() => expect(ofMethod(calls, "POST", "/api/filing-codes/folders")).toHaveLength(1));
   });
 
-  it("Print stickers opens as a sheet; Print… in a saved code ticks that code", async () => {
+  it("Print stickers opens as a sheet; an open code has no print button of its own", async () => {
     const { user } = setup();
     await user.click(await screen.findByRole("button", { name: "Print stickers…" }));
-    let sheet = await screen.findByRole("dialog", { name: "Print stickers" });
+    const sheet = await screen.findByRole("dialog", { name: "Print stickers" });
     expect(await within(sheet).findByLabelText("Print A")).not.toBeChecked();
     await user.click(within(sheet).getByRole("button", { name: "Close" }));
     const editor = await openCode(user, /^P To pay/);
-    await user.click(within(editor).getByRole("button", { name: "Print…" }));
-    sheet = await screen.findByRole("dialog", { name: "Print stickers" });
-    expect(await within(sheet).findByLabelText("Print P")).toBeChecked();
-    await user.click(within(sheet).getByRole("button", { name: "Close" }));
-    await user.type(within(editor).getByLabelText("Label"), "!");
-    expect(within(editor).getByRole("button", { name: "Print…" })).toBeDisabled(); // stickers print the saved table
+    expect(within(editor).queryByRole("button", { name: "Print…" })).toBeNull();
   });
 });
