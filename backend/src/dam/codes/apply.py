@@ -30,6 +30,11 @@ def codes_for(app_or_repo: _HasRepo | FileRepo, rec: FileRecord) -> list[CodeHit
     return hits
 
 
+# what an ``as_suggested`` code sets the tray to, for the conflict check only (it
+# leaves the suggested tray as it is)
+NO_TRAY = "\0no tray"
+
+
 def source_of(code: str) -> str:
     return f"code:{code}"
 
@@ -47,7 +52,9 @@ def apply_codes(
     collections are united; for the folder, name and tray the first code wins and a
     different value from a later code sets ``conflict``. A code whose template does not
     render for this file sets nothing for that field (source noted with " (template
-    error)"). An ``as_suggested`` code, or one not in ``codes``, sets nothing.
+    error)"). A code not in ``codes`` sets nothing. An ``as_suggested`` code sets
+    nothing either, but counts as "no tray": with a code that names a tray it is a
+    conflict.
 
     As in the rules engine, a code's name template is not used when the suggested name
     already follows the naming convention (it would add the date twice). When a code
@@ -79,7 +86,12 @@ def apply_codes(
 
     for hit in hits:
         fc = codes.get(hit.code.upper())
-        if fc is None or fc.as_suggested:
+        if fc is None:
+            continue
+        if fc.as_suggested:
+            # "file as suggested" means no tray: it contradicts any tray code
+            if set_by_code.setdefault("tray", NO_TRAY) != NO_TRAY:
+                out.conflict = True
             continue
         src = source_of(fc.code)
         errored = False

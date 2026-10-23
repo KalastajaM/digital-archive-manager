@@ -1,10 +1,13 @@
 """The File N marked batch: one row per inbox file with a filing code (``dam.codes.batch``)."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from dam.api import create_api
 from dam.codes.batch import marked_rows
 from dam.config import SpecialFolders
+from dam.ops.model import GuardError
+from dam.services.errors import InvalidRequest
 from test_api import BASE, LOCAL_ORIGIN
 from test_codes_apply import add_in
 from test_inbox import NORTHPOWER_BILL, add_rule
@@ -39,7 +42,9 @@ def test_missing_due_date_needs_input(app, fake_archive):
     [row] = marked_rows(app)
     assert row.flag == "needs_input"
     assert "due date" in row.problem
-    assert "due_date" not in row.tray_fields
+    # shown empty, sent empty: filing cannot fill in a value the row did not show
+    assert row.tray_fields["due_date"] == ""
+    assert row.request.tray_fields == row.tray_fields
 
 
 def test_as_suggested_without_folder_needs_input(app, fake_archive):
@@ -48,6 +53,9 @@ def test_as_suggested_without_folder_needs_input(app, fake_archive):
     assert row.flag == "needs_input"
     assert row.problem == "folder"
     assert row.request.tray is None
+    assert row.request.folder == ""
+    with pytest.raises((InvalidRequest, GuardError)):
+        app.inbox.preview([row.request])
 
 
 def test_unmarked_inbox_file_gives_no_row(app, fake_archive):
@@ -75,6 +83,30 @@ def test_batch_flags_name_clash(app, fake_archive):
     assert first.flag is None
     assert second.flag == "needs_input"
     assert "20261115_Northpower.pdf" in second.problem
+
+
+def test_name_clash_found_in_pairs_when_the_batch_is_refused(app, fake_archive, monkeypatch):
+    add_rule(app, folder=BANKS, name="{doc_date:%Y%m%d}_Northpower")
+    other_day = NORTHPOWER_BILL.replace("15.11.2026", "16.11.2026")
+    add_in(app, fake_archive, f"{INBOX}/File as suggested/a.pdf", "f1", NORTHPOWER_BILL)
+    add_in(app, fake_archive, f"{INBOX}/File as suggested/b.pdf", "f2", NORTHPOWER_BILL)
+    add_in(app, fake_archive, f"{INBOX}/File as suggested/c.pdf", "f3", other_day)
+    real = app.inbox.preview
+
+    def refuse_big(reqs, *args, **kwargs):
+        if len(reqs) >= 3:
+            raise InvalidRequest("refused as a whole")
+        return real(reqs, *args, **kwargs)
+
+    monkeypatch.setattr(app.inbox, "preview", refuse_big)
+    rows = rows_by_id(app)
+    assert rows["f3"].request.name == "20261116_Northpower.pdf"
+    assert rows["f3"].flag is None
+    # f1 and f2 take the same name: whichever comes later is flagged, the other is not
+    flagged = [d for d in ("f1", "f2") if rows[d].flag is not None]
+    assert len(flagged) == 1
+    assert rows[flagged[0]].flag == "needs_input"
+    assert "20261115_Northpower.pdf" in rows[flagged[0]].problem
 
 
 def test_invalid_code_gives_no_row(app, fake_archive):

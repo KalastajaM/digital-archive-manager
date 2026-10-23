@@ -2,9 +2,12 @@
 that files it and a flag when it should not be filed without a look.
 
 Reads only. Each row is checked with the existing dry run (``InboxService.preview``):
-first alone, then all unflagged rows together, so two rows that would take the same
-name in the same folder are caught. Filing goes through ``POST /api/inbox/file`` with
-the ticked rows' requests, so it is one journaled batch with one undo.
+first alone, then all unflagged rows together (in pairs when the whole batch is
+refused), so two rows that would take the same name in the same folder are caught:
+the planner gives the later one a collision suffix, and a row whose destination
+differs from its own dry run would file something other than what it shows. Filing
+goes through ``POST /api/inbox/file`` with the ticked rows' requests, so it is one
+journaled batch with one undo.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from dam.codes.apply import CodeHit
+from dam.core.paths import OutsideArchiveError
 from dam.ops.guards import fold_parts
 from dam.ops.model import GuardError, OpKind, ResolvedOp
 from dam.services.errors import InvalidRequest, NotFound
@@ -24,9 +28,8 @@ if TYPE_CHECKING:
 
 Flag = Literal["unclear", "conflict", "needs_input"]
 
-# what a dry run may refuse with (GuardError and InvalidRequest are ValueErrors; an
-# OutsideArchiveError for a folder outside the archive is one too)
-_REFUSED = (InvalidRequest, GuardError, ValueError, NotFound)
+# what a dry run may refuse with
+_REFUSED = (InvalidRequest, GuardError, NotFound, OutsideArchiveError)
 
 
 @dataclass
@@ -63,16 +66,26 @@ def marked_rows(app: App, entries: list[InboxEntry] | None = None) -> list[Batch
     dry run refuses the request, alone or next to the other rows)."""
     entries = app.inbox.list() if entries is None else entries
     rows: list[BatchRow] = []
+    # an unflagged row's drive id -> (its folded source, its destination alone)
+    alone: dict[str, tuple[str, str | None]] = {}
     for entry in entries:
         hits = valid_hits(app, entry)
         if hits:
-            rows.append(_row(app, entry, hits))
-    _check_together(app, [r for r in rows if r.flag is None])
+            row, target = _row(app, entry, hits)
+            rows.append(row)
+            if row.flag is None:
+                alone[row.drive_id] = target
+    _check_together(app, [r for r in rows if r.flag is None], alone)
     return rows
 
 
-def _row(app: App, entry: InboxEntry, hits: list[CodeHit]) -> BatchRow:
+def _row(
+    app: App, entry: InboxEntry, hits: list[CodeHit]
+) -> tuple[BatchRow, tuple[str, str | None]]:
+    """The row, and its folded source with its destination in its own dry run (None
+    when it needs no move or was not previewed)."""
     s = entry.suggestion
+    src = fold_parts(entry.record.path)
     request = FileRequest(
         drive_id=entry.record.drive_id,
         name=s.name,
@@ -83,9 +96,9 @@ def _row(app: App, entry: InboxEntry, hits: list[CodeHit]) -> BatchRow:
     )
     row = BatchRow(entry.record.drive_id, hits, request)
 
-    def flag(kind: Flag, problem: str) -> BatchRow:
+    def flag(kind: Flag, problem: str) -> tuple[BatchRow, tuple[str, str | None]]:
         row.flag, row.problem = kind, problem
-        return row
+        return row, (src, None)
 
     tray_error: str | None = None
     if s.tray is not None:
@@ -95,6 +108,11 @@ def _row(app: App, entry: InboxEntry, hits: list[CodeHit]) -> BatchRow:
             tray_error = str(e)
         else:
             row.tray_fields = {k: str(v) for k, v in raw.items() if v is not None}
+            # a field shown empty is sent as "": filing must not fill in a value the
+            # owner never saw
+            tray = next((t for t in app.tray_defs if t.id == s.tray), None)
+            for name in tray.fields if tray is not None else ():
+                row.tray_fields.setdefault(name, "")
             request.tray_fields = dict(row.tray_fields)
 
     if any(h.unclear for h in hits):
@@ -112,10 +130,10 @@ def _row(app: App, entry: InboxEntry, hits: list[CodeHit]) -> BatchRow:
                 if fdef.required and not row.tray_fields.get(name):
                     return flag("needs_input", name.replace("_", " "))
     try:
-        app.inbox.preview([request])
+        resolved = app.inbox.preview([request])
     except _REFUSED as e:
         return flag("needs_input", _message(e))
-    return row
+    return row, (src, _targets(resolved).get(src))
 
 
 def _message(e: Exception) -> str:
@@ -132,42 +150,49 @@ def _targets(resolved: list[ResolvedOp]) -> dict[str, str]:
     }
 
 
-def _check_together(app: App, rows: list[BatchRow]) -> None:
+def _check_together(
+    app: App, rows: list[BatchRow], alone: dict[str, tuple[str, str | None]]
+) -> None:
     """Flag rows that pass alone but clash with an earlier row: the dry run of all of
-    them refuses, or gives a row another destination than its own dry run (a collision
-    suffix: what would be filed is not what the row shows)."""
+    them gives a row another destination than its own dry run (a collision suffix:
+    what would be filed is not what the row shows). If the dry run of all of them is
+    refused, check in pairs instead."""
     if len(rows) < 2:
         return
     try:
         together = _targets(app.inbox.preview([r.request for r in rows]))
     except _REFUSED:
-        _check_pairs(app, rows)
+        _check_pairs(app, rows, alone)
         return
     taken: dict[str, BatchRow] = {}
     for row in rows:
-        rec = app.repo.get(row.drive_id)
-        if rec is None:
+        src, dst = alone[row.drive_id]
+        if dst is None:
             continue
-        src = fold_parts(rec.path)
-        alone = _targets(app.inbox.preview([row.request])).get(src)
-        if alone is not None and together.get(src) != alone:
-            _clash(app, row, taken.get(fold_parts(alone)))
-        elif alone is not None:
-            taken[fold_parts(alone)] = row
+        if together.get(src) != dst:
+            _clash(app, row, taken.get(fold_parts(dst)))
+        else:
+            taken[fold_parts(dst)] = row
 
 
-def _check_pairs(app: App, rows: list[BatchRow]) -> None:
-    """The batch was refused as a whole: keep each row that previews cleanly next to
-    the rows kept before it, flag the others."""
+def _check_pairs(app: App, rows: list[BatchRow], alone: dict[str, tuple[str, str | None]]) -> None:
+    """The batch was refused as a whole: keep each row whose dry run next to every row
+    kept before it is accepted and leaves its destination as its own dry run gave it;
+    flag the others (refused: the refusal; moved aside: a clash)."""
     kept: list[BatchRow] = []
     for row in rows:
-        try:
-            for other in kept:
-                app.inbox.preview([other.request, row.request])
-        except _REFUSED as e:
-            row.flag, row.problem = "needs_input", _message(e)
-            continue
-        kept.append(row)
+        src, dst = alone[row.drive_id]
+        for other in kept:
+            try:
+                pair = _targets(app.inbox.preview([other.request, row.request]))
+            except _REFUSED as e:
+                row.flag, row.problem = "needs_input", _message(e)
+                break
+            if dst is not None and pair.get(src) != dst:
+                _clash(app, row, other)
+                break
+        if row.flag is None:
+            kept.append(row)
 
 
 def _clash(app: App, row: BatchRow, other: BatchRow | None) -> None:

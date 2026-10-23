@@ -199,3 +199,35 @@ def test_ai_guard_checks_the_code_folder(app, fake_archive):
     add_in(app, fake_archive, f"{INBOX}/To pay/bill.pdf", "b1", NORTHPOWER_BILL)
     why = rules_point_excluded(app, app.repo.get("b1"))
     assert why is not None and "50. Medical/2026" in why
+
+
+SEVERAL = {
+    "P": FilingCode(code="P", tray="to-pay"),
+    "D": FilingCode(code="D", as_suggested=True),
+    "X": FilingCode(code="X", folder="Bills/{year}", tags=["bill"]),
+}
+
+
+def several(*hits):
+    base = Suggestion(name="bill.pdf", folder="Rule/Folder", folder_source="rule:r")
+    return apply_codes(base, list(hits), SEVERAL, date(2026, 10, 15), "bill", "pdf", SPECIAL)
+
+
+def test_as_suggested_and_tray_code_conflict():
+    assert several(CodeHit("P", "folder"), CodeHit("D", "pen", raw="D")).conflict is True
+    assert several(CodeHit("D", "folder"), CodeHit("P", "pen", raw="P")).conflict is True
+
+
+def test_same_codes_twice_do_not_conflict():
+    assert several(CodeHit("D", "folder"), CodeHit("D", "pen", raw="D")).conflict is False
+    out = several(CodeHit("P", "folder"), CodeHit("P", "qr", raw="P"))
+    assert out.conflict is False
+    assert out.tray == "to-pay"
+
+
+def test_tray_code_and_folder_code_combine():
+    out = several(CodeHit("P", "folder"), CodeHit("X", "pen", raw="X"))
+    assert out.conflict is False
+    assert (out.tray, out.tray_source) == ("to-pay", "code:P")
+    assert (out.folder, out.folder_source) == ("Bills/2026", "code:X")
+    assert out.tags == ["bill"]

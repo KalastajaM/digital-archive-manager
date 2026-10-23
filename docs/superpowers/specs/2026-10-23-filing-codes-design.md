@@ -116,8 +116,11 @@ pay code still gets payee, amount, due date and IBAN from the scan and the bank 
 
 Several codes on one file (say a pen code and an inbox folder): list fields (tags,
 collections) are united; scalar fields (tray, folder, name) conflict when their rendered
-values differ. A conflict marks the file **conflict**; the owner resolves it in the Inbox
-form, not in the review list (designer's call).
+values differ. A file-as-suggested code counts as "no tray", so it conflicts with any
+code that names a tray (D with P, A, R or F); the same code found twice, or a tray code
+with a code that sets only a folder, is combined without a conflict. A conflict marks
+the file **conflict**; the owner resolves it in the Inbox form, not in the review list
+(designer's call). Every batch row shows all the codes found for its file.
 
 This needs `Suggestion` (`rules/engine.py`) to carry collections and a tray source, and
 the `InboxService._suggest` hook (where similar-file folders are added today) to apply
