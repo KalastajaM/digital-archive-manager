@@ -1,6 +1,5 @@
 """Filing codes are the strongest suggestion source (``dam.codes.apply``)."""
 
-import dataclasses
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -8,6 +7,7 @@ from fastapi.testclient import TestClient
 from dam.ai.tasks._common import rules_point_excluded
 from dam.api import create_api
 from dam.codes.apply import CodeHit, apply_codes, codes_for
+from dam.codes.batch import marked_rows
 from dam.codes.model import FilingCode
 from dam.config import SpecialFolders
 from dam.rules.engine import Suggestion
@@ -55,14 +55,36 @@ def test_unset_fields_fall_back(app, fake_archive):
     assert found.conflict is False
 
 
-def test_as_suggested_changes_nothing(app, fake_archive):
-    add_rule(app, folder="10. Financial/Northpower", tags=["energy"])
+def test_as_suggested_keeps_the_suggestion_and_clears_the_tray(app, fake_archive):
+    add_rule(app, folder="10. Financial/Northpower", tags=["energy"], tray="to-pay")
     add_in(app, fake_archive, f"{INBOX}/bill.pdf", "b0", NORTHPOWER_BILL)
     add_in(app, fake_archive, f"{INBOX}/File as suggested/bill.pdf", "b1", NORTHPOWER_BILL)
     plain = app.inbox.suggestion("b0")
     found = app.inbox.suggestion("b1")
+    assert plain.tray == "to-pay"
     assert found.codes == [CodeHit("D", "folder")]
-    assert dataclasses.replace(found, codes=[], folder_before_codes=None) == plain
+    assert (found.folder, found.name, found.tags) == (plain.folder, plain.name, plain.tags)
+    assert (found.folder_source, found.name_source) == (plain.folder_source, plain.name_source)
+    # "already handled": a paid bill marked D does not land in To pay
+    assert (found.tray, found.tray_source) == (None, "code:D")
+    assert found.conflict is False
+    [row] = marked_rows(app)
+    assert row.drive_id == "b1"
+    assert row.request.tray is None
+    assert row.tray_fields == {}
+    # Today's "Found in the inbox" no longer offers the tray for it (the scan alone
+    # would guess To pay: due date, amount and IBAN)
+    guesses = {e.record.drive_id: e.tray_guess for e in app.inbox.list()}
+    assert guesses == {"b0": "to-pay", "b1": None}
+    assert [f.drive_id for f in app.today.found_in_inbox()] == ["b0"]
+
+
+def test_as_suggested_alone_clears_a_scan_tray_guess(app, fake_archive):
+    add_in(app, fake_archive, f"{INBOX}/File as suggested/bill.pdf", "b1", NORTHPOWER_BILL)
+    [entry] = app.inbox.list()
+    assert entry.suggestion.tray is None
+    assert entry.tray_guess is None
+    assert app.today.found_in_inbox() == []
 
 
 def test_two_codes_conflict_on_folder():
@@ -216,6 +238,12 @@ def several(*hits):
 def test_as_suggested_and_tray_code_conflict():
     assert several(CodeHit("P", "folder"), CodeHit("D", "pen", raw="D")).conflict is True
     assert several(CodeHit("D", "folder"), CodeHit("P", "pen", raw="P")).conflict is True
+
+
+def test_as_suggested_sets_no_tray():
+    out = several(CodeHit("D", "folder"), CodeHit("D", "pen", raw="D"))
+    assert (out.tray, out.tray_source) == (None, "code:D")
+    assert (out.folder, out.name) == ("Rule/Folder", "bill.pdf")
 
 
 def test_same_codes_twice_do_not_conflict():

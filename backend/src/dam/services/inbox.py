@@ -180,7 +180,7 @@ class InboxService:
                     found,
                     text[:EXCERPT_CHARS],
                     prefill if saved is None else prefill_from(saved),
-                    guess_tray(found.fields, found.tray, tray_ids, barcode),
+                    self._tray_guess(found, tray_ids, barcode),
                     open_trays.get(rec.drive_id, []),
                     detected if saved is None else saved,
                     saved is not None,
@@ -381,6 +381,14 @@ class InboxService:
             table = {c.code: c for c in self._codes()}
             found = apply_codes(found, hits, table, found.doc_date, stem, ext, self.special)
         return found
+
+    @staticmethod
+    def _tray_guess(found: Suggestion, tray_ids: list[str], barcode: str | None) -> str | None:
+        """A code decides the tray (None for "file as suggested": already handled);
+        otherwise ``guess_tray`` from the rules and the scan."""
+        if (found.tray_source or "").startswith("code:"):
+            return found.tray if found.tray in tray_ids else None
+        return guess_tray(found.fields, found.tray, tray_ids, barcode)
 
     def _in_inbox(self, rec: FileRecord) -> bool:
         return self.repo.in_inbox_path(rec.path)
