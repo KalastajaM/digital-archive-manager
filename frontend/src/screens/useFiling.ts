@@ -9,6 +9,7 @@ import {
   type ResolvedOp,
   type TrayDef,
   useFileIt,
+  type Via,
   usePreview,
 } from "../api/client";
 import { useToast } from "../components/Toasts";
@@ -32,7 +33,7 @@ export const sameRequests = (a: FileRequest[] | null, b: FileRequest[] | null) =
 /** A plan together with the exact requests it was computed for, and the speaker's scan
  * prefill as it was then (the confirm's follow-up lines come from it, never from the
  * live entries, which can refetch while the sheet is open). */
-export type Snapshot = { requests: FileRequest[]; ops: ResolvedOp[]; prefill?: Record<string, string> };
+export type Snapshot = { requests: FileRequest[]; ops: ResolvedOp[]; prefill?: Record<string, string>; via?: Via };
 
 const RELOCATES = new Set<ResolvedOp["kind"]>(["rename", "move", "quarantine"]);
 const destinations = (ops: ResolvedOp[]) => ops.filter((op) => RELOCATES.has(op.kind)).map((op) => op.dst);
@@ -198,7 +199,7 @@ export function useFiling(
     const ids = idsOf(snapshot.requests);
     let result: FileItResult;
     try {
-      result = await fileCall.mutateAsync(snapshot.requests);
+      result = await fileCall.mutateAsync({ requests: snapshot.requests, via: snapshot.via ?? "form" });
     } catch (e) {
       setError(errorText(e), ids);
       return;
@@ -266,11 +267,12 @@ export function useFiling(
       }),
     /** File it: use the shown plan if it matches the form, else preview again; apply
      * directly only when ``appliesDirectly``, otherwise ask first. */
-    fileIt: (requests: FileRequest[], batch = false) =>
+    fileIt: (requests: FileRequest[], batch = false, via: Via = batch ? "batch" : "form") =>
       void guarded(async () => {
         const current = plan && sameRequests(plan.requests, requests) ? plan : null;
-        const snapshot = current ?? (await fetchPlan(requests, true));
-        if (snapshot === null) return;
+        const planned = current ?? (await fetchPlan(requests, true));
+        if (planned === null) return;
+        const snapshot: Snapshot = { ...planned, via }; // what the apply tells the server
         if (!batch && appliesDirectly(snapshot.ops, snapshot.requests.length)) await apply(snapshot);
         else setConfirm(snapshot);
       }),

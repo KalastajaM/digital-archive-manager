@@ -1952,3 +1952,16 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .sticker-marks { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); align-items: center; }
 .sticker-marks-title { flex-basis: 100%; font-size: var(--fs-sm); color: var(--muted); }
 .sticker-marks .notice { flex-basis: 100%; margin: 0; }
+
+/* ---- Filing rules: the rule sheet ------------------------------------------------- */
+.rule-words { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0 0 var(--sp-2); padding: 0; }
+.rule-word { border-radius: var(--r-pill); padding: 0 10px; font-size: var(--fs-sm); background: var(--grey-bg); color: var(--muted); text-decoration: line-through; }
+.rule-word[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); text-decoration: none; }
+.rule-field-row { display: flex; gap: var(--sp-3); align-items: center; }
+.rule-field-row > :first-child { flex: 1 1 auto; min-width: 0; }
+.rule-field .rule-off, .field .rule-off { display: inline-flex; align-items: center; gap: 4px; margin: 0; flex: none; font-size: var(--fs-sm); color: var(--muted); }
+.rule-filed { margin: 0 0 var(--sp-3); }
+.replay-result { margin-top: var(--sp-3); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
+.replay-result p { margin: 0 0 var(--sp-1); }
+.replay-different { margin: var(--sp-1) 0; padding-left: var(--sp-4); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.replay-result[aria-busy="true"] { opacity: 0.6; }

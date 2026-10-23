@@ -273,7 +273,7 @@ describe("File N marked", () => {
     await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
     // exactly the rows' requests, as the server built them, flagged row left out
     expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([BILL, LETTER]);
-    expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: [BILL, LETTER], dry_run: false });
+    expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: [BILL, LETTER], dry_run: false, via: "codes" });
     expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 
