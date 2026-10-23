@@ -398,8 +398,7 @@ marked, or when a filing code did the filing.
 
 - **Match words**, as chips. One is ticked: the most distinctive word near the top of the
   text, usually the sender. A rule matches when **any** ticked word is in the text, so
-  ticking more words widens the rule. Words that appear in most of your filed documents
-  are not offered.
+  ticking more words widens the rule. Words that appear in more than about a third of your filed documents are not offered. When no usable word is left, there is no offer.
 - **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
   document's year, its date and its original file name, and the sheet shows what each
   gives for this document.
