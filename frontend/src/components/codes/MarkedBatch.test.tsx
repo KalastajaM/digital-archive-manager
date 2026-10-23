@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import type { InboxEntry } from "../../api/client";
-import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
+import { type Call, deferred, mockFetch, renderWithProviders } from "../../test-utils";
 import Inbox from "../../screens/Inbox";
 
 function entry(id: string, name: string, suggested: string): InboxEntry {
@@ -159,13 +159,13 @@ function setup(routes: Parameters<typeof mockFetch>[0] = {}, at = "/inbox?marked
     ...routes,
   });
   const user = userEvent.setup();
-  renderWithProviders(
+  const { client } = renderWithProviders(
     <MemoryRouter initialEntries={[at]}>
       <Inbox />
       <Where />
     </MemoryRouter>,
   );
-  return { calls, user };
+  return { calls, user, client };
 }
 
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
@@ -264,14 +264,76 @@ describe("File N marked", () => {
     expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 
-  it("ticking a row adds its request; unticking removes it", async () => {
-    const { user } = setup();
+  it("a conflict row can be ticked on purpose; unticking removes a row", async () => {
+    const { calls, user } = setup({
+      "GET /api/filing-codes/batch": { body: [{ ...ROWS[0], flag: "conflict", problem: null }, ROWS[2]] },
+      "POST /api/inbox/preview": { body: MOVES },
+    });
+    await panel();
+    const bill = await screen.findByRole("listitem", { name: "2026-10-01 Northpower.pdf" });
+    expect(within(bill).getByRole("checkbox")).not.toBeChecked();
+    await user.click(within(bill).getByRole("checkbox"));
+    expect(screen.getByRole("button", { name: "File 2" })).toBeInTheDocument();
+    await user.click(within(rowOf("2026-10-03 Letter.pdf")).getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "File 1" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([BILL]);
+  });
+
+  it("a row that needs input cannot be ticked and is never sent", async () => {
+    const { calls, user } = setup({ "POST /api/inbox/preview": { body: MOVES } });
     await panel();
     const water = await screen.findByRole("listitem", { name: "2026-10-02 Water.pdf" });
-    await user.click(within(water).getByRole("checkbox"));
-    expect(screen.getByRole("button", { name: "File 3" })).toBeInTheDocument();
-    await user.click(within(rowOf("2026-10-01 Northpower.pdf")).getByRole("checkbox"));
-    expect(screen.getByRole("button", { name: "File 2" })).toBeInTheDocument();
+    const box = within(water).getByRole("checkbox");
+    expect(box).toBeDisabled();
+    expect(box).toHaveAttribute("title", "Open it to fix it in the form");
+    await user.click(box);
+    expect(box).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "File 2" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([BILL, LETTER]);
+  });
+
+  it("says when the rows changed while File was previewing", async () => {
+    let rows = ROWS;
+    const answer = deferred<{ body: unknown }>();
+    const { calls, user, client } = setup({
+      "GET /api/filing-codes/batch": () => ({ body: rows }),
+      "POST /api/inbox/preview": () => answer.promise,
+    });
+    await panel();
+    await screen.findByRole("listitem", { name: "2026-10-03 Letter.pdf" });
+    await user.click(screen.getByRole("button", { name: "File 2" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    // the letter leaves the inbox while the preview is in flight (a status change reloads)
+    rows = [ROWS[0]];
+    await client.invalidateQueries({ queryKey: ["inbox"] });
+    await waitFor(() => expect(screen.queryByRole("listitem", { name: "2026-10-03 Letter.pdf" })).not.toBeInTheDocument());
+    answer.resolve({ body: MOVES });
+    expect(await screen.findByText("The marked files changed; check the list and press File again")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(posts(calls, "/api/inbox/file")).toHaveLength(0);
+  });
+
+  it("clicking a list row closes the panel and shows that file in the form", async () => {
+    const { user } = setup();
+    await panel();
+    await screen.findByRole("listitem", { name: "2026-10-01 Northpower.pdf" });
+    const row = screen.getAllByRole("button", { name: /scan002\.pdf/ })[0];
+    await user.click(row);
+    expect(await screen.findByLabelText("Name")).toHaveValue("2026-10-02 Water.pdf");
+    expect(screen.queryByRole("region", { name: "Marked files" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/inbox$/);
+  });
+
+  it("⌘⌫ does nothing while the panel hides the selection", async () => {
+    const { calls, user } = setup();
+    await panel();
+    await screen.findByRole("listitem", { name: "2026-10-01 Northpower.pdf" });
+    await user.keyboard("{Meta>}{Backspace}{/Meta}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    expect(screen.getByRole("region", { name: "Marked files" })).toBeInTheDocument();
   });
 
   it("Open shows the file in the Inbox form", async () => {

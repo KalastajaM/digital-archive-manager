@@ -14,8 +14,7 @@ import {
 } from "../../api/client";
 import { fieldWord, formatField, plural } from "../../format";
 import { visible } from "../../text";
-import { FilingMessage } from "../../screens/ReviewCard";
-import { type Filing, FILING_BUSY, followUpLines } from "../../screens/useFiling";
+import { type Filing, FILING_BUSY, FORM_CHANGED, followUpLines } from "../../screens/useFiling";
 import { Tag } from "../ui/Tag";
 import { TipButton } from "../ui/TipButton";
 import { Toolbar } from "../ui/Toolbar";
@@ -26,6 +25,16 @@ const VIA: Record<CodeHit["via"], string> = { folder: "folder", qr: "sticker", p
 
 /** "P (folder)", "A (sticker)", "D? (pen)" for an unclear reading. */
 export const codeText = (hit: CodeHit) => `${hit.code}${hit.unclear ? "?" : ""} (${VIA[hit.via]})`;
+
+/** Said when the rows changed while File was previewing (nothing was filed). */
+export const MARKED_CHANGED = "The marked files changed; check the list and press File again";
+
+/** Shown on a needs-input row's checkbox: it cannot be filed from here. */
+export const FIX_IN_FORM = "Open it to fix it in the form";
+
+/** A needs-input row would be refused (or file with a value missing): it cannot be
+ * ticked. Conflict and unclear rows start unticked but can be ticked on purpose. */
+const tickable = (row: BatchRow) => row.flag !== "needs_input";
 
 /** Why a row starts unticked, or null. */
 export function flagText(row: BatchRow): string | null {
@@ -90,7 +99,14 @@ function Row({
   const from = entry ? (entry.record.name ?? entry.record.path) : null;
   return (
     <li className={flag ? "marked-row marked-flagged" : "marked-row"} aria-label={visible(request.name)}>
-      <input type="checkbox" aria-label={`File ${visible(request.name)}`} checked={ticked} disabled={disabled} onChange={onTick} />
+      <input
+        type="checkbox"
+        aria-label={`File ${visible(request.name)}`}
+        checked={ticked}
+        disabled={disabled || !tickable(row)}
+        title={tickable(row) ? undefined : FIX_IN_FORM}
+        onChange={onTick}
+      />
       {entry && <Thumb record={entry.record} />}
       <div className="marked-main">
         <p className="marked-name">
@@ -133,7 +149,7 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
   // The owner's own ticks; a row not touched yet is ticked unless it is flagged. Kept
   // by drive id, so a reload (after filing) keeps the choices for the rows still there.
   const [choice, setChoice] = useState<Map<string, boolean>>(new Map());
-  const isTicked = (row: BatchRow) => choice.get(row.drive_id) ?? row.flag === null;
+  const isTicked = (row: BatchRow) => tickable(row) && (choice.get(row.drive_id) ?? row.flag === null);
   const ticked: FileRequest[] = rows.filter(isTicked).map((r) => r.request);
   // Previews and the confirm are dropped unless they match exactly these requests.
   filing.form.current = ticked;
@@ -143,7 +159,7 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
   }, []);
 
   const tick = (row: BatchRow) => {
-    if (filing.busy) return;
+    if (filing.busy || !tickable(row)) return;
     setChoice((old) => new Map(old).set(row.drive_id, !isTicked(row)));
   };
   const fileThem = () => {
@@ -151,6 +167,9 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
   };
   const byId = new Map(entries.map((e) => [e.record.drive_id, e]));
   const flagged = rows.filter((r) => r.flag !== null).length;
+  // the message for these files; a preview dropped because the rows changed says so here
+  const message = filing.messageFor(rows.map((r) => r.drive_id));
+  const messageText = message?.text === FORM_CHANGED ? MARKED_CHANGED : message?.text;
 
   return (
     <section className="batch-card marked-batch" aria-label="Marked files">
@@ -175,7 +194,16 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
         }
       />
       <div className="marked-body">
-        <FilingMessage filing={filing} ids={ticked.map((r) => r.drive_id)} />
+        {message &&
+          (message.kind === "error" ? (
+            <p className="error" role="alert">
+              {visible(messageText ?? "")}
+            </p>
+          ) : (
+            <p className="notice" role="status">
+              {visible(messageText ?? "")}
+            </p>
+          ))}
         {batch.isPending ? (
           <p className="hint" role="status">
             Checking the marked files…
@@ -190,8 +218,9 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
           <>
             <p className="hint">
               Each file is filed exactly as shown.
-              {flagged === 1 && " 1 file needs a look and starts unticked: open it to fix it in the form."}
-              {flagged > 1 && ` ${plural(flagged, "file")} need a look and start unticked: open one to fix it in the form.`}
+              {flagged === 1 && " 1 file needs a look and starts unticked."}
+              {flagged > 1 && ` ${plural(flagged, "file")} need a look and start unticked.`}
+              {rows.some((r) => !tickable(r)) && " A file that needs input cannot be ticked: open it to fix it in the form."}
             </p>
             <ul className="marked-list" aria-label="Marked">
               {rows.map((row) => (

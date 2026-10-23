@@ -206,6 +206,8 @@ export default function Inbox() {
   targetsRef.current = targets; // a dry run for other entries than these is dropped
   const locked = filing.busy || filing.inFlight.current || trash.busy;
   const trashTargets = () => {
+    // the panel hides the selection: never act on what is not on screen
+    if (markedOpen) return;
     if (locked || filing.inFlight.current || undo.undoing.current || targets.length === 0) return;
     const shown = batch.length > 0 ? batch : current ? [current] : [];
     trash.start(targets, { current: () => targetsRef.current, links: shown.some((e) => e.record.is_link) });
@@ -300,6 +302,7 @@ export default function Inbox() {
    * its own again. */
   const clickRow = (e: MouseEvent, i: number) => {
     if (locked) return;
+    if (markedOpen) setSearch({}); // the clicked file is shown in the form
     const id = entries[i].record.drive_id;
     if (e.shiftKey) {
       selectRange(i);
@@ -337,6 +340,8 @@ export default function Inbox() {
       return;
     }
     if (!isShortcut(e) || !["j", "k", "J", "K", "u", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+    // The marked panel shows no selection: moving it would act on a hidden file.
+    if (markedOpen && e.key !== "u") return;
     // ↑/↓ keep their own meaning in a control (a segmented choice, a list box).
     // ↑/↓ keep their own meaning in a control, and scroll the preview and the inspector.
     if (
@@ -366,6 +371,7 @@ export default function Inbox() {
 
   const toggle = (id: string) => {
     if (locked) return;
+    if (markedOpen) setSearch({}); // the batch form shows the ticked files
     setChecked((old) => {
       const next = new Set(old);
       if (next.has(id)) next.delete(id);

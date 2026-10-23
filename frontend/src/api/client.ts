@@ -1302,12 +1302,12 @@ export const useAIExcludeFolders = () => {
   });
 };
 
-/** The filing codes table, the entries of the file that were skipped (``problems``) and
- * codes that look like each other (``warnings``). */
 /** The File N marked rows (dry runs on the server, nothing changes). */
 export const useMarkedBatch = () =>
   useQuery({ queryKey: keys.markedBatch, queryFn: () => get<BatchRow[]>("/api/filing-codes/batch") });
 
+/** The filing codes table, the entries of the file that were skipped (``problems``) and
+ * codes that look like each other (``warnings``). */
 export const useFilingCodes = () =>
   useQuery({ queryKey: keys.filingCodes, queryFn: () => get<FilingCodes>("/api/filing-codes") });
 
