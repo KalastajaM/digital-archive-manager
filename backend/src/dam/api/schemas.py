@@ -5,7 +5,7 @@ Request models forbid unknown fields, so a body can never smuggle in e.g. ``orig
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
@@ -1314,8 +1314,8 @@ class SheetLayoutOut(BaseModel):
 
 
 class StickerSheetIn(_In):
-    # how many stickers of each code, in print order
-    codes: dict[str, Annotated[int, Field(ge=0, le=2000)]]
+    # how many stickers of each code, in print order (checked by the route: 400)
+    codes: dict[str, int]
     layout: str
     start_at: int = 1
     boxes: bool = True

@@ -3,12 +3,12 @@
 import re
 from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from dam.codes.configfile import write_config_file
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.rules.engine import TemplateError, check_template
 from dam.rules.model import fold, read_yaml
@@ -144,31 +144,19 @@ def load_codes(path: Path, tray_ids: Collection[str]) -> tuple[list[FilingCode],
 
 def save_codes(path: Path, codes: list[FilingCode]) -> None:
     """Write the table. The file it replaces is kept as ``.bak-<time>``; the new file is
-    read back and the original restored if it does not match."""
-    original = path.read_bytes() if path.exists() else None
-    if original is not None:
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        try:
-            with open(path.with_name(f"{path.name}.bak-{stamp}"), "xb") as fh:
-                fh.write(original)
-        except FileExistsError:
-            pass  # a backup from this very second exists already
+    read back and the original restored if it does not match (no file before: an empty
+    table)."""
     dumped = [c.model_dump(exclude_defaults=True, mode="json") for c in codes]
     for d, c in zip(dumped, codes, strict=True):
         d["code"] = c.code
     text = yaml.safe_dump(dumped, allow_unicode=True, sort_keys=False)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-        trays = {c.tray for c in codes if c.tray is not None}
+    trays = {c.tray for c in codes if c.tray is not None}
+
+    def verify() -> bool:
         back, problems = load_codes(path, trays)
-        if problems or back != codes:
-            raise OSError("the code table did not read back as written")
-    except (OSError, ValueError, yaml.YAMLError):
-        with open(path, "wb") as f:  # no file before: an empty table (never delete)
-            f.write(original or b"")
-        raise
+        return not problems and back == codes
+
+    write_config_file(path, text, verify)
 
 
 def confusable_with(code: str, others: Collection[str]) -> list[str]:

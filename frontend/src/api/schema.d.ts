@@ -2098,7 +2098,8 @@ export interface paths {
         /**
          * Sticker Sheet
          * @description A printable page of stickers (HTML, A4) for the chosen codes and counts; 400 for
-         *     an unknown code or layout or a start label off the sheet. Changes nothing.
+         *     an unknown code or layout, a start label off the sheet, a negative count, nothing to
+         *     print or more than 2000 stickers. Changes nothing.
          */
         post: operations["sticker_sheet_api_filing_codes_sheet_post"];
         delete?: never;

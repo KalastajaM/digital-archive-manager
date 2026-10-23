@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 
 from dam.codes import sheets, sticker
 from dam.codes.model import FilingCode
+from dam.config import AppPaths
 from test_api import LOCAL_ORIGIN, make_client
 
 MODULE_MM = 12 / 21
@@ -256,12 +257,74 @@ def test_custom_layout_saved(tmp_path):
     assert list(tmp_path.glob("sticker_sheets.yaml.bak-*"))  # the old file is kept
 
 
-def test_seeded_copy_is_not_a_custom_layout(tmp_path):
-    """A fresh install copies the defaults folder into config: no custom from that."""
-    (tmp_path / "sticker_sheets.yaml").write_bytes(
-        (sheets.DEFAULTS_FILE).read_bytes()
+def test_fresh_install_has_no_sheet_file(tmp_path):
+    """The built-in layouts are not config: a fresh data folder gets no sheet file."""
+    paths = AppPaths(tmp_path / "data")
+    paths.ensure()
+    assert not (paths.config_dir / "sticker_sheets.yaml").exists()
+    assert [lay.id for lay in sheets.load_layouts(paths.config_dir)] == ["l7651", "plain"]
+
+
+def test_dev_seeded_list_is_ignored_quietly(tmp_path, caplog):
+    """An early build of this branch seeded a list of built-ins into config."""
+    (tmp_path / "sticker_sheets.yaml").write_text(
+        "- id: l7651\n  name: x\n", encoding="utf-8"
     )
     assert [lay.id for lay in sheets.load_layouts(tmp_path)] == ["l7651", "plain"]
+    assert not caplog.records
+
+
+def test_empty_file_is_no_custom_layout(tmp_path, caplog):
+    (tmp_path / "sticker_sheets.yaml").write_bytes(b"")
+    assert sheets.custom_layout(tmp_path) is None
+    assert not caplog.records
+
+
+def test_failed_first_save_leaves_no_custom_layout(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(sheets, "custom_layout", lambda _d: None)  # read-back mismatch
+    with pytest.raises(OSError):
+        sheets.save_custom(tmp_path, l7651())
+    monkeypatch.undo()
+    assert (tmp_path / "sticker_sheets.yaml").read_bytes() == b""
+    assert sheets.custom_layout(tmp_path) is None
+    assert not caplog.records
+
+
+def test_failed_save_restores_previous(tmp_path, monkeypatch):
+    first = l7651().model_copy(update={"name": "First"})
+    sheets.save_custom(tmp_path, first)
+    before = (tmp_path / "sticker_sheets.yaml").read_bytes()
+    monkeypatch.setattr(sheets, "custom_layout", lambda _d: None)
+    with pytest.raises(OSError):
+        sheets.save_custom(tmp_path, l7651().model_copy(update={"name": "Second"}))
+    monkeypatch.undo()
+    assert (tmp_path / "sticker_sheets.yaml").read_bytes() == before
+    assert sheets.custom_layout(tmp_path).name == "First"
+
+
+def test_minimum_label_size():
+    base = {
+        "id": "custom", "name": "Small", "columns": 1, "rows": 1, "top_mm": 0, "left_mm": 0,
+        "gap_x_mm": 0, "gap_y_mm": 0,
+    }
+    assert sheets.MIN_LABEL_W == pytest.approx(52 * 12 / 21 + 2)  # about 31.7 mm
+    sheets.SheetLayout(**base, label_w_mm=31.8, label_h_mm=14)
+    for w, h in ((31.6, 14), (31.8, 13.9)):
+        with pytest.raises(ValueError):
+            sheets.SheetLayout(**base, label_w_mm=w, label_h_mm=h)
+
+
+def test_nothing_to_print():
+    with pytest.raises(ValueError, match="Nothing to print"):
+        sheets.render_sheet(CODES, {"P": 0, "A": 0}, l7651())
+    html = sheets.render_sheet(CODES, {"P": 0, "A": 0}, l7651(), outlines_only=True)
+    assert parse(html).pages == 1
+
+
+def test_too_many_stickers():
+    sheets.render_sheet(CODES, {"P": 1000, "A": 1000}, l7651(), outlines_only=True)
+    with pytest.raises(ValueError, match="2000"):
+        sheets.render_sheet(CODES, {"P": 1000, "A": 1001}, l7651())
 
 
 def test_custom_must_fit_a4():
@@ -299,7 +362,11 @@ def test_unknown_code_400(app):
         r = post_sheet(c, {"codes": {"P": 1}, "layout": "l7651", "start_at": 99})
         assert r.status_code == 400
         r = post_sheet(c, {"codes": {"P": -1}, "layout": "l7651"})
-        assert r.status_code in (400, 422)
+        assert r.status_code == 400 and "negative" in r.json()["error"]
+        r = post_sheet(c, {"codes": {"P": 0}, "layout": "l7651"})
+        assert r.status_code == 400 and r.json()["error"] == "Nothing to print"
+        r = post_sheet(c, {"codes": {"P": 2001}, "layout": "l7651"})
+        assert r.status_code == 400 and "2000" in r.json()["error"]
 
 
 def test_api_layouts_and_custom(app):

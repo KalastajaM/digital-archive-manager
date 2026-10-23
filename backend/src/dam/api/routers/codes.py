@@ -119,7 +119,8 @@ def save_custom_sheet(app: AppDep, body: SheetLayoutIn) -> dict:
 )
 def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
     """A printable page of stickers (HTML, A4) for the chosen codes and counts; 400 for
-    an unknown code or layout or a start label off the sheet. Changes nothing."""
+    an unknown code or layout, a start label off the sheet, a negative count, nothing to
+    print or more than 2000 stickers. Changes nothing."""
     table = {c.code: c for c in app.codes}
     unknown = [k for k in body.codes if k.upper() not in table]
     if unknown:
@@ -130,6 +131,8 @@ def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
     )
     if layout is None:
         raise InvalidRequest(f"unknown sheet layout {body.layout!r}")
+    if any(n < 0 for n in body.codes.values()):
+        raise InvalidRequest("a count cannot be negative")
     counts: dict[str, int] = {}
     for k, n in body.codes.items():
         counts[k.upper()] = counts.get(k.upper(), 0) + n

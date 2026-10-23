@@ -13,21 +13,19 @@ import logging
 import math
 import re
 import unicodedata
-from datetime import datetime
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dam.codes import sticker
+from dam.codes.configfile import write_config_file
 from dam.codes.model import FilingCode
-from dam.config import DEFAULTS_DIR
 from dam.rules.model import read_yaml
 
 log = logging.getLogger(__name__)
 
-DEFAULTS_FILE = DEFAULTS_DIR / "sticker_sheets.yaml"
-CUSTOM_FILE = "sticker_sheets.yaml"  # in the config folder
+CUSTOM_FILE = "sticker_sheets.yaml"  # in the config folder, written by dam
 CUSTOM_ID = "custom"
 A4_W, A4_H = 210.0, 297.0
 FIT_SLACK = 0.05  # mm of rounding a grid may overshoot the page by
@@ -42,8 +40,8 @@ BANG_PT = 11.0
 CAP = 0.716  # cap height of Arial/Helvetica, in em
 FONT = "Arial, Helvetica, 'Liberation Sans', sans-serif"
 LABEL_MARGIN_MM = 2.0  # kept free across the label (1 mm each side)
-MIN_LABEL_W = (sticker.X0 + BOXES_W) * MODULE_MM + 1.0
-MIN_LABEL_H = QR_MM + 1.0
+MIN_LABEL_W = (sticker.X0 + BOXES_W) * MODULE_MM + LABEL_MARGIN_MM  # about 31.7 mm
+MIN_LABEL_H = QR_MM + LABEL_MARGIN_MM
 NOTE = "Print at 100 %, without fit to page."
 
 
@@ -92,28 +90,41 @@ class SheetLayout(BaseModel):
         )
 
 
-def _read_list(path: Path) -> list:
-    _, data = read_yaml(path)
-    if not isinstance(data, list):
-        raise ValueError("the file must be a list of layouts")
-    return data
+_GRID = {
+    "columns": 5, "rows": 13, "label_w_mm": 38.1, "label_h_mm": 21.2,
+    "top_mm": 10.7, "left_mm": 4.7, "gap_x_mm": 2.5, "gap_y_mm": 0.0,
+}  # L7651 per Avery's template; the guide says to check it against the pack
 
 
 def builtin_layouts() -> list[SheetLayout]:
-    return [SheetLayout.model_validate(d) for d in _read_list(DEFAULTS_FILE)]
+    """The layouts that come with dam (not in the config folder, so never seeded there)."""
+    return [
+        SheetLayout(
+            id="l7651", name="Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)",
+            cut_lines=False, **_GRID,
+        ),
+        SheetLayout(id="plain", name="Plain paper, cut out", cut_lines=True, **_GRID),
+    ]
 
 
 def custom_layout(config_dir: Path) -> SheetLayout | None:
-    """The saved custom layout, or None. Only the entry with id ``custom`` counts (a
-    fresh install copies the defaults file here; its built-ins are ignored)."""
+    """The saved custom layout (``config/sticker_sheets.yaml``, one mapping), or None.
+    A missing or empty file is no custom layout; an invalid one is logged and skipped."""
     path = config_dir / CUSTOM_FILE
     if not path.exists():
         return None
     try:
-        for d in _read_list(path):
-            if isinstance(d, dict) and d.get("id") == CUSTOM_ID:
-                return SheetLayout.model_validate(d)
-    except (ValueError, ValidationError):
+        _, data = read_yaml(path)
+        if isinstance(data, list):  # an early dev build seeded a list of built-ins here
+            data = next(
+                (d for d in data if isinstance(d, dict) and d.get("id") == CUSTOM_ID), None
+            )
+        if data is None:
+            return None
+        if not isinstance(data, dict):
+            raise ValueError("the file must hold one layout")
+        return SheetLayout.model_validate({**data, "id": CUSTOM_ID})
+    except ValueError:  # pydantic's ValidationError is a ValueError
         log.warning("custom sticker sheet in %s skipped", path, exc_info=True)
     return None
 
@@ -129,27 +140,10 @@ def save_custom(config_dir: Path, layout: SheetLayout) -> SheetLayout:
     ``.bak-<time>``; restored if the new file does not read back)."""
     layout = layout.model_copy(update={"id": CUSTOM_ID})
     path = config_dir / CUSTOM_FILE
-    original = path.read_bytes() if path.exists() else None
-    if original is not None:
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        try:
-            with open(path.with_name(f"{path.name}.bak-{stamp}"), "xb") as fh:
-                fh.write(original)
-        except FileExistsError:
-            pass  # a backup from this very second exists already
-    text = "# The custom sticker sheet layout (mm), written by dam.\n" + yaml.safe_dump(
-        [layout.model_dump(mode="json")], allow_unicode=True, sort_keys=False
+    text = "# The custom sticker sheet layout (mm), saved by dam.\n" + yaml.safe_dump(
+        layout.model_dump(mode="json"), allow_unicode=True, sort_keys=False
     )
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-        if custom_layout(config_dir) != layout:
-            raise OSError("the custom layout did not read back as written")
-    except (OSError, ValueError, yaml.YAMLError):
-        with open(path, "wb") as f:  # no file before: an empty one (never delete)
-            f.write(original or b"")
-        raise
+    write_config_file(path, text, lambda: custom_layout(config_dir) == layout)
     return layout
 
 
@@ -304,11 +298,14 @@ def render_sheet(
     more pages. ``boxes`` adds the star and important tick boxes (payload ``dam:1:``);
     ``blank_labels`` leaves the label text out to write by hand; ``outlines_only`` (the
     test print) draws only the outlines of every label on the pages the print would use.
-    Raises ``ValueError`` for a ``start_at`` off the sheet or too many stickers.
+    Raises ``ValueError`` for a ``start_at`` off the sheet, no stickers (unless
+    ``outlines_only``) or too many.
     """
     if not 1 <= start_at <= layout.per_page:
         raise ValueError(f"start at a label from 1 to {layout.per_page}")
     queue = [fc for fc in codes for _ in range(max(0, counts.get(fc.code, 1)))]
+    if not queue and not outlines_only:
+        raise ValueError("Nothing to print")
     if len(queue) > MAX_STICKERS:
         raise ValueError(f"at most {MAX_STICKERS} stickers at once")
     slots = start_at - 1 + len(queue)
