@@ -15,6 +15,7 @@
 - [Browse](#browse)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
+- [Settings](#settings)
 - [Notes and checklists](#notes-and-checklists)
 - [Reminders](#reminders)
 - [AI (optional)](#ai-optional)
@@ -137,8 +138,8 @@ setting. The sidebar, from the top:
 - **Collections**: **Important** and **Starred** first, then the open collections as a
   tree (a parent's children nest under it; the chevron folds it). The caption opens the
   list of all collections, with New collection and the closed ones;
-- **Archive**: **Browse**, **Ask** (AI questions about the archive), **Activity** and
-  **Help** (this guide).
+- **Archive**: **Browse**, **Ask** (AI questions about the archive), **Activity**,
+  **Settings** and **Help** (this guide).
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray
@@ -386,6 +387,12 @@ says why if it cannot (for example when the file was changed or moved again sinc
 
 The **AI** view in Activity lists every AI call with its cost, the month's total and the
 on/off switch.
+
+## Settings
+
+Settings is where dam's own options are kept, one section for each area. It starts with
+**Filing codes**: the short letters or numbers you write on a paper or in a file name, each
+with the tray, folder, name and tags it files as.
 
 ## Notes and checklists
 

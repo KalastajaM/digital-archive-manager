@@ -79,6 +79,17 @@ const toCode = (d: Draft): FilingCode => ({
   inbox_folder: d.inbox_folder.trim() || null,
 });
 
+const GROUPS = ["0OØDQ", "1IL7", "5S", "2Z", "8B", "UV", "6G"];
+
+/** Two codes that differ in exactly one position, by characters that look alike by hand. */
+export function confusable(a: string, b: string): boolean {
+  const x = a.trim().toUpperCase();
+  const y = b.trim().toUpperCase();
+  if (!x || x.length !== y.length) return false;
+  const diff = [...x].map((c, i) => [c, y[i]] as const).filter(([c, d]) => c !== d);
+  return diff.length === 1 && GROUPS.some((g) => g.includes(diff[0][0]) && g.includes(diff[0][1]));
+}
+
 export function FilingCodes() {
   const codes = useFilingCodes();
   const trays = useTrays();
@@ -118,7 +129,6 @@ export function FilingCodes() {
   }
 
   const problems = codes.data.problems;
-  const warnings = new Map(codes.data.warnings.map((w) => [w.code, w.confusable_with]));
   const trayList = trays.data?.trays ?? [];
   const edit = (key: number, patch: Partial<Draft>) =>
     setRows((rs) => (rs ?? []).map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -164,12 +174,12 @@ export function FilingCodes() {
       )}
       <ul className="filing-codes-list">
         {rows.map((r, i) => {
-          const same = warnings.get(r.code.trim());
+          const same = rows.filter((o) => o.key !== r.key && confusable(r.code, o.code)).map((o) => o.code.trim());
           return (
             <li key={r.key} className="filing-code-row" role="group" aria-label={`Code ${r.code || `row ${i + 1}`}`}>
               <label>
                 Code
-                <input value={r.code} onChange={(e) => edit(r.key, { code: e.target.value })} maxLength={8} />
+                <input value={r.code} onChange={(e) => edit(r.key, { code: e.target.value })} maxLength={4} />
               </label>
               <label>
                 Label
@@ -233,6 +243,12 @@ export function FilingCodes() {
           );
         })}
       </ul>
+      {(trays.isError || folders.isError) && (
+        <p className="error" role="alert">
+          {trays.isError && `The trays could not be loaded: ${visible(errorText(trays.error))}. `}
+          {folders.isError && `The inbox folders could not be checked: ${visible(errorText(folders.error))}.`}
+        </p>
+      )}
       {stray.length > 0 && (
         <ul className="filing-codes-stray">
           {stray.map((f) => (

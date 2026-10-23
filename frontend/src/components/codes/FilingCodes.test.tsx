@@ -54,27 +54,24 @@ describe("Filing codes (Settings)", () => {
     expect(within(rows[2]).getByLabelText("File as suggested")).toBeChecked();
   });
 
-  it("shows the confusable warning the server gives for a code", async () => {
-    let table: unknown = { codes: SEEDED, problems: [], warnings: [] };
-    const { user } = setup({
-      "GET /api/filing-codes": () => ({ body: table }),
-      "PUT /api/filing-codes": () => {
-        table = {
-          codes: [...SEEDED, code("O", ""), code("0", "")],
-          problems: [],
-          warnings: [{ code: "O", confusable_with: ["0"] }],
-        };
-        return { body: table };
-      },
-    });
+  it("warns while editing that a code is easy to confuse, and stops when it changes", async () => {
+    const { calls, user } = setup(
+      {},
+      { codes: [...SEEDED, code("0", "Zero")] },
+    );
     await screen.findAllByRole("group");
     await user.click(screen.getByRole("button", { name: "Add a code" }));
-    await user.click(screen.getByRole("button", { name: "Add a code" }));
     const rows = screen.getAllByRole("group");
-    await user.type(within(rows[3]).getByLabelText("Code"), "O");
-    await user.type(within(rows[4]).getByLabelText("Code"), "0");
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText(/Easy to confuse with/)).toHaveTextContent("Easy to confuse with 0 when written by hand.");
+    const added = rows[rows.length - 1];
+    const field = within(added).getByLabelText("Code");
+    await user.type(field, "O");
+    expect(await screen.findAllByText(/Easy to confuse with/)).toHaveLength(3); // O, the 0 row and the seeded D (D, O and 0 look alike)
+    expect(within(added).getByText(/Easy to confuse with/)).toHaveTextContent("Easy to confuse with D, 0 when written by hand.");
+    await user.clear(field);
+    await user.type(field, "K");
+    expect(within(added).queryByText(/Easy to confuse with/)).toBeNull(); // 0 and D still warn each other
+    expect(screen.getAllByText(/Easy to confuse with/)).toHaveLength(2);
+    expect(ofMethod(calls, "PUT", "/api/filing-codes")).toHaveLength(0);
   });
 
   it("Save sends the whole edited list", async () => {
