@@ -8,6 +8,11 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Browse search results have the Folder, Date and Size columns of the Files view and can
+  be sorted by any of them (up to 500 matches); a third click on a column goes back to
+  best match first.
+- Browse: the search scope sits beside the search box, so you can choose before typing
+  whether to search the open folder (with its subfolders) or the whole archive.
 - Activity → AI lists the excluded folders (never sent to AI) and lets you add or remove
   them, with a folder picker; a folder not in the archive is marked. The change applies
   at once and is saved in settings.yaml. Removing one asks first, since its documents

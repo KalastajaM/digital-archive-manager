@@ -63,7 +63,6 @@ import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyb
 import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
-import { Breakable } from "../components/PlanPreview";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { useSearch } from "./useSearch";
@@ -148,6 +147,25 @@ const LIST_SPLIT = { min: 25, max: 75, initial: 45 };
 
 const NONE: Set<string> = new Set();
 const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
+
+const byText = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+/** Search hits in a column's order (ties by name, then path); files with no date or size last. */
+function sortHits(items: Item[], { sort, dir }: SortState): Item[] {
+  const key = (it: Item): string | number | null =>
+    sort === "name" ? it.name : sort === "folder" ? parentOf(it.path) : sort === "date" ? (it.mtime ?? null) : (it.size ?? null);
+  const sign = dir === "asc" ? 1 : -1;
+  return [...items].sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    if (ka === null || kb === null) {
+      if (ka !== kb) return ka === null ? 1 : -1;
+    } else {
+      const c = typeof ka === "number" ? ka - (kb as number) : byText(ka, kb as string);
+      if (c !== 0) return sign * c;
+    }
+    return byText(a.name, b.name) || byText(a.path, b.path);
+  });
+}
 const extOf = (name: string) => (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null);
 const previewOf = (item: Item): PreviewFile => ({
   drive_id: item.drive_id,
@@ -253,7 +271,6 @@ type RowProps = {
   item: Item;
   current: boolean;
   checked: boolean;
-  showPath: boolean;
   /** The Files view: the folder, date and size columns. */
   columns?: boolean;
   /** The ids a drag of this row carries; null: the row is not draggable (as files). */
@@ -275,7 +292,6 @@ function EntryRow({
   item,
   current,
   checked,
-  showPath,
   columns = false,
   dragIds,
   dragPaths,
@@ -342,7 +358,6 @@ function EntryRow({
         ) : (
           main
         )}
-        {showPath && <code className="entry-path"><Breakable text={item.path} /></code>}
         {item.snippet !== undefined && item.snippet !== item.name && <Snippet text={item.snippet} />}
       </button>
     </li>
@@ -579,23 +594,29 @@ export default function Browse() {
 
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<"folder" | "everywhere">("everywhere");
+  // The search results' column order; null: best match first (the API's order).
+  const [searchSort, setSearchSort] = useState<SortState | null>(null);
   const [searchPane, setSearchPane] = useState<PaneId>("left");
   const [reload, setReload] = useState(0);
   const q = query.trim();
   const sp: PaneId = split ? searchPane : "left";
-  const folder = scope === "folder" ? paths[sp] : "";
+  const inFolder = scope === "folder" && !!paths[sp];
+  const folder = inFolder ? paths[sp] : "";
   const search = useSearch(q, folder, reload);
 
   const viewOf = (pane: PaneId) => {
-    if (q && pane === sp) return `search\n${q}\n${folder}`;
+    if (q && pane === sp) return `search\n${q}\n${folder}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
     const { path, collection, view } = panes[pane];
     const sort = view === "files" ? `${sorts[pane].sort} ${sorts[pane].dir}` : "";
     return `browse\n${path}\n${collection ?? ""}\n${view}\n${sort}`;
   };
   const itemsOf = (pane: PaneId): Item[] =>
     q && pane === sp
-      ? // SearchHit has no is_dir/is_link (the API does not say); hits are indexed files.
-        (search.hits ?? []).map((h) => ({ ...h, is_dir: false, is_link: false }))
+      ? (() => {
+          // SearchHit has no is_dir/is_link (the API does not say); hits are indexed files.
+          const hits: Item[] = (search.hits ?? []).map((h) => ({ ...h, is_dir: false, is_link: false }));
+          return searchSort ? sortHits(hits, searchSort) : hits;
+        })()
       : flatOf(pane)
         ? (flats[pane].data?.rows ?? []).map((e: DirEntry) => ({ ...e })) // in the API's order
         : [...(listings[pane].data ?? [])]
@@ -613,6 +634,7 @@ export default function Browse() {
       panes.left.view,
       panes.right.view,
       search.hits,
+      searchSort,
       q,
       sp,
       split,
@@ -717,6 +739,15 @@ export default function Browse() {
         dir: all[pane].sort === sort ? (all[pane].dir === "asc" ? "desc" : "asc") : firstDir(sort),
       },
     }));
+  /** A search column: first click sorts, the second turns it round, the third goes back to best match. */
+  const sortSearchBy = (sort: FlatSort) =>
+    setSearchSort((cur) =>
+      cur?.sort !== sort
+        ? { sort, dir: firstDir(sort) }
+        : cur.dir === firstDir(sort)
+          ? { sort, dir: cur.dir === "asc" ? "desc" : "asc" }
+          : null,
+    );
 
   // ?select=<drive id> ("Go to target" on a link): once the folder is listed, that file
   // is the current row and the preview; then the parameter goes (Back keeps the folder).
@@ -1112,11 +1143,13 @@ export default function Browse() {
     const s = selOf(pane);
     const isSearch = !!q && pane === sp;
     const flat = flatOf(pane) && !isSearch;
+    // the Files view and search results have the folder, date and size columns
+    const columns = flat || isSearch;
     const body = bodyOf(pane);
     const state = panes[pane];
     const nameRow = naming?.pane === pane && naming.parent === paths[pane] && !flat && !isSearch ? naming : null;
     const total = flat ? (flats[pane].data?.total ?? 0) : 0;
-    const sortState = sorts[pane];
+    const sortState = isSearch ? searchSort : sorts[pane];
     // Two panes have no preview panel: the active pane's toolbar has the ★ / ! toggles of
     // the file it is on (one file: a toggle marks one file)
     const onFiles = split && act === pane ? filesOf(pane) : [];
@@ -1183,19 +1216,21 @@ export default function Browse() {
           </div>
         </div>
         <DropZone drop={paneDrop(pane)}>
-          {body === null && !flat && (
+          {body === null && !columns && (
             <div className="list-head">
               {selectAllBox}
               <span>Select all</span>
             </div>
           )}
-          {flat && body === null && (
+          {columns && body === null && (
             <div className="flat-head" role="group" aria-label="Sort by">
               {selectAllBox}
               <div className="flat-head-cols">
                 {SORT_COLUMNS.map((c) => {
-                  const on = sortState.sort === c.sort;
-                  const dir = sortState.dir === "asc" ? "ascending" : "descending";
+                  const on = sortState?.sort === c.sort;
+                  const dir = sortState?.dir === "asc" ? "ascending" : "descending";
+                  // a search column sorted both ways goes back to best match on the next click
+                  const back = isSearch && on && sortState?.dir !== firstDir(c.sort);
                   return (
                     <button
                       key={c.sort}
@@ -1203,10 +1238,11 @@ export default function Browse() {
                       className={`flat-sort flat-sort-${c.sort}`}
                       aria-pressed={on}
                       aria-label={`Sort by ${c.label.toLowerCase()}${on ? `, ${dir}` : ""}`}
-                      onClick={() => sortBy(pane, c.sort)}
+                      data-tip={back ? "Click for best match first" : undefined}
+                      onClick={() => (isSearch ? sortSearchBy(c.sort) : sortBy(pane, c.sort))}
                     >
                       {c.label}
-                      {on && <span aria-hidden="true">{sortState.dir === "asc" ? " ↑" : " ↓"}</span>}
+                      {on && <span aria-hidden="true">{sortState?.dir === "asc" ? " ↑" : " ↓"}</span>}
                     </button>
                   );
                 })}
@@ -1218,7 +1254,7 @@ export default function Browse() {
               ref={(el) => {
                 listRef.current[pane] = el;
               }}
-              className={flat ? "entries entries-flat" : "entries"}
+              className={columns ? "entries entries-flat" : "entries"}
               aria-label={isSearch ? "Search results" : flat ? "Files" : "Folder contents"}
             >
               {nameRow && (
@@ -1229,8 +1265,7 @@ export default function Browse() {
                   item,
                   current: i === s.index && s.touched,
                   checked: s.ids.includes(item.drive_id),
-                  showPath: isSearch,
-                  columns: flat,
+                  columns,
                   onToggle: () => toggle(pane, item.drive_id),
                   onClick: (e: MouseEvent) => clickRow(pane, e, i),
                 };
@@ -1276,13 +1311,26 @@ export default function Browse() {
 
   const searchBox = (
     <div className="search">
+      {paths[sp] && (
+        <Segmented<"folder" | "everywhere">
+          ariaLabel="Search scope"
+          className="search-scope"
+          value={scope}
+          onChange={setScope}
+          options={[
+            { value: "folder", label: "Folder", title: `Search ${visible(paths[sp])} and its subfolders` },
+            { value: "everywhere", label: "Archive", title: "Search the whole archive" },
+          ]}
+        />
+      )}
       <label htmlFor={`${ids}-q`} className="visually-hidden">
         Search
       </label>
       <input
         id={`${ids}-q`}
         type="search"
-        placeholder="Search the archive"
+        placeholder={inFolder ? `Search ${visible(paths[sp].split("/").at(-1) ?? "")}` : "Search the archive"}
+        title={inFolder ? `Searches ${visible(paths[sp])} and its subfolders` : undefined}
         value={query}
         spellCheck={false}
         onChange={(e) => {
@@ -1346,26 +1394,8 @@ export default function Browse() {
         }
         search={searchBox}
       />
-      {(q || marking.message) && (
+      {marking.message && (
       <div className="browse-filters">
-        {q && (
-          <div className="search-scope">
-            <span>Search:</span>
-            {paths[sp] ? (
-              <Segmented<"folder" | "everywhere">
-                ariaLabel="Search scope"
-                value={scope}
-                onChange={setScope}
-                options={[
-                  { value: "folder", label: "This folder", title: `Only files in ${visible(paths[sp])}` },
-                  { value: "everywhere", label: "Everywhere", title: "The whole archive" },
-                ]}
-              />
-            ) : (
-              <span>the whole archive</span>
-            )}
-          </div>
-        )}
         {marking.message &&
           (marking.message.kind === "error" ? (
             <p className="error" role="alert">

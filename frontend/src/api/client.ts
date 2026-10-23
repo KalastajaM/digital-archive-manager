@@ -499,10 +499,11 @@ export const useBrowseFiles = (
     enabled,
   });
 
-/** Full-text search; ``folder`` limits it to that subtree. */
+/** Full-text search; ``folder`` limits it to that subtree. Up to the API's 500 hits, so
+ * sorting the results by a column sorts (nearly) every match, not just the best 50. */
 export const searchFiles = (q: string, folder?: string) => {
   const folderParam = folder ? `&folder=${encodeURIComponent(folder)}` : "";
-  return get<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}${folderParam}`);
+  return get<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}${folderParam}&limit=500`);
 };
 
 /** Moves into ``##. To Delete`` (mirrored path); a dry run only resolves the plan. */

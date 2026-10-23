@@ -3873,6 +3873,10 @@ export interface components {
             snippet: string;
             /** Rank */
             rank: number;
+            /** Size */
+            size: number | null;
+            /** Mtime */
+            mtime: number | null;
             /** Marks */
             marks: ("starred" | "important")[];
         };
