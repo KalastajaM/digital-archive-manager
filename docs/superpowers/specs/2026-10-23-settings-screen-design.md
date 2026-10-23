@@ -40,8 +40,9 @@ Save button was below the fold.
   shows them again with the bar. Closing or reloading the tab asks first (the browser's
   own prompt). The app's router cannot hold an in-app navigation, so keeping the edits is
   the answer there.
-- **Print stickers is a sheet,** opened by "Print stickers…" in Filing codes, or by
-  "Print…" in an open code, which ticks that code. It is a task, not a setting.
+- **Print stickers is a sheet,** opened by "Print stickers…" in Filing codes. It is a
+  task, not a setting. (A second "Print…" in an open code was dropped: one way in is
+  enough.)
 - **Rare actions as notices.** "Create inbox folders" and the folders that belong to no
   code show as a notice above the list, and only while there is something to do.
 - **One line of explanation** under the section title, with a link to the guide; the
