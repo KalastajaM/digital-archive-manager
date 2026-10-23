@@ -13,8 +13,8 @@ All notable changes are listed here. The format follows
   marked. A code is a short letter or number from your own table that fills in the
   tray, folder, name pattern, tags and collections. Five come with dam (A, P, R, F and
   D for "file as suggested": already handled, file it where dam suggests, in no tray).
-  Edit them in Settings → Filing codes, with a warning when two codes look alike by
-  hand. The table is kept in `config/filing_codes.yaml`; comments written in that file
+  Edit them in Settings → Filing codes, with a warning when two codes are easy to
+  confuse if you write codes by hand. The table is kept in `config/filing_codes.yaml`; comments written in that file
   by hand are not kept when you save from the app.
 - Inbox folders for filing codes: Settings → Filing codes → Create inbox folders makes
   the missing ones in `##. Organize`, after a preview and with Undo. Files directly in a

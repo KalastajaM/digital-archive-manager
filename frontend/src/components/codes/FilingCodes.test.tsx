@@ -66,12 +66,24 @@ describe("Filing codes (Settings)", () => {
     const field = within(added).getByLabelText("Code");
     await user.type(field, "O");
     expect(await screen.findAllByText(/Easy to confuse with/)).toHaveLength(3); // O, the 0 row and the seeded D (D, O and 0 look alike)
-    expect(within(added).getByText(/Easy to confuse with/)).toHaveTextContent("Easy to confuse with D, 0 when written by hand.");
+    expect(within(added).getByText(/Easy to confuse with/)).toHaveTextContent("Easy to confuse with D, 0 if you write codes by hand.");
     await user.clear(field);
     await user.type(field, "K");
     expect(within(added).queryByText(/Easy to confuse with/)).toBeNull(); // 0 and D still warn each other
     expect(screen.getAllByText(/Easy to confuse with/)).toHaveLength(2);
     expect(ofMethod(calls, "PUT", "/api/filing-codes")).toHaveLength(0);
+  });
+
+  it("says how a file gets a code, and caps a label at 24 characters", async () => {
+    setup();
+    const rows = await screen.findAllByRole("group");
+    expect(
+      screen.getByText(
+        /A code is a short letter or number\. A file gets it when you save it into the code's inbox folder or put the code's QR sticker on the paper\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/file name/)).toBeNull();
+    expect(within(rows[0]).getByLabelText("Label")).toHaveAttribute("maxLength", "24");
   });
 
   it("Save sends the whole edited list", async () => {

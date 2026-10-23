@@ -98,3 +98,30 @@ def test_save_round_trip_and_backup(tmp_path):
 def test_confusable():
     assert confusable_with("O", ["0", "A"]) == ["0"]
     assert confusable_with("S1", ["5I", "SI"]) == ["SI"]
+
+
+def test_label_is_at_most_24_characters():
+    assert FilingCode(code="X", label="x" * 24).label == "x" * 24
+    with pytest.raises(ValidationError, match="24"):
+        FilingCode(code="X", label="x" * 25)
+
+
+@pytest.mark.parametrize("name", ["", "  ", "Ongoing", "important", "a/b"])
+def test_bad_collection_names_are_refused(name):
+    with pytest.raises(ValidationError, match="collections"):
+        FilingCode(code="X", collections=[name])
+
+
+def test_collection_names_and_tags_are_cleaned():
+    fc = FilingCode(code="X", collections=[" Bills "], tags=[" energy", "energy", " ", "Tax"])
+    assert fc.collections == ["Bills"]
+    assert fc.tags == ["energy", "Tax"]
+
+
+def test_a_bad_collection_name_in_the_file_is_a_problem(tmp_path):
+    path = tmp_path / "filing_codes.yaml"
+    path.write_text("- code: X\n  collections: [Ongoing]\n", encoding="utf-8")
+    codes, problems = load_codes(path, TRAYS)
+    assert codes == []
+    assert [p.code for p in problems] == ["X"]
+    assert "Starred" in problems[0].message

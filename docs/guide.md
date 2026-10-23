@@ -251,8 +251,8 @@ starts with a date (`20261015_...`): you named it already, so that name is kept.
 
 **Editing codes.** In Settings → Filing codes each code has a label, a tray, a folder, a
 name pattern, tags, collections, an inbox folder and the **File as suggested** box. While
-you type a code, dam warns when it looks like another one (`0` and `O`, `1` and `I`, `5`
-and `S`); that only matters for codes written by hand. The table is saved in
+you type a code, dam warns when it is easy to confuse with another one if you write codes
+by hand (`0` and `O`, `1` and `I`, `5` and `S`). The table is saved in
 `config/filing_codes.yaml` in the data folder, with a backup of the old file; comments
 you wrote in that file by hand are not kept when you save from the app. See
 [Filing codes file](reference.md#filing-codes-file) for the format.

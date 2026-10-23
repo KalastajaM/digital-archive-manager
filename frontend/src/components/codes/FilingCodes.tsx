@@ -1,5 +1,5 @@
-/** Settings → Filing codes: the table of codes written on a paper (or file name) and what
- * each one files as. The table is saved whole (the old file is kept as a backup). Entries
+/** Settings → Filing codes: the table of codes (a file gets one from the code's inbox
+ * folder or its QR sticker) and what each one files as. The table is saved whole (the old file is kept as a backup). Entries
  * of the file that could not be loaded (``problems``) are not in the table, so saving drops
  * them from the file; that is said next to Save. "Create inbox folders" makes the codes'
  * folders in the inbox, after a preview. */
@@ -157,8 +157,9 @@ export function FilingCodes() {
     <section className="filing-codes" aria-label="Filing codes">
       <h3>Filing codes</h3>
       <p className="hint">
-        A code is a short letter or number written on a paper or in a file name. It says where the file goes and what it
-        gets. Saved in the filing codes file, with a backup of the old one.
+        A code is a short letter or number. A file gets it when you save it into the code's inbox folder or put the
+        code's QR sticker on the paper. It says where the file goes and what it gets. Saved in the filing codes file, with
+        a backup of the old one.
       </p>
       {problems.length > 0 && (
         <div className="banner" role="alert">
@@ -183,7 +184,7 @@ export function FilingCodes() {
               </label>
               <label>
                 Label
-                <input value={r.label} onChange={(e) => edit(r.key, { label: e.target.value })} />
+                <input value={r.label} onChange={(e) => edit(r.key, { label: e.target.value })} maxLength={24} />
               </label>
               <label>
                 Tray
@@ -236,7 +237,7 @@ export function FilingCodes() {
                       <code>{visible(c)}</code>
                     </span>
                   ))}{" "}
-                  when written by hand.
+                  if you write codes by hand.
                 </p>
               )}
             </li>

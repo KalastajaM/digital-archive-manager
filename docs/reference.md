@@ -334,7 +334,7 @@ before filing codes gets the seeded table on its first start with this version.
 
 ```yaml
 - code: P                     # 1 to 4 letters or digits, unique; stored upper case
-  label: To pay               # shown in chips, the batch and on stickers
+  label: To pay               # at most 24 characters; shown in chips, the batch and on stickers
   tray: to-pay                # a tray id (see Tray files)
   inbox_folder: To pay        # its subfolder of the inbox; unique
 - code: V3
@@ -342,7 +342,7 @@ before filing codes gets the seeded table on its first start with this version.
   folder: "20. Vehicles/{year}"          # templates as in a rule's then.folder
   name: "{doc_date:%Y%m%d}_Insurance"    # as in a rule's then.name; the extension is added
   tags: ["car", "insurance"]
-  collections: ["Car"]
+  collections: ["Car"]                  # collection names as in the app (not Ongoing or Important)
 - code: D
   label: File as suggested
   as_suggested: true          # already handled: file where dam suggests, in no tray

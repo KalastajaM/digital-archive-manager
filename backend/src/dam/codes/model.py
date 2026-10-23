@@ -9,11 +9,14 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from dam.codes.configfile import write_config_file
+from dam.collections.service import check_collection_name
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.rules.engine import TemplateError, check_template
 from dam.rules.model import fold, read_yaml
+from dam.services.errors import InvalidRequest
 
 _CODE_RE = re.compile(r"^[A-Za-z0-9]{1,4}$")
+LABEL_MAX = 24  # fits a sticker and a chip
 
 CONFUSABLE_GROUPS = ("0OØDQ", "1IL7", "5S", "2Z", "8B", "UV", "6G")
 _GROUP_OF = {c: i for i, group in enumerate(CONFUSABLE_GROUPS) for c in group}
@@ -23,7 +26,7 @@ class FilingCode(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str
-    label: str = ""
+    label: str = Field(default="", max_length=LABEL_MAX)
     tray: str | None = None
     folder: str | None = None
     name: str | None = None
@@ -38,6 +41,27 @@ class FilingCode(BaseModel):
         if not _CODE_RE.match(v):
             raise ValueError("a code is 1 to 4 letters or digits")
         return v.upper()
+
+    @field_validator("tags")
+    @classmethod
+    def _clean_tags(cls, v: list[str]) -> list[str]:
+        # imported here: dam.services.inbox imports this module (through codes.apply)
+        from dam.services.inbox import normalise_tags
+
+        return normalise_tags(v)
+
+    @field_validator("collections")
+    @classmethod
+    def _check_collections(cls, v: list[str]) -> list[str]:
+        out: list[str] = []
+        for name in v:
+            try:
+                name = check_collection_name(name)
+            except InvalidRequest as e:
+                raise ValueError(str(e)) from e
+            if name not in out:
+                out.append(name)
+        return out
 
     @field_validator("folder", "name")
     @classmethod
