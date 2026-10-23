@@ -1,14 +1,14 @@
-# Filing codes, step 1: Implementation Plan
+# Filing codes, steps 1 and 2: Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The owner keeps a table of filing codes; files in a code's inbox folder arrive pre-filled from that code, and **File N marked** files all coded inbox files as one journaled, undoable batch.
+**Goal:** The owner keeps a table of filing codes; files in a code's inbox folder or carrying a printed QR sticker arrive pre-filled from that code (tick boxes on the sticker add Starred and Important), and **File N marked** files all coded inbox files as one journaled, undoable batch. Tasks 1 to 9 are step 1 (inbox folders), Tasks 10 to 14 step 2 (QR stickers), Task 15 the docs for both.
 
 **Architecture:** A new backend package `dam.codes` owns the code table (YAML in the data folder), matching (step 1: by inbox folder only; pen and QR plug in later as more sources), applying codes on top of the existing suggestion, and building the batch rows. Inbox membership widens from "directly in the inbox" to "directly in the inbox or directly in a code's inbox folder", in one place on `FileRepo`. The frontend gets a new Settings screen whose first section is the codes editor, code chips and tray preselection in the Inbox form, and a batch review panel reachable from the Inbox and Today.
 
 **Tech Stack:** Python 3.13, FastAPI, SQLAlchemy Core, pydantic, PyYAML, pytest (uv); React + TypeScript, TanStack Query, Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-10-23-filing-codes-design.md` (sections "Build steps", "Goals" to "Anti-goals", "Step 1", "Constraints").
+**Spec:** `docs/superpowers/specs/2026-10-23-filing-codes-design.md` (sections "Build steps", "Goals" to "Anti-goals", "Step 1", "Step 2: QR stickers" incl. "Star and Important tick boxes", "Constraints").
 
 ## Global Constraints
 
@@ -264,13 +264,106 @@ UI: button **File N marked** (hidden when N is 0). Panel: one row per `BatchRow`
 - [ ] **Step 4: Run** `npm test -- --run` and `npm run build`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat: file all marked inbox files in one confirmed batch`.
 
-### Task 10: Docs and the full check
+### Task 10: Sticker layout and QR payload (shared geometry)
+
+**Files:**
+- Create: `backend/src/dam/codes/sticker.py`
+- Test: `backend/tests/test_codes_sticker.py`
+
+**Interfaces:**
+- Produces (single source of truth for printing and reading):
+  - `QR_VERSION_MODULES = 21` (QR version 1; every payload must fit version 1 at error correction M, asserted).
+  - `PLAIN = "dam:{code}"`, `BOXED = "dam:1:{code}"`; `parse_payload(text: str) -> tuple[str, int] | None` returns `(code, layout)` with layout 0 (plain) or 1 (boxes); any other text, including other `dam:` forms, gives None. Code upper-cased, 1 to 4 letters or digits.
+  - Layout 1 geometry, in QR modules relative to the QR's top-left corner (spike values, keep verbatim): text column starts at `X0 = 25`, and everything in it is left-aligned on that column (ink edge, not font origin); row 1 the code in bold with its ink top on the QR's top edge, row 2 the label (one line, shrunk from 6.5 pt down to 5 pt to fit) centred on the QR's middle, row 3 the boxes bottom-aligned with the QR; `STAR_SLOT = 6` modules before the star box holding a drawn 5-point star about 65 % of the box height; box side `BOX = 8`; `GAP = 2` after the star box; `BANG_SLOT = 3` modules holding a bold `!` before the important box. The QR plus text block is centred on the label horizontally and vertically. `box_rects(layout=1) -> dict[Literal["star", "important"], tuple[float, float, float]]` (x, y, side) = star `(31, 13, 8)`, important `(44, 13, 8)`.
+  - `qr_svg(code: str, layout: int) -> str`: zxing-cpp `create_barcode(payload, BarcodeFormat.QRCode, ec_level="M").to_svg()`.
+- [ ] **Step 1: Write the failing tests:** `test_parse_payload` (`dam:P` -> ("P", 0); `dam:1:v3` -> ("V3", 1); `dam:2:P`, `dam:`, `dam:TOOLONG`, `https://x` -> None); `test_longest_payload_is_version_1` (`dam:1:ABCD` decodes back from `qr_svg` rasterised, or from `create_barcode(...).to_image()`, with 21 modules); `test_box_rects`.
+- [ ] **Step 2: Run** `uv run pytest tests/test_codes_sticker.py -q`. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run.** Expected: PASS.
+- [ ] **Step 5: Commit** `feat: one sticker layout shared by printing and reading`.
+
+### Task 11: Read QR stickers and tick boxes in the barcode pass
+
+**Files:**
+- Create: `backend/src/dam/codes/qr.py`, `backend/migrations/versions/0026_file_qr_codes.py`
+- Modify: `backend/src/dam/index/barcodes.py`, `backend/src/dam/index/content.py` (`_read_barcode`, `run_barcodes_once`), `backend/src/dam/index/repo.py`, `backend/src/dam/db/tables.py`
+- Test: `backend/tests/test_codes_qr.py`
+
+**Interfaces:**
+- Consumes: Task 10.
+- Produces:
+  - `@dataclass QrRead: code: str; layout: int; star: Literal["ticked", "empty", "unclear"] | None; important: (same) | None` (None for layout 0).
+  - `read_qr(image: PIL.Image.Image) -> list[QrRead]` in `codes/qr.py`: page 1 only. For layout 1: map box rects through the QR corner points (`position.top_left/top_right/bottom_left`, 21 modules), register each box pair on its printed outline by searching offsets within ±1.5 modules in 0.25-module steps (maximise dark share along the four edges of both boxes), then measure the dark share (< 128) inside each box with a 15 % inset. Thresholds (from the blind trial, keep verbatim): `>= 1 %` ticked, `< 0.5 %` empty, otherwise unclear. A box partly off the page is unclear.
+  - `barcodes.read_page1(path, ext, data) -> tuple[list[str], list[QrRead]]`: one render of page 1 (300 dpi greyscale, as today) feeds both the Code 128 bank-barcode read (all pages up to `MAX_PAGES`, unchanged) and `read_qr`. Pass zxing formats as a tuple, never with `|` (deprecated; the suite runs `-W error`).
+  - Table `file_qr_codes` (migration `0026`, `down_revision = "0025"`): `drive_id` (PK, FK files), `sha256`, `reads` (JSON text of the `QrRead` list, `[]` = none found), `read_at`. Same lifetime rules as `file_barcodes`: a row for other content is ignored and the file is read again.
+  - `FileRepo.qr_for(drive_id) -> list[QrRead]`, `FileRepo.save_qr(drive_id, sha256, reads) -> bool`; `next_for_barcodes` also returns inbox files that have a barcode row but no `file_qr_codes` row for their content, so existing inbox files get read once after the update.
+- [ ] **Step 1: Write the failing tests**, generating stickers in the test with `codes.sticker` and Pillow (no fixture files): `test_plain_sticker_read`; `test_boxed_sticker_ticks` (draw a 2 px cross in the star box, nothing in the other: star ticked, important empty); `test_rotated_page_still_reads` (rotate 178 degrees); `test_faint_mark_is_unclear` (a few dark pixels giving 0.5 to 1 %); `test_foreign_qr_ignored` (`https://example.com` QR); `test_bank_barcode_still_read_with_qr` (existing Code 128 fixture plus a sticker on the same page); `test_reads_recorded_per_content` (save, change sha, row ignored); `test_existing_inbox_file_gets_qr_read_once`.
+- [ ] **Step 2: Run.** Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** the new tests plus `uv run pytest tests/test_barcodes*.py tests/test_content*.py -q`. Expected: PASS.
+- [ ] **Step 5: Commit** `feat: read filing-code QR stickers and their tick boxes`.
+
+### Task 12: QR hits, Starred and Important in suggestions and the batch
+
+**Files:**
+- Modify: `backend/src/dam/codes/apply.py` (`codes_for`), `backend/src/dam/rules/engine.py` (`Suggestion`), `backend/src/dam/services/inbox.py` (`FileRequest`, `_follow_up`, `_run_follow_up`), `backend/src/dam/codes/batch.py`, `backend/src/dam/api/schemas.py`
+- Test: `backend/tests/test_codes_qr_batch.py`
+
+**Interfaces:**
+- Consumes: Tasks 5, 6, 11; `MarkService.star(drive_ids)`, `MarkService.mark_important(drive_ids)` (`collections/marks.py`).
+- Produces:
+  - `codes_for` adds a `CodeHit(code, via="qr")` per known code read by Task 11 (unknown codes ignored). A code read both from the folder and a sticker is one code, two hits.
+  - `Suggestion.star: bool | None`, `Suggestion.important: bool | None` from the tick boxes (True when any boxed sticker has it ticked); `Suggestion.marks_unclear: bool` when a box is unclear.
+  - `FileRequest.star: bool = False`, `FileRequest.important: bool = False` (and `FileRequestIn`): applied after filing in the same follow-up as tray and collections, so undo of the batch removes them like collection membership. Existing callers that do not send them behave as before.
+  - Batch: rows carry `star`, `important` in the request; a row with `marks_unclear` gets flag `unclear` with problem "Tick box unclear: star" (or important).
+- [ ] **Step 1: Write the failing tests:** `test_qr_hit_fills_suggestion` (sticker P in a root inbox file -> tray to-pay, `codes[0].via == "qr"`); `test_ticked_star_files_starred` (file the batch row, file is in Starred; undo removes it); `test_ticked_important_files_important`; `test_unclear_box_flags_row`; `test_unknown_sticker_code_ignored`; `test_folder_and_sticker_conflict` (folder P, sticker A with different trays -> conflict).
+- [ ] **Step 2: Run.** Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** them plus `tests/test_codes_apply.py tests/test_codes_batch.py tests/test_inbox.py -q`. Expected: PASS.
+- [ ] **Step 5: Regenerate the API types** (`npm run gen:api`); frontend tests and build still pass.
+- [ ] **Step 6: Commit** `feat: QR stickers fill the filing, tick boxes star or mark important`.
+
+### Task 13: Sticker sheet page (backend)
+
+**Files:**
+- Create: `backend/src/dam/codes/sheets.py`, `defaults/sticker_sheets.yaml`
+- Modify: `backend/src/dam/api/routers/codes.py`
+- Test: `backend/tests/test_codes_sheets.py`
+
+**Interfaces:**
+- Consumes: Task 10, `App.codes`.
+- Produces:
+  - `SheetLayout(BaseModel)`: `id`, `name`, `columns`, `rows`, `label_w_mm`, `label_h_mm`, `top_mm`, `left_mm`, `gap_x_mm`, `gap_y_mm`, `cut_lines: bool`. Built-ins in `defaults/sticker_sheets.yaml`: `l7651` "Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)" with columns 5, rows 13, 38.1 x 21.2, top 10.7, left 4.7, gap_x 2.5, gap_y 0 (verify against Avery's published template before release; the guide says to check the pack); `plain` "Plain paper, cut out" with the same grid and `cut_lines: true`. A saved custom layout lives in `config/sticker_sheets.yaml` (`custom` id), written like `filing_codes.yaml`.
+  - `render_sheet(codes: list[FilingCode], counts: dict[str, int], layout: SheetLayout, start_at: int = 1, boxes: bool = True, blank_labels: bool = False, outlines_only: bool = False) -> str`: a complete HTML document, A4 `@page { size: A4; margin: 0 }`, absolutely positioned labels in mm, each with `qr_svg` (12 mm QR, layout 1 when `boxes`, else 0), the code in bold, the label (empty when `blank_labels`), and the ★ and ! boxes; `outlines_only` draws only label outlines (the test print). A note at the top of the screen view (hidden in print): "Print at 100 %, without fit to page."
+  - `GET /api/filing-codes/sheets` -> layouts; `PUT /api/filing-codes/sheets/custom`; `POST /api/filing-codes/sheet` body `{codes: {code: count}, layout, start_at, boxes, blank_labels, outlines_only}` -> `text/html`.
+- [ ] **Step 1: Write the failing tests:** `test_sheet_positions_match_layout` (parse the HTML: label N at the expected mm offsets for l7651); `test_start_at_skips_labels`; `test_counts_and_overflow` (more stickers than fit -> second page); `test_qr_payloads` (each svg decodes, via zxing on a rasterised copy, to `dam:1:<CODE>` or `dam:<CODE>`); `test_blank_labels`; `test_outlines_only`; `test_unknown_code_400`.
+- [ ] **Step 2: Run.** Expected: FAIL.
+- [ ] **Step 3: Implement.** No new dependency: SVG from zxing-cpp, HTML by hand (escape labels).
+- [ ] **Step 4: Run.** Expected: PASS.
+- [ ] **Step 5: Regenerate the API types**; commit `feat: printable filing-code sticker sheets`.
+
+### Task 14: Print stickers in Settings, QR and tick boxes in the UI
+
+**Files:**
+- Create: `frontend/src/components/codes/PrintStickers.tsx`, `frontend/src/components/codes/PrintStickers.test.tsx`
+- Modify: `frontend/src/screens/Settings.tsx`, `frontend/src/components/codes/MarkedBatch.tsx`, `frontend/src/screens/ReviewCard.tsx`, `frontend/src/api/client.ts`
+
+**Interfaces:**
+- Consumes: Tasks 12 and 13.
+- UI: a "Print stickers" section in Settings: pick codes and a count per code, the sheet layout (built-ins, Custom with its fields), Start at label N, With tick boxes (default on), Blank labels, then **Open sheet** (opens the HTML in a new tab for the browser's print dialog) and **Test print** (outlines only). The batch panel and the Inbox form show "from sticker `P`" for `via == "qr"` and preselect Starred and Important from the suggestion; an unclear box shows "Tick box unclear: check star".
+- [ ] **Step 1: Write the failing tests:** section renders built-in layouts; Custom shows the mm fields and saves; Open sheet posts the chosen counts; Test print posts `outlines_only: true`; the review form preselects Starred from `suggestion.star`; the chip reads "from sticker `P`".
+- [ ] **Step 2: Run.** Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `npm test -- --run` and `npm run build`. Expected: PASS.
+- [ ] **Step 5: Commit** `feat: print filing-code stickers from Settings`.
+
+### Task 15: Docs and the full check
 
 **Files:**
 - Modify: `docs/guide.md` (new "## Filing codes" section after "Filing from the Inbox", a line in "Today", a "Settings" section for the new screen, and the table of contents), `docs/reference.md` (`filing_codes.yaml` format under "Config and rules"), `CHANGELOG.md` (`## [Unreleased]` / `### Added`), `README.md` (a bullet under "Why you might like it" and a screenshot row, light and dark, in the screenshot table)
 - Create: `docs/images/filing-codes-light.png`, `docs/images/filing-codes-dark.png` (the File N marked panel on the demo archive)
 
-Filing codes are a distinguishing feature (like Activity with undo), so the README bullet sits high in "Why you might like it" and says plainly what it does for the user: decide on paper or by where you save a file, and dam files the whole batch after one look. Step 1 delivers inbox folders only; write the README and guide so QR stickers can be added later without rewriting.
+Filing codes are a distinguishing feature (like Activity with undo), so the README bullet sits high in "Why you might like it" and says plainly what it does for the user: decide on paper or by where you save a file, and dam files the whole batch after one look. Cover inbox folders, QR stickers with tick boxes, and printing sticker sheets; the README screenshot row may show the batch panel and a printed sticker sheet.
 
 - [ ] **Step 1: Write the guide section:** what a code is, the seeded codes, inbox folders and Create inbox folders, File N marked and its three flags, that hand comments in `filing_codes.yaml` are not kept when saving from the app. Plain words, no em dashes.
 - [ ] **Step 1b: Write the README bullet and add the screenshot row** (screenshots taken in Step 4, light and dark, demo archive only, matching the existing `<picture>` rows).
