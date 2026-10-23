@@ -71,37 +71,58 @@ def test_kept_rule_suggestion_records_and_offers_nothing(client, app, fake_archi
     assert (stats.suggested, stats.changed) == (1, 0)
 
 
-def test_no_offer_for_batches_codes_declined_or_switched_off(client, app, fake_archive):
+def _offer_for(client, app, fake_archive, via=None):
     add_scan(app, fake_archive, "lasku.pdf", "id-a", TEXT)
-    assert _file(client, via="batch").json()["offer"] is None
-    # declined: the ticked-word set is remembered
-    add_scan(app, fake_archive, "c.pdf", "id-a2", TEXT)
+    return _file(client, via=via).json()["offer"]
+
+
+def test_no_offer_for_a_batch_filing_but_outcomes_are_recorded(client, app, fake_archive):
+    _learned(app)
+    add_scan(app, fake_archive, "lasku.pdf", "id-a", TEXT)
+    r = _file(client, via="batch", folder="11. Bills/Other")
+    assert r.json()["offer"] is None
+    stats = app.rule_record.stats()["fortum"]
+    assert (stats.suggested, stats.changed) == (1, 1)
+
+
+def test_the_same_filing_via_the_form_offers(client, app, fake_archive):
+    assert _offer_for(client, app, fake_archive, via="form")["kind"] == "new"
+
+
+def test_no_offer_for_a_codes_filing(client, app, fake_archive):
+    assert _offer_for(client, app, fake_archive, via="codes") is None
+
+
+def test_a_declined_word_set_is_not_offered_again(client, app, fake_archive):
+    save_state(app.app_paths.data_dir, RulesState(declined=[["other"]]))
+    assert _offer_for(client, app, fake_archive) is not None  # control: another set
+    fake_archive.add(f"{BILLS}/old2.txt", content=b"2", drive_id="old-2")
+    add_scan(app, fake_archive, "lasku2.pdf", "id-b", TEXT)
     save_state(app.app_paths.data_dir, RulesState(declined=[["fortum"]]))
-    r = post(
-        client,
-        "/api/inbox/file",
-        {"requests": [{"drive_id": "id-a2", "name": "x.pdf", "folder": BILLS, "tags": []}]},
-    )
-    assert r.json()["offer"] is None
+    body = {"requests": [{"drive_id": "id-b", "name": "n.pdf", "folder": BILLS, "tags": []}]}
+    assert post(client, "/api/inbox/file", body).json()["offer"] is None
+
+
+def test_no_offer_when_switched_off(client, app, fake_archive):
     save_state(app.app_paths.data_dir, RulesState(offer=False))
-    add_scan(app, fake_archive, "d.pdf", "id-a3", TEXT)
-    r = post(
-        client,
-        "/api/inbox/file",
-        {"requests": [{"drive_id": "id-a3", "name": "y.pdf", "folder": BILLS, "tags": []}]},
-    )
-    assert r.json()["offer"] is None
+    assert _offer_for(client, app, fake_archive) is None
+    # control: the same filing with the offer on
+    add_scan(app, fake_archive, "lasku2.pdf", "id-b", TEXT)
     save_state(app.app_paths.data_dir, RulesState())
-    add_scan(app, fake_archive, "e.pdf", "id-a4", TEXT)
-    r = post(
-        client,
-        "/api/inbox/file",
-        {
-            "via": "codes",
-            "requests": [{"drive_id": "id-a4", "name": "z.pdf", "folder": BILLS, "tags": []}],
-        },
-    )
-    assert r.json()["offer"] is None
+    body = {"requests": [{"drive_id": "id-b", "name": "n.pdf", "folder": BILLS, "tags": []}]}
+    assert post(client, "/api/inbox/file", body).json()["offer"] is not None
+
+
+def test_no_offer_for_two_requests_in_one_filing(client, app, fake_archive):
+    add_scan(app, fake_archive, "a.pdf", "id-a", TEXT)
+    add_scan(app, fake_archive, "b.pdf", "id-b", TEXT)
+    body = {
+        "requests": [
+            {"drive_id": "id-a", "name": "a1.pdf", "folder": BILLS, "tags": []},
+            {"drive_id": "id-b", "name": "b1.pdf", "folder": BILLS, "tags": []},
+        ]
+    }
+    assert post(client, "/api/inbox/file", body).json()["offer"] is None
 
 
 def test_codes_filing_records_nothing(client, app, fake_archive):

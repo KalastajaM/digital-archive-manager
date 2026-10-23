@@ -74,14 +74,20 @@ def offer_target(
     return True, "new", None
 
 
-def make_doc_frequency(count: Callable[[str], int], total: int) -> Callable[[str], float]:
+def make_doc_frequency(
+    count: Callable[[str], int], total: Callable[[], int]
+) -> Callable[[str], float]:
+    """Share of filed documents containing a word; each count is made once."""
     cache: dict[str, float] = {}
+    size: list[int] = []
 
     def frequency(word: str) -> float:
-        if total == 0:
+        if not size:
+            size.append(total())
+        if size[0] == 0:
             return 0.0
         if word not in cache:
-            cache[word] = count(word) / total
+            cache[word] = count(word) / size[0]
         return cache[word]
 
     return frequency

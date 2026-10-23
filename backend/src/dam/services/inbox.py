@@ -28,7 +28,7 @@ from dam.rules.guess import guess_tray
 from dam.rules.model import Rule
 from dam.rules.offer import RuleOffer, make_doc_frequency, offer_target, outcomes
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
-from dam.rules.similar import _special, similar_folder
+from dam.rules.similar import similar_folder
 from dam.rules.state import load_state
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.errors import InvalidRequest, NotFound
@@ -355,10 +355,13 @@ class InboxService:
                 done = outcomes(found, req.name, req.folder, req.tray)
                 if done:
                     self._rule_record.record(batch_id, req.drive_id, done)
+        except Exception:
+            log.warning("recording the filing of %s failed", req.drive_id, exc_info=True)
+        try:
             if via == "form" and count == 1 and batch_id is not None:
                 outcome.offer = self._offer(req, found, rec, text)
         except Exception:
-            log.warning("learning from the filing of %s failed", req.drive_id, exc_info=True)
+            log.warning("offering a rule for %s failed", req.drive_id, exc_info=True)
 
     def _offer(
         self, req: FileRequest, found: Suggestion, rec: FileRecord, text: str
@@ -391,24 +394,37 @@ class InboxService:
             return None
         return RuleOffer(kind, rule_id, req.drive_id, draft)
 
-    def _frequency_counter(self) -> tuple[Callable[[str], int], int]:
+    def _frequency_counter(self) -> tuple[Callable[[str], int], Callable[[], int]]:
         """(documents matching a word, documents in all): filed documents with text,
-        outside the special folders. Counted lazily, per word."""
+        outside the configured special folders. Counted in SQL, lazily."""
+        names = [
+            self.special.inbox,
+            self.special.ongoing,
+            self.special.important,
+            self.special.quarantine,
+        ]
+        params: dict = {}
+        clauses = []
+        for i, name in enumerate(names):
+            escaped = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            params[f"s{i}"] = name
+            params[f"s{i}p"] = escaped + "/%"
+            clauses.append(f"f.path = :s{i} OR f.path LIKE :s{i}p ESCAPE '\\'")
         base = (
-            "SELECT f.path FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "
-            "WHERE f.missing IS NOT 1 AND f.parked_at IS NULL"
+            "SELECT count(*) FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "
+            "WHERE f.missing IS NOT 1 AND f.parked_at IS NULL "
+            f"AND NOT ({' OR '.join(clauses)})"
         )
 
-        def paths(extra: str, params: dict) -> int:
+        def number(extra: str, more: dict) -> int:
             with self.repo.engine.connect() as conn:
-                rows = conn.execute(sql_text(base + extra), params).all()
-            return sum(1 for r in rows if not _special(r.path))
+                return conn.execute(sql_text(base + extra), {**params, **more}).scalar() or 0
 
         def count(word: str) -> int:
             quoted = '"' + word.replace('"', '""') + '"'
-            return paths(" AND file_fts MATCH :q", {"q": quoted})
+            return number(" AND file_fts MATCH :q", {"q": quoted})
 
-        return count, paths("", {})
+        return count, lambda: number("", {})
 
     def _follow_up(self, req: FileRequest) -> _FollowUp:
         """Validate a request's tray/collections/note (no DB writes)."""
