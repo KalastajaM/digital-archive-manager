@@ -76,14 +76,17 @@ owner's values filled in. No offer for multi-document batches, File N marked, or
 filings by a filing code (the code already decides), nor when the owner turned the
 offer off in Settings → Filing rules.
 
-The server knows where a filing came from because each request says so: a new optional
-field on the filing request, `origin`: `"form"` (the single-document card,
-`ReviewCard.tsx`), `"batch"` (`BatchCard.tsx`) or `"codes"` (`MarkedBatch.tsx`),
-default `"form"` for callers that do not send it (designer's call; after the API change
-run `npm run gen:api`).
+The server knows where a filing came from because the request body says so: a new
+optional field on `POST /api/inbox/file`'s body, `via`: `"form"` (the single-document
+card, `ReviewCard.tsx`), `"batch"` (`BatchCard.tsx`) or `"codes"` (`MarkedBatch.tsx`),
+default `"form"` (designer's call; `origin` is taken: it is the journal's ui/cli/workflow
+origin). The server decides whether to offer and returns the offer, with the draft, in
+the filing result, so the client only shows it (after the API change run
+`npm run gen:api`).
 
 **Not for these** stores the drafted match words for that document (see below) in a
-small "declined" list; a later document whose drafted words are the same set gets no
+small "declined" list (with the offer switch, in `<data dir>/rules-state.json`, like
+`ai-state.json`); a later document whose drafted words are the same set gets no
 offer (designer's call). The list can be cleared in Settings.
 
 ### 2. The draft
