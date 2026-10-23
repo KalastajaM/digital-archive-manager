@@ -2104,11 +2104,47 @@ describe("Filing says where it came from and offers a rule", () => {
     await user.click(screen.getByRole("button", { name: "File it" }));
     await user.click(await screen.findByRole("button", { name: "Make a rule…" }));
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
-    expect(within(sheet).getByText(/This document:/)).toHaveTextContent("20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf");
+    expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf");
     await waitFor(() => expect(posts(calls, "/api/rules/replay").length).toBeGreaterThan(0));
     const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { folder_is: string; text_contains: string[] } } };
     expect(sent.rule.when.text_contains).toEqual(["kotihoito"]);
     expect(sent.rule.when.folder_is).toBe("##. Organize");
+  });
+
+  it("Update rule opens the existing rule and saves it under its own id with its own conditions", async () => {
+    const when = { text_contains: ["kotihoito", "hoitomaksu"], filename_matches: "(?i)hoito", folder_is: "##. Organize" };
+    const existing = {
+      id: "kotihoito",
+      file: "learned.yaml",
+      learned: true,
+      when,
+      then: { folder: "20. Health/{year}", name: "{doc_date}_Kotihoito", tags: ["health"], tray: null, payee: null },
+      stats: { suggested: 3, changed: 1, last_used: null, flagged: false },
+    };
+    const draft = { ...DRAFT, id: "kotihoito-2", words: [{ word: "lasku", ticked: true }] };
+    const { calls, user } = await setup({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/rules": { body: { rules: [existing], errors: [], state: { offer: true, declined: 0 } } },
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult({ offer: { ...OFFER, kind: "update", rule_id: "kotihoito", draft } }) },
+      "POST /api/rules/replay": { body: REPLAY },
+      "PUT /api/rules/kotihoito": { body: { rules: [existing], errors: [], state: { offer: true, declined: 0 } } },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(await screen.findByRole("button", { name: "Update rule kotihoito…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Update rule kotihoito" });
+    expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf");
+    const save = await within(sheet).findByRole("button", { name: "Save" });
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.url).toBe("/api/rules/kotihoito?replaces=kotihoito");
+    const body = put.body as { id: string; when: unknown; then: Record<string, unknown> };
+    expect(body.id).toBe("kotihoito");
+    expect(body.when).toEqual(when);
+    // the filing's folder and name patterns; the rule's other actions stay
+    expect(body.then).toMatchObject({ folder: DRAFT.folder, name: DRAFT.name, tags: ["health"] });
   });
 
   it("Not for these posts the ticked words", async () => {

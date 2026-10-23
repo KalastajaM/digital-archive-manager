@@ -23,7 +23,7 @@ import { MarkedBatch, markedFollowUps } from "../components/codes/MarkedBatch";
 import { useSetupFolders } from "../components/SetupFolders";
 import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
 import { useLocalToday } from "../components/RelativeDate";
-import { RuleSheet } from "../components/rules/RuleSheet";
+import { OfferRuleSheet } from "../components/rules/RuleSheet";
 import { type ToastAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { isTrashKey, useTrash } from "../components/Trash";
 import { IconButton } from "../components/ui/IconButton";
@@ -557,10 +557,9 @@ export default function Inbox() {
       {quickLook.view}
       {trash.view}
       {ruleOffer && (
-        <RuleSheet
+        <OfferRuleSheet
           key={`${ruleOffer.offer.drive_id}-${ruleOffer.offer.draft.id}`}
-          initial={ruleOffer.offer.draft}
-          replaces={ruleOffer.offer.kind === "update" ? (ruleOffer.offer.rule_id ?? undefined) : undefined}
+          offer={ruleOffer.offer}
           filed={ruleOffer.filed}
           onClose={() => setRuleOffer(null)}
         />

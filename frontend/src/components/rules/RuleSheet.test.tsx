@@ -49,7 +49,7 @@ describe("RuleSheet", () => {
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("button", { name: "kotihoito" })).toHaveAttribute("aria-pressed", "true");
     expect(within(sheet).getByRole("button", { name: "lasku" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(sheet).getByText(/This document:/)).toHaveTextContent("20. Health/2026/a.pdf");
+    expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/2026/a.pdf");
     expect(await within(sheet).findByText(/Matches 4 documents you filed before: 3 would land exactly where they are\./)).toBeInTheDocument();
     expect(within(sheet).getByText("10. Financial/a.pdf → 20. Health/2026/a.pdf")).toBeInTheDocument();
     expect(within(sheet).getByText("It also catches 2 documents in the inbox now.")).toBeInTheDocument();

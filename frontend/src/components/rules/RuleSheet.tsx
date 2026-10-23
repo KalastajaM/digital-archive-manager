@@ -9,7 +9,9 @@ import {
   type Rule,
   type RuleDraft,
   type RuleIn,
+  type RuleOffer,
   useReplay,
+  useRules,
   useSaveRule,
   useTrays,
 } from "../../api/client";
@@ -30,6 +32,37 @@ type Text = { off: boolean; value: string };
 const isDraft = (r: RuleDraft | Rule): r is RuleDraft => "words" in r;
 const text = (value: string | null): Text => ({ off: value === null, value: value ?? "" });
 
+/** The sheet an offer on the filed toast opens. "Make a rule…" starts from the draft;
+ * "Update rule …" starts from that rule as it is (its id, words and other conditions)
+ * with only the folder and name patterns of the filing just done. A rule that is gone
+ * by now is offered as a new one. */
+export function OfferRuleSheet({
+  offer,
+  filed,
+  onClose,
+}: {
+  offer: RuleOffer;
+  filed?: { folder: string; name: string };
+  onClose: () => void;
+}) {
+  const update = offer.kind === "update" && offer.rule_id ? offer.rule_id : null;
+  const rules = useRules();
+  const toast = useToast();
+  const failed = update !== null && rules.isError;
+  useEffect(() => {
+    if (!failed) return;
+    toast({ kind: "error", text: `Could not open rule ${update}: ${errorText(rules.error)}` });
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failed]);
+  if (update === null) return <RuleSheet initial={offer.draft} filed={filed} onClose={onClose} />;
+  if (!rules.data) return null;
+  const rule = rules.data.rules.find((r) => r.id === update);
+  if (!rule) return <RuleSheet initial={offer.draft} filed={filed} onClose={onClose} />;
+  const initial: Rule = { ...rule, then: { ...rule.then, folder: offer.draft.folder, name: offer.draft.name } };
+  return <RuleSheet initial={initial} replaces={rule.id} filed={filed} onClose={onClose} />;
+}
+
 export function RuleSheet({
   initial,
   replaces,
@@ -39,7 +72,7 @@ export function RuleSheet({
   initial: RuleDraft | Rule;
   /** The id of the rule this one takes the place of (an update, or an edit). */
   replaces?: string;
-  /** Offer mode: what was just filed, as the proof that the patterns give it. */
+  /** Offer mode: what was just filed (its folder and name, shown under the words). */
   filed?: { folder: string; name: string };
   onClose: () => void;
 }) {
@@ -138,7 +171,12 @@ export function RuleSheet({
     }
   };
   const canSave = ticked.length > 0 && tested !== null && !save.isPending;
-  const title = !draft ? `Edit rule ${initial.id}` : replaces ? `Update rule ${replaces}` : "Make a rule";
+  // an existing rule opened from a filing is an update of it
+  const title = draft
+    ? replaces
+      ? `Update rule ${replaces}`
+      : "Make a rule"
+    : `${filed ? "Update" : "Edit"} rule ${initial.id}`;
 
   const textField = (label: string, state: Text, set: (t: Text) => void, hint?: string) => (
     <div className="field rule-field">
@@ -216,9 +254,9 @@ export function RuleSheet({
             onBlur={addWord}
           />
         </div>
-        {draft && filed && (
+        {filed && (
           <p className="hint rule-filed">
-            This document: {visible(`${filed.folder}/${filed.name}`)}
+            Filed as: {visible(`${filed.folder}/${filed.name}`)}
           </p>
         )}
         {textField("Folder", folder, setFolder, "Patterns like {year} are filled in for each document.")}
