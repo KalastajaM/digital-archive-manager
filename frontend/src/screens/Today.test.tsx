@@ -148,6 +148,7 @@ const TODAY: TodayData = {
     { tray_id: "to-action", items: [ACTION] },
     { tray_id: "to-read", items: [READ] },
   ],
+  marked: 0,
 };
 
 const FOUND = {

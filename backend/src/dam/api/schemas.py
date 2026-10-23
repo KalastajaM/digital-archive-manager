@@ -1085,6 +1085,8 @@ class TodayOut(BaseModel):
     inbox_stats: InboxStatsOut
     found: list[FoundOut]
     open_items: list[TrayItemsOut]  # per tray in tray order, at most 8 each
+    # inbox files with a filing code (the File N marked button), flagged ones included
+    marked: int = 0
 
 
 # -- Phase 3: AI ---------------------------------------------------------------
@@ -1278,3 +1280,31 @@ class FilingCodeFoldersOut(BaseModel):
     # code inbox folders not in the inbox yet, and inbox subfolders that are no code's
     missing: list[str]
     stray: list[str]
+
+
+class FileRequestOut(BaseModel):
+    """A filing request as ``POST /api/inbox/file`` takes it (``FileRequestIn``)."""
+
+    drive_id: str
+    name: str
+    folder: str  # "" when nothing suggests one (the row needs input)
+    tags: list[str]
+    tray: str | None
+    tray_fields: dict[str, str]
+    collections: list[str]
+    note: str
+
+
+class BatchRowOut(BaseModel):
+    """A row of the File N marked batch: an inbox file with a filing code, the request
+    that files it and the tray fields that will be stored. ``flag``: why the row starts
+    unticked (``unclear``: a code read uncertainly, ``conflict``: codes disagree,
+    ``needs_input``: the filing would be refused); ``problem`` says what to fix
+    ("folder", a required tray field such as "due date", or the refusal)."""
+
+    drive_id: str
+    codes: list[CodeHitOut]
+    request: FileRequestOut
+    tray_fields: dict[str, str]
+    flag: Literal["unclear", "conflict", "needs_input"] | None
+    problem: str | None

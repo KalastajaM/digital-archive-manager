@@ -2022,6 +2022,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/filing-codes/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Batch
+         * @description The File N marked rows: each inbox file with a filing code, the request that files
+         *     it (post the ticked ones to ``/api/inbox/file``) and a flag when it needs a look.
+         *     Changes nothing.
+         */
+        get: operations["batch_api_filing_codes_batch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/archives": {
         parameters: {
             query?: never;
@@ -2506,6 +2528,29 @@ export interface components {
             error: string | null;
             /** Index Error */
             index_error: string | null;
+        };
+        /**
+         * BatchRowOut
+         * @description A row of the File N marked batch: an inbox file with a filing code, the request
+         *     that files it and the tray fields that will be stored. ``flag``: why the row starts
+         *     unticked (``unclear``: a code read uncertainly, ``conflict``: codes disagree,
+         *     ``needs_input``: the filing would be refused); ``problem`` says what to fix
+         *     ("folder", a required tray field such as "due date", or the refusal).
+         */
+        BatchRowOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Codes */
+            codes: components["schemas"]["CodeHitOut"][];
+            request: components["schemas"]["FileRequestOut"];
+            /** Tray Fields */
+            tray_fields: {
+                [key: string]: string;
+            };
+            /** Flag */
+            flag: ("unclear" | "conflict" | "needs_input") | null;
+            /** Problem */
+            problem: string | null;
         };
         /** BatchSummaryOut */
         BatchSummaryOut: {
@@ -3094,6 +3139,30 @@ export interface components {
              * Note
              * @default
              */
+            note: string;
+        };
+        /**
+         * FileRequestOut
+         * @description A filing request as ``POST /api/inbox/file`` takes it (``FileRequestIn``).
+         */
+        FileRequestOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Name */
+            name: string;
+            /** Folder */
+            folder: string;
+            /** Tags */
+            tags: string[];
+            /** Tray */
+            tray: string | null;
+            /** Tray Fields */
+            tray_fields: {
+                [key: string]: string;
+            };
+            /** Collections */
+            collections: string[];
+            /** Note */
             note: string;
         };
         /**
@@ -4320,6 +4389,11 @@ export interface components {
             found: components["schemas"]["FoundOut"][];
             /** Open Items */
             open_items: components["schemas"]["TrayItemsOut"][];
+            /**
+             * Marked
+             * @default 0
+             */
+            marked: number;
         };
         /** TrayCountOut */
         TrayCountOut: {
@@ -15428,6 +15502,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolvedOpOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    batch_api_filing_codes_batch_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchRowOut"][];
                 };
             };
             /** @description Bad Request */

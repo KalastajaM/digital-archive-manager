@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from dam.api.deps import UI_ORIGIN, AppDep
 from dam.api.schemas import (
     BatchResultOut,
+    BatchRowOut,
     FilingCodeFoldersOut,
     FilingCodeIn,
     FilingCodesOut,
@@ -15,6 +16,7 @@ from dam.api.schemas import (
 )
 from dam.app import App
 from dam.codes import folders
+from dam.codes.batch import marked_rows
 from dam.codes.model import FilingCode, confusable_with, format_validation
 from dam.services.errors import InvalidRequest
 
@@ -75,3 +77,11 @@ def code_folders_preview(app: AppDep) -> list:
 def create_code_folders(app: AppDep):
     """Make the missing code folders in the inbox: journaled, undoable while empty."""
     return folders.create_inbox_folders(app, origin=UI_ORIGIN)
+
+
+@router.get("/batch", response_model=list[BatchRowOut])
+def batch(app: AppDep) -> list:
+    """The File N marked rows: each inbox file with a filing code, the request that files
+    it (post the ticked ones to ``/api/inbox/file``) and a flag when it needs a look.
+    Changes nothing."""
+    return marked_rows(app)
