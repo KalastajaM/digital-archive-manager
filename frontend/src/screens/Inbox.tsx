@@ -1,24 +1,23 @@
-import { FileText, Image, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   archiveKey,
   errorText,
   type FileItResult,
-  type FileRecord,
   type FileRequest,
   type InboxEntry,
-  pageUrl,
-  rawUrl,
   type ResolvedOp,
   type TrayDef,
   useInbox,
   useStatus,
+  useToday,
   useTrays,
 } from "../api/client";
 import { useAddFiles } from "../components/AddFiles";
 import { scannedFields } from "../components/FileDetails";
 import { InboxEmpty } from "../components/InboxEmpty";
+import { MarkedBatch, markedFollowUps } from "../components/codes/MarkedBatch";
 import { useSetupFolders } from "../components/SetupFolders";
 import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
 import { useLocalToday } from "../components/RelativeDate";
@@ -27,6 +26,7 @@ import { isTrashKey, useTrash } from "../components/Trash";
 import { IconButton } from "../components/ui/IconButton";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { Tag } from "../components/ui/Tag";
+import { Thumb } from "../components/Thumb";
 import { Toolbar } from "../components/ui/Toolbar";
 import { type UndoTarget, useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
@@ -59,17 +59,17 @@ function summary(result: FileItResult): string {
   return `${result.done.length} change(s) applied`;
 }
 
-/** " · added to To pay, Sauna": the tray (if its items were created) and the
- * collections (unless a follow-up failed: its warning toast says what happened). */
+/** " · added to To pay, Sauna": the trays (if their items were created) and the
+ * collections (unless a follow-up failed: its warning toast says what happened). A
+ * marked batch gives each file its own, so every request's are named once. */
 function addedTo(result: FileItResult, requests: FileRequest[], trays: TrayDef[]): string {
-  const first = speaker(requests);
-  if (!first) return "";
-  const targets: string[] = [];
-  if (first.tray && result.items.length > 0) {
-    targets.push(trays.find((t) => t.id === first.tray)?.name ?? first.tray);
+  if (!speaker(requests)) return "";
+  const targets = new Set<string>();
+  if (result.items.length > 0) {
+    for (const r of requests) if (r.tray) targets.add(trays.find((t) => t.id === r.tray)?.name ?? r.tray);
   }
-  if (!result.follow_up_error) targets.push(...(first.collections ?? []));
-  return targets.length > 0 ? ` · added to ${targets.join(", ")}` : "";
+  if (!result.follow_up_error) for (const r of requests) for (const c of r.collections ?? []) targets.add(c);
+  return targets.size > 0 ? ` · added to ${[...targets].join(", ")}` : "";
 }
 
 const uniqueTags = (requests: FileRequest[]) => [...new Set(requests.flatMap((r) => r.tags ?? []))];
@@ -89,28 +89,6 @@ const KEYS: KeyHint[] = [
   [["u"], "undo"],
   [["⌘⌫"], "move to To Delete"],
 ];
-
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
-
-/** The list row's thumbnail: the first page (or the image), else a file icon. */
-function Thumb({ record }: { record: FileRecord }) {
-  const [failed, setFailed] = useState(false);
-  const ext = record.ext?.toLowerCase() ?? "";
-  const src = ext === "pdf" ? pageUrl(record.drive_id, 1, 400) : IMAGE_EXTS.has(ext) ? rawUrl(record.drive_id) : null;
-  if (!src || failed) {
-    const Icon = IMAGE_EXTS.has(ext) ? Image : FileText;
-    return (
-      <span className="thumb thumb-icon" aria-hidden="true">
-        <Icon size={18} strokeWidth={1.5} />
-      </span>
-    );
-  }
-  return (
-    <span className="thumb" aria-hidden="true">
-      <img src={src} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)} />
-    </span>
-  );
-}
 
 /** "due 15.10.2026 · 84,20 €" from the scan, red once the due date has passed. */
 function ScanChip({ prefill, today }: { prefill: Record<string, string>; today: string }) {
@@ -154,7 +132,10 @@ export default function Inbox() {
   const addFiles = useAddFiles();
   const setupFolders = useSetupFolders();
   // ``?file=<drive_id>`` starts on that file ("Mark paid & file it…" links here).
-  const [search] = useSearchParams();
+  // ``?marked=1`` shows the File N marked panel instead of the form.
+  const [search, setSearch] = useSearchParams();
+  const markedOpen = search.get("marked") === "1";
+  const marked = useToday().data?.marked ?? 0;
   const [selectedId, setSelectedId] = useState<string | null>(() => search.get("file"));
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // Where a ⇧-click range starts: the last plainly or ⌘-clicked entry.
@@ -410,13 +391,27 @@ export default function Inbox() {
           title="Inbox"
           subtitle={plural(entries.length, "file")}
           actions={
-            <IconButton
-              icon={<Upload />}
-              label="Add files…"
-              disabledReason="The inbox folder does not exist yet"
-              disabled={addFiles.busy || status.data?.inbox_exists === false}
-              onClick={addFiles.choose}
-            />
+            <>
+              {marked > 0 && (
+                <button
+                  type="button"
+                  className="marked-open"
+                  aria-pressed={markedOpen}
+                  disabled={locked}
+                  title="File every inbox file with a filing code, in one batch"
+                  onClick={() => setSearch({ marked: "1" })}
+                >
+                  File {marked} marked
+                </button>
+              )}
+              <IconButton
+                icon={<Upload />}
+                label="Add files…"
+                disabledReason="The inbox folder does not exist yet"
+                disabled={addFiles.busy || status.data?.inbox_exists === false}
+                onClick={addFiles.choose}
+              />
+            </>
           }
         />
         {entries.length === 0 ? (
@@ -486,7 +481,20 @@ export default function Inbox() {
       </nav>
       <Splitter split={split} label="Resize the list" />
       <section className="inbox-card" aria-label="Review">
-        {batch.length > 0 ? (
+        {markedOpen ? (
+          <MarkedBatch
+            entries={entries}
+            trays={trayList}
+            filing={filing}
+            onOpen={(id) => {
+              if (locked) return;
+              setChecked(new Set());
+              setSelectedId(id);
+              setSearch({});
+            }}
+            onClose={() => setSearch({})}
+          />
+        ) : batch.length > 0 ? (
           <BatchCard
             entries={batch}
             filing={filing}
@@ -510,8 +518,13 @@ export default function Inbox() {
         <ConfirmPlan
           planKey={snapshotKey(filing.confirm.requests)}
           ops={filing.confirm.ops}
-          tags={uniqueTags(filing.confirm.requests)}
-          followUps={followUpLines(filing.confirm.requests, trayList, filing.confirm.prefill)}
+          // a marked batch names each file's own tags in its line
+          tags={markedOpen ? undefined : uniqueTags(filing.confirm.requests)}
+          followUps={
+            markedOpen
+              ? markedFollowUps(filing.confirm.requests, trayList)
+              : followUpLines(filing.confirm.requests, trayList, filing.confirm.prefill)
+          }
           busy={filing.busy}
           confirmLabel="File"
           onConfirm={filing.confirmApply}

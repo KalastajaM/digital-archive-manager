@@ -558,6 +558,22 @@ main:has(> .inbox) { padding: 0; min-height: 0; display: flex; }
 .batch-arrow { color: var(--muted); }
 .batch-to { font-weight: 500; overflow-wrap: anywhere; }
 .batch-note { color: var(--orange-text); font-size: var(--fs-sm); }
+/* File N marked: one row per coded inbox file, exactly what will be filed */
+.marked-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); }
+.marked-body > .hint, .marked-body > .error, .marked-body > .notice { margin: 0 0 var(--sp-3); }
+.marked-list { list-style: none; margin: 0; padding: 0; }
+.marked-row { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3) var(--sp-2); border-bottom: 0.5px solid var(--hairline); }
+.marked-row > input[type="checkbox"] { flex: none; margin-top: 14px; }
+.marked-row > .link-button { flex: none; margin-top: 2px; }
+.marked-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.marked-main p { margin: 0; }
+.marked-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.marked-to { font-weight: 600; overflow-wrap: anywhere; }
+.marked-meta { color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.marked-label { display: inline-block; min-width: 72px; color: var(--muted); }
+.marked-flagged .marked-to { color: var(--muted); }
+.marked-main > .marked-flag { margin-top: var(--sp-1); font-size: var(--fs-sm); align-self: flex-start; }
+.card-actions .card-link + .card-link { margin-left: var(--sp-2); }
 
 /* A preview that fills its pane: the zoom frame takes the height left. */
 .preview-fill { display: flex; flex-direction: column; }

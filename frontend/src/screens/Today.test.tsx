@@ -576,6 +576,21 @@ describe("Today", () => {
     expect(within(inbox).queryByRole("list", { name: "Found in the inbox" })).not.toBeInTheDocument();
   });
 
+  it("the Inbox card's File N marked opens the marked panel, and is hidden when none are marked", async () => {
+    const { user } = renderToday({ "GET /api/today": { body: { ...TODAY, marked: 3 } } });
+    const inbox = await screen.findByRole("region", { name: "Inbox" });
+    const link = within(inbox).getByRole("link", { name: "File 3 marked" });
+    expect(link).toHaveAttribute("href", "/inbox?marked=1");
+    await user.click(link);
+    expect(screen.getByTestId("where")).toHaveTextContent("/inbox?marked=1");
+  });
+
+  it("the Inbox card has no File N marked when no file is marked", async () => {
+    renderToday();
+    const inbox = await screen.findByRole("region", { name: "Inbox" });
+    expect(within(inbox).queryByRole("link", { name: /marked/ })).not.toBeInTheDocument();
+  });
+
   it("an empty inbox says so, without a bar", async () => {
     renderToday({
       "GET /api/today": {

@@ -20,6 +20,8 @@ export type FilingCode = Schemas["FilingCodeIn"];
 export type FilingCodes = Schemas["FilingCodesOut"];
 export type CodeHit = Schemas["CodeHitOut"];
 export type CodeFolders = Schemas["FilingCodeFoldersOut"];
+/** A row of the File N marked batch: its codes, the request that files it and a flag. */
+export type BatchRow = Schemas["BatchRowOut"];
 export type UndoResult = Schemas["UndoResultOut"];
 export type Status = Schemas["StatusOut"];
 // several archives (profiles)
@@ -267,6 +269,8 @@ const keys = {
   ai: ["ai"],
   fileFields: ["file-fields"],
   filingCodes: ["filing-codes"],
+  // under the inbox's key: whatever reloads the inbox reloads the marked batch too
+  markedBatch: ["inbox", "marked"],
 } as const;
 
 const enc = encodeURIComponent;
@@ -1300,6 +1304,10 @@ export const useAIExcludeFolders = () => {
 
 /** The filing codes table, the entries of the file that were skipped (``problems``) and
  * codes that look like each other (``warnings``). */
+/** The File N marked rows (dry runs on the server, nothing changes). */
+export const useMarkedBatch = () =>
+  useQuery({ queryKey: keys.markedBatch, queryFn: () => get<BatchRow[]>("/api/filing-codes/batch") });
+
 export const useFilingCodes = () =>
   useQuery({ queryKey: keys.filingCodes, queryFn: () => get<FilingCodes>("/api/filing-codes") });
 
