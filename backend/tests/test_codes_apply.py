@@ -5,6 +5,7 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
+from dam.ai.tasks._common import rules_point_excluded
 from dam.api import create_api
 from dam.codes.apply import CodeHit, apply_codes, codes_for
 from dam.codes.model import FilingCode
@@ -43,12 +44,12 @@ def test_code_folder_beats_rule(app, fake_archive):
 
 def test_unset_fields_fall_back(app, fake_archive):
     add_rule(app, folder="10. Financial/Northpower", name="{doc_date:%Y%m%d}_Northpower")
-    add_in(app, fake_archive, f"{INBOX}/To pay/20261015_bill.pdf", "b1", NORTHPOWER_BILL)
+    add_in(app, fake_archive, f"{INBOX}/To pay/bill.pdf", "b1", NORTHPOWER_BILL)
     found = app.inbox.suggestion("b1")
     assert found.folder == "10. Financial/Northpower"
     assert found.folder_source == "rule:northpower"
-    # the name is already conventional, so the rule's name template is not used
-    assert (found.name, found.name_source) == ("20261015_bill.pdf", "scan")
+    # the text's date (Eräpäivä 15.11.2026) through the rule's name template
+    assert (found.name, found.name_source) == ("20261115_Northpower.pdf", "rule:northpower")
     assert found.tray == "to-pay"
     assert found.tray_source == "code:P"
     assert found.conflict is False
@@ -61,7 +62,7 @@ def test_as_suggested_changes_nothing(app, fake_archive):
     plain = app.inbox.suggestion("b0")
     found = app.inbox.suggestion("b1")
     assert found.codes == [CodeHit("F", "folder")]
-    assert dataclasses.replace(found, codes=[]) == plain
+    assert dataclasses.replace(found, codes=[], folder_before_codes=None) == plain
 
 
 def test_two_codes_conflict_on_folder():
@@ -148,3 +149,53 @@ def test_api_inbox_entry_has_code_fields(app, fake_archive):
     assert s["collections"] == []
     assert s["collection_sources"] == {}
     assert row["tray_guess"] == "to-pay"
+
+
+def name_code(template):
+    return {"N": FilingCode(code="N", name=template)}
+
+
+def test_code_name_skips_a_conventional_name():
+    out = apply_codes(
+        Suggestion(name="20261015_bill.pdf"),
+        [CodeHit("N", "folder")],
+        name_code("{doc_date:%Y%m%d}_{stem}"),
+        date(2026, 10, 15),
+        "20261015_bill",
+        "pdf",
+        SPECIAL,
+    )
+    assert (out.name, out.name_source) == ("20261015_bill.pdf", "scan")
+
+
+def test_code_name_renames_a_non_conventional_name():
+    out = apply_codes(
+        Suggestion(name="bill.pdf"),
+        [CodeHit("N", "folder")],
+        name_code("{doc_date:%Y%m%d}_{stem}"),
+        date(2026, 10, 15),
+        "bill",
+        "pdf",
+        SPECIAL,
+    )
+    assert (out.name, out.name_source) == ("20261015_bill.pdf", "code:N")
+
+
+def test_ai_guard_checks_the_rule_folder_under_a_code_folder(app, fake_archive):
+    app.settings.ai.exclude_folders = ["50. Medical"]
+    add_rule(app, folder="50. Medical/Lab")
+    set_code(app, "P", folder="Bills/{year}")
+    add_in(app, fake_archive, f"{INBOX}/To pay/bill.pdf", "b1", NORTHPOWER_BILL)
+    found = app.inbox.suggestion("b1")
+    assert (found.folder, found.folder_before_codes) == ("Bills/2026", "50. Medical/Lab")
+    why = rules_point_excluded(app, app.repo.get("b1"))
+    assert why is not None and "50. Medical/Lab" in why and "never sent" in why
+
+
+def test_ai_guard_checks_the_code_folder(app, fake_archive):
+    app.settings.ai.exclude_folders = ["50. Medical"]
+    add_rule(app, folder="10. Financial/Northpower")
+    set_code(app, "P", folder="50. Medical/{year}")
+    add_in(app, fake_archive, f"{INBOX}/To pay/bill.pdf", "b1", NORTHPOWER_BILL)
+    why = rules_point_excluded(app, app.repo.get("b1"))
+    assert why is not None and "50. Medical/2026" in why

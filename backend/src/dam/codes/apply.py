@@ -6,6 +6,7 @@ from datetime import date
 from typing import Protocol
 
 from dam.config import SpecialFolders
+from dam.core.naming import matches_convention
 from dam.index.repo import FileRecord, FileRepo
 from dam.rules.engine import CodeHit, Suggestion, TemplateError, _render_folder, _render_name
 
@@ -46,7 +47,13 @@ def apply_codes(
     collections are united; for the folder, name and tray the first code wins and a
     different value from a later code sets ``conflict``. A code whose template does not
     render for this file sets nothing for that field (source noted with " (template
-    error)"). An ``as_suggested`` code, or one not in ``codes``, sets nothing."""
+    error)"). An ``as_suggested`` code, or one not in ``codes``, sets nothing.
+
+    As in the rules engine, a code's name template is not used when the suggested name
+    already follows the naming convention (it would add the date twice). When a code
+    sets the tray, ``payee`` deliberately stays as the rules and the scan found it: a
+    code names no payee, and the detected one is still the best prefill.
+    ``folder_before_codes`` keeps the earlier folder for the AI exclusion guard."""
     out = dataclasses.replace(
         found,
         tags=list(found.tags),
@@ -55,7 +62,9 @@ def apply_codes(
         collections=list(found.collections),
         collection_sources=dict(found.collection_sources),
         codes=[*found.codes, *hits],
+        folder_before_codes=found.folder,
     )
+    conventional = matches_convention(found.name)
     suffix = f".{ext}" if ext else ""
     set_by_code: dict[str, str] = {}  # field -> the value the first code gave
 
@@ -79,7 +88,7 @@ def apply_codes(
                 put("folder", _render_folder(fc.folder, doc_date, stem, special), fc.code)
             except TemplateError:
                 errored = True
-        if fc.name is not None:
+        if fc.name is not None and not conventional:
             try:
                 put("name", _render_name(fc.name, doc_date, stem, ext) + suffix, fc.code)
             except TemplateError:

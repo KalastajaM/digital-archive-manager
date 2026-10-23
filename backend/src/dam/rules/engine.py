@@ -24,7 +24,10 @@ _BIG_NUMBER = re.compile(r"\d{4,}")
 @dataclass
 class CodeHit:
     """A filing code found for a file: by the inbox folder it is in, a pen mark or a QR
-    sticker. ``raw`` is what was read (pen, QR); ``unclear``: the reading is uncertain."""
+    sticker. ``raw`` is what was read (pen, QR); ``unclear``: the reading is uncertain.
+
+    It belongs with ``dam.codes.apply`` (which re-exports it) and lives here only to
+    avoid an import cycle (``dam.codes.model`` imports this module)."""
 
     code: str
     via: Literal["folder", "pen", "qr"]
@@ -55,6 +58,9 @@ class Suggestion:
     codes: list[CodeHit] = field(default_factory=list)
     # two codes gave different values for the folder, name or tray (the first is kept)
     conflict: bool = False
+    # the folder the rules (or similar files) gave before codes were applied; the AI
+    # exclusion guard checks it as well as ``folder`` (None: no code was applied)
+    folder_before_codes: str | None = None
 
 
 class TemplateError(ValueError):
@@ -250,7 +256,8 @@ def suggest(
         final = prefix + _fit(stem, prefix, suffix) + suffix
 
     # tray and payee come from one rule, never mixed: the one that gave the folder,
-    # else (no rule gave one) the first matching rule that names a tray or a payee
+    # else (no rule gave one) the first matching rule that names a tray or a payee.
+    # (A filing code may later replace the tray and keep this payee: ``apply_codes``.)
     tray_rule = folder_rule or next(
         (r for r in matching if r.then.tray is not None or r.then.payee is not None), None
     )

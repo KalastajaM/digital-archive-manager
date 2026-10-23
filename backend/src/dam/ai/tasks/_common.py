@@ -59,14 +59,19 @@ def rules_point_excluded(app: "App", rec: FileRecord) -> str | None:
 
     ``Suggestion.folder`` is the folder of the FIRST matching rule (in rule-file order)
     that names one; later matching rules' folders are not looked at, just as filing
-    would never use them."""
+    would never use them. When a filing code replaced that folder, both the earlier
+    folder and the code's are checked: a code never makes such a file sendable."""
     if not is_under(rec.path, app.settings.special_folders.inbox, strict=True):
         return None
-    folder = app.inbox.suggestion(rec.drive_id).folder
-    hit = guard.excluded_folder(folder, app.settings.ai.exclude_folders) if folder else None
-    if hit is None:
-        return None
-    return f"{rec.name}: the rules suggest {folder}, an excluded folder ({hit}); it is never sent"
+    found = app.inbox.suggestion(rec.drive_id)
+    for folder in (found.folder_before_codes, found.folder):
+        hit = guard.excluded_folder(folder, app.settings.ai.exclude_folders) if folder else None
+        if hit is not None:
+            return (
+                f"{rec.name}: the rules suggest {folder}, an excluded folder ({hit}); "
+                "it is never sent"
+            )
+    return None
 
 
 @dataclass(frozen=True)
