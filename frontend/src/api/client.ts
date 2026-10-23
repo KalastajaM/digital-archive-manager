@@ -16,6 +16,9 @@ export type FileBody = Omit<Schemas["FileBody"], "requests"> & { requests: FileR
 export type ResolvedOp = Schemas["ResolvedOpOut"];
 export type FileItResult = Schemas["FileItResultOut"];
 export type BatchResult = Schemas["BatchResultOut"];
+export type FilingCode = Schemas["FilingCodeIn"];
+export type FilingCodes = Schemas["FilingCodesOut"];
+export type CodeFolders = Schemas["FilingCodeFoldersOut"];
 export type UndoResult = Schemas["UndoResultOut"];
 export type Status = Schemas["StatusOut"];
 // several archives (profiles)
@@ -262,6 +265,7 @@ const keys = {
   file: ["file"],
   ai: ["ai"],
   fileFields: ["file-fields"],
+  filingCodes: ["filing-codes"],
 } as const;
 
 const enc = encodeURIComponent;
@@ -1290,6 +1294,48 @@ export const useAIExcludeFolders = () => {
     mutationFn: (folders: string[]) => put<AIStatus>("/api/ai/exclude-folders", { folders }),
     onSuccess: (status) => client.setQueryData([...keys.ai, "status"], status),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.ai }),
+  });
+};
+
+/** The filing codes table, the entries of the file that were skipped (``problems``) and
+ * codes that look like each other (``warnings``). */
+export const useFilingCodes = () =>
+  useQuery({ queryKey: keys.filingCodes, queryFn: () => get<FilingCodes>("/api/filing-codes") });
+
+/** Replace the whole table (the old file is kept as a backup); a 400 says why not. */
+export const useSaveFilingCodes = () => {
+  const client = useQueryClient();
+  const refresh = useRefresh(); // the inbox rows and Today read the codes
+  return useMutation({
+    mutationFn: (codes: FilingCode[]) => put<FilingCodes>("/api/filing-codes", codes),
+    onSuccess: (saved) => client.setQueryData(keys.filingCodes, saved),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.filingCodes }); // also the folders below it
+      refresh();
+    },
+  });
+};
+
+/** The codes' inbox folders that are missing, and inbox subfolders that are no code's. */
+export const useCodeFolders = () =>
+  useQuery({
+    queryKey: [...keys.filingCodes, "folders"],
+    queryFn: () => get<CodeFolders>("/api/filing-codes/folders"),
+  });
+
+/** What "Create inbox folders" would do (nothing changes on disk). */
+export const previewCodeFolders = () => post<ResolvedOp[]>("/api/filing-codes/folders/preview");
+
+/** Make the missing code folders in the inbox (one batch, undoable from Activity). */
+export const useCreateCodeFolders = () => {
+  const client = useQueryClient();
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: () => post<BatchResult>("/api/filing-codes/folders"),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.filingCodes });
+      refresh();
+    },
   });
 };
 

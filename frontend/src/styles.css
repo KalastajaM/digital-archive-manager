@@ -1836,3 +1836,15 @@ button.primary.danger:hover:not(:disabled), button.primary.danger:active:not(:di
 .tray-add-file { white-space: nowrap; flex: none; }
 /* An AI action with its own words ("Summarize with AI…"): the sparkle before the text. */
 button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Settings: one section per area (filing codes first) */
+.settings { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) var(--sp-5) var(--sp-8); }
+.settings-body > section { max-width: 960px; margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
+.settings-body h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.filing-codes-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.filing-code-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--sp-2); align-items: end; padding-bottom: var(--sp-3); border-bottom: 0.5px solid var(--hairline); }
+.filing-code-row label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
+.filing-code-row label.check { flex-direction: row; align-items: center; gap: var(--sp-2); }
+.filing-code-row .hint { grid-column: 1 / -1; margin: 0; }
+.filing-codes-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }

@@ -12,6 +12,7 @@ import {
   MessageCircleQuestion,
   ListTodo,
   type LucideIcon,
+  Settings,
   Sun,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -460,6 +461,7 @@ export function Sidebar({ footer }: Props) {
             <Row to="/browse" icon={FolderTree} label="Browse" />
             <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
             <Row to="/activity" icon={History} label="Activity" />
+            <Row to="/settings" icon={Settings} label="Settings" />
             <Row to="/help" icon={CircleHelp} label="Help" />
           </Section>
         </ul>

@@ -91,12 +91,24 @@ describe("App shell", () => {
       ["Browse", "/browse"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
+      ["Settings", "/settings"],
       ["Help", "/help"],
     ]);
     expect(within(nav).getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page");
     expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)$/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Run recovery" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Archive unavailable" })).not.toBeInTheDocument();
+  });
+
+  it("routes /settings to the Filing codes section", async () => {
+    mockFetch({
+      "GET /api/status": { body: STATUS },
+      ...BASE,
+      "GET /api/filing-codes": { body: { codes: [], problems: [], warnings: [] } },
+      "GET /api/filing-codes/folders": { body: { missing: [], stray: [] } },
+    });
+    renderApp("/settings");
+    expect(await screen.findByRole("region", { name: "Filing codes" })).toBeInTheDocument();
   });
 
   it("keeps the inbox at /inbox, routes the screens", async () => {

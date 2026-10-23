@@ -8,6 +8,7 @@ import { hasBand } from "./components/archivePalette";
 import { EmptyState } from "./components/ui/EmptyState";
 import { Sidebar } from "./components/ui/Sidebar";
 import Activity from "./screens/Activity";
+import SettingsScreen from "./screens/Settings";
 import Ask from "./screens/Ask";
 import Browse from "./screens/Browse";
 import FirstRun from "./screens/FirstRun";
@@ -136,6 +137,7 @@ function Shell() {
             <Route path="/browse" element={<Browse />} />
             <Route path="/ask" element={<Ask />} />
             <Route path="/activity" element={<Activity />} />
+            <Route path="/settings" element={<SettingsScreen />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
