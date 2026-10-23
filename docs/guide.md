@@ -107,6 +107,11 @@ to open the folder, and **Choose files…**, which *copies* files into the inbox
 originals stay; up to 200 MB each; a name already taken gets `_2`). Undo of a copy moves
 it to `##. To Delete`.
 
+You can also drop files or folders from Finder (or Explorer) on the Inbox list; they are
+copied the same way. A folder's files at any depth land side by side in the inbox (its
+subfolders are not kept), hidden files such as `.DS_Store` are left out, and one drop
+copies at most 100 files. Documents dragged inside dam are never taken by the Inbox.
+
 ### New folders
 
 **New folder** in Browse (toolbar or ⇧⌘N) adds a name row in the folder you are in, with

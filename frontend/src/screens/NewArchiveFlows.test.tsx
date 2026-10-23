@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import type { DirEntry, ResolvedOp } from "../api/client";
+import { DRAG_TYPE } from "../dnd";
 import { type Call, mockFetch, renderWithProviders, undoButton } from "../test-utils";
 import Browse from "./Browse";
 import Inbox from "./Inbox";
@@ -106,6 +107,81 @@ describe("the empty inbox", () => {
     expect(screen.queryByRole("button", { name: /Choose files/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Set up folders…" }));
     expect(await screen.findByRole("dialog", { name: "Set up folders" })).toBeInTheDocument();
+  });
+});
+
+/** A file or folder as the browser's entries API hands a Finder drop over. */
+type FakeEntry = { name: string; isFile: boolean; isDirectory: boolean; file?: (ok: (f: File) => void) => void; createReader?: () => unknown };
+const fileEntry = (name: string): FakeEntry => ({ name, isFile: true, isDirectory: false, file: (ok) => ok(new File(["x"], name)) });
+const folderEntry = (name: string, children: FakeEntry[]): FakeEntry => ({
+  name,
+  isFile: false,
+  isDirectory: true,
+  createReader: () => {
+    let read = false; // one batch, then the empty one that ends it
+    return { readEntries: (ok: (e: FakeEntry[]) => void) => ok(read ? [] : ((read = true), children)) };
+  },
+});
+/** The drag data of a drop from Finder: the type "Files" and one item per dropped entry. */
+const finderDrop = (entries: FakeEntry[]) => ({
+  types: ["Files"],
+  items: entries.map((e) => ({ kind: "file", webkitGetAsEntry: () => e })),
+  files: [],
+  effectAllowed: "all",
+  dropEffect: "none",
+});
+const uploaded = (calls: Call[]) => posts(calls, "/api/inbox/upload").map((c) => new URL(c.url, "http://x").searchParams.get("name"));
+
+describe("dropping from Finder on the inbox list", () => {
+  const upload = { "POST /api/inbox/upload": () => ({ body: batch("u1") }) };
+
+  it("copies dropped files and every file in a dropped folder, flat, leaving out hidden ones", async () => {
+    const calls = renderInbox(true, upload);
+    await screen.findByText("The inbox is empty.");
+    const list = screen.getByRole("navigation", { name: "Inbox" });
+    const dt = finderDrop([
+      fileEntry("bill.pdf"),
+      folderEntry("Scans", [fileEntry("a.pdf"), fileEntry(".DS_Store"), folderEntry("2026", [fileEntry("b.pdf")]), folderEntry(".git", [fileEntry("c")])]),
+    ]);
+    fireEvent.dragEnter(list, { dataTransfer: dt });
+    expect(list).toHaveAttribute("data-drop", "over");
+    fireEvent.drop(list, { dataTransfer: dt });
+    expect(await screen.findByText(/Copied 3 files into the inbox\. Left out 2 hidden files\./)).toBeInTheDocument();
+    expect(uploaded(calls)).toEqual(["bill.pdf", "a.pdf", "b.pdf"]);
+  });
+
+  it("ignores a drag of the app's own documents", async () => {
+    const calls = renderInbox(true, upload);
+    await screen.findByText("The inbox is empty.");
+    const list = screen.getByRole("navigation", { name: "Inbox" });
+    const dt = { ...finderDrop([fileEntry("x.pdf")]), types: [DRAG_TYPE], getData: () => JSON.stringify({ ids: ["f1"] }) };
+    fireEvent.dragEnter(list, { dataTransfer: dt });
+    expect(list).not.toHaveAttribute("data-drop");
+    fireEvent.drop(list, { dataTransfer: dt });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(posts(calls, "/api/inbox/upload")).toHaveLength(0);
+  });
+
+  it("refuses a drop of too many files, sending none", async () => {
+    const calls = renderInbox(true, upload);
+    await screen.findByText("The inbox is empty.");
+    const many = Array.from({ length: 101 }, (_, i) => fileEntry(`f${i}.pdf`));
+    fireEvent.drop(screen.getByRole("navigation", { name: "Inbox" }), { dataTransfer: finderDrop([folderEntry("Documents", many)]) });
+    expect(await screen.findByText(/Not copied: that is 101 files; drop at most 100 at a time\./)).toBeInTheDocument();
+    expect(posts(calls, "/api/inbox/upload")).toHaveLength(0);
+  });
+
+  it("refuses a drop while the inbox folder does not exist", async () => {
+    const calls = renderInbox(false, { ...upload, "GET /api/layout/templates": { body: { templates: [], special_folders: [] } } });
+    await screen.findByText("The inbox folder is not there yet.");
+    const list = screen.getByRole("navigation", { name: "Inbox" });
+    const dt = finderDrop([fileEntry("bill.pdf")]);
+    fireEvent.dragEnter(list, { dataTransfer: dt });
+    expect(list).toHaveAttribute("data-drop", "refused");
+    expect(list).toHaveAttribute("data-tip", "The inbox folder does not exist yet");
+    fireEvent.drop(list, { dataTransfer: dt });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(posts(calls, "/api/inbox/upload")).toHaveLength(0);
   });
 });
 

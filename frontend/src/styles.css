@@ -1740,6 +1740,9 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 .starred-list .starred-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .starred-list .starred-name[data-quicklook]:focus-visible { outline: 2px solid var(--focus-ring); border-radius: var(--r-sm); }
 .starred-actions { display: inline-flex; gap: 2px; flex: none; }
+.starred-list .starred-actions { opacity: 0; transition: opacity var(--motion) var(--ease); }
+.starred-list li:hover .starred-actions, .starred-list li:focus-within .starred-actions { opacity: 1; }
+@media (hover: none) { .starred-list .starred-actions { opacity: 1; } }
 .convert-choice { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-2); }
 .convert-choice label { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .important-page { flex-direction: column; }

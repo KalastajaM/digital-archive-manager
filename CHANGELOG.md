@@ -14,8 +14,8 @@ All notable changes are listed here. The format follows
   tray, folder, name pattern, tags and collections. Five come with dam (A, P, R, F and
   D for "file as suggested": already handled, file it where dam suggests, in no tray).
   Edit them in Settings → Filing codes, with a warning when two codes are easy to
-  confuse if you write codes by hand. The table is kept in `config/filing_codes.yaml`; comments written in that file
-  by hand are not kept when you save from the app.
+  confuse if you write codes by hand. The table is kept in `config/filing_codes.yaml`;
+  comments written in that file by hand are not kept when you save from the app.
 - Inbox folders for filing codes: Settings → Filing codes → Create inbox folders makes
   the missing ones in `##. Organize`, after a preview and with Undo. Files directly in a
   code's folder show in the Inbox with that code, and filing rules for the inbox
@@ -39,6 +39,9 @@ All notable changes are listed here. The format follows
   that needs input is fixed in the form. File files the ticked rows as one batch with
   one Undo. "Reading filing codes…" shows next to it while new scans are still read for
   stickers.
+- Drop files or folders from Finder (or Explorer) on the Inbox list to copy them into the
+  inbox, as Choose files… does. A folder's files land side by side, hidden files are left
+  out, and one drop takes at most 100 files.
 - Activity → AI lists the excluded folders (never sent to AI) and lets you add or remove
   them, with a folder picker; a folder not in the archive is marked. The change applies
   at once and is saved in settings.yaml. Removing one asks first, since its documents
@@ -141,6 +144,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Today's Starred card shows a file's buttons (Quick Look, Open, Show in Finder, Remove
+  the star) only for the row under the pointer or with keyboard focus, so the list reads
+  calmer. On touch screens they stay visible.
 - Renaming works the same way everywhere, as in Finder: the name turns into a field in
   place, Enter saves, Esc cancels. A collection is renamed in its title (no separate
   form, and the ⋯ menu says Rename), an archive in Manage archives with a pencil button.
