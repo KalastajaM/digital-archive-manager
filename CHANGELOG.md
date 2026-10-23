@@ -8,6 +8,9 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Drop files or folders from Finder (or Explorer) on the Inbox list to copy them into the
+  inbox, as Choose files… does. A folder's files land side by side, hidden files are left
+  out, and one drop takes at most 100 files.
 - Activity → AI lists the excluded folders (never sent to AI) and lets you add or remove
   them, with a folder picker; a folder not in the archive is marked. The change applies
   at once and is saved in settings.yaml. Removing one asks first, since its documents
