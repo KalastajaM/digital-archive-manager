@@ -69,6 +69,18 @@ file_barcodes = Table(
     Column("read_at", Float, nullable=False),
 )
 
+# The dam QR stickers read from page 1 of the file's scan (migration 0026): ``reads`` is
+# a JSON list of ``QrRead`` (``[]``: read, none found). Same lifetime as
+# ``file_barcodes``: a row for other content than ``sha256`` is ignored and read again.
+file_qr_codes = Table(
+    "file_qr_codes",
+    metadata,
+    Column("drive_id", Text, ForeignKey("files.drive_id"), primary_key=True),
+    Column("sha256", Text, nullable=True),
+    Column("reads", Text, nullable=False),
+    Column("read_at", Float, nullable=False),
+)
+
 tags = Table(
     "tags",
     metadata,

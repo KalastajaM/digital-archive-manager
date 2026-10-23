@@ -1,4 +1,5 @@
-"""Read Finnish bank barcodes off scans (PDF and JPG/PNG) with zxing-cpp."""
+"""Read Finnish bank barcodes and dam filing-code QR stickers off scans (PDF and
+JPG/PNG) with zxing-cpp."""
 
 import io
 import logging
@@ -9,6 +10,7 @@ import zxingcpp
 from PIL import Image
 
 from dam.bills.barcode import BarcodeError, parse
+from dam.codes.qr import QrRead, read_qr
 from dam.pdfium import PDFIUM_LOCK
 
 log = logging.getLogger(__name__)
@@ -43,6 +45,13 @@ def read_barcodes(path: Path, ext: str, data: bytes | None = None) -> list[str]:
     order, without duplicates; only codes ``parse`` accepts. ``data`` is the file's bytes
     when already read (else ``path`` is opened). Never raises: any error is logged and
     gives no codes."""
+    return read_page1(path, ext, data)[0]
+
+
+def read_page1(path: Path, ext: str, data: bytes | None = None) -> tuple[list[str], list[QrRead]]:
+    """The bank barcodes (as ``read_barcodes``: up to ``MAX_PAGES`` pages) and the dam
+    QR stickers on page 1, from one render of the pages. Never raises: an error is
+    logged and gives nothing for the part it hit."""
     ext = ext.lower().lstrip(".")
     try:
         if ext == "pdf":
@@ -50,11 +59,19 @@ def read_barcodes(path: Path, ext: str, data: bytes | None = None) -> list[str]:
         elif ext in IMAGE_EXTS:
             images = _image(path, data)
         else:
-            return []
+            return [], []
+    except Exception:
+        log.warning("barcode reading failed for %s", path, exc_info=True)
+        return [], []
+    return _bank_codes(path, images), _stickers(path, images[0] if images else None)
+
+
+def _bank_codes(path: Path, images: list[Image.Image]) -> list[str]:
+    try:
         found: list[str] = []
         for image in images:
             for hit in zxingcpp.read_barcodes(
-                image, formats=zxingcpp.BarcodeFormat.Code128, text_mode=zxingcpp.TextMode.Plain
+                image, formats=(zxingcpp.BarcodeFormat.Code128,), text_mode=zxingcpp.TextMode.Plain
             ):
                 try:
                     parse(hit.text)
@@ -65,4 +82,14 @@ def read_barcodes(path: Path, ext: str, data: bytes | None = None) -> list[str]:
         return found
     except Exception:
         log.warning("barcode reading failed for %s", path, exc_info=True)
+        return []
+
+
+def _stickers(path: Path, page: Image.Image | None) -> list[QrRead]:
+    if page is None:
+        return []
+    try:
+        return read_qr(page)
+    except Exception:
+        log.warning("QR sticker reading failed for %s", path, exc_info=True)
         return []

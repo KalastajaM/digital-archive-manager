@@ -1,18 +1,29 @@
 """File index repository."""
 
+import json
 import time
 from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from datetime import date
 from pathlib import PurePosixPath
 
 from sqlalchemy import Connection, Engine, and_, case, false, func, not_, or_, select, text, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from dam.codes.qr import QrRead
 from dam.core.paths import nfc
 from dam.db.engine import write_tx
-from dam.db.tables import file_barcodes, file_tags, file_text, files, item_files, items, tags
+from dam.db.tables import (
+    file_barcodes,
+    file_qr_codes,
+    file_tags,
+    file_text,
+    files,
+    item_files,
+    items,
+    tags,
+)
 from dam.extract.base import ExtractedText
 from dam.rules.model import fold
 
@@ -22,7 +33,7 @@ def ext_of(name: str, is_dir: bool | None) -> str | None:
     return None if is_dir else PurePosixPath(name).suffix.lower().lstrip(".")
 
 
-# the extensions the barcode pass reads (``read_barcodes``)
+# the extensions the barcode pass reads (``read_page1``)
 BARCODE_EXTS = ("pdf", "jpg", "jpeg", "png")
 
 PARKED = "/parked/"  # no archive-relative path starts with "/"
@@ -369,10 +380,48 @@ class FileRepo:
             )
         return True
 
+    def qr_for(self, drive_id: str) -> list[QrRead]:
+        """The QR stickers read from the file's current content; ``[]`` if none were
+        found or none were read (or they were read from content the file no longer has)."""
+        with self._conn() as conn:
+            reads = conn.execute(
+                select(file_qr_codes.c.reads)
+                .join(files, files.c.drive_id == file_qr_codes.c.drive_id)
+                .where(
+                    file_qr_codes.c.drive_id == drive_id,
+                    files.c.sha256 == file_qr_codes.c.sha256,
+                )
+            ).scalar()
+        return [QrRead(**r) for r in json.loads(reads)] if reads else []
+
+    def save_qr(self, drive_id: str, sha256: str, reads: Sequence[QrRead]) -> bool:
+        """Record the QR stickers read from content ``sha256`` (``[]``: none found). Not
+        saved (False) when the file's content is no longer ``sha256``."""
+        with self._conn(write=True) as conn:
+            current = conn.execute(
+                select(files.c.sha256).where(files.c.drive_id == drive_id)
+            ).scalar()
+            if current is None or current != sha256:
+                return False
+            stmt = sqlite_insert(file_qr_codes).values(
+                drive_id=drive_id,
+                sha256=sha256,
+                reads=json.dumps([asdict(r) for r in reads]),
+                read_at=time.time(),
+            )
+            conn.execute(
+                stmt.on_conflict_do_update(
+                    index_elements=["drive_id"],
+                    set_={c: stmt.excluded[c] for c in ("sha256", "reads", "read_at")},
+                )
+            )
+        return True
+
     def next_for_barcodes(
         self, limit: int, tray_ids: Collection[str], skip: Collection[str] = ()
     ) -> list[FileRecord]:
-        """Indexed PDFs and images with no barcode reading for their current content:
+        """Indexed PDFs and images with no barcode reading for their current content
+        (or, in the inbox, no QR sticker reading for it: files read before 0026):
         inbox files first, then the files of open items in ``tray_ids``, by path.
         ``skip``: drive ids to leave out (reads that timed out, waiting to retry)."""
         in_inbox = self._in_inbox()
@@ -389,6 +438,14 @@ class FileRepo:
             )
             .exists()
         )
+        qr_read = (
+            select(file_qr_codes.c.drive_id)
+            .where(
+                file_qr_codes.c.drive_id == files.c.drive_id,
+                file_qr_codes.c.sha256 == files.c.sha256,
+            )
+            .exists()
+        )
         stmt = (
             select(files)
             .where(
@@ -400,7 +457,7 @@ class FileRepo:
                 files.c.sha256.is_not(None),
                 files.c.ext.in_(BARCODE_EXTS),
                 or_(in_inbox, in_items),
-                not_(read),
+                or_(not_(read), and_(in_inbox, not_(qr_read))),
                 files.c.drive_id.not_in(list(skip)),
             )
             .order_by(in_inbox.desc(), files.c.path)
@@ -435,6 +492,7 @@ class FileRepo:
         for drive_id in ids:
             conn.execute(file_tags.delete().where(file_tags.c.drive_id == drive_id))
             conn.execute(file_barcodes.delete().where(file_barcodes.c.drive_id == drive_id))
+            conn.execute(file_qr_codes.delete().where(file_qr_codes.c.drive_id == drive_id))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
             conn.execute(files.delete().where(files.c.drive_id == drive_id))
@@ -501,10 +559,10 @@ class FileRepo:
 
     def rekey(self, old_id: str, new_id: str) -> None:
         """Replace a synthetic id by the real one, carrying text, fts, tags and the
-        barcode along."""
+        barcode and QR sticker reads along."""
         with self._conn(write=True) as conn:
             conn.exec_driver_sql("PRAGMA defer_foreign_keys = ON")
-            for table in (file_text, file_tags, file_barcodes, files):
+            for table in (file_text, file_tags, file_barcodes, file_qr_codes, files):
                 conn.execute(
                     update(table).where(table.c.drive_id == old_id).values(drive_id=new_id)
                 )

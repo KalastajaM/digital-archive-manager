@@ -132,13 +132,13 @@ def _indexed_before_0009(fake_archive, repo, rel, drive_id, widths=None):
 
 def _counting(monkeypatch):
     calls: list[str] = []
-    real = content.read_barcodes
+    real = content.read_page1
 
     def counted(path, ext, data=None):
         calls.append(path.name)
         return real(path, ext, data)
 
-    monkeypatch.setattr(content, "read_barcodes", counted)
+    monkeypatch.setattr(content, "read_page1", counted)
     return calls
 
 
@@ -274,7 +274,7 @@ def test_read_barcodes_crash_in_the_pass_is_contained(fake_archive, engine, monk
     def boom(*_a, **_k):
         raise RuntimeError("unexpected")
 
-    monkeypatch.setattr(content, "read_barcodes", boom)
+    monkeypatch.setattr(content, "read_page1", boom)
     repo, indexer = _indexer(fake_archive, engine)
     _indexed_before_0009(fake_archive, repo, f"{INBOX}/bill.pdf", "d1", modules(CODE))
     assert indexer.run_barcodes_once() == 1
@@ -300,9 +300,9 @@ def test_barcode_time_has_its_own_budget(fake_archive, engine, monkeypatch):
 
     def slow(*_a, **_k):
         release.wait(5)
-        return [CODE]
+        return [CODE], []
 
-    monkeypatch.setattr(content, "read_barcodes", slow)
+    monkeypatch.setattr(content, "read_page1", slow)
     clock = _Clock()
     monkeypatch.setattr(content, "time", clock)
     # extraction's timeout is tiny: barcode reading never runs inside it
@@ -332,7 +332,7 @@ def test_barcode_time_has_its_own_budget(fake_archive, engine, monkeypatch):
 
 
 def test_a_finished_read_that_found_nothing_is_recorded(fake_archive, engine, monkeypatch):
-    monkeypatch.setattr(content, "read_barcodes", lambda *_a, **_k: [])
+    monkeypatch.setattr(content, "read_page1", lambda *_a, **_k: ([], []))
     repo, indexer = _indexer(fake_archive, engine)
     _indexed_before_0009(fake_archive, repo, f"{INBOX}/plain.pdf", "d1", OTHER)
     assert indexer.run_barcodes_once() == 1
@@ -385,7 +385,7 @@ def test_migrations_upgrade_an_existing_db(tmp_path: Path, new_engine):
         cols = {r[1]: r[3] for r in conn.execute(text("PRAGMA table_info(file_barcodes)"))}
         assert conn.execute(text("SELECT count(*) FROM files")).scalar() == 1
         assert conn.execute(text("SELECT code FROM file_barcodes")).scalar() == CODE
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0025"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0026"
     assert list(cols) == ["drive_id", "code", "sha256", "read_at"]
     assert cols["code"] == 0 and cols["read_at"] == 1  # code nullable: "none found"
     engine.dispose()

@@ -12,7 +12,7 @@ from sqlalchemy import Engine
 
 from dam.core.paths import ArchivePaths
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
-from dam.index.barcodes import read_barcodes
+from dam.index.barcodes import read_page1
 from dam.index.repo import FileRecord, FileRepo
 
 log = logging.getLogger(__name__)
@@ -223,13 +223,13 @@ class ContentIndexer:
     # -- the barcode pass ------------------------------------------------------
 
     def run_barcodes_once(self, limit: int = 1) -> int:
-        """Read bank barcodes off up to ``limit`` indexed PDFs and images (inbox files,
-        then open items' files in ``barcode_trays``) that have no reading for their
-        current content; record each finished read, "none found" included, so a file is
-        read again only when its sha256 changes. Each read has ``barcode_timeout_s``: a
-        read that times out is not recorded, and the file waits ``barcode_retry_s``
-        before a later pass tries it again. Content indexing is never involved. Returns
-        the number of files attempted."""
+        """Read bank barcodes and filing-code QR stickers off up to ``limit`` indexed PDFs
+        and images (inbox files, then open items' files in ``barcode_trays``) that have no
+        reading for their current content; record each finished read, "none found"
+        included, so a file is read again only when its sha256 changes. Each read has
+        ``barcode_timeout_s``: a read that times out is not recorded, and the file waits
+        ``barcode_retry_s`` before a later pass tries it again. Content indexing is
+        never involved. Returns the number of files attempted."""
         if self._closed:
             return 0
         with self._lock:
@@ -257,7 +257,8 @@ class ContentIndexer:
         return done
 
     def _read_barcode(self, rec: FileRecord) -> bool:
-        """Read and record ``rec``'s barcode in a daemon thread; False if it timed out."""
+        """Read and record ``rec``'s bank barcode and QR stickers in a daemon thread;
+        False if it timed out."""
         assert rec.sha256 is not None and rec.ext is not None
         path = self.paths.abs(rec.path)
         out: dict = {}
@@ -267,7 +268,7 @@ class ContentIndexer:
             try:
                 sha, data = _read_file(path)
                 if sha == rec.sha256 and data is not None:  # else: changed, or too big
-                    found = read_barcodes(path, rec.ext, data)
+                    found, out["qr"] = read_page1(path, rec.ext, data)
                     out["code"] = found[0] if found else None
             except BaseException as exc:  # noqa: BLE001 - logged by the caller
                 out["error"] = exc
@@ -297,6 +298,7 @@ class ContentIndexer:
         # content) is recorded as "none found" for this content, so the file is not
         # read again until it changes
         self.repo.save_barcode(rec.drive_id, rec.sha256, out.get("code"))
+        self.repo.save_qr(rec.drive_id, rec.sha256, out.get("qr", []))
         return True
 
     def step(self, now: float | None = None) -> int:
