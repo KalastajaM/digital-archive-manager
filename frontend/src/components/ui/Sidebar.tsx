@@ -100,28 +100,49 @@ function Row({ to, end, icon: Icon, label, count, badge, dropProps }: RowProps) 
 }
 
 /** A section caption; when ``to`` is given it links to the section's index screen.
- * ``dropProps`` make the caption a drop target (the Collections caption: the top level). */
+ * ``dropProps`` make the caption a drop target (the Collections caption: the top level).
+ * The chevron beside the caption folds the section (shown on hover, and always while
+ * folded); a folded section shows ``foldedCount`` after its caption, if given. */
 function Section({
   title,
   to,
   dropProps,
+  folded,
+  onFold,
+  foldedCount,
   children,
 }: {
   title: string;
   to?: string;
   dropProps?: DropTarget["props"];
+  folded: boolean;
+  onFold: () => void;
+  foldedCount?: number;
   children: ReactNode;
 }) {
   return (
     <li className="sidebar-section">
-      {to ? (
-        <NavLink to={to} end className="sidebar-section-title" {...dropProps}>
-          {title}
-        </NavLink>
-      ) : (
-        <h3 className="sidebar-section-title">{title}</h3>
-      )}
-      <ul className="sidebar-list">{children}</ul>
+      <div className="sidebar-section-head">
+        {to ? (
+          <NavLink to={to} end className="sidebar-section-title" {...dropProps}>
+            {title}
+          </NavLink>
+        ) : (
+          <h3 className="sidebar-section-title">{title}</h3>
+        )}
+        {folded && foldedCount ? <span className="sidebar-count sidebar-section-count">{foldedCount}</span> : null}
+        <button
+          type="button"
+          className="sidebar-disclosure sidebar-section-fold"
+          aria-expanded={!folded}
+          aria-label={`${title} section`}
+          title={folded ? `Show ${title}` : `Hide ${title}`}
+          onClick={onFold}
+        >
+          <ChevronRight size={12} strokeWidth={2} aria-hidden="true" className="sidebar-chevron" data-open={!folded || undefined} />
+        </button>
+      </div>
+      {!folded && <ul className="sidebar-list">{children}</ul>}
     </li>
   );
 }
@@ -206,38 +227,44 @@ const readFilesOrCollection = (e: Parameters<typeof readDragFiles>[0]): Dragged 
 };
 
 const FOLD_KEY = "dam.sidebar.collections.folded.v1";
+/** The folded sections (Trays, Collections, Archive): the same in every archive. */
+const SECTION_FOLD_KEY = "dam.sidebar.sections.folded.v1";
 
-/** The folded parents (collection ids), kept in this browser's localStorage. Every
- * storage access is in try/catch: private windows and blocked site data throw. */
-function readFolds(): Set<number> {
+const isId = (x: unknown): x is number => Number.isSafeInteger(x);
+const isName = (x: unknown): x is string => typeof x === "string";
+
+/** What is folded, kept in this browser's localStorage under ``key``. Every storage
+ * access is in try/catch: private windows and blocked site data throw. */
+function readFolds<T>(key: string, valid: (x: unknown) => x is T): Set<T> {
   try {
-    const value: unknown = JSON.parse(localStorage.getItem(archiveKey(FOLD_KEY)) ?? "[]");
-    return new Set(Array.isArray(value) ? value.filter((x): x is number => Number.isSafeInteger(x)) : []);
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return new Set(Array.isArray(value) ? value.filter(valid) : []);
   } catch {
     return new Set();
   }
 }
 
-function useFolds() {
-  const [folded, setFolded] = useState<Set<number>>(readFolds);
+/** The folded parents (collection ids, per archive) or sections (by name). */
+function useFolds<T extends number | string>(key: string, valid: (x: unknown) => x is T) {
+  const [folded, setFolded] = useState<Set<T>>(() => readFolds(key, valid));
   // Saved after each change; the updates are functional, so a fold made while a move
   // runs is never undone by the move's unfold (or the other way round).
   useEffect(() => {
     try {
-      localStorage.setItem(archiveKey(FOLD_KEY), JSON.stringify([...folded]));
+      localStorage.setItem(key, JSON.stringify([...folded]));
     } catch {
       // Not saved: the fold still applies until the page reloads.
     }
-  }, [folded]);
+  }, [key, folded]);
   return {
     folded,
-    toggle: (id: number) =>
+    toggle: (id: T) =>
       setFolded((now) => {
         const next = new Set(now);
         if (!next.delete(id)) next.add(id);
         return next;
       }),
-    unfold: (id: number) =>
+    unfold: (id: T) =>
       setFolded((now) => {
         if (!now.has(id)) return now;
         const next = new Set(now);
@@ -288,7 +315,7 @@ function useMoveCollection(list: CollectionRow[], onMoved: (target: CollectionRo
 type TreeProps = {
   c: CollectionRow;
   kids: Map<number | null, CollectionRow[]>;
-  folds: ReturnType<typeof useFolds>;
+  folds: ReturnType<typeof useFolds<number>>;
   collect: ReturnType<typeof useAddToCollection>;
   mover: ReturnType<typeof useMoveCollection>;
 };
@@ -345,16 +372,24 @@ function CollectionNode({ c, kids, folds, collect, mover }: TreeProps) {
   );
 }
 
+type SectionFolds = ReturnType<typeof useFolds<string>>;
+
 /** The Collections section: the open collections as a tree; its caption takes a
  * dropped collection to the top level. */
-function CollectionsSection({ list }: { list: CollectionRow[] }) {
-  const folds = useFolds();
+function CollectionsSection({ list, sections }: { list: CollectionRow[]; sections: SectionFolds }) {
+  const folds = useFolds(archiveKey(FOLD_KEY), isId);
   const collect = useAddToCollection();
   const mover = useMoveCollection(list, (target) => target && folds.unfold(target.id));
   const kids = childrenOf(list);
   const top = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
   return (
-    <Section title="Collections" to="/collections" dropProps={top.props}>
+    <Section
+      title="Collections"
+      to="/collections"
+      dropProps={top.props}
+      folded={sections.folded.has("collections")}
+      onFold={() => sections.toggle("collections")}
+    >
       <ImportantRow />
       <StarredRow />
       {(kids.get(null) ?? []).map((c) => (
@@ -413,8 +448,8 @@ type Props = {
   footer?: ReactNode;
 };
 
-/** The app's sidebar: Today, Inbox, the trays, the open collections (a tree) and the
- * archive. Documents dragged onto a tray are put in it; onto a collection, added to
+/** The app's sidebar: Today, Inbox, Browse, the trays, the open collections (a tree)
+ * and the rest of the archive (Trays, Collections and Archive fold). Documents dragged onto a tray are put in it; onto a collection, added to
  * it. A collection dragged onto another goes inside it; onto the caption, to the top. */
 export function Sidebar({ footer }: Props) {
   const status = useStatus();
@@ -426,6 +461,8 @@ export function Sidebar({ footer }: Props) {
   const openIn = (trayId: string) => today.data?.overview.trays.find((t) => t.tray_id === trayId)?.open ?? 0;
   const quick = useQuickPut();
   const back = useDropBackToInbox();
+  const sections = useFolds(SECTION_FOLD_KEY, isName);
+  const trayTotal = trays.data?.trays.reduce((n, t) => n + openIn(t.id), 0) ?? 0;
   return (
     <aside className="sidebar">
       <ArchiveSwitcher />
@@ -440,7 +477,14 @@ export function Sidebar({ footer }: Props) {
             accept={back.accept}
             onDrop={back.drop}
           />
-          <Section title="Trays" to="/trays">
+          <Row to="/browse" icon={FolderTree} label="Browse" />
+          <Section
+            title="Trays"
+            to="/trays"
+            folded={sections.folded.has("trays")}
+            onFold={() => sections.toggle("trays")}
+            foldedCount={trayTotal}
+          >
             {trays.data?.trays.map((t) => (
               <DropRow
                 key={t.id}
@@ -456,9 +500,8 @@ export function Sidebar({ footer }: Props) {
               />
             ))}
           </Section>
-          <CollectionsSection list={collections.data ?? []} />
-          <Section title="Archive">
-            <Row to="/browse" icon={FolderTree} label="Browse" />
+          <CollectionsSection list={collections.data ?? []} sections={sections} />
+          <Section title="Archive" folded={sections.folded.has("archive")} onFold={() => sections.toggle("archive")}>
             <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
             <Row to="/activity" icon={History} label="Activity" />
             <Row to="/settings" icon={Settings} label="Settings" />

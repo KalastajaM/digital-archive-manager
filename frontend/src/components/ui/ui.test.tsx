@@ -70,7 +70,7 @@ const renderSidebar = (url = "/") =>
   );
 
 describe("Sidebar", () => {
-  it("lists Today, Inbox, the trays in order, the open collections A–Z and the archive as links", async () => {
+  it("lists Today, Inbox, Browse, the trays in order, the open collections A–Z and the archive as links", async () => {
     mockFetch({
       "GET /api/status": { body: STATUS },
       "GET /api/trays": { body: TRAYS },
@@ -84,6 +84,7 @@ describe("Sidebar", () => {
     expect(within(nav).getAllByRole("link").map((a) => [a.getAttribute("aria-label") ?? a.textContent, a.getAttribute("href")])).toEqual([
       ["Today (3)", "/"],
       ["Inbox (3)", "/inbox"],
+      ["Browse", "/browse"],
       ["Trays", "/trays"],
       ["To pay (3)", "/trays/to-pay"],
       ["To action (1)", "/trays/to-action"],
@@ -93,7 +94,6 @@ describe("Sidebar", () => {
       ["Starred", "/starred"],
       ["Legal", "/collections/1"],
       ["Tax 2026", "/collections/2"],
-      ["Browse", "/browse"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
       ["Settings", "/settings"],
@@ -102,6 +102,40 @@ describe("Sidebar", () => {
     expect(within(nav).getByRole("link", { name: "Inbox (3)" })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: "Today (3)" })).not.toHaveAttribute("aria-current");
     expect(screen.getByText("foot")).toBeInTheDocument(); // the status badge slot
+  });
+
+  it("folds Trays, Collections and Archive; a folded Trays shows its open total; the folds are remembered", async () => {
+    localStorage.clear();
+    mockFetch({
+      "GET /api/status": { body: STATUS },
+      "GET /api/trays": { body: TRAYS },
+      "GET /api/collections": { body: COLLECTIONS },
+      "GET /api/today": { body: TODAY },
+    });
+    const user = userEvent.setup();
+    const { unmount } = renderSidebar();
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    await within(nav).findByRole("link", { name: "To read (4)" });
+    const trays = within(nav).getByRole("button", { name: "Trays section" });
+    expect(trays).toHaveAttribute("aria-expanded", "true");
+    await user.click(trays);
+    expect(trays).toHaveAttribute("aria-expanded", "false");
+    expect(within(nav).queryByRole("link", { name: "To read (4)" })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Trays" }).parentElement).toHaveTextContent("Trays8"); // 3 + 1 + 4 open
+    await user.click(within(nav).getByRole("button", { name: "Archive section" }));
+    expect(within(nav).queryByRole("link", { name: "Help" })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Browse" })).toBeInTheDocument(); // Browse is not in Archive
+    unmount();
+    renderSidebar();
+    const again = screen.getByRole("navigation", { name: "Main" });
+    await within(again).findByRole("link", { name: "Legal" });
+    expect(within(again).queryByRole("link", { name: "To read (4)" })).toBeNull();
+    expect(within(again).queryByRole("link", { name: "Help" })).toBeNull();
+    await user.click(within(again).getByRole("button", { name: "Collections section" }));
+    expect(within(again).queryByRole("link", { name: "Legal" })).toBeNull();
+    await user.click(within(again).getByRole("button", { name: "Trays section" }));
+    expect(await within(again).findByRole("link", { name: "To read (4)" })).toBeInTheDocument();
+    localStorage.clear();
   });
 
   it("the Today badge counts overdue and due-today items, and hides when there are none", async () => {

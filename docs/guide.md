@@ -141,12 +141,17 @@ setting. The sidebar, from the top:
 
 - **Today**, with a red badge counting overdue and due-today items;
 - **Inbox**, with its count;
+- **Browse**, the whole archive;
 - **Trays**: one row per tray, each with its open count;
 - **Collections**: **Important** and **Starred** first, then the open collections as a
   tree (a parent's children nest under it; the chevron folds it). The caption opens the
   list of all collections, with New collection and the closed ones;
-- **Archive**: **Browse**, **Ask** (AI questions about the archive), **Activity**,
-  **Settings** and **Help** (this guide).
+- **Archive**: **Ask** (AI questions about the archive), **Activity**, **Settings** and
+  **Help** (this guide).
+
+Trays, Collections and Archive fold: hold the pointer on the caption and click the chevron
+at its right. A folded Trays shows its open total next to the caption. dam remembers in
+this browser which sections you folded.
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray
@@ -325,7 +330,7 @@ change them. A box dam cannot read clearly is pointed out ("Tick box unclear: ch
 star"), and the file starts unticked in File N marked.
 
 **Printing stickers.** In Settings → Filing codes, **Print stickers…** opens the sticker
-sheet; **Print…** in an open code opens it with that code ticked (save the code first):
+sheet:
 
 - Tick the codes to print and type how many of each.
 - Choose the sheet: **Avery Zweckform L7651** (65 labels of 38.1 × 21.2 mm), **Plain
