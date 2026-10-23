@@ -136,7 +136,7 @@ export default function Inbox() {
   const trayList = useTrays().data?.trays ?? [];
   const toast = useToast();
   const status = useStatus();
-  const addFiles = useAddFiles();
+  const addFiles = useAddFiles(status.data?.inbox_exists === false ? "The inbox folder does not exist yet" : null);
   const setupFolders = useSetupFolders();
   // ``?file=<drive_id>`` starts on that file ("Mark paid & file it…" links here).
   const [search] = useSearchParams();
@@ -390,7 +390,7 @@ export default function Inbox() {
   const multi = checked.size > 0;
   return (
     <div className="inbox" ref={split.hostRef} style={split.hostStyle}>
-      <nav className="inbox-list" aria-label="Inbox">
+      <nav className="inbox-list" aria-label="Inbox" {...addFiles.drop.props}>
         <Toolbar
           title="Inbox"
           subtitle={plural(entries.length, "file")}

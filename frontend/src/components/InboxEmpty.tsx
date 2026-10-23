@@ -49,7 +49,8 @@ export function InboxEmpty({ inbox, exists, onChoose, choosing, onSetup }: Props
       title="The inbox is empty."
       hint={
         <>
-          Put new files in <code>{name}</code> — drag them there {inFileManager()}, or point your scanner at it.
+          Put new files in <code>{name}</code> — drop files or folders here, drag them there {inFileManager()}, or
+          point your scanner at it.
         </>
       }
       action={
