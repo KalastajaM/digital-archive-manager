@@ -6,23 +6,14 @@ are settled.
 ## Why
 
 Most of dam's configuration can only be changed in `config/settings.yaml` or with the
-CLI. The filing codes work (branch `claude/auto-archive-file-feature-12bb03`, commit
-`af34883`) adds a Settings screen at `/settings` with a sidebar row, built as one section
-per area ("Filing codes is the first; later areas slot in below it"). This plan decides
-what the other sections are, so they arrive in a sensible order instead of one by one as
-they come up.
+CLI. This plan decides what joins the Settings screen, so sections arrive in a sensible
+order instead of one by one as they come up.
 
-## Coordination with the filing codes branch
+## Where it starts
 
-The filing codes branch owns the Settings screen until it is merged: `screens/Settings.tsx`,
-its test, the `/settings` route in `App.tsx`, the Settings row in `Sidebar.tsx` and the
-`.settings` styles in `styles.css`. Nothing in this plan edits those files before that
-merge.
-
-One piece can be done earlier without touching them: the theme groundwork in
-`theme.css`, `index.html` and `main.tsx` (see Appearance). The filing codes branch does
-not change those three files (checked against `main...claude/auto-archive-file-feature-12bb03`
-on 2026-10-23).
+The filing codes work (PR #23, merged 2026-10-23) added the Settings screen at
+`/settings` with a sidebar row, built as one section per area: Filing codes and Print
+stickers. The sections below slot into that screen.
 
 ## Two kinds of setting
 
@@ -33,6 +24,8 @@ on 2026-10-23).
 
 The screen should show the two groups apart, so nobody expects a reminder hour set in one
 archive to apply to another. Archive-level sections name the archive they belong to.
+For now Appearance says in its hint that it applies to every archive; the group headings
+come with the next archive-level section (Reminders or AI).
 
 ## Sections
 
@@ -40,30 +33,26 @@ In build order. Each one gets its own changelog entry and tests on fake archives
 
 ### 1. Appearance (Light, Dark, Auto)
 
-A three-way segmented control: Light, Dark, Auto. Auto (the default) follows the system,
-which is what dam does today.
+Built. A segmented control, Light, Dark and Auto, at the top of Settings. Auto (the
+default) follows the system, which is what dam did before.
 
-- **Storage:** `localStorage` under one app-wide key (for example `dam.appearance`), not
-  `archiveKey(...)`, because it is not per archive. Missing or unreadable means Auto.
-- **No flash on load:** a small inline script in `index.html` sets `data-theme` on
-  `<html>` before the stylesheet paints. React then only updates it on change.
-- **Tokens:** in `theme.css` the dark values now sit only under
-  `@media (prefers-color-scheme: dark)`. They need to apply under
-  `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` and under
-  `:root[data-theme="dark"]`, with `color-scheme` set to match, so native controls and
-  scrollbars follow too. The light values stay the base.
-- **Window colour:** the two `theme-color` meta tags in `index.html` follow the system
-  only; with a forced theme, one tag's `content` has to be set from the chosen theme.
-- **Groundwork first:** the tokens, the early script and a small `useAppearance` hook
-  can land before the Settings screen exists, because they touch no file the filing codes
-  branch changes. The control itself goes into Settings after the merge.
+- **Storage:** `localStorage` under the app-wide key `dam.appearance` (not
+  `archiveKey(...)`, because it is not per archive). Auto is stored as no key; a missing
+  or unknown value means Auto.
+- **Theme:** `<html data-theme="light|dark">`. `theme.css` has the light tokens on
+  `:root` and the dark ones on `:root[data-theme="dark"]`, with `color-scheme` to
+  match, so native controls and scrollbars follow too. Always setting a concrete theme
+  keeps one dark block instead of a copy for the media query and a copy for the choice.
+- **No flash on load:** `public/appearance.js`, a plain script in `<head>`, sets
+  `data-theme` and the `theme-color` tag before the first paint. It is a file, not
+  inline, because the CSP allows only `script-src 'self'`. `src/appearance.ts` has the
+  same rule (a test checks the key and colours match) and keeps the theme up to date:
+  the system switching while on Auto, and a choice made in another tab.
 
-Strongest objection to `localStorage`: it is per browser and per origin, so changing
-`server_port` or opening dam in another browser resets the choice to Auto. The
-alternative is an app-wide file in the data directory, like `ai-state.json`, served by
-a small endpoint. That costs a backend round trip before first paint (so a flash, or a
-cached copy anyway). Recommendation: `localStorage`, since the cost of losing it is one
-click.
+Objection weighed: `localStorage` is per browser and per origin, so changing
+`server_port` or opening dam in another browser starts on Auto again. An app-wide file
+in the data directory would avoid that but needs a request before the first paint.
+Losing the choice costs one click, so `localStorage` it is.
 
 ### 2. Filing codes
 
@@ -136,6 +125,6 @@ having, as tray defaults do.
 
 1. ~~AI settings: move to Settings, or stay in Activity → AI?~~ Settled: move the
    configuration, links both ways (see section 5).
-2. **Appearance storage:** `localStorage` (recommended above) or an app-wide file.
+2. ~~Appearance storage~~ Settled: `localStorage` (see section 1).
 3. **Reminders and OCR:** in this plan, or later? They are the most useful file-only
    settings, but neither is needed by filing codes.

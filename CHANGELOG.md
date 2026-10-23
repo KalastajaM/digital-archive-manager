@@ -8,6 +8,8 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Settings → Appearance: choose Light, Dark, or Auto to follow the system setting. It
+  applies at once, to every archive, and is remembered by this browser.
 - Filing codes: drop files into a code's folder in the inbox (To pay, To action, To
   read, Follow-up, File as suggested, or your own) and file them all at once with File N
   marked. A code is a short letter or number from your own table that fills in the

@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { installAppearance } from "./appearance";
 import { RecoveryProvider } from "./components/Recovery";
 import { ToastProvider } from "./components/Toasts";
 import { UndoProvider } from "./components/UndoConfirm";
@@ -15,6 +16,7 @@ const client = new QueryClient({
 });
 
 installOverflowTitles();
+installAppearance();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
