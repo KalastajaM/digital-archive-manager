@@ -16,11 +16,11 @@ function declarations(selector: string): string {
     .join(";");
 }
 
-/** The custom properties of one theme block (light: the first :root; dark: the one in the media query). */
+/** The custom properties of one theme block (light: the first :root; dark: :root[data-theme="dark"]). */
 function tokens(block: "light" | "dark"): Record<string, string> {
   const text = strip(theme);
-  const dark = text.slice(text.indexOf("@media (prefers-color-scheme: dark)"));
-  const source = block === "light" ? text.slice(0, text.indexOf("@media (prefers-color-scheme: dark)")) : dark;
+  const at = text.indexOf(':root[data-theme="dark"]');
+  const source = block === "light" ? text.slice(0, at) : text.slice(at);
   return Object.fromEntries([...source.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
 }
 

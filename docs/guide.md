@@ -538,6 +538,8 @@ on/off switch.
 
 Settings is where dam's own options are kept, one section for each area:
 
+- **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at once
+  and to every archive, and is remembered by this browser (another browser starts on Auto).
 - **Filing codes**: your table of codes, each with its label, tray, folder, name
   pattern, tags, collections, inbox folder and the **File as suggested** box. **Add a
   code** adds a row and **Save** writes the table. **Create inbox folders** appears while
