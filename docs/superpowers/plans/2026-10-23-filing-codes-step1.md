@@ -4,7 +4,7 @@
 
 **Goal:** The owner keeps a table of filing codes; files in a code's inbox folder arrive pre-filled from that code, and **File N marked** files all coded inbox files as one journaled, undoable batch.
 
-**Architecture:** A new backend package `dam.codes` owns the code table (YAML in the data folder), matching (step 1: by inbox folder only; pen and QR plug in later as more sources), applying codes on top of the existing suggestion, and building the batch rows. Inbox membership widens from "directly in the inbox" to "directly in the inbox or directly in a code's inbox folder", in one place on `FileRepo`. The frontend gets a codes editor on the Trays screen, code chips and tray preselection in the Inbox form, and a batch review panel reachable from the Inbox and Today.
+**Architecture:** A new backend package `dam.codes` owns the code table (YAML in the data folder), matching (step 1: by inbox folder only; pen and QR plug in later as more sources), applying codes on top of the existing suggestion, and building the batch rows. Inbox membership widens from "directly in the inbox" to "directly in the inbox or directly in a code's inbox folder", in one place on `FileRepo`. The frontend gets a new Settings screen whose first section is the codes editor, code chips and tray preselection in the Inbox form, and a batch review panel reachable from the Inbox and Today.
 
 **Tech Stack:** Python 3.13, FastAPI, SQLAlchemy Core, pydantic, PyYAML, pytest (uv); React + TypeScript, TanStack Query, Vitest.
 
@@ -28,7 +28,7 @@
 
 ## Decisions this plan makes (not in the spec)
 
-- **Where the codes editor lives:** dam has no Settings screen. The editor is a "Filing codes" section on the Trays screen (`frontend/src/screens/Trays.tsx`), next to the tray defaults.
+- **Where the codes editor lives:** dam has no Settings screen yet. This plan adds one (`/settings`, sidebar entry "Settings") with "Filing codes" as its only section. Moving other settings there (AI excluded folders, tray defaults, archives, folder layout, OCR languages) is a separate follow-up, not this plan.
 - **Storage and seeding:** `config/filing_codes.yaml` in the data folder. `defaults/filing_codes.yaml` holds the seed. `AppPaths.ensure()` copies it only when the file is absent, so deleting a seeded code (the file exists) keeps it deleted. The UI writes the whole file (YAML dump, a `.bak-<stamp>` copy first, like `write_ai_exclude_folders`); hand-written comments in that file are not preserved, and the guide says so.
 - **Inbox membership is folded** (NFC + casefold) everywhere it is touched, matching `InboxService._in_inbox` and `fold_parts`; the case-sensitive NFC comparisons in `FileRepo` are replaced in the same change.
 - **Inbox folders inside the inbox are allowed only through a dedicated plan flag** `Plan.inbox_folders`, which permits MKDIR of a direct child of the inbox and nothing else.
@@ -211,23 +211,24 @@ def test_confusable():
 - [ ] **Step 5: Regenerate the API types:** `npm run gen:api` in `frontend/`; `npm run build` still passes.
 - [ ] **Step 6: Commit** `feat: build the File N marked batch from filing codes` (include `frontend/src/api/schema.d.ts`).
 
-### Task 7: Frontend codes editor on the Trays screen
+### Task 7: Settings screen with the codes editor
 
 **Files:**
 - Create: `frontend/src/components/codes/FilingCodes.tsx`, `frontend/src/components/codes/FilingCodes.test.tsx`
-- Modify: `frontend/src/screens/Trays.tsx`, `frontend/src/api/client.ts`
+- Create: `frontend/src/screens/Settings.tsx`, `frontend/src/screens/Settings.test.tsx`
+- Modify: `frontend/src/App.tsx` (route `/settings`), `frontend/src/components/ui/Sidebar.tsx` (entry "Settings" near Activity and Help), `frontend/src/api/client.ts`
 
 **Interfaces:**
 - Consumes: Task 2 and Task 4 endpoints.
 - Produces: hooks `useFilingCodes()`, `useSaveFilingCodes()`, `useCodeFolders()`, `useCreateCodeFolders()` in `client.ts` (pattern: `useAIExcludeFolders`, `useCreateFolder`); query key `keys.filingCodes`. Saving invalidates inbox, today and status (via `useRefresh`).
 
-UI: a `section aria-label="Filing codes"` with one row per code (code, label, tray select from `useTrays`, folder via `FolderPicker`, name, tags, collections, "File as suggested" checkbox, inbox folder), Add and Remove, one Save. Confusable warnings under the affected row: "Easy to confuse with `0` when written by hand." Problems from the file shown at the top. A "Create inbox folders" button when `missing` is non-empty, through `ConfirmPlan` with the preview. `stray` folders listed as "Not a filing code folder: its files are not in the Inbox."
+UI: `Settings` is a page with a heading and one `section` per area, built so later sections slot in; its first and only section is `FilingCodes`, a `section aria-label="Filing codes"` with one row per code (code, label, tray select from `useTrays`, folder via `FolderPicker`, name, tags, collections, "File as suggested" checkbox, inbox folder), Add and Remove, one Save. Confusable warnings under the affected row: "Easy to confuse with `0` when written by hand." Problems from the file shown at the top. A "Create inbox folders" button when `missing` is non-empty, through `ConfirmPlan` with the preview. `stray` folders listed as "Not a filing code folder: its files are not in the Inbox."
 
-- [ ] **Step 1: Write the failing tests** with `mockFetch` and `renderWithProviders`: renders seeded codes; adding `O` beside `0` shows the warning; Save sends PUT with the edited list; "Create inbox folders" shows the preview and posts on confirm; a 400 shows its message.
+- [ ] **Step 1: Write the failing tests** with `mockFetch` and `renderWithProviders`: the sidebar has a Settings link and `/settings` renders the Filing codes section; renders seeded codes; adding `O` beside `0` shows the warning; Save sends PUT with the edited list; "Create inbox folders" shows the preview and posts on confirm; a 400 shows its message.
 - [ ] **Step 2: Run** `npm test -- --run src/components/codes`. Expected: FAIL.
 - [ ] **Step 3: Implement** following `ExcludedFolders.tsx` and `TrayDefaults.tsx` for structure and styles.
 - [ ] **Step 4: Run** the tests and `npm run build`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: edit filing codes on the Trays screen`.
+- [ ] **Step 5: Commit** `feat: a Settings screen, starting with filing codes`.
 
 ### Task 8: Code chips and tray preselection in the Inbox form
 
