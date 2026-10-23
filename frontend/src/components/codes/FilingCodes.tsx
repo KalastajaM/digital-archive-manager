@@ -257,7 +257,7 @@ function CodeEditor({
               <input
                 id={`code-${r.key}-name`}
                 value={r.name}
-                placeholder="{doc_date:%Y%m%d}_Fortum"
+                placeholder="{doc_date:%Y%m%d}_{stem}"
                 onChange={(e) => edit(r.key, { name: e.target.value })}
               />
             </div>

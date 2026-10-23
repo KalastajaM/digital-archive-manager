@@ -151,6 +151,8 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- A filing code's empty Name pattern now shows `{doc_date:%Y%m%d}_{stem}` (the date, then
+  the file's own name) as its example, which fits any code, not a sample sender.
 - Settings has a row of sections at the top, grouped by what they apply to (this
   archive, or this browser), and shows one section at a time, each at its own address.
   Filing codes is now a short list, one line per code with its sticker and what it does;

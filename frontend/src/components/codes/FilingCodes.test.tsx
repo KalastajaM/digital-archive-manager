@@ -105,7 +105,7 @@ describe("Filing codes (Settings)", () => {
     const { user } = setup({}, { codes: [code("K", "Kela")] });
     const editor = await openCode(user, /^K Kela/);
     const field = within(editor).getByLabelText("Name pattern");
-    expect(field).toHaveAttribute("placeholder", "{doc_date:%Y%m%d}_Fortum");
+    expect(field).toHaveAttribute("placeholder", "{doc_date:%Y%m%d}_{stem}");
     await user.type(field, "Kela letter");
     expect(within(editor).getByText(/Every file with this code gets the same name/)).toBeInTheDocument();
     await user.click(within(editor).getByRole("button", { name: "Done" }));
