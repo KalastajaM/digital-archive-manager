@@ -113,6 +113,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Today's Starred card shows a file's buttons (Quick Look, Open, Show in Finder, Remove
+  the star) only for the row under the pointer or with keyboard focus, so the list reads
+  calmer. On touch screens they stay visible.
 - Renaming works the same way everywhere, as in Finder: the name turns into a field in
   place, Enter saves, Esc cancels. A collection is renamed in its title (no separate
   form, and the ⋯ menu says Rename), an archive in Manage archives with a pencil button.
