@@ -2,7 +2,8 @@
 
 from dataclasses import asdict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
+from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
 from dam.api.deps import UI_ORIGIN, AppDep
@@ -13,9 +14,12 @@ from dam.api.schemas import (
     FilingCodeIn,
     FilingCodesOut,
     ResolvedOpOut,
+    SheetLayoutIn,
+    SheetLayoutOut,
+    StickerSheetIn,
 )
 from dam.app import App
-from dam.codes import folders
+from dam.codes import folders, sheets
 from dam.codes.batch import marked_rows
 from dam.codes.model import FilingCode, confusable_with, format_validation
 from dam.services.errors import InvalidRequest
@@ -85,3 +89,60 @@ def batch(app: AppDep) -> list:
     it (post the ticked ones to ``/api/inbox/file``) and a flag when it needs a look.
     Changes nothing."""
     return marked_rows(app)
+
+
+@router.get("/sheets", response_model=list[SheetLayoutOut])
+def sheet_layouts(app: AppDep) -> list:
+    """The sticker sheet layouts: the built-in ones, then the saved custom one (id
+    ``custom``) if there is one."""
+    return [lay.model_dump() for lay in sheets.load_layouts(app.app_paths.config_dir)]
+
+
+@router.put("/sheets/custom", response_model=SheetLayoutOut)
+def save_custom_sheet(app: AppDep, body: SheetLayoutIn) -> dict:
+    """Save the custom sheet layout (the old file is kept as a backup); 400 with the
+    reason if the labels do not fit an A4 page or are too small for a sticker."""
+    try:
+        layout = sheets.SheetLayout.model_validate({"id": sheets.CUSTOM_ID, **body.model_dump()})
+    except ValidationError as e:
+        raise InvalidRequest(format_validation(e)) from e
+    try:
+        return sheets.save_custom(app.app_paths.config_dir, layout).model_dump()
+    except OSError as e:
+        raise InvalidRequest(f"the layout could not be saved: {e}") from e
+
+
+@router.post(
+    "/sheet",
+    response_class=Response,  # not HTMLResponse: errors stay JSON in the schema
+    responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
+)
+def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
+    """A printable page of stickers (HTML, A4) for the chosen codes and counts; 400 for
+    an unknown code or layout or a start label off the sheet. Changes nothing."""
+    table = {c.code: c for c in app.codes}
+    unknown = [k for k in body.codes if k.upper() not in table]
+    if unknown:
+        raise InvalidRequest(f"unknown filing code: {', '.join(unknown)}")
+    layout = next(
+        (lay for lay in sheets.load_layouts(app.app_paths.config_dir) if lay.id == body.layout),
+        None,
+    )
+    if layout is None:
+        raise InvalidRequest(f"unknown sheet layout {body.layout!r}")
+    counts: dict[str, int] = {}
+    for k, n in body.codes.items():
+        counts[k.upper()] = counts.get(k.upper(), 0) + n
+    try:
+        page = sheets.render_sheet(
+            [table[k] for k in counts],
+            counts,
+            layout,
+            start_at=body.start_at,
+            boxes=body.boxes,
+            blank_labels=body.blank_labels,
+            outlines_only=body.outlines_only,
+        )
+    except ValueError as e:
+        raise InvalidRequest(str(e)) from e
+    return HTMLResponse(page, headers={"X-Content-Type-Options": "nosniff"})

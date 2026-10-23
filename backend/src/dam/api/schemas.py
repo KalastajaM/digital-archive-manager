@@ -5,7 +5,7 @@ Request models forbid unknown fields, so a body can never smuggle in e.g. ``orig
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
@@ -1283,6 +1283,44 @@ class FilingCodesOut(BaseModel):
     codes: list[FilingCodeOut]
     problems: list[CodeProblemOut]
     warnings: list[CodeWarningOut]
+
+
+class SheetLayoutIn(_In):
+    # checked by ``SheetLayout`` so a grid that does not fit A4 answers 400 with its text
+    name: str
+    columns: int
+    rows: int
+    label_w_mm: float
+    label_h_mm: float
+    top_mm: float
+    left_mm: float
+    gap_x_mm: float
+    gap_y_mm: float
+    cut_lines: bool = False
+
+
+class SheetLayoutOut(BaseModel):
+    id: str
+    name: str
+    columns: int
+    rows: int
+    label_w_mm: float
+    label_h_mm: float
+    top_mm: float
+    left_mm: float
+    gap_x_mm: float
+    gap_y_mm: float
+    cut_lines: bool
+
+
+class StickerSheetIn(_In):
+    # how many stickers of each code, in print order
+    codes: dict[str, Annotated[int, Field(ge=0, le=2000)]]
+    layout: str
+    start_at: int = 1
+    boxes: bool = True
+    blank_labels: bool = False
+    outlines_only: bool = False
 
 
 class FilingCodeFoldersOut(BaseModel):
