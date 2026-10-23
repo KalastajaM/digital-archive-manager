@@ -1923,14 +1923,15 @@ describe("Filing codes in the form", () => {
     expect(await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (from sticker `P`)" })).toBeInTheDocument();
   });
 
-  it("preselects Starred and Important from the sticker's tick boxes and sends them", async () => {
+  it("preselects the sticker's ticked boxes and sends them", async () => {
     const { calls, user } = await setup({
       ...route({ ...STICKER, star: true, important: false }),
       "POST /api/inbox/preview": { body: SIMPLE_MOVE },
     });
-    const starred = screen.getByRole("checkbox", { name: "Starred" });
-    const important = screen.getByRole("checkbox", { name: "Important" });
-    expect(starred).toBeChecked();
+    const group = screen.getByRole("group", { name: "From the sticker" });
+    const star = within(group).getByRole("checkbox", { name: "Star when filed" });
+    const important = within(group).getByRole("checkbox", { name: "Mark Important when filed" });
+    expect(star).toBeChecked();
     expect(important).not.toBeChecked();
     expect(screen.queryByText(/Tick box unclear/)).not.toBeInTheDocument();
     await user.click(important);
@@ -1941,10 +1942,10 @@ describe("Filing codes in the form", () => {
     expect(screen.getByText("Mark Important")).toBeInTheDocument();
   });
 
-  it("leaves both off without a sticker, and sends neither", async () => {
+  it("shows no sticker group for a file without a sticker, and sends neither", async () => {
     const { calls, user } = await setup({ ...route(FROM_P), "POST /api/inbox/preview": { body: SIMPLE_MOVE } });
-    expect(screen.getByRole("checkbox", { name: "Starred" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Important" })).not.toBeChecked();
+    expect(screen.queryByRole("group", { name: "From the sticker" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Star when filed" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
     const [request] = posts(calls, "/api/inbox/preview")[0].body as Array<Record<string, unknown>>;
@@ -1954,8 +1955,28 @@ describe("Filing codes in the form", () => {
 
   it("says which tick box could not be read", async () => {
     await setup(route({ ...STICKER, star: null, important: false, marks_unclear: true }));
-    expect(screen.getByText("Tick box unclear: check star")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Starred" })).not.toBeChecked();
+    const group = screen.getByRole("group", { name: "From the sticker" });
+    expect(within(group).getByText("Tick box unclear: check star")).toBeInTheDocument();
+    expect(within(group).getByRole("checkbox", { name: "Star when filed" })).not.toBeChecked();
+  });
+
+  it("does not offer a mark the file already has", async () => {
+    const starredFile = [{ ...coded({ ...STICKER, star: true, important: true })[0] }];
+    starredFile[0].record = { ...starredFile[0].record, marks: ["starred"] };
+    const { calls, user } = await setup({
+      ...route({}),
+      "GET /api/inbox": { body: starredFile },
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+    });
+    const group = screen.getByRole("group", { name: "From the sticker" });
+    expect(within(group).queryByRole("checkbox", { name: "Star when filed" })).not.toBeInTheDocument();
+    expect(within(group).getByText("already starred")).toBeInTheDocument();
+    expect(within(group).getByRole("checkbox", { name: "Mark Important when filed" })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    const [request] = posts(calls, "/api/inbox/preview")[0].body as Array<Record<string, unknown>>;
+    expect(request).not.toHaveProperty("star");
+    expect(request.important).toBe(true);
   });
 
   it("says when the codes disagree, and the list row shows the code badge", async () => {

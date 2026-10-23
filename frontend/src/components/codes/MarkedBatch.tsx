@@ -36,11 +36,20 @@ export const FIX_IN_FORM = "Open it to fix it in the form";
  * ticked. Conflict and unclear rows start unticked but can be ticked on purpose. */
 const tickable = (row: BatchRow) => row.flag !== "needs_input";
 
+const TICK_BOX = "Tick box unclear: ";
+
 /** Why a row starts unticked, or null. */
 export function flagText(row: BatchRow): string | null {
   if (row.flag === "needs_input") return row.problem ? `Needs input: ${row.problem}` : "Needs input";
   if (row.flag === "conflict") return "Codes disagree";
-  if (row.flag === "unclear") return row.problem ? `Unclear: ${row.problem}` : "Unclear";
+  if (row.flag === "unclear") {
+    // a sticker's tick box: say which to check ("Tick box unclear: check star")
+    if (row.problem?.startsWith(TICK_BOX)) {
+      const boxes = row.problem.slice(TICK_BOX.length).split(", ");
+      return `${TICK_BOX}check ${boxes.join(" and ")}`;
+    }
+    return row.problem ? `Unclear: ${row.problem}` : "Unclear";
+  }
   return null;
 }
 

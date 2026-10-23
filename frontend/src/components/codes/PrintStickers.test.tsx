@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
+import { type Call, deferred, mockFetch, renderWithProviders } from "../../test-utils";
 import { PrintStickers } from "./PrintStickers";
 
 const code = (c: string, label: string) => ({
@@ -17,24 +17,10 @@ const code = (c: string, label: string) => ({
 });
 const GRID = { columns: 5, rows: 13, label_w_mm: 38.1, label_h_mm: 21.2, top_mm: 10.7, left_mm: 4.7, gap_x_mm: 2.5, gap_y_mm: 0 };
 const L7651 = { id: "l7651", name: "Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)", cut_lines: false, ...GRID };
-const SHEET =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Filing code stickers</title>' +
-  '<style>.label { position: absolute }</style></head><body><p class="note">Print at 100 %, without fit to page.</p>' +
-  '<div class="page"><div class="label" data-code="P" style="left:4.7mm;top:10.7mm;width:38.1mm;height:21.2mm"></div></div></body></html>';
 const PLAIN = { id: "plain", name: "Plain paper, cut out", cut_lines: true, ...GRID };
 
-/** A stand-in for the new tab: an empty page the sheet is built into. */
-function fakeWindow() {
-  return { close: vi.fn(), document: document.implementation.createHTMLDocument("") };
-}
-let opened: ReturnType<typeof fakeWindow>[] = [];
 beforeEach(() => {
-  opened = [];
-  vi.spyOn(window, "open").mockImplementation(() => {
-    const w = fakeWindow();
-    opened.push(w);
-    return w as unknown as Window;
-  });
+  vi.spyOn(window, "open").mockImplementation(() => null); // "noopener" answers null
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -42,13 +28,25 @@ function setup(over: Record<string, unknown> = {}) {
   const calls = mockFetch({
     "GET /api/filing-codes": { body: { codes: [code("A", "To action"), code("P", "To pay")], problems: [], warnings: [] } },
     "GET /api/filing-codes/sheets": { body: [L7651, PLAIN] },
-    "POST /api/filing-codes/sheet": { html: SHEET },
+    "GET /api/filing-codes/sheet": { html: "<!doctype html><title>Filing code stickers</title>" },
     ...over,
   } as never);
   renderWithProviders(<PrintStickers />);
   return { calls, user: userEvent.setup() };
 }
-const sheetPosts = (calls: Call[]) => calls.filter((c) => c.method === "POST" && c.url === "/api/filing-codes/sheet");
+/** The sheet requests (the pre-check), each as its query. */
+const sheetGets = (calls: Call[]) =>
+  calls
+    .filter((c) => c.method === "GET" && c.url.startsWith("/api/filing-codes/sheet?"))
+    .map((c) => Object.fromEntries(new URL(c.url, "http://x").searchParams));
+/** The URL of every tab opened, as its query. */
+const openedTabs = () =>
+  vi.mocked(window.open).mock.calls.map(([url, target, features]) => {
+    expect(target).toBe("_blank");
+    expect(features).toBe("noopener");
+    expect(String(url)).toMatch(/^\/api\/filing-codes\/sheet\?/);
+    return Object.fromEntries(new URL(String(url), "http://x").searchParams);
+  });
 
 describe("Print stickers (Settings)", () => {
   it("lists the built-in layouts and Custom, with tick boxes on by default", async () => {
@@ -80,23 +78,24 @@ describe("Print stickers (Settings)", () => {
     await user.type(start, "3");
     expect(within(section).getByText("12 stickers")).toBeInTheDocument();
     await user.click(within(section).getByRole("button", { name: "Open sheet" }));
-    await waitFor(() => expect(sheetPosts(calls)).toHaveLength(1));
-    expect(sheetPosts(calls)[0].body).toEqual({
-      codes: { P: 12 },
-      layout: "l7651",
-      start_at: 3,
-      boxes: true,
-      blank_labels: true,
-      outlines_only: false,
-    });
+    await waitFor(() => expect(window.open).toHaveBeenCalledTimes(1));
+    const query = { codes: "P:12", layout: "l7651", start_at: "3", boxes: "true", blank_labels: "true", outlines_only: "false" };
+    expect(sheetGets(calls)).toEqual([query]); // checked once, then opened
+    expect(openedTabs()).toEqual([query]);
+  });
+
+  it("a second click while the sheet is checked opens no second tab", async () => {
+    const held = deferred<{ html: string }>();
+    const { calls, user } = setup({ "GET /api/filing-codes/sheet": () => held.promise });
+    const section = await screen.findByRole("region", { name: "Print stickers" });
+    await user.click(await within(section).findByLabelText("Print A"));
+    const open = within(section).getByRole("button", { name: "Open sheet" });
+    await user.dblClick(open);
+    expect(open).toBeDisabled();
+    held.resolve({ html: "<!doctype html><title>Filing code stickers</title>" });
+    await waitFor(() => expect(open).toBeEnabled());
     expect(window.open).toHaveBeenCalledTimes(1);
-    const tab = opened[0].document;
-    await waitFor(() => expect(tab.title).toBe("Filing code stickers"));
-    expect(tab.body.textContent).toContain("Print at 100 %, without fit to page.");
-    // the page's styles are set through the CSSOM (the app's CSP blocks inline style)
-    const label = tab.querySelector<HTMLElement>(".label");
-    expect(label?.style.width).toBe("38.1mm");
-    expect(opened[0].close).not.toHaveBeenCalled();
+    expect(sheetGets(calls)).toHaveLength(1);
   });
 
   it("Open sheet needs at least one code", async () => {
@@ -112,24 +111,25 @@ describe("Print stickers (Settings)", () => {
     await user.click(await within(section).findByLabelText("Print A"));
     await user.selectOptions(within(section).getByLabelText("Sheet"), "plain");
     await user.click(within(section).getByRole("button", { name: "Test print" }));
-    await waitFor(() => expect(sheetPosts(calls)).toHaveLength(1));
-    expect(sheetPosts(calls)[0].body).toEqual({
-      codes: {},
-      layout: "plain",
-      start_at: 1,
-      boxes: true,
-      blank_labels: false,
-      outlines_only: true,
-    });
+    await waitFor(() => expect(window.open).toHaveBeenCalledTimes(1));
+    expect(openedTabs()).toEqual([
+      { codes: "", layout: "plain", start_at: "1", boxes: "true", blank_labels: "false", outlines_only: "true" },
+    ]);
+    expect(sheetGets(calls)).toHaveLength(1);
   });
 
-  it("a refused sheet shows the server's reason and closes the empty tab", async () => {
-    const { user } = setup({ "POST /api/filing-codes/sheet": { status: 400, body: { error: "start at a label from 1 to 65" } } });
+  it("a refused sheet shows the server's reason and opens no tab", async () => {
+    const { user } = setup({
+      "GET /api/filing-codes/sheet": {
+        status: 400,
+        html: '<!doctype html><html><head><title>Sticker sheet</title></head><body><p class="error">start at a label from 1 to 65</p></body></html>',
+      },
+    });
     const section = await screen.findByRole("region", { name: "Print stickers" });
     await user.click(await within(section).findByLabelText("Print A"));
     await user.click(within(section).getByRole("button", { name: "Open sheet" }));
-    expect(await within(section).findByRole("alert")).toHaveTextContent("start at a label from 1 to 65");
-    expect(opened[0].close).toHaveBeenCalled();
+    expect(await within(section).findByRole("alert")).toHaveTextContent(/^start at a label from 1 to 65$/);
+    expect(window.open).not.toHaveBeenCalled();
   });
 
   it("Custom shows the mm fields, saves them and then prints on it", async () => {
@@ -156,8 +156,8 @@ describe("Print stickers (Settings)", () => {
     expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ ...saved, id: undefined });
     await waitFor(() => expect(within(section).getByRole("button", { name: "Open sheet" })).toBeEnabled());
     await user.click(within(section).getByRole("button", { name: "Open sheet" }));
-    await waitFor(() => expect(sheetPosts(calls)).toHaveLength(1));
-    expect(sheetPosts(calls)[0].body).toMatchObject({ layout: "custom", codes: { A: 1 } });
+    await waitFor(() => expect(window.open).toHaveBeenCalledTimes(1));
+    expect(openedTabs()[0]).toMatchObject({ layout: "custom", codes: "A:1" });
   });
 
   it("a refused custom sheet shows why", async () => {

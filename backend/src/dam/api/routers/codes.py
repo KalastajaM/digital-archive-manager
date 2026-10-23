@@ -1,5 +1,6 @@
 """Filing codes: read the table and replace it as a whole."""
 
+import html
 from dataclasses import asdict
 
 from fastapi import APIRouter, Response
@@ -112,15 +113,18 @@ def save_custom_sheet(app: AppDep, body: SheetLayoutIn) -> dict:
         raise InvalidRequest(f"the layout could not be saved: {e}") from e
 
 
-@router.post(
-    "/sheet",
-    response_class=Response,  # not HTMLResponse: errors stay JSON in the schema
-    responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
+# The sheet opened in its own browser tab: its inline styles need a policy of its own
+# (the app page's ``style-src 'self'`` would blank them), and it may load nothing.
+SHEET_CSP = (
+    "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; "
+    "form-action 'none'; frame-ancestors 'none'"
 )
-def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
-    """A printable page of stickers (HTML, A4) for the chosen codes and counts; 400 for
-    an unknown code or layout, a start label off the sheet, a negative count, nothing to
-    print or more than 2000 stickers. Changes nothing."""
+_SHEET_HEADERS = {"Content-Security-Policy": SHEET_CSP, "Referrer-Policy": "no-referrer"}
+
+
+def _render_sheet(app: App, body: StickerSheetIn) -> str:
+    """The sheet's HTML; ``InvalidRequest`` for an unknown code or layout, a start label
+    off the sheet, a negative count, nothing to print or too many stickers."""
     table = {c.code: c for c in app.codes}
     unknown = [k for k in body.codes if k.upper() not in table]
     if unknown:
@@ -139,7 +143,7 @@ def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
     for k, n in body.codes.items():
         counts[k.upper()] = counts.get(k.upper(), 0) + n
     try:
-        page = sheets.render_sheet(
+        return sheets.render_sheet(
             [table[k] for k in counts],
             counts,
             layout,
@@ -150,4 +154,97 @@ def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
         )
     except ValueError as e:
         raise InvalidRequest(str(e)) from e
-    return HTMLResponse(page, headers={"X-Content-Type-Options": "nosniff"})
+
+
+@router.post(
+    "/sheet",
+    response_class=Response,  # not HTMLResponse: errors stay JSON in the schema
+    responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
+)
+def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
+    """A printable page of stickers (HTML, A4) for the chosen codes and counts; 400 for
+    an unknown code or layout, a start label off the sheet, a negative count, nothing to
+    print or more than 2000 stickers. Changes nothing."""
+    return HTMLResponse(_render_sheet(app, body), headers=_SHEET_HEADERS)
+
+
+_TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off"}
+
+
+def _flag(name: str, value: str | None, default: bool) -> bool:
+    if value is None or value == "":
+        return default
+    if value.lower() in _TRUE:
+        return True
+    if value.lower() in _FALSE:
+        return False
+    raise InvalidRequest(f"{name} must be true or false")
+
+
+def _whole(name: str, value: str) -> int:
+    try:
+        return int(value)
+    except ValueError:
+        raise InvalidRequest(f"{name} must be a whole number") from None
+
+
+def _sheet_query(
+    codes: str, layout: str, start_at: str | None, boxes: str | None,
+    blank_labels: str | None, outlines_only: str | None,
+) -> StickerSheetIn:
+    """The GET's query as the POST's body: ``codes`` is ``P:12,A:3`` (a code repeated
+    adds up)."""
+    counts: dict[str, int] = {}
+    for part in (p.strip() for p in codes.split(",")):
+        if not part:
+            continue
+        code, sep, n = part.rpartition(":")
+        if not sep or not code:
+            raise InvalidRequest("codes must look like P:12,A:3")
+        counts[code] = counts.get(code, 0) + _whole(f"the count of {code}", n)
+    return StickerSheetIn(
+        codes=counts,
+        layout=layout,
+        start_at=_whole("start_at", start_at) if start_at else 1,
+        boxes=_flag("boxes", boxes, True),
+        blank_labels=_flag("blank_labels", blank_labels, False),
+        outlines_only=_flag("outlines_only", outlines_only, False),
+    )
+
+
+def _error_page(message: str) -> HTMLResponse:
+    page = (
+        '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
+        "<title>Sticker sheet</title></head>"
+        f'<body><p class="error">{html.escape(message)}</p></body></html>\n'
+    )
+    return HTMLResponse(page, status_code=400, headers=_SHEET_HEADERS)
+
+
+@router.get(
+    "/sheet",
+    response_class=Response,
+    responses={
+        200: {"content": {"text/html": {"schema": {"type": "string"}}}},
+        400: {"content": {"text/html": {"schema": {"type": "string"}}}},
+    },
+)
+def sticker_sheet_page(
+    app: AppDep,
+    layout: str = "",
+    codes: str = "",
+    start_at: str | None = None,
+    boxes: str | None = None,
+    blank_labels: str | None = None,
+    outlines_only: str | None = None,
+) -> HTMLResponse:
+    """The sticker sheet as a page to open in its own tab and print (``codes``:
+    ``P:12,A:3``; the other options as in the POST). Its own Content-Security-Policy
+    allows its inline styles and nothing else. A 400 is a small HTML page saying why.
+    Changes nothing."""
+    try:
+        body = _sheet_query(codes, layout, start_at, boxes, blank_labels, outlines_only)
+        return HTMLResponse(_render_sheet(app, body), headers=_SHEET_HEADERS)
+    except InvalidRequest as e:
+        return _error_page(str(e))

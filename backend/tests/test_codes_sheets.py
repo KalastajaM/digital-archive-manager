@@ -372,6 +372,56 @@ def test_unknown_code_400(app):
         assert r.status_code == 400 and "2000" in r.json()["error"]
 
 
+SHEET_CSP = (
+    "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; "
+    "form-action 'none'; frame-ancestors 'none'"
+)
+
+
+def test_api_sheet_page_get(app):
+    """The tab the UI opens: the same sheet by GET, with a policy of its own."""
+    with make_client(app) as c:
+        r = c.get(
+            "/api/filing-codes/sheet",
+            params={"codes": "P:2,A:1", "layout": "l7651", "start_at": "2", "boxes": "false"},
+        )
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/html")
+    assert r.headers["content-security-policy"] == SHEET_CSP
+    labels = printed(parse(r.text))
+    assert [lab["data-code"] for lab in labels] == ["P", "P", "A"]
+    assert mm(labels[0]["style"], "left") == pytest.approx(4.7 + 40.6)
+    assert "<polygon" not in r.text  # boxes=false: no tick boxes
+
+
+def test_api_sheet_page_get_outlines_and_repeats(app):
+    with make_client(app) as c:
+        r = c.get("/api/filing-codes/sheet", params={"layout": "plain", "outlines_only": "true"})
+        assert r.status_code == 200 and "Filing code test print" in r.text
+        r = c.get("/api/filing-codes/sheet", params={"codes": "P:1,p:2", "layout": "l7651"})
+        assert [lab["data-code"] for lab in printed(parse(r.text))] == ["P", "P", "P"]
+
+
+def test_api_sheet_page_get_400_is_html(app):
+    with make_client(app) as c:
+        for params, says in [
+            (
+                {"codes": "P:1,<b>Z</b>:1", "layout": "l7651"},
+                "unknown filing code: &lt;b&gt;Z&lt;/b&gt;",
+            ),
+            ({"codes": "P:0", "layout": "l7651"}, "Nothing to print"),
+            ({"codes": "P", "layout": "l7651"}, "codes must look like P:12,A:3"),
+            ({"codes": "P:x", "layout": "l7651"}, "must be a whole number"),
+            ({"codes": "P:1", "layout": "l7651", "start_at": "99"}, "start at a label"),
+            ({"codes": "P:1", "layout": "l7651", "boxes": "maybe"}, "boxes must be true or false"),
+        ]:
+            r = c.get("/api/filing-codes/sheet", params=params)
+            assert r.status_code == 400, params
+            assert r.headers["content-type"].startswith("text/html")
+            assert r.headers["content-security-policy"] == SHEET_CSP
+            assert says in r.text, (params, r.text)
+
+
 def test_huge_count_400_quickly(app):
     """A huge count is refused before any sticker list is built."""
     with make_client(app) as c:

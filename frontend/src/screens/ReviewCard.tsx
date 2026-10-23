@@ -188,26 +188,39 @@ function AISummary({ summary, onUse }: { summary: string; onUse: () => void }) {
 export const unclearBoxes = (s: InboxEntry["suggestion"]): string[] =>
   s.marks_unclear ? (["star", "important"] as const).filter((k) => s[k] === null) : [];
 
-/** Star it / mark it Important once filed (sent with the filing; a sticker's tick boxes
- * preselect them). */
-function FilingMarks(props: {
+/** What a QR sticker's tick boxes ask for once the file is filed (sent with the filing):
+ * shown only when a sticker set something. A box for a mark the file already has is
+ * not offered. */
+function StickerMarks(props: {
   star: boolean;
   important: boolean;
+  hasStar: boolean;
+  hasImportant: boolean;
   unclear: string[];
   onStar: (on: boolean) => void;
   onImportant: (on: boolean) => void;
 }) {
+  const unclear = props.unclear.filter((k) => (k === "star" ? !props.hasStar : !props.hasImportant));
   return (
-    <div className="field filing-marks" role="group" aria-label="Once filed">
-      <label className="check">
-        <input type="checkbox" checked={props.star} onChange={(e) => props.onStar(e.target.checked)} />
-        Starred
-      </label>
-      <label className="check">
-        <input type="checkbox" checked={props.important} onChange={(e) => props.onImportant(e.target.checked)} />
-        Important
-      </label>
-      {props.unclear.length > 0 && <p className="notice">Tick box unclear: check {props.unclear.join(" and ")}</p>}
+    <div className="field sticker-marks" role="group" aria-label="From the sticker">
+      <span className="sticker-marks-title">From the sticker</span>
+      {props.hasStar ? (
+        <span className="hint">already starred</span>
+      ) : (
+        <label className="check">
+          <input type="checkbox" checked={props.star} onChange={(e) => props.onStar(e.target.checked)} />
+          Star when filed
+        </label>
+      )}
+      {props.hasImportant ? (
+        <span className="hint">already Important</span>
+      ) : (
+        <label className="check">
+          <input type="checkbox" checked={props.important} onChange={(e) => props.onImportant(e.target.checked)} />
+          Mark Important when filed
+        </label>
+      )}
+      {unclear.length > 0 && <p className="notice">Tick box unclear: check {unclear.join(" and ")}</p>}
     </div>
   );
 }
@@ -235,7 +248,8 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   const [collections, setCollections] = useState<string[]>(() => [...entry.suggestion.collections]);
   const [collectionText, setCollectionText] = useState("");
   const [note, setNote] = useState("");
-  // A QR sticker's tick boxes preselect these (an unclear box leaves it off and says so).
+  // A QR sticker's tick boxes preselect these (an unclear box leaves it off and says so);
+  // a mark the file already has is not sent again.
   const [star, setStar] = useState(entry.suggestion.star === true);
   const [important, setImportant] = useState(entry.suggestion.important === true);
   // Set on the first Preview / File it: from then on a missing field is shown live.
@@ -344,6 +358,10 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
     setNote((old) => (old.trim() ? `${old.trimEnd()}\n\n${summary}` : summary));
   };
 
+  const fromSticker =
+    entry.suggestion.star === true || entry.suggestion.important === true || entry.suggestion.marks_unclear;
+  const hasStar = entry.record.marks.includes("starred");
+  const hasImportant = entry.record.marks.includes("important");
   const fieldProblem = missingField(name, folder);
   // A missing name or folder is shown on its field; the rest (a half-typed collection)
   // is the card's own message.
@@ -355,7 +373,14 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
     : [
         withFollowUps(
           { drive_id: entry.record.drive_id, name, folder, tags: parseTags(tags) },
-          { tray: alreadyIn ? null : (tray?.id ?? null), trayFields, collections, note, star, important },
+          {
+            tray: alreadyIn ? null : (tray?.id ?? null),
+            trayFields,
+            collections,
+            note,
+            star: star && !hasStar,
+            important: important && !hasImportant,
+          },
         ),
       ];
   filing.form.current = current; // stale previews are dropped against this
@@ -518,13 +543,17 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
           />
           {answer?.summary.trim() && <AISummary summary={answer.summary} onUse={useSummaryAsNote} />}
           <NoteEditor value={note} onChange={setNote} />
-          <FilingMarks
-            star={star}
-            important={important}
-            unclear={unclearBoxes(entry.suggestion)}
-            onStar={setStar}
-            onImportant={setImportant}
-          />
+          {fromSticker && (
+            <StickerMarks
+              star={star}
+              important={important}
+              hasStar={hasStar}
+              hasImportant={hasImportant}
+              unclear={unclearBoxes(entry.suggestion)}
+              onStar={setStar}
+              onImportant={setImportant}
+            />
+          )}
           <hr />
           <DetectedFields entry={entry} />
           {/* After the form, so showing it never pushes the fields down; it sticks to the

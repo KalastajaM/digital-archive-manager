@@ -3,13 +3,14 @@
  * new tab and print it with the browser's dialog. Test print draws only the label
  * outlines, to print on plain paper and hold against a label sheet. Nothing here changes
  * the archive. */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   errorText,
   type SheetLayout,
   type SheetLayoutIn,
-  stickerSheet,
+  checkStickerSheet,
   type StickerSheet,
+  stickerSheetUrl,
   useFilingCodes,
   useSaveCustomSheet,
   useSheetLayouts,
@@ -51,43 +52,6 @@ function toLayout(d: Draft): SheetLayoutIn | null {
 const sameLayout = (a: SheetLayoutIn | null, b: SheetLayout | null) =>
   a !== null && b !== null && a.name === b.name && a.cut_lines === b.cut_lines && MM_FIELDS.every(([k]) => a[k] === b[k]);
 
-/** Build the sheet ``html`` into the empty tab ``win``. The tab shares the app's
- * Content-Security-Policy, which blocks inline ``<style>`` and ``style`` attributes, so
- * the styles are set through the CSSOM (allowed) instead of writing the HTML as it is. */
-export function showSheet(win: Window, html: string) {
-  const parsed = new DOMParser().parseFromString(html, "text/html");
-  const doc = win.document;
-  doc.title = parsed.title;
-  doc.documentElement.lang = parsed.documentElement.lang || "en";
-  const css = Array.from(parsed.querySelectorAll("style"), (s) => s.textContent ?? "").join("\n");
-  const Sheet = (win as Window & typeof globalThis).CSSStyleSheet;
-  let adopted = false;
-  try {
-    const sheet = new Sheet();
-    sheet.replaceSync(css);
-    doc.adoptedStyleSheets = [sheet];
-    adopted = true;
-  } catch {
-    // no constructable style sheets: a <style> element (fine where no CSP applies)
-  }
-  if (!adopted) {
-    const style = doc.createElement("style");
-    style.textContent = css;
-    doc.head.append(style);
-  }
-  const inline: string[] = [];
-  for (const el of Array.from(parsed.body.querySelectorAll("[style]"))) {
-    el.setAttribute("data-sheet-style", String(inline.length));
-    inline.push(el.getAttribute("style") ?? "");
-    el.removeAttribute("style");
-  }
-  doc.body.replaceChildren(...Array.from(parsed.body.childNodes, (n) => doc.importNode(n, true)));
-  for (const el of Array.from(doc.querySelectorAll<HTMLElement | SVGElement>("[data-sheet-style]"))) {
-    el.style.cssText = inline[Number(el.getAttribute("data-sheet-style"))] ?? "";
-    el.removeAttribute("data-sheet-style");
-  }
-}
-
 export function PrintStickers() {
   const codes = useFilingCodes();
   const layouts = useSheetLayouts();
@@ -101,6 +65,7 @@ export function PrintStickers() {
   const [boxes, setBoxes] = useState(true);
   const [blank, setBlank] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false); // one sheet at a time, however fast the clicks
   const [error, setError] = useState<string | null>(null);
 
   const header = (
@@ -183,21 +148,17 @@ export function PrintStickers() {
       blank_labels: blank,
       outlines_only: outlinesOnly,
     };
-    // Opened now, while the click still counts as the user's: a tab opened after the
-    // answer arrives would be blocked as a pop-up.
-    const win = window.open("", "_blank");
-    if (!win) {
-      setError("The browser blocked the new tab. Allow pop-ups for dam and try again.");
-      return;
-    }
-    win.opener = null;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
+    const url = stickerSheetUrl(body);
     try {
-      showSheet(win, await stickerSheet(body));
+      await checkStickerSheet(url); // a refusal is said here, not in an empty tab
+      window.open(url, "_blank", "noopener");
     } catch (e) {
-      win.close();
       setError(errorText(e));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };

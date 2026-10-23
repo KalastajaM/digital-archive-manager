@@ -1369,18 +1369,35 @@ export const useSaveCustomSheet = () => {
   });
 };
 
-/** The printable sticker sheet as an HTML page (changes nothing); a 400 says why not. */
-export async function stickerSheet(body: StickerSheet): Promise<string> {
-  const headers: Record<string, string> = { Accept: "text/html", "Content-Type": "application/json" };
-  if (activeArchive) headers["X-Dam-Archive"] = activeArchive;
-  const response = await fetch("/api/filing-codes/sheet", {
-    method: "POST",
-    headers,
-    credentials: "same-origin",
-    body: JSON.stringify(body),
+/** The sticker sheet page (``GET``, opened in its own tab; it carries a
+ * Content-Security-Policy of its own). ``codes`` go as ``P:12,A:3``. */
+export function stickerSheetUrl(sheet: StickerSheet): string {
+  const query = new URLSearchParams({
+    codes: Object.entries(sheet.codes)
+      .map(([code, n]) => `${code}:${n}`)
+      .join(","),
+    layout: sheet.layout,
+    start_at: String(sheet.start_at),
+    boxes: String(sheet.boxes),
+    blank_labels: String(sheet.blank_labels),
+    outlines_only: String(sheet.outlines_only),
   });
-  if (!response.ok) throw await failure(response);
-  return response.text();
+  return `/api/filing-codes/sheet?${query}`;
+}
+
+/** Load the sheet page once before opening it, so a refusal (a 400 page saying why)
+ * is shown in the app instead of in a new tab. Changes nothing. */
+export async function checkStickerSheet(url: string): Promise<void> {
+  const response = await fetch(url, { headers: { Accept: "text/html" }, credentials: "same-origin" });
+  if (response.ok) return;
+  let detail = "";
+  try {
+    const page = new DOMParser().parseFromString(await response.text(), "text/html");
+    detail = page.body.textContent?.trim() ?? "";
+  } catch {
+    detail = response.statusText;
+  }
+  throw new ApiError(response.status, detail);
 }
 
 const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];

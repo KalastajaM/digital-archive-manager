@@ -354,7 +354,7 @@ describe("File N marked", () => {
     expect(bill).toHaveTextContent("Then Starred, Important");
     const letter = rowOf("2026-10-03 Letter.pdf");
     expect(letter).not.toHaveTextContent("Starred");
-    expect(within(letter).getByText("Unclear: Tick box unclear: star")).toBeInTheDocument();
+    expect(within(letter).getByText("Tick box unclear: check star")).toBeInTheDocument();
     expect(within(letter).getByRole("checkbox")).not.toBeChecked();
     await user.click(screen.getByRole("button", { name: "File 1" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));

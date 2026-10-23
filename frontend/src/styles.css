@@ -1870,5 +1870,6 @@ button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
 .print-stickers-options, .print-stickers-custom { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--sp-2); align-items: end; margin-bottom: var(--sp-3); }
 .print-stickers-options > label, .print-stickers-custom > label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
 .print-stickers label.check { flex-direction: row; align-items: center; gap: var(--sp-2); margin: 0; }
-.filing-marks { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; }
-.filing-marks .notice { flex-basis: 100%; margin: 0; }
+.sticker-marks { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); align-items: center; }
+.sticker-marks-title { flex-basis: 100%; font-size: var(--fs-sm); color: var(--muted); }
+.sticker-marks .notice { flex-basis: 100%; margin: 0; }
