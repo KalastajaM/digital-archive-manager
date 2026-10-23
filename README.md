@@ -20,6 +20,10 @@ without ever deleting a file.
 - **Safe by design.** dam never deletes your files. Every change is shown before it
   happens, recorded, and can be undone. "Delete" means moving to a `To Delete` folder that
   you empty yourself.
+- **Decide on paper, file in one go.** Save a scan straight into the inbox's To pay or
+  To action folder, or put a printed QR sticker on the paper before scanning (tick ★ or
+  ! on it to star it or mark it Important). dam fills in the tray, folder and tags from
+  that, and **File N marked** files the whole batch after one look, with one Undo.
 - **Your folders, your cloud.** It works on an ordinary folder that your sync client
   already keeps in sync, so there is no new account, no upload and no lock-in. Stop using
   dam and your archive is still just folders and files.
@@ -61,6 +65,14 @@ without ever deleting a file.
   <tr>
     <td align="center"><b>Collections</b>: a house sale in one place, nothing moved</td>
     <td align="center"><b>AI settings</b>: spend, the switch and the folders never sent</td>
+  </tr>
+  <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/filing-codes-dark.png"><img alt="File N marked: each coded inbox file with its codes, folder, tray and tags; the ones that need a look start unticked" src="docs/images/filing-codes-light.png"></picture></td>
+    <td><picture><img alt="A sheet of QR stickers for the filing codes P, A and R, each with star and Important tick boxes" src="docs/images/sticker-sheet.png"></picture></td>
+  </tr>
+  <tr>
+    <td align="center"><b>File N marked</b>: a whole batch, checked and filed at once</td>
+    <td align="center"><b>QR stickers</b>: decide on the paper before you scan</td>
   </tr>
 </table>
 

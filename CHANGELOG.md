@@ -8,13 +8,35 @@ All notable changes are listed here. The format follows
 
 ### Added
 
-- Settings → Print stickers: pick filing codes and how many of each, a label sheet
-  (Avery Zweckform L7651, plain paper, or your own sizes in mm) and the first label to
-  use, then open the sheet in a new tab and print it. Stickers have star and Important
-  tick boxes unless you turn them off, and can be left blank to write on. Test print
-  draws only the label outlines, to check the fit against a label sheet. A sticker's
-  ticked boxes preselect Starred and Important when you file the paper, and an unclear
-  box is pointed out.
+- Filing codes: drop files into a code's folder in the inbox (To pay, To action, To
+  read, Follow-up, File as suggested, or your own) and file them all at once with File N
+  marked. A code is a short letter or number from your own table that fills in the
+  tray, folder, name pattern, tags and collections. Five come with dam (A, P, R, F and
+  D for "file as suggested": already handled, file it where dam suggests, in no tray).
+  Edit them in Settings → Filing codes, with a warning when two codes look alike by
+  hand. The table is kept in `config/filing_codes.yaml`; comments written in that file
+  by hand are not kept when you save from the app.
+- Inbox folders for filing codes: Settings → Filing codes → Create inbox folders makes
+  the missing ones in `##. Organize`, after a preview and with Undo. Files directly in a
+  code's folder show in the Inbox with that code. Inbox subfolders that are no code's
+  folder are listed in Settings. Existing `##. Organize` subfolders named "To pay",
+  "To action", "To read", "Follow-up" or "File as suggested" become inbox folders after
+  the update, so the files directly in them now show in the Inbox.
+- QR stickers for filing codes: a sticker on page 1 of a scan gives the file its code,
+  on every platform. Other QR codes (on invoices, letters) are ignored, and a sticker
+  keeps working when you change what its code does. The ★ and ! tick boxes on a sticker
+  set Star when filed and Mark Important when filed in the Inbox form; a box that cannot
+  be read clearly is pointed out.
+- Settings → Print stickers: pick codes and how many of each, a label sheet (Avery
+  Zweckform L7651, plain paper with cut lines, or your own sizes in mm, saved) and the
+  first label to use, then open the sheet in a new tab and print it at 100 %. Tick
+  boxes are on by default, and labels can be left blank to write on. Test print draws
+  only the label outlines, to check the fit against a label sheet first.
+- File N marked, in the Inbox toolbar and on Today: one row per coded file with the
+  codes found (folder, sticker) and exactly what filing will do. Rows that need input,
+  whose codes disagree or whose tick box is unclear start unticked and say why; a row
+  that needs input is fixed in the form. File files the ticked rows as one batch with
+  one Undo.
 - Activity → AI lists the excluded folders (never sent to AI) and lets you add or remove
   them, with a folder picker; a folder not in the archive is marked. The change applies
   at once and is saved in settings.yaml. Removing one asks first, since its documents

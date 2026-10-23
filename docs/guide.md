@@ -8,6 +8,7 @@
 - [The window](#the-window)
 - [Today](#today)
 - [Filing from the Inbox](#filing-from-the-inbox)
+- [Filing codes](#filing-codes)
 - [Trays](#trays)
 - [Paying a bill with the bank barcode](#paying-a-bill-with-the-bank-barcode)
 - [Collections](#collections)
@@ -156,7 +157,8 @@ nothing overdue", or "All clear") and the date, then cards.
   (red overdue, orange within 3 days, grey later).
 - **Inbox** has the count, the age of the oldest document, a bar for this week, last week
   and older, and **Found in the inbox**: documents whose scan says they belong in a tray,
-  each with **Put in <tray>**.
+  each with **Put in <tray>**. When inbox files have a filing code, **File N marked**
+  opens them as one batch (see [Filing codes](#filing-codes)).
 - **To action**, **To read** and your other trays, the open collections that still have
   to-dos (open checklist entries, or files still in the inbox), **Starred** files, and
   the result of the last reminder check.
@@ -211,6 +213,137 @@ More on the form:
 collection, a tray item): the pencil beside the name renames it (the extension stays), the
 folder icon beside the path moves it, and tags are chips written at once. A rename or move
 is shown as a plan first and has **Undo**.
+
+## Filing codes
+
+When you scan a paper you usually know already what it is for: a bill to pay, something
+to do, or something already dealt with that only needs to go to its folder. A **filing
+code** carries that decision with the document, so you do not make it again in the
+Inbox. A code is one to four letters or digits from your own table, for example `P` for
+To pay, and it can set any part of the filing form: the tray, the folder, a name pattern,
+tags and collections.
+
+A file gets its code from where you save it (an [inbox folder](#inbox-folders)) or from a
+[QR sticker](#qr-stickers) on its first page. Either way nothing is filed until you have
+seen it: a coded file waits in the Inbox with the code's values filled in, and you file
+it from the form or together with the others through [File N marked](#file-n-marked).
+
+dam comes with five codes, which you can change or remove in **Settings → Filing codes**:
+
+| Code | Label | Does | Inbox folder |
+| --- | --- | --- | --- |
+| `A` | To action | puts it in the To action tray | `To action` |
+| `P` | To pay | puts it in the To pay tray | `To pay` |
+| `R` | To read | puts it in the To read tray | `To read` |
+| `F` | Follow-up | puts it in the Follow up tray | `Follow-up` |
+| `D` | File as suggested | files it where dam suggests, in no tray | `File as suggested` |
+
+**File as suggested** is for paper you have already dealt with: the file goes to the
+folder and name that the rules, similar files and the date suggest, and into no tray (a
+tray that a rule or the scan suggested is dropped). If dam has no folder to suggest, the
+file needs input.
+
+**In the form**, each field a code sets starts with the code's value, and its chip says
+where it came from ("from folder To pay", "from sticker `P`"). Fields the code leaves
+alone are filled in as before, so a To pay code still takes the payee, amount and due
+date from the scan. A code's name pattern is not used when the file's name already
+starts with a date (`20261015_...`), so the date is not added twice.
+
+**Editing codes.** In Settings → Filing codes each code has a label, a tray, a folder, a
+name pattern, tags, collections, an inbox folder and the **File as suggested** box. While
+you type a code, dam warns when it looks like another one (`0` and `O`, `1` and `I`, `5`
+and `S`); that only matters for codes written by hand. The table is saved in
+`config/filing_codes.yaml` in the data folder, with a backup of the old file; comments
+you wrote in that file by hand are not kept when you save from the app. See
+[Filing codes file](reference.md#filing-codes-file) for the format.
+
+**Codes and AI.** A filing code never lets a file reach AI: if the rules would file it in
+an [excluded folder](#ai-optional), it stays excluded, whatever folder the code names.
+
+### Inbox folders
+
+Each code can have an inbox folder: a subfolder of `##. Organize` such as
+`##. Organize/To pay`. Save or scan a file straight into it, or drag it there, and it
+shows in the Inbox with that code. Only files directly in a code's folder count; a
+folder inside it is not looked at.
+
+dam does not make these folders by itself. **Create inbox folders** in Settings → Filing
+codes makes the missing ones after a preview, and Activity can undo it while they are
+still empty. Filing a file moves it out as usual; the folder stays for the next one.
+Renaming a code's inbox folder in Settings does not rename the folder on disk.
+
+Other subfolders of the inbox are not inbox folders, and the files in them are not in
+the Inbox. Settings lists them under the codes ("Not a filing code folder"), so a
+renamed folder is easy to spot.
+
+If your inbox already has subfolders named "To pay", "To action", "To read",
+"Follow-up" or "File as suggested", they become inbox folders with this version, and the
+files directly in them now show in the Inbox.
+
+### QR stickers
+
+A sticker is a small label with a QR code, the code in bold and its label. Stick it on
+the first page of a paper before you scan it. When dam reads the scan it looks for
+stickers on page 1 and takes a sticker only when its code is in your table, so QR codes
+printed on invoices and letters are ignored. This works on macOS, Windows and Linux. The
+QR code holds only the code, so printed stickers keep working when you change what a code
+does.
+
+**Tick boxes.** A sticker can have two boxes, ★ and **!**. Tick ★ with a pen to star the
+document when it is filed, and **!** to mark it Important (see
+[Starred and Important](#starred-and-important)). For a file with a sticker the form
+shows **Star when filed** and **Mark Important when filed**, set from the boxes; you can
+change them. A box dam cannot read clearly is pointed out ("Tick box unclear: check
+star"), and the file starts unticked in File N marked.
+
+**Printing stickers.** In **Settings → Print stickers**:
+
+- Tick the codes to print and type how many of each.
+- Choose the sheet: **Avery Zweckform L7651** (65 labels of 38.1 × 21.2 mm), **Plain
+  paper, cut out** (the same grid with cut lines), or **Custom**: columns, rows, label
+  size, margins and gaps in mm, with or without cut lines. **Save custom sheet** keeps
+  it for next time.
+- **Start at label** picks the first label to use, to finish a half-used sheet.
+- **With tick boxes** is on by default. **Blank labels** leaves out the label text so you
+  can write your own; the code is still printed.
+- **Open sheet** opens the stickers in a new tab. Print from there at 100 %, without
+  "fit to page", since scaling is the usual cause of labels that do not line up.
+
+**Test print** draws only the label outlines: print it on plain paper and hold it against
+a label sheet to check the fit. The L7651 measurements in dam have not been checked
+against Avery's own template, so make a test print before printing on labels.
+
+### Several codes on one file
+
+A file can have more than one code, for example a sticker `A` on a paper saved in the
+To pay folder. Tags and collections from all codes are combined. If the codes give
+different values for the same field (two different trays, or a tray code together with
+File as suggested), the file is marked **Codes disagree** and you decide in the form. The
+same code found twice (folder and sticker) counts once.
+
+### File N marked
+
+When at least one inbox file has a code, the Inbox toolbar and the Inbox card on Today
+show **File N marked**. It opens **Marked files**, one row per coded file: the codes
+found and how ("P (folder)", "A (sticker)"), and exactly what filing will do: the new
+name, the folder, the tray with the fields that will be stored (for To pay the due
+date, amount, IBAN and reference), tags, collections, and Starred or Important from the
+tick boxes.
+
+Every row is checked with a dry run before the list shows. A row that needs a look says
+why and starts unticked:
+
+- **Needs input**: the filing would be refused or would miss something, such as a file
+  with no folder or a bill with no due date. The row says what is missing and cannot be
+  ticked. **Open** shows the file in the Inbox form; fix it there and file it from the
+  form.
+- **Codes disagree**: see above.
+- **Tick box unclear**: a sticker's box could not be read clearly.
+
+You can tick the last two on purpose if what the row shows is right, or open them.
+**File N** shows the preview of every move and files the ticked rows as one batch: one
+entry in Activity, with one **Undo** for all of them. Files you left unticked stay in the
+Inbox with their code's values filled in.
 
 ## Trays
 
@@ -390,9 +523,15 @@ on/off switch.
 
 ## Settings
 
-Settings is where dam's own options are kept, one section for each area. It starts with
-**Filing codes**: the short letters or numbers you write on a paper or in a file name, each
-with the tray, folder, name and tags it files as.
+Settings is where dam's own options are kept, one section for each area:
+
+- **Filing codes**: your table of codes, each with its label, tray, folder, name
+  pattern, tags, collections, inbox folder and the **File as suggested** box. **Add a
+  code** adds a row and **Save** writes the table. **Create inbox folders** appears while
+  a code's inbox folder is missing. Subfolders of the inbox that belong to no code are
+  listed here too. See [Filing codes](#filing-codes).
+- **Print stickers**: sticker sheets with QR codes for your filing codes, with a test
+  print to check the fit. See [QR stickers](#qr-stickers).
 
 ## Notes and checklists
 
