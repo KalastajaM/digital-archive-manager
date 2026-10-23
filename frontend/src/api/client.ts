@@ -18,6 +18,7 @@ export type FileItResult = Schemas["FileItResultOut"];
 export type BatchResult = Schemas["BatchResultOut"];
 export type FilingCode = Schemas["FilingCodeIn"];
 export type FilingCodes = Schemas["FilingCodesOut"];
+export type CodeHit = Schemas["CodeHitOut"];
 export type CodeFolders = Schemas["FilingCodeFoldersOut"];
 export type UndoResult = Schemas["UndoResultOut"];
 export type Status = Schemas["StatusOut"];

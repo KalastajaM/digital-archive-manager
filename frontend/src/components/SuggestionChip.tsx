@@ -28,11 +28,22 @@ const fold = (s: string) => s.normalize("NFC").toLocaleLowerCase();
 
 const SOURCES = " · ";
 
-/** "rule:northpower" → "rule northpower"; other sources as they are (each of a joined list). */
-export const sourceLabel = (source: string) =>
+/** How a filing code was found, for a "code:P" source: "from folder To pay", "from pen
+ * mark `P`", "from sticker `P`". Unknown (not found in the file's hits): "code `P`". */
+export type CodeLabel = (code: string) => string;
+
+/** "rule:northpower" → "rule northpower", "code:P" → "from folder To pay" (``codeLabel``
+ * knows how the code was found); other sources as they are (each of a joined list). */
+export const sourceLabel = (source: string, codeLabel?: CodeLabel) =>
   source
     .split(SOURCES)
-    .map((s) => (s.startsWith("rule:") ? `rule ${s.slice(5)}` : s))
+    .map((s) =>
+      s.startsWith("rule:")
+        ? `rule ${s.slice(5)}`
+        : s.startsWith("code:")
+          ? (codeLabel?.(s.slice(5)) ?? `code \`${s.slice(5)}\``)
+          : s,
+    )
     .join(SOURCES);
 
 /** The offers (first one first) whose value differs from ``current``; one per value,
@@ -74,12 +85,13 @@ type ChipProps = {
   /** The value as shown, when it differs from what Use puts in (e.g. a tray's name). */
   shown?: string;
   disabled?: boolean;
+  codeLabel?: CodeLabel;
   onUse: () => void;
 };
 
-export function SuggestionChip({ field, offer, shown, disabled, onUse }: ChipProps) {
+export function SuggestionChip({ field, offer, shown, disabled, codeLabel, onUse }: ChipProps) {
   const text = visible(shown ?? offer.value);
-  const source = visible(sourceLabel(offer.source));
+  const source = visible(sourceLabel(offer.source, codeLabel));
   const tip = offer.note ? `${source}: ${visible(offer.note)}` : source;
   return (
     <div className="suggestion-chip" role="group" aria-label={`Suggested ${visible(field)}: ${text} (${source})`}>
@@ -106,12 +118,14 @@ export function FieldChips({
   offers,
   shown,
   disabled,
+  codeLabel,
   onUse,
 }: {
   field: string;
   offers: Offer[];
   shown?: (offer: Offer) => string;
   disabled?: boolean;
+  codeLabel?: CodeLabel;
   onUse: (offer: Offer) => void;
 }) {
   if (offers.length === 0) return null;
@@ -124,6 +138,7 @@ export function FieldChips({
           offer={o}
           shown={shown?.(o)}
           disabled={disabled}
+          codeLabel={codeLabel}
           onUse={() => onUse(o)}
         />
       ))}

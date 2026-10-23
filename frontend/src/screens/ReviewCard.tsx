@@ -4,6 +4,7 @@ import { TipButton } from "../components/ui/TipButton";
 import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  type CodeHit,
   errorText,
   type FieldDef,
   type FileRequest,
@@ -11,6 +12,7 @@ import {
   type InboxEntry,
   type TrayDef,
   useFileLinks,
+  useFilingCodes,
   useTrays,
 } from "../api/client";
 import { AIRejected } from "../components/ai/AIBadge";
@@ -43,6 +45,7 @@ import {
   addTags,
   AI_SOURCE,
   aiNote,
+  type CodeLabel,
   FieldChips,
   type Offer,
   offersFor,
@@ -120,16 +123,30 @@ export function FilingMessage({ filing, ids, problem }: { filing: Filing; ids: s
 
 /** The trays (in order) and the tray picked on a card; a tray that vanished from the
  * list on a reload counts as none picked. */
-export function useTrayChoice() {
+export function useTrayChoice(initialId: string | null = null) {
   const trays = useTrays();
   const list: TrayDef[] = trays.data?.trays ?? [];
-  // Starts at Nothing. The review card is remounted for every entry, so a choice is
+  // Starts at Nothing (or the tray a filing code picked). The review card is remounted for every entry, so a choice is
   // never carried over to another file; the batch card keeps its choice while the
   // selection changes (it applies to the whole batch).
-  const [trayId, setTrayId] = useState<string | null>(null);
+  const [trayId, setTrayId] = useState<string | null>(initialId);
   const tray = list.find((t) => t.id === trayId) ?? null;
   const problem = trays.isError ? errorText(trays.error) : null;
   return { list, tray, setTrayId, problem };
+}
+
+/** How each code of a file was found, for a chip's "code:P" source: its inbox folder's name
+ * ("from folder To pay"), the pen mark or the sticker. */
+export function useCodeLabel(hits: CodeHit[]): CodeLabel {
+  const codes = useFilingCodes();
+  return (code) => {
+    const hit = hits.find((h) => h.code === code);
+    if (!hit) return `code \`${code}\``;
+    if (hit.via === "pen") return `from pen mark \`${code}\``;
+    if (hit.via === "qr") return `from sticker \`${code}\``;
+    const folder = codes.data?.codes.find((c) => c.code === code)?.inbox_folder;
+    return folder ? `from folder ${folder}` : `code \`${code}\``;
+  };
 }
 
 /** In place of the tray fields when the file already has an open item in that tray:
@@ -179,11 +196,15 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   const [name, setName] = useState(entry.suggestion.name);
   const [folder, setFolder] = useState(entry.suggestion.folder ?? "");
   const [tags, setTags] = useState(entry.suggestion.tags.join(", "));
-  const trays = useTrayChoice();
+  // Only a filing code preselects a tray (a code's tray, or none for "file as suggested");
+  // a rule's or the heuristic's tray guess is not applied by itself.
+  const fromCode = entry.suggestion.tray_source?.startsWith("code:") ?? false;
+  const trays = useTrayChoice(fromCode ? entry.suggestion.tray : null);
   const tray = trays.tray;
+  const codeLabel = useCodeLabel(entry.suggestion.codes);
   // Per tray, the fields the user edited (switching trays back and forth keeps them).
   const [edits, setEdits] = useState<Record<string, TrayValues>>({});
-  const [collections, setCollections] = useState<string[]>([]);
+  const [collections, setCollections] = useState<string[]>(() => [...entry.suggestion.collections]);
   const [collectionText, setCollectionText] = useState("");
   const [note, setNote] = useState("");
   // Set on the first Preview / File it: from then on a missing field is shown live.
@@ -381,6 +402,11 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
         </div>
         <div className="proposal inspector">
           <FilingMessage filing={filing} ids={[entry.record.drive_id]} problem={tried && !fieldProblem ? otherProblem : null} />
+          {entry.suggestion.conflict && (
+            <p className="notice" role="status">
+              These filing codes disagree; pick the values here.
+            </p>
+          )}
           <AIHint what="for filing suggestions" />
           {ai.sheet}
           <LinkBadges driveId={entry.record.drive_id} />
@@ -402,7 +428,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
                 {fieldProblem.message}
               </p>
             )}
-            <FieldChips field="Name" offers={nameOffers} disabled={filing.busy} onUse={(o) => setName(o.value)} />
+            <FieldChips field="Name" offers={nameOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setName(o.value)} />
             {rejected("name", "name")}
           </div>
           <div className="field">
@@ -413,7 +439,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               onChange={setFolder}
               error={tried && fieldProblem?.field === "folder" ? fieldProblem.message : null}
             />
-            <FieldChips field="Folder" offers={folderOffers} disabled={filing.busy} onUse={(o) => setFolder(o.value)} />
+            <FieldChips field="Folder" offers={folderOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setFolder(o.value)} />
             {rejected("folder", "folder")}
           </div>
           <div className="field">
@@ -425,7 +451,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               disabled={filing.busy}
               passCmdEnter
             />
-            <FieldChips field="tag" offers={tagChips} disabled={filing.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
+            <FieldChips field="tag" offers={tagChips} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
             {rejected("tags", "tags")}
           </div>
           <hr />

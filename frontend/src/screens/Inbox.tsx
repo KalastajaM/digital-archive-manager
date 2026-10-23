@@ -125,6 +125,21 @@ function ScanChip({ prefill, today }: { prefill: Record<string, string>; today: 
   );
 }
 
+/** The filing codes found for a file ("P", "P?" when the reading was unclear). */
+function CodeBadge({ codes }: { codes: InboxEntry["suggestion"]["codes"] }) {
+  if (codes.length === 0) return null;
+  const shown: string[] = [];
+  for (const c of codes) {
+    const text = c.unclear ? `${c.code}?` : c.code;
+    if (!shown.includes(text)) shown.push(text);
+  }
+  return (
+    <Tag tone="grey" className="entry-chip" title={`Filing code ${shown.join(", ")}`}>
+      {visible(shown.join(" "))}
+    </Tag>
+  );
+}
+
 /** The ``##. Organize`` queue in two columns beside the sidebar: the list, then the
  * document (preview plus the form as a narrow inspector) or, with several files
  * selected, the batch form. ⌘-click and ⇧-click select several (the checkboxes do the
@@ -459,6 +474,7 @@ export default function Inbox() {
                         {date}
                       </span>
                       <ScanChip prefill={e.prefill} today={today} />
+                      <CodeBadge codes={e.suggestion.codes} />
                     </span>
                   </button>
                 </li>
