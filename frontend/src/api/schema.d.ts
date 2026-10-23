@@ -1952,6 +1952,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/filing-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Codes
+         * @description The loaded codes, entries of the file that were skipped (``problems``) and codes
+         *     that look like each other (``warnings``).
+         */
+        get: operations["list_codes_api_filing_codes_get"];
+        /**
+         * Replace Codes
+         * @description Replace the whole table (the old file is kept as a backup); 400 with the reason
+         *     if any code is invalid, repeated or names an unknown tray.
+         */
+        put: operations["replace_codes_api_filing_codes_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/archives": {
         parameters: {
             query?: never;
@@ -2487,6 +2513,20 @@ export interface components {
             done: boolean;
             /** Position */
             position: number;
+        };
+        /** CodeProblemOut */
+        CodeProblemOut: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** CodeWarningOut */
+        CodeWarningOut: {
+            /** Code */
+            code: string;
+            /** Confusable With */
+            confusable_with: string[];
         };
         /**
          * CollectionChangeOut
@@ -3058,6 +3098,63 @@ export interface components {
         FileTagsOut: {
             /** Tags */
             tags: string[];
+        };
+        /** FilingCodeIn */
+        FilingCodeIn: {
+            /** Code */
+            code: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /** Tray */
+            tray?: string | null;
+            /** Folder */
+            folder?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Collections */
+            collections?: string[];
+            /**
+             * As Suggested
+             * @default false
+             */
+            as_suggested: boolean;
+            /** Inbox Folder */
+            inbox_folder?: string | null;
+        };
+        /** FilingCodeOut */
+        FilingCodeOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Tray */
+            tray: string | null;
+            /** Folder */
+            folder: string | null;
+            /** Name */
+            name: string | null;
+            /** Tags */
+            tags: string[];
+            /** Collections */
+            collections: string[];
+            /** As Suggested */
+            as_suggested: boolean;
+            /** Inbox Folder */
+            inbox_folder: string | null;
+        };
+        /** FilingCodesOut */
+        FilingCodesOut: {
+            /** Codes */
+            codes: components["schemas"]["FilingCodeOut"][];
+            /** Problems */
+            problems: components["schemas"]["CodeProblemOut"][];
+            /** Warnings */
+            warnings: components["schemas"]["CodeWarningOut"][];
         };
         /**
          * FlatFilesOut
@@ -14784,6 +14881,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_codes_api_filing_codes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilingCodesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    replace_codes_api_filing_codes_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilingCodeIn"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilingCodesOut"];
                 };
             };
             /** @description Bad Request */

@@ -1209,3 +1209,47 @@ class ArchiveForgetOut(BaseModel):
 
 class ArchiveRevealIn(_In):
     what: Literal["data", "archive"]
+
+
+# -- filing codes -------------------------------------------------------------
+
+
+class FilingCodeIn(_In):
+    # checked by ``FilingCode`` (and the app) so a bad entry answers 400 with its text
+    code: str
+    label: str = ""
+    tray: str | None = None
+    folder: str | None = None
+    name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    collections: list[str] = Field(default_factory=list)
+    as_suggested: bool = False
+    inbox_folder: str | None = None
+
+
+class FilingCodeOut(BaseModel):
+    code: str
+    label: str
+    tray: str | None
+    folder: str | None
+    name: str | None
+    tags: list[str]
+    collections: list[str]
+    as_suggested: bool
+    inbox_folder: str | None
+
+
+class CodeProblemOut(BaseModel):
+    code: str
+    message: str
+
+
+class CodeWarningOut(BaseModel):
+    code: str
+    confusable_with: list[str]
+
+
+class FilingCodesOut(BaseModel):
+    codes: list[FilingCodeOut]
+    problems: list[CodeProblemOut]
+    warnings: list[CodeWarningOut]
