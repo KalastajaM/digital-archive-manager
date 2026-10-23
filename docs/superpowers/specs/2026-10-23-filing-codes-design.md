@@ -182,7 +182,9 @@ from there; no PDF library). QR images are generated with zxing-cpp
 (`zxingcpp.create_barcode(..., BarcodeFormat.QRCode).to_svg()`), so no new dependency.
 Each sticker holds the QR code with the code in bold and its label in small print beside
 it. Labels are capped at 24 characters and wrap or shrink to fit the sticker. The QR text
-holds only `dam:<CODE>`, so stickers stay valid when the code's meaning changes.
+holds only `dam:<CODE>`, so stickers stay valid when the code's meaning changes. The
+`dam:` prefix leaves room for richer sticker content later (a different form after the
+prefix); this version ignores any form it does not know.
 
 Sheet layouts:
 
