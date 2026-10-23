@@ -2558,6 +2558,24 @@ export interface components {
             /** Position */
             position: number;
         };
+        /**
+         * CodeHitOut
+         * @description A filing code found for a file: by its inbox folder, a pen mark or a QR sticker.
+         *     ``raw``: what was read (pen, QR); ``unclear``: the reading is uncertain.
+         */
+        CodeHitOut: {
+            /** Code */
+            code: string;
+            /**
+             * Via
+             * @enum {string}
+             */
+            via: "folder" | "pen" | "qr";
+            /** Raw */
+            raw: string | null;
+            /** Unclear */
+            unclear: boolean;
+        };
         /** CodeProblemOut */
         CodeProblemOut: {
             /** Code */
@@ -4213,6 +4231,20 @@ export interface components {
             tag_sources: {
                 [key: string]: string;
             };
+            /** Tray */
+            tray: string | null;
+            /** Tray Source */
+            tray_source: string | null;
+            /** Collections */
+            collections: string[];
+            /** Collection Sources */
+            collection_sources: {
+                [key: string]: string;
+            };
+            /** Codes */
+            codes: components["schemas"]["CodeHitOut"][];
+            /** Conflict */
+            conflict: boolean;
         };
         /** SummaryBody */
         SummaryBody: {

@@ -6,6 +6,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import PurePosixPath
+from typing import Literal
 
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
@@ -18,6 +19,17 @@ _COPY_MARKER = re.compile(r"(?:\s*\(\d{1,3}\))+\s*$")
 _ALLOWED_KEYS = frozenset({"doc_date", "year", "stem"})
 _REGEX_TIMEOUT = 0.2
 _BIG_NUMBER = re.compile(r"\d{4,}")
+
+
+@dataclass
+class CodeHit:
+    """A filing code found for a file: by the inbox folder it is in, a pen mark or a QR
+    sticker. ``raw`` is what was read (pen, QR); ``unclear``: the reading is uncertain."""
+
+    code: str
+    via: Literal["folder", "pen", "qr"]
+    raw: str | None = None
+    unclear: bool = False
 
 
 @dataclass
@@ -36,6 +48,13 @@ class Suggestion:
     name_source: str = "scan"
     folder_source: str | None = None
     tag_sources: dict[str, str] = field(default_factory=dict)
+    # filled by filing codes (``dam.codes.apply``): sources are "code:<CODE>"
+    collections: list[str] = field(default_factory=list)
+    tray_source: str | None = None
+    collection_sources: dict[str, str] = field(default_factory=dict)
+    codes: list[CodeHit] = field(default_factory=list)
+    # two codes gave different values for the folder, name or tray (the first is kept)
+    conflict: bool = False
 
 
 class TemplateError(ValueError):
@@ -142,6 +161,19 @@ def _render_name(template: str, doc_date: date | None, stem: str, ext: str) -> s
     return _fit(name, "", "." + ext if ext else "")
 
 
+def _stem(name: str, suffix: str) -> str:
+    raw_stem = name[: -len(suffix)] if suffix and name.lower().endswith(suffix) else name
+    return clean_stem(raw_stem) or "document"
+
+
+def stem_and_ext(rec: FileRecord) -> tuple[str, str]:
+    """The ``{stem}`` templates see for ``rec`` and its lower-case extension (no dot),
+    as ``suggest`` computes them."""
+    ext = (rec.ext or "").lower()
+    name = fix_mojibake(rec.name or PurePosixPath(rec.path).name)
+    return _stem(name, f".{ext}" if ext else ""), ext
+
+
 def suggest(
     rec: FileRecord,
     text: str,
@@ -169,8 +201,7 @@ def suggest(
             doc_date = None
 
     name = fix_mojibake(name)
-    raw_stem = name[: -len(suffix)] if suffix and name.lower().endswith(suffix) else name
-    stem = clean_stem(raw_stem) or "document"
+    stem = _stem(name, suffix)
 
     folded_text = fold(text)
     matching: list[Rule] = []
@@ -236,4 +267,5 @@ def suggest(
         name_source=f"rule:{name_rule.id}" if name_rule is not None else "scan",
         folder_source=f"rule:{folder_rule.id}" if folder_rule is not None else None,
         tag_sources=tag_sources,
+        tray_source=f"rule:{tray_rule.id}" if tray_rule and tray_rule.then.tray else None,
     )

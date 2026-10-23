@@ -137,6 +137,7 @@ class App:
             self.collections,
             self.notes,
             self.scan_fields,
+            lambda: self.codes,
         )
         self.layout = LayoutService(
             self.paths,

@@ -342,6 +342,16 @@ class DetectedFieldsOut(BaseModel):
     reference: str | None
 
 
+class CodeHitOut(BaseModel):
+    """A filing code found for a file: by its inbox folder, a pen mark or a QR sticker.
+    ``raw``: what was read (pen, QR); ``unclear``: the reading is uncertain."""
+
+    code: str
+    via: Literal["folder", "pen", "qr"]
+    raw: str | None
+    unclear: bool
+
+
 class SuggestionOut(BaseModel):
     name: str
     folder: str | None
@@ -353,6 +363,15 @@ class SuggestionOut(BaseModel):
     name_source: str
     folder_source: str | None
     tag_sources: dict[str, str]
+    # from the rules or a filing code ("code:<CODE>"; with a "folder" hit the UI shows
+    # it as "from folder <inbox folder>")
+    tray: str | None
+    tray_source: str | None
+    collections: list[str]
+    collection_sources: dict[str, str]
+    codes: list[CodeHitOut]
+    # two codes gave different folders, names or trays (the first is kept)
+    conflict: bool
 
 
 class FileSuggestionsOut(BaseModel):

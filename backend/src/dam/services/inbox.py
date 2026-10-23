@@ -8,6 +8,8 @@ from decimal import Decimal
 
 from dam.bills.barcode import BarcodeError
 from dam.bills.barcode import parse as parse_barcode
+from dam.codes.apply import apply_codes, codes_for
+from dam.codes.model import FilingCode
 from dam.collections.service import CollectionService, check_collection_name
 from dam.config import SpecialFolders
 from dam.core.paths import ArchivePaths
@@ -16,7 +18,7 @@ from dam.notes import NotesService, check_note
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
-from dam.rules.engine import Suggestion, suggest
+from dam.rules.engine import Suggestion, stem_and_ext, suggest
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
 from dam.rules.model import Rule
@@ -144,6 +146,7 @@ class InboxService:
         collections: CollectionService,
         notes: NotesService,
         scan_fields: ScanFieldService,
+        codes: Callable[[], list[FilingCode]] = list,
     ) -> None:
         self.paths = paths
         self.repo = repo
@@ -155,6 +158,7 @@ class InboxService:
         self.collections = collections
         self.notes = notes
         self.scan_fields = scan_fields
+        self._codes = codes
 
     def list(self) -> list[InboxEntry]:
         """Files directly in the inbox or in a filing code's inbox folder (no folders,
@@ -370,6 +374,12 @@ class InboxService:
                 found.folder = folder
                 found.folder_source = SIMILAR_SOURCE
                 found.sources.append(SIMILAR_SOURCE)
+        # codes last: what a code sets beats the rules and similar files
+        hits = codes_for(self.repo, rec)
+        if hits:
+            stem, ext = stem_and_ext(rec)
+            table = {c.code: c for c in self._codes()}
+            found = apply_codes(found, hits, table, found.doc_date, stem, ext, self.special)
         return found
 
     def _in_inbox(self, rec: FileRecord) -> bool:

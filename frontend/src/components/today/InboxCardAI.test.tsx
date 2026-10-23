@@ -31,7 +31,7 @@ function entry(id: string, name: string, trayGuess: string | null): InboxEntry {
       parked_at: null,
       marks: [],
     },
-    suggestion: { name, folder: null, tags: [], fields: { dates: [], amounts: [], iban: null, reference: null }, doc_date: null, sources: [], name_source: "scan", folder_source: null, tag_sources: {} },
+    suggestion: { name, folder: null, tags: [], fields: { dates: [], amounts: [], iban: null, reference: null }, doc_date: null, sources: [], name_source: "scan", folder_source: null, tag_sources: {}, tray: null, tray_source: null, collections: [], collection_sources: {}, codes: [], conflict: false },
     text_excerpt: "",
     prefill: {},
     tray_guess: trayGuess,
