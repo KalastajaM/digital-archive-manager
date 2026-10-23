@@ -16,11 +16,13 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from hashlib import sha256
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from dam.ai import cache, guard, keys, log
 from dam.ai.provider import AIProvider, AIResult, ProviderError
 from dam.ai.tasks import TASKS, AITask, Built
+from dam.ops.guards import fold_parts
 from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.setup import write_ai_exclude_folders
 
@@ -252,7 +254,7 @@ class AIService:
         made yet); none while the archive cannot be listed (that is not the same)."""
         if not self.app.archive_available:
             return []
-        return [f for f in folders if not (self.app.paths.root / f).is_dir()]
+        return [f for f in folders if not _folder_exists(self.app.paths.root, f)]
 
     def recent(self, limit: int = 50) -> list[dict]:
         return log.recent(self.app.engine, limit)
@@ -531,3 +533,18 @@ class AIService:
             "cost_eur": cost,
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
+
+
+def _folder_exists(root: Path, rel: str) -> bool:
+    """``rel`` is a folder in the archive, its names matched as an exclusion matches them
+    (NFC, any case): on a case-sensitive file system "10. financial" is still found."""
+    if (root / rel).is_dir():
+        return True
+    here = root
+    for part in fold_parts(rel):
+        try:
+            here = next(c for c in here.iterdir() if c.is_dir() and fold_parts(c.name) == (part,))
+        except (StopIteration, OSError):
+            return False
+    return True
+

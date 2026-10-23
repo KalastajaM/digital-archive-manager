@@ -184,3 +184,16 @@ def test_an_inline_ai_section_is_a_conflict_and_the_file_stays(ai_app):
         ai_app.ai.set_exclude_folders(NEW)
     assert target.read_bytes() == before
     assert ai_app.settings.ai.exclude_folders == ["50. Medical", "70. Work", "90. Other People"]
+
+
+def test_a_folder_is_found_in_any_case_and_unicode_form(tmp_path):
+    """The "not in the archive" check matches names as the exclusion does, also on a
+    case-sensitive file system (Linux): any case, NFC or NFD."""
+    from dam.ai.service import _folder_exists
+
+    (tmp_path / "10. Financial" / "Pankit ä").mkdir(parents=True)
+    assert _folder_exists(tmp_path, "10. Financial")
+    assert _folder_exists(tmp_path, "10. financial")
+    assert _folder_exists(tmp_path, "10. FINANCIAL/pankit ä")  # NFD ä
+    assert not _folder_exists(tmp_path, "10. Financial/Banks")
+    assert not _folder_exists(tmp_path, "70. Work")
