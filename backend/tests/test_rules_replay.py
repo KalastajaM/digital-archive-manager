@@ -124,3 +124,28 @@ def test_explain_labels_folder_only_and_regex_rules(app, fake_archive):
     out = {e.rule_id: e for e in explain(rec, "Fortum", [folder_only, both], special, None)}
     assert out["f"].why == f"in the folder ‘{INBOX}’"
     assert out["b"].why == "word ‘fortum’, file name matches (?i)^inv"
+
+
+def test_replay_counts_only_inbox_files_the_rule_would_file(app, fake_archive):
+    add_filed(app, fake_archive, "20. Home/20260301_Fortum.pdf", "a", "Fortum")
+    add_filed(app, fake_archive, f"{INBOX}/20260401_scan.pdf", "b", "Fortum bill")
+    add_filed(app, fake_archive, f"{INBOX}/20260402_scan.pdf", "c", "Something else")
+    add_filed(app, fake_archive, f"{INBOX}/To pay/20260403_scan.pdf", "d", "Fortum")
+    add_filed(app, fake_archive, f"{INBOX}/Other/20260404_scan.pdf", "e", "Fortum")
+    app.repo.code_folders = {"to pay": "PAY"}
+    rule = Rule.model_validate(FORTUM_RULE)
+    r = replay(
+        app.engine, rule, [rule], app.settings.special_folders, inbox_code_of=app.repo.inbox_code_of
+    )
+    # b (in the inbox) and d (in a code's inbox folder) match; c has no word, and e is
+    # in a plain subfolder, not the inbox the rule is for
+    assert r.inbox == 2
+    assert (r.matched, r.checked, r.total) == (1, 1, 1)
+
+
+def test_replay_inbox_count_without_folder_is(app, fake_archive):
+    add_filed(app, fake_archive, f"{INBOX}/20260401_scan.pdf", "b", "Fortum bill")
+    add_filed(app, fake_archive, f"{INBOX}/20260402_scan.pdf", "c", "Something else")
+    rule = Rule.model_validate({**FORTUM_RULE, "when": {"text_contains": ["fortum"]}})
+    r = replay(app.engine, rule, [rule], app.settings.special_folders)
+    assert (r.inbox, r.total, r.checked) == (1, 0, 0)

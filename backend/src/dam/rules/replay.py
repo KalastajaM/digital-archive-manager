@@ -6,6 +6,7 @@ document, which rules match and which of them wins each field.
 """
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
@@ -95,9 +96,13 @@ def replay(
     rules: list[Rule],
     special: SpecialFolders,
     budget_s: float = 5.0,
+    inbox_code_of: Callable[[str], str | None] | None = None,
 ) -> ReplayResult:
-    """``rules`` is the load order with ``rule`` in its place. ``folder_is`` is ignored:
-    a rule meant for the inbox is judged on the files it would have filed."""
+    """``rules`` is the load order with ``rule`` in its place. For filed files
+    ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
+    have filed. Inbox files are only counted (``inbox``), when the rule as written, with
+    its ``folder_is``, matches them as live filing would; ``inbox_code_of`` tells which
+    files sit in a filing code's inbox folder (they count as in the inbox)."""
     started = time.monotonic()
     free = _without_folder(rule)
     earlier: list[Rule] = []
@@ -107,38 +112,35 @@ def replay(
         earlier.append(r)
     earlier = [_without_folder(r) for r in earlier if r.then.folder or r.then.name]
     others = [special.ongoing, special.important, special.quarantine]
+    where = (
+        files.c.index_state == "indexed",
+        files.c.is_dir.is_not(True),
+        files.c.is_link.is_not(True),
+        files.c.missing.is_not(True),
+        files.c.parked_at.is_(None),
+    )
     cols = [files.c.drive_id, files.c.path, files.c.name, files.c.ext, files.c.doc_date]
     result = ReplayResult(0, 0, [], 0, [], 0, 0, False)
+
+    def skipped(path: str) -> bool:
+        return any(is_under(path, base) for base in others)
+
     with engine.connect() as conn:
-        rows = [
-            r
-            for r in conn.execute(
-                select(*cols)
-                .join(file_text, file_text.c.drive_id == files.c.drive_id)
-                .where(
-                    files.c.index_state == "indexed",
-                    files.c.is_dir.is_not(True),
-                    files.c.is_link.is_not(True),
-                    files.c.missing.is_not(True),
-                    files.c.parked_at.is_(None),
-                )
-                .order_by(files.c.path)
-            )
-            if not any(is_under(r.path, base) for base in others)
-        ]
-        result.total = len(rows)
+        # paths only, to say how many filed files there are even when the budget runs out
+        joined = files.join(file_text, file_text.c.drive_id == files.c.drive_id)
+        for (path,) in conn.execute(select(files.c.path).select_from(joined).where(*where)):
+            if not skipped(path) and not is_under(path, special.inbox):
+                result.total += 1
+        rows = conn.execute(
+            select(*cols, file_text.c.text).select_from(joined).where(*where).order_by(files.c.path)
+        )
         for row in rows:
+            if skipped(row.path):
+                continue
             if time.monotonic() - started >= budget_s:
                 result.truncated = True
                 break
-            result.checked += 1
-            if is_under(row.path, special.inbox):
-                result.inbox += 1
-                continue
-            text = conn.execute(
-                select(file_text.c.text).where(file_text.c.drive_id == row.drive_id)
-            ).scalar()
-            folded = fold(text or "")
+            folded = fold(row.text or "")
             rec = FileRecord(
                 drive_id=row.drive_id,
                 path=row.path,
@@ -146,6 +148,13 @@ def replay(
                 ext=row.ext,
                 doc_date=row.doc_date,
             )
+            if is_under(row.path, special.inbox):
+                code = inbox_code_of(row.path) if inbox_code_of is not None else None
+                alias = special.inbox if code is not None else None
+                if _matches(rule, rec, folded, alias)[0]:
+                    result.inbox += 1
+                continue
+            result.checked += 1
             if not _matches(free, rec, folded)[0]:
                 continue
             result.matched += 1

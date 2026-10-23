@@ -97,7 +97,13 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
             if path is not None and path.name == LEARNED_FILE:
                 last = i
         order.insert(last + 1, rule)
-    result = replay(app.engine, rule, order, app.settings.special_folders)
+    result = replay(
+        app.engine,
+        rule,
+        order,
+        app.settings.special_folders,
+        inbox_code_of=app.repo.inbox_code_of,
+    )
     out = asdict(result)
     out["shadowed"] = [{"drive_id": d, "rule_id": r} for d, r in result.shadowed]
     return out
