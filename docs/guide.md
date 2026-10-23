@@ -246,8 +246,10 @@ file needs input.
 **In the form**, each field a code sets starts with the code's value, and its chip says
 where it came from ("from folder To pay", "from sticker `P`"). Fields the code leaves
 alone are filled in as before, so a To pay code still takes the payee, amount and due
-date from the scan. A code's name pattern is not used when the file's own name already
-starts with a date (`20261015_...`): you named it already, so that name is kept.
+date from the scan. The tray starts as File N marked would file it: the code's tray
+(none for File as suggested), or the tray a rule suggests when the code names none. A
+code's name pattern is not used when the file's own name already starts with a date
+(`20261015_...`): you named it already, so that name is kept.
 
 **Editing codes.** In Settings → Filing codes each code has a label, a tray, a folder, a
 name pattern, tags, collections, an inbox folder and the **File as suggested** box. While

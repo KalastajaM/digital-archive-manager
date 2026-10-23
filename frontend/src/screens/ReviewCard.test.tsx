@@ -1915,6 +1915,13 @@ describe("Filing codes in the form", () => {
     expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("preselects a rule's tray on a coded file, as File N marked files it", async () => {
+    const codes = [{ code: "X", via: "qr" as const, raw: "dam:1:X:x:0", unclear: false }];
+    await setup(route({ tray: "to-pay", tray_source: "rule:x", codes }));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    await waitFor(() => expect(within(trayGroup).getByRole("button", { name: "To pay" })).toHaveAttribute("aria-pressed", "true"));
+  });
+
   const STICKER = { ...FROM_P, tray: null, tray_source: null, codes: [{ code: "P", via: "qr" as const, raw: "dam:1:P:x:0", unclear: false }] };
 
   it("labels a sticker's chip with the code", async () => {

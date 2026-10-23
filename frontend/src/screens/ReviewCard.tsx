@@ -237,10 +237,11 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   const [name, setName] = useState(entry.suggestion.name);
   const [folder, setFolder] = useState(entry.suggestion.folder ?? "");
   const [tags, setTags] = useState(entry.suggestion.tags.join(", "));
-  // Only a filing code preselects a tray (a code's tray, or none for "file as suggested");
-  // a rule's or the heuristic's tray guess is not applied by itself.
-  const fromCode = entry.suggestion.tray_source?.startsWith("code:") ?? false;
-  const trays = useTrayChoice(fromCode ? entry.suggestion.tray : null);
+  // A file with a filing code starts with the suggested tray, as File N marked files it (a
+  // code's tray, none for "file as suggested", else the rules' tray); on a file without a
+  // code a rule's or the heuristic's tray guess is not applied by itself.
+  const coded = entry.suggestion.codes.length > 0 || (entry.suggestion.tray_source?.startsWith("code:") ?? false);
+  const trays = useTrayChoice(coded ? entry.suggestion.tray : null);
   const tray = trays.tray;
   const codeLabel = useCodeLabel(entry.suggestion.codes);
   // Per tray, the fields the user edited (switching trays back and forth keeps them).
