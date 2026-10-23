@@ -217,6 +217,14 @@ a.sidebar-section-title[aria-current="page"] { color: var(--text); }
 }
 .sidebar-disclosure:hover:not(:disabled) { background: var(--hover); color: var(--text-2); }
 .sidebar-chevron { transition: transform var(--motion) var(--ease); }
+/* A section's fold chevron sits at the caption's right end; it shows on hover or focus, and
+ * always while the section is folded (so a folded section is easy to open again). */
+.sidebar-section-head { position: relative; display: flex; align-items: center; padding-right: calc(var(--icon-button-sm) + var(--sp-1)); }
+.sidebar-section-head .sidebar-section-title { flex: 1; min-width: 0; }
+.sidebar-section-count { padding-right: var(--sp-1); }
+.sidebar-section-fold { top: 50%; translate: 0 -50%; opacity: 0; transition: opacity var(--motion) var(--ease); }
+.sidebar-section-head:hover .sidebar-section-fold, .sidebar-section-fold:focus-visible, .sidebar-section-fold[aria-expanded="false"] { opacity: 1; }
+@media (hover: none) { .sidebar-section-fold { opacity: 1; } }
 .sidebar-chevron[data-open] { transform: rotate(90deg); }
 .sidebar-foot { padding: var(--sp-3) var(--sp-2) 0; border-top: 0.5px solid var(--hairline); margin-top: var(--sp-2); }
 .status-badge { margin: 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.4; cursor: default; }

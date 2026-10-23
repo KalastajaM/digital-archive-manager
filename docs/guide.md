@@ -140,12 +140,17 @@ setting. The sidebar, from the top:
 
 - **Today**, with a red badge counting overdue and due-today items;
 - **Inbox**, with its count;
+- **Browse**, the whole archive;
 - **Trays**: one row per tray, each with its open count;
 - **Collections**: **Important** and **Starred** first, then the open collections as a
   tree (a parent's children nest under it; the chevron folds it). The caption opens the
   list of all collections, with New collection and the closed ones;
-- **Archive**: **Browse**, **Ask** (AI questions about the archive), **Activity**,
-  **Settings** and **Help** (this guide).
+- **Archive**: **Ask** (AI questions about the archive), **Activity**, **Settings** and
+  **Help** (this guide).
+
+Trays, Collections and Archive fold: hold the pointer on the caption and click the chevron
+at its right. A folded Trays shows its open total next to the caption. dam remembers in
+this browser which sections you folded.
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray

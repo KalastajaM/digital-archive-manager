@@ -151,6 +151,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- The sidebar has Browse at the top, under Inbox, and Trays, Collections and Archive
+  fold with a chevron beside their caption. A folded Trays still shows how many items
+  are open, and the browser remembers which sections are folded.
 - A filing code's empty Name pattern now shows `{doc_date:%Y%m%d}_{stem}` (the date, then
   the file's own name) as its example, which fits any code, not a sample sender.
 - Settings has a row of sections at the top, grouped by what they apply to (this
