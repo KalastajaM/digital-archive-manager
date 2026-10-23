@@ -43,6 +43,7 @@ class FileRequestIn(_In):
 class FileBody(_In):
     requests: list[FileRequestIn]
     dry_run: bool = False
+    via: Literal["form", "batch", "codes"] = "form"
 
 
 class QuarantineBody(_In):
@@ -470,6 +471,30 @@ class BatchResultOut(BaseModel):
     index_error: str | None
 
 
+class DraftWordOut(BaseModel):
+    word: str
+    ticked: bool
+
+
+class RuleDraftOut(BaseModel):
+    id: str
+    words: list[DraftWordOut]
+    folder: str | None
+    name: str | None
+    tags: list[str]
+    tray: str | None
+    payee: str | None
+
+
+class RuleOfferOut(BaseModel):
+    """Offer to make a rule (``new``) or change a learned one (``update``) from a filing."""
+
+    kind: Literal["new", "update"]
+    rule_id: str | None
+    drive_id: str
+    draft: RuleDraftOut
+
+
 class FileItResultOut(BatchResultOut):
     """The batch, plus tagging and follow-up problems: the files were filed even if
     tagging or creating the items/memberships/notes failed."""
@@ -478,6 +503,7 @@ class FileItResultOut(BatchResultOut):
     untagged: list[str]
     items: list[int]  # tray items created
     follow_up_error: str | None
+    offer: RuleOfferOut | None = None
 
 
 class MoveResultOut(BatchResultOut):

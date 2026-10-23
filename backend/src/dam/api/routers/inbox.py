@@ -42,13 +42,16 @@ def preview(app: AppDep, body: list[FileRequestIn]) -> list:
 
 @router.post("/file", response_model=FileItResultOut)
 def file_it(app: AppDep, body: FileBody) -> dict:
-    outcome = app.inbox.file_it(_requests(body.requests), dry_run=body.dry_run, origin=UI_ORIGIN)
+    outcome = app.inbox.file_it(
+        _requests(body.requests), dry_run=body.dry_run, origin=UI_ORIGIN, via=body.via
+    )
     return {
         **asdict(outcome.batch),
         "tag_error": outcome.tag_error,
         "untagged": outcome.untagged,
         "items": outcome.items,
         "follow_up_error": outcome.follow_up_error,
+        "offer": asdict(outcome.offer) if outcome.offer else None,
     }
 
 

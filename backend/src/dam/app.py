@@ -129,6 +129,7 @@ class App:
         self.scan_fields = ScanFieldService(
             self.engine, lambda drive_id: self.inbox.detected_fields(drive_id)
         )
+        self.rule_record = RuleRecord(self.engine)
         self.inbox = InboxService(
             self.paths,
             self.repo,
@@ -141,6 +142,9 @@ class App:
             self.notes,
             self.scan_fields,
             lambda: self.codes,
+            rule_record=self.rule_record,
+            rules_dir=lambda: self.rules_dir,
+            data_dir=self.app_paths.data_dir,
         )
         self.layout = LayoutService(
             self.paths,
@@ -159,7 +163,6 @@ class App:
             important=self.marks.important_paths,
             important_lock=self.collections.important_lock,
         )
-        self.rule_record = RuleRecord(self.engine)
         self.activity = ActivityService(
             self.executor,
             self.trays,
