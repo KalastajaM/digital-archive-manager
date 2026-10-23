@@ -54,7 +54,7 @@ class FilingCode(BaseModel):
     def _check_inbox(cls, v: str | None) -> str | None:
         if v is not None:
             try:
-                check_folder_name(v)
+                return check_folder_name(v)  # stored cleaned (NFC, trimmed)
             except FolderNameError as e:
                 raise ValueError(str(e)) from e
         return v
@@ -66,15 +66,46 @@ class CodeProblem:
     message: str
 
 
-def _format_validation(e: ValidationError) -> str:
-    return "; ".join(
-        f"{'.'.join(str(p) for p in err['loc']) or 'code'}: {err['msg']}" for err in e.errors()
-    )
+def format_validation(e: ValidationError) -> str:
+    parts = []
+    for err in e.errors():
+        where = ".".join(str(p) for p in err["loc"]) or "code"
+        parts.append(f"{where}: {err['msg'].removeprefix('Value error, ')}")
+    return "; ".join(parts)
 
 
-def load_codes(
-    path: Path, tray_ids: Collection[str]
-) -> tuple[list[FilingCode], list[CodeProblem]]:
+def table_problem(
+    fc: FilingCode, tray_ids: Collection[str], seen_codes: set[str], seen_inbox: set[str]
+) -> str | None:
+    """Why ``fc`` cannot join the table (repeated code, unknown tray, repeated inbox
+    folder), else None and it is recorded in ``seen_codes``/``seen_inbox``. The one
+    check behind both loading the file and saving a new table."""
+    if fc.code in seen_codes:
+        return f"the code {fc.code} is used twice"
+    if fc.tray is not None and fc.tray not in tray_ids:
+        return f"unknown tray {fc.tray!r}"
+    if fc.inbox_folder is not None:
+        key = fold(fc.inbox_folder)
+        if key in seen_inbox:
+            return f"inbox folder {fc.inbox_folder!r} is used twice"
+        seen_inbox.add(key)
+    seen_codes.add(fc.code)
+    return None
+
+
+def check_table(codes: list[FilingCode], tray_ids: Collection[str]) -> list[CodeProblem]:
+    """The problems of a whole table (as ``load_codes`` would report them)."""
+    seen_codes: set[str] = set()
+    seen_inbox: set[str] = set()
+    out = []
+    for fc in codes:
+        message = table_problem(fc, tray_ids, seen_codes, seen_inbox)
+        if message:
+            out.append(CodeProblem(fc.code, message))
+    return out
+
+
+def load_codes(path: Path, tray_ids: Collection[str]) -> tuple[list[FilingCode], list[CodeProblem]]:
     """Read the code table. Invalid, repeated or tray-less entries are reported and left out."""
     if not path.exists():
         return [], []
@@ -98,26 +129,15 @@ def load_codes(
                 raise ValueError("each entry must be a mapping")
             fc = FilingCode.model_validate(item)
         except ValidationError as e:
-            problems.append(CodeProblem(label, _format_validation(e)))
+            problems.append(CodeProblem(label, format_validation(e)))
             continue
         except ValueError as e:
             problems.append(CodeProblem(label, str(e)))
             continue
-        if fc.code in seen_codes:
-            problems.append(CodeProblem(fc.code, f"the code {fc.code} is used twice"))
+        message = table_problem(fc, tray_ids, seen_codes, seen_inbox)
+        if message:
+            problems.append(CodeProblem(fc.code, message))
             continue
-        if fc.tray is not None and fc.tray not in tray_ids:
-            problems.append(CodeProblem(fc.code, f"unknown tray {fc.tray!r}"))
-            continue
-        if fc.inbox_folder is not None:
-            key = fold(check_folder_name(fc.inbox_folder))
-            if key in seen_inbox:
-                problems.append(
-                    CodeProblem(fc.code, f"inbox folder {fc.inbox_folder!r} is used twice")
-                )
-                continue
-            seen_inbox.add(key)
-        seen_codes.add(fc.code)
         codes.append(fc)
     return codes, problems
 

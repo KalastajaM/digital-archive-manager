@@ -40,8 +40,23 @@ def test_put_unknown_tray_400(app):
 
 def test_put_invalid_code_400(app):
     with make_client(app) as c:
-        r = put(c, "/api/filing-codes", [{"code": "A"}, {"code": "a"}])
-    assert r.status_code == 400
+        r = put(c, "/api/filing-codes", [{"code": "A"}, {"code": "TOOLONG"}])
+        assert r.status_code == 400
+        err = r.json()["error"]
+        assert "TOOLONG" in err and "1 to 4" in err and "Value error" not in err
+        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == ["A", "P", "F"]
+
+
+def test_put_padded_duplicate_inbox_folder_400(app):
+    body = [
+        {"code": "X", "inbox_folder": "To pay"},
+        {"code": "Y", "inbox_folder": " To pay"},
+    ]
+    with make_client(app) as c:
+        r = put(c, "/api/filing-codes", body)
+        assert r.status_code == 400
+        assert "used twice" in r.json()["error"]
+        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == ["A", "P", "F"]
 
 
 def test_get_reports_hand_edit_problem(app):

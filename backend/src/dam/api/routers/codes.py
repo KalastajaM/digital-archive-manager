@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from dam.api.deps import AppDep
 from dam.api.schemas import FilingCodeIn, FilingCodesOut
 from dam.app import App
-from dam.codes.model import FilingCode, confusable_with
+from dam.codes.model import FilingCode, confusable_with, format_validation
 from dam.services.errors import InvalidRequest
 
 router = APIRouter(prefix="/api/filing-codes", tags=["filing-codes"])
@@ -39,9 +39,11 @@ def list_codes(app: AppDep) -> dict:
 def replace_codes(app: AppDep, body: list[FilingCodeIn]) -> dict:
     """Replace the whole table (the old file is kept as a backup); 400 with the reason
     if any code is invalid, repeated or names an unknown tray."""
-    try:
-        codes = [FilingCode.model_validate(c.model_dump()) for c in body]
-    except ValidationError as e:
-        raise InvalidRequest("; ".join(err["msg"] for err in e.errors())) from e
+    codes = []
+    for entry in body:
+        try:
+            codes.append(FilingCode.model_validate(entry.model_dump()))
+        except ValidationError as e:
+            raise InvalidRequest(f"{entry.code}: {format_validation(e)}") from e
     app.save_codes(codes)
     return _out(app)

@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy import Engine, func, select
 
 from dam.ai.service import AIService
-from dam.codes.model import CodeProblem, FilingCode, load_codes
+from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
 from dam.codes.model import save_codes as write_codes
 from dam.collections.convert import OngoingConverter
 from dam.collections.convert_important import ImportantConverter
@@ -30,7 +30,7 @@ from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
-from dam.rules.model import Rule, RuleError, fold, load_rules
+from dam.rules.model import Rule, RuleError, load_rules
 from dam.search import SearchHit, search
 from dam.services.activity import ActivityService
 from dam.services.browse import BrowseService
@@ -280,20 +280,9 @@ class App:
     def save_codes(self, codes: list[FilingCode]) -> list[CodeProblem]:
         """Replace the code table with ``codes`` and reload. Raises ``InvalidRequest``
         (nothing written) for a repeated code or inbox folder or an unknown tray."""
-        tray_ids = {t.id for t in self.tray_defs}
-        seen: set[str] = set()
-        seen_inbox: set[str] = set()
-        for c in codes:
-            if c.code in seen:
-                raise InvalidRequest(f"the code {c.code} is used twice")
-            seen.add(c.code)
-            if c.tray is not None and c.tray not in tray_ids:
-                raise InvalidRequest(f"unknown tray {c.tray!r} (code {c.code})")
-            if c.inbox_folder is not None:
-                key = fold(c.inbox_folder)
-                if key in seen_inbox:
-                    raise InvalidRequest(f"inbox folder {c.inbox_folder!r} is used twice")
-                seen_inbox.add(key)
+        problems = check_table(codes, {t.id for t in self.tray_defs})
+        if problems:
+            raise InvalidRequest("; ".join(f"{p.code}: {p.message}" for p in problems))
         try:
             write_codes(self.app_paths.filing_codes_path, codes)
         except OSError as e:
