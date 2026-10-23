@@ -256,9 +256,15 @@ date from the scan. The tray starts as File N marked would file it: the code's t
 code's name pattern is not used when the file's own name already starts with a date
 (`20261015_...`): you named it already, so that name is kept.
 
-**Editing codes.** In Settings → Filing codes each code has a label, a tray, a folder, a
-name pattern, tags, collections, an inbox folder and the **File as suggested** box. Each
-code shows its sticker on the left as it prints, redrawn as you change the code or label.
+**Editing codes.** Settings → Filing codes lists each code on one line: its sticker, the
+code, the label and what it does. Click a line to edit that code (one at a time; **Done**
+closes it). A code has a label, a tray, a folder, a name pattern, tags, collections, an
+inbox folder and the **File as suggested** box, and shows its sticker as it prints,
+redrawn as you change the code or label. A line with a problem (a code easy to confuse,
+or a name pattern that gives every file the same name) says so even while it is closed.
+Changes are saved together from the bar at the bottom, which shows while there are
+unsaved changes (**Save** or **Discard**). Leaving Settings keeps them until you come
+back, and closing the window asks first.
 Collections are picked like folders (type to find one, or **…** to browse), and tags work
 as everywhere else. Hold the pointer on a field to see what it does. While
 you type a code, dam warns when it is easy to confuse with another one if you write codes
@@ -288,14 +294,14 @@ applies to the files in a code's folder, so they get the same folder suggestion 
 inbox itself. A rule that names a code's folder (`folder_is: "##. Organize/To pay"`)
 applies only to the files in that folder.
 
-dam does not make these folders by itself. **Create inbox folders** in Settings → Filing
-codes makes the missing ones after a preview, and Activity can undo it while they are
+dam does not make these folders by itself. While some are missing, Settings → Filing
+codes says which; **Create inbox folders…** makes them after a preview, and Activity can undo it while they are
 still empty. Filing a file moves it out as usual; the folder stays for the next one.
 Renaming a code's inbox folder in Settings does not rename the folder on disk.
 
 Other subfolders of the inbox are not inbox folders, and the files in them are not in
-the Inbox. Settings lists them under the codes ("Not a filing code folder"), so a
-renamed folder is easy to spot.
+the Inbox. Settings → Filing codes names them above the codes ("belongs to no code"), so
+a renamed folder is easy to spot.
 
 If your inbox already has subfolders named "To pay", "To action", "To read",
 "Follow-up" or "File as suggested", they become inbox folders with this version, and the
@@ -317,7 +323,8 @@ shows **Star when filed** and **Mark Important when filed**, set from the boxes;
 change them. A box dam cannot read clearly is pointed out ("Tick box unclear: check
 star"), and the file starts unticked in File N marked.
 
-**Printing stickers.** In **Settings → Print stickers**:
+**Printing stickers.** In Settings → Filing codes, **Print stickers…** opens the sticker
+sheet; **Print…** in an open code opens it with that code ticked (save the code first):
 
 - Tick the codes to print and type how many of each.
 - Choose the sheet: **Avery Zweckform L7651** (65 labels of 38.1 × 21.2 mm), **Plain
@@ -548,17 +555,18 @@ on/off switch.
 
 ## Settings
 
-Settings is where dam's own options are kept, one section for each area:
+Settings is where dam's own options are kept. The row at the top has one section for
+each area, grouped by what it applies to; one section shows at a time.
 
-- **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at once
-  and to every archive, and is remembered by this browser (another browser starts on Auto).
-- **Filing codes**: your table of codes, each with its label, tray, folder, name
-  pattern, tags, collections, inbox folder and the **File as suggested** box. **Add a
-  code** adds a row and **Save** writes the table. **Create inbox folders** appears while
-  a code's inbox folder is missing. Subfolders of the inbox that belong to no code are
-  listed here too. See [Filing codes](#filing-codes).
-- **Print stickers**: sticker sheets with QR codes for your filing codes, with a test
-  print to check the fit. See [QR stickers](#qr-stickers).
+- **This archive** (the one open now; each archive has its own):
+  - **Filing codes**: your table of codes, one line each; click one to edit it. **Add a
+    code** adds one, **Print stickers…** prints sticker sheets, and the bar at the bottom
+    saves or discards your changes. Missing inbox folders, and inbox folders that belong
+    to no code, are pointed out above the list. See [Filing codes](#filing-codes) and
+    [QR stickers](#qr-stickers).
+- **This browser** (every archive alike):
+  - **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at
+    once, and is remembered by this browser (another browser starts on Auto).
 
 ## Notes and checklists
 

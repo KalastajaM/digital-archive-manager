@@ -1,4 +1,4 @@
-/** Settings → Print stickers: pick filing codes and how many of each, a sheet layout (the
+/** Print stickers (a sheet opened from Settings → Filing codes): pick filing codes and how many of each, a sheet layout (the
  * built-ins, or a custom one in mm) and the options, then open the printable sheet in a
  * new tab and print it with the browser's dialog. Test print draws only the label
  * outlines, to print on plain paper and hold against a label sheet. Nothing here changes
@@ -85,11 +85,12 @@ export function sheetSummary(columns: number, rows: number, total: number, start
   } left empty on the last.`;
 }
 
-export function PrintStickers() {
+/** ``initialCode``: tick this code (one sticker) to start with; opened from that code's editor. */
+export function PrintStickers({ initialCode = null }: { initialCode?: string | null } = {}) {
   const codes = useFilingCodes();
   const layouts = useSheetLayouts();
   const saveCustom = useSaveCustomSheet();
-  const [chosen, setChosen] = useState<Record<string, string>>({}); // code -> count as typed
+  const [chosen, setChosen] = useState<Record<string, string>>(initialCode ? { [initialCode]: "1" } : {}); // code -> count as typed
   const [layoutId, setLayoutId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   // the custom layout this page saved (the list catches up on its next load)
@@ -101,7 +102,6 @@ export function PrintStickers() {
 
   const header = (
     <>
-      <h3>Print stickers</h3>
       <p className="hint">
         Pick the codes and how many of each. The sheet opens in a new tab: print it from there at 100 %, without fit to
         page. Test print draws only the label outlines: print it on plain paper and hold it against a label sheet to

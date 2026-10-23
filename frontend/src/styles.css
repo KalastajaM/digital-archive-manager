@@ -1866,15 +1866,50 @@ button.primary.danger:hover:not(:disabled), button.primary.danger:active:not(:di
 button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
 
 /* Settings: one section per area (filing codes first) */
+/* Settings fills the pane beside the sidebar and its body scrolls on its own, so the save bar can stay in view. */
+main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .settings { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* The section list: a row of tabs above the section (as in a Mac settings window), grouped by
+ * what the sections apply to, so a section keeps the whole width. */
+.settings-layout { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.settings-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-4); padding: var(--sp-2) var(--sp-5); border-bottom: 0.5px solid var(--hairline); }
+.settings-nav h4 { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
+.settings-nav ul { display: flex; flex-wrap: wrap; gap: var(--sp-1); list-style: none; margin: 0; padding: 0; }
+.settings-nav ul + h4 { padding-left: var(--sp-4); border-left: 0.5px solid var(--hairline); }
+.settings-nav-row { display: block; padding: 3px var(--sp-2); border-radius: var(--r-md); color: var(--text); text-decoration: none; }
+.settings-nav-row:hover { background: var(--hover); }
+.settings-nav-row.active { background: var(--sidebar-sel); font-weight: 500; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) var(--sp-5) var(--sp-8); }
+/* A narrow window scrolls as a whole (the sidebar stacks above), so the body does not scroll itself. */
+@media (max-width: 900px) { .settings-body, .app:has(.settings) .content { overflow: visible; } }
 .settings-body > section { max-width: 960px; margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
 .settings-body h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
-.filing-codes-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.filing-codes-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: flex; flex-direction: column; border-radius: var(--r-md); background: var(--panel); box-shadow: var(--shadow-card); }
+.filing-codes-list > li + li { border-top: 0.5px solid var(--hairline); }
+/* A closed code: one line, the whole of it a button that opens the editor. */
+.code-line { display: grid; grid-template-columns: auto 3rem minmax(6rem, 12rem) minmax(0, 1fr) auto auto; align-items: center; gap: var(--sp-3); width: 100%; min-height: 40px; padding: var(--sp-1) var(--sp-3); border: none; border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
+.filing-codes-list > li:first-child .code-line { border-radius: var(--r-md) var(--r-md) 0 0; }
+.filing-codes-list > li:last-child .code-line { border-radius: 0 0 var(--r-md) var(--r-md); }
+.code-line:hover:not(:disabled) { background: var(--hover); }
+.code-line-code { font-weight: 700; font-size: var(--fs-md); }
+.code-line-label, .code-line-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-line-summary { color: var(--muted); }
+.code-line-warning { display: inline-flex; align-items: center; gap: 4px; color: var(--orange-text); font-size: var(--fs-sm); white-space: nowrap; }
+.code-line-chevron { color: var(--muted); }
+.code-open { padding: var(--sp-3); background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+.filing-codes-list > .code-open:first-child { border-radius: var(--r-md) var(--r-md) 0 0; }
+.filing-codes-list > .code-open:last-child { border-radius: 0 0 var(--r-md) var(--r-md); }
+.code-editor-note { margin: var(--sp-2) 0 0; }
+.code-editor-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-2); }
+.code-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); margin: 0 0 var(--sp-3); }
+/* Unsaved edits: a bar that stays at the bottom of the scrolling section while there are any. */
+.save-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); margin: var(--sp-3) calc(-1 * var(--sp-3)) calc(-1 * var(--sp-3)); padding: var(--sp-2) var(--sp-3); border-top: 0.5px solid var(--hairline); border-radius: 0 0 var(--r-lg) var(--r-lg); background: var(--panel); box-shadow: var(--shadow-pop); }
+.save-bar-text { margin-right: auto; color: var(--muted); font-size: var(--fs-sm); }
+.save-bar-text .error { margin: 0; }
 /* A code row: the sticker preview, four columns of two fields, then Remove over File as suggested.
  * Narrow sections (a small window) fold it to the preview and two columns. */
 .settings-body > section.filing-codes { max-width: 1200px; container-type: inline-size; }
-.filing-code-row { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)) auto; gap: var(--sp-2) var(--sp-3); align-items: start; padding-bottom: var(--sp-3); border-bottom: 0.5px solid var(--hairline); }
+.filing-code-row { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)) auto; gap: var(--sp-2) var(--sp-3); align-items: start; }
 .filing-code-row label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
 .filing-code-row label.check { flex-direction: row; align-items: center; gap: var(--sp-2); white-space: nowrap; }
 .filing-code-row .hint { grid-column: 1 / -1; margin: 0; }
@@ -1894,7 +1929,13 @@ button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
 .sticker-preview { position: relative; display: flex; align-items: center; justify-content: center; width: 10rem; min-height: 4rem; margin-top: 18px; padding: var(--sp-1); border-radius: var(--r-md); background: #fff /* paper, in both themes */; box-shadow: var(--shadow-card); }
 .sticker-preview img { display: block; max-width: 100%; height: auto; }
 .sticker-preview.empty { background: var(--panel); color: var(--muted); font-size: var(--fs-sm); }
+.sticker-preview.small { width: 4.5rem; min-height: 0; height: 2rem; margin: 0; padding: 2px; border-radius: var(--r-sm); box-shadow: none; }
+.sticker-preview.small img { max-height: 100%; }
 .sticker-preview[data-tip]::after { left: 0; transform: none; white-space: normal; width: max-content; max-width: 18rem; }
+@container (max-width: 36rem) {
+  .code-line { grid-template-columns: auto 2.5rem minmax(0, 1fr) auto auto; }
+  .code-line-summary { display: none; }
+}
 @container (max-width: 60rem) {
   .filing-code-row { grid-template-columns: auto repeat(2, minmax(0, 1fr)); }
   .code-col { grid-row: auto; display: flex; flex-direction: column; gap: var(--sp-2); }

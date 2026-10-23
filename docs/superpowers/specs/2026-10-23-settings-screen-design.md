@@ -1,7 +1,7 @@
 # Settings screen: what goes in it, and in what order
 
-Status: draft plan, 2026-10-23. Not ready to build until the open decisions at the end
-are settled.
+Status: plan, 2026-10-23. Appearance and the layout below are built; the other sections
+wait on the open decisions at the end.
 
 ## Why
 
@@ -15,6 +15,38 @@ The filing codes work (PR #23, merged 2026-10-23) added the Settings screen at
 `/settings` with a sidebar row, built as one section per area: Filing codes and Print
 stickers. The sections below slot into that screen.
 
+## Layout
+
+Decided (2026-10-23), after a review of the first version: one long page had 81 controls
+with five codes (2160 px tall in a narrow window), and even at 1280 px the Filing codes
+Save button was below the fold.
+
+- **A section list.** Settings has a row of section tabs above the section (as in a Mac
+  settings window), grouped by scope: "This
+  archive" (Filing codes, later Filing rules, Trays, Reminders, Reading text, AI,
+  Archive) and "This browser"
+  (Appearance). One section shows at a time, each at its own address
+  (`/settings/filing-codes`, `/settings/appearance`), so other screens can link to one.
+  `/settings` opens the first, Filing codes. Sections appear only once they are built: no
+  empty placeholders. A list on the left was tried first: it left the section too narrow
+  for the six-column code editor (about 900 px) on most screens.
+- **Filing codes as a list.** Each code is one line: a small sticker, the code and label,
+  and a summary of what it does (tray, folder, name pattern). Clicking a line opens that
+  code's editor in place (the six-column row); one code is open at a time, and a code
+  just added opens at once. A code with a warning (easy to confuse, same name for every
+  file, or no label) shows a marker on its line, so closing it does not hide the warning.
+- **A save bar.** While the table has unsaved edits, a bar at the bottom of the section
+  stays in view with Discard and Save. Leaving Settings keeps the edits: coming back
+  shows them again with the bar. Closing or reloading the tab asks first (the browser's
+  own prompt). The app's router cannot hold an in-app navigation, so keeping the edits is
+  the answer there.
+- **Print stickers is a sheet,** opened by "Print stickers…" in Filing codes, or by
+  "Print…" in an open code, which ticks that code. It is a task, not a setting.
+- **Rare actions as notices.** "Create inbox folders" and the folders that belong to no
+  code show as a notice above the list, and only while there is something to do.
+- **One line of explanation** under the section title, with a link to the guide; the
+  fields explain themselves in their tooltips.
+
 ## Two kinds of setting
 
 - **This app, in this browser:** Appearance. The same for every archive.
@@ -22,10 +54,8 @@ stickers. The sections below slot into that screen.
   archive in the switcher has its own data directory, so its own file). Filing codes are
   in this group.
 
-The screen should show the two groups apart, so nobody expects a reminder hour set in one
-archive to apply to another. Archive-level sections name the archive they belong to.
-For now Appearance says in its hint that it applies to every archive; the group headings
-come with the next archive-level section (Reminders or AI).
+The section list shows the two groups apart (see Layout), so nobody expects a reminder
+hour set in one archive to apply to another; the "This archive" heading names the archive.
 
 ## Sections
 
@@ -99,6 +129,31 @@ stay in Activity, with links both ways.
 
 A last row with the path of this archive's `settings.yaml` and a Reveal button, for the
 settings that stay file only.
+
+### 7. Later candidates
+
+From the same review, not scheduled yet:
+
+- **Reminders, extended:** Send test notification, and the daily schedule on or off
+  (today `dam remind --install`, which asks first; the UI would confirm the same way).
+- **Archive (shown, not edited):** the archive folder, the data folder and the special
+  folder names, each with Reveal. Editing stays in Set up folders.
+- **Filing rules and Trays editors** (wanted, 2026-10-23). Both are file only today and
+  each needs its own design before it is built; the section list leaves room for them
+  under "This archive". Notes for that design:
+  - *Rules* (`config/rules/*.yaml`): several files, loaded in name order; for folder and
+    name the first matching rule wins, tags from every match are merged. An editor should
+    show the rules in the order they apply, edit `when` (`text_contains`,
+    `filename_matches`, `folder_is`) and `then` (`folder`, `name`, `tags`), and above all
+    answer "which rule files this document, and why" against a file in the inbox.
+  - *Trays* (`config/trays/*.yaml`, one per tray): name, order, item title, typed fields
+    with prefills, the done form, reminders and Today's summary. A first editor could
+    cover name, order, field labels and reminder days, and leave field types and prefills
+    to the file.
+  - Both files ship with explanatory comments. Saving from the app rewrites the file, so
+    those comments are lost (as with filing codes); the editor says so and keeps a backup.
+  Until then, a read-only list with the problems in each file and Reveal is the stopgap.
+- **This browser:** reset Today's card layout and the panel widths, next to Appearance.
 
 ## Deliberately left out
 
