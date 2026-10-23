@@ -1855,64 +1855,70 @@ describe("Trash in the inbox", () => {
 });
 
 describe("Filing codes in the form", () => {
-    const FILING_CODES = {
-      codes: [
-        { code: "P", label: "To pay", tray: "to-pay", folder: null, name: null, tags: [], collections: [], as_suggested: false, inbox_folder: "To pay" },
-        { code: "D", label: "File as suggested", tray: null, folder: null, name: null, tags: [], collections: [], as_suggested: true, inbox_folder: "File as suggested" },
-      ],
-      problems: [],
-      warnings: [],
-    };
-    const coded = (suggestion: Partial<InboxEntry["suggestion"]>) => [
-      { ...ENTRIES[0], suggestion: { ...ENTRIES[0].suggestion, ...suggestion } },
-    ];
-    const FROM_P = {
-      tray: "to-pay",
-      tray_source: "code:P",
-      folder: "Bills/2026",
-      folder_source: "code:P",
-      collections: ["Legal"],
-      collection_sources: { Legal: "code:P" },
-      codes: [{ code: "P", via: "folder" as const, raw: null, unclear: false }],
-    };
-    const route = (suggestion: Partial<InboxEntry["suggestion"]>) => ({
-      "GET /api/inbox": { body: coded(suggestion) },
-      "GET /api/filing-codes": { body: FILING_CODES },
-    });
-
-    it("preselects the tray, the collections and names the folder a code came from", async () => {
-      await setup(route(FROM_P));
-      const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
-      await waitFor(() => expect(within(trayGroup).getByRole("button", { name: "To pay" })).toHaveAttribute("aria-pressed", "true"));
-      expect(screen.getByRole("button", { name: "Remove Legal" })).toBeInTheDocument();
-      expect(screen.getByLabelText("Folder")).toHaveValue("Bills/2026");
-    });
-
-    it("labels a code's chip with the code's inbox folder", async () => {
-      await setup(route({ ...FROM_P, folder: "Bills/2026", name: "X.pdf", name_source: "code:P", tray_source: null, tray: null }));
-      const folder = screen.getByLabelText("Folder");
-      await userEvent.setup().clear(folder);
-      expect(await screen.findByText("Suggested:", { exact: false, selector: ".suggestion-text" })).toBeInTheDocument();
-      const chip = screen.getByRole("group", { name: /Suggested Folder: Bills\/2026/ });
-      expect(chip).toHaveAccessibleName("Suggested Folder: Bills/2026 (from folder To pay)");
-    });
-
-    it("starts with no tray for a file as suggested code", async () => {
-      await setup(route({ tray: null, tray_source: "code:D", codes: [{ code: "D", via: "folder", raw: null, unclear: false }] }));
-      const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
-      expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
-    });
-
-    it("leaves the tray on Nothing for a rule's tray guess", async () => {
-      await setup(route({ tray: "to-pay", tray_source: "rule:x" }));
-      const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
-      expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
-    });
-
-    it("says when the codes disagree, and the list row shows the code badge", async () => {
-      await setup(route({ ...FROM_P, tray: null, tray_source: null, conflict: true }));
-      expect(screen.getByText("These filing codes disagree; pick the values here.")).toBeInTheDocument();
-      const row = document.querySelector("[data-inbox-entry]") as HTMLElement;
-      expect(within(row).getByText("P")).toBeInTheDocument();
-    });
+  const FILING_CODES = {
+    codes: [
+      { code: "P", label: "To pay", tray: "to-pay", folder: null, name: null, tags: [], collections: [], as_suggested: false, inbox_folder: "To pay" },
+      { code: "D", label: "File as suggested", tray: null, folder: null, name: null, tags: [], collections: [], as_suggested: true, inbox_folder: "File as suggested" },
+    ],
+    problems: [],
+    warnings: [],
+  };
+  const coded = (suggestion: Partial<InboxEntry["suggestion"]>) => [
+    { ...ENTRIES[0], suggestion: { ...ENTRIES[0].suggestion, ...suggestion } },
+  ];
+  const FROM_P = {
+    tray: "to-pay",
+    tray_source: "code:P",
+    folder: "Bills/2026",
+    folder_source: "code:P",
+    collections: ["Legal"],
+    collection_sources: { Legal: "code:P" },
+    codes: [{ code: "P", via: "folder" as const, raw: null, unclear: false }],
+  };
+  const route = (suggestion: Partial<InboxEntry["suggestion"]>) => ({
+    "GET /api/inbox": { body: coded(suggestion) },
+    "GET /api/filing-codes": { body: FILING_CODES },
   });
+
+  it("preselects the tray, the collections and names the folder a code came from", async () => {
+    await setup(route(FROM_P));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    await waitFor(() => expect(within(trayGroup).getByRole("button", { name: "To pay" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("button", { name: "Remove Legal" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Folder")).toHaveValue("Bills/2026");
+  });
+
+  it("labels a code's chip with the code's inbox folder", async () => {
+    const { user } = await setup(route({ ...FROM_P, tray_source: null, tray: null }));
+    await user.clear(screen.getByLabelText("Folder"));
+    expect(await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (from folder To pay)" })).toBeInTheDocument();
+  });
+
+  it("falls back to the plain code when the codes cannot be loaded", async () => {
+    const { user } = await setup({
+      ...route({ ...FROM_P, tray_source: null, tray: null }),
+      "GET /api/filing-codes": { status: 500, body: { error: "boom" } },
+    });
+    await user.clear(screen.getByLabelText("Folder"));
+    expect(await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (code `P`)" })).toBeInTheDocument();
+  });
+
+  it("starts with no tray for a file as suggested code", async () => {
+    await setup(route({ tray: null, tray_source: "code:D", codes: [{ code: "D", via: "folder", raw: null, unclear: false }] }));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("leaves the tray on Nothing for a rule's tray guess", async () => {
+    await setup(route({ tray: "to-pay", tray_source: "rule:x" }));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("says when the codes disagree, and the list row shows the code badge", async () => {
+    await setup(route({ ...FROM_P, tray: null, tray_source: null, conflict: true }));
+    expect(screen.getByText("These filing codes disagree; pick the values here.")).toBeInTheDocument();
+    const row = document.querySelector("[data-inbox-entry]") as HTMLElement;
+    expect(within(row).getByText("P")).toBeInTheDocument();
+  });
+});
