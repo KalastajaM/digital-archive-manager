@@ -1253,3 +1253,9 @@ class FilingCodesOut(BaseModel):
     codes: list[FilingCodeOut]
     problems: list[CodeProblemOut]
     warnings: list[CodeWarningOut]
+
+
+class FilingCodeFoldersOut(BaseModel):
+    # code inbox folders not in the inbox yet, and inbox subfolders that are no code's
+    missing: list[str]
+    stray: list[str]

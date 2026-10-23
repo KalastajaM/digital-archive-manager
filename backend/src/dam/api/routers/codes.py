@@ -5,9 +5,16 @@ from dataclasses import asdict
 from fastapi import APIRouter
 from pydantic import ValidationError
 
-from dam.api.deps import AppDep
-from dam.api.schemas import FilingCodeIn, FilingCodesOut
+from dam.api.deps import UI_ORIGIN, AppDep
+from dam.api.schemas import (
+    BatchResultOut,
+    FilingCodeFoldersOut,
+    FilingCodeIn,
+    FilingCodesOut,
+    ResolvedOpOut,
+)
 from dam.app import App
+from dam.codes import folders
 from dam.codes.model import FilingCode, confusable_with, format_validation
 from dam.services.errors import InvalidRequest
 
@@ -47,3 +54,24 @@ def replace_codes(app: AppDep, body: list[FilingCodeIn]) -> dict:
             raise InvalidRequest(f"{entry.code}: {format_validation(e)}") from e
     app.save_codes(codes)
     return _out(app)
+
+
+@router.get("/folders", response_model=FilingCodeFoldersOut)
+def code_folders(app: AppDep) -> dict:
+    """The codes' inbox folders that are missing, and inbox subfolders that are no code's."""
+    return {
+        "missing": folders.missing_inbox_folders(app),
+        "stray": folders.stray_inbox_folders(app),
+    }
+
+
+@router.post("/folders/preview", response_model=list[ResolvedOpOut])
+def code_folders_preview(app: AppDep) -> list:
+    """The folders "Create the folders" would make. Changes nothing."""
+    return folders.preview_inbox_folders(app, origin=UI_ORIGIN)
+
+
+@router.post("/folders", response_model=BatchResultOut)
+def create_code_folders(app: AppDep):
+    """Make the missing code folders in the inbox: journaled, undoable while empty."""
+    return folders.create_inbox_folders(app, origin=UI_ORIGIN)

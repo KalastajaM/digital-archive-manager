@@ -78,6 +78,10 @@ class Plan:
     # undo can remove it again while it is still empty. Filing suggestions, rules and
     # syncs never set it, and without it a top-level folder is never created.
     new_folders: bool = False
+    # With ``new_folders`` only (the user-confirmed "Create the filing code folders"):
+    # an MKDIR may also make a folder directly inside the inbox (its parent is exactly
+    # the inbox), nothing deeper and nothing in the other special folders.
+    inbox_folders: bool = False
 
 
 @dataclass

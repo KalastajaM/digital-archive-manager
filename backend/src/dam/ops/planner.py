@@ -174,6 +174,8 @@ class Planner:
         self.aliases: list[tuple[str, str]] = []  # (requested path, actual path)
         self.from_protected: list[str] = []  # current paths of entries moved out of protection
         self.out: list[ResolvedOp] = []
+        if plan.inbox_folders and not plan.new_folders:
+            raise GuardError("Inbox folders are made only by a new-folder plan.")
         self.made = plan.new_folders  # MKDIRs of a New folder / layout batch are "made"
         ops = self._new_folder_ops(plan) if plan.new_folders else plan.ops
         for op in ops:
@@ -200,7 +202,10 @@ class Planner:
         """The ops of a ``Plan.new_folders`` plan (the user-confirmed New folder and
         layout workflows, the only way a top-level folder is ever created): nothing but
         MKDIR, every folder name checked, nothing inside the app's own folders. Returns
-        the ops with ``allow_top_level`` set; no other plan gets that."""
+        the ops with ``allow_top_level`` set; no other plan gets that.
+
+        With ``Plan.inbox_folders`` a folder directly inside the inbox (its parent,
+        folded, is exactly the inbox) is allowed as well; nothing deeper."""
         special = self.paths.settings.special_folders
         names = (special.inbox, special.ongoing, special.important, special.quarantine)
         out = []
@@ -213,8 +218,13 @@ class Planner:
                     check_folder_name(part, names)
                 except FolderNameError as e:
                     raise GuardError(str(e)) from None
+            inbox_child = plan.inbox_folders and fold_parts(parent(folder)) == fold_parts(
+                special.inbox
+            )
             for area in names:
-                if is_under(folder, area, strict=True):
+                if is_under(folder, area, strict=True) and not (
+                    inbox_child and area == special.inbox
+                ):
                     raise GuardError(f"Folders are not made inside {area!r}.")
             out.append(dataclasses.replace(op, allow_top_level=True))
         return out
