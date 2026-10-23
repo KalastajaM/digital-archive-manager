@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
+import { type Call, deferred, mockFetch, renderWithProviders } from "../../test-utils";
 import { RuleSheet } from "./RuleSheet";
 
 const DRAFT = {
@@ -122,5 +122,54 @@ describe("RuleSheet", () => {
       expect(sent.rule.then.folder).toBeNull();
       expect(sent.rule.when.text_contains).toEqual(["kotihoito", "sähkö"]);
     });
+  });
+
+  it("Save is disabled and reads Testing… until the first replay has finished", async () => {
+    setup();
+    const save = screen.getByRole("button", { name: "Testing…" });
+    expect(save).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("Save is disabled within the debounce after an edit, and while the replay is in flight", async () => {
+    const held = deferred<{ body: object }>();
+    let first = true;
+    const { user } = setup();
+    mockFetch({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/trays": { body: { trays: [], errors: [] } },
+      "POST /api/rules/replay": () => {
+        if (first) {
+          first = false;
+          return { body: REPLAY };
+        }
+        return held.promise;
+      },
+    } as never);
+    await screen.findByRole("button", { name: "Save" });
+    await user.click(screen.getByRole("button", { name: "lasku" })); // an edit: the debounce runs
+    expect(screen.getByRole("button", { name: "Testing…" })).toBeDisabled();
+    await new Promise((r) => setTimeout(r, 600)); // the replay is in flight, held
+    expect(screen.getByRole("button", { name: "Testing…" })).toBeDisabled();
+    expect(screen.getByRole("region", { name: "Test result" })).toHaveAttribute("aria-busy", "true"); // the old proof stays
+    expect(screen.getByText(/Matches 4/)).toBeInTheDocument();
+    held.resolve({ body: { ...REPLAY, different: [] } });
+    expect(await screen.findByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("after a failed replay Save stays disabled until Try again succeeds", async () => {
+    let fail = true;
+    const { user } = setup();
+    mockFetch({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/trays": { body: { trays: [], errors: [] } },
+      "POST /api/rules/replay": () => (fail ? { status: 500, body: { error: "boom" } } : { body: REPLAY }),
+    } as never);
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    fail = false;
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText(/Matches 4/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 });

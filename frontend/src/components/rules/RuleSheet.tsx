@@ -2,9 +2,10 @@
  * then does, and the proof (a replay over the documents filed so far) below, refreshed
  * 400 ms after the last edit. Saving asks first when the rule would have filed some
  * document somewhere else. */
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   errorText,
+  type Replay,
   type Rule,
   type RuleDraft,
   type RuleIn,
@@ -93,10 +94,22 @@ export function RuleSheet({
   );
   const ruleKey = JSON.stringify(rule);
 
+  // The last successful replay with the rule it was made for: Save needs one for exactly
+  // the rule on screen, so the proof is never skipped.
+  const [proof, setProof] = useState<{ key: string; replay: Replay } | null>(null);
+  const latestKey = useRef(ruleKey);
+  latestKey.current = ruleKey;
   const { mutate: runReplay } = replay;
+  const run = () => {
+    const key = ruleKey;
+    runReplay(
+      { rule, replaces: replacing },
+      { onSuccess: (result) => key === latestKey.current && setProof({ key, replay: result }) },
+    );
+  };
   useEffect(() => {
     if (ticked.length === 0) return;
-    const timer = setTimeout(() => runReplay({ rule, replaces: replacing }), REPLAY_DELAY_MS);
+    const timer = setTimeout(run, REPLAY_DELAY_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ruleKey, replacing, runReplay]);
@@ -110,7 +123,9 @@ export function RuleSheet({
     );
   };
 
-  const different = replay.data?.different.length ?? 0;
+  const tested = proof !== null && proof.key === ruleKey ? proof.replay : null;
+  const failed = replay.isError && tested === null;
+  const different = tested?.different.length ?? 0;
   const doSave = async () => {
     setAsking(false);
     setError(null);
@@ -122,7 +137,7 @@ export function RuleSheet({
       setError(errorText(e));
     }
   };
-  const canSave = ticked.length > 0 && !save.isPending;
+  const canSave = ticked.length > 0 && tested !== null && !save.isPending;
   const title = !draft ? `Edit rule ${initial.id}` : replaces ? `Update rule ${replaces}` : "Make a rule";
 
   const textField = (label: string, state: Text, set: (t: Text) => void, hint?: string) => (
@@ -166,7 +181,7 @@ export function RuleSheet({
               disabled={!canSave}
               onClick={() => (different > 0 ? setAsking(true) : void doSave())}
             >
-              Save
+              {ticked.length > 0 && tested === null && !failed ? "Testing…" : "Save"}
             </button>
           </>
         }
@@ -255,7 +270,12 @@ export function RuleSheet({
           </>
         )}
         {ticked.length > 0 && (
-          <ReplayResult replay={replay.data} pending={replay.isPending} error={replay.error ? errorText(replay.error) : null} />
+          <ReplayResult
+            replay={proof?.replay}
+            pending={tested === null && !failed}
+            error={failed ? errorText(replay.error) : null}
+            onRetry={run}
+          />
         )}
         {error && <p className="error" role="alert">{visible(error)}</p>}
       </Sheet>

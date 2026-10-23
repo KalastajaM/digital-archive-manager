@@ -166,15 +166,20 @@ export default function Inbox() {
     return [
       {
         label: offer.kind === "update" ? `Update rule ${offer.rule_id}…` : "Make a rule…",
-        run: () => setRuleOffer({ offer, filed }),
+        run: () => {
+          if (dialogOpen()) return;
+          setRuleOffer({ offer, filed });
+        },
       },
       {
         label: "Not for these",
-        run: () =>
+        run: () => {
+          if (dialogOpen()) return;
           declineRule.mutate(
             offer.draft.words.filter((w) => w.ticked).map((w) => w.word),
             { onError: (e) => toast({ kind: "error", text: `Could not save that: ${errorText(e)}` }) },
-          ),
+          );
+        },
       },
     ];
   };

@@ -9,12 +9,20 @@ export function ReplayResult({
   replay,
   pending = false,
   error = null,
+  onRetry,
 }: {
   replay: Replay | undefined;
   pending?: boolean;
   error?: string | null;
+  onRetry?: () => void;
 }) {
-  if (error) return <p className="error" role="alert">{visible(error)}</p>;
+  if (error)
+    return (
+      <div className="error" role="alert">
+        <p>{visible(error)}</p>
+        {onRetry && <button type="button" onClick={onRetry}>Try again</button>}
+      </div>
+    );
   if (!replay) return <p className="busy" role="status">Testing against your filed documents…</p>;
   const shadowed = new Map<string, number>();
   for (const s of replay.shadowed) shadowed.set(s.rule_id, (shadowed.get(s.rule_id) ?? 0) + 1);
