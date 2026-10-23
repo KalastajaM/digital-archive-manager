@@ -160,7 +160,7 @@ All notable changes are listed here. The format follows
 - Settings → Filing codes shows each code as a row: its sticker on the left as it
   prints (redrawn as you type the code or label), then Code and Label, Tray and Inbox
   folder, Folder and Collections, Name pattern and Tags, and Remove above File as
-  suggested. Collections are picked like folders, tags work as in the Inbox, and every
+  suggested, which lines up with the Tags field. Collections are picked like folders, tags work as in the Inbox, and every
   field explains itself when you hold the pointer on it.
 - Today's Starred card shows a file's buttons (Quick Look, Open, Show in Finder, Remove
   the star) only for the row under the pointer or with keyboard focus, so the list reads

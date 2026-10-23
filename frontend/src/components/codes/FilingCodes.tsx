@@ -272,7 +272,7 @@ export function FilingCodes() {
                   onClick={() => setRows((rs) => (rs ?? []).filter((x) => x.key !== r.key))}
                 />
                 <label
-                  className="check code-field"
+                  className="check code-field code-check"
                   data-tip="Already handled: file it where dam suggests, in no tray; the tray and name pattern are not used"
                 >
                   <input
