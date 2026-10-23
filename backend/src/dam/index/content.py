@@ -297,6 +297,8 @@ class ContentIndexer:
         # a finished read with anything but a code (none found, an error, changed
         # content) is recorded as "none found" for this content, so the file is not
         # read again until it changes
+        # a file queued only for its QR stickers (read before 0026) also rewrites its
+        # bank barcode row: same content, so the same result
         self.repo.save_barcode(rec.drive_id, rec.sha256, out.get("code"))
         self.repo.save_qr(rec.drive_id, rec.sha256, out.get("qr", []))
         return True

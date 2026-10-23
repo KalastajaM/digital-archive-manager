@@ -6,7 +6,7 @@ from pathlib import Path
 import zxingcpp
 from alembic import command
 from alembic.config import Config
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from sqlalchemy import text
 
 from dam.bills.barcode import modules
@@ -16,6 +16,7 @@ from dam.config import Settings
 from dam.core.paths import ArchivePaths
 from dam.db.engine import MIGRATIONS_DIR, migrate, write_tx
 from dam.extract.base import ExtractedText, ExtractorRegistry
+from dam.index import barcodes
 from dam.index.barcodes import read_page1
 from dam.index.content import ContentIndexer
 from dam.index.repo import FileRecord, FileRepo
@@ -109,6 +110,33 @@ def test_box_off_the_page_is_unclear():
     assert read_qr(cut) == [QrRead("E", 1, "empty", "unclear")]
 
 
+def test_mirrored_sticker_reads_through_the_transposed_frame():
+    page = _page()
+    _sticker(page, "M", 1)
+    _cross(page, _box((300, 300), "important"))
+    assert read_qr(ImageOps.mirror(page)) == [QrRead("M", 1, "empty", "ticked")]
+
+
+def test_boxes_without_outlines_are_unclear():
+    page = _page()
+    _sticker(page, "W", 1)
+    draw = ImageDraw.Draw(page)
+    for name in ("star", "important"):
+        draw.rectangle(_box((300, 300), name), fill=255)  # outline gone, inside blank
+    assert read_qr(page) == [QrRead("W", 1, "unclear", "unclear")]
+
+
+def test_huge_sticker_is_sampled_cheaply():
+    page = _page((2400, 1400))
+    big = _qr(sticker.payload("H", 1)).resize((21 * 40, 21 * 40), Image.Resampling.NEAREST)
+    page.paste(big, (100, 100))
+    draw = ImageDraw.Draw(page)
+    for x, y, side in sticker.box_rects(1).values():
+        x0, y0 = 100 + x * 40, 100 + y * 40
+        draw.rectangle([x0, y0, x0 + side * 40, y0 + side * 40], outline=0, width=6)
+    assert read_qr(page) == [QrRead("H", 1, "empty", "empty")]
+
+
 def test_foreign_qr_ignored():
     page = _page()
     page.paste(_qr("https://example.com"), (100, 100))
@@ -131,6 +159,19 @@ def test_bank_barcode_still_read_with_qr(tmp_path: Path):
     png = tmp_path / "bill.png"
     sheet.save(png)
     assert read_page1(png, "png") == found
+
+
+def test_a_failing_qr_read_keeps_the_bank_code(tmp_path: Path, monkeypatch, caplog):
+    def boom(_image):
+        raise RuntimeError("qr exploded")
+
+    monkeypatch.setattr(barcodes, "read_qr", boom)
+    sheet = _page((2480, 3508))
+    sheet.paste(barcode_image(modules(CODE)), (300, 2800))
+    png = tmp_path / "bill.png"
+    sheet.save(png)
+    assert read_page1(png, "png") == ([CODE], [])
+    assert "QR sticker reading failed" in caplog.text
 
 
 def test_qr_only_on_page_one(tmp_path: Path):

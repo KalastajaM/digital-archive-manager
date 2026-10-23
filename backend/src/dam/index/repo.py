@@ -11,7 +11,7 @@ from pathlib import PurePosixPath
 from sqlalchemy import Connection, Engine, and_, case, false, func, not_, or_, select, text, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from dam.codes.qr import QrRead
+from dam.codes.qr_model import QrRead
 from dam.core.paths import nfc
 from dam.db.engine import write_tx
 from dam.db.tables import (
