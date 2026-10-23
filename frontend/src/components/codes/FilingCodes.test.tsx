@@ -124,6 +124,36 @@ describe("Filing codes (Settings)", () => {
     expect(body[2]).toMatchObject({ label: "Taxes", tags: ["tax", "2026"], tray: "to-pay", folder: null, as_suggested: false });
   });
 
+  it("each row shows its sticker, redrawn from the code and label as typed", async () => {
+    const { user } = setup();
+    const row = (await screen.findAllByRole("group"))[0];
+    const img = within(row).getByRole("img");
+    expect(img).toHaveAttribute("src", "/api/filing-codes/sticker?code=A&label=To+action");
+    await user.clear(within(row).getByLabelText("Label"));
+    await user.type(within(row).getByLabelText("Label"), "Do it");
+    await waitFor(() => expect(within(row).getByRole("img")).toHaveAttribute("src", "/api/filing-codes/sticker?code=A&label=Do+it"));
+    await user.clear(within(row).getByLabelText("Code"));
+    expect(await within(row).findByText("No code yet")).toBeInTheDocument();
+    await user.type(within(row).getByLabelText("Code"), "A-1");
+    expect(await within(row).findByText("Not a valid code")).toBeInTheDocument();
+  });
+
+  it("collections are picked like folders, and one typed but not added is saved too", async () => {
+    const { calls, user } = setup({
+      "GET /api/collections": { body: [] },
+      "PUT /api/filing-codes": (c: Call) => ({ body: { codes: c.body, problems: [], warnings: [] } }),
+    });
+    const row = (await screen.findAllByRole("group"))[0];
+    const field = within(row).getByLabelText("Collections");
+    await user.type(field, "Taxes 2026{Enter}");
+    expect(within(row).getByRole("list", { name: "Collections to add" })).toHaveTextContent("Taxes 2026");
+    await user.type(field, "Car");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(ofMethod(calls, "PUT", "/api/filing-codes")).toHaveLength(1));
+    const body = ofMethod(calls, "PUT", "/api/filing-codes")[0].body as Array<Record<string, unknown>>;
+    expect(body[0].collections).toEqual(["Taxes 2026", "Car"]);
+  });
+
   it("a refused save shows its message and keeps the edits", async () => {
     const { user } = setup({ "PUT /api/filing-codes": { status: 400, body: { error: "Code 'A' is repeated" } } });
     await screen.findAllByRole("group");

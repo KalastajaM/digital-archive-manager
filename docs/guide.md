@@ -257,7 +257,10 @@ code's name pattern is not used when the file's own name already starts with a d
 (`20261015_...`): you named it already, so that name is kept.
 
 **Editing codes.** In Settings → Filing codes each code has a label, a tray, a folder, a
-name pattern, tags, collections, an inbox folder and the **File as suggested** box. While
+name pattern, tags, collections, an inbox folder and the **File as suggested** box. Each
+code shows its sticker on the left as it prints, redrawn as you change the code or label.
+Collections are picked like folders (type to find one, or **…** to browse), and tags work
+as everywhere else. Hold the pointer on a field to see what it does. While
 you type a code, dam warns when it is easy to confuse with another one if you write codes
 by hand (`0` and `O`, `1` and `I`, `5` and `S`).
 

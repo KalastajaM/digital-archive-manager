@@ -1871,10 +1871,31 @@ button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
 .settings-body > section { max-width: 960px; margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
 .settings-body h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
 .filing-codes-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
-.filing-code-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--sp-2); align-items: end; padding-bottom: var(--sp-3); border-bottom: 0.5px solid var(--hairline); }
+/* A code row: the sticker preview, four columns of two fields, then Remove over File as suggested.
+ * Narrow sections (a small window) fold it to the preview and two columns. */
+.settings-body > section.filing-codes { max-width: 1200px; container-type: inline-size; }
+.filing-code-row { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)) auto; gap: var(--sp-2) var(--sp-3); align-items: start; padding-bottom: var(--sp-3); border-bottom: 0.5px solid var(--hairline); }
 .filing-code-row label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
-.filing-code-row label.check { flex-direction: row; align-items: center; gap: var(--sp-2); }
+.filing-code-row label.check { flex-direction: row; align-items: center; gap: var(--sp-2); white-space: nowrap; }
 .filing-code-row .hint { grid-column: 1 / -1; margin: 0; }
+.code-col { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.code-col-end { align-items: flex-end; }
+.code-field { position: relative; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.code-field input, .code-field select { width: 100%; }
+.code-field .field, .code-field .folder-picker { margin: 0; }
+/* Field tooltips: from the field's left edge, wrapped; a control inside with its own tip (… browse) wins. */
+.code-field[data-tip]::after { left: 0; transform: none; white-space: normal; width: max-content; max-width: 18rem; }
+.code-col-end .code-field[data-tip]::after { left: auto; right: 0; }
+.code-field[data-tip]:has([data-tip]:hover)::after { display: none; }
+.sticker-preview { position: relative; display: flex; align-items: center; justify-content: center; width: 10rem; min-height: 4rem; margin-top: 18px; padding: var(--sp-1); border-radius: var(--r-md); background: #fff /* paper, in both themes */; box-shadow: var(--shadow-card); }
+.sticker-preview img { display: block; max-width: 100%; height: auto; }
+.sticker-preview.empty { background: var(--panel); color: var(--muted); font-size: var(--fs-sm); }
+.sticker-preview[data-tip]::after { left: 0; transform: none; white-space: normal; width: max-content; max-width: 18rem; }
+@container (max-width: 60rem) {
+  .filing-code-row { grid-template-columns: auto repeat(2, minmax(0, 1fr)); }
+  .filing-code-row > .sticker-preview { grid-row: span 2; }
+  .filing-code-row > .code-col-end { grid-column: 2 / -1; flex-direction: row-reverse; justify-content: space-between; align-items: center; }
+}
 .filing-codes-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
 .print-stickers-codes { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--sp-2); }
 .print-stickers-codes li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }

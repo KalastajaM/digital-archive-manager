@@ -157,6 +157,11 @@ All notable changes are listed here. The format follows
 - A filing code's Name is now called Name pattern, with an example and a line on what
   `{doc_date:%Y%m%d}`, `{year}` and `{stem}` do. A pattern that would give every file
   the same name is pointed out.
+- Settings → Filing codes shows each code as a row: its sticker on the left as it
+  prints (redrawn as you type the code or label), then Code and Label, Tray and Inbox
+  folder, Folder and Collections, Name pattern and Tags, and Remove above File as
+  suggested. Collections are picked like folders, tags work as in the Inbox, and every
+  field explains itself when you hold the pointer on it.
 - Today's Starred card shows a file's buttons (Quick Look, Open, Show in Finder, Remove
   the star) only for the row under the pointer or with keyboard focus, so the list reads
   calmer. On touch screens they stay visible.

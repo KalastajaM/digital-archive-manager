@@ -211,6 +211,27 @@ def _error_page(message: str) -> HTMLResponse:
 
 
 @router.get(
+    "/sticker",
+    response_class=Response,
+    responses={200: {"content": {"image/svg+xml": {"schema": {"type": "string"}}}}},
+)
+def sticker_preview(code: str, label: str = "", boxes: str | None = None) -> Response:
+    """One sticker as SVG, from the code and label as given (not the saved table): the
+    Settings preview while a code is edited. ``boxes`` (default true): with the tick
+    boxes. 400 for a code that is not 1 to 4 letters or digits or a label over 24
+    characters. Changes nothing."""
+    try:
+        svg = sheets.sticker_preview(code, label, _flag("boxes", boxes, True))
+    except ValueError as e:
+        raise InvalidRequest(str(e)) from e
+    return Response(
+        svg,
+        media_type="image/svg+xml",
+        headers={"Content-Security-Policy": "default-src 'none'", "Cache-Control": "no-store"},
+    )
+
+
+@router.get(
     "/sheet",
     response_class=Response,
     responses={
