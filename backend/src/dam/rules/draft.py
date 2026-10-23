@@ -12,6 +12,7 @@ from datetime import date
 from pathlib import PurePosixPath
 
 from dam.rules.engine import check_template, clean_stem
+from dam.rules.model import RESERVED_IDS
 from dam.rules.similar import _tokens
 
 MAX_WORDS = 6
@@ -61,6 +62,8 @@ def _slug(word: str) -> str:
 
 
 def _unique(base: str, taken: set[str]) -> str:
+    """``base``, or ``base-2``, ``base-3``... : never a taken or a reserved id."""
+    taken = taken | RESERVED_IDS
     if base not in taken:
         return base
     n = 2

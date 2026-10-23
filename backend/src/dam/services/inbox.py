@@ -25,7 +25,7 @@ from dam.rules.draft import draft_rule
 from dam.rules.engine import Suggestion, stem_and_ext, suggest
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
-from dam.rules.model import Rule
+from dam.rules.model import RESERVED_IDS, Rule
 from dam.rules.offer import RuleOffer, make_doc_frequency, offer_target, outcomes
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
 from dam.rules.similar import similar_folder
@@ -385,7 +385,7 @@ class InboxService:
             tray=req.tray,
             payee=req.tray_fields.get("payee") if isinstance(req.tray_fields, dict) else None,
             doc_frequency=frequency,
-            taken_ids={r.id for r in self._rules()},
+            taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
         )
         if draft is None:
             return None

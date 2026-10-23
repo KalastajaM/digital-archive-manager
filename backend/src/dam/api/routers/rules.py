@@ -23,16 +23,12 @@ from dam.app import App
 from dam.codes.model import format_validation
 from dam.rules import state as rules_state
 from dam.rules.learned import rule_file
-from dam.rules.model import LEARNED_FILE, Rule
+from dam.rules.model import LEARNED_FILE, RESERVED_IDS, Rule
 from dam.rules.replay import explain, replay
 from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleStats
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
-
-# Ids that would collide with fixed routes: ``/state`` is routed before ``/{rule_id}``,
-# but a rule of that name could never be addressed by a POST/DELETE sibling cleanly.
-_RESERVED = {"state", "replay", "explain"}
 
 _NO_STATS = RuleStats(suggested=0, changed=0, last_used=None, flagged=False)
 
@@ -148,7 +144,7 @@ def save_rule(app: AppDep, rule_id: str, body: RuleIn, replaces: str | None = No
     invalid, repeated or reserved one."""
     if rule_id != body.id:
         raise InvalidRequest("the rule id in the address and in the body differ")
-    if rule_id in _RESERVED:
+    if rule_id in RESERVED_IDS:
         raise InvalidRequest(f"\u2018{rule_id}\u2019 is a reserved name")
     app.save_rule(_rule(body), replaces)
     return _out(app)

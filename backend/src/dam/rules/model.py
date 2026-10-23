@@ -106,6 +106,8 @@ def _format_validation(e: ValidationError) -> str:
 
 
 LEARNED_FILE = "learned.yaml"  # rules made in the app; read before every other file
+# rule ids the API cannot take: they are fixed routes under ``/api/rules``
+RESERVED_IDS = frozenset({"state", "replay", "explain"})
 
 MAX_CONFIG_BYTES = 256 * 1024
 TOO_DEEP_MESSAGE = "file skipped: too deeply nested or too large to load"

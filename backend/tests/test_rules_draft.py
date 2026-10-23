@@ -97,3 +97,13 @@ def test_patterns_pass_check_template(folder):
     d = _draft(filed_folder=folder)
     check_template(d.folder)
     check_template(d.name)
+
+
+def test_draft_id_avoids_the_reserved_names():
+    from dam.rules.model import RESERVED_IDS
+
+    assert {"state", "replay", "explain"} <= RESERVED_IDS
+    d = _draft(text="State Treasury", doc_frequency=lambda w: {"state": 0.01}.get(w, 0.2))
+    assert d.id == "state-2"
+    d = _draft(text="Replay Oy", doc_frequency=lambda w: {"replay": 0.01}.get(w, 0.2))
+    assert d.id == "replay-2"
