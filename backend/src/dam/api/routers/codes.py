@@ -133,6 +133,8 @@ def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
         raise InvalidRequest(f"unknown sheet layout {body.layout!r}")
     if any(n < 0 for n in body.codes.values()):
         raise InvalidRequest("a count cannot be negative")
+    if any(n > sheets.MAX_STICKERS for n in body.codes.values()):
+        raise InvalidRequest(f"too many stickers: at most {sheets.MAX_STICKERS} at once")
     counts: dict[str, int] = {}
     for k, n in body.codes.items():
         counts[k.upper()] = counts.get(k.upper(), 0) + n

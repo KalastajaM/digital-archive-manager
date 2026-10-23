@@ -303,11 +303,12 @@ def render_sheet(
     """
     if not 1 <= start_at <= layout.per_page:
         raise ValueError(f"start at a label from 1 to {layout.per_page}")
-    queue = [fc for fc in codes for _ in range(max(0, counts.get(fc.code, 1)))]
-    if not queue and not outlines_only:
+    total = sum(max(0, counts.get(fc.code, 1)) for fc in codes)  # before building anything
+    if total > MAX_STICKERS:
+        raise ValueError(f"too many stickers: at most {MAX_STICKERS} at once")
+    if total == 0 and not outlines_only:
         raise ValueError("Nothing to print")
-    if len(queue) > MAX_STICKERS:
-        raise ValueError(f"at most {MAX_STICKERS} stickers at once")
+    queue = [fc for fc in codes for _ in range(max(0, counts.get(fc.code, 1)))]
     slots = start_at - 1 + len(queue)
     n_pages = max(1, math.ceil(slots / layout.per_page))
 

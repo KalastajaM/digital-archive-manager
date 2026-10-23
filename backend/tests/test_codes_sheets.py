@@ -1,6 +1,7 @@
 """Printable filing-code sticker sheets: grid positions, sticker geometry, the API."""
 
 import re
+import time
 from html.parser import HTMLParser
 
 import pytest
@@ -367,6 +368,23 @@ def test_unknown_code_400(app):
         assert r.status_code == 400 and r.json()["error"] == "Nothing to print"
         r = post_sheet(c, {"codes": {"P": 2001}, "layout": "l7651"})
         assert r.status_code == 400 and "2000" in r.json()["error"]
+        r = post_sheet(c, {"codes": {"P": 1000, "A": 1001}, "layout": "l7651"})
+        assert r.status_code == 400 and "2000" in r.json()["error"]
+
+
+def test_huge_count_400_quickly(app):
+    """A huge count is refused before any sticker list is built."""
+    with make_client(app) as c:
+        start = time.monotonic()
+        r = post_sheet(c, {"codes": {"P": 10**9}, "layout": "l7651"})
+        assert r.status_code == 400 and "too many" in r.json()["error"]
+        r = post_sheet(c, {"codes": {"P": 2000, "A": 2000}, "layout": "l7651"})
+        assert r.status_code == 400 and "too many" in r.json()["error"]
+    assert time.monotonic() - start < 2
+    start = time.monotonic()
+    with pytest.raises(ValueError, match="too many"):
+        sheets.render_sheet(CODES, {"P": 10**9}, l7651())
+    assert time.monotonic() - start < 1
 
 
 def test_api_layouts_and_custom(app):
@@ -388,3 +406,28 @@ def test_api_layouts_and_custom(app):
         r = c.put("/api/filing-codes/sheets/custom", json=too_big, headers=LOCAL_ORIGIN)
         assert r.status_code == 400
     assert (app.app_paths.config_dir / "sticker_sheets.yaml").exists()
+
+
+def test_restore_failure_keeps_first_error(tmp_path, monkeypatch):
+    """If writing the old content back fails too, the original error is raised."""
+    from dam.codes import configfile
+
+    path = tmp_path / "x.yaml"
+    path.write_text("old\n", encoding="utf-8")
+    real_open = open
+    calls = {"n": 0}
+
+    def flaky_open(file, mode="r", *args, **kwargs):
+        if str(file) == str(path) and mode == "wb":
+            raise PermissionError("restore failed")
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", flaky_open)
+
+    def verify() -> bool:
+        calls["n"] += 1
+        raise ValueError("read-back broke")
+
+    with pytest.raises(ValueError, match="read-back broke"):
+        configfile.write_config_file(path, "new\n", verify)
+    assert calls["n"] == 1
