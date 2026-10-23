@@ -159,3 +159,38 @@ def test_today_marked_count(app, fake_archive):
         today = client.get("/api/today").json()
     assert today["marked"] == 2
     assert today["inbox_stats"]["count"] == 3
+
+
+def test_an_unexpected_dry_run_error_needs_input_and_is_logged(app, fake_archive, caplog):
+    add_rule(app, folder=BANKS)
+    add_in(app, fake_archive, f"{INBOX}/To pay/bill.pdf", "b1", NORTHPOWER_BILL)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    app.inbox.preview = broken
+    with caplog.at_level("ERROR", logger="dam.codes.batch"):
+        [row] = marked_rows(app)
+    assert (row.flag, row.problem) == ("needs_input", "could not be checked")
+    assert any("boom" in (r.exc_text or "") or "boom" in r.getMessage() for r in caplog.records)
+    with TestClient(create_api(app), base_url=BASE) as client:
+        res = client.get("/api/filing-codes/batch")
+    assert res.status_code == 200
+    assert [r["problem"] for r in res.json()] == ["could not be checked"]
+
+
+def test_an_unexpected_error_checking_rows_together_flags_the_later_row(app, fake_archive):
+    add_rule(app, folder=BANKS)
+    add_in(app, fake_archive, f"{INBOX}/To pay/one.pdf", "b1", NORTHPOWER_BILL)
+    add_in(app, fake_archive, f"{INBOX}/To pay/two.pdf", "b2", NORTHPOWER_BILL)
+    alone = app.inbox.preview
+
+    def broken_together(reqs, *args, **kwargs):
+        if len(reqs) > 1:
+            raise RuntimeError("boom")
+        return alone(reqs, *args, **kwargs)
+
+    app.inbox.preview = broken_together
+    first, later = marked_rows(app)  # in Inbox order
+    assert (first.flag, first.problem) == (None, None)
+    assert (later.flag, later.problem) == ("needs_input", "could not be checked")

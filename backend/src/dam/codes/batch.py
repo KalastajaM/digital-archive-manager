@@ -12,6 +12,7 @@ journaled batch with one undo.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
@@ -28,8 +29,13 @@ if TYPE_CHECKING:
 
 Flag = Literal["unclear", "conflict", "needs_input"]
 
+log = logging.getLogger(__name__)
+
 # what a dry run may refuse with
 _REFUSED = (InvalidRequest, GuardError, NotFound, OutsideArchiveError)
+# the problem of a row whose dry run failed unexpectedly (a bug, logged): the batch is
+# still listed, and the row is filed from the form
+UNCHECKED = "could not be checked"
 
 
 @dataclass
@@ -64,7 +70,8 @@ def marked_rows(app: App, entries: list[InboxEntry] | None = None) -> list[Batch
     Flags, first that applies: ``unclear`` (a code or a sticker's tick box read
     uncertainly: "Tick box unclear: star"), ``conflict``
     (codes disagree), ``needs_input`` (no folder, a required tray field missing, or the
-    dry run refuses the request, alone or next to the other rows)."""
+    dry run refuses the request, alone or next to the other rows; a dry run that fails
+    unexpectedly gives ``UNCHECKED``, so listing the batch never fails)."""
     entries = app.inbox.list() if entries is None else entries
     rows: list[BatchRow] = []
     # an unflagged row's drive id -> (its folded source, its destination alone)
@@ -138,6 +145,9 @@ def _row(
         resolved = app.inbox.preview([request])
     except _REFUSED as e:
         return flag("needs_input", _message(e))
+    except Exception:
+        log.exception("dry run of marked file %s failed", row.drive_id)
+        return flag("needs_input", UNCHECKED)
     return row, (src, _targets(resolved).get(src))
 
 
@@ -169,6 +179,10 @@ def _check_together(
     except _REFUSED:
         _check_pairs(app, rows, alone)
         return
+    except Exception:
+        log.exception("dry run of %d marked files together failed", len(rows))
+        _check_pairs(app, rows, alone)
+        return
     taken: dict[str, BatchRow] = {}
     for row in rows:
         src, dst = alone[row.drive_id]
@@ -192,6 +206,10 @@ def _check_pairs(app: App, rows: list[BatchRow], alone: dict[str, tuple[str, str
                 pair = _targets(app.inbox.preview([other.request, row.request]))
             except _REFUSED as e:
                 row.flag, row.problem = "needs_input", _message(e)
+                break
+            except Exception:
+                log.exception("dry run of marked file %s next to another failed", row.drive_id)
+                row.flag, row.problem = "needs_input", UNCHECKED
                 break
             if dst is not None and pair.get(src) != dst:
                 _clash(app, row, other)
