@@ -2,6 +2,8 @@
 # and Swedish words in text_contains) and the sample folder layout of the demo archive.
 # Change the words and folders to your own, or delete what you do not need.
 #
+# Rules you make in the app are kept in learned.yaml, which is read first.
+#
 # Rules file: a YAML list of rules. Files in this folder load in name order;
 # for folder and name the first matching rule wins, tags from all matches are merged.
 #
