@@ -326,14 +326,14 @@ UI: button **File N marked** (hidden when N is 0). Panel: one row per `BatchRow`
 ### Task 13: Sticker sheet page (backend)
 
 **Files:**
-- Create: `backend/src/dam/codes/sheets.py`, `defaults/sticker_sheets.yaml`
+- Create: `backend/src/dam/codes/sheets.py`, Python constants in `codes/sheets.py` (not seeded into config/)
 - Modify: `backend/src/dam/api/routers/codes.py`
 - Test: `backend/tests/test_codes_sheets.py`
 
 **Interfaces:**
 - Consumes: Task 10, `App.codes`.
 - Produces:
-  - `SheetLayout(BaseModel)`: `id`, `name`, `columns`, `rows`, `label_w_mm`, `label_h_mm`, `top_mm`, `left_mm`, `gap_x_mm`, `gap_y_mm`, `cut_lines: bool`. Built-ins in `defaults/sticker_sheets.yaml`: `l7651` "Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)" with columns 5, rows 13, 38.1 x 21.2, top 10.7, left 4.7, gap_x 2.5, gap_y 0 (verify against Avery's published template before release; the guide says to check the pack); `plain` "Plain paper, cut out" with the same grid and `cut_lines: true`. A saved custom layout lives in `config/sticker_sheets.yaml` (`custom` id), written like `filing_codes.yaml`.
+  - `SheetLayout(BaseModel)`: `id`, `name`, `columns`, `rows`, `label_w_mm`, `label_h_mm`, `top_mm`, `left_mm`, `gap_x_mm`, `gap_y_mm`, `cut_lines: bool`. Built-ins in Python constants in `codes/sheets.py` (not seeded into config/): `l7651` "Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)" with columns 5, rows 13, 38.1 x 21.2, top 10.7, left 4.7, gap_x 2.5, gap_y 0 (verify against Avery's published template before release; the guide says to check the pack); `plain` "Plain paper, cut out" with the same grid and `cut_lines: true`. A saved custom layout lives in `config/sticker_sheets.yaml` (`custom` id), written like `filing_codes.yaml`.
   - `render_sheet(codes: list[FilingCode], counts: dict[str, int], layout: SheetLayout, start_at: int = 1, boxes: bool = True, blank_labels: bool = False, outlines_only: bool = False) -> str`: a complete HTML document, A4 `@page { size: A4; margin: 0 }`, absolutely positioned labels in mm, each with `qr_svg` (12 mm QR, layout 1 when `boxes`, else 0), the code in bold, the label (empty when `blank_labels`), and the ★ and ! boxes; `outlines_only` draws only label outlines (the test print). A note at the top of the screen view (hidden in print): "Print at 100 %, without fit to page."
   - `GET /api/filing-codes/sheets` -> layouts; `PUT /api/filing-codes/sheets/custom`; `POST /api/filing-codes/sheet` body `{codes: {code: count}, layout, start_at, boxes, blank_labels, outlines_only}` -> `text/html`.
 - [ ] **Step 1: Write the failing tests:** `test_sheet_positions_match_layout` (parse the HTML: label N at the expected mm offsets for l7651); `test_start_at_skips_labels`; `test_counts_and_overflow` (more stickers than fit -> second page); `test_qr_payloads` (each svg decodes, via zxing on a rasterised copy, to `dam:1:<CODE>` or `dam:<CODE>`); `test_blank_labels`; `test_outlines_only`; `test_unknown_code_400`.
