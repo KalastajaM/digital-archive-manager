@@ -1878,8 +1878,12 @@ button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
 .filing-code-row label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
 .filing-code-row label.check { flex-direction: row; align-items: center; gap: var(--sp-2); white-space: nowrap; }
 .filing-code-row .hint { grid-column: 1 / -1; margin: 0; }
-.code-col { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
-.code-col-end { align-items: flex-end; }
+/* Each column spans the row's two field rows (subgrid), so every second field starts at the same
+ * height; File as suggested sits in the second row, centred on the Tags field's box. */
+.code-col { grid-row: span 2; display: grid; grid-template-rows: subgrid; min-width: 0; }
+.filing-code-row > .sticker-preview { grid-row: span 2; }
+.code-col-end { justify-items: end; }
+.code-check { align-self: start; margin-top: calc(var(--fs-sm) * var(--lh) + 2px); min-height: 35px; } /* a one-line tag field */
 .code-field { position: relative; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .code-field input, .code-field select { width: 100%; }
 .code-field .field, .code-field .folder-picker { margin: 0; }
@@ -1893,8 +1897,9 @@ button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
 .sticker-preview[data-tip]::after { left: 0; transform: none; white-space: normal; width: max-content; max-width: 18rem; }
 @container (max-width: 60rem) {
   .filing-code-row { grid-template-columns: auto repeat(2, minmax(0, 1fr)); }
-  .filing-code-row > .sticker-preview { grid-row: span 2; }
+  .code-col { grid-row: auto; display: flex; flex-direction: column; gap: var(--sp-2); }
   .filing-code-row > .code-col-end { grid-column: 2 / -1; flex-direction: row-reverse; justify-content: space-between; align-items: center; }
+  .code-check { margin-top: 0; min-height: 0; }
 }
 .filing-codes-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
 .print-stickers-codes { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--sp-2); }
