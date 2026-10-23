@@ -90,6 +90,10 @@ export function confusable(a: string, b: string): boolean {
   return diff.length === 1 && GROUPS.some((g) => g.includes(diff[0][0]) && g.includes(diff[0][1]));
 }
 
+/** A name pattern that gives every file the same name: nothing in it changes per file. */
+export const fixedName = (pattern: string) =>
+  pattern.trim() !== "" && !pattern.includes("{doc_date") && !pattern.includes("{stem}");
+
 export function FilingCodes() {
   const codes = useFilingCodes();
   const trays = useTrays();
@@ -161,6 +165,12 @@ export function FilingCodes() {
         code's QR sticker on the paper. It says where the file goes and what it gets. Saved in the filing codes file, with
         a backup of the old one.
       </p>
+      <p className="hint">
+        A name pattern makes each file's name from its details: <code>{"{doc_date:%Y%m%d}"}</code> is the document's date,{" "}
+        <code>{"{year}"}</code> its year and <code>{"{stem}"}</code> the file's own name, so{" "}
+        <code>{"{doc_date:%Y%m%d}_Fortum"}</code> gives <code>20261015_Fortum.pdf</code>. It is not used when the file's
+        name already starts with a date.
+      </p>
       {problems.length > 0 && (
         <div className="banner" role="alert">
           <p>Some entries in the file could not be loaded:</p>
@@ -200,8 +210,12 @@ export function FilingCodes() {
               </label>
               <FolderPicker label="Folder" value={r.folder} onChange={(v) => edit(r.key, { folder: v })} />
               <label>
-                Name
-                <input value={r.name} onChange={(e) => edit(r.key, { name: e.target.value })} />
+                Name pattern
+                <input
+                  value={r.name}
+                  placeholder="{doc_date:%Y%m%d}_Fortum"
+                  onChange={(e) => edit(r.key, { name: e.target.value })}
+                />
               </label>
               <label>
                 Tags
@@ -228,6 +242,12 @@ export function FilingCodes() {
                 label={`Remove code ${r.code || `row ${i + 1}`}`}
                 onClick={() => setRows((rs) => (rs ?? []).filter((x) => x.key !== r.key))}
               />
+              {!r.as_suggested && fixedName(r.name) && (
+                <p className="hint">
+                  Every file with this code gets the same name. Add <code>{"{doc_date:%Y%m%d}"}</code> or{" "}
+                  <code>{"{stem}"}</code> to tell them apart.
+                </p>
+              )}
               {same && same.length > 0 && (
                 <p className="hint">
                   Easy to confuse with{" "}

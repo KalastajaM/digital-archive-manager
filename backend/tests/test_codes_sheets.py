@@ -87,7 +87,7 @@ def test_builtin_layouts():
     assert (a.columns, a.rows, a.label_w_mm, a.label_h_mm) == (5, 13, 38.1, 21.2)
     assert (a.top_mm, a.left_mm, a.gap_x_mm, a.gap_y_mm, a.cut_lines) == (10.7, 4.7, 2.5, 0, False)
     p = lays["plain"]
-    assert p.name == "Plain paper, cut out" and p.cut_lines
+    assert p.name == "Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)" and p.cut_lines
     grid = ("columns", "rows", "label_w_mm", "label_h_mm")
     grid += ("top_mm", "left_mm", "gap_x_mm", "gap_y_mm")
     assert all(getattr(p, k) == getattr(a, k) for k in grid)

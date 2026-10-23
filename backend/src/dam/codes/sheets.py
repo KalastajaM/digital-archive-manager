@@ -104,7 +104,10 @@ def builtin_layouts() -> list[SheetLayout]:
             id="l7651", name="Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)",
             cut_lines=False, **_GRID,
         ),
-        SheetLayout(id="plain", name="Plain paper, cut out", cut_lines=True, **_GRID),
+        SheetLayout(
+            id="plain", name="Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)",
+            cut_lines=True, **_GRID,
+        ),
     ]
 
 

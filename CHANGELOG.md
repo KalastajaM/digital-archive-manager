@@ -151,6 +151,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Print stickers says how many labels fit on the chosen sheet and, with codes chosen,
+  how many sheets they take and how many labels stay empty on the last one. Plain paper
+  now shows its size in the sheet list (65 per sheet, like the Avery L7651).
+- A filing code's Name is now called Name pattern, with an example and a line on what
+  `{doc_date:%Y%m%d}`, `{year}` and `{stem}` do. A pattern that would give every file
+  the same name is pointed out.
 - Today's Starred card shows a file's buttons (Quick Look, Open, Show in Finder, Remove
   the star) only for the row under the pointer or with keyboard focus, so the list reads
   calmer. On touch screens they stay visible.

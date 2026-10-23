@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
-import { PrintStickers } from "./PrintStickers";
+import { PrintStickers, sheetSummary } from "./PrintStickers";
 
 const code = (c: string, label: string) => ({
   code: c,
@@ -17,7 +17,7 @@ const code = (c: string, label: string) => ({
 });
 const GRID = { columns: 5, rows: 13, label_w_mm: 38.1, label_h_mm: 21.2, top_mm: 10.7, left_mm: 4.7, gap_x_mm: 2.5, gap_y_mm: 0 };
 const L7651 = { id: "l7651", name: "Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)", cut_lines: false, ...GRID };
-const PLAIN = { id: "plain", name: "Plain paper, cut out", cut_lines: true, ...GRID };
+const PLAIN = { id: "plain", name: "Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)", cut_lines: true, ...GRID };
 
 function setup(over: Record<string, unknown> = {}) {
   const calls = mockFetch({
@@ -53,7 +53,7 @@ describe("Print stickers (Settings)", () => {
     await waitFor(() => expect(within(layout).getAllByRole("option")).toHaveLength(3));
     expect(within(layout).getAllByRole("option").map((o) => o.textContent)).toEqual([
       "Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)",
-      "Plain paper, cut out",
+      "Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)",
       "Custom",
     ]);
     expect(layout).toHaveValue("l7651");
@@ -75,7 +75,9 @@ describe("Print stickers (Settings)", () => {
     const start = within(section).getByLabelText("Start at label");
     await user.clear(start);
     await user.type(start, "3");
-    expect(within(section).getByText("13 stickers")).toBeInTheDocument();
+    expect(
+      within(section).getByText("65 labels per sheet (5 × 13). 13 stickers from label 3: 1 sheet, 50 labels left empty on the last."),
+    ).toBeInTheDocument();
     expect(sheetLink(section, "Open sheet")).toEqual({
       codes: "P:12,A:1",
       layout: "l7651",
@@ -155,5 +157,22 @@ describe("Print stickers (Settings)", () => {
     await user.selectOptions(within(section).getByLabelText("Sheet"), "custom");
     await user.click(within(section).getByRole("button", { name: "Save custom sheet" }));
     expect(await within(section).findByRole("alert")).toHaveTextContent("a label must be at least 31.7 x 14.0 mm");
+  });
+});
+
+describe("the sheet summary", () => {
+  it("says how many labels fit, before any sticker is chosen", () => {
+    expect(sheetSummary(5, 13, 0, 1)).toBe("65 labels per sheet (5 × 13). No stickers chosen.");
+  });
+
+  it("counts the sheets and the empty labels on the last, from the start label on", () => {
+    expect(sheetSummary(5, 13, 70, 1)).toBe("65 labels per sheet (5 × 13). 70 stickers: 2 sheets, 60 labels left empty on the last.");
+    expect(sheetSummary(5, 13, 65, 1)).toBe("65 labels per sheet (5 × 13). 65 stickers: 1 sheet, no labels left empty on the last.");
+    expect(sheetSummary(5, 13, 1, 65)).toBe("65 labels per sheet (5 × 13). 1 sticker from label 65: 1 sheet, no labels left empty on the last.");
+    expect(sheetSummary(5, 13, 2, 65)).toBe("65 labels per sheet (5 × 13). 2 stickers from label 65: 2 sheets, 64 labels left empty on the last.");
+  });
+
+  it("names a start label past the end of the sheet", () => {
+    expect(sheetSummary(5, 13, 3, 70)).toBe("65 labels per sheet (5 × 13). Start at label 70 is past the end of the sheet.");
   });
 });
