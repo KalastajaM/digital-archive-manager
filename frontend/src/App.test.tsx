@@ -84,11 +84,11 @@ describe("App shell", () => {
     expect(within(nav).getAllByRole("link").map((a) => [name(a), a.getAttribute("href")])).toEqual([
       ["Today", "/"],
       ["Inbox (3)", "/inbox"],
+      ["Browse", "/browse"],
       ["Trays", "/trays"],
       ["Collections", "/collections"],
       ["Important", "/important"],
       ["Starred", "/starred"],
-      ["Browse", "/browse"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
       ["Settings", "/settings"],
