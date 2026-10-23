@@ -267,10 +267,14 @@ UI: button **File N marked** (hidden when N is 0). Panel: one row per `BatchRow`
 ### Task 10: Docs and the full check
 
 **Files:**
-- Modify: `docs/guide.md` (new "## Filing codes" section after "Filing from the Inbox", plus a line in "Today"), `docs/reference.md` (`filing_codes.yaml` format under "Config and rules"), `CHANGELOG.md` (`## [Unreleased]` / `### Added`)
+- Modify: `docs/guide.md` (new "## Filing codes" section after "Filing from the Inbox", a line in "Today", a "Settings" section for the new screen, and the table of contents), `docs/reference.md` (`filing_codes.yaml` format under "Config and rules"), `CHANGELOG.md` (`## [Unreleased]` / `### Added`), `README.md` (a bullet under "Why you might like it" and a screenshot row, light and dark, in the screenshot table)
+- Create: `docs/images/filing-codes-light.png`, `docs/images/filing-codes-dark.png` (the File N marked panel on the demo archive)
+
+Filing codes are a distinguishing feature (like Activity with undo), so the README bullet sits high in "Why you might like it" and says plainly what it does for the user: decide on paper or by where you save a file, and dam files the whole batch after one look. Step 1 delivers inbox folders only; write the README and guide so QR stickers can be added later without rewriting.
 
 - [ ] **Step 1: Write the guide section:** what a code is, the seeded codes, inbox folders and Create inbox folders, File N marked and its three flags, that hand comments in `filing_codes.yaml` are not kept when saving from the app. Plain words, no em dashes.
-- [ ] **Step 2: Write the CHANGELOG entry:** "Filing codes: drop files into a code's folder in the inbox (To pay, To action, File as suggested, or your own) and file them all at once with File N marked."
+- [ ] **Step 1b: Write the README bullet and add the screenshot row** (screenshots taken in Step 4, light and dark, demo archive only, matching the existing `<picture>` rows).
+- [ ] **Step 2: Write the CHANGELOG entry** (also say that existing `##. Organize` subfolders named "To pay", "To action" or "File as suggested" become inbox folders after the update): "Filing codes: drop files into a code's folder in the inbox (To pay, To action, File as suggested, or your own) and file them all at once with File N marked."
 - [ ] **Step 3: Run the full check:** `uv run ruff check . && uv run pytest -q -W error` in `backend/`; `npm test -- --run && npm run build` in `frontend/`. Expected: all pass.
 - [ ] **Step 4: Run the app on the demo archive** (`uv run python -m dam.demo <scratch>/dam-demo`, `uv run dam --data-dir <scratch>/dam-demo/data serve --port 8766`): create inbox folders, drop a demo bill into "To pay", file it via File N marked, undo it. Screenshot for the PR with no personal documents.
 - [ ] **Step 5: Commit** `docs: guide and changelog for filing codes`.
