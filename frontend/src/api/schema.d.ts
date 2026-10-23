@@ -2248,7 +2248,9 @@ export interface paths {
         /**
          * Save Rule
          * @description Save a rule: new ones go at the end of ``learned.yaml``; with ``replaces`` that
-         *     rule is rewritten in place. 400 for an invalid or repeated one.
+         *     rule is rewritten in place. ``rule_id`` is the rule's (new) id and must equal the
+         *     body's; ``replaces`` is the id being replaced (the old one, for a rename). 400 for an
+         *     invalid, repeated or reserved one.
          */
         put: operations["save_rule_api_rules__rule_id__put"];
         post?: never;
@@ -4304,10 +4306,7 @@ export interface components {
             /** Inbox */
             inbox: number;
             /** Shadowed */
-            shadowed: [
-                string,
-                string
-            ][];
+            shadowed: components["schemas"]["ShadowOut"][];
             /** Checked */
             checked: number;
             /** Total */
@@ -4675,6 +4674,13 @@ export interface components {
              * @default 0
              */
             item_count: number;
+        };
+        /** ShadowOut */
+        ShadowOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Rule Id */
+            rule_id: string;
         };
         /** SheetLayoutIn */
         SheetLayoutIn: {

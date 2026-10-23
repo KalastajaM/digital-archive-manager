@@ -147,7 +147,7 @@ def test_replay_places_a_new_rule_after_the_learned_ones(app, api, fake_archive)
     )
     app.reload_rules()
     new = post(api, "/api/rules/replay", {"rule": rule_body("fortum")}).json()
-    assert new["shadowed"] == [["a", "invoice"]]
+    assert new["shadowed"] == [{"drive_id": "a", "rule_id": "invoice"}]
 
 
 def test_replay_with_replaces_uses_the_old_position(app, api, fake_archive):
@@ -157,7 +157,7 @@ def test_replay_with_replaces_uses_the_old_position(app, api, fake_archive):
     first = post(api, "/api/rules/replay", {"rule": rule_body("fortum"), "replaces": "fortum"})
     assert first.json()["shadowed"] == []
     last = post(api, "/api/rules/replay", {"rule": rule_body("fortum"), "replaces": "invoice"})
-    assert last.json()["shadowed"] == [["a", "fortum"]]
+    assert last.json()["shadowed"] == [{"drive_id": "a", "rule_id": "fortum"}]
     unknown = post(api, "/api/rules/replay", {"rule": rule_body("x"), "replaces": "nope"})
     assert unknown.status_code == 404
 
@@ -194,3 +194,16 @@ def test_state_toggle_decline_and_clear(app, api):
     cleared = put(api, "/api/rules/state", {"clear_declined": True})
     assert cleared.json() == {"offer": False, "declined": 0}
     assert api.get("/api/rules").json()["state"] == {"offer": False, "declined": 0}
+
+
+def test_save_path_id_must_match_body_and_not_be_reserved(app, api):
+    put(api, "/api/rules/a", rule_body("a"))
+    mismatch = put(api, "/api/rules/a2?replaces=a", rule_body("other"))
+    assert mismatch.status_code == 400 and "differ" in mismatch.json()["error"]
+    renamed = put(api, "/api/rules/a2?replaces=a", rule_body("a2"))
+    assert renamed.status_code == 200 and ids(renamed.json()) == ["a2"]
+    # PUT /state is routed to the state route first (so a rule body there is a 422)
+    assert put(api, "/api/rules/state", rule_body("state")).status_code == 422
+    for name in ("replay", "explain"):
+        r = put(api, f"/api/rules/{name}", rule_body(name))
+        assert r.status_code == 400 and "reserved" in r.json()["error"]

@@ -30,6 +30,10 @@ from dam.services.rule_record import RuleStats
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
+# Ids that would collide with fixed routes: ``/state`` is routed before ``/{rule_id}``,
+# but a rule of that name could never be addressed by a POST/DELETE sibling cleanly.
+_RESERVED = {"state", "replay", "explain"}
+
 _NO_STATS = RuleStats(suggested=0, changed=0, last_used=None, flagged=False)
 
 
@@ -94,7 +98,9 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
                 last = i
         order.insert(last + 1, rule)
     result = replay(app.engine, rule, order, app.settings.special_folders)
-    return asdict(result)
+    out = asdict(result)
+    out["shadowed"] = [{"drive_id": d, "rule_id": r} for d, r in result.shadowed]
+    return out
 
 
 @router.post("/explain", response_model=list[RuleExplainOut])
@@ -131,7 +137,13 @@ def decline(app: AppDep, body: RulesDeclineIn) -> dict:
 @router.put("/{rule_id}", response_model=RulesOut)
 def save_rule(app: AppDep, rule_id: str, body: RuleIn, replaces: str | None = None) -> dict:
     """Save a rule: new ones go at the end of ``learned.yaml``; with ``replaces`` that
-    rule is rewritten in place. 400 for an invalid or repeated one."""
+    rule is rewritten in place. ``rule_id`` is the rule's (new) id and must equal the
+    body's; ``replaces`` is the id being replaced (the old one, for a rename). 400 for an
+    invalid, repeated or reserved one."""
+    if rule_id != body.id:
+        raise InvalidRequest("the rule id in the address and in the body differ")
+    if rule_id in _RESERVED:
+        raise InvalidRequest(f"\u2018{rule_id}\u2019 is a reserved name")
     app.save_rule(_rule(body), replaces)
     return _out(app)
 

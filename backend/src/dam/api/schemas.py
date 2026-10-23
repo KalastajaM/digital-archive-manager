@@ -1491,12 +1491,17 @@ class ReplayHitOut(BaseModel):
     path_rule: str
 
 
+class ShadowOut(BaseModel):
+    drive_id: str
+    rule_id: str  # the earlier rule that wins
+
+
 class ReplayOut(BaseModel):
     matched: int
     same: int
     different: list[ReplayHitOut]
     inbox: int
-    shadowed: list[tuple[str, str]]  # (drive_id, id of the earlier rule that wins)
+    shadowed: list[ShadowOut]
     checked: int
     total: int
     truncated: bool
