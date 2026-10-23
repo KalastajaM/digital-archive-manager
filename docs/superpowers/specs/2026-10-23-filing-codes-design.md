@@ -28,8 +28,9 @@ One design, built in three steps. Each step is usable on its own.
 
 1. **Code table, the File N marked batch, the "file as suggested" code, and inbox
    folders.** No OCR; works on every platform; proves the whole confirm flow.
-2. **Pen codes** (Apple Vision, macOS only).
-3. **QR stickers** (printing sticker sheets, and reading them on every platform).
+2. **QR stickers** (printing sticker sheets, and reading them on every platform).
+3. **Pen codes** (Apple Vision, macOS only). Optional: decided after QR stickers have been
+   built and tested in daily use.
 
 Parked until all three are done: Tesseract-based pen codes for Windows and Linux.
 
@@ -146,7 +147,7 @@ their current meaning; deeper levels are not included.
 
 - The Inbox header and Today's "Found in the inbox" strip show **File N marked** when at
   least one inbox file has a matched code. While new files are still waiting for a code
-  pass (steps 2 and 3), the button shows "Reading filing codes…" so the count is not
+  pass (QR, pen), the button shows "Reading filing codes…" so the count is not
   mistaken for final.
 - It opens a review list, one row per coded file: thumbnail, the code and how it was found
   (folder, pen, QR; for pen the raw read when it differs), and the resulting name, folder,
@@ -163,7 +164,43 @@ their current meaning; deeper levels are not included.
   `FileRequest`s), so it is one journaled batch with one undo.
 - Unticked rows stay in the Inbox with their suggestions pre-filled.
 
-## Step 2: pen codes
+## Step 2: QR stickers
+
+### Reading
+
+The barcode pass already renders the first pages of inbox files and reads them with
+zxing-cpp (core dependency, all platforms), today only for Code 128 bank barcodes. It also
+reads QR codes on page 1. A QR code counts only when its text is `dam:<CODE>` and `<CODE>`
+is in the table; any other QR code (on invoices, letters) is ignored. QR reads are never
+unclear. Results are stored with the pen reads or alongside them (builder's call).
+
+### Printing sticker sheets
+
+Settings → Filing codes has **Print stickers**: choose codes and how many of each, choose
+a sheet layout, and dam produces a printable HTML page (opened in the browser and printed
+from there; no PDF library). QR images are generated with zxing-cpp
+(`zxingcpp.create_barcode(..., BarcodeFormat.QRCode).to_svg()`), so no new dependency.
+Each sticker holds the QR code with the code in bold and its label in small print beside
+it. Labels are capped at 24 characters and wrap or shrink to fit the sticker. The QR text
+holds only `dam:<CODE>`, so stickers stay valid when the code's meaning changes.
+
+Sheet layouts:
+
+- A short built-in list of common A4 label sheets, chosen by product number. The first
+  candidate is Avery Zweckform L7651 (65 per sheet, 38.1 × 21.2 mm); others to be added
+  only after checking the manufacturer's published dimensions.
+- **Custom**: columns, rows, label width and height, top and left margin, horizontal and
+  vertical gap, in mm. Saved, so it is entered once.
+- **Plain paper**: a grid with cutting lines, for anyone without label sheets.
+- **Start at label N**, to use up a half-used sheet.
+- **Test print**: the same layout with label outlines only, to print on plain paper and
+  hold against a label sheet. The page tells the owner to print at 100% (no "fit to
+  page"), since browser and printer scaling is the usual cause of misaligned labels.
+
+Minimum printed QR size and the quiet zone around it are the builder's call, to be tested
+on the owner's scanner at 300 dpi black and white before the built-in list is fixed.
+
+## Step 3 (optional): pen codes
 
 ### Evidence (spike, 2026-10-23)
 
@@ -226,41 +263,6 @@ Matching:
 - Rendering and limits are the builder's call, starting from the barcode pass (300 dpi
   greyscale, its timeout and retry); sharing the rendered page 1 with that pass is
   preferred if the coupling stays small.
-
-## Step 3: QR stickers
-
-### Reading
-
-The barcode pass already renders the first pages of inbox files and reads them with
-zxing-cpp (core dependency, all platforms), today only for Code 128 bank barcodes. It also
-reads QR codes on page 1. A QR code counts only when its text is `dam:<CODE>` and `<CODE>`
-is in the table; any other QR code (on invoices, letters) is ignored. QR reads are never
-unclear. Results are stored with the pen reads or alongside them (builder's call).
-
-### Printing sticker sheets
-
-Settings → Filing codes has **Print stickers**: choose codes and how many of each, choose
-a sheet layout, and dam produces a printable HTML page (opened in the browser and printed
-from there; no PDF library). QR images are generated with zxing-cpp
-(`zxingcpp.create_barcode(..., BarcodeFormat.QRCode).to_svg()`), so no new dependency.
-Each sticker holds the QR code and the code's label in small text beside it. The QR text
-holds only `dam:<CODE>`, so stickers stay valid when the code's meaning changes.
-
-Sheet layouts:
-
-- A short built-in list of common A4 label sheets, chosen by product number. The first
-  candidate is Avery Zweckform L7651 (65 per sheet, 38.1 × 21.2 mm); others to be added
-  only after checking the manufacturer's published dimensions.
-- **Custom**: columns, rows, label width and height, top and left margin, horizontal and
-  vertical gap, in mm. Saved, so it is entered once.
-- **Plain paper**: a grid with cutting lines, for anyone without label sheets.
-- **Start at label N**, to use up a half-used sheet.
-- **Test print**: the same layout with label outlines only, to print on plain paper and
-  hold against a label sheet. The page tells the owner to print at 100% (no "fit to
-  page"), since browser and printer scaling is the usual cause of misaligned labels.
-
-Minimum printed QR size and the quiet zone around it are the builder's call, to be tested
-on the owner's scanner at 300 dpi black and white before the built-in list is fixed.
 
 ## Constraints
 
