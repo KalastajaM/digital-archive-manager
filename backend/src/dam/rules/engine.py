@@ -100,12 +100,18 @@ def _parent(rel: str) -> str:
     return "" if parent == "." else parent
 
 
-def _matches(rule: Rule, rec: FileRecord, folded_text: str) -> tuple[bool, bool]:
-    """Return ``(matched, regex_timed_out)``."""
+def _matches(
+    rule: Rule, rec: FileRecord, folded_text: str, inbox_alias: str | None = None
+) -> tuple[bool, bool]:
+    """Return ``(matched, regex_timed_out)``. ``folder_is`` matches the file's real
+    folder, or ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder)."""
     when = rule.when
     if when.folder_is is not None:
         want = nfc(when.folder_is).strip("/").casefold()
-        if nfc(_parent(rec.path)).casefold() != want:
+        here = {nfc(_parent(rec.path)).casefold()}
+        if inbox_alias is not None:
+            here.add(nfc(inbox_alias).strip("/").casefold())
+        if want not in here:
             return False, False
     if rule._folded_terms and not any(t in folded_text for t in rule._folded_terms):
         return False, False
@@ -179,12 +185,13 @@ def _stem(name: str, suffix: str) -> str:
     return clean_stem(raw_stem) or "document"
 
 
-def stem_and_ext(rec: FileRecord) -> tuple[str, str]:
-    """The ``{stem}`` templates see for ``rec`` and its lower-case extension (no dot),
-    as ``suggest`` computes them."""
+def stem_and_ext(rec: FileRecord) -> tuple[str, str, str]:
+    """The ``{stem}`` templates see for ``rec``, its lower-case extension (no dot) and
+    the file's own name (mojibake fixed), as ``suggest`` computes them. The name is
+    what the naming-convention check looks at, never the suggested (dated) name."""
     ext = (rec.ext or "").lower()
     name = fix_mojibake(rec.name or PurePosixPath(rec.path).name)
-    return _stem(name, f".{ext}" if ext else ""), ext
+    return _stem(name, f".{ext}" if ext else ""), ext, name
 
 
 def suggest(
@@ -192,7 +199,11 @@ def suggest(
     text: str,
     rules: list[Rule],
     special: SpecialFolders | None = None,
+    inbox_alias: str | None = None,
 ) -> Suggestion:
+    """``inbox_alias``: for a file directly in a filing code's inbox folder, the inbox,
+    so a rule whose ``folder_is`` is the inbox matches it as well (a rule naming the
+    code's folder itself still matches only that folder)."""
     special = special or SpecialFolders()
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
@@ -219,7 +230,7 @@ def suggest(
     folded_text = fold(text)
     matching: list[Rule] = []
     for r in rules:
-        ok, timed_out = _matches(r, rec, folded_text)
+        ok, timed_out = _matches(r, rec, folded_text, inbox_alias)
         if timed_out:
             sources.append(f"rule:{r.id} (regex timeout)")
         elif ok:

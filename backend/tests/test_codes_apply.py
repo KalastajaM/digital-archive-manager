@@ -1,7 +1,9 @@
 """Filing codes are the strongest suggestion source (``dam.codes.apply``)."""
 
 from datetime import date
+from pathlib import Path
 
+import yaml
 from fastapi.testclient import TestClient
 
 from dam.ai.tasks._common import rules_point_excluded
@@ -94,7 +96,9 @@ def test_two_codes_conflict_on_folder():
     }
     base = Suggestion(name="20261015_bill.pdf", folder="Rule/Folder", folder_source="rule:r")
     hits = [CodeHit("A", "folder"), CodeHit("B", "pen", raw="B")]
-    out = apply_codes(base, hits, codes, date(2026, 10, 15), "bill", "pdf", SPECIAL)
+    out = apply_codes(
+        base, hits, codes, date(2026, 10, 15), "bill", "pdf", SPECIAL, original_name="bill.pdf"
+    )
     assert out.conflict is True
     assert out.folder == "Bills/2026"
     assert out.folder_source == "code:A"
@@ -112,7 +116,9 @@ def test_same_value_from_two_codes_is_no_conflict():
     }
     base = Suggestion(name="bill.pdf")
     hits = [CodeHit("A", "folder"), CodeHit("B", "qr")]
-    out = apply_codes(base, hits, codes, date(2026, 10, 15), "bill", "pdf", SPECIAL)
+    out = apply_codes(
+        base, hits, codes, date(2026, 10, 15), "bill", "pdf", SPECIAL, original_name="bill.pdf"
+    )
     assert out.conflict is False
     assert out.folder == "Bills/2026"
 
@@ -123,7 +129,14 @@ def test_code_name_template_and_template_error():
     }
     base = Suggestion(name="bill.pdf", folder="Rule/Folder", folder_source="rule:r")
     out = apply_codes(
-        base, [CodeHit("N", "folder")], codes, date(2026, 10, 15), "bill", "pdf", SPECIAL
+        base,
+        [CodeHit("N", "folder")],
+        codes,
+        date(2026, 10, 15),
+        "bill",
+        "pdf",
+        SPECIAL,
+        original_name="bill.pdf",
     )
     assert out.name == "20261015_Invoice.pdf"
     assert out.name_source == "code:N"
@@ -136,6 +149,7 @@ def test_code_name_template_and_template_error():
         "bill",
         "pdf",
         SPECIAL,
+        original_name="bill.pdf",
     )
     assert out.name == "bill.pdf"
     assert out.folder == "Rule/Folder"
@@ -145,7 +159,16 @@ def test_code_name_template_and_template_error():
 
 def test_unknown_code_is_kept_as_hit_but_sets_nothing():
     base = Suggestion(name="bill.pdf")
-    out = apply_codes(base, [CodeHit("Q", "pen", raw="Q")], {}, None, "bill", "pdf", SPECIAL)
+    out = apply_codes(
+        base,
+        [CodeHit("Q", "pen", raw="Q")],
+        {},
+        None,
+        "bill",
+        "pdf",
+        SPECIAL,
+        original_name="bill.pdf",
+    )
     assert out.codes == [CodeHit("Q", "pen", raw="Q")]
     assert out.folder is None and out.tray is None
 
@@ -186,8 +209,77 @@ def test_code_name_skips_a_conventional_name():
         "20261015_bill",
         "pdf",
         SPECIAL,
+        original_name="20261015_bill.pdf",
     )
     assert (out.name, out.name_source) == ("20261015_bill.pdf", "scan")
+
+
+def test_code_name_checks_the_original_name_not_the_dated_suggestion():
+    # the scan already dated the suggestion; the file's own name is not conventional
+    out = apply_codes(
+        Suggestion(name="20261015_scan0001.pdf"),
+        [CodeHit("N", "folder")],
+        name_code("{doc_date:%Y%m%d}_Invoice"),
+        date(2026, 10, 15),
+        "scan0001",
+        "pdf",
+        SPECIAL,
+        original_name="scan0001.pdf",
+    )
+    assert (out.name, out.name_source) == ("20261015_Invoice.pdf", "code:N")
+
+
+def test_code_name_pattern_through_the_inbox(app, fake_archive):
+    set_code(app, "P", name="{doc_date:%Y%m%d}_Invoice")
+    add_in(app, fake_archive, f"{INBOX}/To pay/scan0001.pdf", "b1", NORTHPOWER_BILL)
+    add_in(app, fake_archive, f"{INBOX}/To pay/20261015_bill.pdf", "b2", NORTHPOWER_BILL)
+    found = app.inbox.suggestion("b1")
+    # the text's date (Eräpäivä 15.11.2026) through the code's name pattern
+    assert (found.name, found.name_source) == ("20261115_Invoice.pdf", "code:P")
+    kept = app.inbox.suggestion("b2")
+    assert (kept.name, kept.name_source) == ("20261015_bill.pdf", "scan")
+
+
+def test_shipped_rule_matches_a_file_in_a_code_inbox_folder(app, fake_archive):
+    shipped = Path(__file__).resolve().parents[2] / "defaults" / "rules" / "00-examples.yaml"
+    (app.rules_dir / "00-examples.yaml").write_text(
+        shipped.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    assert app.reload_rules() == []
+    fake_archive.add("11. Bills & Receipts/old.pdf", content=b"old", drive_id="old")
+    text = "Invoice 15.10.2026\nTotal 12,00 EUR"
+    add_in(app, fake_archive, f"{INBOX}/File as suggested/invoice.pdf", "b1", text)
+    found = app.inbox.suggestion("b1")
+    assert (found.folder, found.folder_source) == (
+        "11. Bills & Receipts/2026",
+        "rule:generic-invoice",
+    )
+    [row] = marked_rows(app)
+    assert (row.flag, row.problem) == (None, None)
+    assert row.request.folder == "11. Bills & Receipts/2026"
+    assert row.request.tray is None
+
+
+def test_folder_is_a_code_folder_matches_only_that_folder(app, fake_archive):
+    (app.rules_dir / "50-to-pay.yaml").write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "id": "to-pay-only",
+                    "when": {"folder_is": f"{INBOX}/To pay"},
+                    "then": {"folder": "Paid"},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assert app.reload_rules() == []
+    add_in(app, fake_archive, f"{INBOX}/To pay/a.pdf", "a", "x")
+    add_in(app, fake_archive, f"{INBOX}/File as suggested/b.pdf", "b", "x")
+    add_in(app, fake_archive, f"{INBOX}/c.pdf", "c", "x")
+    assert app.inbox.suggestion("a").folder == "Paid"
+    assert app.inbox.suggestion("b").folder is None
+    assert app.inbox.suggestion("c").folder is None
 
 
 def test_code_name_renames_a_non_conventional_name():
@@ -199,6 +291,7 @@ def test_code_name_renames_a_non_conventional_name():
         "bill",
         "pdf",
         SPECIAL,
+        original_name="bill.pdf",
     )
     assert (out.name, out.name_source) == ("20261015_bill.pdf", "code:N")
 
@@ -232,7 +325,16 @@ SEVERAL = {
 
 def several(*hits):
     base = Suggestion(name="bill.pdf", folder="Rule/Folder", folder_source="rule:r")
-    return apply_codes(base, list(hits), SEVERAL, date(2026, 10, 15), "bill", "pdf", SPECIAL)
+    return apply_codes(
+        base,
+        list(hits),
+        SEVERAL,
+        date(2026, 10, 15),
+        "bill",
+        "pdf",
+        SPECIAL,
+        original_name="bill.pdf",
+    )
 
 
 def test_as_suggested_and_tray_code_conflict():

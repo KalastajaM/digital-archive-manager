@@ -18,7 +18,8 @@ All notable changes are listed here. The format follows
   by hand are not kept when you save from the app.
 - Inbox folders for filing codes: Settings → Filing codes → Create inbox folders makes
   the missing ones in `##. Organize`, after a preview and with Undo. Files directly in a
-  code's folder show in the Inbox with that code. Inbox subfolders that are no code's
+  code's folder show in the Inbox with that code, and filing rules for the inbox
+  (`folder_is: "##. Organize"`) apply to them too. Inbox subfolders that are no code's
   folder are listed in Settings. Existing `##. Organize` subfolders named "To pay",
   "To action", "To read", "Follow-up" or "File as suggested" become inbox folders after
   the update, so the files directly in them now show in the Inbox.

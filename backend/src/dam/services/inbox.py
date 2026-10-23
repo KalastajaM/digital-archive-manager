@@ -392,7 +392,9 @@ class InboxService:
         return rec
 
     def _suggest(self, rec: FileRecord, text: str) -> Suggestion:
-        found = suggest(rec, text, self._rules(), self.special)
+        # a file in a code's inbox folder counts as in the inbox for ``folder_is``
+        alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
+        found = suggest(rec, text, self._rules(), self.special, inbox_alias=alias)
         if found.folder is None and self._in_inbox(rec):
             folder = similar_folder(self.repo.engine, rec.drive_id, rec.name or "", text, rec.ext)
             if folder is not None:
@@ -404,8 +406,10 @@ class InboxService:
         reads = known_reads(self.repo, rec, table)
         hits = codes_for(self.repo, rec, table, reads)
         if hits:
-            stem, ext = stem_and_ext(rec)
-            found = apply_codes(found, hits, table, found.doc_date, stem, ext, self.special)
+            stem, ext, name = stem_and_ext(rec)
+            found = apply_codes(
+                found, hits, table, found.doc_date, stem, ext, self.special, original_name=name
+            )
         return apply_ticks(found, reads)
 
     @staticmethod

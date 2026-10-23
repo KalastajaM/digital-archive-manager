@@ -246,8 +246,8 @@ file needs input.
 **In the form**, each field a code sets starts with the code's value, and its chip says
 where it came from ("from folder To pay", "from sticker `P`"). Fields the code leaves
 alone are filled in as before, so a To pay code still takes the payee, amount and due
-date from the scan. A code's name pattern is not used when the file's name already
-starts with a date (`20261015_...`), so the date is not added twice.
+date from the scan. A code's name pattern is not used when the file's own name already
+starts with a date (`20261015_...`): you named it already, so that name is kept.
 
 **Editing codes.** In Settings → Filing codes each code has a label, a tray, a folder, a
 name pattern, tags, collections, an inbox folder and the **File as suggested** box. While
@@ -266,6 +266,11 @@ Each code can have an inbox folder: a subfolder of `##. Organize` such as
 `##. Organize/To pay`. Save or scan a file straight into it, or drag it there, and it
 shows in the Inbox with that code. Only files directly in a code's folder count; a
 folder inside it is not looked at.
+
+A filing rule for the inbox (`folder_is: "##. Organize"`, as in the example rules) also
+applies to the files in a code's folder, so they get the same folder suggestion as in the
+inbox itself. A rule that names a code's folder (`folder_is: "##. Organize/To pay"`)
+applies only to the files in that folder.
 
 dam does not make these folders by itself. **Create inbox folders** in Settings → Filing
 codes makes the missing ones after a preview, and Activity can undo it while they are

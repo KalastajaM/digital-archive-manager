@@ -297,7 +297,7 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
   when:                                  # all given conditions must match
     text_contains: ["acme benefits", "eläkekassa"]   # case/diacritics-insensitive
     filename_matches: "(?i)scan"         # optional regex on the file name
-    folder_is: "##. Organize"            # optional
+    folder_is: "##. Organize"            # optional; see below
   then:
     folder: "13. Taxes/{year}"           # templates: {doc_date:%Y%m%d}, {year}, {stem}
     name: "{doc_date:%Y%m%d}_Benefits"      # stem only; the extension is added
@@ -305,6 +305,10 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
     # tray: to-pay                       # optional: the tray it is guessed to belong in
     # payee: "Acme Benefits"        # optional: prefills the To pay tray's payee
 ```
+
+`folder_is` is the folder the file sits in. The inbox (`##. Organize`) also matches files
+directly in a filing code's inbox folder (such as `##. Organize/To pay`); naming a code's
+folder (`folder_is: "##. Organize/To pay"`) matches only the files in that folder.
 
 `then.tray` and `then.payee` come from the same rule as the folder (the first matching
 rule with a folder; if no rule gives a folder, the first matching rule that has either).

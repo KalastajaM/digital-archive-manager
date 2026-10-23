@@ -105,6 +105,8 @@ def apply_codes(
     stem: str,
     ext: str,
     special: SpecialFolders,
+    *,
+    original_name: str,
 ) -> Suggestion:
     """``found`` with each field the hit codes set (source ``code:<CODE>``). Tags and
     collections are united; for the folder, name and tray the first code wins and a
@@ -115,8 +117,9 @@ def apply_codes(
     None (source ``code:<CODE>``), and with a code that names a tray it is a conflict.
     Its tags and collections are added like any code's.
 
-    As in the rules engine, a code's name template is not used when the suggested name
-    already follows the naming convention (it would add the date twice). When a code
+    As in the rules engine, a code's name template is not used when the file's own name
+    (``original_name``, not the suggested one, which the scan may already have dated)
+    follows the naming convention: the owner named it already. When a code
     sets the tray, ``payee`` deliberately stays as the rules and the scan found it: a
     code names no payee, and the detected one is still the best prefill.
     ``folder_before_codes`` keeps the earlier folder for the AI exclusion guard."""
@@ -130,7 +133,7 @@ def apply_codes(
         codes=[*found.codes, *hits],
         folder_before_codes=found.folder,
     )
-    conventional = matches_convention(found.name)
+    conventional = matches_convention(original_name)
     suffix = f".{ext}" if ext else ""
     set_by_code: dict[str, str] = {}  # field -> the value the first code gave
 
