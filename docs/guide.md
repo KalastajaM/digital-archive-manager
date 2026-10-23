@@ -9,6 +9,7 @@
 - [Today](#today)
 - [Filing from the Inbox](#filing-from-the-inbox)
 - [Filing codes](#filing-codes)
+- [Filing rules](#filing-rules)
 - [Trays](#trays)
 - [Paying a bill with the bank barcode](#paying-a-bill-with-the-bank-barcode)
 - [Collections](#collections)
@@ -377,6 +378,84 @@ You can tick the last two on purpose if what the row shows is right, or open the
 entry in Activity, with one **Undo** for all of them. Files you left unticked stay in the
 Inbox with their code's values filled in.
 
+## Filing rules
+
+A filing rule fills in the Inbox form for you: when a document contains certain words,
+the rule suggests the folder, the name, the tags, the tray and the payee. dam can draft
+rules from how you file, and it proves each one against the documents you have already
+filed before you save it. Rules only fill in the form. Nothing is filed until you
+confirm, and no AI is involved.
+
+### Making a rule from a filing
+
+After you file one document by hand from the Inbox form, the "Filed" message offers
+**Make a rule…** when the folder or name was not what a rule suggested (or you changed
+it). If the value you changed came from a rule made in the app, it offers **Update rule
+<id>…** instead. There is no offer after filing several documents at once, after File N
+marked, or when a filing code did the filing.
+
+**Make a rule…** opens a sheet drafted from what you just did:
+
+- **Match words**, as chips. One is ticked: the most distinctive word near the top of the
+  text, usually the sender. A rule matches when **any** ticked word is in the text, so
+  ticking more words widens the rule. Words that appear in most of your filed documents
+  are not offered.
+- **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
+  document's year, its date and its original file name, and the sheet shows what each
+  gives for this document.
+- **Tags, tray and payee**, each with a box to leave it out.
+- **More conditions**: a file-name pattern, and the folder the file must be in.
+- **This document**: the folder and name the rule would give the document you just filed.
+
+### The proof
+
+Under the sheet, dam replays the rule against the documents you filed before and shows
+the result again after each edit: "Matches 14 documents you filed before: 12 would land
+exactly where they are", then every one that would land somewhere else, current place
+beside the rule's place. It also says how many documents in the inbox now the rule
+catches, and, when an earlier rule already wins for some of the matches, "For 3 of them
+rule fortum comes first". If no filed document matches, it says "Not tested yet: no
+filed document matches it", and you can still save.
+
+**Save** waits ("Testing…") until the proof for what is on screen is in. If some
+documents would land elsewhere it asks "2 documents would land somewhere else. Save
+anyway?".
+
+**Not for these** closes the offer and remembers the match words of that document, so
+dam does not offer again for documents with the same words. Settings can forget them.
+
+### Where rules are kept, and in what order
+
+Rules made in the app go to `config/rules/learned.yaml`, which dam reads before the other
+rule files. A rule about one sender therefore wins over a broad one such as the shipped
+`generic-invoice`. For the folder and name the first matching rule wins; tags from all
+matching rules are added together. Rules you wrote by hand in other files keep working
+as before. If you edit one of them in the app, dam rewrites that file: the comments in
+it are lost, and a `.bak-<time>` copy of the old file is kept next to it.
+
+### The record
+
+Each rule keeps a record: how often it was suggested and how often you changed what it
+suggested. When you corrected a rule in 2 of its last 5 filings it is flagged
+"Corrected recently" in Settings, and its suggestion in the Inbox says "this rule was
+corrected recently". Undoing a filing removes it from the record.
+
+### Settings → Filing rules
+
+Under "This archive", Settings lists every rule in the order dam tries them, with its
+words, where it files, its record and any flag. Rules not made in the app show the file
+they are in. Click a rule to edit it (the proof is shown there too). You can:
+
+- add a **New rule**, or **Delete** one (dam asks first);
+- move rules made in the app **Up** or **Down**; rules in other files are reordered in
+  their files;
+- **Test a document**: pick a file from the inbox and see which rules match it, why
+  (the word or pattern that matched) and which field each rule gives;
+- turn off "Offer to make a rule after I file a document by hand";
+- **Forget N declined senders**, to be offered rules for them again.
+
+Files with rules that could not be loaded are listed at the top, with the reason.
+
 ## Trays
 
 A tray is a to-do list of documents: once a scanned paper is filed into a tray, the paper
@@ -564,6 +643,9 @@ each area, grouped by what it applies to; one section shows at a time.
     saves or discards your changes. Missing inbox folders, and inbox folders that belong
     to no code, are pointed out above the list. See [Filing codes](#filing-codes) and
     [QR stickers](#qr-stickers).
+  - **Filing rules**: every rule in the order it applies, with its record; edit, test,
+    delete or add rules, test a document from the inbox, and switch the offer to make a
+    rule on or off. See [Filing rules](#filing-rules).
 - **This browser** (every archive alike):
   - **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at
     once, and is remembered by this browser (another browser starts on Auto).
