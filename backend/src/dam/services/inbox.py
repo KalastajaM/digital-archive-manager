@@ -520,6 +520,13 @@ class InboxService:
             raise NotFound(drive_id)
         return rec
 
+    def rule_context(self, drive_id: str) -> tuple[FileRecord, str, str | None]:
+        """``(record, text, inbox_alias)`` for judging the rules against one document;
+        ``NotFound`` for a file that is gone."""
+        rec = self._record(drive_id)
+        alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
+        return rec, self.repo.text_for(drive_id), alias
+
     def _suggest(self, rec: FileRecord, text: str) -> Suggestion:
         # a file in a code's inbox folder counts as in the inbox for ``folder_is``
         alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
