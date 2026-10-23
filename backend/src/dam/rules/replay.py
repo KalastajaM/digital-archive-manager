@@ -23,6 +23,7 @@ from dam.rules.engine import (
     _parent,
     _render_folder,
     _render_name,
+    stem_and_ext,
     suggest,
 )
 from dam.rules.model import Rule, fold
@@ -62,8 +63,9 @@ def _without_folder(rule: Rule) -> Rule:
     return rule.model_copy(update={"when": rule.when.model_copy(update={"folder_is": None})})
 
 
-def _replay_stem(name: str, ext: str) -> str:
-    stem = name[: -len(ext) - 1] if ext and name.lower().endswith("." + ext) else name
+def _replay_stem(rec: FileRecord) -> str:
+    """The ``{stem}`` live filing gives, minus the date prefix and one separator."""
+    stem, _, _ = stem_and_ext(rec)
     if _DATE_PREFIX.match(stem):
         stem = stem[8:]
         if stem.startswith(("_", " ", "-", ".")):
@@ -74,8 +76,8 @@ def _replay_stem(name: str, ext: str) -> str:
 def _rule_path(rule: Rule, rec: FileRecord, special: SpecialFolders) -> str:
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
-    doc_date = rec.doc_date or parse_doc_date(name)
-    stem = _replay_stem(name, ext)
+    doc_date = parse_doc_date(name) or rec.doc_date
+    stem = _replay_stem(rec)
     if rule.then.folder is not None:
         folder = _render_folder(rule.then.folder, doc_date, stem, special)
     else:
@@ -166,12 +168,16 @@ def _why(rule: Rule, rec: FileRecord, folded_text: str, inbox_alias: str | None,
     when = rule.when
     ok, timed_out = _matches(rule, rec, folded_text, inbox_alias)
     if ok:
-        for raw, term in zip(when.text_contains, rule._folded_terms, strict=True):
-            if term in folded_text:
-                return f"word ‘{raw}’"
+        parts = [
+            f"word ‘{raw}’"
+            for raw, term in zip(when.text_contains, rule._folded_terms, strict=True)
+            if term in folded_text
+        ][:1]
         if when.filename_matches is not None:
-            return f"file name matches {when.filename_matches}"
-        return "no condition: matches every file"
+            parts.append(f"file name matches {when.filename_matches}")
+        if not parts and when.folder_is is not None:
+            parts.append(f"in the folder ‘{when.folder_is}’")
+        return ", ".join(parts) or "no condition: matches every file"
     if timed_out:
         return "file name check took too long"
     if when.folder_is is not None:

@@ -85,3 +85,42 @@ def test_explain_says_which_word_matched_and_what_wins(app, fake_archive):
     elsewhere = FileRecord(drive_id="y", path="20. Home/invoice.pdf")
     e = explain(elsewhere, "Fortum", [fortum], special, None)[0]
     assert not e.matched and e.why == "not in the inbox"
+
+
+def test_replay_stem_follows_live_filing(app, fake_archive):
+    add_filed(app, fake_archive, "11. Bills/20260301_Fortum_bill.pdf", "a", "Fortum")
+    add_filed(app, fake_archive, "11. Bills/20260302 Fortum bill.pdf", "b", "Fortum")
+    rule = Rule.model_validate(
+        {
+            "id": "s",
+            "when": {"text_contains": ["fortum"]},
+            "then": {"folder": "11. Bills", "name": "{doc_date:%Y%m%d}_{stem}"},
+        }
+    )
+    r = replay(app.engine, rule, [rule], app.settings.special_folders)
+    assert [h.drive_id for h in r.different] == ["b"]
+    assert r.different[0].path_rule == "11. Bills/20260302_Fortum_bill.pdf"
+    assert r.same == 1
+
+
+def test_replay_date_prefers_the_name_over_the_column(app, fake_archive):
+    from sqlalchemy import text as sql
+
+    add_filed(app, fake_archive, "20. Home/20260301_Fortum.pdf", "a", "Fortum")
+    with app.engine.begin() as c:
+        c.execute(sql("update files set doc_date = '2020-01-01' where drive_id = 'a'"))
+    rule = Rule.model_validate(FORTUM_RULE)
+    r = replay(app.engine, rule, [rule], app.settings.special_folders)
+    assert [h.path_rule for h in r.different] == ["11. Bills/2026/20260301_Fortum.pdf"]
+
+
+def test_explain_labels_folder_only_and_regex_rules(app, fake_archive):
+    special = app.settings.special_folders
+    folder_only = Rule.model_validate({"id": "f", "when": {"folder_is": INBOX}})
+    both = Rule.model_validate(
+        {"id": "b", "when": {"text_contains": ["fortum"], "filename_matches": "(?i)^inv"}}
+    )
+    rec = FileRecord(drive_id="x", path=f"{INBOX}/invoice.pdf")
+    out = {e.rule_id: e for e in explain(rec, "Fortum", [folder_only, both], special, None)}
+    assert out["f"].why == f"in the folder ‘{INBOX}’"
+    assert out["b"].why == "word ‘fortum’, file name matches (?i)^inv"
