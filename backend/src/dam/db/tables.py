@@ -410,3 +410,20 @@ file_fields = Table(
     Column("fields", Text, nullable=False),
     Column("updated", Float, nullable=False),
 )
+
+# What each learned filing rule suggested and whether the user kept it (migration 0027):
+# one row per (filing, rule, field). A filing is a (batch_id, drive_id) pair. Removed
+# when the batch is undone. No FKs: files rows may be parked or purged.
+rule_outcomes = Table(
+    "rule_outcomes",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("batch_id", Text, nullable=False),
+    Column("drive_id", Text, nullable=False),
+    Column("rule_id", Text, nullable=False),
+    Column("field", Text, nullable=False),  # "folder" | "name" | "tray"
+    Column("kept", Boolean, nullable=False),
+    Column("created", Float, nullable=False),
+    Index("ix_rule_outcomes_batch_id", "batch_id"),
+    Index("ix_rule_outcomes_rule_id", "rule_id"),
+)

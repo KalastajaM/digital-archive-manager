@@ -156,6 +156,8 @@ PHASE2_INDEXES = {
         ["collection_id", "parent_id"],
     ),
     "ix_collection_groups_created_by_batch": ("collection_groups", ["created_by_batch"]),  # 0018
+    "ix_rule_outcomes_batch_id": ("rule_outcomes", ["batch_id"]),  # 0027
+    "ix_rule_outcomes_rule_id": ("rule_outcomes", ["rule_id"]),  # 0027
 }
 
 

@@ -41,6 +41,7 @@ from dam.services.intake import IntakeService
 from dam.services.launch import LaunchService
 from dam.services.layout import LayoutService
 from dam.services.preview import PreviewService
+from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService
 from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
@@ -65,6 +66,7 @@ class App:
     content: ContentIndexer
     trays: TrayService = field(init=False)
     notes: NotesService = field(init=False)
+    rule_record: RuleRecord = field(init=False)
     publishers: PublisherRegistry = field(init=False)
     collections: CollectionService = field(init=False)
     marks: MarkService = field(init=False)
@@ -157,8 +159,14 @@ class App:
             important=self.marks.important_paths,
             important_lock=self.collections.important_lock,
         )
+        self.rule_record = RuleRecord(self.engine)
         self.activity = ActivityService(
-            self.executor, self.trays, self.collections, self.notes, self.ongoing
+            self.executor,
+            self.trays,
+            self.collections,
+            self.notes,
+            self.rule_record,
+            self.ongoing,
         )
         self.today = TodayService(
             self.trays,

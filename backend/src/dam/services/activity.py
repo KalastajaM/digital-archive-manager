@@ -15,6 +15,7 @@ from dam.ops.model import BatchResult, ResolvedOp
 from dam.ops.undo import ACTED, SYNC_ORIGIN, JournalEntry, RecoveryResult, entries
 from dam.rules.model import fold
 from dam.services.errors import InvalidRequest, NotFound
+from dam.services.rule_record import RuleRecord
 from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
@@ -66,12 +67,14 @@ class ActivityService:
         trays: TrayService,
         collections: CollectionService,
         notes: NotesService,
+        rule_record: RuleRecord,
         ongoing: OngoingPublisher | None = None,
     ) -> None:
         self.executor = executor
         self.trays = trays
         self.collections = collections
         self.notes = notes
+        self.rule_record = rule_record
         self.ongoing = ongoing
 
     def recent(self, limit: int = 50) -> list[BatchSummary]:
@@ -280,7 +283,11 @@ class ActivityService:
         if (removed and removed.total) or forgotten:
             self.collections.changed()
         if ok:
-            for cleanup in (self.trays.remove_created_by, self.notes.remove_created_by):
+            for cleanup in (
+                self.trays.remove_created_by,
+                self.notes.remove_created_by,
+                self.rule_record.remove_created_by,
+            ):
                 self._remove(outcome, batch_id, cleanup)
         return outcome
 
