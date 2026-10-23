@@ -39,6 +39,11 @@ All notable changes are listed here. The format follows
   that needs input is fixed in the form. File files the ticked rows as one batch with
   one Undo. "Reading filing codes…" shows next to it while new scans are still read for
   stickers.
+- Browse search results have the Folder, Date and Size columns of the Files view and can
+  be sorted by any of them (up to 500 matches); a third click on a column goes back to
+  best match first.
+- Browse: the search scope sits beside the search box, so you can choose before typing
+  whether to search the open folder (with its subfolders) or the whole archive.
 - Drop files or folders from Finder (or Explorer) on the Inbox list to copy them into the
   inbox, as Choose files… does. A folder's files land side by side, hidden files are left
   out, and one drop takes at most 100 files.

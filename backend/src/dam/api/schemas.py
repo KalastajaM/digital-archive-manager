@@ -518,6 +518,8 @@ class SearchHitOut(BaseModel):
     name: str
     snippet: str
     rank: float
+    size: int | None
+    mtime: float | None
     marks: list[Mark]
 
 

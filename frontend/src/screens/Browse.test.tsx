@@ -194,6 +194,8 @@ describe("Search", () => {
     name: "a.pdf",
     snippet: "Total of the [invoice] is due",
     rank: -1,
+    size: 1000,
+    mtime: 1_700_000_000,
     marks: [],
     ...overrides,
   });
@@ -205,19 +207,21 @@ describe("Search", () => {
     expect(searches(calls)).toHaveLength(0); // nothing before the pause
     await screen.findByText("invoice");
     expect(searches(calls)).toHaveLength(1);
-    expect(searches(calls)[0].url).toBe("/api/search?q=invoice");
+    expect(searches(calls)[0].url).toBe("/api/search?q=invoice&limit=500");
   });
 
   it("renders matches as <mark> and can search only this folder", async () => {
     const { calls, user } = setup("10. Financial", { "GET /api/search": { body: [hit()] } });
     await screen.findByText("Banks");
-    // the scope is part of searching: nothing to choose before a query is typed
-    expect(screen.queryByRole("group", { name: "Search scope" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "In this folder" })).not.toBeInTheDocument();
+    // the scope sits beside the box, so it can be chosen before typing
+    const scope = screen.getByRole("group", { name: "Search scope" });
+    expect(within(scope).getByRole("button", { name: "Archive" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveAttribute("placeholder", "Search the archive");
     await user.type(screen.getByRole("searchbox", { name: "Search" }), "invoice");
     const results = await screen.findByRole("list", { name: "Search results" });
-    expect(queryOf(searches(calls).at(-1)!).get("folder")).toBeNull(); // everywhere by default
-    await user.click(within(screen.getByRole("group", { name: "Search scope" })).getByRole("button", { name: "This folder" }));
+    expect(queryOf(searches(calls).at(-1)!).get("folder")).toBeNull(); // the whole archive by default
+    await user.click(within(scope).getByRole("button", { name: "Folder" }));
+    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveAttribute("placeholder", "Search 10. Financial");
     const mark = await within(results).findByText("invoice");
     expect(mark.tagName).toBe("MARK");
     expect(mark.parentElement).toHaveTextContent("Total of the invoice is due");
@@ -274,11 +278,44 @@ describe("Search", () => {
     await screen.findByText("readme.txt");
     await user.type(screen.getByRole("searchbox", { name: "Search" }), "bold");
     expect(await screen.findByText(evil)).toBeInTheDocument();
-    expect(screen.getByText(`X/${evil}`)).toBeInTheDocument();
     expect(document.querySelector("img[src=x]")).toBeNull();
     expect(document.querySelector("b")).toBeNull();
     expect(screen.getByText("bold").tagName).toBe("MARK");
     expect(screen.getByText(/⟨U\+202E⟩x/)).toBeInTheDocument();
+  });
+});
+
+describe("Search results' columns", () => {
+  const hits: SearchHit[] = [
+    { drive_id: "b", path: "20. Home/b.pdf", name: "b.pdf", snippet: "b.pdf", rank: -3, size: 10, mtime: 1_600_000_000, marks: [] },
+    { drive_id: "a", path: "10. Financial/a.pdf", name: "a.pdf", snippet: "a.pdf", rank: -2, size: 300, mtime: 1_700_000_000, marks: [] },
+    { drive_id: "c", path: "30. Car/c.pdf", name: "c.pdf", snippet: "c.pdf", rank: -1, size: null, mtime: null, marks: [] },
+  ];
+  const order = () =>
+    within(screen.getByRole("list", { name: "Search results" }))
+      .getAllByRole("checkbox")
+      .map((c) => c.getAttribute("aria-label")!.replace("Select ", ""));
+
+  it("show folder, date and size, sort by a column and go back to best match", async () => {
+    const { user } = setup("", { "GET /api/search": { body: hits } });
+    await screen.findByText("readme.txt");
+    await user.type(screen.getByRole("searchbox", { name: "Search" }), "pdf");
+    await screen.findByRole("list", { name: "Search results" });
+    expect(order()).toEqual(["b.pdf", "a.pdf", "c.pdf"]); // best match first
+    const head = screen.getByRole("group", { name: "Sort by" });
+    expect(screen.getByText("10. Financial")).toBeInTheDocument(); // the folder column
+    const size = within(head).getByRole("button", { name: "Sort by size" });
+    await user.click(size);
+    expect(order()).toEqual(["a.pdf", "b.pdf", "c.pdf"]); // largest first, no size last
+    await user.click(within(head).getByRole("button", { name: /^Sort by size/ }));
+    expect(order()).toEqual(["b.pdf", "a.pdf", "c.pdf"]);
+    await user.click(within(head).getByRole("button", { name: /^Sort by size/ }));
+    expect(order()).toEqual(["b.pdf", "a.pdf", "c.pdf"]); // best match again
+    expect(within(head).getByRole("button", { name: "Sort by size" })).toHaveAttribute("aria-pressed", "false");
+    await user.click(within(head).getByRole("button", { name: "Sort by folder" }));
+    expect(order()).toEqual(["a.pdf", "b.pdf", "c.pdf"]);
+    await user.click(within(head).getByRole("button", { name: /^Sort by date/ }));
+    expect(order()).toEqual(["a.pdf", "b.pdf", "c.pdf"]); // newest first
   });
 });
 
@@ -1288,7 +1325,7 @@ describe("Task 11 review fixes", () => {
   });
 
   it("undoing a move reloads the search results", async () => {
-    const hit: SearchHit = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", name: "a.pdf", snippet: "[a]", rank: -1, marks: [] };
+    const hit: SearchHit = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", name: "a.pdf", snippet: "[a]", rank: -1, size: 1, mtime: 1, marks: [] };
     const op = { kind: "move" as const, src: hit.path, dst: "13. Taxes/a.pdf", drive_id: "f1", note: null };
     const { calls, user } = setup("", {
       "GET /api/search": { body: [hit] },

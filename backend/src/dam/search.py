@@ -16,6 +16,8 @@ class SearchHit:
     name: str
     snippet: str
     rank: float
+    size: int | None = None
+    mtime: float | None = None
 
 
 # Private markers so a literal "[" in the body is never mistaken for a match.
@@ -50,7 +52,7 @@ def search(
     if not match:
         return []
     sql = (
-        "SELECT f.drive_id, f.path, f.name, "
+        "SELECT f.drive_id, f.path, f.name, f.size, f.mtime, "
         "snippet(file_fts, 3, :open, :close, '…', 12) AS snip, bm25(file_fts) AS rank "
         "FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "
         "WHERE file_fts MATCH :q AND f.missing IS NOT 1 AND f.parked_at IS NULL"
@@ -64,7 +66,10 @@ def search(
     sql += " ORDER BY rank, f.path LIMIT :limit"
     with engine.connect() as conn:
         rows = conn.execute(text(sql), params).all()
-    return [SearchHit(r.drive_id, r.path, r.name, _snippet(r.snip, r.name), r.rank) for r in rows]
+    return [
+        SearchHit(r.drive_id, r.path, r.name, _snippet(r.snip, r.name), r.rank, r.size, r.mtime)
+        for r in rows
+    ]
 
 
 def _snippet(snip: str | None, name: str) -> str:
