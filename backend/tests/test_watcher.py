@@ -231,3 +231,19 @@ def test_reconcile_with_archive_gone_warns_and_keeps_index(fake_archive, engine,
             t.join(5)
     assert repo.get("id-a").missing is False
     assert not changed.is_set()
+
+
+def test_file_dropped_into_a_code_folder_shows_in_the_inbox_with_its_code(app, fake_archive):
+    folder = fake_archive.root / "##. Organize" / "To pay"
+    folder.mkdir(parents=True)
+    w = Watcher(app.paths, app.repo, debounce_s=0.2, reconcile_every_s=3600)
+    w.start()
+    try:
+        fake_archive.add("##. Organize/To pay/bill.pdf", drive_id="b1")
+        assert wait_for(lambda: app.repo.by_path("##. Organize/To pay/bill.pdf") is not None, 5)
+    finally:
+        w.stop()
+    [entry] = app.inbox.list()
+    assert entry.record.drive_id == "b1"
+    assert [h.code for h in entry.suggestion.codes] == ["P"]
+    assert entry.suggestion.tray == "to-pay"
