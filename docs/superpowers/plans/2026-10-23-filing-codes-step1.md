@@ -20,7 +20,7 @@
 - Seeded codes and folder names are not tied to any language's words.
 - Code: 1 to 4 letters or digits, unique, stored upper case.
 - Confusable groups: `0 O Ø D Q`, `1 I L 7`, `5 S`, `2 Z`, `8 B`, `U V`, `6 G`. Warn, never block.
-- Seeded codes: `A` (tray `to-action`, inbox folder "To action"), `P` (tray `to-pay`, inbox folder "To pay"), `F` (`as_suggested`, inbox folder "File as suggested").
+- Seeded codes: `A` (tray `to-action`, inbox folder "To action"), `P` (tray `to-pay`, inbox folder "To pay"), `R` (tray `to-read`, inbox folder "To read"), `F` (label "Follow-up", tray `follow-up`, inbox folder "Follow-up"), `D` (`as_suggested`, inbox folder "File as suggested").
 - Chip copy: "Suggested: <value>, from code `P`"; for an inbox folder source: "from folder To pay".
 - Batch flags: **unclear**, **conflict**, **needs input**; flagged rows unticked by default. (Unclear only arises from pen reads, so step 1 never produces it, but the type carries it.)
 - Every user-visible change: CHANGELOG `## [Unreleased]` entry and a "Filing codes" section in `docs/guide.md`; regenerate `frontend/src/api/schema.d.ts` with `npm run gen:api` after API changes.
@@ -64,7 +64,7 @@
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_seed_on_ensure(tmp_path):  # AppPaths(tmp_path).ensure() -> file exists; load gives A, P, F
+def test_seed_on_ensure(tmp_path):  # AppPaths(tmp_path).ensure() -> file exists; load gives A, P, R, F, D
 def test_deleted_seed_stays_deleted(tmp_path):  # save [] then ensure() again -> load gives []
 def test_code_is_upper_cased(): assert FilingCode(code="v3").code == "V3"
 def test_code_too_long_is_invalid():  # code="ABCDE" -> ValidationError
@@ -78,7 +78,7 @@ def test_confusable():
 ```
 
 - [ ] **Step 2: Run** `uv run pytest tests/test_codes_model.py -q` in `backend/`. Expected: FAIL (module missing).
-- [ ] **Step 3: Implement** the interfaces above and `defaults/filing_codes.yaml` with the three seeded codes (labels "To action", "To pay", "File as suggested"). In `ensure()`, after tray seeding, copy the default with `_copy_new` only if `filing_codes_path` is absent. Check that `_seed` (copying all of `DEFAULTS_DIR` on a fresh install) does not also copy it to a wrong place: the default must land at `config/filing_codes.yaml`.
+- [ ] **Step 3: Implement** the interfaces above and `defaults/filing_codes.yaml` with the five seeded codes (labels "To action", "To pay", "To read", "Follow-up", "File as suggested"). In `ensure()`, after tray seeding, copy the default with `_copy_new` only if `filing_codes_path` is absent. Check that `_seed` (copying all of `DEFAULTS_DIR` on a fresh install) does not also copy it to a wrong place: the default must land at `config/filing_codes.yaml`.
 - [ ] **Step 4: Run** the tests. Expected: PASS. Run `uv run pytest tests/test_config.py -q`: still PASS.
 - [ ] **Step 5: Commit** `feat: filing code table with seeding and confusable check`.
 
@@ -98,7 +98,7 @@ def test_confusable():
   - `PUT /api/filing-codes` body `list[FilingCodeIn]` -> `FilingCodesOut`; 400 with the problem text on invalid input.
   - `FilingCodeIn/Out` mirror `FilingCode`.
 
-- [ ] **Step 1: Write the failing tests:** `test_get_lists_seeded_codes` (3 codes, no problems), `test_put_replaces_and_warns` (PUT `0` and `O` -> both saved, warnings name each other), `test_put_unknown_tray_400`, `test_get_reports_hand_edit_problem` (write a bad entry to the file, `app.reload_rules()`, GET shows one problem). Use `make_client` and `post` helpers from `tests/test_api.py` (with `Origin` header).
+- [ ] **Step 1: Write the failing tests:** `test_get_lists_seeded_codes` (5 codes, no problems), `test_put_replaces_and_warns` (PUT `0` and `O` -> both saved, warnings name each other), `test_put_unknown_tray_400`, `test_get_reports_hand_edit_problem` (write a bad entry to the file, `app.reload_rules()`, GET shows one problem). Use `make_client` and `post` helpers from `tests/test_api.py` (with `Origin` header).
 - [ ] **Step 2: Run** them. Expected: FAIL (404).
 - [ ] **Step 3: Implement** as specified.
 - [ ] **Step 4: Run** them. Expected: PASS.
@@ -174,7 +174,7 @@ def test_confusable():
 - [ ] **Step 1: Write the failing tests:**
   - `test_code_folder_beats_rule`: a rule gives folder X; the P code with folder `Bills/{year}` gives `Bills/<year>`, `folder_source == "code:P"`.
   - `test_unset_fields_fall_back`: P (tray only) keeps the rule's folder and name; `tray == "to-pay"`, `tray_source == "code:P"`.
-  - `test_as_suggested_changes_nothing`: F leaves the suggestion equal to the rule-only one, but `codes == [CodeHit("F", "folder")]`.
+  - `test_as_suggested_changes_nothing`: D leaves the suggestion equal to the rule-only one, but `codes == [CodeHit("D", "folder")]`.
   - `test_two_codes_conflict_on_folder` (call `apply_codes` with two hits directly) -> `conflict is True`; tags united.
   - `test_api_inbox_entry_has_code_fields`: `GET /api/inbox` row for `To pay/bill.pdf` has `suggestion.tray == "to-pay"` and `suggestion.codes[0].via == "folder"`.
 - [ ] **Step 2: Run** them. Expected: FAIL.
@@ -200,8 +200,8 @@ def test_confusable():
 - [ ] **Step 1: Write the failing tests:**
   - `test_tray_code_row_has_tray_fields`: a To pay file with a scanned due date and amount -> row `tray_fields` has `due_date` and `amount`, `flag is None`.
   - `test_missing_due_date_needs_input`: same without a due date -> `flag == "needs_input"`, `problem` names the due date field.
-  - `test_as_suggested_without_folder_needs_input`: F file, no rule, no similar files -> `problem == "folder"`.
-  - `test_batch_flags_name_clash`: two F files whose suggestions give the same folder and name -> the second is flagged, the first is not.
+  - `test_as_suggested_without_folder_needs_input`: D file, no rule, no similar files -> `problem == "folder"`.
+  - `test_batch_flags_name_clash`: two D files whose suggestions give the same folder and name -> the second is flagged, the first is not.
   - `test_invalid_code_gives_no_row`: a hand-edited code with a deleted tray -> its folder's file has no row.
   - `test_file_ticked_rows_is_one_undoable_batch`: POST `/api/inbox/file` with two rows' requests -> one `batch_id`; `app.activity.undo(batch_id)` puts both back in their code folders and removes their tray items.
   - `test_today_marked_count`.
@@ -367,7 +367,7 @@ Filing codes are a distinguishing feature (like Activity with undo), so the READ
 
 - [ ] **Step 1: Write the guide section:** what a code is, the seeded codes, inbox folders and Create inbox folders, File N marked and its three flags, that hand comments in `filing_codes.yaml` are not kept when saving from the app. Plain words, no em dashes.
 - [ ] **Step 1b: Write the README bullet and add the screenshot row** (screenshots taken in Step 4, light and dark, demo archive only, matching the existing `<picture>` rows).
-- [ ] **Step 2: Write the CHANGELOG entry** (also say that existing `##. Organize` subfolders named "To pay", "To action" or "File as suggested" become inbox folders after the update): "Filing codes: drop files into a code's folder in the inbox (To pay, To action, File as suggested, or your own) and file them all at once with File N marked."
+- [ ] **Step 2: Write the CHANGELOG entry** (also say that existing `##. Organize` subfolders named "To pay", "To action", "To read", "Follow-up" or "File as suggested" become inbox folders after the update): "Filing codes: drop files into a code's folder in the inbox (To pay, To action, To read, Follow-up, File as suggested, or your own) and file them all at once with File N marked."
 - [ ] **Step 3: Run the full check:** `uv run ruff check . && uv run pytest -q -W error` in `backend/`; `npm test -- --run && npm run build` in `frontend/`. Expected: all pass.
 - [ ] **Step 4: Run the app on the demo archive** (`uv run python -m dam.demo <scratch>/dam-demo`, `uv run dam --data-dir <scratch>/dam-demo/data serve --port 8766`): create inbox folders, drop a demo bill into "To pay", file it via File N marked, undo it. Screenshot for the PR with no personal documents.
 - [ ] **Step 5: Commit** `docs: guide and changelog for filing codes`.

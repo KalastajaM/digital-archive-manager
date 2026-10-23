@@ -2,6 +2,8 @@
 
 from test_api import LOCAL_ORIGIN, make_client
 
+SEEDED = ["A", "P", "R", "F", "D"]
+
 
 def put(client, url, body):
     return client.put(url, json=body, headers=LOCAL_ORIGIN)
@@ -12,7 +14,7 @@ def test_get_lists_seeded_codes(app):
         r = c.get("/api/filing-codes")
     assert r.status_code == 200
     data = r.json()
-    assert [x["code"] for x in data["codes"]] == ["A", "P", "F"]
+    assert [x["code"] for x in data["codes"]] == ["A", "P", "R", "F", "D"]
     assert data["problems"] == []
     assert data["warnings"] == []
 
@@ -35,7 +37,7 @@ def test_put_unknown_tray_400(app):
         r = put(c, "/api/filing-codes", [{"code": "X", "tray": "no-such-tray"}])
         assert r.status_code == 400
         assert "no-such-tray" in r.json()["error"]
-        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == ["A", "P", "F"]
+        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == SEEDED
 
 
 def test_put_invalid_code_400(app):
@@ -44,7 +46,7 @@ def test_put_invalid_code_400(app):
         assert r.status_code == 400
         err = r.json()["error"]
         assert "TOOLONG" in err and "1 to 4" in err and "Value error" not in err
-        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == ["A", "P", "F"]
+        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == SEEDED
 
 
 def test_put_padded_duplicate_inbox_folder_400(app):
@@ -56,7 +58,7 @@ def test_put_padded_duplicate_inbox_folder_400(app):
         r = put(c, "/api/filing-codes", body)
         assert r.status_code == 400
         assert "used twice" in r.json()["error"]
-        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == ["A", "P", "F"]
+        assert [x["code"] for x in c.get("/api/filing-codes").json()["codes"]] == SEEDED
 
 
 def test_get_reports_hand_edit_problem(app):
@@ -67,4 +69,4 @@ def test_get_reports_hand_edit_problem(app):
         data = c.get("/api/filing-codes").json()
     assert len(data["problems"]) == 1
     assert data["problems"][0]["code"] == "TOOLONG"
-    assert len(data["codes"]) == 3
+    assert len(data["codes"]) == 5

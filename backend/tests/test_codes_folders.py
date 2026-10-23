@@ -17,7 +17,8 @@ from dam.services.errors import InvalidRequest
 from test_api import BASE, LOCAL_ORIGIN
 
 INBOX = SpecialFolders().inbox
-CODE_FOLDERS = ["To action", "To pay", "File as suggested"]  # the seeded codes'
+# the seeded codes' inbox folders
+CODE_FOLDERS = ["To action", "To pay", "To read", "Follow-up", "File as suggested"]
 
 
 def _tree(root) -> set[str]:
@@ -27,19 +28,26 @@ def _tree(root) -> set[str]:
 def test_preview_lists_missing_folders(app, fake_archive):
     assert sorted(missing_inbox_folders(app)) == sorted(CODE_FOLDERS)
     ops = app.executor.preview(create_inbox_folders_plan(app, "ui"))
-    assert [op.kind for op in ops] == [OpKind.MKDIR] * 3
+    assert [op.kind for op in ops] == [OpKind.MKDIR] * 5
     assert sorted(op.dst for op in ops) == sorted(f"{INBOX}/{n}" for n in CODE_FOLDERS)
     assert not (fake_archive.root / INBOX / "To pay").exists()  # preview changes nothing
 
 
 def test_only_missing_folders_are_planned(app, fake_archive):
     (fake_archive.root / INBOX / "to PAY").mkdir()  # folded match counts as there
-    assert sorted(missing_inbox_folders(app)) == ["File as suggested", "To action"]
+    assert sorted(missing_inbox_folders(app)) == [
+        "File as suggested",
+        "Follow-up",
+        "To action",
+        "To read",
+    ]
     plan = create_inbox_folders_plan(app, "ui")
     assert plan.label == f"Created the filing code folders in {INBOX}"
     assert sorted(op.dst for op in plan.ops) == [
         f"{INBOX}/File as suggested",
+        f"{INBOX}/Follow-up",
         f"{INBOX}/To action",
+        f"{INBOX}/To read",
     ]
 
 
@@ -137,7 +145,7 @@ def test_api_folders(client, app, fake_archive):
 
     r = client.post("/api/filing-codes/folders", json={}, headers=LOCAL_ORIGIN)
     assert r.status_code == 200, r.text
-    assert len(r.json()["done"]) == 3
+    assert len(r.json()["done"]) == 5
     assert (fake_archive.root / INBOX / "To pay").is_dir()
     assert f"{INBOX}/To pay" in app.repo.dir_paths()  # indexed at once
     assert client.get("/api/filing-codes/folders").json()["missing"] == []

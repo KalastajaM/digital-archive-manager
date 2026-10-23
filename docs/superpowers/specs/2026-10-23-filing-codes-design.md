@@ -82,9 +82,10 @@ it backs up and can be edited by hand like the other config. Template validation
 `check_template` in `rules/engine.py`, whose placeholders are `doc_date`, `year` and
 `stem`.
 
-Seeded codes, all editable: `A` (tray To action, inbox folder "To action"), `P` (tray To
-pay, inbox folder "To pay") and `F` (file as suggested, inbox folder "File as
-suggested"). Seeded codes and folder names are not tied to any language's words; the
+Seeded codes, all editable, one for every shipped tray plus one for file as suggested:
+`A` (tray To action, inbox folder "To action"), `P` (tray To pay, inbox folder "To pay"),
+`R` (tray To read, inbox folder "To read"), `F` (tray Follow up, inbox folder "Follow-up")
+and `D` (file as suggested, inbox folder "File as suggested"). Seeded codes and folder names are not tied to any language's words; the
 owner renames them as they like. Seeding follows the trays' pattern (`seeded_trays`): a seeded code the owner
 deleted stays deleted.
 

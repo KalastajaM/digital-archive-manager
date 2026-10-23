@@ -8,7 +8,15 @@
   label: To pay
   tray: to-pay
   inbox_folder: To pay
+- code: R
+  label: To read
+  tray: to-read
+  inbox_folder: To read
 - code: F
+  label: Follow-up
+  tray: follow-up
+  inbox_folder: Follow-up
+- code: D
   label: File as suggested
   as_suggested: true
   inbox_folder: File as suggested

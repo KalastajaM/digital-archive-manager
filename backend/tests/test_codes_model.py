@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from dam.codes.model import FilingCode, confusable_with, load_codes, save_codes
 from dam.config import AppPaths
 
-TRAYS = {"to-action", "to-pay"}
+TRAYS = {"to-action", "to-pay", "to-read", "follow-up"}
 
 
 def test_seed_on_ensure(tmp_path):
@@ -14,9 +14,12 @@ def test_seed_on_ensure(tmp_path):
     assert paths.filing_codes_path.exists()
     codes, problems = load_codes(paths.filing_codes_path, TRAYS)
     assert problems == []
-    assert [c.code for c in codes] == ["A", "P", "F"]
+    assert [c.code for c in codes] == ["A", "P", "R", "F", "D"]
     assert codes[0].tray == "to-action" and codes[0].inbox_folder == "To action"
-    assert codes[2].as_suggested is True and codes[2].label == "File as suggested"
+    assert (codes[2].tray, codes[2].inbox_folder) == ("to-read", "To read")
+    assert (codes[3].label, codes[3].tray) == ("Follow-up", "follow-up")
+    assert codes[3].as_suggested is False
+    assert codes[4].as_suggested is True and codes[4].label == "File as suggested"
 
 
 def test_seed_into_existing_config(tmp_path):

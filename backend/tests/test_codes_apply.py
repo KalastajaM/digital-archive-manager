@@ -61,7 +61,7 @@ def test_as_suggested_changes_nothing(app, fake_archive):
     add_in(app, fake_archive, f"{INBOX}/File as suggested/bill.pdf", "b1", NORTHPOWER_BILL)
     plain = app.inbox.suggestion("b0")
     found = app.inbox.suggestion("b1")
-    assert found.codes == [CodeHit("F", "folder")]
+    assert found.codes == [CodeHit("D", "folder")]
     assert dataclasses.replace(found, codes=[], folder_before_codes=None) == plain
 
 
