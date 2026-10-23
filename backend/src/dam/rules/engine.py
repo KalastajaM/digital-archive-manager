@@ -61,6 +61,13 @@ class Suggestion:
     # the folder the rules (or similar files) gave before codes were applied; the AI
     # exclusion guard checks it as well as ``folder`` (None: no code was applied)
     folder_before_codes: str | None = None
+    # a QR sticker's tick boxes (``dam.codes.apply.apply_ticks``): True when a sticker
+    # has the box ticked, False when every boxed sticker has it empty, None when no
+    # sticker has boxes or the box could not be read; ``marks_unclear``: a box could not
+    # be read (and no other sticker has it ticked)
+    star: bool | None = None
+    important: bool | None = None
+    marks_unclear: bool = False
 
 
 class TemplateError(ValueError):

@@ -8,8 +8,9 @@ export type InboxEntry = Schemas["InboxEntryOut"];
 /** A scan field of a file: ``{kind, label, value}`` (``label`` only for ``custom``). */
 export type ScanField = Schemas["ScanFieldOut"];
 export type ScanFields = Schemas["ScanFieldsOut"];
-type FollowUps = "tray_fields" | "collections" | "note";
-/** A filing request; the tray/collection/note follow-ups are optional (server defaults). */
+type FollowUps = "tray_fields" | "collections" | "note" | "star" | "important";
+/** A filing request; the tray/collection/note/star/important follow-ups are optional
+ * (server defaults). */
 export type FileRequest = Omit<Schemas["FileRequestIn"], FollowUps> &
   Partial<Pick<Schemas["FileRequestIn"], FollowUps>>;
 export type FileBody = Omit<Schemas["FileBody"], "requests"> & { requests: FileRequest[] };

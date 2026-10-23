@@ -43,7 +43,7 @@ function entry(id: string, name: string, suggested: string): InboxEntry {
       collections: [],
       collection_sources: {},
       codes: [],
-      conflict: false,
+      conflict: false, star: null, important: null, marks_unclear: false,
     },
     text_excerpt: "",
     prefill: {},

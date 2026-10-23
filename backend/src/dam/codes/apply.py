@@ -2,6 +2,7 @@
 the rules and similar files; what they leave unset keeps the earlier suggestion."""
 
 import dataclasses
+from collections.abc import Collection
 from datetime import date
 from typing import Protocol
 
@@ -11,23 +12,80 @@ from dam.index.repo import FileRecord, FileRepo
 from dam.rules.engine import CodeHit, Suggestion, TemplateError, _render_folder, _render_name
 
 from .model import FilingCode
+from .qr_model import QrRead
 
-__all__ = ["CodeHit", "apply_codes", "codes_for"]
+__all__ = ["CodeHit", "apply_codes", "apply_ticks", "codes_for", "known_reads", "unclear_boxes"]
 
 
 class _HasRepo(Protocol):
     repo: FileRepo
 
 
-def codes_for(app_or_repo: _HasRepo | FileRepo, rec: FileRecord) -> list[CodeHit]:
-    """The codes found for ``rec``: the code whose inbox folder holds it (pen marks and
-    QR stickers join here later)."""
+def codes_for(
+    app_or_repo: _HasRepo | FileRepo,
+    rec: FileRecord,
+    known: Collection[str] | None = None,
+    qr: list[QrRead] | None = None,
+) -> list[CodeHit]:
+    """The codes found for ``rec``: the code whose inbox folder holds it, then one hit
+    per code read from a QR sticker on an inbox file (``qr``: the file's reads, else
+    read from the index). A sticker code not in ``known`` (the loaded table, compared
+    case-insensitively) is ignored; without ``known`` none is. A code found in the
+    folder and on a sticker is one code with two hits."""
     repo = app_or_repo if isinstance(app_or_repo, FileRepo) else app_or_repo.repo
     hits: list[CodeHit] = []
     code = repo.inbox_code_of(rec.path)
     if code is not None:
         hits.append(CodeHit(code, "folder"))
+    for read in known_reads(repo, rec, known, qr):
+        if not any(h.via == "qr" and h.code == read.code.upper() for h in hits):
+            hits.append(CodeHit(read.code.upper(), "qr", raw=read.code))
     return hits
+
+
+def known_reads(
+    repo: FileRepo,
+    rec: FileRecord,
+    known: Collection[str] | None,
+    qr: list[QrRead] | None = None,
+) -> list[QrRead]:
+    """The file's QR reads whose code is known (``known``, folded to upper case); none
+    for a file outside the inbox: a sticker on a filed document routes nothing."""
+    if known is None or not repo.in_inbox_path(rec.path):
+        return []
+    upper = {k.upper() for k in known}
+    reads = repo.qr_for(rec.drive_id) if qr is None else qr
+    return [r for r in reads if r.code.upper() in upper]
+
+
+def apply_ticks(found: Suggestion, reads: list[QrRead]) -> Suggestion:
+    """``found`` with ``star``/``important`` from the stickers' tick boxes (``reads``:
+    known codes only). A box ticked on any sticker gives True; else unclear on any
+    gives None and ``marks_unclear``; else empty on every boxed sticker gives False.
+    No boxed sticker leaves both None."""
+    boxed = [r for r in reads if r.star is not None or r.important is not None]
+    if not boxed:
+        return found
+
+    def tick(values: list[str | None]) -> bool | None:
+        if "ticked" in values:
+            return True
+        if "unclear" in values or None in values:
+            return None
+        return False
+
+    star = tick([r.star for r in boxed])
+    important = tick([r.important for r in boxed])
+    return dataclasses.replace(
+        found, star=star, important=important, marks_unclear=star is None or important is None
+    )
+
+
+def unclear_boxes(found: Suggestion) -> list[str]:
+    """The tick boxes ("star", "important") a sticker has but could not be read."""
+    if not found.marks_unclear:
+        return []
+    return [k for k in ("star", "important") if getattr(found, k) is None]
 
 
 # an ``as_suggested`` code's tray in the conflict check: "no tray" (``Suggestion.tray``
@@ -85,10 +143,13 @@ def apply_codes(
         setattr(out, key, None if value == NO_TRAY else value)
         setattr(out, f"{key}_source", source_of(code))
 
+    applied: set[str] = set()
     for hit in hits:
         fc = codes.get(hit.code.upper())
-        if fc is None:
+        # a code with several hits (folder and sticker) is applied once
+        if fc is None or fc.code in applied:
             continue
+        applied.add(fc.code)
         src = source_of(fc.code)
         errored = False
         if fc.as_suggested:

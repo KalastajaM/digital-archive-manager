@@ -2533,9 +2533,10 @@ export interface components {
          * BatchRowOut
          * @description A row of the File N marked batch: an inbox file with a filing code, the request
          *     that files it and the tray fields that will be stored. ``flag``: why the row starts
-         *     unticked (``unclear``: a code read uncertainly, ``conflict``: codes disagree,
-         *     ``needs_input``: the filing would be refused); ``problem`` says what to fix
-         *     ("folder", a required tray field such as "due date", or the refusal).
+         *     unticked (``unclear``: a code or a sticker's tick box read uncertainly,
+         *     ``conflict``: codes disagree, ``needs_input``: the filing would be refused);
+         *     ``problem`` says what to fix ("folder", "Tick box unclear: star", a required tray
+         *     field such as "due date", or the refusal).
          */
         BatchRowOut: {
             /** Drive Id */
@@ -3140,6 +3141,16 @@ export interface components {
              * @default
              */
             note: string;
+            /**
+             * Star
+             * @default false
+             */
+            star: boolean;
+            /**
+             * Important
+             * @default false
+             */
+            important: boolean;
         };
         /**
          * FileRequestOut
@@ -3164,6 +3175,10 @@ export interface components {
             collections: string[];
             /** Note */
             note: string;
+            /** Star */
+            star: boolean;
+            /** Important */
+            important: boolean;
         };
         /**
          * FileSuggestionsOut
@@ -4314,6 +4329,12 @@ export interface components {
             codes: components["schemas"]["CodeHitOut"][];
             /** Conflict */
             conflict: boolean;
+            /** Star */
+            star: boolean | null;
+            /** Important */
+            important: boolean | null;
+            /** Marks Unclear */
+            marks_unclear: boolean;
         };
         /** SummaryBody */
         SummaryBody: {

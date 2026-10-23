@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from dam.bills.barcode import BarcodeError
 from dam.bills.barcode import parse as parse_barcode
-from dam.codes.apply import apply_codes, codes_for
+from dam.codes.apply import apply_codes, apply_ticks, codes_for, known_reads
 from dam.codes.model import FilingCode
 from dam.collections.service import CollectionService, check_collection_name
 from dam.config import SpecialFolders
@@ -111,7 +111,10 @@ class InboxEntry:
 class FileRequest:
     """File ``drive_id`` as ``folder/name`` and add ``tags``; then optionally create an
     item in ``tray`` (``tray_fields`` over the scan's prefill), add the file to the
-    ``collections`` named (created if new) and set its ``note``."""
+    ``collections`` named (created if new), star it or mark it important (a QR
+    sticker's tick boxes) and set its ``note``. Star and Important are collection
+    memberships made by the batch, so undoing it removes them (a file starred before
+    keeps its star)."""
 
     drive_id: str
     name: str
@@ -121,6 +124,8 @@ class FileRequest:
     tray_fields: dict = field(default_factory=dict)
     collections: list[str] = field(default_factory=list)
     note: str = ""
+    star: bool = False
+    important: bool = False
 
 
 @dataclass
@@ -131,6 +136,8 @@ class _FollowUp:
     fields: dict
     collections: list[str]
     note: str
+    star: bool = False
+    important: bool = False
 
 
 class InboxService:
@@ -245,13 +252,13 @@ class InboxService:
 
         Tags and follow-ups go only to files whose op is in ``result.done`` (and to files
         that needed no op). A failed or interrupted batch is returned as is, never
-        raised. Per file, in order: tags, the tray item, collection memberships, the
-        note; each its own DB transaction, all with ``created_by_batch`` = the batch so
-        undoing it removes them. A failure is logged and noted (``tag_error``/
-        ``untagged``, ``follow_up_error``) and the rest still run. The batch id is never
-        lost. If the batch applied nothing (no op needed, or the only ops failed) there
-        is nothing to undo: the follow-ups are created with no batch and stay until
-        removed by hand.
+        raised. Per file, in order: tags, the tray item, collection memberships (then
+        Starred and Important), the note; each its own DB transaction, all with
+        ``created_by_batch`` = the batch so undoing it removes them. A failure is
+        logged and noted (``tag_error``/``untagged``, ``follow_up_error``) and the rest
+        still run. The batch id is never lost. If the batch applied nothing (no op
+        needed, or the only ops failed) there is nothing to undo: the follow-ups are
+        created with no batch and stay until removed by hand.
 
         Tray fields: the scan's prefill only fills fields left out of ``tray_fields``. A
         caller that showed prefill values to the user (the review card) must send every
@@ -311,7 +318,12 @@ class InboxService:
         for raw in req.collections:
             name = check_collection_name(raw)
             names.setdefault(name.casefold(), name)
-        return _FollowUp(req.tray, fields, list(names.values()), check_note(req.note))
+        for flag in ("star", "important"):
+            if not isinstance(getattr(req, flag), bool):
+                raise InvalidRequest(f"{flag} must be true or false")
+        return _FollowUp(
+            req.tray, fields, list(names.values()), check_note(req.note), req.star, req.important
+        )
 
     def _run_follow_up(
         self, drive_id: str, follow: _FollowUp, batch_id: str | None, outcome: FileItResult
@@ -338,6 +350,19 @@ class InboxService:
                 self.collections.add_members(coll.id, [drive_id], batch_id=batch_id)
             except Exception as e:
                 failed(f"adding to collection {name!r}", e)
+        # the built-in Starred and Important collections, as the batch's memberships
+        if follow.star:
+            try:
+                starred = self.collections.builtin("starred")
+                self.collections.add_members(starred.id, [drive_id], batch_id=batch_id)
+            except Exception as e:
+                failed("starring", e)
+        if follow.important:
+            try:
+                important = self.collections.builtin("important")
+                self.collections.set_group_path(important.id, [drive_id], None, batch_id=batch_id)
+            except Exception as e:
+                failed("marking important", e)
         if not follow.note:
             return
         if follow.tray is not None and item_id is None:
@@ -375,12 +400,13 @@ class InboxService:
                 found.folder_source = SIMILAR_SOURCE
                 found.sources.append(SIMILAR_SOURCE)
         # codes last: what a code sets beats the rules and similar files
-        hits = codes_for(self.repo, rec)
+        table = {c.code: c for c in self._codes()}
+        reads = known_reads(self.repo, rec, table)
+        hits = codes_for(self.repo, rec, table, reads)
         if hits:
             stem, ext = stem_and_ext(rec)
-            table = {c.code: c for c in self._codes()}
             found = apply_codes(found, hits, table, found.doc_date, stem, ext, self.special)
-        return found
+        return apply_ticks(found, reads)
 
     @staticmethod
     def _tray_guess(found: Suggestion, tray_ids: list[str], barcode: str | None) -> str | None:

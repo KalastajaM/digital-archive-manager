@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from dam.codes.apply import CodeHit
+from dam.codes.apply import CodeHit, unclear_boxes
 from dam.core.paths import OutsideArchiveError
 from dam.ops.guards import fold_parts
 from dam.ops.model import GuardError, OpKind, ResolvedOp
@@ -61,7 +61,8 @@ def marked_count(app: App, entries: list[InboxEntry] | None = None) -> int:
 def marked_rows(app: App, entries: list[InboxEntry] | None = None) -> list[BatchRow]:
     """One row per inbox file with at least one valid code hit, in Inbox order.
 
-    Flags, first that applies: ``unclear`` (a code read uncertainly), ``conflict``
+    Flags, first that applies: ``unclear`` (a code or a sticker's tick box read
+    uncertainly: "Tick box unclear: star"), ``conflict``
     (codes disagree), ``needs_input`` (no folder, a required tray field missing, or the
     dry run refuses the request, alone or next to the other rows)."""
     entries = app.inbox.list() if entries is None else entries
@@ -93,6 +94,8 @@ def _row(
         tags=list(s.tags),
         tray=s.tray,
         collections=list(s.collections),
+        star=bool(s.star),
+        important=bool(s.important),
     )
     row = BatchRow(entry.record.drive_id, hits, request)
 
@@ -117,6 +120,8 @@ def _row(
 
     if any(h.unclear for h in hits):
         return flag("unclear", "a code was read unclearly")
+    if s.marks_unclear:
+        return flag("unclear", "Tick box unclear: " + ", ".join(unclear_boxes(s)))
     if s.conflict:
         return flag("conflict", "the codes give different values")
     if s.folder is None:

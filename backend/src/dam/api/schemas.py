@@ -34,6 +34,10 @@ class FileRequestIn(_In):
     tray_fields: dict[str, Any] = {}
     collections: list[str] = []
     note: str = ""
+    # star it / mark it important once filed (a QR sticker's tick boxes); undone with
+    # the batch
+    star: bool = False
+    important: bool = False
 
 
 class FileBody(_In):
@@ -372,6 +376,11 @@ class SuggestionOut(BaseModel):
     codes: list[CodeHitOut]
     # two codes gave different folders, names or trays (the first is kept)
     conflict: bool
+    # a QR sticker's tick boxes: True ticked, False empty, None no boxes or unreadable
+    star: bool | None
+    important: bool | None
+    # a tick box could not be read (the batch row is flagged "unclear")
+    marks_unclear: bool
 
 
 class FileSuggestionsOut(BaseModel):
@@ -1293,14 +1302,17 @@ class FileRequestOut(BaseModel):
     tray_fields: dict[str, str]
     collections: list[str]
     note: str
+    star: bool
+    important: bool
 
 
 class BatchRowOut(BaseModel):
     """A row of the File N marked batch: an inbox file with a filing code, the request
     that files it and the tray fields that will be stored. ``flag``: why the row starts
-    unticked (``unclear``: a code read uncertainly, ``conflict``: codes disagree,
-    ``needs_input``: the filing would be refused); ``problem`` says what to fix
-    ("folder", a required tray field such as "due date", or the refusal)."""
+    unticked (``unclear``: a code or a sticker's tick box read uncertainly,
+    ``conflict``: codes disagree, ``needs_input``: the filing would be refused);
+    ``problem`` says what to fix ("folder", "Tick box unclear: star", a required tray
+    field such as "due date", or the refusal)."""
 
     drive_id: str
     codes: list[CodeHitOut]
