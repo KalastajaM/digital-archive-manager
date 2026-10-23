@@ -257,9 +257,18 @@ code's name pattern is not used when the file's own name already starts with a d
 (`20261015_...`): you named it already, so that name is kept.
 
 **Editing codes.** In Settings → Filing codes each code has a label, a tray, a folder, a
-name pattern, tags, collections, an inbox folder and the **File as suggested** box. While
+name pattern, tags, collections, an inbox folder and the **File as suggested** box. Each
+code shows its sticker on the left as it prints, redrawn as you change the code or label.
+Collections are picked like folders (type to find one, or **…** to browse), and tags work
+as everywhere else. Hold the pointer on a field to see what it does. While
 you type a code, dam warns when it is easy to confuse with another one if you write codes
-by hand (`0` and `O`, `1` and `I`, `5` and `S`). The table is saved in
+by hand (`0` and `O`, `1` and `I`, `5` and `S`).
+
+The **name pattern** makes each file's name from its details: `{doc_date:%Y%m%d}` is the
+document's date, `{year}` its year and `{stem}` the file's own name, so
+`{doc_date:%Y%m%d}_Fortum` gives `20261015_Fortum.pdf`. A pattern without the date or
+`{stem}` would give every file the same name, and dam says so under the code. The table
+is saved in
 `config/filing_codes.yaml` in the data folder, with a backup of the old file; comments
 you wrote in that file by hand are not kept when you save from the app. See
 [Filing codes file](reference.md#filing-codes-file) for the format.
@@ -312,10 +321,13 @@ star"), and the file starts unticked in File N marked.
 
 - Tick the codes to print and type how many of each.
 - Choose the sheet: **Avery Zweckform L7651** (65 labels of 38.1 × 21.2 mm), **Plain
-  paper, cut out** (the same grid with cut lines), or **Custom**: columns, rows, label
+  paper, cut out** (the same 65-label grid with cut lines), or **Custom**: columns, rows, label
   size, margins and gaps in mm, with or without cut lines. **Save custom sheet** keeps
   it for next time.
 - **Start at label** picks the first label to use, to finish a half-used sheet.
+- Under the options dam says how many labels fit on the sheet and, once you have chosen
+  codes, how many sheets they take and how many labels stay empty on the last one. More
+  stickers than one sheet holds go on to the next.
 - **With tick boxes** is on by default. **Blank labels** leaves out the label text so you
   can write your own; the code is still printed.
 - **Open sheet** opens the stickers in a new tab. Print from there at 100 %, without

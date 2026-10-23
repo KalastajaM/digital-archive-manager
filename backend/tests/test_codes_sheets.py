@@ -87,7 +87,7 @@ def test_builtin_layouts():
     assert (a.columns, a.rows, a.label_w_mm, a.label_h_mm) == (5, 13, 38.1, 21.2)
     assert (a.top_mm, a.left_mm, a.gap_x_mm, a.gap_y_mm, a.cut_lines) == (10.7, 4.7, 2.5, 0, False)
     p = lays["plain"]
-    assert p.name == "Plain paper, cut out" and p.cut_lines
+    assert p.name == "Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)" and p.cut_lines
     grid = ("columns", "rows", "label_w_mm", "label_h_mm")
     grid += ("top_mm", "left_mm", "gap_x_mm", "gap_y_mm")
     assert all(getattr(p, k) == getattr(a, k) for k in grid)
@@ -506,3 +506,35 @@ def test_restore_failure_keeps_first_error(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="read-back broke"):
         configfile.write_config_file(path, "new\n", verify)
     assert calls["n"] == 1
+
+
+def test_sticker_preview_draws_the_code_as_typed():
+    """The Settings preview: QR, code, label and boxes from unsaved values, on white."""
+    svg = sheets.sticker_preview("p", "To pay & bills")
+    assert svg.startswith('<svg xmlns="http://www.w3.org/2000/svg"')
+    assert [decode(g) for g in qr_drawings(svg)] == ["dam:1:P"]
+    assert 'font-weight="bold">P</text>' in svg
+    assert ">To pay &amp; bills</text>" in svg
+    assert svg.count("data-box=") == 2 and '<rect x="-1" y="-1"' in svg
+    plain = sheets.sticker_preview("A", "", boxes=False)
+    assert [decode(g) for g in qr_drawings(plain)] == ["dam:A"]
+    assert "data-box=" not in plain and plain.count("</text>") == 1
+
+
+@pytest.mark.parametrize("code,label", [("", "x"), ("ABCDE", "x"), ("P-1", "x"), ("P", "y" * 25)])
+def test_sticker_preview_refuses(code, label):
+    with pytest.raises(ValueError):
+        sheets.sticker_preview(code, label)
+
+
+def test_api_sticker_preview(app):
+    with make_client(app) as c:
+        r = c.get("/api/filing-codes/sticker", params={"code": "R", "label": "To read"})
+        assert r.status_code == 200, r.text
+        assert r.headers["content-type"].startswith("image/svg+xml")
+        assert r.headers["content-security-policy"] == "default-src 'none'"
+        assert [decode(g) for g in qr_drawings(r.text)] == ["dam:1:R"]
+        r = c.get("/api/filing-codes/sticker", params={"code": "R", "boxes": "false"})
+        assert [decode(g) for g in qr_drawings(r.text)] == ["dam:R"]
+        r = c.get("/api/filing-codes/sticker", params={"code": "TOOLONG"})
+        assert r.status_code == 400 and "1 to 4 letters or digits" in r.json()["error"]

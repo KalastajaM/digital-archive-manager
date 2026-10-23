@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
-import { FilingCodes } from "./FilingCodes";
+import { FilingCodes, fixedName } from "./FilingCodes";
 
 const code = (c: string, label: string, extra: object = {}) => ({
   code: c,
@@ -74,6 +74,27 @@ describe("Filing codes (Settings)", () => {
     expect(ofMethod(calls, "PUT", "/api/filing-codes")).toHaveLength(0);
   });
 
+  it("Name pattern warns when every file would get the same name", async () => {
+    const { user } = setup({}, { codes: [code("K", "Kela")] });
+    const row = (await screen.findAllByRole("group"))[0];
+    const field = within(row).getByLabelText("Name pattern");
+    expect(field).toHaveAttribute("placeholder", "{doc_date:%Y%m%d}_Fortum");
+    await user.type(field, "Kela letter");
+    expect(within(row).getByText(/Every file with this code gets the same name/)).toBeInTheDocument();
+    await user.clear(field);
+    await user.type(field, "{{doc_date:%Y%m%d}_Kela");
+    expect(field).toHaveValue("{doc_date:%Y%m%d}_Kela");
+    expect(within(row).queryByText(/Every file with this code gets the same name/)).toBeNull();
+  });
+
+  it("a name pattern is fixed unless it uses the date or the file's own name", () => {
+    expect(fixedName("")).toBe(false);
+    expect(fixedName("Kela letter")).toBe(true);
+    expect(fixedName("{year}_Kela")).toBe(true);
+    expect(fixedName("{doc_date:%Y%m%d}_Kela")).toBe(false);
+    expect(fixedName("Kela_{stem}")).toBe(false);
+  });
+
   it("says how a file gets a code, and caps a label at 24 characters", async () => {
     setup();
     const rows = await screen.findAllByRole("group");
@@ -101,6 +122,36 @@ describe("Filing codes (Settings)", () => {
     const body = ofMethod(calls, "PUT", "/api/filing-codes")[0].body as Array<Record<string, unknown>>;
     expect(body.map((c) => c.code)).toEqual(["A", "D", "T"]);
     expect(body[2]).toMatchObject({ label: "Taxes", tags: ["tax", "2026"], tray: "to-pay", folder: null, as_suggested: false });
+  });
+
+  it("each row shows its sticker, redrawn from the code and label as typed", async () => {
+    const { user } = setup();
+    const row = (await screen.findAllByRole("group"))[0];
+    const img = within(row).getByRole("img");
+    expect(img).toHaveAttribute("src", "/api/filing-codes/sticker?code=A&label=To+action");
+    await user.clear(within(row).getByLabelText("Label"));
+    await user.type(within(row).getByLabelText("Label"), "Do it");
+    await waitFor(() => expect(within(row).getByRole("img")).toHaveAttribute("src", "/api/filing-codes/sticker?code=A&label=Do+it"));
+    await user.clear(within(row).getByLabelText("Code"));
+    expect(await within(row).findByText("No code yet")).toBeInTheDocument();
+    await user.type(within(row).getByLabelText("Code"), "A-1");
+    expect(await within(row).findByText("Not a valid code")).toBeInTheDocument();
+  });
+
+  it("collections are picked like folders, and one typed but not added is saved too", async () => {
+    const { calls, user } = setup({
+      "GET /api/collections": { body: [] },
+      "PUT /api/filing-codes": (c: Call) => ({ body: { codes: c.body, problems: [], warnings: [] } }),
+    });
+    const row = (await screen.findAllByRole("group"))[0];
+    const field = within(row).getByLabelText("Collections");
+    await user.type(field, "Taxes 2026{Enter}");
+    expect(within(row).getByRole("list", { name: "Collections to add" })).toHaveTextContent("Taxes 2026");
+    await user.type(field, "Car");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(ofMethod(calls, "PUT", "/api/filing-codes")).toHaveLength(1));
+    const body = ofMethod(calls, "PUT", "/api/filing-codes")[0].body as Array<Record<string, unknown>>;
+    expect(body[0].collections).toEqual(["Taxes 2026", "Car"]);
   });
 
   it("a refused save shows its message and keeps the edits", async () => {

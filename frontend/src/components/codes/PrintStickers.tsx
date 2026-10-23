@@ -69,6 +69,22 @@ function SheetLink({ url, primary, children }: { url: string | null; primary?: b
   );
 }
 
+/** How the stickers fill the sheets: labels per sheet, and with stickers chosen, how many
+ * sheets they take from label ``start`` on and how many labels stay empty on the last. */
+export function sheetSummary(columns: number, rows: number, total: number, start: number): string {
+  const perPage = columns * rows;
+  const head = `${plural(perPage, "label")} per sheet (${columns} × ${rows}).`;
+  if (total === 0) return `${head} No stickers chosen.`;
+  if (start > perPage) return `${head} Start at label ${start} is past the end of the sheet.`;
+  const used = start - 1 + total;
+  const sheets = Math.ceil(used / perPage);
+  const empty = sheets * perPage - used;
+  const from = start > 1 ? ` from label ${start}` : "";
+  return `${head} ${plural(total, "sticker")}${from}: ${plural(sheets, "sheet")}, ${
+    empty === 0 ? "no labels" : plural(empty, "label")
+  } left empty on the last.`;
+}
+
 export function PrintStickers() {
   const codes = useFilingCodes();
   const layouts = useSheetLayouts();
@@ -118,11 +134,8 @@ export function PrintStickers() {
   const isCustom = current === CUSTOM;
   const edited = isCustom && draft ? toLayout(draft) : null;
   const customReady = !isCustom || (savedCustom !== null && (draft === null || sameLayout(edited, savedCustom)));
-  const perPage = isCustom
-    ? edited
-      ? edited.columns * edited.rows
-      : null
-    : ((l) => (l ? l.columns * l.rows : null))(list.find((l) => l.id === current));
+  const grid = isCustom ? edited : (list.find((l) => l.id === current) ?? null);
+  const perPage = grid ? grid.columns * grid.rows : null;
 
   const counts: Record<string, number> = {};
   for (const [code, text] of Object.entries(chosen)) {
@@ -130,6 +143,7 @@ export function PrintStickers() {
     if (n > 0) counts[code] = n;
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const start = Math.max(1, Math.floor(Number(startAt)) || 1);
 
   const pickLayout = (id: string) => {
     setLayoutId(id);
@@ -158,7 +172,7 @@ export function PrintStickers() {
     const body: StickerSheet = {
       codes: outlinesOnly ? {} : counts,
       layout: current,
-      start_at: outlinesOnly ? 1 : Math.floor(Number(startAt)) || 1,
+      start_at: outlinesOnly ? 1 : start,
       boxes,
       blank_labels: blank,
       outlines_only: outlinesOnly,
@@ -271,8 +285,12 @@ export function PrintStickers() {
           {visible(error)}
         </p>
       )}
+      {grid && (
+        <p className="hint" aria-live="polite">
+          {sheetSummary(grid.columns, grid.rows, total, start)}
+        </p>
+      )}
       <div className="filing-codes-actions">
-        <span className="hint">{plural(total, "sticker")}</span>
         <SheetLink url={customReady ? sheetUrl(true) : null}>Test print</SheetLink>
         <SheetLink url={customReady && total > 0 ? sheetUrl(false) : null} primary>
           Open sheet

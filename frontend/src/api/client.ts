@@ -1401,6 +1401,11 @@ export function stickerSheetUrl(sheet: StickerSheet): string {
   return `/api/filing-codes/sheet?${query}`;
 }
 
+/** One sticker as SVG, drawn from a code and label as typed (the Settings preview). */
+export function stickerPreviewUrl(code: string, label: string): string {
+  return `/api/filing-codes/sticker?${new URLSearchParams({ code, label })}`;
+}
+
 const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];
 
 /** A file's saved summaries (``{ai, user}``, each with ``outdated``). */

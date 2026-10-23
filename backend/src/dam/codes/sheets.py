@@ -104,7 +104,10 @@ def builtin_layouts() -> list[SheetLayout]:
             id="l7651", name="Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)",
             cut_lines=False, **_GRID,
         ),
-        SheetLayout(id="plain", name="Plain paper, cut out", cut_lines=True, **_GRID),
+        SheetLayout(
+            id="plain", name="Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)",
+            cut_lines=True, **_GRID,
+        ),
     ]
 
 
@@ -216,12 +219,14 @@ def _star(x: float, y: float, side: float) -> str:
     return f'<polygon points="{" ".join(pts)}"/>'
 
 
-def _sticker(fc: FilingCode, layout: SheetLayout, boxes: bool, blank: bool) -> str:
-    code = html.escape(fc.code)
+def _marks(code_text: str, boxes: bool) -> tuple[list[str], int]:
+    """A sticker's QR, bold code and tick boxes as SVG elements (in modules), and the
+    width they take."""
+    code = html.escape(code_text)
     em = CODE_PT / 72 * 25.4 / MODULE_MM  # code font size in modules
     width = sticker.X0 + BOXES_W if boxes else N
     parts = [
-        _qr_group(fc.code, 1 if boxes else 0),
+        _qr_group(code_text, 1 if boxes else 0),
         f'<text x="{sticker.X0}" y="{_n(em * CAP)}" font-size="{_n(em)}" '
         f'font-weight="bold">{code}</text>',
     ]
@@ -240,6 +245,11 @@ def _sticker(fc: FilingCode, layout: SheetLayout, boxes: bool, blank: bool) -> s
                 f'<rect data-box="{name}" x="{_n(x)}" y="{_n(y)}" width="{_n(s)}" height="{_n(s)}" '
                 'fill="none" stroke="#000" stroke-width="0.35"/>'
             )
+    return parts, width
+
+
+def _sticker(fc: FilingCode, layout: SheetLayout, boxes: bool, blank: bool) -> str:
+    parts, width = _marks(fc.code, boxes)
     svg = (
         f'<svg class="sticker" xmlns="http://www.w3.org/2000/svg" '
         f'viewBox="0 0 {width} {N}" width="{_n(width * MODULE_MM)}mm" height="{_n(QR_MM)}mm" '
@@ -255,6 +265,36 @@ def _sticker(fc: FilingCode, layout: SheetLayout, boxes: bool, blank: bool) -> s
     return (
         f'<div class="st" style="padding-left:{_n(sticker.X0 * MODULE_MM)}mm;'
         f'min-width:{_n(min_w)}mm">{svg}{text}</div>'
+    )
+
+
+PREVIEW_LABEL_MAX = 24
+
+
+def sticker_preview(code: str, label: str, boxes: bool = True) -> str:
+    """One sticker as a standalone SVG (black on white, about 12 mm tall when shown at
+    its size), the label sized as on the first built-in sheet: the Settings preview of a
+    code as it is typed. ``ValueError`` for a code that is not 1 to 4 letters or digits,
+    or a label over 24 characters."""
+    if sticker.parse_payload(sticker.PLAIN.format(code=code)) is None:
+        raise ValueError("a code is 1 to 4 letters or digits")
+    if len(label) > PREVIEW_LABEL_MAX:
+        raise ValueError(f"a label is at most {PREVIEW_LABEL_MAX} characters")
+    parts, width = _marks(code.upper(), boxes)
+    size = label_pt(label, builtin_layouts()[0]) / 72 * 25.4 / MODULE_MM  # in modules
+    if label:
+        parts.append(
+            f'<text x="{sticker.X0}" y="{_n(N / 2 + size * CAP / 2)}" '
+            f'font-size="{_n(size)}">{html.escape(label)}</text>'
+        )
+    w = max(width, sticker.X0 + _em(label) * size)
+    pad = 1.0  # modules of white around the sticker
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{_n(-pad)} {_n(-pad)} '
+        f'{_n(w + 2 * pad)} {_n(N + 2 * pad)}" width="{_n((w + 2 * pad) * MODULE_MM)}mm" '
+        f'height="{_n((N + 2 * pad) * MODULE_MM)}mm" font-family="{html.escape(FONT)}">'
+        f'<rect x="{_n(-pad)}" y="{_n(-pad)}" width="{_n(w + 2 * pad)}" height="{_n(N + 2 * pad)}" '
+        f'fill="#fff"/><g fill="#000">{"".join(parts)}</g></svg>\n'
     )
 
 

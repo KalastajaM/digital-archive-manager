@@ -18,11 +18,14 @@ import {
   useTrays,
 } from "../../api/client";
 import { visible } from "../../text";
+import { CollectionPicker } from "../CollectionPicker";
 import { FolderPicker } from "../FolderPicker";
 import { ConfirmPlan } from "../PlanPreview";
+import { TagInput } from "../TagInput";
 import { IconButton } from "../ui/IconButton";
+import { StickerPreview } from "./StickerPreview";
 
-/** A row being edited: tags and collections as comma-separated text. */
+/** A row being edited; ``collectionText`` is a collection typed in its picker, not added yet. */
 type Draft = {
   key: number;
   code: string;
@@ -30,17 +33,12 @@ type Draft = {
   tray: string;
   folder: string;
   name: string;
-  tags: string;
-  collections: string;
+  tags: string[];
+  collections: string[];
+  collectionText: string;
   as_suggested: boolean;
   inbox_folder: string;
 };
-
-const list = (text: string) =>
-  text
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
 
 let nextKey = 1;
 const blank = (): Draft => ({
@@ -50,8 +48,9 @@ const blank = (): Draft => ({
   tray: "",
   folder: "",
   name: "",
-  tags: "",
-  collections: "",
+  tags: [],
+  collections: [],
+  collectionText: "",
   as_suggested: false,
   inbox_folder: "",
 });
@@ -62,8 +61,9 @@ const toDraft = (c: FilingCodesData["codes"][number]): Draft => ({
   tray: c.tray ?? "",
   folder: c.folder ?? "",
   name: c.name ?? "",
-  tags: c.tags.join(", "),
-  collections: c.collections.join(", "),
+  tags: [...c.tags],
+  collections: [...c.collections],
+  collectionText: "",
   as_suggested: c.as_suggested,
   inbox_folder: c.inbox_folder ?? "",
 });
@@ -73,8 +73,9 @@ const toCode = (d: Draft): FilingCode => ({
   tray: d.tray || null,
   folder: d.folder.trim() || null,
   name: d.name.trim() || null,
-  tags: list(d.tags),
-  collections: list(d.collections),
+  tags: d.tags,
+  // a collection typed but not added yet is saved too, as Save is pressed after typing it
+  collections: d.collectionText.trim() ? [...d.collections, d.collectionText.trim()] : d.collections,
   as_suggested: d.as_suggested,
   inbox_folder: d.inbox_folder.trim() || null,
 });
@@ -89,6 +90,10 @@ export function confusable(a: string, b: string): boolean {
   const diff = [...x].map((c, i) => [c, y[i]] as const).filter(([c, d]) => c !== d);
   return diff.length === 1 && GROUPS.some((g) => g.includes(diff[0][0]) && g.includes(diff[0][1]));
 }
+
+/** A name pattern that gives every file the same name: nothing in it changes per file. */
+export const fixedName = (pattern: string) =>
+  pattern.trim() !== "" && !pattern.includes("{doc_date") && !pattern.includes("{stem}");
 
 export function FilingCodes() {
   const codes = useFilingCodes();
@@ -161,6 +166,12 @@ export function FilingCodes() {
         code's QR sticker on the paper. It says where the file goes and what it gets. Saved in the filing codes file, with
         a backup of the old one.
       </p>
+      <p className="hint">
+        A name pattern makes each file's name from its details: <code>{"{doc_date:%Y%m%d}"}</code> is the document's date,{" "}
+        <code>{"{year}"}</code> its year and <code>{"{stem}"}</code> the file's own name, so{" "}
+        <code>{"{doc_date:%Y%m%d}_Fortum"}</code> gives <code>20261015_Fortum.pdf</code>. It is not used when the file's
+        name already starts with a date.
+      </p>
       {problems.length > 0 && (
         <div className="banner" role="alert">
           <p>Some entries in the file could not be loaded:</p>
@@ -178,56 +189,106 @@ export function FilingCodes() {
           const same = rows.filter((o) => o.key !== r.key && confusable(r.code, o.code)).map((o) => o.code.trim());
           return (
             <li key={r.key} className="filing-code-row" role="group" aria-label={`Code ${r.code || `row ${i + 1}`}`}>
-              <label>
-                Code
-                <input value={r.code} onChange={(e) => edit(r.key, { code: e.target.value })} maxLength={4} />
-              </label>
-              <label>
-                Label
-                <input value={r.label} onChange={(e) => edit(r.key, { label: e.target.value })} maxLength={24} />
-              </label>
-              <label>
-                Tray
-                <select value={r.tray} onChange={(e) => edit(r.key, { tray: e.target.value })}>
-                  <option value="">No tray</option>
-                  {trayList.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {visible(t.name)}
-                    </option>
-                  ))}
-                  {r.tray && !trayList.some((t) => t.id === r.tray) && <option value={r.tray}>{visible(r.tray)}</option>}
-                </select>
-              </label>
-              <FolderPicker label="Folder" value={r.folder} onChange={(v) => edit(r.key, { folder: v })} />
-              <label>
-                Name
-                <input value={r.name} onChange={(e) => edit(r.key, { name: e.target.value })} />
-              </label>
-              <label>
-                Tags
-                <input value={r.tags} onChange={(e) => edit(r.key, { tags: e.target.value })} />
-              </label>
-              <label>
-                Collections
-                <input value={r.collections} onChange={(e) => edit(r.key, { collections: e.target.value })} />
-              </label>
-              <label>
-                Inbox folder
-                <input value={r.inbox_folder} onChange={(e) => edit(r.key, { inbox_folder: e.target.value })} />
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={r.as_suggested}
-                  onChange={(e) => edit(r.key, { as_suggested: e.target.checked })}
+              <StickerPreview code={r.code} label={r.label} />
+              <div className="code-col">
+                <div className="code-field" data-tip="1 to 4 letters or digits, printed big on the sticker and read from its QR code">
+                  <label htmlFor={`code-${r.key}-code`}>Code</label>
+                  <input
+                    id={`code-${r.key}-code`}
+                    value={r.code}
+                    onChange={(e) => edit(r.key, { code: e.target.value })}
+                    maxLength={4}
+                  />
+                </div>
+                <div className="code-field" data-tip="A short description, on the sticker and in the Inbox (at most 24 characters)">
+                  <label htmlFor={`code-${r.key}-label`}>Label</label>
+                  <input
+                    id={`code-${r.key}-label`}
+                    value={r.label}
+                    onChange={(e) => edit(r.key, { label: e.target.value })}
+                    maxLength={24}
+                  />
+                </div>
+              </div>
+              <div className="code-col">
+                <div className="code-field" data-tip="The tray the file goes into when it is filed with this code">
+                  <label htmlFor={`code-${r.key}-tray`}>Tray</label>
+                  <select id={`code-${r.key}-tray`} value={r.tray} onChange={(e) => edit(r.key, { tray: e.target.value })}>
+                    <option value="">No tray</option>
+                    {trayList.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {visible(t.name)}
+                      </option>
+                    ))}
+                    {r.tray && !trayList.some((t) => t.id === r.tray) && <option value={r.tray}>{visible(r.tray)}</option>}
+                  </select>
+                </div>
+                <div className="code-field" data-tip="A folder in the inbox: files you save there get this code">
+                  <label htmlFor={`code-${r.key}-inbox`}>Inbox folder</label>
+                  <input
+                    id={`code-${r.key}-inbox`}
+                    value={r.inbox_folder}
+                    onChange={(e) => edit(r.key, { inbox_folder: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="code-col">
+                <div className="code-field" data-tip="Where the file is filed; {year} and {doc_date:%Y} work here too">
+                  <FolderPicker label="Folder" value={r.folder} onChange={(v) => edit(r.key, { folder: v })} />
+                </div>
+                <div className="code-field" data-tip="The collections the filed file is added to">
+                  <CollectionPicker
+                    label="Collections"
+                    value={r.collections}
+                    onChange={(names) => edit(r.key, { collections: names })}
+                    text={r.collectionText}
+                    onTextChange={(text) => edit(r.key, { collectionText: text })}
+                  />
+                </div>
+              </div>
+              <div className="code-col">
+                <div
+                  className="code-field"
+                  data-tip="The file's new name, made from its details; not used when its name already starts with a date"
+                >
+                  <label htmlFor={`code-${r.key}-name`}>Name pattern</label>
+                  <input
+                    id={`code-${r.key}-name`}
+                    value={r.name}
+                    placeholder="{doc_date:%Y%m%d}_Fortum"
+                    onChange={(e) => edit(r.key, { name: e.target.value })}
+                  />
+                </div>
+                <div className="code-field" data-tip="The tags the filed file gets">
+                  <label htmlFor={`code-${r.key}-tags`}>Tags</label>
+                  <TagInput id={`code-${r.key}-tags`} value={r.tags} onChange={(tags) => edit(r.key, { tags })} />
+                </div>
+              </div>
+              <div className="code-col code-col-end">
+                <IconButton
+                  icon={<X />}
+                  label={`Remove code ${r.code || `row ${i + 1}`}`}
+                  className="tip-end"
+                  onClick={() => setRows((rs) => (rs ?? []).filter((x) => x.key !== r.key))}
                 />
-                File as suggested
-              </label>
-              <IconButton
-                icon={<X />}
-                label={`Remove code ${r.code || `row ${i + 1}`}`}
-                onClick={() => setRows((rs) => (rs ?? []).filter((x) => x.key !== r.key))}
-              />
+                <label
+                  className="check code-field"
+                  data-tip="Already handled: file it where dam suggests, in no tray; the tray and name pattern are not used"
+                >
+                  <input
+                    type="checkbox"
+                    checked={r.as_suggested}
+                    onChange={(e) => edit(r.key, { as_suggested: e.target.checked })}
+                  />
+                  File as suggested
+                </label>
+              </div>
+              {!r.as_suggested && fixedName(r.name) && (
+                <p className="hint">
+                  Every file with this code gets the same name. Add <code>{"{doc_date:%Y%m%d}"}</code> or{" "}
+                  <code>{"{stem}"}</code> to tell them apart.
+                </p>
+              )}
               {same && same.length > 0 && (
                 <p className="hint">
                   Easy to confuse with{" "}
