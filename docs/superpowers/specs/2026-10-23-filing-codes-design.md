@@ -199,8 +199,16 @@ Sheet layouts:
   hold against a label sheet. The page tells the owner to print at 100% (no "fit to
   page"), since browser and printer scaling is the usual cause of misaligned labels.
 
-Minimum printed QR size and the quiet zone around it are the builder's call, to be tested
-on the owner's scanner at 300 dpi black and white before the built-in list is fixed.
+Print-and-scan trial (2026-10-23, laser print, Doxie 300 dpi black and white, sheets fed
+crooked and one upside down): zxing-cpp read all 28 test codes, `dam:P` at 6, 8, 10, 12,
+15 and 20 mm in every error-correction level (L, M, Q, H) and a 12 mm code with a quiet
+zone of 0, 1, 2 and 4 modules, at both 300 and 200 dpi rendering. Stickers cut from plain
+paper and taped onto a real form and a real bill were read too, next to the bill's own
+Data Matrix and bank barcode (only QR codes in the `dam:` form count). Reading QR on a
+rendered page took about 10 ms. Defaults from this: QR 12 mm or larger on stickers,
+error correction M, a quiet zone of at least 1 module. When reading both QR and Code 128,
+pass the formats as a tuple: the `|` operator is deprecated in zxing-cpp and the test
+suite runs with `-W error`.
 
 ## Step 3 (optional): pen codes
 
