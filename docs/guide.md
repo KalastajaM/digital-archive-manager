@@ -391,20 +391,23 @@ confirm, and no AI is involved.
 After you file one document by hand from the Inbox form, the "Filed" message offers
 **Make a rule…** when the folder or name was not what a rule suggested (or you changed
 it). If the value you changed came from a rule made in the app, it offers **Update rule
-<id>…** instead. There is no offer after filing several documents at once, after File N
-marked, or when a filing code did the filing.
+<id>…** instead, which opens that rule as it is with the folder and name from this
+filing. There is no offer after filing several documents at once, after File N marked,
+or when a filing code did the filing.
 
 **Make a rule…** opens a sheet drafted from what you just did:
 
 - **Match words**, as chips. One is ticked: the most distinctive word near the top of the
   text, usually the sender. A rule matches when **any** ticked word is in the text, so
-  ticking more words widens the rule. Words that appear in more than about a third of your filed documents are not offered. When no usable word is left, there is no offer.
+  ticking more words widens the rule. Words that appear in more than 3 in 10 of your
+  filed documents are not offered. When no usable word is left, there is no offer.
 - **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
-  document's year, its date and its original file name, and the sheet shows what each
-  gives for this document.
+  document's year, its date and its original file name, and are filled in for each
+  document the rule files.
 - **Tags, tray and payee**, each with a box to leave it out.
 - **More conditions**: a file-name pattern, and the folder the file must be in.
-- **This document**: the folder and name the rule would give the document you just filed.
+- **Filed as**: the folder and name you gave the document just now, which the patterns
+  were made from.
 
 ### The proof
 
@@ -429,8 +432,9 @@ Rules made in the app go to `config/rules/learned.yaml`, which dam reads before 
 rule files. A rule about one sender therefore wins over a broad one such as the shipped
 `generic-invoice`. For the folder and name the first matching rule wins; tags from all
 matching rules are added together. Rules you wrote by hand in other files keep working
-as before. If you edit one of them in the app, dam rewrites that file: the comments in
-it are lost, and a `.bak-<time>` copy of the old file is kept next to it.
+as before. If you edit or delete one of them in the app, dam rewrites that file: the
+comments in it are lost, and a `.bak-<time>` copy of the old file is kept next to it.
+The sheet and the delete question say so.
 
 ### The record
 
