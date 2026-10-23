@@ -185,6 +185,12 @@ class AppPaths:
         if not os.path.lexists(self.config_dir / "trays"):
             _seed(DEFAULTS_DIR / "trays", self.config_dir / "trays")
         self._seed_new_default_trays()
+        # The code table: seeded only while the file is absent (a saved empty table stays).
+        _copy_new(DEFAULTS_DIR / "filing_codes.yaml", self.filing_codes_path)
+
+    @property
+    def filing_codes_path(self) -> Path:
+        return self.config_dir / "filing_codes.yaml"
 
     @property
     def seeded_trays_path(self) -> Path:

@@ -1,0 +1,167 @@
+"""The filing code table: short codes that route a document (tray, folder, tags...)."""
+
+import re
+from collections.abc import Collection
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+from dam.core.foldernames import FolderNameError, check_folder_name
+from dam.rules.engine import TemplateError, check_template
+from dam.rules.model import fold, read_yaml
+
+_CODE_RE = re.compile(r"^[A-Za-z0-9]{1,4}$")
+
+CONFUSABLE_GROUPS = ("0OØDQ", "1IL7", "5S", "2Z", "8B", "UV", "6G")
+_GROUP_OF = {c: i for i, group in enumerate(CONFUSABLE_GROUPS) for c in group}
+
+
+class FilingCode(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str = ""
+    tray: str | None = None
+    folder: str | None = None
+    name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    collections: list[str] = Field(default_factory=list)
+    as_suggested: bool = False
+    inbox_folder: str | None = None
+
+    @field_validator("code")
+    @classmethod
+    def _check_code(cls, v: str) -> str:
+        if not _CODE_RE.match(v):
+            raise ValueError("a code is 1 to 4 letters or digits")
+        return v.upper()
+
+    @field_validator("folder", "name")
+    @classmethod
+    def _check_template(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                check_template(v)
+            except TemplateError as e:
+                raise ValueError(str(e)) from e
+        return v
+
+    @field_validator("inbox_folder")
+    @classmethod
+    def _check_inbox(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                check_folder_name(v)
+            except FolderNameError as e:
+                raise ValueError(str(e)) from e
+        return v
+
+
+@dataclass
+class CodeProblem:
+    code: str
+    message: str
+
+
+def _format_validation(e: ValidationError) -> str:
+    return "; ".join(
+        f"{'.'.join(str(p) for p in err['loc']) or 'code'}: {err['msg']}" for err in e.errors()
+    )
+
+
+def load_codes(
+    path: Path, tray_ids: Collection[str]
+) -> tuple[list[FilingCode], list[CodeProblem]]:
+    """Read the code table. Invalid, repeated or tray-less entries are reported and left out."""
+    if not path.exists():
+        return [], []
+    try:
+        _, data = read_yaml(path)
+    except ValueError as e:
+        return [], [CodeProblem("", str(e))]
+    if data is None:
+        return [], []
+    if not isinstance(data, list):
+        return [], [CodeProblem("", "the file must be a list of codes")]
+    codes: list[FilingCode] = []
+    problems: list[CodeProblem] = []
+    seen_codes: set[str] = set()
+    seen_inbox: set[str] = set()
+    for i, item in enumerate(data, start=1):
+        label = str(item.get("code", "")) if isinstance(item, dict) else ""
+        label = label or f"#{i}"
+        try:
+            if not isinstance(item, dict):
+                raise ValueError("each entry must be a mapping")
+            fc = FilingCode.model_validate(item)
+        except ValidationError as e:
+            problems.append(CodeProblem(label, _format_validation(e)))
+            continue
+        except ValueError as e:
+            problems.append(CodeProblem(label, str(e)))
+            continue
+        if fc.code in seen_codes:
+            problems.append(CodeProblem(fc.code, f"the code {fc.code} is used twice"))
+            continue
+        if fc.tray is not None and fc.tray not in tray_ids:
+            problems.append(CodeProblem(fc.code, f"unknown tray {fc.tray!r}"))
+            continue
+        if fc.inbox_folder is not None:
+            key = fold(check_folder_name(fc.inbox_folder))
+            if key in seen_inbox:
+                problems.append(
+                    CodeProblem(fc.code, f"inbox folder {fc.inbox_folder!r} is used twice")
+                )
+                continue
+            seen_inbox.add(key)
+        seen_codes.add(fc.code)
+        codes.append(fc)
+    return codes, problems
+
+
+def save_codes(path: Path, codes: list[FilingCode]) -> None:
+    """Write the table. The file it replaces is kept as ``.bak-<time>``; the new file is
+    read back and the original restored if it does not match."""
+    original = path.read_bytes() if path.exists() else None
+    if original is not None:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        try:
+            with open(path.with_name(f"{path.name}.bak-{stamp}"), "xb") as fh:
+                fh.write(original)
+        except FileExistsError:
+            pass  # a backup from this very second exists already
+    dumped = [c.model_dump(exclude_defaults=True, mode="json") for c in codes]
+    for d, c in zip(dumped, codes, strict=True):
+        d["code"] = c.code
+    text = yaml.safe_dump(dumped, allow_unicode=True, sort_keys=False)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        trays = {c.tray for c in codes if c.tray is not None}
+        back, problems = load_codes(path, trays)
+        if problems or back != codes:
+            raise OSError("the code table did not read back as written")
+    except (OSError, ValueError, yaml.YAMLError):
+        with open(path, "wb") as f:  # no file before: an empty table (never delete)
+            f.write(original or b"")
+        raise
+
+
+def confusable_with(code: str, others: Collection[str]) -> list[str]:
+    """Existing codes one confusable substitution away from ``code``."""
+    mine = code.upper()
+    found: list[str] = []
+    for other in others:
+        theirs = other.upper()
+        if len(theirs) != len(mine):
+            continue
+        diff = [(a, b) for a, b in zip(mine, theirs, strict=True) if a != b]
+        if len(diff) == 1:
+            a, b = diff[0]
+            if a in _GROUP_OF and _GROUP_OF.get(b) == _GROUP_OF[a]:
+                found.append(other)
+    return found
