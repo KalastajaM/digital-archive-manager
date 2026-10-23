@@ -13,6 +13,7 @@ import {
   type TrayDef,
   useFileLinks,
   useFilingCodes,
+  useRules,
   useTrays,
 } from "../api/client";
 import { AIRejected } from "../components/ai/AIBadge";
@@ -286,18 +287,26 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   const rules = entry.suggestion;
   const aiOffer = (value: string | null | undefined, confidence?: number): Offer | null =>
     value ? { value, source: AI_SOURCE, note: aiNote(confidence, answer?.reason) } : null;
+  // A rule whose suggestions were corrected recently says so on its chips (a failed or
+  // missing rules load just means no note).
+  const flaggedRules = new Set((useRules().data?.rules ?? []).filter((r) => r.stats.flagged).map((r) => r.id));
+  const flagged = (o: Offer): Offer => {
+    if (!o.source.split(" · ").some((s) => s.startsWith("rule:") && flaggedRules.has(s.slice(5)))) return o;
+    const note = "this rule was corrected recently";
+    return { ...o, note: o.note ? `${o.note} · ${note}` : note };
+  };
   const nameOffers = offersFor(name, [
     aiOffer(answer?.name, answer?.confidence.name),
     { value: rules.name, source: rules.name_source },
-  ]);
+  ]).map(flagged);
   const folderOffers = offersFor(folder, [
     aiOffer(answer?.folder, answer?.confidence.folder),
     rules.folder ? { value: rules.folder, source: rules.folder_source ?? "scan" } : null,
-  ]);
+  ]).map(flagged);
   const tagChips = tagOffers(tags, [
     ...(answer?.tags ?? []).map((t) => aiOffer(t, answer?.confidence.tags) as Offer),
     ...rules.tags.map((t) => ({ value: t, source: rules.tag_sources[t] ?? "scan" })),
-  ]);
+  ]).map(flagged);
   const aiTray = answer?.tray ? (trays.list.find((t) => t.id === answer.tray) ?? null) : null;
   const trayOffer = aiTray && aiTray.id !== tray?.id ? aiTray : null;
   /** The AI's values for ``t``'s fields that differ from what the form would show. */

@@ -1484,6 +1484,29 @@ describe("Suggestion chips (rules and scan)", () => {
     expect(screen.queryByRole("button", { name: "Use all" })).not.toBeInTheDocument();
   });
 
+  it("a chip of a rule that was corrected recently says so in its tip", async () => {
+    const flagged = (flag: boolean) => ({
+      rules: [{ id: "kotihoito", file: "learned.toml", learned: true, when: { text_contains: ["x"], filename_matches: null, folder_is: null }, then: { folder: null, name: null, tags: [], tray: null, payee: null }, stats: { suggested: 5, changed: 2, last_used: null, flagged: flag } }],
+      errors: [],
+      state: { offer: true, declined: 0 },
+    });
+    const { user, name } = await setup({ "GET /api/rules": { body: flagged(true) } });
+    await user.clear(name);
+    await user.type(name, "mine.pdf");
+    const nameChip = chip(/^Suggested Name: 2026-10-01 Kotihoito lasku\.pdf \(rule kotihoito\)$/);
+    await waitFor(() => expect(within(nameChip).getByText("rule kotihoito")).toHaveAttribute("title", "rule kotihoito: this rule was corrected recently"));
+  });
+
+  it("a chip of a rule that was not flagged has no note", async () => {
+    const { user, name } = await setup({
+      "GET /api/rules": { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } },
+    });
+    await user.clear(name);
+    await user.type(name, "mine.pdf");
+    const nameChip = chip(/^Suggested Name: 2026-10-01 Kotihoito lasku\.pdf \(rule kotihoito\)$/);
+    expect(within(nameChip).getByText("rule kotihoito")).toHaveAttribute("title", "rule kotihoito");
+  });
+
   it("a field edited away from the rule's value gets a chip; Use changes only that field", async () => {
     const { user, name } = await setup();
     await user.clear(name);
