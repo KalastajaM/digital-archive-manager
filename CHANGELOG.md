@@ -88,6 +88,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- On Linux, an excluded AI folder typed in another case (`10. financial`) no longer
+  shows as "not in the archive"; it is found as the exclusion itself finds it.
 - Dropping a folder from Browse on a collection in the sidebar now adds it; the row lit up
   but the browser cancelled the drop.
 - After adding a group to a collection, **New group** could not add another straight
