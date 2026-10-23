@@ -210,6 +210,25 @@ error correction M, a quiet zone of at least 1 module. When reading both QR and 
 pass the formats as a tuple: the `|` operator is deprecated in zxing-cpp and the test
 suite runs with `-W error`.
 
+### Star and Important tick boxes
+
+A sticker can carry two tick boxes, ★ (star) and **!** (important), so the owner marks a
+single document Starred or Important with the pen. The QR text says the sticker has boxes
+(`dam:1:<CODE>`, the version after the prefix naming the box layout); plain `dam:<CODE>`
+stickers have none. The boxes sit at fixed positions in QR module units relative to the QR,
+so the reader finds them from the QR's corner points on any rotation. No OCR is involved.
+
+Blind trial (2026-10-23, blue ballpoint, Doxie 300 dpi black and white, crooked feeds, two
+full sheets and two stickers on documents; the owner revealed the truth only after the
+reading): 15 ticked and 249 empty boxes. The QR corner points alone place the boxes up to
+about 0.75 module off, so the reader first aligns each box pair on its printed outline
+(search within ±1.5 modules), then measures the share of dark pixels inside the box with a
+15 % inset from the edge. Result: every ticked box measured at least 3.8 % ink, every empty
+box at most 0.2 %. Thin ballpoint ticks give low fill, so thresholds are low: ticked at 1 %
+or more, empty below 0.5 %, **unclear** in between (the batch flag). With these, the trial
+classified all 264 boxes correctly. Box sizes 3.7, 5.0 and 6.2 mm all worked; the smallest
+that the owner finds comfortable to tick decides the sticker layout.
+
 ## Step 3 (optional): pen codes
 
 ### Evidence (spike, 2026-10-23)
