@@ -329,7 +329,7 @@ change them. A box dam cannot read clearly is pointed out ("Tick box unclear: ch
 star"), and the file starts unticked in File N marked.
 
 **Printing stickers.** In Settings → Filing codes, **Print stickers…** opens the sticker
-sheet; **Print…** in an open code opens it with that code ticked (save the code first):
+sheet:
 
 - Tick the codes to print and type how many of each.
 - Choose the sheet: **Avery Zweckform L7651** (65 labels of 38.1 × 21.2 mm), **Plain

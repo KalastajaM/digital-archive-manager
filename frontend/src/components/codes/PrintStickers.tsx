@@ -85,12 +85,11 @@ export function sheetSummary(columns: number, rows: number, total: number, start
   } left empty on the last.`;
 }
 
-/** ``initialCode``: tick this code (one sticker) to start with; opened from that code's editor. */
-export function PrintStickers({ initialCode = null }: { initialCode?: string | null } = {}) {
+export function PrintStickers() {
   const codes = useFilingCodes();
   const layouts = useSheetLayouts();
   const saveCustom = useSaveCustomSheet();
-  const [chosen, setChosen] = useState<Record<string, string>>(initialCode ? { [initialCode]: "1" } : {}); // code -> count as typed
+  const [chosen, setChosen] = useState<Record<string, string>>({}); // code -> count as typed
   const [layoutId, setLayoutId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   // the custom layout this page saved (the list catches up on its next load)
