@@ -127,9 +127,10 @@ def recent_filings(app: "App") -> list[tuple[str, str]]:
             operations.c.kind == OpKind.MOVE.value,
             operations.c.state == "done",
             operations.c.origin.in_(EXAMPLE_ORIGINS),
-            # directly in the inbox (SQL first, so the newest 10 are always found)
+            # directly in the inbox or one folder below it, where a filing code's inbox
+            # folder is (SQL first, so the newest 10 are always found)
             operations.c.src.like(in_inbox, escape="\\"),
-            operations.c.src.not_like(in_inbox + "/%", escape="\\"),
+            operations.c.src.not_like(in_inbox + "/%/%", escape="\\"),
         )
         .order_by(
             func.coalesce(operations.c.finished, operations.c.created).desc(),
@@ -139,8 +140,9 @@ def recent_filings(app: "App") -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     with app.engine.connect() as conn:
         for src, dst, drive_id in conn.execute(stmt):
-            # the exact check (LIKE folds ASCII case only)
-            if not src or not dst or fold_parts(parent(src)) != fold_parts(inbox):
+            # the exact check (LIKE folds ASCII case only): from the inbox or a code's
+            # inbox folder
+            if not src or not dst or not app.repo.in_inbox_path(src):
                 continue
             folder = parent(dst)
             if not folder or guard.is_excluded(folder, exclude) or is_under(folder, inbox):

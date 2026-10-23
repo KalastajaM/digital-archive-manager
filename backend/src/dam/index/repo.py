@@ -27,6 +27,14 @@ BARCODE_EXTS = ("pdf", "jpg", "jpeg", "png")
 
 PARKED = "/parked/"  # no archive-relative path starts with "/"
 
+# the rows the status counts and the inbox list count: no folders, links or parked rows
+_COUNTED = (files.c.is_dir.is_not(True), files.c.is_link.is_not(True), files.c.parked_at.is_(None))
+
+
+def _folded(path: str) -> str:
+    """``path`` compared the way the disk does: NFC and case-insensitive."""
+    return nfc(path).casefold()
+
 
 @dataclass
 class FileRecord:
@@ -99,16 +107,45 @@ class FileRepo:
     def __init__(self, engine: Engine, inbox: str) -> None:
         self.engine = engine
         self.inbox = nfc(inbox)
+        self._inbox_fold = _folded(self.inbox.strip("/"))
+        # a filing code's inbox folder (folded name) -> its code; set by ``App`` after
+        # every load of the code table
+        self.code_folders: dict[str, str] = {}
         self._bound: Connection | None = None
 
     def in_inbox(self, rec: FileRecord) -> bool:
-        """The file sits directly in the inbox folder (as ``counts`` and the inbox list
-        count it), not in a subfolder."""
+        """The file sits directly in the inbox folder or in a filing code's inbox folder
+        (as ``counts`` and the inbox list count it), not deeper."""
         return self.in_inbox_path(rec.path_nfc)
 
     def in_inbox_path(self, path: str) -> bool:
-        """``path`` (archive-relative) is directly in the inbox folder, not deeper."""
-        return nfc(path).rpartition("/")[0] == self.inbox
+        """``path`` (archive-relative) is directly in the inbox folder or directly in a
+        filing code's inbox folder (``<inbox>/To pay``), not deeper. Compared folded
+        (NFC, case-insensitive), as the disk does."""
+        folder = _folded(path).rpartition("/")[0]
+        return folder == self._inbox_fold or self._code_of_folder(folder) is not None
+
+    def inbox_code_of(self, path: str) -> str | None:
+        """The code whose inbox folder directly holds ``path``, else None."""
+        return self._code_of_folder(_folded(path).rpartition("/")[0])
+
+    def _code_of_folder(self, folded: str) -> str | None:
+        above, _, name = folded.rpartition("/")
+        return self.code_folders.get(name) if above == self._inbox_fold else None
+
+    def inbox_files(self) -> list[FileRecord]:
+        """Files (no folders, links, missing or parked rows) directly in the inbox or in
+        a filing code's inbox folder, by path."""
+        with self._conn() as conn:
+            stmt = select(files).where(*_COUNTED, files.c.missing.is_not(True), self._under_inbox())
+            rows = conn.execute(stmt.order_by(files.c.path)).all()
+        return [r for r in map(_record, rows) if self.in_inbox_path(r.path_nfc)]
+
+    def _under_inbox(self):
+        """Every row below the inbox, at any depth, matching it up to ASCII case (LIKE);
+        callers keep those ``in_inbox_path`` accepts. The inbox is small."""
+        esc = self.inbox.strip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return files.c.path_nfc.like(esc + "/%", escape="\\")
 
     @staticmethod
     def record_from_row(row) -> FileRecord:
@@ -131,6 +168,7 @@ class FileRepo:
         """Run several repo calls in one DB transaction (batched scanner writes)."""
         with write_tx(self.engine) as conn:
             bound = FileRepo(self.engine, self.inbox)
+            bound.code_folders = self.code_folders
             bound._bound = conn
             yield bound
 
@@ -266,36 +304,28 @@ class FileRepo:
         """File counts for the status view (folders, links and parked rows not counted).
 
         One key per ``index_state`` of the present (not missing) files, plus ``total``
-        (present files), ``inbox`` (present files directly in the inbox) and ``missing``.
+        (present files), ``inbox`` (present files directly in the inbox or in a filing
+        code's inbox folder, as ``inbox_files``) and ``missing``.
         """
-        prefix = self.inbox + "/"
-        rest = func.substr(files.c.path_nfc, len(prefix) + 1)
-        in_inbox = and_(
-            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix, func.instr(rest, "/") == 0
-        )
         present = files.c.missing.is_not(True)
         stmt = (
             select(
                 files.c.index_state,
                 func.sum(case((present, 1), else_=0)),
-                func.sum(case((and_(present, in_inbox), 1), else_=0)),
                 func.sum(case((present, 0), else_=1)),
             )
-            .where(
-                files.c.is_dir.is_not(True),
-                files.c.is_link.is_not(True),
-                files.c.parked_at.is_(None),
-            )
+            .where(*_COUNTED)
             .group_by(files.c.index_state)
         )
+        under = select(files.c.path_nfc).where(*_COUNTED, present, self._under_inbox())
         out: dict[str, int] = {"total": 0, "inbox": 0, "missing": 0}
         with self._conn() as conn:
-            for state, n, inbox, missing in conn.execute(stmt).all():
+            for state, n, missing in conn.execute(stmt).all():
                 if n:
                     out[state] = n
                 out["total"] += n
-                out["inbox"] += inbox
                 out["missing"] += missing
+            out["inbox"] = sum(1 for p in conn.execute(under).scalars() if self.in_inbox_path(p))
         return out
 
     def text_for(self, drive_id: str) -> str:

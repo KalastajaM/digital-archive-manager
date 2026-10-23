@@ -10,7 +10,7 @@ from dam.bills.barcode import BarcodeError
 from dam.bills.barcode import parse as parse_barcode
 from dam.collections.service import CollectionService, check_collection_name
 from dam.config import SpecialFolders
-from dam.core.paths import ArchivePaths, nfc
+from dam.core.paths import ArchivePaths
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.notes import NotesService, check_note
 from dam.ops.executor import Executor
@@ -157,12 +157,9 @@ class InboxService:
         self.scan_fields = scan_fields
 
     def list(self) -> list[InboxEntry]:
-        """Files directly in the inbox (no folders, links or parked rows), newest first."""
-        records = [
-            r
-            for r in self.repo.list_dir(self.special.inbox)
-            if not r.is_dir and not r.is_link and not r.missing and r.parked_at is None
-        ]
+        """Files directly in the inbox or in a filing code's inbox folder (no folders,
+        links or parked rows), newest first."""
+        records = self.repo.inbox_files()
         records.sort(key=lambda r: r.mtime if r.mtime is not None else float("-inf"), reverse=True)
         tray_ids = [t.id for t in self.trays.defs()]
         open_trays = self.trays.open_trays([r.drive_id for r in records])
@@ -376,7 +373,7 @@ class InboxService:
         return found
 
     def _in_inbox(self, rec: FileRecord) -> bool:
-        return nfc(parent(rec.path)).casefold() == nfc(self.special.inbox).strip("/").casefold()
+        return self.repo.in_inbox_path(rec.path)
 
     def _ops(self, reqs: list[FileRequest]) -> list[tuple[FileRequest, Op | None]]:
         seen: set[str] = set()

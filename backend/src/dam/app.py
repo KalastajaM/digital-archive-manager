@@ -270,7 +270,10 @@ class App:
         self.codes, self.code_problems = load_codes(
             self.app_paths.filing_codes_path, {t.id for t in self.tray_defs}
         )
-        # Task 3: set ``self.repo.code_folders`` (inbox folder -> code) from ``self.codes`` here.
+        # files in a code's inbox folder (``<inbox>/To pay``) are inbox files
+        self.repo.code_folders = {
+            c.inbox_folder.casefold(): c.code for c in self.codes if c.inbox_folder is not None
+        }
         try:
             self.trays.refresh_dates()
         except Exception:
