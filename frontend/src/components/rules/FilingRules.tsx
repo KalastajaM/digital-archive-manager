@@ -21,7 +21,7 @@ import { plural } from "../../format";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
 import { Sheet } from "../ui/Sheet";
-import { RuleSheet } from "./RuleSheet";
+import { RuleSheet, rewriteNote } from "./RuleSheet";
 
 /** "kept 9 of 9", "changed 2 of 5", "not used yet". */
 export function record({ suggested, changed }: Rule["stats"]): string {
@@ -264,6 +264,7 @@ export function FilingRules() {
           }
         >
           <p>The rule is removed from its file. Documents already filed stay where they are.</p>
+          {!deleting.learned && <p className="hint">{visible(rewriteNote("Deleting", deleting.file))}</p>}
         </Sheet>
       )}
     </section>

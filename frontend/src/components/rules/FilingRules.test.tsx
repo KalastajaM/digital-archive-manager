@@ -108,6 +108,19 @@ describe("FilingRules", () => {
     await waitFor(() => expect(ofMethod(calls, "DELETE", "/api/rules/bank")).toHaveLength(1));
   });
 
+  it("deleting a rule from a hand-written file says the file is rewritten", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Delete rule manual" }));
+    const ask = await screen.findByRole("dialog", { name: /Delete rule manual/ });
+    expect(within(ask).getByText(/Deleting rewrites my-rules\.toml/)).toHaveTextContent(
+      "Deleting rewrites my-rules.toml, so the comments in it are lost. A copy of the old file is kept next to it (.bak).",
+    );
+    await user.click(within(ask).getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Delete rule bank" }));
+    const learned = await screen.findByRole("dialog", { name: /Delete rule bank/ });
+    expect(within(learned).queryByText(/rewrites/)).toBeNull();
+  });
+
   it("tests a document against the rules", async () => {
     const { calls, user } = setup(DATA(), {
       "POST /api/rules/explain": {

@@ -50,6 +50,7 @@ describe("RuleSheet", () => {
     expect(within(sheet).getByRole("button", { name: "kotihoito" })).toHaveAttribute("aria-pressed", "true");
     expect(within(sheet).getByRole("button", { name: "lasku" })).toHaveAttribute("aria-pressed", "false");
     expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/2026/a.pdf");
+    expect(within(sheet).getByText("Any ticked word is enough; more words catch more documents.")).toBeInTheDocument();
     expect(await within(sheet).findByText(/Matches 4 documents you filed before: 3 would land exactly where they are\./)).toBeInTheDocument();
     expect(within(sheet).getByText("10. Financial/a.pdf → 20. Health/2026/a.pdf")).toBeInTheDocument();
     expect(within(sheet).getByText("It also catches 2 documents in the inbox now.")).toBeInTheDocument();
@@ -101,6 +102,38 @@ describe("RuleSheet", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
     expect(calls.find((c) => c.method === "PUT")?.url).toBe("/api/rules/kotihoito?replaces=kotihoito");
+  });
+
+  it("says that saving a rule from a hand-written file rewrites it and keeps a copy", async () => {
+    const own = (learned: boolean, file: string) => ({
+      id: "kotihoito",
+      file,
+      learned,
+      when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null },
+      then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
+      stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
+    });
+    setup(REPLAY, { initial: own(false, "my-rules.yaml"), filed: undefined });
+    const sheet = await screen.findByRole("dialog", { name: "Edit rule kotihoito" });
+    expect(within(sheet).getByText(/Saving rewrites my-rules\.yaml/)).toHaveTextContent(
+      "Saving rewrites my-rules.yaml, so the comments in it are lost. A copy of the old file is kept next to it (.bak).",
+    );
+  });
+
+  it("says nothing about rewriting for a learned rule", async () => {
+    setup(REPLAY, {
+      initial: {
+        id: "kotihoito",
+        file: "learned.yaml",
+        learned: true,
+        when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null },
+        then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
+        stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
+      },
+      filed: undefined,
+    });
+    await screen.findByRole("dialog", { name: "Edit rule kotihoito" });
+    expect(screen.queryByText(/rewrites/)).toBeNull();
   });
 
   it("unticking the only word disables Save and says why", async () => {

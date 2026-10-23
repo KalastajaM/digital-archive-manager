@@ -30,6 +30,10 @@ type Word = { word: string; ticked: boolean };
 type Text = { off: boolean; value: string };
 
 const isDraft = (r: RuleDraft | Rule): r is RuleDraft => "words" in r;
+
+/** What saving or deleting a rule kept in a file written by hand does to that file. */
+export const rewriteNote = (doing: "Saving" | "Deleting", file: string) =>
+  `${doing} rewrites ${file}, so the comments in it are lost. A copy of the old file is kept next to it (.bak).`;
 const text = (value: string | null): Text => ({ off: value === null, value: value ?? "" });
 
 /** The sheet an offer on the filed toast opens. "Make a rule…" starts from the draft;
@@ -253,6 +257,7 @@ export function RuleSheet({
             }}
             onBlur={addWord}
           />
+          <p className="hint">Any ticked word is enough; more words catch more documents.</p>
         </div>
         {filed && (
           <p className="hint rule-filed">
@@ -315,6 +320,7 @@ export function RuleSheet({
             onRetry={run}
           />
         )}
+        {!draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}
         {error && <p className="error" role="alert">{visible(error)}</p>}
       </Sheet>
       {asking && (
