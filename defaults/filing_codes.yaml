@@ -1,0 +1,22 @@
+# Filing codes: a short code (1 to 4 letters or digits) that routes a document.
+# Edit freely; an invalid entry is reported and skipped.
+- code: A
+  label: To action
+  tray: to-action
+  inbox_folder: To action
+- code: P
+  label: To pay
+  tray: to-pay
+  inbox_folder: To pay
+- code: R
+  label: To read
+  tray: to-read
+  inbox_folder: To read
+- code: F
+  label: Follow-up
+  tray: follow-up
+  inbox_folder: Follow-up
+- code: D
+  label: File as suggested
+  as_suggested: true
+  inbox_folder: File as suggested

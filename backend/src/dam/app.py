@@ -9,6 +9,8 @@ from pathlib import Path
 from sqlalchemy import Engine, func, select
 
 from dam.ai.service import AIService
+from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
+from dam.codes.model import save_codes as write_codes
 from dam.collections.convert import OngoingConverter
 from dam.collections.convert_important import ImportantConverter
 from dam.collections.marks import MarkService
@@ -32,7 +34,7 @@ from dam.rules.model import Rule, RuleError, load_rules
 from dam.search import SearchHit, search
 from dam.services.activity import ActivityService
 from dam.services.browse import BrowseService
-from dam.services.errors import ArchiveUnavailable, NotConfigured
+from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotConfigured
 from dam.services.inbox import InboxService
 from dam.services.intake import IntakeService
 from dam.services.launch import LaunchService
@@ -87,6 +89,8 @@ class App:
     rule_errors: list[RuleError] = field(init=False, default_factory=list)
     tray_defs: list[TrayDef] = field(init=False, default_factory=list)
     tray_errors: list[RuleError] = field(init=False, default_factory=list)
+    codes: list[FilingCode] = field(init=False, default_factory=list)
+    code_problems: list[CodeProblem] = field(init=False, default_factory=list)
     # the last completed ``run_reminders`` result (for Today); None until a run in this
     # process. ``dam serve`` sets ``skipped`` on it when its latest check was skipped.
     last_reminders: RemindResult | None = field(init=False, default=None)
@@ -133,6 +137,7 @@ class App:
             self.collections,
             self.notes,
             self.scan_fields,
+            lambda: self.codes,
         )
         self.layout = LayoutService(
             self.paths,
@@ -263,11 +268,31 @@ class App:
         errors followed by the tray errors."""
         self.rules, self.rule_errors = load_rules(self.rules_dir)
         self.tray_defs, self.tray_errors = load_trays(self.trays_dir)
+        self.codes, self.code_problems = load_codes(
+            self.app_paths.filing_codes_path, {t.id for t in self.tray_defs}
+        )
+        # files in a code's inbox folder (``<inbox>/To pay``) are inbox files
+        self.repo.code_folders = {
+            c.inbox_folder.casefold(): c.code for c in self.codes if c.inbox_folder is not None
+        }
         try:
             self.trays.refresh_dates()
         except Exception:
             log.warning("recomputing tray item dates failed", exc_info=True)
         return [*self.rule_errors, *self.tray_errors]
+
+    def save_codes(self, codes: list[FilingCode]) -> list[CodeProblem]:
+        """Replace the code table with ``codes`` and reload. Raises ``InvalidRequest``
+        (nothing written) for a repeated code or inbox folder or an unknown tray."""
+        problems = check_table(codes, {t.id for t in self.tray_defs})
+        if problems:
+            raise InvalidRequest("; ".join(f"{p.code}: {p.message}" for p in problems))
+        try:
+            write_codes(self.app_paths.filing_codes_path, codes)
+        except OSError as e:
+            raise InvalidRequest(f"the codes could not be saved: {e}") from e
+        self.reload_rules()
+        return self.code_problems
 
     @property
     def dismissed_defaults_path(self) -> Path:

@@ -38,6 +38,11 @@ button.primary { background: var(--accent-fill); color: var(--on-accent); border
 button.primary:hover:not(:disabled) { background: var(--accent-hover); }
 button.primary:active:not(:disabled) { background: var(--accent-hover); }
 button:disabled { opacity: 0.45; cursor: default; }
+/* a link drawn as a button (opens a page in a new tab) */
+a.button-link { display: inline-flex; align-items: center; font-size: var(--fs-md); min-height: 24px; padding: 2px 11px; border: 0.5px solid var(--border-strong); border-radius: var(--r-md); background: var(--panel); color: var(--text); text-decoration: none; box-shadow: var(--shadow-button); transition: background var(--motion) var(--ease); }
+a.button-link:hover { background: var(--panel-2); }
+a.button-link.primary { background: var(--accent-fill); color: var(--on-accent); border-color: transparent; font-weight: 500; }
+a.button-link.primary:hover { background: var(--accent-hover); }
 :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
 
 /* Fields */
@@ -558,6 +563,24 @@ main:has(> .inbox) { padding: 0; min-height: 0; display: flex; }
 .batch-arrow { color: var(--muted); }
 .batch-to { font-weight: 500; overflow-wrap: anywhere; }
 .batch-note { color: var(--orange-text); font-size: var(--fs-sm); }
+/* "Reading filing codes…" beside File N marked while stickers are still read */
+.reading-codes { color: var(--muted); font-size: var(--fs-sm); align-self: center; white-space: nowrap; }
+/* File N marked: one row per coded inbox file, exactly what will be filed */
+.marked-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); }
+.marked-body > .hint, .marked-body > .error, .marked-body > .notice { margin: 0 0 var(--sp-3); }
+.marked-list { list-style: none; margin: 0; padding: 0; }
+.marked-row { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3) var(--sp-2); border-bottom: 0.5px solid var(--hairline); }
+.marked-row > input[type="checkbox"] { flex: none; margin-top: 14px; }
+.marked-row > .link-button { flex: none; margin-top: 2px; }
+.marked-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.marked-main p { margin: 0; }
+.marked-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.marked-to { font-weight: 600; overflow-wrap: anywhere; }
+.marked-meta { color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.marked-label { display: inline-block; min-width: 72px; color: var(--muted); }
+.marked-flagged .marked-to { color: var(--muted); }
+.marked-main > .marked-flag { margin-top: var(--sp-1); font-size: var(--fs-sm); align-self: flex-start; }
+.card-actions .card-link + .card-link { margin-left: var(--sp-2); }
 
 /* A preview that fills its pane: the zoom frame takes the height left. */
 .preview-fill { display: flex; flex-direction: column; }
@@ -1841,3 +1864,24 @@ button.primary.danger:hover:not(:disabled), button.primary.danger:active:not(:di
 .tray-add-file { white-space: nowrap; flex: none; }
 /* An AI action with its own words ("Summarize with AI…"): the sparkle before the text. */
 button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Settings: one section per area (filing codes first) */
+.settings { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) var(--sp-5) var(--sp-8); }
+.settings-body > section { max-width: 960px; margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
+.settings-body h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.filing-codes-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.filing-code-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--sp-2); align-items: end; padding-bottom: var(--sp-3); border-bottom: 0.5px solid var(--hairline); }
+.filing-code-row label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
+.filing-code-row label.check { flex-direction: row; align-items: center; gap: var(--sp-2); }
+.filing-code-row .hint { grid-column: 1 / -1; margin: 0; }
+.filing-codes-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.print-stickers-codes { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--sp-2); }
+.print-stickers-codes li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.print-stickers-codes input[type="number"] { width: 5rem; }
+.print-stickers-options, .print-stickers-custom { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--sp-2); align-items: end; margin-bottom: var(--sp-3); }
+.print-stickers-options > label, .print-stickers-custom > label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
+.print-stickers label.check { flex-direction: row; align-items: center; gap: var(--sp-2); margin: 0; }
+.sticker-marks { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); align-items: center; }
+.sticker-marks-title { flex-basis: 100%; font-size: var(--fs-sm); color: var(--muted); }
+.sticker-marks .notice { flex-basis: 100%; margin: 0; }

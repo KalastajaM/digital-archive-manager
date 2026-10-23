@@ -44,7 +44,8 @@ export function unexpectedDestinations(applied: ResolvedOp[], previewed: Resolve
   return destinations(applied).filter((dst) => !expected.has(dst));
 }
 
-/** What happens after the move: the tray item, collections and note. */
+/** What happens after the move: the tray item, collections, note, and the star and
+ * Important marks (a sticker's tick boxes). */
 export type FollowUps = {
   tray: string | null;
   /** Every value the form shows for the tray's fields ("" = cleared); ``{}`` lets the
@@ -52,6 +53,8 @@ export type FollowUps = {
   trayFields: TrayValues;
   collections: string[];
   note: string;
+  star?: boolean;
+  important?: boolean;
 };
 
 /** ``base`` plus its follow-ups; one left out means none (the server's default), so a
@@ -65,6 +68,8 @@ export function withFollowUps(base: FileRequest, follow: FollowUps): FileRequest
   if (follow.collections.length > 0) request.collections = follow.collections;
   const note = follow.note.trim(); // the server trims too: send what it will store
   if (note) request.note = note;
+  if (follow.star) request.star = true;
+  if (follow.important) request.important = true;
   return request;
 }
 
@@ -110,6 +115,8 @@ export function followUpLines(
   if (first.collections?.length) lines.push(`Add to collection: ${first.collections.join(", ")}`);
   const note = first.note?.trim();
   if (note) lines.push(`Note: ${note.length > NOTE_SHOWN ? `${note.slice(0, NOTE_SHOWN)}…` : note}`);
+  if (first.star) lines.push("Star it");
+  if (first.important) lines.push("Mark Important");
   return lines;
 }
 

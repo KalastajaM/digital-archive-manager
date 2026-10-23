@@ -1,18 +1,29 @@
 """File index repository."""
 
+import json
 import time
 from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from datetime import date
 from pathlib import PurePosixPath
 
 from sqlalchemy import Connection, Engine, and_, case, false, func, not_, or_, select, text, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from dam.codes.qr_model import QrRead
 from dam.core.paths import nfc
 from dam.db.engine import write_tx
-from dam.db.tables import file_barcodes, file_tags, file_text, files, item_files, items, tags
+from dam.db.tables import (
+    file_barcodes,
+    file_qr_codes,
+    file_tags,
+    file_text,
+    files,
+    item_files,
+    items,
+    tags,
+)
 from dam.extract.base import ExtractedText
 from dam.rules.model import fold
 
@@ -22,10 +33,18 @@ def ext_of(name: str, is_dir: bool | None) -> str | None:
     return None if is_dir else PurePosixPath(name).suffix.lower().lstrip(".")
 
 
-# the extensions the barcode pass reads (``read_barcodes``)
+# the extensions the barcode pass reads (``read_page1``)
 BARCODE_EXTS = ("pdf", "jpg", "jpeg", "png")
 
 PARKED = "/parked/"  # no archive-relative path starts with "/"
+
+# the rows the status counts and the inbox list count: no folders, links or parked rows
+_COUNTED = (files.c.is_dir.is_not(True), files.c.is_link.is_not(True), files.c.parked_at.is_(None))
+
+
+def _folded(path: str) -> str:
+    """``path`` compared the way the disk does: NFC and case-insensitive."""
+    return nfc(path).casefold()
 
 
 @dataclass
@@ -99,16 +118,70 @@ class FileRepo:
     def __init__(self, engine: Engine, inbox: str) -> None:
         self.engine = engine
         self.inbox = nfc(inbox)
+        self._inbox_fold = _folded(self.inbox.strip("/"))
+        # a filing code's inbox folder (folded name) -> its code; set by ``App`` after
+        # every load of the code table
+        self.code_folders: dict[str, str] = {}
         self._bound: Connection | None = None
 
     def in_inbox(self, rec: FileRecord) -> bool:
-        """The file sits directly in the inbox folder (as ``counts`` and the inbox list
-        count it), not in a subfolder."""
+        """The file sits directly in the inbox folder or in a filing code's inbox folder
+        (as ``counts`` and the inbox list count it), not deeper."""
         return self.in_inbox_path(rec.path_nfc)
 
     def in_inbox_path(self, path: str) -> bool:
-        """``path`` (archive-relative) is directly in the inbox folder, not deeper."""
-        return nfc(path).rpartition("/")[0] == self.inbox
+        """``path`` (archive-relative) is directly in the inbox folder or directly in a
+        filing code's inbox folder (``<inbox>/To pay``), not deeper. Compared folded
+        (NFC, case-insensitive), as the disk does."""
+        folder = _folded(path).rpartition("/")[0]
+        return folder == self._inbox_fold or self._code_of_folder(folder) is not None
+
+    def inbox_code_of(self, path: str) -> str | None:
+        """The code whose inbox folder directly holds ``path``, else None."""
+        return self._code_of_folder(_folded(path).rpartition("/")[0])
+
+    def _code_of_folder(self, folded: str) -> str | None:
+        above, _, name = folded.rpartition("/")
+        return self.code_folders.get(name) if above == self._inbox_fold else None
+
+    def inbox_files(self) -> list[FileRecord]:
+        """Files (no folders, links, missing or parked rows) directly in the inbox or in
+        a filing code's inbox folder, by path."""
+        with self._conn() as conn:
+            stmt = select(files).where(*_COUNTED, files.c.missing.is_not(True), self._under_inbox())
+            rows = conn.execute(stmt.order_by(files.c.path)).all()
+        return [r for r in map(_record, rows) if self.in_inbox_path(r.path_nfc)]
+
+    def codes_pending(self) -> int:
+        """How many inbox files (``in_inbox_path``) the barcode pass will still read for
+        QR stickers: a type it reads and no sticker reading for the current content (no
+        hash yet counts). Files that failed to index or are unsupported are never read,
+        so they are not waited for."""
+        qr_read = (
+            select(file_qr_codes.c.drive_id)
+            .where(
+                file_qr_codes.c.drive_id == files.c.drive_id,
+                file_qr_codes.c.sha256 == files.c.sha256,
+            )
+            .exists()
+        )
+        with self._conn() as conn:
+            stmt = select(files.c.path_nfc).where(
+                *_COUNTED,
+                files.c.missing.is_not(True),
+                self._under_inbox(),
+                files.c.ext.in_(BARCODE_EXTS),
+                files.c.index_state.in_(["pending", "indexed"]),
+                not_(qr_read),
+            )
+            paths = conn.execute(stmt).scalars().all()
+        return sum(1 for path in paths if self.in_inbox_path(path))
+
+    def _under_inbox(self):
+        """Every row below the inbox, at any depth, matching it up to ASCII case (LIKE);
+        callers keep those ``in_inbox_path`` accepts. The inbox is small."""
+        esc = self.inbox.strip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return files.c.path_nfc.like(esc + "/%", escape="\\")
 
     @staticmethod
     def record_from_row(row) -> FileRecord:
@@ -131,6 +204,7 @@ class FileRepo:
         """Run several repo calls in one DB transaction (batched scanner writes)."""
         with write_tx(self.engine) as conn:
             bound = FileRepo(self.engine, self.inbox)
+            bound.code_folders = self.code_folders
             bound._bound = conn
             yield bound
 
@@ -266,36 +340,28 @@ class FileRepo:
         """File counts for the status view (folders, links and parked rows not counted).
 
         One key per ``index_state`` of the present (not missing) files, plus ``total``
-        (present files), ``inbox`` (present files directly in the inbox) and ``missing``.
+        (present files), ``inbox`` (present files directly in the inbox or in a filing
+        code's inbox folder, as ``inbox_files``) and ``missing``.
         """
-        prefix = self.inbox + "/"
-        rest = func.substr(files.c.path_nfc, len(prefix) + 1)
-        in_inbox = and_(
-            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix, func.instr(rest, "/") == 0
-        )
         present = files.c.missing.is_not(True)
         stmt = (
             select(
                 files.c.index_state,
                 func.sum(case((present, 1), else_=0)),
-                func.sum(case((and_(present, in_inbox), 1), else_=0)),
                 func.sum(case((present, 0), else_=1)),
             )
-            .where(
-                files.c.is_dir.is_not(True),
-                files.c.is_link.is_not(True),
-                files.c.parked_at.is_(None),
-            )
+            .where(*_COUNTED)
             .group_by(files.c.index_state)
         )
+        under = select(files.c.path_nfc).where(*_COUNTED, present, self._under_inbox())
         out: dict[str, int] = {"total": 0, "inbox": 0, "missing": 0}
         with self._conn() as conn:
-            for state, n, inbox, missing in conn.execute(stmt).all():
+            for state, n, missing in conn.execute(stmt).all():
                 if n:
                     out[state] = n
                 out["total"] += n
-                out["inbox"] += inbox
                 out["missing"] += missing
+            out["inbox"] = sum(1 for p in conn.execute(under).scalars() if self.in_inbox_path(p))
         return out
 
     def text_for(self, drive_id: str) -> str:
@@ -339,10 +405,48 @@ class FileRepo:
             )
         return True
 
+    def qr_for(self, drive_id: str) -> list[QrRead]:
+        """The QR stickers read from the file's current content; ``[]`` if none were
+        found or none were read (or they were read from content the file no longer has)."""
+        with self._conn() as conn:
+            reads = conn.execute(
+                select(file_qr_codes.c.reads)
+                .join(files, files.c.drive_id == file_qr_codes.c.drive_id)
+                .where(
+                    file_qr_codes.c.drive_id == drive_id,
+                    files.c.sha256 == file_qr_codes.c.sha256,
+                )
+            ).scalar()
+        return [QrRead(**r) for r in json.loads(reads)] if reads else []
+
+    def save_qr(self, drive_id: str, sha256: str, reads: Sequence[QrRead]) -> bool:
+        """Record the QR stickers read from content ``sha256`` (``[]``: none found). Not
+        saved (False) when the file's content is no longer ``sha256``."""
+        with self._conn(write=True) as conn:
+            current = conn.execute(
+                select(files.c.sha256).where(files.c.drive_id == drive_id)
+            ).scalar()
+            if current is None or current != sha256:
+                return False
+            stmt = sqlite_insert(file_qr_codes).values(
+                drive_id=drive_id,
+                sha256=sha256,
+                reads=json.dumps([asdict(r) for r in reads]),
+                read_at=time.time(),
+            )
+            conn.execute(
+                stmt.on_conflict_do_update(
+                    index_elements=["drive_id"],
+                    set_={c: stmt.excluded[c] for c in ("sha256", "reads", "read_at")},
+                )
+            )
+        return True
+
     def next_for_barcodes(
         self, limit: int, tray_ids: Collection[str], skip: Collection[str] = ()
     ) -> list[FileRecord]:
-        """Indexed PDFs and images with no barcode reading for their current content:
+        """Indexed PDFs and images with no barcode reading for their current content
+        (or, in the inbox, no QR sticker reading for it: files read before 0026):
         inbox files first, then the files of open items in ``tray_ids``, by path.
         ``skip``: drive ids to leave out (reads that timed out, waiting to retry)."""
         in_inbox = self._in_inbox()
@@ -359,6 +463,14 @@ class FileRepo:
             )
             .exists()
         )
+        qr_read = (
+            select(file_qr_codes.c.drive_id)
+            .where(
+                file_qr_codes.c.drive_id == files.c.drive_id,
+                file_qr_codes.c.sha256 == files.c.sha256,
+            )
+            .exists()
+        )
         stmt = (
             select(files)
             .where(
@@ -370,7 +482,7 @@ class FileRepo:
                 files.c.sha256.is_not(None),
                 files.c.ext.in_(BARCODE_EXTS),
                 or_(in_inbox, in_items),
-                not_(read),
+                or_(not_(read), and_(in_inbox, not_(qr_read))),
                 files.c.drive_id.not_in(list(skip)),
             )
             .order_by(in_inbox.desc(), files.c.path)
@@ -405,6 +517,7 @@ class FileRepo:
         for drive_id in ids:
             conn.execute(file_tags.delete().where(file_tags.c.drive_id == drive_id))
             conn.execute(file_barcodes.delete().where(file_barcodes.c.drive_id == drive_id))
+            conn.execute(file_qr_codes.delete().where(file_qr_codes.c.drive_id == drive_id))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
             conn.execute(files.delete().where(files.c.drive_id == drive_id))
@@ -471,10 +584,10 @@ class FileRepo:
 
     def rekey(self, old_id: str, new_id: str) -> None:
         """Replace a synthetic id by the real one, carrying text, fts, tags and the
-        barcode along."""
+        barcode and QR sticker reads along."""
         with self._conn(write=True) as conn:
             conn.exec_driver_sql("PRAGMA defer_foreign_keys = ON")
-            for table in (file_text, file_tags, file_barcodes, files):
+            for table in (file_text, file_tags, file_barcodes, file_qr_codes, files):
                 conn.execute(
                     update(table).where(table.c.drive_id == old_id).values(drive_id=new_id)
                 )

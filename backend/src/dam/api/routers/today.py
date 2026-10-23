@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from dam.api.deps import AppDep
 from dam.api.marks import with_marks
 from dam.api.schemas import TodayOut
+from dam.codes.batch import marked_count
 
 router = APIRouter(prefix="/api", tags=["today"])
 
@@ -31,4 +32,6 @@ def today(app: AppDep) -> dict:
         "inbox_stats": app.today.inbox_stats(day, inbox),
         "found": with_marks(app, app.today.found_in_inbox(day, inbox)),
         "open_items": app.today.open_items(),
+        "marked": marked_count(app, inbox),
+        "reading_codes": app.repo.codes_pending() if app.codes else 0,
     }

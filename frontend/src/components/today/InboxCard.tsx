@@ -195,9 +195,21 @@ export function InboxCard({ data, frame }: { data: TodayData; frame?: CardFrame 
       headerProps={frame?.headerProps}
       actions={
         stats.count > 0 && (
-          <Link className="card-link" to="/inbox">
-            Start filing
-          </Link>
+          <>
+            {data.marked > 0 && (
+              <Link className="card-link" to="/inbox?marked=1" title="File every inbox file with a filing code, in one batch">
+                File {data.marked} marked
+              </Link>
+            )}
+            {data.reading_codes > 0 && (
+              <span className="reading-codes" role="status">
+                Reading filing codes…
+              </span>
+            )}
+            <Link className="card-link" to="/inbox">
+              Start filing
+            </Link>
+          </>
         )
       }
     >

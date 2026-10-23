@@ -6,6 +6,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import PurePosixPath
+from typing import Literal
 
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
@@ -18,6 +19,20 @@ _COPY_MARKER = re.compile(r"(?:\s*\(\d{1,3}\))+\s*$")
 _ALLOWED_KEYS = frozenset({"doc_date", "year", "stem"})
 _REGEX_TIMEOUT = 0.2
 _BIG_NUMBER = re.compile(r"\d{4,}")
+
+
+@dataclass
+class CodeHit:
+    """A filing code found for a file: by the inbox folder it is in, a pen mark or a QR
+    sticker. ``raw`` is what was read (pen, QR); ``unclear``: the reading is uncertain.
+
+    It belongs with ``dam.codes.apply`` (which re-exports it) and lives here only to
+    avoid an import cycle (``dam.codes.model`` imports this module)."""
+
+    code: str
+    via: Literal["folder", "pen", "qr"]
+    raw: str | None = None
+    unclear: bool = False
 
 
 @dataclass
@@ -36,6 +51,23 @@ class Suggestion:
     name_source: str = "scan"
     folder_source: str | None = None
     tag_sources: dict[str, str] = field(default_factory=dict)
+    # filled by filing codes (``dam.codes.apply``): sources are "code:<CODE>"
+    collections: list[str] = field(default_factory=list)
+    tray_source: str | None = None
+    collection_sources: dict[str, str] = field(default_factory=dict)
+    codes: list[CodeHit] = field(default_factory=list)
+    # two codes gave different values for the folder, name or tray (the first is kept)
+    conflict: bool = False
+    # the folder the rules (or similar files) gave before codes were applied; the AI
+    # exclusion guard checks it as well as ``folder`` (None: no code was applied)
+    folder_before_codes: str | None = None
+    # a QR sticker's tick boxes (``dam.codes.apply.apply_ticks``): True when a sticker
+    # has the box ticked, False when every boxed sticker has it empty, None when no
+    # sticker has boxes or the box could not be read; ``marks_unclear``: a box could not
+    # be read (and no other sticker has it ticked)
+    star: bool | None = None
+    important: bool | None = None
+    marks_unclear: bool = False
 
 
 class TemplateError(ValueError):
@@ -68,12 +100,18 @@ def _parent(rel: str) -> str:
     return "" if parent == "." else parent
 
 
-def _matches(rule: Rule, rec: FileRecord, folded_text: str) -> tuple[bool, bool]:
-    """Return ``(matched, regex_timed_out)``."""
+def _matches(
+    rule: Rule, rec: FileRecord, folded_text: str, inbox_alias: str | None = None
+) -> tuple[bool, bool]:
+    """Return ``(matched, regex_timed_out)``. ``folder_is`` matches the file's real
+    folder, or ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder)."""
     when = rule.when
     if when.folder_is is not None:
         want = nfc(when.folder_is).strip("/").casefold()
-        if nfc(_parent(rec.path)).casefold() != want:
+        here = {nfc(_parent(rec.path)).casefold()}
+        if inbox_alias is not None:
+            here.add(nfc(inbox_alias).strip("/").casefold())
+        if want not in here:
             return False, False
     if rule._folded_terms and not any(t in folded_text for t in rule._folded_terms):
         return False, False
@@ -142,12 +180,30 @@ def _render_name(template: str, doc_date: date | None, stem: str, ext: str) -> s
     return _fit(name, "", "." + ext if ext else "")
 
 
+def _stem(name: str, suffix: str) -> str:
+    raw_stem = name[: -len(suffix)] if suffix and name.lower().endswith(suffix) else name
+    return clean_stem(raw_stem) or "document"
+
+
+def stem_and_ext(rec: FileRecord) -> tuple[str, str, str]:
+    """The ``{stem}`` templates see for ``rec``, its lower-case extension (no dot) and
+    the file's own name (mojibake fixed), as ``suggest`` computes them. The name is
+    what the naming-convention check looks at, never the suggested (dated) name."""
+    ext = (rec.ext or "").lower()
+    name = fix_mojibake(rec.name or PurePosixPath(rec.path).name)
+    return _stem(name, f".{ext}" if ext else ""), ext, name
+
+
 def suggest(
     rec: FileRecord,
     text: str,
     rules: list[Rule],
     special: SpecialFolders | None = None,
+    inbox_alias: str | None = None,
 ) -> Suggestion:
+    """``inbox_alias``: for a file directly in a filing code's inbox folder, the inbox,
+    so a rule whose ``folder_is`` is the inbox matches it as well (a rule naming the
+    code's folder itself still matches only that folder)."""
     special = special or SpecialFolders()
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
@@ -169,13 +225,12 @@ def suggest(
             doc_date = None
 
     name = fix_mojibake(name)
-    raw_stem = name[: -len(suffix)] if suffix and name.lower().endswith(suffix) else name
-    stem = clean_stem(raw_stem) or "document"
+    stem = _stem(name, suffix)
 
     folded_text = fold(text)
     matching: list[Rule] = []
     for r in rules:
-        ok, timed_out = _matches(r, rec, folded_text)
+        ok, timed_out = _matches(r, rec, folded_text, inbox_alias)
         if timed_out:
             sources.append(f"rule:{r.id} (regex timeout)")
         elif ok:
@@ -219,7 +274,8 @@ def suggest(
         final = prefix + _fit(stem, prefix, suffix) + suffix
 
     # tray and payee come from one rule, never mixed: the one that gave the folder,
-    # else (no rule gave one) the first matching rule that names a tray or a payee
+    # else (no rule gave one) the first matching rule that names a tray or a payee.
+    # (A filing code may later replace the tray and keep this payee: ``apply_codes``.)
     tray_rule = folder_rule or next(
         (r for r in matching if r.then.tray is not None or r.then.payee is not None), None
     )
@@ -236,4 +292,5 @@ def suggest(
         name_source=f"rule:{name_rule.id}" if name_rule is not None else "scan",
         folder_source=f"rule:{folder_rule.id}" if folder_rule is not None else None,
         tag_sources=tag_sources,
+        tray_source=f"rule:{tray_rule.id}" if tray_rule and tray_rule.then.tray else None,
     )

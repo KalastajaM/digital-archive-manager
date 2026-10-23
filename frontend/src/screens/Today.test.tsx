@@ -1,7 +1,7 @@
 import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { act, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttentionItem, Item, Today as TodayData, TrayDef } from "../api/client";
 import { AgeBar } from "../components/AgeBar";
@@ -148,6 +148,8 @@ const TODAY: TodayData = {
     { tray_id: "to-action", items: [ACTION] },
     { tray_id: "to-read", items: [READ] },
   ],
+  marked: 0,
+  reading_codes: 0,
 };
 
 const FOUND = {
@@ -573,6 +575,34 @@ describe("Today", () => {
     ).toEqual(["10 this week", "5 last week", "20 older"]);
     expect(within(inbox).getByRole("link", { name: "Start filing" })).toHaveAttribute("href", "/inbox");
     expect(within(inbox).queryByRole("list", { name: "Found in the inbox" })).not.toBeInTheDocument();
+  });
+
+  it("the Inbox card's File N marked opens the marked panel, and is hidden when none are marked", async () => {
+    const { user } = renderToday({ "GET /api/today": { body: { ...TODAY, marked: 3 } } });
+    const inbox = await screen.findByRole("region", { name: "Inbox" });
+    const link = within(inbox).getByRole("link", { name: "File 3 marked" });
+    expect(link).toHaveAttribute("href", "/inbox?marked=1");
+    await user.click(link);
+    expect(screen.getByTestId("where")).toHaveTextContent("/inbox?marked=1");
+  });
+
+  it("the Inbox card has no File N marked when no file is marked", async () => {
+    renderToday();
+    const inbox = await screen.findByRole("region", { name: "Inbox" });
+    expect(within(inbox).queryByRole("link", { name: /marked/ })).not.toBeInTheDocument();
+    expect(within(inbox).queryByText("Reading filing codes…")).not.toBeInTheDocument();
+  });
+
+  it("the Inbox card says Reading filing codes… while stickers are read, beside File N marked or alone", async () => {
+    renderToday({ "GET /api/today": { body: { ...TODAY, marked: 2, reading_codes: 1 } } });
+    let inbox = await screen.findByRole("region", { name: "Inbox" });
+    expect(within(inbox).getByRole("link", { name: "File 2 marked" })).toBeInTheDocument();
+    expect(within(inbox).getByText("Reading filing codes…")).toHaveAttribute("role", "status");
+    cleanup();
+    renderToday({ "GET /api/today": { body: { ...TODAY, marked: 0, reading_codes: 3 } } });
+    inbox = await screen.findByRole("region", { name: "Inbox" });
+    expect(within(inbox).queryByRole("link", { name: /marked/ })).not.toBeInTheDocument();
+    expect(within(inbox).getByText("Reading filing codes…")).toBeInTheDocument();
   });
 
   it("an empty inbox says so, without a bar", async () => {

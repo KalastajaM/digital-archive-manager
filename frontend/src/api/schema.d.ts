@@ -1952,6 +1952,165 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/filing-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Codes
+         * @description The loaded codes, entries of the file that were skipped (``problems``) and codes
+         *     that look like each other (``warnings``).
+         */
+        get: operations["list_codes_api_filing_codes_get"];
+        /**
+         * Replace Codes
+         * @description Replace the whole table (the old file is kept as a backup); 400 with the reason
+         *     if any code is invalid, repeated or names an unknown tray.
+         */
+        put: operations["replace_codes_api_filing_codes_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filing-codes/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Code Folders
+         * @description The codes' inbox folders that are missing, and inbox subfolders that are no code's.
+         */
+        get: operations["code_folders_api_filing_codes_folders_get"];
+        put?: never;
+        /**
+         * Create Code Folders
+         * @description Make the missing code folders in the inbox: journaled, undoable while empty.
+         */
+        post: operations["create_code_folders_api_filing_codes_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filing-codes/folders/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Code Folders Preview
+         * @description The folders "Create the folders" would make. Changes nothing.
+         */
+        post: operations["code_folders_preview_api_filing_codes_folders_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filing-codes/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Batch
+         * @description The File N marked rows: each inbox file with a filing code, the request that files
+         *     it (post the ticked ones to ``/api/inbox/file``) and a flag when it needs a look.
+         *     Changes nothing.
+         */
+        get: operations["batch_api_filing_codes_batch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filing-codes/sheets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sheet Layouts
+         * @description The sticker sheet layouts: the built-in ones, then the saved custom one (id
+         *     ``custom``) if there is one.
+         */
+        get: operations["sheet_layouts_api_filing_codes_sheets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filing-codes/sheets/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Custom Sheet
+         * @description Save the custom sheet layout (the old file is kept as a backup); 400 with the
+         *     reason if the labels do not fit an A4 page or are too small for a sticker.
+         */
+        put: operations["save_custom_sheet_api_filing_codes_sheets_custom_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/filing-codes/sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sticker Sheet Page
+         * @description The sticker sheet (HTML, A4) as a page to open in its own tab and print.
+         *     ``codes``: ``P:12,A:3``; ``start_at``: the first label (1-based); ``boxes`` (default
+         *     true), ``blank_labels`` and ``outlines_only`` (the test print): true or false. Its own
+         *     Content-Security-Policy allows its inline styles and nothing else. A 400 (an unknown
+         *     code or layout, a start label off the sheet, a negative count, nothing to print or
+         *     more than 2000 stickers) is a small HTML page saying why. Changes nothing.
+         */
+        get: operations["sticker_sheet_page_api_filing_codes_sheet_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/archives": {
         parameters: {
             query?: never;
@@ -2437,6 +2596,30 @@ export interface components {
             /** Index Error */
             index_error: string | null;
         };
+        /**
+         * BatchRowOut
+         * @description A row of the File N marked batch: an inbox file with a filing code, the request
+         *     that files it and the tray fields that will be stored. ``flag``: why the row starts
+         *     unticked (``unclear``: a code or a sticker's tick box read uncertainly,
+         *     ``conflict``: codes disagree, ``needs_input``: the filing would be refused);
+         *     ``problem`` says what to fix ("folder", "Tick box unclear: star", a required tray
+         *     field such as "due date", or the refusal).
+         */
+        BatchRowOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Codes */
+            codes: components["schemas"]["CodeHitOut"][];
+            request: components["schemas"]["FileRequestOut"];
+            /** Tray Fields */
+            tray_fields: {
+                [key: string]: string;
+            };
+            /** Flag */
+            flag: ("unclear" | "conflict" | "needs_input") | null;
+            /** Problem */
+            problem: string | null;
+        };
         /** BatchSummaryOut */
         BatchSummaryOut: {
             /** Batch Id */
@@ -2487,6 +2670,38 @@ export interface components {
             done: boolean;
             /** Position */
             position: number;
+        };
+        /**
+         * CodeHitOut
+         * @description A filing code found for a file: by its inbox folder, a pen mark or a QR sticker.
+         *     ``raw``: what was read (pen, QR); ``unclear``: the reading is uncertain.
+         */
+        CodeHitOut: {
+            /** Code */
+            code: string;
+            /**
+             * Via
+             * @enum {string}
+             */
+            via: "folder" | "pen" | "qr";
+            /** Raw */
+            raw: string | null;
+            /** Unclear */
+            unclear: boolean;
+        };
+        /** CodeProblemOut */
+        CodeProblemOut: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** CodeWarningOut */
+        CodeWarningOut: {
+            /** Code */
+            code: string;
+            /** Confusable With */
+            confusable_with: string[];
         };
         /**
          * CollectionChangeOut
@@ -2993,6 +3208,44 @@ export interface components {
              * @default
              */
             note: string;
+            /**
+             * Star
+             * @default false
+             */
+            star: boolean;
+            /**
+             * Important
+             * @default false
+             */
+            important: boolean;
+        };
+        /**
+         * FileRequestOut
+         * @description A filing request as ``POST /api/inbox/file`` takes it (``FileRequestIn``).
+         */
+        FileRequestOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Name */
+            name: string;
+            /** Folder */
+            folder: string;
+            /** Tags */
+            tags: string[];
+            /** Tray */
+            tray: string | null;
+            /** Tray Fields */
+            tray_fields: {
+                [key: string]: string;
+            };
+            /** Collections */
+            collections: string[];
+            /** Note */
+            note: string;
+            /** Star */
+            star: boolean;
+            /** Important */
+            important: boolean;
         };
         /**
          * FileSuggestionsOut
@@ -3058,6 +3311,70 @@ export interface components {
         FileTagsOut: {
             /** Tags */
             tags: string[];
+        };
+        /** FilingCodeFoldersOut */
+        FilingCodeFoldersOut: {
+            /** Missing */
+            missing: string[];
+            /** Stray */
+            stray: string[];
+        };
+        /** FilingCodeIn */
+        FilingCodeIn: {
+            /** Code */
+            code: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /** Tray */
+            tray?: string | null;
+            /** Folder */
+            folder?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Collections */
+            collections?: string[];
+            /**
+             * As Suggested
+             * @default false
+             */
+            as_suggested: boolean;
+            /** Inbox Folder */
+            inbox_folder?: string | null;
+        };
+        /** FilingCodeOut */
+        FilingCodeOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Tray */
+            tray: string | null;
+            /** Folder */
+            folder: string | null;
+            /** Name */
+            name: string | null;
+            /** Tags */
+            tags: string[];
+            /** Collections */
+            collections: string[];
+            /** As Suggested */
+            as_suggested: boolean;
+            /** Inbox Folder */
+            inbox_folder: string | null;
+        };
+        /** FilingCodesOut */
+        FilingCodesOut: {
+            /** Codes */
+            codes: components["schemas"]["FilingCodeOut"][];
+            /** Problems */
+            problems: components["schemas"]["CodeProblemOut"][];
+            /** Warnings */
+            warnings: components["schemas"]["CodeWarningOut"][];
         };
         /**
          * FlatFilesOut
@@ -3514,7 +3831,7 @@ export interface components {
         /**
          * MemberAttentionOut
          * @description A member that needs attention: its open tray items, and whether it is still
-         *     directly in the inbox folder (not filed yet).
+         *     directly in the inbox or in a filing code's inbox folder (not filed yet).
          */
         MemberAttentionOut: {
             /** Drive Id */
@@ -3982,6 +4299,57 @@ export interface components {
              */
             item_count: number;
         };
+        /** SheetLayoutIn */
+        SheetLayoutIn: {
+            /** Name */
+            name: string;
+            /** Columns */
+            columns: number;
+            /** Rows */
+            rows: number;
+            /** Label W Mm */
+            label_w_mm: number;
+            /** Label H Mm */
+            label_h_mm: number;
+            /** Top Mm */
+            top_mm: number;
+            /** Left Mm */
+            left_mm: number;
+            /** Gap X Mm */
+            gap_x_mm: number;
+            /** Gap Y Mm */
+            gap_y_mm: number;
+            /**
+             * Cut Lines
+             * @default false
+             */
+            cut_lines: boolean;
+        };
+        /** SheetLayoutOut */
+        SheetLayoutOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Columns */
+            columns: number;
+            /** Rows */
+            rows: number;
+            /** Label W Mm */
+            label_w_mm: number;
+            /** Label H Mm */
+            label_h_mm: number;
+            /** Top Mm */
+            top_mm: number;
+            /** Left Mm */
+            left_mm: number;
+            /** Gap X Mm */
+            gap_x_mm: number;
+            /** Gap Y Mm */
+            gap_y_mm: number;
+            /** Cut Lines */
+            cut_lines: boolean;
+        };
         /** SpecialFoldersOut */
         SpecialFoldersOut: {
             /** Inbox */
@@ -4069,6 +4437,26 @@ export interface components {
             tag_sources: {
                 [key: string]: string;
             };
+            /** Tray */
+            tray: string | null;
+            /** Tray Source */
+            tray_source: string | null;
+            /** Collections */
+            collections: string[];
+            /** Collection Sources */
+            collection_sources: {
+                [key: string]: string;
+            };
+            /** Codes */
+            codes: components["schemas"]["CodeHitOut"][];
+            /** Conflict */
+            conflict: boolean;
+            /** Star */
+            star: boolean | null;
+            /** Important */
+            important: boolean | null;
+            /** Marks Unclear */
+            marks_unclear: boolean;
         };
         /** SummaryBody */
         SummaryBody: {
@@ -4144,6 +4532,16 @@ export interface components {
             found: components["schemas"]["FoundOut"][];
             /** Open Items */
             open_items: components["schemas"]["TrayItemsOut"][];
+            /**
+             * Marked
+             * @default 0
+             */
+            marked: number;
+            /**
+             * Reading Codes
+             * @default 0
+             */
+            reading_codes: number;
         };
         /** TrayCountOut */
         TrayCountOut: {
@@ -14797,6 +15195,849 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_codes_api_filing_codes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilingCodesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    replace_codes_api_filing_codes_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilingCodeIn"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilingCodesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    code_folders_api_filing_codes_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilingCodeFoldersOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_code_folders_api_filing_codes_folders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResultOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    code_folders_preview_api_filing_codes_folders_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedOpOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    batch_api_filing_codes_batch_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchRowOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    sheet_layouts_api_filing_codes_sheets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SheetLayoutOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    save_custom_sheet_api_filing_codes_sheets_custom_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SheetLayoutIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SheetLayoutOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    sticker_sheet_page_api_filing_codes_sheet_get: {
+        parameters: {
+            query?: {
+                layout?: string;
+                codes?: string;
+                start_at?: string | null;
+                boxes?: string | null;
+                blank_labels?: string | null;
+                outlines_only?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
             /** @description Forbidden */

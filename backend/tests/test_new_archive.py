@@ -422,6 +422,19 @@ def test_user_rules_are_never_overwritten(blank):
     assert other.read_text(encoding="utf-8") == "- id: another\n"
 
 
+def test_the_examples_as_shipped_in_0_1_0_are_still_replaced(blank):
+    """The examples' comments changed after 0.1.0: an unedited 0.1.0 copy (any line
+    endings) still counts as the user's no rules."""
+    shipped = (layouts.DEFAULTS_DIR / "rules" / "00-examples.yaml").read_text(encoding="utf-8")
+    old_line = "#   folder_is:        folder the file currently sits in\n"
+    start = shipped.index("#   folder_is:")
+    end = shipped.index("# then:")
+    old = shipped[:start] + old_line + shipped[end:]
+    mine = blank.rules_dir / "00-examples.yaml"
+    mine.write_bytes(old.replace("\n", "\r\n").encode("utf-8"))
+    assert blank.layout.apply(household(blank)).rules_written is True
+
+
 # -- New folder ---------------------------------------------------------------------------------
 
 

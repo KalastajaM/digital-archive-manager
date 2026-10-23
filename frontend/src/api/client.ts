@@ -8,14 +8,35 @@ export type InboxEntry = Schemas["InboxEntryOut"];
 /** A scan field of a file: ``{kind, label, value}`` (``label`` only for ``custom``). */
 export type ScanField = Schemas["ScanFieldOut"];
 export type ScanFields = Schemas["ScanFieldsOut"];
-type FollowUps = "tray_fields" | "collections" | "note";
-/** A filing request; the tray/collection/note follow-ups are optional (server defaults). */
+type FollowUps = "tray_fields" | "collections" | "note" | "star" | "important";
+/** A filing request; the tray/collection/note/star/important follow-ups are optional
+ * (server defaults). */
 export type FileRequest = Omit<Schemas["FileRequestIn"], FollowUps> &
   Partial<Pick<Schemas["FileRequestIn"], FollowUps>>;
 export type FileBody = Omit<Schemas["FileBody"], "requests"> & { requests: FileRequest[] };
 export type ResolvedOp = Schemas["ResolvedOpOut"];
 export type FileItResult = Schemas["FileItResultOut"];
 export type BatchResult = Schemas["BatchResultOut"];
+export type FilingCode = Schemas["FilingCodeIn"];
+export type FilingCodes = Schemas["FilingCodesOut"];
+export type CodeHit = Schemas["CodeHitOut"];
+export type CodeFolders = Schemas["FilingCodeFoldersOut"];
+/** A sticker sheet layout (mm on an A4 page): the built-ins and the saved custom one. */
+export type SheetLayout = Schemas["SheetLayoutOut"];
+export type SheetLayoutIn = Schemas["SheetLayoutIn"];
+/** What to print: a count per code, the layout and the options. */
+/** The sticker sheet's options: the query of ``GET /api/filing-codes/sheet``
+ * (``stickerSheetUrl``); how many stickers of each code, in print order. */
+export type StickerSheet = {
+  codes: Record<string, number>;
+  layout: string;
+  start_at: number;
+  boxes: boolean;
+  blank_labels: boolean;
+  outlines_only: boolean;
+};
+/** A row of the File N marked batch: its codes, the request that files it and a flag. */
+export type BatchRow = Schemas["BatchRowOut"];
 export type UndoResult = Schemas["UndoResultOut"];
 export type Status = Schemas["StatusOut"];
 // several archives (profiles)
@@ -262,6 +283,9 @@ const keys = {
   file: ["file"],
   ai: ["ai"],
   fileFields: ["file-fields"],
+  filingCodes: ["filing-codes"],
+  // under the inbox's key: whatever reloads the inbox reloads the marked batch too
+  markedBatch: ["inbox", "marked"],
 } as const;
 
 const enc = encodeURIComponent;
@@ -591,8 +615,14 @@ export const useRecovery = () => {
 
 // -- Phase 2: Today, trays and items -------------------------------------------
 
+/** Today, fetched again every few seconds while the barcode pass still reads inbox
+ * files for QR stickers (``reading_codes``): its progress moves no status count. */
 export const useToday = () =>
-  useQuery({ queryKey: keys.today, queryFn: () => get<Today>("/api/today") });
+  useQuery({
+    queryKey: keys.today,
+    queryFn: () => get<Today>("/api/today"),
+    refetchInterval: (query) => ((query.state.data?.reading_codes ?? 0) > 0 ? 3000 : false),
+  });
 
 /** Today counts the inbox and what indexing found in it: fetch it again whenever the
  * polled status's inbox count or indexing progress changes (a scan found or lost a
@@ -1293,6 +1323,83 @@ export const useAIExcludeFolders = () => {
     onSettled: () => void client.invalidateQueries({ queryKey: keys.ai }),
   });
 };
+
+/** The File N marked rows (dry runs on the server, nothing changes). */
+export const useMarkedBatch = () =>
+  useQuery({ queryKey: keys.markedBatch, queryFn: () => get<BatchRow[]>("/api/filing-codes/batch") });
+
+/** The filing codes table, the entries of the file that were skipped (``problems``) and
+ * codes that look like each other (``warnings``). */
+export const useFilingCodes = () =>
+  useQuery({ queryKey: keys.filingCodes, queryFn: () => get<FilingCodes>("/api/filing-codes") });
+
+/** Replace the whole table (the old file is kept as a backup); a 400 says why not. */
+export const useSaveFilingCodes = () => {
+  const client = useQueryClient();
+  const refresh = useRefresh(); // the inbox rows and Today read the codes
+  return useMutation({
+    mutationFn: (codes: FilingCode[]) => put<FilingCodes>("/api/filing-codes", codes),
+    onSuccess: (saved) => client.setQueryData(keys.filingCodes, saved),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.filingCodes }); // also the folders below it
+      refresh();
+    },
+  });
+};
+
+/** The codes' inbox folders that are missing, and inbox subfolders that are no code's. */
+export const useCodeFolders = () =>
+  useQuery({
+    queryKey: [...keys.filingCodes, "folders"],
+    queryFn: () => get<CodeFolders>("/api/filing-codes/folders"),
+  });
+
+/** What "Create inbox folders" would do (nothing changes on disk). */
+export const previewCodeFolders = () => post<ResolvedOp[]>("/api/filing-codes/folders/preview");
+
+/** Make the missing code folders in the inbox (one batch, undoable from Activity). */
+export const useCreateCodeFolders = () => {
+  const client = useQueryClient();
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: () => post<BatchResult>("/api/filing-codes/folders"),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.filingCodes });
+      refresh();
+    },
+  });
+};
+
+const sheetsKey = [...keys.filingCodes, "sheets"];
+
+/** The sticker sheet layouts: the built-ins, then the saved custom one (id ``custom``). */
+export const useSheetLayouts = () => useQuery({ queryKey: sheetsKey, queryFn: () => get<SheetLayout[]>("/api/filing-codes/sheets") });
+
+/** Save the custom sheet layout (the old file is kept as a backup); a 400 says why not
+ * (too small for a sticker, beyond an A4 page). */
+export const useSaveCustomSheet = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (layout: SheetLayoutIn) => put<SheetLayout>("/api/filing-codes/sheets/custom", layout),
+    onSettled: () => void client.invalidateQueries({ queryKey: sheetsKey }),
+  });
+};
+
+/** The sticker sheet page (``GET``, opened in its own tab; it carries a
+ * Content-Security-Policy of its own). ``codes`` go as ``P:12,A:3``. */
+export function stickerSheetUrl(sheet: StickerSheet): string {
+  const query = new URLSearchParams({
+    codes: Object.entries(sheet.codes)
+      .map(([code, n]) => `${code}:${n}`)
+      .join(","),
+    layout: sheet.layout,
+    start_at: String(sheet.start_at),
+    boxes: String(sheet.boxes),
+    blank_labels: String(sheet.blank_labels),
+    outlines_only: String(sheet.outlines_only),
+  });
+  return `/api/filing-codes/sheet?${query}`;
+}
 
 const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];
 

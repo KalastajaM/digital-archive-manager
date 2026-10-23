@@ -14,7 +14,8 @@ export type Call = {
   body: unknown;
 };
 
-type Reply = { status?: number; body: unknown };
+/** ``html``: answer that text as ``text/html`` instead of ``body`` as JSON. */
+type Reply = { status?: number; body?: unknown; html?: string };
 type Handler = Reply | ((call: Call) => Reply | Promise<Reply>);
 
 /** Replace global fetch with a router over "METHOD /path" keys; returns the recorded calls. */
@@ -43,6 +44,8 @@ export function mockFetch(routes: Record<string, Handler>): Call[] {
       }
       const reply = typeof handler === "function" ? await handler(call) : handler;
       if (reply.status === 204) return new Response(null, { status: 204 });
+      if (reply.html !== undefined)
+        return new Response(reply.html, { status: reply.status ?? 200, headers: { "Content-Type": "text/html" } });
       return new Response(JSON.stringify(reply.body), {
         status: reply.status ?? 200,
         headers: { "Content-Type": "application/json" },

@@ -100,8 +100,8 @@ with the `DAM_DATA_DIR` environment variable or `dam --data-dir <dir> ...` (the 
 before the command). To keep a test archive apart from your real one, add a second archive
 instead of juggling data folders.
 
-On first use `config/settings.yaml`, `config/rules/` and `config/trays/` are seeded from
-`defaults/`. The defaults contain nothing personal and **no archive folder**: dam never
+On first use `config/settings.yaml`, `config/rules/`, `config/trays/` and
+`config/filing_codes.yaml` are seeded from `defaults/`. The defaults contain nothing personal and **no archive folder**: dam never
 guesses where your documents are. You choose the folder once, either on the app's
 first-run screen (see the user guide) or with **`dam init`** in a terminal.
 
@@ -280,6 +280,9 @@ All in the data folder under `config/`:
   `ops_throttle_ms`, `server_port`, `ocr_languages`, `reminders` (`hour`, `mac`, `email`),
   `ai` (see AI setup).
 - `trays/*.yaml`: one tray per file (see Tray files).
+- `filing_codes.yaml`: the filing code table (see Filing codes file below).
+- `sticker_sheets.yaml`: the saved custom sticker sheet, if any (see Sticker sheet
+  layout below).
 - `rules/*.yaml`: filing rules, loaded in name order. A bad file is reported and
   skipped; rule ids must be unique across files. For folder and name the first matching
   rule wins; tags from all matching rules are merged. The seeded `00-examples.yaml`
@@ -294,7 +297,7 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
   when:                                  # all given conditions must match
     text_contains: ["acme benefits", "eläkekassa"]   # case/diacritics-insensitive
     filename_matches: "(?i)scan"         # optional regex on the file name
-    folder_is: "##. Organize"            # optional
+    folder_is: "##. Organize"            # optional; see below
   then:
     folder: "13. Taxes/{year}"           # templates: {doc_date:%Y%m%d}, {year}, {stem}
     name: "{doc_date:%Y%m%d}_Benefits"      # stem only; the extension is added
@@ -302,6 +305,10 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
     # tray: to-pay                       # optional: the tray it is guessed to belong in
     # payee: "Acme Benefits"        # optional: prefills the To pay tray's payee
 ```
+
+`folder_is` is the folder the file sits in. The inbox (`##. Organize`) also matches files
+directly in a filing code's inbox folder (such as `##. Organize/To pay`); naming a code's
+folder (`folder_is: "##. Organize/To pay"`) matches only the files in that folder.
 
 `then.tray` and `then.payee` come from the same rule as the folder (the first matching
 rule with a folder; if no rule gives a folder, the first matching rule that has either).
@@ -317,6 +324,59 @@ When a starter layout is applied and your rules folder holds no rules of your ow
 rules that point at the new folders (receipts to `Bills & Receipts/{year}`, tax letters
 to `Taxes/{year}`, ...); a rule whose folder you removed is left out. The Finland bank
 examples stay in that file, commented out. Rules you wrote are never touched.
+
+### Filing codes file
+
+`config/filing_codes.yaml` holds the filing codes (see the user guide, "Filing codes").
+It is seeded from `defaults/filing_codes.yaml` only while the file does not exist, so an
+update never changes your table, and a table you emptied stays empty. An install from
+before filing codes gets the seeded table on its first start with this version.
+
+```yaml
+- code: P                     # 1 to 4 letters or digits, unique; stored upper case
+  label: To pay               # at most 24 characters; shown in chips, the batch and on stickers
+  tray: to-pay                # a tray id (see Tray files)
+  inbox_folder: To pay        # its subfolder of the inbox; unique
+- code: V3
+  label: Car insurance
+  folder: "20. Vehicles/{year}"          # templates as in a rule's then.folder
+  name: "{doc_date:%Y%m%d}_Insurance"    # as in a rule's then.name; the extension is added
+  tags: ["car", "insurance"]
+  collections: ["Car"]                  # collection names as in the app (not Ongoing or Important)
+- code: D
+  label: File as suggested
+  as_suggested: true          # already handled: file where dam suggests, in no tray
+  inbox_folder: File as suggested
+```
+
+Every key but `code` is optional. An entry that is invalid, repeats a code or an inbox
+folder, or names a tray that does not exist is reported in Settings and skipped. The app
+rewrites the whole file when you save there (keeping the old one as
+`filing_codes.yaml.bak-<time>`), so comments you added by hand are not kept; entries
+that were skipped are dropped too, and Settings says so before you save.
+
+### Sticker sheet layout
+
+The built-in sheets (Avery Zweckform L7651 and plain paper) are part of dam. A custom
+sheet saved from Settings → Print stickers is written to `config/sticker_sheets.yaml`
+(the old file kept as a backup), one layout in mm on an A4 page:
+
+```yaml
+id: custom
+name: My labels
+columns: 5
+rows: 13
+label_w_mm: 38.1
+label_h_mm: 21.2
+top_mm: 10.7
+left_mm: 4.7
+gap_x_mm: 2.5
+gap_y_mm: 0.0
+cut_lines: false
+```
+
+A label must be at least about 31.7 × 14 mm to hold a sticker, and the grid must fit on
+the page. An invalid file is skipped (and logged), as if no custom sheet were saved.
 
 ## Tray files
 

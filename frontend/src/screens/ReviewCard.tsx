@@ -4,6 +4,7 @@ import { TipButton } from "../components/ui/TipButton";
 import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  type CodeHit,
   errorText,
   type FieldDef,
   type FileRequest,
@@ -11,6 +12,7 @@ import {
   type InboxEntry,
   type TrayDef,
   useFileLinks,
+  useFilingCodes,
   useTrays,
 } from "../api/client";
 import { AIRejected } from "../components/ai/AIBadge";
@@ -43,6 +45,7 @@ import {
   addTags,
   AI_SOURCE,
   aiNote,
+  type CodeLabel,
   FieldChips,
   type Offer,
   offersFor,
@@ -120,16 +123,30 @@ export function FilingMessage({ filing, ids, problem }: { filing: Filing; ids: s
 
 /** The trays (in order) and the tray picked on a card; a tray that vanished from the
  * list on a reload counts as none picked. */
-export function useTrayChoice() {
+export function useTrayChoice(initialId: string | null = null) {
   const trays = useTrays();
   const list: TrayDef[] = trays.data?.trays ?? [];
-  // Starts at Nothing. The review card is remounted for every entry, so a choice is
+  // Starts at Nothing (or the tray a filing code picked). The review card is remounted for every entry, so a choice is
   // never carried over to another file; the batch card keeps its choice while the
   // selection changes (it applies to the whole batch).
-  const [trayId, setTrayId] = useState<string | null>(null);
+  const [trayId, setTrayId] = useState<string | null>(initialId);
   const tray = list.find((t) => t.id === trayId) ?? null;
   const problem = trays.isError ? errorText(trays.error) : null;
   return { list, tray, setTrayId, problem };
+}
+
+/** How each code of a file was found, for a chip's "code:P" source: its inbox folder's name
+ * ("from folder To pay"), the pen mark or the sticker. */
+export function useCodeLabel(hits: CodeHit[]): CodeLabel {
+  const codes = useFilingCodes();
+  return (code) => {
+    const hit = hits.find((h) => h.code === code);
+    if (!hit) return `code \`${code}\``;
+    if (hit.via === "pen") return `from pen mark \`${code}\``;
+    if (hit.via === "qr") return `from sticker \`${code}\``;
+    const folder = codes.data?.codes.find((c) => c.code === code)?.inbox_folder;
+    return folder ? `from folder ${folder}` : `code \`${code}\``;
+  };
 }
 
 /** In place of the tray fields when the file already has an open item in that tray:
@@ -167,6 +184,47 @@ function AISummary({ summary, onUse }: { summary: string; onUse: () => void }) {
   );
 }
 
+/** The tick boxes a sticker has but that could not be read ("star", "important"). */
+export const unclearBoxes = (s: InboxEntry["suggestion"]): string[] =>
+  s.marks_unclear ? (["star", "important"] as const).filter((k) => s[k] === null) : [];
+
+/** What a QR sticker's tick boxes ask for once the file is filed (sent with the filing):
+ * shown only when a sticker set something. A box for a mark the file already has is
+ * not offered. */
+function StickerMarks(props: {
+  star: boolean;
+  important: boolean;
+  hasStar: boolean;
+  hasImportant: boolean;
+  unclear: string[];
+  onStar: (on: boolean) => void;
+  onImportant: (on: boolean) => void;
+}) {
+  const unclear = props.unclear.filter((k) => (k === "star" ? !props.hasStar : !props.hasImportant));
+  return (
+    <div className="field sticker-marks" role="group" aria-label="From the sticker">
+      <span className="sticker-marks-title">From the sticker</span>
+      {props.hasStar ? (
+        <span className="hint">already starred</span>
+      ) : (
+        <label className="check">
+          <input type="checkbox" checked={props.star} onChange={(e) => props.onStar(e.target.checked)} />
+          Star when filed
+        </label>
+      )}
+      {props.hasImportant ? (
+        <span className="hint">already Important</span>
+      ) : (
+        <label className="check">
+          <input type="checkbox" checked={props.important} onChange={(e) => props.onImportant(e.target.checked)} />
+          Mark Important when filed
+        </label>
+      )}
+      {unclear.length > 0 && <p className="notice">Tick box unclear: check {unclear.join(" and ")}</p>}
+    </div>
+  );
+}
+
 /** The card's Trash (bin) button: the inbox owns the flow. */
 export type CardTrash = { run: () => void; busy: boolean };
 
@@ -179,13 +237,22 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   const [name, setName] = useState(entry.suggestion.name);
   const [folder, setFolder] = useState(entry.suggestion.folder ?? "");
   const [tags, setTags] = useState(entry.suggestion.tags.join(", "));
-  const trays = useTrayChoice();
+  // A file with a filing code starts with the suggested tray, as File N marked files it (a
+  // code's tray, none for "file as suggested", else the rules' tray); on a file without a
+  // code a rule's or the heuristic's tray guess is not applied by itself.
+  const coded = entry.suggestion.codes.length > 0 || (entry.suggestion.tray_source?.startsWith("code:") ?? false);
+  const trays = useTrayChoice(coded ? entry.suggestion.tray : null);
   const tray = trays.tray;
+  const codeLabel = useCodeLabel(entry.suggestion.codes);
   // Per tray, the fields the user edited (switching trays back and forth keeps them).
   const [edits, setEdits] = useState<Record<string, TrayValues>>({});
-  const [collections, setCollections] = useState<string[]>([]);
+  const [collections, setCollections] = useState<string[]>(() => [...entry.suggestion.collections]);
   const [collectionText, setCollectionText] = useState("");
   const [note, setNote] = useState("");
+  // A QR sticker's tick boxes preselect these (an unclear box leaves it off and says so);
+  // a mark the file already has is not sent again.
+  const [star, setStar] = useState(entry.suggestion.star === true);
+  const [important, setImportant] = useState(entry.suggestion.important === true);
   // Set on the first Preview / File it: from then on a missing field is shown live.
   const [tried, setTried] = useState(false);
   // Narrow windows hide the preview pane (the form matters most); this shows it again.
@@ -292,6 +359,10 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
     setNote((old) => (old.trim() ? `${old.trimEnd()}\n\n${summary}` : summary));
   };
 
+  const fromSticker =
+    entry.suggestion.star === true || entry.suggestion.important === true || entry.suggestion.marks_unclear;
+  const hasStar = entry.record.marks.includes("starred");
+  const hasImportant = entry.record.marks.includes("important");
   const fieldProblem = missingField(name, folder);
   // A missing name or folder is shown on its field; the rest (a half-typed collection)
   // is the card's own message.
@@ -303,7 +374,14 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
     : [
         withFollowUps(
           { drive_id: entry.record.drive_id, name, folder, tags: parseTags(tags) },
-          { tray: alreadyIn ? null : (tray?.id ?? null), trayFields, collections, note },
+          {
+            tray: alreadyIn ? null : (tray?.id ?? null),
+            trayFields,
+            collections,
+            note,
+            star: star && !hasStar,
+            important: important && !hasImportant,
+          },
         ),
       ];
   filing.form.current = current; // stale previews are dropped against this
@@ -381,6 +459,11 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
         </div>
         <div className="proposal inspector">
           <FilingMessage filing={filing} ids={[entry.record.drive_id]} problem={tried && !fieldProblem ? otherProblem : null} />
+          {entry.suggestion.conflict && (
+            <p className="notice" role="status">
+              These filing codes disagree; pick the values here.
+            </p>
+          )}
           <AIHint what="for filing suggestions" />
           {ai.sheet}
           <LinkBadges driveId={entry.record.drive_id} />
@@ -402,7 +485,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
                 {fieldProblem.message}
               </p>
             )}
-            <FieldChips field="Name" offers={nameOffers} disabled={filing.busy} onUse={(o) => setName(o.value)} />
+            <FieldChips field="Name" offers={nameOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setName(o.value)} />
             {rejected("name", "name")}
           </div>
           <div className="field">
@@ -413,7 +496,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               onChange={setFolder}
               error={tried && fieldProblem?.field === "folder" ? fieldProblem.message : null}
             />
-            <FieldChips field="Folder" offers={folderOffers} disabled={filing.busy} onUse={(o) => setFolder(o.value)} />
+            <FieldChips field="Folder" offers={folderOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setFolder(o.value)} />
             {rejected("folder", "folder")}
           </div>
           <div className="field">
@@ -425,7 +508,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               disabled={filing.busy}
               passCmdEnter
             />
-            <FieldChips field="tag" offers={tagChips} disabled={filing.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
+            <FieldChips field="tag" offers={tagChips} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
             {rejected("tags", "tags")}
           </div>
           <hr />
@@ -461,6 +544,17 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
           />
           {answer?.summary.trim() && <AISummary summary={answer.summary} onUse={useSummaryAsNote} />}
           <NoteEditor value={note} onChange={setNote} />
+          {fromSticker && (
+            <StickerMarks
+              star={star}
+              important={important}
+              hasStar={hasStar}
+              hasImportant={hasImportant}
+              unclear={unclearBoxes(entry.suggestion)}
+              onStar={setStar}
+              onImportant={setImportant}
+            />
+          )}
           <hr />
           <DetectedFields entry={entry} />
           {/* After the form, so showing it never pushes the fields down; it sticks to the

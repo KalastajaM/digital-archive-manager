@@ -53,6 +53,12 @@ function entry(id: string, name: string, suggested: string, folder: string | nul
       name_source: "rule:kotihoito",
       folder_source: folder ? "rule:kotihoito" : null,
       tag_sources: { invoice: "rule:kotihoito" },
+      tray: null,
+      tray_source: null,
+      collections: [],
+      collection_sources: {},
+      codes: [],
+      conflict: false, star: null, important: null, marks_unclear: false,
     },
     text_excerpt: "Kotihoito lasku",
     prefill: {},
@@ -1845,5 +1851,145 @@ describe("Trash in the inbox", () => {
       const labels = Array.from(fields.querySelectorAll(".detected-label")).map((n) => n.textContent);
       expect(labels).toEqual(["Total", "Other amount 1", "Other amount 2"]);
     });
+  });
+});
+
+describe("Filing codes in the form", () => {
+  const FILING_CODES = {
+    codes: [
+      { code: "P", label: "To pay", tray: "to-pay", folder: null, name: null, tags: [], collections: [], as_suggested: false, inbox_folder: "To pay" },
+      { code: "D", label: "File as suggested", tray: null, folder: null, name: null, tags: [], collections: [], as_suggested: true, inbox_folder: "File as suggested" },
+    ],
+    problems: [],
+    warnings: [],
+  };
+  const coded = (suggestion: Partial<InboxEntry["suggestion"]>) => [
+    { ...ENTRIES[0], suggestion: { ...ENTRIES[0].suggestion, ...suggestion } },
+  ];
+  const FROM_P = {
+    tray: "to-pay",
+    tray_source: "code:P",
+    folder: "Bills/2026",
+    folder_source: "code:P",
+    collections: ["Legal"],
+    collection_sources: { Legal: "code:P" },
+    codes: [{ code: "P", via: "folder" as const, raw: null, unclear: false }],
+  };
+  const route = (suggestion: Partial<InboxEntry["suggestion"]>) => ({
+    "GET /api/inbox": { body: coded(suggestion) },
+    "GET /api/filing-codes": { body: FILING_CODES },
+  });
+
+  it("preselects the tray, the collections and names the folder a code came from", async () => {
+    await setup(route(FROM_P));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    await waitFor(() => expect(within(trayGroup).getByRole("button", { name: "To pay" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("button", { name: "Remove Legal" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Folder")).toHaveValue("Bills/2026");
+  });
+
+  it("labels a code's chip with the code's inbox folder", async () => {
+    const { user } = await setup(route({ ...FROM_P, tray_source: null, tray: null }));
+    await user.clear(screen.getByLabelText("Folder"));
+    expect(await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (from folder To pay)" })).toBeInTheDocument();
+  });
+
+  it("falls back to the plain code when the codes cannot be loaded", async () => {
+    const { user } = await setup({
+      ...route({ ...FROM_P, tray_source: null, tray: null }),
+      "GET /api/filing-codes": { status: 500, body: { error: "boom" } },
+    });
+    await user.clear(screen.getByLabelText("Folder"));
+    expect(await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (code `P`)" })).toBeInTheDocument();
+  });
+
+  it("starts with no tray for a file as suggested code", async () => {
+    await setup(route({ tray: null, tray_source: "code:D", codes: [{ code: "D", via: "folder", raw: null, unclear: false }] }));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("leaves the tray on Nothing for a rule's tray guess", async () => {
+    await setup(route({ tray: "to-pay", tray_source: "rule:x" }));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("preselects a rule's tray on a coded file, as File N marked files it", async () => {
+    const codes = [{ code: "X", via: "qr" as const, raw: "dam:1:X:x:0", unclear: false }];
+    await setup(route({ tray: "to-pay", tray_source: "rule:x", codes }));
+    const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
+    await waitFor(() => expect(within(trayGroup).getByRole("button", { name: "To pay" })).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  const STICKER = { ...FROM_P, tray: null, tray_source: null, codes: [{ code: "P", via: "qr" as const, raw: "dam:1:P:x:0", unclear: false }] };
+
+  it("labels a sticker's chip with the code", async () => {
+    const { user } = await setup(route(STICKER));
+    await user.clear(screen.getByLabelText("Folder"));
+    expect(await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (from sticker `P`)" })).toBeInTheDocument();
+  });
+
+  it("preselects the sticker's ticked boxes and sends them", async () => {
+    const { calls, user } = await setup({
+      ...route({ ...STICKER, star: true, important: false }),
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+    });
+    const group = screen.getByRole("group", { name: "From the sticker" });
+    const star = within(group).getByRole("checkbox", { name: "Star when filed" });
+    const important = within(group).getByRole("checkbox", { name: "Mark Important when filed" });
+    expect(star).toBeChecked();
+    expect(important).not.toBeChecked();
+    expect(screen.queryByText(/Tick box unclear/)).not.toBeInTheDocument();
+    await user.click(important);
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([expect.objectContaining({ star: true, important: true })]);
+    expect(await screen.findByText("Star it")).toBeInTheDocument(); // the plan says what follows
+    expect(screen.getByText("Mark Important")).toBeInTheDocument();
+  });
+
+  it("shows no sticker group for a file without a sticker, and sends neither", async () => {
+    const { calls, user } = await setup({ ...route(FROM_P), "POST /api/inbox/preview": { body: SIMPLE_MOVE } });
+    expect(screen.queryByRole("group", { name: "From the sticker" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Star when filed" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    const [request] = posts(calls, "/api/inbox/preview")[0].body as Array<Record<string, unknown>>;
+    expect(request).not.toHaveProperty("star");
+    expect(request).not.toHaveProperty("important");
+  });
+
+  it("says which tick box could not be read", async () => {
+    await setup(route({ ...STICKER, star: null, important: false, marks_unclear: true }));
+    const group = screen.getByRole("group", { name: "From the sticker" });
+    expect(within(group).getByText("Tick box unclear: check star")).toBeInTheDocument();
+    expect(within(group).getByRole("checkbox", { name: "Star when filed" })).not.toBeChecked();
+  });
+
+  it("does not offer a mark the file already has", async () => {
+    const starredFile = [{ ...coded({ ...STICKER, star: true, important: true })[0] }];
+    starredFile[0].record = { ...starredFile[0].record, marks: ["starred"] };
+    const { calls, user } = await setup({
+      ...route({}),
+      "GET /api/inbox": { body: starredFile },
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+    });
+    const group = screen.getByRole("group", { name: "From the sticker" });
+    expect(within(group).queryByRole("checkbox", { name: "Star when filed" })).not.toBeInTheDocument();
+    expect(within(group).getByText("already starred")).toBeInTheDocument();
+    expect(within(group).getByRole("checkbox", { name: "Mark Important when filed" })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    const [request] = posts(calls, "/api/inbox/preview")[0].body as Array<Record<string, unknown>>;
+    expect(request).not.toHaveProperty("star");
+    expect(request.important).toBe(true);
+  });
+
+  it("says when the codes disagree, and the list row shows the code badge", async () => {
+    await setup(route({ ...FROM_P, tray: null, tray_source: null, conflict: true }));
+    expect(screen.getByText("These filing codes disagree; pick the values here.")).toBeInTheDocument();
+    const row = document.querySelector("[data-inbox-entry]") as HTMLElement;
+    expect(within(row).getByText("P")).toBeInTheDocument();
   });
 });

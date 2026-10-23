@@ -8,7 +8,8 @@
 # when: all given conditions must match (each is optional)
 #   text_contains:    any of these words in the document text (case/diacritics-insensitive)
 #   filename_matches: regex searched in the file name (add (?i) yourself if wanted)
-#   folder_is:        folder the file currently sits in
+#   folder_is:        folder the file currently sits in; the inbox also matches files
+#                     in a filing code's inbox folder (such as ##. Organize/To pay)
 # then:
 #   folder / name:    templates using {doc_date:%Y%m%d}, {year} and {stem}
 #                     (name is the stem only; the extension is added automatically)

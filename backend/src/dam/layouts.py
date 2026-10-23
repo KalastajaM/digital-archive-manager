@@ -7,6 +7,7 @@ ones). Nothing here touches the disk except to read: creating the folders goes t
 settings through ``write_layout_rules`` / ``dam.setup.write_layout_settings``.
 """
 
+import hashlib
 import logging
 import os
 import re
@@ -27,6 +28,11 @@ log = logging.getLogger(__name__)
 FIRST_NUMBER = 10  # "10. Finance", "11. Bills & Receipts", ...
 MAX_FOLDERS = 100
 RULES_FILE = "00-examples.yaml"  # the rules file the app seeds (and a layout may replace)
+# sha256 (LF line endings) of ``RULES_FILE`` as earlier versions shipped it: a copy left
+# unedited since then still holds no rules of the user's
+_EARLIER_EXAMPLES = frozenset(
+    {"f69b67bb2b93eef4791b3f435860adea39c9f2920e0b418d4fab4d5a378ba12d"}  # 0.1.0
+)
 SPECIAL_ROLES = ("inbox", "ongoing", "important", "quarantine")
 _KEY_REF = re.compile(r"<([a-z][a-z0-9_]*)>")
 
@@ -244,7 +250,8 @@ _RULES_HEADER = """\
 # when: all given conditions must match (each is optional)
 #   text_contains:    any of these words in the document text (case/diacritics-insensitive)
 #   filename_matches: regex searched in the file name (add (?i) yourself if wanted)
-#   folder_is:        folder the file currently sits in
+#   folder_is:        folder the file currently sits in; the inbox also matches files
+#                     in a filing code's inbox folder (such as ##. Organize/To pay)
 # then:
 #   folder / name:    templates using {doc_date:%Y%m%d}, {year} and {stem}
 #                     (name is the stem only; the extension is added automatically)
@@ -296,9 +303,12 @@ def seedable(app_paths: AppPaths, defaults_dir: Path = DEFAULTS_DIR) -> bool:
         return False
     try:
         shipped = (defaults_dir / "rules" / RULES_FILE).read_bytes()
-        return files[0].read_bytes() == shipped
+        mine = files[0].read_bytes()
     except OSError:
         return False
+    if mine == shipped:
+        return True
+    return hashlib.sha256(mine.replace(b"\r\n", b"\n")).hexdigest() in _EARLIER_EXAMPLES
 
 
 def write_layout_rules(
