@@ -547,6 +547,8 @@ def test_browse_folders_and_search(client, app, fake_archive):
     assert BANKS in folders and QUAR not in folders and INBOX not in folders
     hits = client.get("/api/search", params={"q": "zebra", "folder": "10. Financial"}).json()
     assert [h["drive_id"] for h in hits] == ["s1"] and "[zebra]" in hits[0]["snippet"]
+    # the Browse columns: size and date, as the folder listing has them
+    assert hits[0]["size"] == len(b"quarterly zebra report") and hits[0]["mtime"] > 0
     assert client.get("/api/search", params={"q": "zebra", "folder": INBOX}).json() == []
 
 

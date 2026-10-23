@@ -592,7 +592,7 @@ main:has(> .inbox) { padding: 0; min-height: 0; display: flex; }
 .fit-full { display: block; height: 0; overflow: hidden; white-space: nowrap; pointer-events: none; user-select: none; }
 .entry-date, .entry-size { text-align: right; font-variant-numeric: tabular-nums; }
 .entries-flat li.checked .entry-col { color: inherit; opacity: 0.85; }
-.entries-flat .entry-path { grid-column: 1 / -1; }
+.entries-flat .snippet { grid-column: 1 / -1; }
 .flat-more { margin: var(--sp-2) var(--sp-4); }
 @media (max-width: 900px) { .browse-split .browse-pane { --flat-cols: minmax(0, 2fr) minmax(0, 1fr) 0 0; } .browse-split .entry-date, .browse-split .entry-size, .browse-split .flat-sort-date, .browse-split .flat-sort-size { visibility: hidden; } }
 .browse-preview { min-width: 0; }
@@ -720,8 +720,10 @@ dialog.quicklook:focus { outline: none; }
 .app:has(.browse) .content { height: 100%; }
 main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .browse { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
-.browse .toolbar-search { width: 220px; }
-.browse .search input { width: 100%; }
+.browse .toolbar-search { width: auto; }
+/* Search: the scope (this folder and below, or the whole archive) beside the box */
+.browse .search { display: flex; align-items: center; gap: var(--sp-2); }
+.browse .search input { width: 200px; }
 .browse-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding: var(--sp-1) var(--sp-5); border-bottom: 0.5px solid var(--hairline); font-size: var(--fs-sm); color: var(--muted); }
 .browse-filters .error, .browse-filters .notice { margin: 0; }
 .browse-filters label { display: inline-flex; align-items: center; gap: 6px; }
@@ -816,7 +818,7 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .tag-token { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--text); font-size: var(--fs-sm); }
 .tag-token button { border: none; background: transparent; box-shadow: none; padding: 0 4px; min-height: 0; line-height: 1; color: var(--muted); cursor: pointer; }
 .tag-token button:hover:not(:disabled) { color: var(--text); background: transparent; }
-.search-scope { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.search-scope { flex: none; }
 .list-head { display: flex; align-items: center; gap: var(--sp-1); margin: 0 var(--sp-2); padding: 0 0 var(--sp-1) calc(var(--sp-2) + var(--sp-2)); border-bottom: 0.5px solid var(--hairline); font-size: var(--fs-sm); color: var(--muted); }
 .list-head input, .flat-head .select-all { margin: 0; }
 
