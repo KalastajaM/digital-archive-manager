@@ -1,6 +1,6 @@
 # Filing codes: design
 
-Status: draft for review, 2026-10-23.
+Status: Steps 1 and 2 built (2026-10-23); step 3 (pen codes) optional, not built.
 
 ## Intent
 
