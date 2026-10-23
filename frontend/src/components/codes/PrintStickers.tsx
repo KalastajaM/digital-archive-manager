@@ -3,12 +3,11 @@
  * new tab and print it with the browser's dialog. Test print draws only the label
  * outlines, to print on plain paper and hold against a label sheet. Nothing here changes
  * the archive. */
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   errorText,
   type SheetLayout,
   type SheetLayoutIn,
-  checkStickerSheet,
   type StickerSheet,
   stickerSheetUrl,
   useFilingCodes,
@@ -52,6 +51,24 @@ function toLayout(d: Draft): SheetLayoutIn | null {
 const sameLayout = (a: SheetLayoutIn | null, b: SheetLayout | null) =>
   a !== null && b !== null && a.name === b.name && a.cut_lines === b.cut_lines && MM_FIELDS.every(([k]) => a[k] === b[k]);
 
+/** A link that opens the sheet in a new tab, drawn as a button; a disabled button while
+ * there is nothing to open (``url`` null). A real link, so the browser opens the tab on
+ * the click itself: no pop-up blocker in the way. */
+function SheetLink({ url, primary, children }: { url: string | null; primary?: boolean; children: string }) {
+  if (url === null) {
+    return (
+      <button type="button" className={primary ? "primary" : undefined} disabled>
+        {children}
+      </button>
+    );
+  }
+  return (
+    <a className={primary ? "button-link primary" : "button-link"} href={url} target="_blank" rel="noopener">
+      {children}
+    </a>
+  );
+}
+
 export function PrintStickers() {
   const codes = useFilingCodes();
   const layouts = useSheetLayouts();
@@ -64,8 +81,6 @@ export function PrintStickers() {
   const [startAt, setStartAt] = useState("1");
   const [boxes, setBoxes] = useState(true);
   const [blank, setBlank] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const inFlight = useRef(false); // one sheet at a time, however fast the clicks
   const [error, setError] = useState<string | null>(null);
 
   const header = (
@@ -138,8 +153,8 @@ export function PrintStickers() {
     }
   };
 
-  const print = async (outlinesOnly: boolean) => {
-    setError(null);
+  /** The sheet page's URL; opened by a plain link (a refusal is a page saying why). */
+  const sheetUrl = (outlinesOnly: boolean) => {
     const body: StickerSheet = {
       codes: outlinesOnly ? {} : counts,
       layout: current,
@@ -148,19 +163,7 @@ export function PrintStickers() {
       blank_labels: blank,
       outlines_only: outlinesOnly,
     };
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(true);
-    const url = stickerSheetUrl(body);
-    try {
-      await checkStickerSheet(url); // a refusal is said here, not in an empty tab
-      window.open(url, "_blank", "noopener");
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
-    }
+    return stickerSheetUrl(body);
   };
 
   return (
@@ -270,17 +273,10 @@ export function PrintStickers() {
       )}
       <div className="filing-codes-actions">
         <span className="hint">{plural(total, "sticker")}</span>
-        <button type="button" disabled={busy || !customReady} onClick={() => void print(true)}>
-          Test print
-        </button>
-        <button
-          type="button"
-          className="primary"
-          disabled={busy || !customReady || total === 0}
-          onClick={() => void print(false)}
-        >
+        <SheetLink url={customReady ? sheetUrl(true) : null}>Test print</SheetLink>
+        <SheetLink url={customReady && total > 0 ? sheetUrl(false) : null} primary>
           Open sheet
-        </button>
+        </SheetLink>
       </div>
     </section>
   );

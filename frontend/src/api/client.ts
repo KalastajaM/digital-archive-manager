@@ -1385,21 +1385,6 @@ export function stickerSheetUrl(sheet: StickerSheet): string {
   return `/api/filing-codes/sheet?${query}`;
 }
 
-/** Load the sheet page once before opening it, so a refusal (a 400 page saying why)
- * is shown in the app instead of in a new tab. Changes nothing. */
-export async function checkStickerSheet(url: string): Promise<void> {
-  const response = await fetch(url, { headers: { Accept: "text/html" }, credentials: "same-origin" });
-  if (response.ok) return;
-  let detail = "";
-  try {
-    const page = new DOMParser().parseFromString(await response.text(), "text/html");
-    detail = page.body.textContent?.trim() ?? "";
-  } catch {
-    detail = response.statusText;
-  }
-  throw new ApiError(response.status, detail);
-}
-
 const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];
 
 /** A file's saved summaries (``{ai, user}``, each with ``outdated``). */

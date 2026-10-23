@@ -38,6 +38,11 @@ button.primary { background: var(--accent-fill); color: var(--on-accent); border
 button.primary:hover:not(:disabled) { background: var(--accent-hover); }
 button.primary:active:not(:disabled) { background: var(--accent-hover); }
 button:disabled { opacity: 0.45; cursor: default; }
+/* a link drawn as a button (opens a page in a new tab) */
+a.button-link { display: inline-flex; align-items: center; font-size: var(--fs-md); min-height: 24px; padding: 2px 11px; border: 0.5px solid var(--border-strong); border-radius: var(--r-md); background: var(--panel); color: var(--text); text-decoration: none; box-shadow: var(--shadow-button); transition: background var(--motion) var(--ease); }
+a.button-link:hover { background: var(--panel-2); }
+a.button-link.primary { background: var(--accent-fill); color: var(--on-accent); border-color: transparent; font-weight: 500; }
+a.button-link.primary:hover { background: var(--accent-hover); }
 :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
 
 /* Fields */
