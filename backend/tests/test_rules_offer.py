@@ -142,3 +142,15 @@ def test_state_defaults_and_roundtrip(tmp_path):
     assert load_state(tmp_path) == RulesState()
     save_state(tmp_path, RulesState(offer=False, declined=[["a", "b"]]))
     assert load_state(tmp_path) == RulesState(offer=False, declined=[["a", "b"]])
+
+
+def test_no_offer_when_a_kept_folder_or_name_came_from_a_filing_code(tmp_path):
+    from dam.rules.engine import Suggestion
+    from dam.rules.offer import offer_target
+
+    by_code = Suggestion(name="x.pdf", folder=BILLS, folder_source="code:PAY")
+    assert offer_target(by_code, "other.pdf", BILLS, tmp_path)[0] is False
+    named = Suggestion(name="20261015_PAY.pdf", name_source="code:PAY")
+    assert offer_target(named, "20261015_PAY.pdf", "11. Bills/Other", tmp_path)[0] is False
+    # control: the owner changed what the code gave, so the offer stands
+    assert offer_target(by_code, "other.pdf", "11. Bills/Other", tmp_path)[0] is True

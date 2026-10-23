@@ -15,6 +15,7 @@ from dam.rules.learned import rule_file
 from dam.rules.model import LEARNED_FILE
 
 RULE_PREFIX = "rule:"
+CODE_PREFIX = "code:"
 
 
 @dataclass
@@ -27,6 +28,10 @@ class RuleOffer:
 
 def rule_id_of(source: str | None) -> str | None:
     return source[len(RULE_PREFIX) :] if source and source.startswith(RULE_PREFIX) else None
+
+
+def _from_code(source: str | None) -> bool:
+    return bool(source) and source.startswith(CODE_PREFIX)
 
 
 def same(a: str | None, b: str | None) -> bool:
@@ -55,7 +60,12 @@ def offer_target(
     found: Suggestion, name: str, folder: str, rules_dir: Path
 ) -> tuple[bool, Literal["new", "update"], str | None]:
     """(whether to offer, kind, rule id). No offer when a rule gave both folder and name
-    and both were kept."""
+    and both were kept, nor when a filing code gave the folder or the name that was kept
+    (the code already decides)."""
+    if (_from_code(found.folder_source) and same(found.folder, folder)) or (
+        _from_code(found.name_source) and same(found.name, name)
+    ):
+        return False, "new", None
     folder_rule, name_rule = rule_id_of(found.folder_source), rule_id_of(found.name_source)
     if (
         folder_rule is not None
