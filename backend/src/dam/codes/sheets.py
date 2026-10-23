@@ -93,7 +93,8 @@ class SheetLayout(BaseModel):
 _GRID = {
     "columns": 5, "rows": 13, "label_w_mm": 38.1, "label_h_mm": 21.2,
     "top_mm": 10.7, "left_mm": 4.7, "gap_x_mm": 2.5, "gap_y_mm": 0.0,
-}  # L7651 per Avery's template; the guide says to check it against the pack
+}  # L7651 as commonly published (pitch 40.6 x 21.2 mm, top 10.7, left 4.7); not checked
+# against Avery's template, see the guide.
 
 
 def builtin_layouts() -> list[SheetLayout]:

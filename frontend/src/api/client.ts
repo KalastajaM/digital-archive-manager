@@ -25,7 +25,16 @@ export type CodeFolders = Schemas["FilingCodeFoldersOut"];
 export type SheetLayout = Schemas["SheetLayoutOut"];
 export type SheetLayoutIn = Schemas["SheetLayoutIn"];
 /** What to print: a count per code, the layout and the options. */
-export type StickerSheet = Schemas["StickerSheetIn"];
+/** The sticker sheet's options: the query of ``GET /api/filing-codes/sheet``
+ * (``stickerSheetUrl``); how many stickers of each code, in print order. */
+export type StickerSheet = {
+  codes: Record<string, number>;
+  layout: string;
+  start_at: number;
+  boxes: boolean;
+  blank_labels: boolean;
+  outlines_only: boolean;
+};
 /** A row of the File N marked batch: its codes, the request that files it and a flag. */
 export type BatchRow = Schemas["BatchRowOut"];
 export type UndoResult = Schemas["UndoResultOut"];

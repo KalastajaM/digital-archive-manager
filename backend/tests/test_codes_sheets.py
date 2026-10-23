@@ -1,7 +1,7 @@
 """Printable filing-code sticker sheets: grid positions, sticker geometry, the API."""
 
 import re
-import time
+from html import unescape
 from html.parser import HTMLParser
 
 import pytest
@@ -339,13 +339,37 @@ def test_custom_must_fit_a4():
 # --- the API ---
 
 
-def post_sheet(c, body):
-    return c.post("/api/filing-codes/sheet", json=body, headers=LOCAL_ORIGIN)
+def get_sheet(c, body):
+    """The sheet by GET (the tab the UI opens), from a body like ``{"codes": {"P": 2},
+    "layout": "l7651", "start_at": 2}``."""
+    params = {
+        "codes": ",".join(f"{k}:{n}" for k, n in body["codes"].items()),
+        "layout": body["layout"],
+    }
+    for key in ("start_at", "boxes", "blank_labels", "outlines_only"):
+        if key in body:
+            params[key] = str(body[key]).lower()
+    return c.get("/api/filing-codes/sheet", params=params)
+
+
+def error_of(r):
+    """The message of a sheet's HTML 400 page."""
+    found = re.search(r'<p class="error">(.*?)</p>', r.text)
+    assert found, r.text
+    return unescape(found.group(1))
+
+
+def test_there_is_no_post_sheet_route(app):
+    """The UI opens the sheet by GET; one print path."""
+    body = {"codes": {"P": 1}, "layout": "l7651"}
+    with make_client(app) as c:
+        r = c.post("/api/filing-codes/sheet", json=body, headers=LOCAL_ORIGIN)
+    assert r.status_code == 405
 
 
 def test_api_sheet_html(app):
     with make_client(app) as c:
-        r = post_sheet(c, {"codes": {"P": 2, "A": 1}, "layout": "l7651", "start_at": 2})
+        r = get_sheet(c, {"codes": {"P": 2, "A": 1}, "layout": "l7651", "start_at": 2})
     assert r.status_code == 200, r.text
     assert r.headers["content-type"].startswith("text/html")
     labels = printed(parse(r.text))
@@ -355,21 +379,21 @@ def test_api_sheet_html(app):
 
 def test_unknown_code_400(app):
     with make_client(app) as c:
-        r = post_sheet(c, {"codes": {"P": 1, "ZZZ": 1}, "layout": "l7651"})
+        r = get_sheet(c, {"codes": {"P": 1, "ZZZ": 1}, "layout": "l7651"})
         assert r.status_code == 400
-        assert "ZZZ" in r.json()["error"]
-        r = post_sheet(c, {"codes": {"P": 1}, "layout": "nope"})
+        assert "ZZZ" in error_of(r)
+        r = get_sheet(c, {"codes": {"P": 1}, "layout": "nope"})
         assert r.status_code == 400
-        r = post_sheet(c, {"codes": {"P": 1}, "layout": "l7651", "start_at": 99})
+        r = get_sheet(c, {"codes": {"P": 1}, "layout": "l7651", "start_at": 99})
         assert r.status_code == 400
-        r = post_sheet(c, {"codes": {"P": -1}, "layout": "l7651"})
-        assert r.status_code == 400 and "negative" in r.json()["error"]
-        r = post_sheet(c, {"codes": {"P": 0}, "layout": "l7651"})
-        assert r.status_code == 400 and r.json()["error"] == "Nothing to print"
-        r = post_sheet(c, {"codes": {"P": 2001}, "layout": "l7651"})
-        assert r.status_code == 400 and "2000" in r.json()["error"]
-        r = post_sheet(c, {"codes": {"P": 1000, "A": 1001}, "layout": "l7651"})
-        assert r.status_code == 400 and "2000" in r.json()["error"]
+        r = get_sheet(c, {"codes": {"P": -1}, "layout": "l7651"})
+        assert r.status_code == 400 and "negative" in error_of(r)
+        r = get_sheet(c, {"codes": {"P": 0}, "layout": "l7651"})
+        assert r.status_code == 400 and error_of(r) == "Nothing to print"
+        r = get_sheet(c, {"codes": {"P": 2001}, "layout": "l7651"})
+        assert r.status_code == 400 and "2000" in error_of(r)
+        r = get_sheet(c, {"codes": {"P": 1000, "A": 1001}, "layout": "l7651"})
+        assert r.status_code == 400 and "2000" in error_of(r)
 
 
 SHEET_CSP = (
@@ -422,19 +446,20 @@ def test_api_sheet_page_get_400_is_html(app):
             assert says in r.text, (params, r.text)
 
 
-def test_huge_count_400_quickly(app):
-    """A huge count is refused before any sticker list is built."""
+def test_huge_count_is_refused_before_any_sticker_is_built(app, monkeypatch):
+    """The limit is checked before any sticker is built: building one fails the test."""
+
+    def no_sticker(*args, **kwargs):
+        raise AssertionError("a sticker was built")
+
+    monkeypatch.setattr(sheets, "_sticker", no_sticker)
     with make_client(app) as c:
-        start = time.monotonic()
-        r = post_sheet(c, {"codes": {"P": 10**9}, "layout": "l7651"})
-        assert r.status_code == 400 and "too many" in r.json()["error"]
-        r = post_sheet(c, {"codes": {"P": 2000, "A": 2000}, "layout": "l7651"})
-        assert r.status_code == 400 and "too many" in r.json()["error"]
-    assert time.monotonic() - start < 2
-    start = time.monotonic()
+        r = get_sheet(c, {"codes": {"P": 10**9}, "layout": "l7651"})
+        assert r.status_code == 400 and "too many" in error_of(r)
+        r = get_sheet(c, {"codes": {"P": 2000, "A": 2000}, "layout": "l7651"})
+        assert r.status_code == 400 and "too many" in error_of(r)
     with pytest.raises(ValueError, match="too many"):
         sheets.render_sheet(CODES, {"P": 10**9}, l7651())
-    assert time.monotonic() - start < 1
 
 
 def test_api_layouts_and_custom(app):
@@ -449,7 +474,7 @@ def test_api_layouts_and_custom(app):
         assert r.status_code == 200, r.text
         lays = c.get("/api/filing-codes/sheets").json()
         assert [lay["id"] for lay in lays] == ["l7651", "plain", "custom"]
-        r = post_sheet(c, {"codes": {"P": 1}, "layout": "custom"})
+        r = get_sheet(c, {"codes": {"P": 1}, "layout": "custom"})
         assert r.status_code == 200
         assert mm(printed(parse(r.text))[0]["style"], "width") == pytest.approx(63.5)
         too_big = {**body, "columns": 4}

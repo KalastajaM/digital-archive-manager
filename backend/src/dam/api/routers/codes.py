@@ -156,18 +156,6 @@ def _render_sheet(app: App, body: StickerSheetIn) -> str:
         raise InvalidRequest(str(e)) from e
 
 
-@router.post(
-    "/sheet",
-    response_class=Response,  # not HTMLResponse: errors stay JSON in the schema
-    responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
-)
-def sticker_sheet(app: AppDep, body: StickerSheetIn) -> HTMLResponse:
-    """A printable page of stickers (HTML, A4) for the chosen codes and counts; 400 for
-    an unknown code or layout, a start label off the sheet, a negative count, nothing to
-    print or more than 2000 stickers. Changes nothing."""
-    return HTMLResponse(_render_sheet(app, body), headers=_SHEET_HEADERS)
-
-
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
 
@@ -193,7 +181,7 @@ def _sheet_query(
     codes: str, layout: str, start_at: str | None, boxes: str | None,
     blank_labels: str | None, outlines_only: str | None,
 ) -> StickerSheetIn:
-    """The GET's query as the POST's body: ``codes`` is ``P:12,A:3`` (a code repeated
+    """The query as a ``StickerSheetIn``: ``codes`` is ``P:12,A:3`` (a code repeated
     adds up)."""
     counts: dict[str, int] = {}
     for part in (p.strip() for p in codes.split(",")):
@@ -239,10 +227,12 @@ def sticker_sheet_page(
     blank_labels: str | None = None,
     outlines_only: str | None = None,
 ) -> HTMLResponse:
-    """The sticker sheet as a page to open in its own tab and print (``codes``:
-    ``P:12,A:3``; the other options as in the POST). Its own Content-Security-Policy
-    allows its inline styles and nothing else. A 400 is a small HTML page saying why.
-    Changes nothing."""
+    """The sticker sheet (HTML, A4) as a page to open in its own tab and print.
+    ``codes``: ``P:12,A:3``; ``start_at``: the first label (1-based); ``boxes`` (default
+    true), ``blank_labels`` and ``outlines_only`` (the test print): true or false. Its own
+    Content-Security-Policy allows its inline styles and nothing else. A 400 (an unknown
+    code or layout, a start label off the sheet, a negative count, nothing to print or
+    more than 2000 stickers) is a small HTML page saying why. Changes nothing."""
     try:
         body = _sheet_query(codes, layout, start_at, boxes, blank_labels, outlines_only)
         return HTMLResponse(_render_sheet(app, body), headers=_SHEET_HEADERS)

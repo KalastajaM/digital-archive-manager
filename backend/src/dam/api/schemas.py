@@ -1314,6 +1314,7 @@ class SheetLayoutOut(BaseModel):
 
 
 class StickerSheetIn(_In):
+    # the sheet GET's query, parsed
     # how many stickers of each code, in print order (checked by the route: 400)
     codes: dict[str, int]
     layout: str

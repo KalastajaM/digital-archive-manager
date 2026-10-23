@@ -2095,20 +2095,16 @@ export interface paths {
         };
         /**
          * Sticker Sheet Page
-         * @description The sticker sheet as a page to open in its own tab and print (``codes``:
-         *     ``P:12,A:3``; the other options as in the POST). Its own Content-Security-Policy
-         *     allows its inline styles and nothing else. A 400 is a small HTML page saying why.
-         *     Changes nothing.
+         * @description The sticker sheet (HTML, A4) as a page to open in its own tab and print.
+         *     ``codes``: ``P:12,A:3``; ``start_at``: the first label (1-based); ``boxes`` (default
+         *     true), ``blank_labels`` and ``outlines_only`` (the test print): true or false. Its own
+         *     Content-Security-Policy allows its inline styles and nothing else. A 400 (an unknown
+         *     code or layout, a start label off the sheet, a negative count, nothing to print or
+         *     more than 2000 stickers) is a small HTML page saying why. Changes nothing.
          */
         get: operations["sticker_sheet_page_api_filing_codes_sheet_get"];
         put?: never;
-        /**
-         * Sticker Sheet
-         * @description A printable page of stickers (HTML, A4) for the chosen codes and counts; 400 for
-         *     an unknown code or layout, a start label off the sheet, a negative count, nothing to
-         *     print or more than 2000 stickers. Changes nothing.
-         */
-        post: operations["sticker_sheet_api_filing_codes_sheet_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4415,35 +4411,6 @@ export interface components {
              * @default 1
              */
             profiles_count: number;
-        };
-        /** StickerSheetIn */
-        StickerSheetIn: {
-            /** Codes */
-            codes: {
-                [key: string]: number;
-            };
-            /** Layout */
-            layout: string;
-            /**
-             * Start At
-             * @default 1
-             */
-            start_at: number;
-            /**
-             * Boxes
-             * @default true
-             */
-            boxes: boolean;
-            /**
-             * Blank Labels
-             * @default false
-             */
-            blank_labels: boolean;
-            /**
-             * Outlines Only
-             * @default false
-             */
-            outlines_only: boolean;
         };
         /** SuggestionOut */
         SuggestionOut: {
@@ -16062,102 +16029,6 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Content Too Large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Unsupported Media Type */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    sticker_sheet_api_filing_codes_sheet_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StickerSheetIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             /** @description Forbidden */
