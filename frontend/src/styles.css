@@ -1864,3 +1864,11 @@ button.ai-action { display: inline-flex; align-items: center; gap: 4px; }
 .filing-code-row label.check { flex-direction: row; align-items: center; gap: var(--sp-2); }
 .filing-code-row .hint { grid-column: 1 / -1; margin: 0; }
 .filing-codes-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.print-stickers-codes { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--sp-2); }
+.print-stickers-codes li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.print-stickers-codes input[type="number"] { width: 5rem; }
+.print-stickers-options, .print-stickers-custom { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--sp-2); align-items: end; margin-bottom: var(--sp-3); }
+.print-stickers-options > label, .print-stickers-custom > label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
+.print-stickers label.check { flex-direction: row; align-items: center; gap: var(--sp-2); margin: 0; }
+.filing-marks { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; }
+.filing-marks .notice { flex-basis: 100%; margin: 0; }

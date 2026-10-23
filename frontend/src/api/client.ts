@@ -21,6 +21,11 @@ export type FilingCode = Schemas["FilingCodeIn"];
 export type FilingCodes = Schemas["FilingCodesOut"];
 export type CodeHit = Schemas["CodeHitOut"];
 export type CodeFolders = Schemas["FilingCodeFoldersOut"];
+/** A sticker sheet layout (mm on an A4 page): the built-ins and the saved custom one. */
+export type SheetLayout = Schemas["SheetLayoutOut"];
+export type SheetLayoutIn = Schemas["SheetLayoutIn"];
+/** What to print: a count per code, the layout and the options. */
+export type StickerSheet = Schemas["StickerSheetIn"];
 /** A row of the File N marked batch: its codes, the request that files it and a flag. */
 export type BatchRow = Schemas["BatchRowOut"];
 export type UndoResult = Schemas["UndoResultOut"];
@@ -1348,6 +1353,35 @@ export const useCreateCodeFolders = () => {
     },
   });
 };
+
+const sheetsKey = [...keys.filingCodes, "sheets"];
+
+/** The sticker sheet layouts: the built-ins, then the saved custom one (id ``custom``). */
+export const useSheetLayouts = () => useQuery({ queryKey: sheetsKey, queryFn: () => get<SheetLayout[]>("/api/filing-codes/sheets") });
+
+/** Save the custom sheet layout (the old file is kept as a backup); a 400 says why not
+ * (too small for a sticker, beyond an A4 page). */
+export const useSaveCustomSheet = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (layout: SheetLayoutIn) => put<SheetLayout>("/api/filing-codes/sheets/custom", layout),
+    onSettled: () => void client.invalidateQueries({ queryKey: sheetsKey }),
+  });
+};
+
+/** The printable sticker sheet as an HTML page (changes nothing); a 400 says why not. */
+export async function stickerSheet(body: StickerSheet): Promise<string> {
+  const headers: Record<string, string> = { Accept: "text/html", "Content-Type": "application/json" };
+  if (activeArchive) headers["X-Dam-Archive"] = activeArchive;
+  const response = await fetch("/api/filing-codes/sheet", {
+    method: "POST",
+    headers,
+    credentials: "same-origin",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw await failure(response);
+  return response.text();
+}
 
 const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];
 

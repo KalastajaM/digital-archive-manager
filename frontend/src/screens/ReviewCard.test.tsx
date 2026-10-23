@@ -1915,6 +1915,49 @@ describe("Filing codes in the form", () => {
     expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  const STICKER = { ...FROM_P, tray: null, tray_source: null, codes: [{ code: "P", via: "qr" as const, raw: "dam:1:P:x:0", unclear: false }] };
+
+  it("labels a sticker's chip with the code", async () => {
+    const { user } = await setup(route(STICKER));
+    await user.clear(screen.getByLabelText("Folder"));
+    expect(await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (from sticker `P`)" })).toBeInTheDocument();
+  });
+
+  it("preselects Starred and Important from the sticker's tick boxes and sends them", async () => {
+    const { calls, user } = await setup({
+      ...route({ ...STICKER, star: true, important: false }),
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+    });
+    const starred = screen.getByRole("checkbox", { name: "Starred" });
+    const important = screen.getByRole("checkbox", { name: "Important" });
+    expect(starred).toBeChecked();
+    expect(important).not.toBeChecked();
+    expect(screen.queryByText(/Tick box unclear/)).not.toBeInTheDocument();
+    await user.click(important);
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([expect.objectContaining({ star: true, important: true })]);
+    expect(await screen.findByText("Star it")).toBeInTheDocument(); // the plan says what follows
+    expect(screen.getByText("Mark Important")).toBeInTheDocument();
+  });
+
+  it("leaves both off without a sticker, and sends neither", async () => {
+    const { calls, user } = await setup({ ...route(FROM_P), "POST /api/inbox/preview": { body: SIMPLE_MOVE } });
+    expect(screen.getByRole("checkbox", { name: "Starred" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Important" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    const [request] = posts(calls, "/api/inbox/preview")[0].body as Array<Record<string, unknown>>;
+    expect(request).not.toHaveProperty("star");
+    expect(request).not.toHaveProperty("important");
+  });
+
+  it("says which tick box could not be read", async () => {
+    await setup(route({ ...STICKER, star: null, important: false, marks_unclear: true }));
+    expect(screen.getByText("Tick box unclear: check star")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Starred" })).not.toBeChecked();
+  });
+
   it("says when the codes disagree, and the list row shows the code badge", async () => {
     await setup(route({ ...FROM_P, tray: null, tray_source: null, conflict: true }));
     expect(screen.getByText("These filing codes disagree; pick the values here.")).toBeInTheDocument();

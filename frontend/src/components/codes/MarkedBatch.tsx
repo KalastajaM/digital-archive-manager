@@ -97,6 +97,8 @@ function Row({
   const { request } = row;
   const flag = flagText(row);
   const from = entry ? (entry.record.name ?? entry.record.path) : null;
+  // a sticker's tick boxes: what is marked once filed (sent as it is)
+  const marks = [request.star && "Starred", request.important && "Important"].filter(Boolean);
   return (
     <li className={flag ? "marked-row marked-flagged" : "marked-row"} aria-label={visible(request.name)}>
       <input
@@ -132,6 +134,11 @@ function Row({
         {request.collections.length > 0 && (
           <p className="marked-meta">
             <span className="marked-label">Collections</span> {visible(request.collections.join(", "))}
+          </p>
+        )}
+        {marks.length > 0 && (
+          <p className="marked-meta">
+            <span className="marked-label">Then</span> {marks.join(", ")}
           </p>
         )}
         {flag && <p className="notice marked-flag">{visible(flag)}</p>}

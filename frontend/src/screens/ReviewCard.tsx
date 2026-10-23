@@ -184,6 +184,34 @@ function AISummary({ summary, onUse }: { summary: string; onUse: () => void }) {
   );
 }
 
+/** The tick boxes a sticker has but that could not be read ("star", "important"). */
+export const unclearBoxes = (s: InboxEntry["suggestion"]): string[] =>
+  s.marks_unclear ? (["star", "important"] as const).filter((k) => s[k] === null) : [];
+
+/** Star it / mark it Important once filed (sent with the filing; a sticker's tick boxes
+ * preselect them). */
+function FilingMarks(props: {
+  star: boolean;
+  important: boolean;
+  unclear: string[];
+  onStar: (on: boolean) => void;
+  onImportant: (on: boolean) => void;
+}) {
+  return (
+    <div className="field filing-marks" role="group" aria-label="Once filed">
+      <label className="check">
+        <input type="checkbox" checked={props.star} onChange={(e) => props.onStar(e.target.checked)} />
+        Starred
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={props.important} onChange={(e) => props.onImportant(e.target.checked)} />
+        Important
+      </label>
+      {props.unclear.length > 0 && <p className="notice">Tick box unclear: check {props.unclear.join(" and ")}</p>}
+    </div>
+  );
+}
+
 /** The card's Trash (bin) button: the inbox owns the flow. */
 export type CardTrash = { run: () => void; busy: boolean };
 
@@ -207,6 +235,9 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   const [collections, setCollections] = useState<string[]>(() => [...entry.suggestion.collections]);
   const [collectionText, setCollectionText] = useState("");
   const [note, setNote] = useState("");
+  // A QR sticker's tick boxes preselect these (an unclear box leaves it off and says so).
+  const [star, setStar] = useState(entry.suggestion.star === true);
+  const [important, setImportant] = useState(entry.suggestion.important === true);
   // Set on the first Preview / File it: from then on a missing field is shown live.
   const [tried, setTried] = useState(false);
   // Narrow windows hide the preview pane (the form matters most); this shows it again.
@@ -324,7 +355,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
     : [
         withFollowUps(
           { drive_id: entry.record.drive_id, name, folder, tags: parseTags(tags) },
-          { tray: alreadyIn ? null : (tray?.id ?? null), trayFields, collections, note },
+          { tray: alreadyIn ? null : (tray?.id ?? null), trayFields, collections, note, star, important },
         ),
       ];
   filing.form.current = current; // stale previews are dropped against this
@@ -487,6 +518,13 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
           />
           {answer?.summary.trim() && <AISummary summary={answer.summary} onUse={useSummaryAsNote} />}
           <NoteEditor value={note} onChange={setNote} />
+          <FilingMarks
+            star={star}
+            important={important}
+            unclear={unclearBoxes(entry.suggestion)}
+            onStar={setStar}
+            onImportant={setImportant}
+          />
           <hr />
           <DetectedFields entry={entry} />
           {/* After the form, so showing it never pushes the fields down; it sticks to the

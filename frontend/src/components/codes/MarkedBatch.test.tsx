@@ -336,6 +336,31 @@ describe("File N marked", () => {
     expect(screen.getByRole("region", { name: "Marked files" })).toBeInTheDocument();
   });
 
+  it("shows Starred and Important from a sticker's tick boxes, and sends them as they are", async () => {
+    const starred = { ...ROWS[0], request: { ...BILL, star: true, important: true } };
+    const unclear = {
+      ...ROWS[2],
+      codes: [{ code: "D", via: "qr", raw: "dam:1:D:?:0", unclear: false }],
+      request: { ...LETTER, star: false, important: false },
+      flag: "unclear",
+      problem: "Tick box unclear: star",
+    };
+    const { calls, user } = setup({
+      "GET /api/filing-codes/batch": { body: [starred, unclear] },
+      "POST /api/inbox/preview": { body: [MOVES[0]] },
+    });
+    await panel();
+    const bill = await screen.findByRole("listitem", { name: "2026-10-01 Northpower.pdf" });
+    expect(bill).toHaveTextContent("Then Starred, Important");
+    const letter = rowOf("2026-10-03 Letter.pdf");
+    expect(letter).not.toHaveTextContent("Starred");
+    expect(within(letter).getByText("Unclear: Tick box unclear: star")).toBeInTheDocument();
+    expect(within(letter).getByRole("checkbox")).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "File 1" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([{ ...BILL, star: true, important: true }]);
+  });
+
   it("Open shows the file in the Inbox form", async () => {
     const { user } = setup();
     await panel();

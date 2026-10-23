@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Settings → Print stickers: pick filing codes and how many of each, a label sheet
+  (Avery Zweckform L7651, plain paper, or your own sizes in mm) and the first label to
+  use, then open the sheet in a new tab and print it. Stickers have star and Important
+  tick boxes unless you turn them off, and can be left blank to write on. Test print
+  draws only the label outlines, to check the fit against a label sheet. A sticker's
+  ticked boxes preselect Starred and Important when you file the paper, and an unclear
+  box is pointed out.
 - Activity → AI lists the excluded folders (never sent to AI) and lets you add or remove
   them, with a folder picker; a folder not in the archive is marked. The change applies
   at once and is saved in settings.yaml. Removing one asks first, since its documents
