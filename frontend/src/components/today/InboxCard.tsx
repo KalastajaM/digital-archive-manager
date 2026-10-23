@@ -201,6 +201,11 @@ export function InboxCard({ data, frame }: { data: TodayData; frame?: CardFrame 
                 File {data.marked} marked
               </Link>
             )}
+            {data.reading_codes > 0 && (
+              <span className="reading-codes" role="status">
+                Reading filing codes…
+              </span>
+            )}
             <Link className="card-link" to="/inbox">
               Start filing
             </Link>

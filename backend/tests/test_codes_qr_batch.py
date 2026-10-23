@@ -182,3 +182,30 @@ def test_api_shows_qr_hits_and_ticks(app, fake_archive):
     assert s["codes"][0]["via"] == "qr"
     assert (s["star"], s["important"], s["marks_unclear"]) == (True, False, False)
     assert (row["request"]["star"], row["request"]["important"]) == (True, False)
+
+
+def test_codes_pending_counts_inbox_scans_without_a_sticker_reading(app, fake_archive):
+    add_in(app, fake_archive, f"{INBOX}/scan.pdf", "s1", "x")  # no sha yet: pending
+    add_in(app, fake_archive, f"{INBOX}/To pay/photo.JPG", "s2", "x")
+    add_in(app, fake_archive, f"{INBOX}/To pay/bill.pdf", "b1", "x")
+    stick(app, "b1")  # read: nothing found
+    add_in(app, fake_archive, f"{INBOX}/notes.txt", "t1", "x")  # not read for stickers
+    add_in(app, fake_archive, f"{INBOX}/Old stuff/y.pdf", "o1", "x")  # not an inbox folder
+    add_in(app, fake_archive, "Filed/z.pdf", "f1", "x")
+    add_in(app, fake_archive, f"{INBOX}/broken.pdf", "e1", "x")
+    app.repo.save_content("e1", "sha-e1", None, "unsupported")  # never read: not waited for
+    assert app.repo.codes_pending() == 2
+    stick(app, "s1")
+    stick(app, "s2")
+    assert app.repo.codes_pending() == 0
+    # new content: the reading is for the old one
+    app.repo.save_content("s1", "sha-new", ExtractedText("x", "test"), "indexed")
+    assert app.repo.codes_pending() == 1
+
+
+def test_today_says_reading_codes_only_with_a_code_table(app, fake_archive):
+    add_in(app, fake_archive, f"{INBOX}/scan.pdf", "s1", "x")
+    with TestClient(create_api(app), base_url=BASE) as client:
+        assert client.get("/api/today").json()["reading_codes"] == 1
+        assert app.save_codes([]) == []
+        assert client.get("/api/today").json()["reading_codes"] == 0

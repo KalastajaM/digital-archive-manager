@@ -816,7 +816,8 @@ class ItemFileOut(BaseModel):
     ext: str | None
     # "missing": gone (or parked); "to_delete": in the quarantine folder
     state: Literal["ok", "missing", "to_delete"]
-    in_inbox: bool  # present and directly in the inbox folder (not filed yet)
+    # present and directly in the inbox or in a filing code's inbox folder (not filed yet)
+    in_inbox: bool
     marks: list[Mark]
 
 
@@ -906,7 +907,7 @@ class MemberItemOut(BaseModel):
 
 class MemberAttentionOut(BaseModel):
     """A member that needs attention: its open tray items, and whether it is still
-    directly in the inbox folder (not filed yet)."""
+    directly in the inbox or in a filing code's inbox folder (not filed yet)."""
 
     drive_id: str
     in_inbox: bool
@@ -1037,7 +1038,8 @@ class CollectionSummaryOut(BaseModel):
     files: int
     open_checks: int
     note_excerpt: str
-    in_inbox: int  # file members still directly in the inbox
+    # file members still directly in the inbox or in a filing code's inbox folder
+    in_inbox: int
 
 
 class OverviewOut(BaseModel):
@@ -1096,6 +1098,9 @@ class TodayOut(BaseModel):
     open_items: list[TrayItemsOut]  # per tray in tray order, at most 8 each
     # inbox files with a filing code (the File N marked button), flagged ones included
     marked: int = 0
+    # inbox files the barcode pass has still to read for QR stickers ("Reading filing
+    # codes..."); 0 when the code table is empty
+    reading_codes: int = 0
 
 
 # -- Phase 3: AI ---------------------------------------------------------------

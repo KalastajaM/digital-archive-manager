@@ -135,7 +135,9 @@ export default function Inbox() {
   // ``?marked=1`` shows the File N marked panel instead of the form.
   const [search, setSearch] = useSearchParams();
   const markedOpen = search.get("marked") === "1";
-  const marked = useToday().data?.marked ?? 0;
+  const todayData = useToday().data;
+  const marked = todayData?.marked ?? 0;
+  const readingCodes = (todayData?.reading_codes ?? 0) > 0;
   const [selectedId, setSelectedId] = useState<string | null>(() => search.get("file"));
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // Where a ⇧-click range starts: the last plainly or ⌘-clicked entry.
@@ -409,6 +411,11 @@ export default function Inbox() {
                 >
                   File {marked} marked
                 </button>
+              )}
+              {readingCodes && (
+                <span className="reading-codes" role="status">
+                  Reading filing codes…
+                </span>
               )}
               <IconButton
                 icon={<Upload />}

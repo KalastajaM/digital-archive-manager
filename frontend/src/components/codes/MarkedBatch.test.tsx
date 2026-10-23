@@ -182,10 +182,23 @@ describe("File N marked", () => {
     await panel();
   });
 
+  it("says Reading filing codes… beside the button while stickers are still being read", async () => {
+    setup({ "GET /api/today": { body: { marked: 3, reading_codes: 2 } } }, "/inbox");
+    await screen.findByRole("button", { name: "File 3 marked" });
+    expect(screen.getByText("Reading filing codes…")).toHaveAttribute("role", "status");
+  });
+
+  it("says Reading filing codes… alone while none is marked yet, and nothing once all are read", async () => {
+    setup({ "GET /api/today": { body: { marked: 0, reading_codes: 1 } } }, "/inbox");
+    expect(await screen.findByText("Reading filing codes…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /marked/ })).not.toBeInTheDocument();
+  });
+
   it("hides the button when nothing is marked", async () => {
     setup({ "GET /api/today": { body: { marked: 0 } } }, "/inbox");
     await screen.findByLabelText("Name");
     expect(screen.queryByRole("button", { name: /marked/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Reading filing codes…")).not.toBeInTheDocument();
   });
 
   it("shows each row's codes, name, folder, tray and fields; a flagged row starts unticked with its problem", async () => {

@@ -614,8 +614,14 @@ export const useRecovery = () => {
 
 // -- Phase 2: Today, trays and items -------------------------------------------
 
+/** Today, fetched again every few seconds while the barcode pass still reads inbox
+ * files for QR stickers (``reading_codes``): its progress moves no status count. */
 export const useToday = () =>
-  useQuery({ queryKey: keys.today, queryFn: () => get<Today>("/api/today") });
+  useQuery({
+    queryKey: keys.today,
+    queryFn: () => get<Today>("/api/today"),
+    refetchInterval: (query) => ((query.state.data?.reading_codes ?? 0) > 0 ? 3000 : false),
+  });
 
 /** Today counts the inbox and what indexing found in it: fetch it again whenever the
  * polled status's inbox count or indexing progress changes (a scan found or lost a

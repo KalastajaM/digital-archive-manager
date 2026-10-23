@@ -3831,7 +3831,7 @@ export interface components {
         /**
          * MemberAttentionOut
          * @description A member that needs attention: its open tray items, and whether it is still
-         *     directly in the inbox folder (not filed yet).
+         *     directly in the inbox or in a filing code's inbox folder (not filed yet).
          */
         MemberAttentionOut: {
             /** Drive Id */
@@ -4533,6 +4533,11 @@ export interface components {
              * @default 0
              */
             marked: number;
+            /**
+             * Reading Codes
+             * @default 0
+             */
+            reading_codes: number;
         };
         /** TrayCountOut */
         TrayCountOut: {

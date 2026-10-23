@@ -71,7 +71,9 @@ class CollectionSummary:
     files: int
     open_checks: int
     note_excerpt: str
-    in_inbox: int  # file members still directly in the inbox (not filed yet)
+    # file members still directly in the inbox or in a filing code's inbox folder (not
+    # filed yet)
+    in_inbox: int
 
 
 @dataclass
@@ -258,8 +260,9 @@ class TodayService:
         return len(self.collections.expand(collection_id)), sum(1 for x in checks if not x.done)
 
     def collection_in_inbox(self, collection_id: int) -> int:
-        """File members still directly in the inbox, by the rule of the collection's
-        "Needs attention" strip (present, not quarantined)."""
+        """File members still directly in the inbox or in a filing code's inbox folder,
+        by the rule of the collection's "Needs attention" strip (present, not
+        quarantined)."""
         members = self.collections.get(collection_id).members
         return sum(
             1

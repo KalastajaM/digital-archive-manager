@@ -37,7 +37,8 @@ All notable changes are listed here. The format follows
   codes found (folder, sticker) and exactly what filing will do. Rows that need input,
   whose codes disagree or whose tick box is unclear start unticked and say why; a row
   that needs input is fixed in the form. File files the ticked rows as one batch with
-  one Undo.
+  one Undo. "Reading filing codes…" shows next to it while new scans are still read for
+  stickers.
 - Activity → AI lists the excluded folders (never sent to AI) and lets you add or remove
   them, with a folder picker; a folder not in the archive is marked. The change applies
   at once and is saved in settings.yaml. Removing one asks first, since its documents

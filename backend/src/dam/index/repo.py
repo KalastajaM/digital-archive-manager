@@ -152,6 +152,31 @@ class FileRepo:
             rows = conn.execute(stmt.order_by(files.c.path)).all()
         return [r for r in map(_record, rows) if self.in_inbox_path(r.path_nfc)]
 
+    def codes_pending(self) -> int:
+        """How many inbox files (``in_inbox_path``) the barcode pass will still read for
+        QR stickers: a type it reads and no sticker reading for the current content (no
+        hash yet counts). Files that failed to index or are unsupported are never read,
+        so they are not waited for."""
+        qr_read = (
+            select(file_qr_codes.c.drive_id)
+            .where(
+                file_qr_codes.c.drive_id == files.c.drive_id,
+                file_qr_codes.c.sha256 == files.c.sha256,
+            )
+            .exists()
+        )
+        with self._conn() as conn:
+            stmt = select(files.c.path_nfc).where(
+                *_COUNTED,
+                files.c.missing.is_not(True),
+                self._under_inbox(),
+                files.c.ext.in_(BARCODE_EXTS),
+                files.c.index_state.in_(["pending", "indexed"]),
+                not_(qr_read),
+            )
+            paths = conn.execute(stmt).scalars().all()
+        return sum(1 for path in paths if self.in_inbox_path(path))
+
     def _under_inbox(self):
         """Every row below the inbox, at any depth, matching it up to ASCII case (LIKE);
         callers keep those ``in_inbox_path`` accepts. The inbox is small."""

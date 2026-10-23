@@ -563,6 +563,8 @@ main:has(> .inbox) { padding: 0; min-height: 0; display: flex; }
 .batch-arrow { color: var(--muted); }
 .batch-to { font-weight: 500; overflow-wrap: anywhere; }
 .batch-note { color: var(--orange-text); font-size: var(--fs-sm); }
+/* "Reading filing codes…" beside File N marked while stickers are still read */
+.reading-codes { color: var(--muted); font-size: var(--fs-sm); align-self: center; white-space: nowrap; }
 /* File N marked: one row per coded inbox file, exactly what will be filed */
 .marked-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); }
 .marked-body > .hint, .marked-body > .error, .marked-body > .notice { margin: 0 0 var(--sp-3); }

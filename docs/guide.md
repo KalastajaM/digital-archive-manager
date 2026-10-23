@@ -333,7 +333,8 @@ show **File N marked**. It opens **Marked files**, one row per coded file: the c
 found and how ("P (folder)", "A (sticker)"), and exactly what filing will do: the new
 name, the folder, the tray with the fields that will be stored (for To pay the due
 date, amount, IBAN and reference), tags, collections, and Starred or Important from the
-tick boxes.
+tick boxes. While dam is still reading new scans for stickers, **Reading filing codes…**
+shows next to the button (or on its own until a coded file is found).
 
 Every row is checked with a dry run before the list shows. A row that needs a look says
 why and starts unticked:

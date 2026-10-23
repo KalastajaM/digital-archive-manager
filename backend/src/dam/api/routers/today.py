@@ -33,4 +33,5 @@ def today(app: AppDep) -> dict:
         "found": with_marks(app, app.today.found_in_inbox(day, inbox)),
         "open_items": app.today.open_items(),
         "marked": marked_count(app, inbox),
+        "reading_codes": app.repo.codes_pending() if app.codes else 0,
     }
