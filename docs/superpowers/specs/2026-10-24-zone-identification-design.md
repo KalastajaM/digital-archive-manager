@@ -39,7 +39,7 @@ Where a word sits on page 1 says far more than whether it is in the text at all.
 - Matching logos as images (no text in them). Text in or next to the letterhead covers
   most senders; image matching is a later design if real examples need it.
 - Pages after page 1.
-- Deskewing or rotating scans. A small tolerance around each box absorbs the usual shift
+- Deskewing or rotating scans. A small margin around each box (when matching) absorbs the usual shift
   and skew of a scanner; a page scanned sideways does not match, and the replay shows it.
 - Filing without a confirm (CONTRIBUTING safety rules). Zone rules and detected people
   only fill in the Inbox form, as rules do today.
@@ -79,9 +79,12 @@ Where a word sits on page 1 says far more than whether it is in the text at all.
 
 **What is kept.** For page 1: each line of text with its box, as fractions of the page
 width and height (origin top left, after the page's own rotation), plus the page size.
-Lines rather than words, because both OCR engines give lines directly and a page has
-tens of them, not hundreds (builder's call, also the storage format: a JSON list per
-file is enough).
+Lines first, with a box per word inside each line (added after the first release: a box
+drawn tightly around one word must not return its whole line). The storage format is a
+JSON list per file; a line's `words` (`text`, `box`) is optional, and a row without it
+(read earlier) is matched by line. Word boxes come from the text layer's character boxes,
+Tesseract's `image_to_data` and, for Apple Vision (line boxes only through ocrmac), an
+estimate that shares the line's width in proportion to the characters.
 
 **Where it comes from.**
 
@@ -144,12 +147,18 @@ A rule can require text in an area of page 1:
     name: "{doc_date:%Y%m%d}_Pohjola"
 ```
 
-- `zone.text_contains`: any of these words in a line of page 1 that lies in the box, by
-  the same folding as today (`fold` in `rules/model.py`). All other conditions in `when`
+- `zone.text_contains`: any of these words in the text of the box (the words of page 1
+  that are at least half inside the box, joined per line; a line without word boxes
+  counts whole), by the same folding as today (`fold` in `rules/model.py`). All other conditions in `when`
   still have to match too.
-- **Tolerance**: a line lies in the box when at least half of its area is inside the box
-  grown by a margin on every side (builder's call: about 3 % of the page). Scans shift a
-  few millimetres between letters; a small margin is what makes a box usable.
+- **Tolerance**: what a box *contains*, as listed for the box that was drawn (the lines
+  endpoint, the draft, the box rows, the explain lines), uses no margin: words at least
+  half inside the box itself. Matching a rule on another document grows the box by 2 %
+  of the page across (about 4 mm on A4) and 0.6 % down (about 1.8 mm, which still absorbs a 3 mm shift of a line), because scans shift a
+  few millimetres between letters. Down is smaller on purpose: ordinary lines sit 4 to 6
+  mm apart with their boxes only about 1 mm apart, and a bigger vertical margin would pull the neighbouring line into a box
+  drawn around one line. People detection in the address area keeps its own 3 % margin
+  (the area is an approximation of the standard).
 - A file without a current layout row does not match a zone condition. In the Inbox
   this is rare (inbox files are read first); while it is the case, the suggestion says
   "Reading page 1…" instead of silently offering nothing.
@@ -159,10 +168,10 @@ images, so a drag rectangle over page 1 is plain frontend work), on the Inbox ca
 Browse. On release, the server returns the lines inside the box (a new endpoint, read
 only). The owner picks what the box means:
 
-- **Sender**: opens the learned-rules draft sheet with `when.zone` filled in (the box and
+- **Make a rule…** (first called "Sender"; who it is from is an optional field in the sheet): opens the learned-rules draft sheet with `when.zone` filled in (the box and
   its most distinctive word ticked, as the draft does today), the folder and name from
   the owner's filing when there is one, and the replay below.
-- **Address area for this sender**: for the few senders whose letters break the usual
+- **Address area for this rule's letters** (first called "for this sender"): for the few senders whose letters break the usual
   layout. Stored on the sender's rule as `person_zone: [x0, y0, x1, y1]`; when that rule
   matches, people are looked for there instead of in the global address zone.
 

@@ -352,6 +352,16 @@ describe("FilePreview of a link", () => {
       </MemoryRouter>,
     );
 
+  it("gives the target's page the Draw a box tool when asked", async () => {
+    mockFetch({ "GET /api/files/l1": detail() });
+    renderWithProviders(
+      <MemoryRouter>
+        <FilePreview file={link} boxTool={{}} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("button", { name: "Draw a box" })).toBeInTheDocument();
+  });
+
   it("says what it links to and previews the target (by the target's type)", async () => {
     mockFetch({ "GET /api/files/l1": detail() });
     renderLink();

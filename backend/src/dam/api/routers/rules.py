@@ -148,9 +148,7 @@ def draft_zone(app: AppDep, body: ZoneDraftIn) -> dict:
     """The rule the boxes drawn on page 1 start from (see ``ZoneDraftOut``). 400 when
     page 1 is not read yet, a box is empty or holds no usable word; 404 for an unknown
     document. Changes nothing."""
-    return asdict(
-        app.inbox.draft_zone(body.drive_id, body.boxes, body.sender, body.picture_boxes)
-    )
+    return asdict(app.inbox.draft_zone(body.drive_id, body.boxes, body.sender, body.picture_boxes))
 
 
 @router.post("/area-picture", response_model=AreaPictureOut)

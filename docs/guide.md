@@ -408,9 +408,12 @@ or when a filing code did the filing.
   filed documents are not offered. When no usable word is left, there is no offer.
 - **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
   document's year, its date and its original file name, and are filled in for each
-  document the rule files.
-- **Tags, tray and payee**, each with a box to leave it out.
-- **More conditions**: a file-name pattern, and the folder the file must be in.
+  document the rule files (the tips beside Folder and Name list them).
+- **Tags, tray and payee**: what the rule sets. An empty field is one the rule does not
+  set; to leave a field out, clear it.
+- **More conditions** (closed to begin with; a line beside it says what is set, such as
+  "Only in the inbox"): a file-name pattern (a regular expression searched anywhere in the
+  file name, see the tip beside it), and the folder the file must be in.
 - **Filed as**: the folder and name you gave the document just now, which the patterns
   were made from.
 
@@ -470,18 +473,35 @@ Most post comes from the same senders, with the letterhead in the same place eac
 A rule can require its words in an area of page 1, so a bill that only mentions
 "Pohjola" somewhere is not taken for a letter from Pohjola.
 
-In the preview of an Inbox document (or in Browse), turn on **Draw a box** and drag a
-rectangle over page 1. dam lists the text it found in the box and offers:
+In the preview of a PDF or image (the Inbox card, Browse, a collection, Quick Look, the
+document window or a link's target), turn on **Draw a box** and drag a rectangle over
+page 1. The panel "Boxes on page 1" lists the words dam found in it. Every box you draw
+is kept as it is drawn, numbered on the page and in the list (Box 1, Box 2, ...), with
+its own x to remove it. Esc drops the box you are dragging, then the last box, then
+closes the tool; the x at the top of the panel ("Close and drop the boxes") drops them
+all. The panel offers:
 
-- **Sender…**: give the sender a name if you like, and a rule sheet opens with the
-  words in the box as chips under "In the area you drew on page 1". The
-  proof works as above. Documents whose page 1 has not been read yet are read first
+- **Make a rule…**: a rule sheet opens with the words in the boxes as chips under "In the
+  area you drew on page 1" (one group for each box). The rule does not have to be about
+  a sender: a box can just as well pick out the kind of letter or any other fixed text.
+  The proof works as above. Documents whose page 1 has not been read yet are read first
   ("Reading page 1 of N documents…"); any that cannot be read are listed as not checked,
-  never counted as a miss. With a sender, the proof also says how many of the documents
-  you set as from that sender the rule finds, and which it misses.
-- **Address area for this sender**: for a sender whose letters put the address
-  somewhere unusual; shown when a rule made the current suggestion.
-- **Address area for all letters**: where dam looks for who a letter is for.
+  never counted as a miss. The sheet has an optional **From (sender)** field, filled in
+  from the document's own From when it has one. With a sender, the proof also says how
+  many of the documents you set as from that sender the rule finds, and which it misses.
+- **Address area for this rule's letters**: for a rule whose letters put the address
+  somewhere unusual; shown when one box is drawn and a rule made the current suggestion.
+- **Address area for all letters**: where dam looks for who a letter is for; shown when
+  one box is drawn.
+
+dam keeps where each word of page 1 sits, so a box drawn tightly around one word lists
+only that word, and a rule word has to be among the words inside the box. Letters that
+were read before dam kept word positions are matched by whole lines (a line counts when
+half of it is inside the box) until the file's content changes and page 1 is read again;
+dam does not re-read them on its own. For scans read by Apple Vision on a Mac, the
+position of each word inside a line is an estimate, so a box that cuts a line in the
+middle can be off by a letter or two. Stray marks that OCR reads as one-letter words (like
+"•ö") are left out of the lists and the word chips.
 
 A box allows for a few millimetres of shift between scans.
 
@@ -492,10 +512,9 @@ too, such as the title under the letterhead. A rule can need more than one area:
 area must have one of its words, so "Pohjola in the letterhead" and "vakuutuskirja in the
 title" together file a policy and leave a Pohjola bill alone.
 
-Draw the first box and choose **Add another box**. The box stays on the page, numbered,
-and is listed in the panel with its lines; remove it with its x. Draw the next one the
-same way. **Sender…** then **Make a rule…** uses all the kept boxes, with one word
-ticked in each. The rule sheet shows each area as its own group of word chips with a
+Draw the first box; it stays on the page, numbered, and is listed in the panel with its
+words. Draw the next one the same way and remove any with its x. **Make a rule…** uses
+all the boxes, with one word ticked in each. The rule sheet shows each area as its own group of word chips with a
 **Remove** button; a rule needs at least one word or area. Within an area any ticked
 word is enough.
 
@@ -508,10 +527,9 @@ of them rule X comes first" if the order is wrong.
 #### Picture areas
 
 Some letterheads are only a picture: a logo, and the box holds no text. Then dam can
-recognise the picture itself. Draw the box and choose **Match the picture in this area**
-(it is offered for any box, not only an empty one). The box stays on the page, numbered,
-and the panel shows the picture that was cut out of it. **Sender…** and **Make a rule…**
-then make a rule with that area; the rule sheet shows the picture and a slider, **Match
+recognise the picture itself. Draw the box and, in its row, choose **Picture** instead of **Words**
+(it is offered for any box, not only an empty one). The panel shows the picture that was
+cut out of it. **Make a rule…** then makes a rule with that area; the rule sheet shows the picture and a slider, **Match
 needed**.
 
 How it works: dam keeps a small grayscale picture of page 1 of each PDF and image (about

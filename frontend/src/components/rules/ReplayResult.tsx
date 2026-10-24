@@ -1,4 +1,5 @@
 /** The proof under a rule: what it would have done to the documents filed so far. */
+import { useId } from "react";
 import type { Replay } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
@@ -74,6 +75,7 @@ export function ReplayResult({
   error?: string | null;
   onRetry?: () => void;
 }) {
+  const id = useId();
   if (error)
     return (
       <div className="error" role="alert">
@@ -88,13 +90,13 @@ export function ReplayResult({
   const shadowed = new Map<string, number>();
   for (const s of replay.shadowed) shadowed.set(s.rule_id, (shadowed.get(s.rule_id) ?? 0) + 1);
   return (
-    <section className="replay-result" aria-label="Test result" aria-busy={pending}>
+    <section className="replay-result" aria-labelledby={`${id}-title`} aria-busy={pending}>
+      <h4 id={`${id}-title`}>Test against your filed documents</h4>
       {replay.matched === 0 ? (
         <p className="hint">
-          Not tested yet:{" "}
           {notChecked.length > 0 || reading > 0
-            ? `${notChecked.length} not checked yet`
-            : "no filed document matches it"}
+            ? `Not tested yet: ${notChecked.length} not checked yet`
+            : "No filed document matches this rule yet, so it could not be tested against them."}
         </p>
       ) : (
         <p>

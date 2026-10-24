@@ -106,7 +106,7 @@ def test_a_word_in_the_zone_matches_and_a_word_elsewhere_does_not():
 
 
 def test_matching_folds_case_and_diacritics_and_uses_the_margin():
-    near = layout(("POHJOLA", (0.10, 0.155, 0.30, 0.175)))  # just under the box, in the margin
+    near = layout(("POHJOLA", (0.10, 0.138, 0.30, 0.148)))  # just under the box, in the margin
     assert suggest(rec(), "pohjola", [zone_rule()], layout=near).folder == "Insurance/Pohjola"
     far = layout(("POHJOLA", (0.10, 0.30, 0.30, 0.32)))
     assert suggest(rec(), "pohjola", [zone_rule()], layout=far).folder is None
@@ -424,3 +424,55 @@ def test_replay_loads_layouts_in_chunks_not_per_row(app, fake_archive, monkeypat
     )
     assert r.matched == 5 and len(calls) <= 3  # ceil(5 / 2), not one per file
     assert r.shadowed  # the earlier zone rule was evaluated with the layouts
+
+
+# --- word positions -------------------------------------------------------------------
+
+
+TEXT = "Asiakastiedote 1.11.2019 Pohjola"
+
+
+def words_layout():
+    from dam.extract.layout import Word
+
+    line = Line(
+        "Asiakastiedote 1.11.2019 Pohjola",
+        (0.1, 0.05, 0.9, 0.08),
+        [
+            Word("Asiakastiedote", (0.1, 0.05, 0.3, 0.08)),
+            Word("1.11.2019", (0.35, 0.05, 0.55, 0.08)),
+            Word("Pohjola", (0.7, 0.05, 0.9, 0.08)),
+        ],
+    )
+    return Page1Layout([line], "text-layer")
+
+
+def test_a_zone_word_must_be_among_the_words_inside_the_box():
+    left = (0.05, 0.02, 0.32, 0.12)
+    page = words_layout()
+    assert suggest(rec(), TEXT, [zone_rule("asiakastiedote", left)], layout=page).folder
+    # "pohjola" is in the same line, but outside the box
+    assert suggest(rec(), TEXT, [zone_rule("pohjola", left)], layout=page).folder is None
+    # a term of several words matches across consecutive words inside the box
+    both = (0.05, 0.02, 0.6, 0.12)
+    assert suggest(rec(), TEXT, [zone_rule("tiedote 1.11", both)], layout=page).folder
+    assert suggest(rec(), TEXT, [zone_rule("tiedote 1.11", left)], layout=page).folder is None
+
+
+def test_an_old_row_without_words_matches_by_line_as_before():
+    old = layout(("Asiakastiedote 1.11.2019 Pohjola", (0.1, 0.05, 0.9, 0.08)))
+    left = (0.05, 0.02, 0.5, 0.12)  # over half the line
+    assert suggest(rec(), TEXT, [zone_rule("pohjola", left)], layout=old).folder
+
+
+def test_the_lines_endpoint_and_explain_give_only_the_words_in_the_box(app, fake_archive):
+    add(app, fake_archive, f"{INBOX}/a.pdf", "a", TEXT, words_layout())
+    with make_client(app) as c:
+        got = post(c, "/api/files/a/page1/lines", {"box": [0.05, 0.02, 0.32, 0.12]}).json()
+        assert [ln["text"] for ln in got["lines"]] == ["Asiakastiedote"]
+        assert got["lines"][0]["box"] == [0.1, 0.05, 0.3, 0.08]
+    shown = explain(
+        rec(), TEXT, [zone_rule("asiakastiedote", (0.05, 0.02, 0.32, 0.12))], None,
+        None, layout=words_layout(),
+    )  # fmt: skip
+    assert shown[0].zone_lines == [["Asiakastiedote"]]

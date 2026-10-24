@@ -351,3 +351,12 @@ def test_oversized_rules_file_skipped(tmp_path):
     rules, errors = load_rules(tmp_path)
     assert rules == []
     assert "too large" in errors[0].message
+
+
+def test_blank_folder_and_name_are_not_set():
+    from dam.rules.model import Then
+
+    assert Then(folder="  ", name="").folder is None
+    assert Then(folder="  ", name="").name is None
+    kept = Then(folder=" 10. Money/{year} ", name="x")
+    assert kept.folder == "10. Money/{year}" and kept.name == "x"

@@ -179,6 +179,19 @@ def test_draft_zone_with_two_boxes_has_one_ticked_word_per_box(app, fake_archive
     assert d["place_above"] is None
 
 
+def test_draft_zone_starts_from_the_documents_from_assignment(app, fake_archive):
+    seed_frequency(app, fake_archive)
+    add(app, fake_archive, f"{INBOX}/a.pdf", "a", "pohjola vakuutus", LETTER)
+    with make_client(app) as c:
+        body = {"drive_id": "a", "boxes": [list(HEADER)]}
+        assert post(c, "/api/rules/draft-zone", body).json()["sender"] is None
+        app.assignments.set(["a"], sender="Pohjola")
+        assert post(c, "/api/rules/draft-zone", body).json()["sender"] == "Pohjola"
+        # a sender given in the request wins
+        other = post(c, "/api/rules/draft-zone", {**body, "sender": "Other"}).json()
+        assert other["sender"] == "Other"
+
+
 def test_draft_zone_names_the_empty_box(app, fake_archive):
     add(app, fake_archive, f"{INBOX}/a.pdf", "a", "x", LETTER)
     with make_client(app) as c:

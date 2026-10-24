@@ -91,8 +91,14 @@ class SheetLayout(BaseModel):
 
 
 _GRID = {
-    "columns": 5, "rows": 13, "label_w_mm": 38.1, "label_h_mm": 21.2,
-    "top_mm": 10.7, "left_mm": 4.7, "gap_x_mm": 2.5, "gap_y_mm": 0.0,
+    "columns": 5,
+    "rows": 13,
+    "label_w_mm": 38.1,
+    "label_h_mm": 21.2,
+    "top_mm": 10.7,
+    "left_mm": 4.7,
+    "gap_x_mm": 2.5,
+    "gap_y_mm": 0.0,
 }  # L7651 as commonly published (pitch 40.6 x 21.2 mm, top 10.7, left 4.7); not checked
 # against Avery's template, see the guide.
 
@@ -101,12 +107,16 @@ def builtin_layouts() -> list[SheetLayout]:
     """The layouts that come with dam (not in the config folder, so never seeded there)."""
     return [
         SheetLayout(
-            id="l7651", name="Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)",
-            cut_lines=False, **_GRID,
+            id="l7651",
+            name="Avery Zweckform L7651 (65 per sheet, 38.1 x 21.2 mm)",
+            cut_lines=False,
+            **_GRID,
         ),
         SheetLayout(
-            id="plain", name="Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)",
-            cut_lines=True, **_GRID,
+            id="plain",
+            name="Plain paper, cut out (65 per sheet, 38.1 x 21.2 mm)",
+            cut_lines=True,
+            **_GRID,
         ),
     ]
 
@@ -120,9 +130,7 @@ def custom_layout(config_dir: Path) -> SheetLayout | None:
     try:
         _, data = read_yaml(path)
         if isinstance(data, list):  # an early dev build seeded a list of built-ins here
-            data = next(
-                (d for d in data if isinstance(d, dict) and d.get("id") == CUSTOM_ID), None
-            )
+            data = next((d for d in data if isinstance(d, dict) and d.get("id") == CUSTOM_ID), None)
         if data is None:
             return None
         if not isinstance(data, dict):
@@ -155,14 +163,74 @@ def save_custom(config_dir: Path, layout: SheetLayout) -> SheetLayout:
 
 _W = {" ": 0.278, "!": 0.278, ".": 0.278, ",": 0.278, "-": 0.333, "(": 0.333, ")": 0.333}
 _W.update(dict.fromkeys("0123456789", 0.556))
-_W.update(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", (
-    0.667, 0.667, 0.722, 0.722, 0.667, 0.611, 0.778, 0.722, 0.278, 0.5, 0.667, 0.556, 0.833,
-    0.722, 0.778, 0.667, 0.778, 0.722, 0.667, 0.611, 0.722, 0.667, 0.944, 0.667, 0.667, 0.611,
-), strict=True))
-_W.update(zip("abcdefghijklmnopqrstuvwxyz", (
-    0.556, 0.556, 0.5, 0.556, 0.556, 0.278, 0.556, 0.556, 0.222, 0.222, 0.5, 0.222, 0.833,
-    0.556, 0.556, 0.556, 0.556, 0.333, 0.5, 0.278, 0.556, 0.5, 0.722, 0.5, 0.5, 0.5,
-), strict=True))
+_W.update(
+    zip(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        (
+            0.667,
+            0.667,
+            0.722,
+            0.722,
+            0.667,
+            0.611,
+            0.778,
+            0.722,
+            0.278,
+            0.5,
+            0.667,
+            0.556,
+            0.833,
+            0.722,
+            0.778,
+            0.667,
+            0.778,
+            0.722,
+            0.667,
+            0.611,
+            0.722,
+            0.667,
+            0.944,
+            0.667,
+            0.667,
+            0.611,
+        ),
+        strict=True,
+    )
+)
+_W.update(
+    zip(
+        "abcdefghijklmnopqrstuvwxyz",
+        (
+            0.556,
+            0.556,
+            0.5,
+            0.556,
+            0.556,
+            0.278,
+            0.556,
+            0.556,
+            0.222,
+            0.222,
+            0.5,
+            0.222,
+            0.833,
+            0.556,
+            0.556,
+            0.556,
+            0.556,
+            0.333,
+            0.5,
+            0.278,
+            0.556,
+            0.5,
+            0.722,
+            0.5,
+            0.5,
+            0.5,
+        ),
+        strict=True,
+    )
+)
 
 
 def _em(text: str) -> float:

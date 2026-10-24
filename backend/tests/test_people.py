@@ -436,3 +436,27 @@ def test_the_offer_after_a_filing_proposes_person_in_the_folder(app, fake_archiv
         r = post(client, "/api/inbox/file", body)
     assert r.status_code == 200, r.text
     assert r.json()["offer"]["draft"]["folder"] == "11. Bills/{person}/{year}"
+
+
+def test_people_are_found_in_the_words_inside_the_box_not_the_whole_line():
+    from dam.config import Person
+    from dam.extract.layout import Line, Page1Layout, Word
+    from dam.rules.people import detect_people
+
+    line = Line(
+        "Michiel Visser Tiina Visser",
+        (0.1, 0.1, 0.9, 0.13),
+        [
+            Word("Michiel", (0.1, 0.1, 0.25, 0.13)),
+            Word("Visser", (0.27, 0.1, 0.4, 0.13)),
+            Word("Tiina", (0.6, 0.1, 0.75, 0.13)),
+            Word("Visser", (0.77, 0.1, 0.9, 0.13)),
+        ],
+    )
+    page = Page1Layout([line], "text-layer")
+    people = [
+        Person(name="Michiel", match=["Michiel Visser"]),
+        Person(name="Tiina", match=["Tiina Visser"]),
+    ]
+    assert detect_people(page, (0.05, 0.05, 0.45, 0.2), people) == ["Michiel"]
+    assert detect_people(page, (0, 0, 1, 1), people) == ["Michiel", "Tiina"]

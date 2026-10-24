@@ -419,7 +419,6 @@ function PdfPages({
             {boxes.button}
             {tools}
           </ZoomControls>
-          {boxes.panel}
           <ZoomFrame zoom={zoom}>
             {boxes.around(
               <ZoomImage
@@ -439,6 +438,7 @@ function PdfPages({
               />,
             )}
           </ZoomFrame>
+          {boxes.panel}
           <figcaption>
             <button
               type="button"
@@ -492,7 +492,6 @@ function ImagePreview({
             {boxes.button}
             {tools}
           </ZoomControls>
-          {boxes.panel}
           <ZoomFrame zoom={zoom}>
             {boxes.around(
               <ZoomImage
@@ -505,6 +504,7 @@ function ImagePreview({
               />,
             )}
           </ZoomFrame>
+          {boxes.panel}
         </figure>
       )}
     </WithBoxes>
@@ -597,6 +597,7 @@ function LinkPreview({
   beforeGoToTarget,
   zoomControl,
   extraTools,
+  boxTool,
 }: PreviewProps & { windowButton: boolean } & LinkProps & { goToTarget: boolean }) {
   const detail = useFileDetail(file.drive_id);
   const navigate = useNavigate();
@@ -643,6 +644,7 @@ function LinkPreview({
           windowButton={windowButton}
           zoomControl={zoomControl}
           extraTools={extraTools}
+          boxTool={boxTool}
         />
       </>
     );
@@ -681,6 +683,7 @@ export function FilePreview({
         beforeGoToTarget={beforeGoToTarget}
         zoomControl={zoomControl}
         extraTools={extraTools}
+        boxTool={boxTool}
       />
     );
   }

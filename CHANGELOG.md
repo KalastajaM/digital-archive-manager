@@ -27,10 +27,21 @@ All notable changes are listed here. The format follows
   pictures in the cache folder are dam's own temporary files: once after the first scan at
   startup dam removes the ones that no indexed file matches any more. A picture area must
   be at least 1% of the page wide and high; smaller ones are refused.
+- dam now keeps where each word of page 1 sits, not only each line. A box drawn tightly
+  around one word lists only that word, and a rule word only counts when it is among the
+  words inside the box (a name of two words matches when both are inside). Documents read
+  before this keep matching by whole lines until their content changes; dam does not
+  re-read them on its own. For scans read by Apple Vision the position of a word inside a
+  line is an estimate.
+- Draw a box now works in every preview of a PDF or image: Quick Look, the document
+  window, a collection's file panel, a link's target and the item screen, as well as the
+  Inbox and Browse.
+- A rule you make from boxes has an optional **From (sender)** field in the rule sheet,
+  filled in from the document's own From when it has one.
 - A rule can need several areas of page 1, such as "Pohjola in the letterhead" and
   "vakuutuskirja in the title", so each kind of letter from a sender files to its own
-  place. In Draw a box, **Add another box** keeps a box and lets you draw the next; the
-  rule sheet shows each area as its own group of words, and a rule made from boxes is
+  place. In Draw a box, every box you draw is kept and numbered and you draw the next;
+  the rule sheet shows each area as its own group of words, and a rule made from boxes is
   saved directly above the learned rule that matches the document already.
 - You can see why a document matched: **Show areas** in the preview draws the areas of
   every rule that matched, the lines that matched in them, the address area and the line
@@ -186,6 +197,10 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- Draw a box no longer lists the lines next to the one you drew around: a box holds
+  only the words inside it. A rule still finds its words when a copy is shifted by a few
+  millimetres, but a line below no longer counts for the box. The box list and notes now
+  sit below the page, so the page stays put while you draw more boxes.
 - On Linux, an excluded AI folder typed in another case (`10. financial`) no longer
   shows as "not in the archive"; it is found as the exclusion itself finds it.
 - Dropping a folder from Browse on a collection in the sidebar now adds it; the row lit up
@@ -207,6 +222,24 @@ All notable changes are listed here. The format follows
   manager.
 
 ### Changed
+
+- The rule sheet is easier to read. The "Leave out" boxes are gone: an empty Folder, Name,
+  Tags, Tray or Payee is one the rule does not set, and clearing a field never saves an
+  empty pattern. The explanations (the From sender, the Folder and Name patterns, and the
+  file name pattern, which is a regular expression with examples) are tooltips beside the
+  labels. More conditions starts closed and a line beside it says what is set, such as
+  "Only in the inbox". The test at the bottom has the heading "Test against your filed
+  documents", and when no filed document matches it says so in plain words.
+- Draw a box: every box you draw is kept at once, numbered Box 1, Box 2 and so on, and the
+  panel "Boxes on page 1" lists each with the words found in it (or "No text found", or
+  its picture) and its own x. There is no "Add another box" step any more. Each box has a
+  **Words** or **Picture** choice. Esc drops the box you are dragging, then the last box,
+  then closes the tool, and the panel's x now reads "Close and drop the boxes".
+- "Sender…" in the box panel is now **Make a rule…**, because boxes can pick out the kind
+  of letter as well as who it is from. "Address area for this sender" is now "Address area
+  for this rule's letters". Both address choices show when exactly one box is drawn.
+- Stray marks that OCR reads as one-letter words, like "•ö", are left out of the words a box
+  lists and of the word chips in a new rule.
 
 - The sidebar has Browse at the top, under Inbox, and Trays, Collections and Archive
   fold with a chevron beside their caption. A folded Trays still shows how many items

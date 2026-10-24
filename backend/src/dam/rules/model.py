@@ -37,7 +37,8 @@ class Zone(BaseModel):
     """An area of page 1 that must hold something: ``box`` is ``(x0, y0, x1, y1)`` as
     fractions of the page, origin top left. Exactly one of ``text_contains`` (words: a line
     of page 1 in the box has one of them; a line lies in the box when at least half of it is
-    inside the box grown by a small margin, ``dam.extract.layout.ZONE_MARGIN``) or ``image``
+    inside the box grown by a small margin, ``dam.extract.layout.ZONE_MARGIN``, 2 % across and
+    0.6 % down; the lines listed for a drawn box use no margin) or ``image``
     (a picture area: ``areas/<name>.png``, a grayscale crop of the area kept in the rules'
     ``areas`` folder, ``dam.rules.picture``; it matches when its best score on page 1 is at
     least ``min_score``, ``DEFAULT_MIN_SCORE`` when that is not given)."""
@@ -134,7 +135,7 @@ class Then(BaseModel):
     tray: str | None = None
     payee: str | None = None
 
-    @field_validator("tray", "payee")
+    @field_validator("folder", "name", "tray", "payee")
     @classmethod
     def _blank_is_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value is not None else None

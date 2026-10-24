@@ -21,7 +21,7 @@ export function FilePanel({
   intro,
   extras,
   backToInbox,
-  boxTool = false,
+  boxTool = true,
 }: {
   file: MetaFile;
   /** What the preview shows (Browse: a link's target). */
@@ -33,7 +33,7 @@ export function FilePanel({
   intro?: ReactNode;
   extras?: ReactNode;
   backToInbox?: BackToInbox;
-  /** The "Draw a box" tool on page 1 (Browse). */
+  /** The "Draw a box" tool on page 1 (on unless turned off). */
   boxTool?: boolean;
 }) {
   return (

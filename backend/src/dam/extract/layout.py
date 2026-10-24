@@ -18,15 +18,35 @@ SCALE = 10000  # PDFium's device matrix works in whole pixels: ask for a fine on
 
 Box = tuple[float, float, float, float]
 
-# a line is in a box when at least half of its area is inside the box grown by this
-# much of the page on every side (scans shift a few millimetres between letters)
-ZONE_MARGIN = 0.03
+# What a box CONTAINS (what the owner sees listed for a drawn box) uses no margin: words
+# at least half inside the box itself. Matching a rule on other documents grows the box
+# by ZONE_MARGIN = (across, down), as fractions of the page, because scans shift a few
+# millimetres between letters. Across 0.02 is about 4 mm on A4 (210 mm), down 0.006 about
+# 1.8 mm (297 mm). Down is much smaller on purpose: in a normal letter (12 pt type on a
+# 14 pt pitch) the boxes of two lines are only about 1 mm apart, so a tight box grown by
+# 0.01 already holds more than half of the line below. With 0.006 that neighbour stays
+# at about a fifth inside, while a copy shifted 3 mm up or down still has more than half
+# of the line in the box (it holds up to about 4 mm) and a sideways shift of 4 mm is fine.
+ZONE_MARGIN = (0.02, 0.006)
+NO_MARGIN = (0.0, 0.0)
+
+Margin = float | tuple[float, float]
+
+
+@dataclass(frozen=True)
+class Word:
+    text: str
+    box: Box
 
 
 @dataclass(frozen=True)
 class Line:
+    """A line of text with its box. ``words`` (each with its own box) is empty for a line
+    read before word positions were kept: such a line is matched as a whole."""
+
     text: str
     box: Box
+    words: list[Word] = field(default_factory=list, compare=True)
 
 
 @dataclass
@@ -44,15 +64,34 @@ class Page1Layout:
         return "\n".join(line.text for line in self.lines)
 
     def lines_json(self) -> str:
-        return json.dumps(
-            [{"text": ln.text, "box": [round(v, 5) for v in ln.box]} for ln in self.lines],
-            ensure_ascii=False,
-        )
+        rows = []
+        for ln in self.lines:
+            row: dict[str, Any] = {"text": ln.text, "box": [round(v, 5) for v in ln.box]}
+            if ln.words:
+                row["words"] = [
+                    {"text": w.text, "box": [round(v, 5) for v in w.box]} for w in ln.words
+                ]
+            rows.append(row)
+        return json.dumps(rows, ensure_ascii=False)
 
     @classmethod
     def from_json(cls, lines: str, source: str) -> Page1Layout:
         raw = json.loads(lines)
-        return cls([Line(r["text"], tuple(float(v) for v in r["box"])) for r in raw], source)
+        return cls(
+            [
+                Line(
+                    r["text"],
+                    tuple(float(v) for v in r["box"]),
+                    # rows stored before word positions were kept have no "words"
+                    [
+                        Word(w["text"], tuple(float(v) for v in w["box"]))
+                        for w in r.get("words") or []
+                    ],
+                )
+                for r in raw
+            ],
+            source,
+        )
 
 
 def clamp_box(box: Sequence[float]) -> Box:
@@ -89,21 +128,74 @@ def share_inside(line: Box, area: Box) -> float:
     return 1.0 if area[0] <= lx0 <= area[2] and area[1] <= ly0 <= area[3] else 0.0
 
 
-def grown(box: Sequence[float], margin: float = ZONE_MARGIN) -> Box:
+def grown(box: Sequence[float], margin: Margin = ZONE_MARGIN) -> Box:
+    """``box`` grown by ``margin`` on every side: one number for both axes, or
+    ``(across, down)``."""
+    mx, my = (margin, margin) if isinstance(margin, (int, float)) else margin
     x0, y0, x1, y1 = box
-    return clamp_box((x0 - margin, y0 - margin, x1 + margin, y1 + margin))
+    return clamp_box((x0 - mx, y0 - my, x1 + mx, y1 + my))
 
 
-def in_zone(line: Line, box: Sequence[float], margin: float = ZONE_MARGIN) -> bool:
+def in_zone(line: Line, box: Sequence[float], margin: Margin = ZONE_MARGIN) -> bool:
     """The line lies in ``box``: at least half of it is inside the box grown by ``margin``."""
     return share_inside(line.box, grown(box, margin)) >= 0.5
 
 
+def estimate_words(text: str, box: Box) -> list[Word]:
+    """Word boxes for a line whose engine gives only the box of the whole line (Apple
+    Vision through ocrmac): an ESTIMATE that shares the line's width among its words in
+    proportion to their characters, spaces included. Good enough to tell the left part of
+    a line from the right; a proportional font is off by a few letters."""
+    parts = text.split()
+    if not parts:
+        return []
+    x0, y0, x1, y1 = box
+    total = sum(len(p) for p in parts) + len(parts) - 1
+    step = (x1 - x0) / total
+    out: list[Word] = []
+    at = 0
+    for p in parts:
+        out.append(Word(p, (x0 + at * step, y0, x0 + (at + len(p)) * step, y1)))
+        at += len(p) + 1
+    return out
+
+
+def union(boxes: Sequence[Box]) -> Box:
+    return (
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    )
+
+
 def lines_in_zone(
-    lines: Sequence[Line], box: Sequence[float], margin: float = ZONE_MARGIN
+    lines: Sequence[Line], box: Sequence[float], margin: Margin = NO_MARGIN
 ) -> list[Line]:
+    """The text of page 1 in ``box``, one ``Line`` per line of the page that has any.
+    No margin by default: this is what the box contains. Pass ``ZONE_MARGIN`` to match.
+
+    A line with word positions contributes the words that are at least half inside the
+    grown box (joined with spaces, in reading order, with the box that holds those words);
+    a line that has all its words in comes back as it is. A line without word positions (an
+    old row) counts whole when half of it is inside."""
     area = grown(box, margin)
-    return [ln for ln in lines if share_inside(ln.box, area) >= 0.5]
+    out: list[Line] = []
+    for ln in lines:
+        if not ln.words:
+            if share_inside(ln.box, area) >= 0.5:
+                out.append(ln)
+            continue
+        inside = [w for w in ln.words if share_inside(w.box, area) >= 0.5]
+        if not inside:
+            continue
+        if len(inside) == len(ln.words):
+            out.append(ln)
+        else:
+            out.append(
+                Line(" ".join(w.text for w in inside), union([w.box for w in inside]), inside)
+            )
+    return out
 
 
 # -- the text layer of a PDF page ----------------------------------------------------
@@ -156,23 +248,25 @@ def text_layer_lines(page) -> list[Line]:
     lines: list[Line] = []
     chars: list[tuple[str, Box]] = []  # characters with a real box: the geometry
     parts: list[str] = []  # the text of the line, which also has the boxless characters
+    words: list[Word] = []  # the words of the line so far
+    word_text: list[str] = []  # the word being read, and the boxes of its sized characters
+    word_boxes: list[Box] = []
+
+    def end_word() -> None:
+        text = "".join(word_text).strip()
+        if text and word_boxes:
+            words.append(Word(text, union(word_boxes)))
+        word_text.clear()
+        word_boxes.clear()
 
     def flush() -> None:
+        end_word()
         text = "".join(parts).strip()
         if text and chars:
-            lines.append(
-                Line(
-                    text,
-                    (
-                        min(b[0] for _, b in chars),
-                        min(b[1] for _, b in chars),
-                        max(b[2] for _, b in chars),
-                        max(b[3] for _, b in chars),
-                    ),
-                )
-            )
+            lines.append(Line(text, union([b for _, b in chars]), list(words)))
         chars.clear()
         parts.clear()
+        words.clear()
 
     for ch, raw_box in zip(texts, boxes, strict=True):
         if ch in "\r\n":
@@ -184,8 +278,10 @@ def text_layer_lines(page) -> list[Line]:
             if ch.isspace():
                 if parts and not parts[-1].isspace():
                     parts.append(" ")
+                end_word()
             else:
                 parts.append(ch)
+                word_text.append(ch)
             continue
         box = place(raw_box)
         if chars:
@@ -201,5 +297,10 @@ def text_layer_lines(page) -> list[Line]:
                 flush()
         chars.append((ch, box))
         parts.append(ch)
+        if ch.isspace():
+            end_word()
+        else:
+            word_text.append(ch)
+            word_boxes.append(box)
     flush()
     return lines
