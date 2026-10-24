@@ -1468,12 +1468,14 @@ class BatchRowOut(BaseModel):
 
 class ZoneIn(_In):
     """An area of page 1: ``box`` is [x0, y0, x1, y1] as fractions of the page, origin top
-    left. It has words (``text_contains``) or, later, a picture (``image``): exactly one
-    (``image`` is refused for now)."""
+    left. It has words (``text_contains``) or a picture (``image``, ``areas/<name>.png``
+    from ``POST /api/rules/area-picture``): exactly one. ``min_score`` (a picture's, 0 to 1)
+    is the score the picture needs; left out, the default (0.85)."""
 
     box: list[float] = Field(min_length=4, max_length=4)
     text_contains: list[str] | None = None
     image: str | None = None
+    min_score: float | None = None
 
 
 class RuleWhenIn(_In):
@@ -1529,6 +1531,7 @@ class ZoneOut(BaseModel):
     box: list[float]
     text_contains: list[str] | None
     image: str | None
+    min_score: float | None = None
 
 
 class RuleWhenOut(BaseModel):
@@ -1589,6 +1592,11 @@ class RulesOut(BaseModel):
     rules: list[RuleOut]
     errors: list[RuleErrorOut]
     state: RulesStateOut
+    # picture files in config/rules/areas that no loaded rule uses (a deleted rule leaves
+    # its pictures)
+    unused_pictures: list[str] = []
+    # the score a picture area needs when it names none
+    default_min_score: float = 0.85
 
 
 class ReplayHitOut(BaseModel):
@@ -1600,6 +1608,15 @@ class ReplayHitOut(BaseModel):
 class ShadowOut(BaseModel):
     drive_id: str
     rule_id: str  # the earlier rule that wins
+
+
+class PictureScoreOut(BaseModel):
+    """How well page 1 of a document matched a rule's picture areas (the lowest score of
+    them) and whether the rule matched it."""
+
+    path: str
+    score: float
+    matched: bool
 
 
 class NotCheckedOut(BaseModel):
@@ -1634,6 +1651,9 @@ class ReplayOut(BaseModel):
     # how many page-1 reads are queued by this replay (post it again to see them)
     reading: int
     marked: MarkedOut | None = None  # only for a rule with a sender
+    # only for a rule with picture areas: the lowest scores of its matches and the highest
+    # of the documents it did not match, to see how well they are told apart
+    scores: list[PictureScoreOut] = []
 
 
 class Page1LineOut(BaseModel):
@@ -1650,6 +1670,27 @@ class Page1Out(BaseModel):
     unavailable: str | None = None
 
 
+class AreaPictureIn(_In):
+    """Cut the picture of ``box`` (fractions of page 1) from the document's page-1 picture.
+    With ``save`` (and the rule's id, for the file name) it is also kept in
+    ``config/rules/areas`` and the answer names it."""
+
+    drive_id: str
+    box: list[float] = Field(min_length=4, max_length=4)
+    save: bool = False
+    rule_id: str | None = None
+
+
+class AreaPictureOut(BaseModel):
+    """The crop: 8-bit grayscale, its long side at most 300 px; ``png`` is base64.
+    ``image`` is the path for a zone's ``image`` once it is saved, else null."""
+
+    width: int
+    height: int
+    png: str
+    image: str | None = None
+
+
 class Page1BoxIn(_In):
     box: list[float] = Field(min_length=4, max_length=4)
 
@@ -1657,10 +1698,12 @@ class Page1BoxIn(_In):
 class ZoneDraftIn(_In):
     drive_id: str
     # one box, or several: each is an area of the rule, with one ticked word
-    boxes: list[list[float]] = Field(min_length=1, max_length=8)
+    boxes: list[list[float]] = Field(default_factory=list, max_length=8)
+    # boxes that become picture areas (the crop is kept as a picture file), after the others
+    picture_boxes: list[list[float]] = Field(default_factory=list, max_length=4)
     sender: str | None = None
 
-    @field_validator("boxes")
+    @field_validator("boxes", "picture_boxes")
     @classmethod
     def _four_numbers(cls, boxes: list[list[float]]) -> list[list[float]]:
         if any(len(b) != 4 for b in boxes):
@@ -1676,6 +1719,17 @@ class ZoneDraftAreaOut(BaseModel):
     lines: list[str]
 
 
+class ZoneDraftPictureOut(BaseModel):
+    """A picture box of a draft: ``image`` is the saved crop (the zone's ``image``), ``png``
+    the same picture in base64 to show."""
+
+    box: list[float]
+    image: str
+    width: int
+    height: int
+    png: str
+
+
 class ZoneDraftOut(RuleDraftOut):
     """The draft boxes drawn on page 1 start from. The rule's ``when`` is ``{folder_is,
     zones: [{box, text_contains: [the ticked word]}, ...]}``; ``zones`` has the candidate
@@ -1684,6 +1738,7 @@ class ZoneDraftOut(RuleDraftOut):
     so the new rule is placed directly above it."""
 
     zones: list[ZoneDraftAreaOut]
+    pictures: list[ZoneDraftPictureOut] = []
     folder_is: str | None
     sender: str | None
     place_above: str | None

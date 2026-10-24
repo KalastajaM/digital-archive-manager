@@ -27,7 +27,10 @@ from dam.rules.engine import (
     _render_folder,
     _render_name,
     check,
+    has_picture_zones,
+    has_text_zones,
     person_for,
+    picture_match,
     rule_areas,
     rule_needs_person,
     stem_and_ext,
@@ -39,6 +42,7 @@ from dam.rules.engine import (
 )
 from dam.rules.model import Rule, fold
 from dam.rules.people import PeopleContext
+from dam.rules.picture import Pictures
 
 
 @dataclass
@@ -75,6 +79,28 @@ class Marked:
 
 
 @dataclass
+class PictureScore:
+    """How well a document's page 1 matched the rule's picture areas (the lowest score of
+    them), and whether the rule matched it."""
+
+    path: str
+    score: float
+    matched: bool
+
+
+# a picture rule's replay reports the lowest scores of its matches and the highest of the
+# documents it did not match: the two ends that show how well they are told apart
+SCORES_MATCHED = 20
+SCORES_NOT_MATCHED = 10
+
+
+def pick_scores(found: list[PictureScore]) -> list[PictureScore]:
+    matched = sorted((x for x in found if x.matched), key=lambda x: (x.score, x.path))
+    others = sorted((x for x in found if not x.matched), key=lambda x: (-x.score, x.path))
+    return matched[:SCORES_MATCHED] + others[:SCORES_NOT_MATCHED]
+
+
+@dataclass
 class ReplayResult:
     matched: int
     same: int
@@ -87,6 +113,8 @@ class ReplayResult:
     not_checked: list[NotChecked] = field(default_factory=list)
     reading: int = 0  # of the not checked, how many page 1 reads are queued now
     marked: Marked | None = None  # only for a rule with a ``sender``
+    # only for a rule with picture areas: see ``PictureScore``
+    scores: list[PictureScore] = field(default_factory=list)
 
 
 LAYOUT_CHUNK = 500  # rows whose layouts are loaded with one query
@@ -147,6 +175,7 @@ def _marked(
     layouts_for: Callable[[Collection[str]], dict[str, Page1Layout]] | None,
     layout_blocked: Callable[[str], str | None] | None,
     context: Callable[[str], PeopleContext],
+    pictures: Pictures | None = None,
 ) -> tuple[Marked, list[str]]:
     """``free`` (the rule without ``folder_is``) against the documents ``ids``, which the
     owner marked as from its sender. Returns the comparison and the ids whose page 1 is
@@ -155,7 +184,14 @@ def _marked(
     unread: list[str] = []
     if not ids:
         return marked, unread
-    cols = [files.c.drive_id, files.c.path, files.c.name, files.c.ext, files.c.doc_date]
+    cols = [
+        files.c.drive_id,
+        files.c.path,
+        files.c.name,
+        files.c.ext,
+        files.c.doc_date,
+        files.c.sha256,
+    ]
     with engine.connect() as conn:
         rows = conn.execute(
             select(*cols, files.c.index_state, file_text.c.text)
@@ -177,12 +213,19 @@ def _marked(
             name=row.name,
             ext=row.ext,
             doc_date=row.doc_date,
+            sha256=row.sha256,
         )
         if row.index_state != "indexed":
             marked.not_checked.append(NotChecked(row.path, "not indexed yet"))
             continue
         c = check(
-            free, rec, fold(row.text or ""), None, layouts.get(row.drive_id), context(row.drive_id)
+            free,
+            rec,
+            fold(row.text or ""),
+            None,
+            layouts.get(row.drive_id),
+            context(row.drive_id),
+            pictures,
         )
         if c.matched:
             marked.found += 1
@@ -213,6 +256,7 @@ def replay(
     address_zone: Sequence[float] = (0.0, 0.0, 1.0, 1.0),
     assigned_persons: Callable[[], dict[str, str]] | None = None,
     sender_ids: Callable[[str], Sequence[str]] | None = None,
+    pictures: Pictures | None = None,
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
@@ -229,7 +273,13 @@ def replay(
     ``{person}`` and ``when.person`` use the document's person: its assignment
     (``assigned_persons``: drive id -> person) if there is one, else the one found in the
     address area of page 1. A document whose person is unknown is not checked
-    ("person unknown"), not a mismatch."""
+    ("person unknown"), not a mismatch.
+
+    A picture area has no text to look for first, so every filed PDF and image is looked
+    at, from its page-1 picture in the cache (``pictures``: nothing is read from the
+    archive). One without a picture yet is not checked and is handed to ``want_layouts``
+    like one without a layout. The time budget applies as ever. ``scores`` then holds the
+    scores of the rule's matches (the lowest) and of its best non-matches."""
     started = time.monotonic()
     free = _without_folder(rule)
     earlier: list[Rule] = []
@@ -252,14 +302,16 @@ def replay(
         files.c.name,
         files.c.ext,
         files.c.doc_date,
+        files.c.sha256,
     ]
     result = ReplayResult(0, 0, [], 0, [], 0, 0, False)
     layouts: dict[str, Page1Layout] = {}
+    found_scores: list[PictureScore] = []
     needs_person = rule_needs_person(rule)
     needs_layouts = (
-        bool(rule.when.zones)
+        has_text_zones(rule)
         or needs_person
-        or any(r.when.zones or rule_needs_person(r) for r in earlier)
+        or any(has_text_zones(r) or rule_needs_person(r) for r in earlier)
     )
     assigned = assigned_persons() if assigned_persons is not None and needs_layouts else {}
 
@@ -267,7 +319,7 @@ def replay(
         return PeopleContext(people, tuple(address_zone), assigned.get(drive_id))
 
     unread: list[str] = []  # candidates (filed or in the inbox) to hand to the layout pass
-    own_layouts = bool(rule.when.zones) or needs_person
+    own_layouts = has_text_zones(rule) or needs_person
 
     def wants_layout(rec: FileRecord, folded: str, in_inbox: bool) -> bool:
         """Whether this row's layout can change the outcome (the cheap conditions on
@@ -275,7 +327,7 @@ def replay(
         if own_layouts:
             return zones_in_text(rule, folded)
         # only an earlier rule looks at it, and only for a file this rule matches
-        return not in_inbox and check(free, rec, folded, None, None, None).matched
+        return not in_inbox and check(free, rec, folded, None, None, None, pictures).matched
 
     def load_layouts(chunk: list) -> None:
         if layouts_for is None or not needs_layouts:
@@ -284,7 +336,13 @@ def replay(
         for row in chunk:
             if skipped(row.path):
                 continue
-            rec = FileRecord(drive_id=row.drive_id, path=row.path, name=row.name, ext=row.ext)
+            rec = FileRecord(
+                drive_id=row.drive_id,
+                path=row.path,
+                name=row.name,
+                ext=row.ext,
+                sha256=row.sha256,
+            )
             if wants_layout(rec, fold(row.text or ""), is_under(row.path, special.inbox)):
                 ids.append(row.drive_id)
         if ids:
@@ -325,19 +383,20 @@ def replay(
                     name=row.name,
                     ext=row.ext,
                     doc_date=row.doc_date,
+                    sha256=row.sha256,
                 )
                 layout = layouts.get(row.drive_id) if needs_layouts else None
                 if is_under(row.path, special.inbox):
                     code = inbox_code_of(row.path) if inbox_code_of is not None else None
                     alias = special.inbox if code is not None else None
-                    c = check(rule, rec, folded, alias, layout, context(row.drive_id))
+                    c = check(rule, rec, folded, alias, layout, context(row.drive_id), pictures)
                     if c.matched:
                         result.inbox += 1
                     elif c.waiting:
                         unread.append(row.drive_id)
                     continue
                 ctx = context(row.drive_id)
-                c = check(free, rec, folded, None, layout, ctx)
+                c = check(free, rec, folded, None, layout, ctx, pictures)
 
                 if c.waiting:
                     # every other condition holds: only page 1 is missing. Not a non-match.
@@ -348,6 +407,8 @@ def replay(
                     continue
                 if not c.matched:
                     result.checked += 1
+                    if c.picture_score is not None:
+                        found_scores.append(PictureScore(row.path, c.picture_score, False))
                     continue
                 person = None
                 if template_uses_person(rule.then.folder) or template_uses_person(rule.then.name):
@@ -361,6 +422,8 @@ def replay(
                         continue
                 result.checked += 1
                 result.matched += 1
+                if c.picture_score is not None:
+                    found_scores.append(PictureScore(row.path, c.picture_score, True))
                 try:
                     path_rule = _rule_path(rule, rec, special, person)
                 except TemplateError:
@@ -370,16 +433,23 @@ def replay(
                 else:
                     result.different.append(ReplayHit(row.drive_id, row.path, path_rule))
                 for r in earlier:
-                    if _matches(r, rec, folded, None, layout, ctx)[0]:
+                    if _matches(r, rec, folded, None, layout, ctx, pictures)[0]:
                         result.shadowed.append((row.drive_id, r.id))
                         break
             if result.truncated:
                 break
     if rule.sender and sender_ids is not None:
         result.marked, more = _marked(
-            engine, free, list(sender_ids(rule.sender)), layouts_for, layout_blocked, context
+            engine,
+            free,
+            list(sender_ids(rule.sender)),
+            layouts_for,
+            layout_blocked,
+            context,
+            pictures,
         )
         unread.extend(more)
+    result.scores = pick_scores(found_scores)
     result.reading = len(unread)
     if unread and want_layouts is not None:
         want_layouts(unread)
@@ -399,9 +469,10 @@ def _why(
     special,
     layout: Page1Layout | None = None,
     people: PeopleContext | None = None,
+    pictures: Pictures | None = None,
 ) -> str:
     when = rule.when
-    c = check(rule, rec, folded_text, inbox_alias, layout, people)
+    c = check(rule, rec, folded_text, inbox_alias, layout, people, pictures)
     if c.matched:
         parts = [
             f"word ‘{raw}’"
@@ -410,8 +481,15 @@ def _why(
         ][:1]
         if when.filename_matches is not None:
             parts.append(f"file name matches {when.filename_matches}")
+        for i, zone in enumerate(when.zones):
+            if zone.is_picture:
+                found = picture_match(rule, i, rec, pictures)
+                if found is not None:
+                    parts.append(f"picture {found.score:.2f} in {_area(i, len(when.zones))}")
         if layout is not None:
             for i, zone in enumerate(when.zones):
+                if zone.is_picture:
+                    continue
                 hit = next(
                     (
                         raw
@@ -429,6 +507,8 @@ def _why(
     if c.timed_out:
         return "file name check took too long"
     if c.waiting:
+        if has_picture_zones(rule) and (layout is not None or not has_text_zones(rule)):
+            return "the picture of page 1 is not made yet"
         return "page 1 has not been read yet"
     if c.person_unknown:
         return "the document has no single person (address area)"
@@ -453,9 +533,20 @@ def _why(
     ):
         return "file name does not match"
     if when.zones:
-        for i in range(len(when.zones)):
+        for i, zone in enumerate(when.zones):
+            if zone.is_picture:
+                continue
             if layout is None or not zone_matches(rule, i, layout):
                 return f"no word found in {_area(i, len(when.zones))}"
+        for i, zone in enumerate(when.zones):
+            if zone.is_picture:
+                found = picture_match(rule, i, rec, pictures)
+                if found is None or found.score < zone.threshold:
+                    got = f"{found.score:.2f}" if found is not None else "not made"
+                    return (
+                        f"the picture in {_area(i, len(when.zones))} scores {got}, "
+                        f"needs {zone.threshold:.2f}"
+                    )
     if when.person is not None:
         return f"the document is not for {when.person}"
     return "file name does not match"
@@ -469,16 +560,19 @@ def explain(
     inbox_alias: str | None,
     layout: Page1Layout | None = None,
     people: PeopleContext | None = None,
+    pictures: Pictures | None = None,
 ) -> list[RuleExplain]:
     """For each rule: does it match this document, why (not), and which fields it wins.
     For a rule with zones, the page-1 lines in each zone (so a missed match can be
     explained)."""
     folded = fold(text)
-    s = suggest(rec, text, rules, special, inbox_alias, layout=layout, people=people)
+    s = suggest(
+        rec, text, rules, special, inbox_alias, layout=layout, people=people, pictures=pictures
+    )
     out: list[RuleExplain] = []
     for rule in rules:
         mine = f"rule:{rule.id}"
-        matched = _matches(rule, rec, folded, inbox_alias, layout, people)[0]
+        matched = _matches(rule, rec, folded, inbox_alias, layout, people, pictures)[0]
         wins = [
             label
             for label, source in (
@@ -492,11 +586,11 @@ def explain(
             wins.append("tags")
         zone_lines = [
             [ln.text for ln in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN)]
-            if layout is not None
+            if layout is not None and not zone.is_picture
             else []
             for zone in rule.when.zones
         ]
-        why = _why(rule, rec, folded, inbox_alias, special, layout, people)
+        why = _why(rule, rec, folded, inbox_alias, special, layout, people, pictures)
         out.append(
             RuleExplain(
                 rule.id,
@@ -504,7 +598,15 @@ def explain(
                 why,
                 wins,
                 zone_lines,
-                rule_areas(rule, layout, matched=matched, wins=bool(wins), why=why),
+                rule_areas(
+                    rule,
+                    layout,
+                    matched=matched,
+                    wins=bool(wins),
+                    why=why,
+                    rec=rec,
+                    pictures=pictures,
+                ),
             )
         )
     return out

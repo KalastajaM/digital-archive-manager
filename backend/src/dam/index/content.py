@@ -14,8 +14,9 @@ from dam.core.paths import ArchivePaths
 from dam.extract import ocr
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
 from dam.extract.layout import Page1Layout
+from dam.extract.picture import have_pictures, picture_name, write_picture
 from dam.index.barcodes import read_page1
-from dam.index.layouts import IMAGE_EXTS, read_layout
+from dam.index.layouts import IMAGE_EXTS, read_layout, render_picture
 from dam.index.repo import FileRecord, FileRepo
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ MAX_BYTES = 256 * 1024 * 1024
 LAYOUT_NO_OCR = "no OCR engine"  # why a file's page 1 cannot be read now
 LAYOUT_MISSING = "missing"
 LAYOUT_TIMEOUT = "page 1 took too long to read"
+LAYOUT_NO_PICTURE = "no picture of page 1 can be made"
 MAX_REASON = 500  # characters of an error reason kept in the index
 
 
@@ -81,6 +83,7 @@ class ContentIndexer:
         ocr_languages: list[str] | None = None,
         layout_timeout_s: float = 120,
         layout_retry_s: float = 3600,
+        cache_dir: Path | None = None,
     ) -> None:
         if reads_per_minute <= 0:
             raise ValueError("reads_per_minute must be positive")
@@ -108,6 +111,10 @@ class ContentIndexer:
         self.layout_retry_s = layout_retry_s
         self._layout_retry: dict[str, float] = {}  # drive_id -> monotonic retry time
         self._layout_why: dict[str, str] = {}  # drive_id -> why it waits (no OCR engine)
+        # the page-1 pictures (picture areas) are kept in this cache folder; None: not kept
+        self.cache_dir = cache_dir
+        # files whose picture cannot be made (until the content changes or dam restarts)
+        self._no_picture: dict[str, str] = {}  # drive_id -> sha256
         self._wanted: set[str] = set()  # asked for by a replay, read next
         self._layout_busy = False
         # the barcode pass runs one read at a time; a hung read pauses it until it
@@ -239,7 +246,12 @@ class ContentIndexer:
                 rec.drive_id, out.sha, None, "unsupported", expect=expect, reason=out.reason
             )
         else:
-            self.repo.save_content(rec.drive_id, out.sha, out.extracted, "indexed", expect=expect)
+            saved = self.repo.save_content(
+                rec.drive_id, out.sha, out.extracted, "indexed", expect=expect
+            )
+            if saved and out.extracted.page1 is not None:
+                # the page was rendered for OCR anyway: keep its picture
+                self._keep_picture(rec.drive_id, out.sha, out.extracted.page1.picture)
 
     # -- the barcode pass ------------------------------------------------------
 
@@ -336,7 +348,41 @@ class ContentIndexer:
         """Why page 1 of this file cannot be read right now (``LAYOUT_NO_OCR``,
         ``LAYOUT_MISSING`` or ``LAYOUT_TIMEOUT``), else None."""
         with self._lock:
+            if drive_id in self._no_picture and drive_id not in self._layout_why:
+                return LAYOUT_NO_PICTURE
             return self._layout_why.get(drive_id)
+
+    def _keep_picture(self, drive_id: str, sha256: str | None, picture) -> bool:
+        """Keep ``picture`` as the page-1 picture of this content in the cache; never
+        fails the caller."""
+        if self.cache_dir is None or picture is None or not sha256:
+            return False
+        try:
+            write_picture(self.cache_dir, drive_id, sha256, picture)
+        except Exception:
+            log.warning("could not keep the page-1 picture of %s", drive_id, exc_info=True)
+            return False
+        return True
+
+    def _next_for_pictures(
+        self, limit: int, wanted: set[str], waiting: set[str], backfill: bool
+    ) -> list[FileRecord]:
+        """Files whose layout is read but whose page-1 picture is not in the cache."""
+        if self.cache_dir is None or limit <= 0:
+            return []
+        have = have_pictures(self.cache_dir)
+        with self._lock:
+            failed = dict(self._no_picture)
+        out: list[FileRecord] = []
+        for drive_id, sha in self.repo.next_for_pictures(wanted, waiting, backfill):
+            if picture_name(drive_id, sha) in have or failed.get(drive_id) == sha:
+                continue
+            rec = self.repo.get(drive_id)
+            if rec is not None:
+                out.append(rec)
+            if len(out) >= limit:
+                break
+        return out
 
     def run_layouts_once(self, limit: int = 1, backfill: bool | None = None) -> int:
         """Read page 1 of up to ``limit`` indexed PDFs and images that have no layout
@@ -345,6 +391,10 @@ class ContentIndexer:
         read is recorded, an empty page included, so a file is read again only when its
         sha256 changes. A read has ``layout_timeout_s``; one that times out, or needs an
         OCR engine that is not installed, is not recorded and waits ``layout_retry_s``.
+        The same pass keeps each file's page-1 picture in the cache (``cache_dir``): the
+        read of a layout that renders the page gives it along, and a file whose layout is
+        read already but whose picture is not in the cache gets only the picture (after the
+        layouts, with the same order and the same ``backfill`` rule).
         Returns the number of files attempted."""
         if self._closed:
             return 0
@@ -375,16 +425,31 @@ class ContentIndexer:
                     break  # the read hangs: pause the pass
             except Exception:
                 log.warning("layout pass failed for %s", rec.path, exc_info=True)
+        else:
+            for rec in self._next_for_pictures(limit - done, wanted, waiting, backfill):
+                if self._closed:
+                    break
+                done += 1
+                try:
+                    if not self._read_layout(rec, layout=False):
+                        break
+                except Exception:
+                    log.warning("picture pass failed for %s", rec.path, exc_info=True)
         return done
 
-    def _read_layout(self, rec: FileRecord) -> bool:
-        """Read and record ``rec``'s page-1 layout in a daemon thread; False if it timed
-        out."""
+    def _read_layout(self, rec: FileRecord, layout: bool = True) -> bool:
+        """Read and record ``rec``'s page-1 layout, and keep its page-1 picture, in a
+        daemon thread; False if it timed out. ``layout`` false: the layout is there, only
+        the picture is made (no OCR needed)."""
         assert rec.sha256 is not None and rec.ext is not None
         path = self.paths.abs(rec.path)
         ocr_used = self.repo.text_was_ocrd(rec.drive_id)
         ext = rec.ext.lower().lstrip(".")
-        if (ext in IMAGE_EXTS or (ext == "pdf" and ocr_used)) and ocr.engine() is None:
+        if (
+            layout
+            and (ext in IMAGE_EXTS or (ext == "pdf" and ocr_used))
+            and ocr.engine() is None
+        ):
             # this read needs OCR: do not read the whole file just to find that out
             self._retry_layout_later(rec.drive_id, LAYOUT_NO_OCR)
             return True
@@ -395,13 +460,18 @@ class ContentIndexer:
             try:
                 sha, data = _read_file(path)
                 if sha == rec.sha256 and data is not None:  # else: changed, or too big
-                    out["layout"] = read_layout(
-                        path,
-                        rec.ext,
-                        data,
-                        ocr_used=bool(ocr_used),
-                        languages=self.ocr_languages,
-                    )
+                    if layout:
+                        out["layout"] = read_layout(
+                            path,
+                            rec.ext,
+                            data,
+                            ocr_used=bool(ocr_used),
+                            languages=self.ocr_languages,
+                        )
+                    else:
+                        out["picture"] = render_picture(path, rec.ext, data)
+                else:
+                    out["gone"] = True
             except BaseException as exc:  # noqa: BLE001 - classified by the caller
                 out["error"] = exc
             finally:
@@ -422,6 +492,8 @@ class ContentIndexer:
             self._retry_layout_later(rec.drive_id, LAYOUT_TIMEOUT)
             return False
         error = out.get("error")
+        if not layout:
+            return self._finish_picture(rec, out)
         if isinstance(error, UnsupportedContent) and str(error) == ocr.NO_OCR:
             self._retry_layout_later(rec.drive_id, LAYOUT_NO_OCR)  # not "read": try later
             return True
@@ -433,10 +505,33 @@ class ContentIndexer:
         # a finished read with anything but lines (an error, changed or oversize
         # content) is recorded as "no text" for this content, so it is not read again
         # until the content changes
-        self.repo.save_layout(
-            rec.drive_id, rec.sha256, out.get("layout") or Page1Layout([], "text-layer")
-        )
+        read = out.get("layout") or Page1Layout([], "text-layer")
+        if self.repo.save_layout(rec.drive_id, rec.sha256, read):
+            self._keep_picture(rec.drive_id, rec.sha256, read.picture)
         with self._lock:
+            self._wanted.discard(rec.drive_id)
+        return True
+
+    def _finish_picture(self, rec: FileRecord, out: dict) -> bool:
+        """The outcome of a picture-only read: kept in the cache, or the reason it cannot
+        be made (now: tried again later; for good: until the content changes)."""
+        assert rec.sha256 is not None
+        error = out.get("error")
+        if isinstance(error, OSError):  # gone, or a cloud file that cannot be fetched now
+            self._retry_layout_later(rec.drive_id, LAYOUT_MISSING)
+            return True
+        picture = out.get("picture")
+        if picture is not None and self._keep_picture(rec.drive_id, rec.sha256, picture):
+            with self._lock:
+                self._no_picture.pop(rec.drive_id, None)
+                self._wanted.discard(rec.drive_id)
+            return True
+        if error is not None:
+            log.warning("page-1 picture failed for %s: %r", rec.path, error)
+        # changed or oversize content, a page that cannot be rendered, a cache that cannot
+        # be written: not tried again until the content changes (or dam restarts)
+        with self._lock:
+            self._no_picture[rec.drive_id] = rec.sha256
             self._wanted.discard(rec.drive_id)
         return True
 

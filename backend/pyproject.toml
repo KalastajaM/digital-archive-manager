@@ -20,6 +20,7 @@ dependencies = [
     "xattr; sys_platform != 'win32'",
     "tzdata; sys_platform == 'win32'",  # zoneinfo has no system database on Windows
     "pillow",
+    "numpy",  # picture areas: normalised cross-correlation (BSD)
     "regex>=2026.9.29",
     "keyring",
     "zxing-cpp==3.1.1",
