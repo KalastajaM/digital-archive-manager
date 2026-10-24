@@ -99,29 +99,61 @@ export type Progress = {
 
 /** "Checked 1 240 of 10 875 documents…" with a Stop button while it runs; what it waits for
  * when all are looked at; where it stopped. Nothing once it is finished. */
-function TestProgress({ progress, onStop, onTestAgain }: { progress: Progress; onStop?: () => void; onTestAgain?: () => void }) {
+function TestProgress({
+  progress,
+  onStop,
+  onTestAgain,
+  onReadNow,
+  readingNow,
+}: {
+  progress: Progress;
+  onStop?: () => void;
+  onTestAgain?: () => void;
+  onReadNow?: () => void;
+  readingNow?: boolean;
+}) {
   const { state, looked, total, waiting } = progress;
-  if (state === "running")
-    return (
-      <p className="busy replay-progress" role="status">
-        {total > 0 ? `Checked ${groupDigits(looked)} of ${groupDigits(total)} documents…` : "Getting ready to test…"}{" "}
-        {onStop && (
-          <button type="button" onClick={onStop}>
-            Stop
+  const readNow =
+    onReadNow && waiting > 0 && (state === "running" || state === "waiting") ? (
+      <p className="replay-read-now">
+        {readingNow ? (
+          <span className="busy" role="status">
+            Reading page 1 of these {groupDigits(waiting)} now, one at a time…
+          </span>
+        ) : (
+          <button type="button" onClick={onReadNow}>
+            Read page 1 of these {groupDigits(waiting)} now
           </button>
         )}
       </p>
+    ) : null;
+  if (state === "running")
+    return (
+      <>
+        <p className="busy replay-progress" role="status">
+          {total > 0 ? `Checked ${groupDigits(looked)} of ${groupDigits(total)} documents…` : "Getting ready to test…"}{" "}
+          {onStop && (
+            <button type="button" onClick={onStop}>
+              Stop
+            </button>
+          )}
+        </p>
+        {readNow}
+      </>
     );
   if (state === "waiting")
     return (
-      <p className="busy replay-progress" role="status">
-        Checked all {groupDigits(total)} documents. Waiting for page 1 of {groupDigits(waiting)}…{" "}
-        {onStop && (
-          <button type="button" onClick={onStop}>
-            Stop
-          </button>
-        )}
-      </p>
+      <>
+        <p className="busy replay-progress" role="status">
+          Checked all {groupDigits(total)} documents. Waiting for page 1 of {groupDigits(waiting)}…{" "}
+          {onStop && (
+            <button type="button" onClick={onStop}>
+              Stop
+            </button>
+          )}
+        </p>
+        {readNow}
+      </>
     );
   if (state === "stopped")
     return (
@@ -149,6 +181,8 @@ export function ReplayResult({
   progress,
   onStop,
   onTestAgain,
+  onReadNow,
+  readingNow,
 }: {
   replay: Replay | undefined;
   /** The same rule before the change being made: how it did, to compare with. */
@@ -168,6 +202,9 @@ export function ReplayResult({
   onStop?: () => void;
   /** Test again from the start (after a stop). */
   onTestAgain?: () => void;
+  /** Have page 1 of the documents the test waits for read now. */
+  onReadNow?: () => void;
+  readingNow?: boolean;
 }) {
   const id = useId();
   const [opened, setOpened] = useState<QLFile | null>(null);
@@ -250,7 +287,15 @@ export function ReplayResult({
         </p>
       ))}
       {replay.inbox > 0 && <p>It also catches {plural(replay.inbox, "document")} in the inbox now.</p>}
-      {progress && <TestProgress progress={progress} onStop={onStop} onTestAgain={onTestAgain} />}
+      {progress && (
+        <TestProgress
+          progress={progress}
+          onStop={onStop}
+          onTestAgain={onTestAgain}
+          onReadNow={onReadNow}
+          readingNow={readingNow}
+        />
+      )}
     </section>
     {opened && (
       <QuickLook

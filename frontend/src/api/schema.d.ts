@@ -2335,6 +2335,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rules/replay/jobs/{job_id}/read-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Replay Job Now
+         * @description Queue page 1 of the documents this test is waiting for to be read at once (still
+         *     one at a time, with the usual time limit), ahead of everything else; the test picks
+         *     them up as they arrive.
+         */
+        post: operations["read_replay_job_now_api_rules_replay_jobs__job_id__read_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rules/unused-pictures/quarantine": {
         parameters: {
             query?: never;
@@ -4901,6 +4923,14 @@ export interface components {
             moved_from: {
                 [key: string]: string;
             };
+        };
+        /**
+         * ReadNowOut
+         * @description How many of a test's documents were queued to have page 1 read now.
+         */
+        ReadNowOut: {
+            /** Queued */
+            queued: number;
         };
         /** RecoveryResultOut */
         RecoveryResultOut: {
@@ -18482,6 +18512,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReplayJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_replay_job_now_api_rules_replay_jobs__job_id__read_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadNowOut"];
                 };
             };
             /** @description Bad Request */

@@ -1552,6 +1552,10 @@ export const getReplayJob = (id: string, since?: number) =>
 /** End a background test where it is; what it found so far stays. */
 export const stopReplayJob = (id: string) => post<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}/stop`);
 
+/** Queue page 1 of the documents a background test waits for to be read now (one at a
+ * time, ahead of everything else); the test picks them up as they arrive. */
+export const readReplayJobNow = (id: string) => post<{ queued: number }>(`/api/rules/replay/jobs/${enc(id)}/read-now`);
+
 /** End a background test and forget it (the sheet that asked for it closed). */
 export const dropReplayJob = (id: string) => del<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}`);
 

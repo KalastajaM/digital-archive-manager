@@ -569,7 +569,10 @@ boxes on, and for a picture area the pages that look most like it), so real matc
 up early; the final counts are the same in any order. It goes on until every document is
 checked, and ends if you stop it, change the rule or close the sheet. After a stop,
 **Test again** starts over. If some documents are still waiting for page 1 to be read, it
-says "Waiting for page 1 of N" and looks at them again as they are read.
+says "Waiting for page 1 of N" and looks at them again as they are read. **Read page 1 of
+these N now** puts exactly those documents first in the page-1 queue and reads them at full
+speed, one at a time and with the usual time limit for each; the test picks them up as they
+arrive. Without it they are read in the background at the normal pace.
 
 A picture area is only for something that tells who a letter is from or what kind it is.
 The address area never takes a picture: a person is found from text only. The picture of

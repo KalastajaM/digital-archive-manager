@@ -527,6 +527,8 @@ export function RuleSheet({
             progress={{ state: test.state, looked: test.looked, total: test.total, waiting: test.waiting }}
             onStop={test.stop}
             onTestAgain={test.restart}
+            onReadNow={test.readNow}
+            readingNow={test.readingNow}
           />
         )}
         {!draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}

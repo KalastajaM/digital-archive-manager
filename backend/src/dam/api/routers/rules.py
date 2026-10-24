@@ -15,6 +15,7 @@ from dam.api.schemas import (
     AreasForIn,
     AreasForOut,
     BatchResultOut,
+    ReadNowOut,
     ReplayJobOut,
     ReplayOut,
     RuleExplainIn,
@@ -248,6 +249,18 @@ def drop_replay_job(app: AppDep, job_id: str) -> dict:
     view = job.view()
     app.replay_jobs.drop(job_id)
     return _job_out(view)
+
+
+@router.post("/replay/jobs/{job_id}/read-now", response_model=ReadNowOut)
+def read_replay_job_now(app: AppDep, job_id: str) -> dict:
+    """Queue page 1 of the documents this test is waiting for to be read at once (still
+    one at a time, with the usual time limit), ahead of everything else; the test picks
+    them up as they arrive."""
+    ids = _job(app, job_id).waiting_ids()
+    app.content.read_now(ids)
+    if ids:
+        app.wake_indexer()
+    return {"queued": len(ids)}
 
 
 @router.post("/unused-pictures/quarantine", response_model=BatchResultOut)

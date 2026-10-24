@@ -6,6 +6,7 @@ import {
   dropReplayJob,
   errorText,
   getReplayJob,
+  readReplayJobNow,
   type Replay,
   type ReplayJob,
   type RuleIn,
@@ -41,6 +42,10 @@ export type JobTest = {
   stop: () => void;
   /** Test again now, from the start. */
   restart: () => void;
+  /** Have page 1 of the documents the test waits for read now; the test picks them up as they arrive. */
+  readNow: () => void;
+  /** Page 1 of those documents was asked for now and is being read. */
+  readingNow: boolean;
 };
 
 const newSheetId = () =>
@@ -73,6 +78,7 @@ export function useReplayJob({
     held: null,
   });
   const [error, setError] = useState<string | null>(null);
+  const [readingNow, setReadingNow] = useState(false);
 
   const take = useCallback((job: ReplayJob, key: string) => {
     if (job.result) version.current = job.version;
@@ -111,6 +117,7 @@ export function useReplayJob({
       }
     };
     setError(null);
+    setReadingNow(false);
     version.current = 0;
     setView((v) => (v.job === null ? v : { ...v, job: null }));
     const wait = immediate.current ? 0 : delayMs;
@@ -137,6 +144,15 @@ export function useReplayJob({
       })
       .catch((e) => setError(errorText(e)));
   }, [take]);
+  const readNow = useCallback(() => {
+    const id = jobId.current;
+    if (!id) return;
+    setReadingNow(true);
+    void readReplayJobNow(id).catch((e) => {
+      setReadingNow(false);
+      setError(errorText(e));
+    });
+  }, []);
   const restart = useCallback(() => {
     immediate.current = true;
     setAgain((n) => n + 1);
@@ -152,5 +168,7 @@ export function useReplayJob({
     error: error ?? (view.job?.state === "error" ? (view.job.error ?? "The test could not be completed") : null),
     stop,
     restart,
+    readNow,
+    readingNow: readingNow && (view.job?.waiting ?? 0) > 0,
   };
 }

@@ -511,6 +511,31 @@ describe("RuleSheet", () => {
       expect(screen.queryByText(/not checked yet/)).toBeNull();
     });
 
+    it("offers to read page 1 of the documents the test waits for now, then shows it is reading them", async () => {
+      const waitingJob = { job_id: "job-1", sheet: "s", version: 1, elapsed_s: 1, error: null, state: "waiting", looked_at: 4, total: 4, waiting: 23 };
+      const calls = mockFetch({
+        "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+        "GET /api/trays": { body: { trays: [], errors: [] } },
+        "GET /api/tags": { body: [] },
+        "POST /api/rules/replay/jobs": { body: { ...waitingJob, result: null } },
+        "GET /api/rules/replay/jobs/job-1": { body: { ...waitingJob, result: { ...REPLAY, reading: 23 } } },
+        "POST /api/rules/replay/jobs/job-1/read-now": { body: { queued: 23 } },
+        "DELETE /api/rules/replay/jobs/job-1": { body: waitingJob },
+      } as never);
+      const user = userEvent.setup();
+      renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+      await user.click(await screen.findByRole("button", { name: "Read page 1 of these 23 now" }));
+      expect(calls.some((c) => c.method === "POST" && c.url === "/api/rules/replay/jobs/job-1/read-now")).toBe(true);
+      expect(await screen.findByText(/Reading page 1 of these 23 now, one at a time/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Read page 1 of these/ })).toBeNull();
+    });
+
+    it("offers no reading when nothing waits for page 1", async () => {
+      setup();
+      await screen.findByText(/Matches 4/);
+      expect(screen.queryByRole("button", { name: /Read page 1 of these/ })).toBeNull();
+    });
+
     it("ends the test on the server when the sheet is closed", async () => {
       const calls = mockFetch({
         "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },

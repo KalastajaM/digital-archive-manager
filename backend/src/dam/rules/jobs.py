@@ -64,6 +64,7 @@ class ReplayJob:
     seen: float = field(default_factory=time.monotonic)
     _result: ReplayResult | None = None
     _waiting: int = 0
+    _waiting_ids: list[str] = field(default_factory=list)
     _run: ReplayRun | None = None
     _published: float = 0.0
     _stop: threading.Event = field(default_factory=threading.Event)
@@ -95,9 +96,9 @@ class ReplayJob:
         self._stop.set()
 
     def waiting_ids(self) -> list[str]:
+        """The documents the test waits for page 1 of, as of the last publish."""
         with self._lock:
-            run = self._run
-        return run.waiting_ids() if run is not None and self.state in LIVE else []
+            return list(self._waiting_ids) if self.state in LIVE else []
 
     # -- the thread ---------------------------------------------------------------------
 
@@ -113,7 +114,8 @@ class ReplayJob:
         result = run.snapshot()
         with self._lock:
             self._result = result
-            self._waiting = len(run.waiting_ids())
+            self._waiting_ids = run.waiting_ids()
+            self._waiting = len(self._waiting_ids)
             self.version += 1
             if state is not None:
                 self.state = state
