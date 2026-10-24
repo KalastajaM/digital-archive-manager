@@ -20,6 +20,7 @@ from dam.extract.layout import ZONE_MARGIN, Page1Layout, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.ops.guards import is_under
 from dam.rules.engine import (
+    Area,
     TemplateError,
     _matches,
     _parent,
@@ -27,6 +28,7 @@ from dam.rules.engine import (
     _render_name,
     check,
     person_for,
+    rule_areas,
     rule_needs_person,
     stem_and_ext,
     suggest,
@@ -98,6 +100,9 @@ class RuleExplain:
     wins: list[str] = field(default_factory=list)
     # the page-1 lines in each of the rule's zones (one list per zone)
     zone_lines: list[list[str]] = field(default_factory=list)
+    # the rule's areas for drawing on page 1: the matched lines of each, and for an area
+    # (or rule) that did not match, the reason
+    areas: list[Area] = field(default_factory=list)
 
 
 def _without_folder(rule: Rule) -> Rule:
@@ -491,13 +496,15 @@ def explain(
             else []
             for zone in rule.when.zones
         ]
+        why = _why(rule, rec, folded, inbox_alias, special, layout, people)
         out.append(
             RuleExplain(
                 rule.id,
                 matched,
-                _why(rule, rec, folded, inbox_alias, special, layout, people),
+                why,
                 wins,
                 zone_lines,
+                rule_areas(rule, layout, matched=matched, wins=bool(wins), why=why),
             )
         )
     return out

@@ -142,6 +142,9 @@ def file_suggestions(app: AppDep, drive_id: str) -> dict:
         "tags": found.tags,
         "tag_sources": found.tag_sources,
         "sources": found.sources,
+        "person": found.person,
+        "areas": [asdict(a) for a in found.areas],
+        "person_line": asdict(found.person_line) if found.person_line else None,
     }
 
 

@@ -60,17 +60,28 @@ def _found(pattern: str, candidates: Sequence[str]) -> bool:
     return letters >= FUZZY_MIN_LETTERS and any(_within_one_edit(pattern, c) for c in candidates)
 
 
-def _candidates(lines: list[Line]) -> list[str]:
-    """Each line, and each two lines one under the other joined with a space."""
+def _boxed_candidates(lines: list[Line]) -> list[tuple[str, Box]]:
+    """Each line, and each two lines one under the other joined with a space, with the box
+    that holds the text."""
     ordered = sorted(lines, key=lambda ln: (ln.box[1], ln.box[0]))
     texts = [_norm(ln.text) for ln in ordered]
-    out = [t for t in texts if t]
+    out = [(t, ln.box) for t, ln in zip(texts, ordered, strict=True) if t]
     for upper, lower, a, b in zip(ordered, ordered[1:], texts, texts[1:], strict=False):
         height = max(upper.box[3] - upper.box[1], lower.box[3] - lower.box[1])
         gap = lower.box[1] - upper.box[3]
         if a and b and gap <= 1.5 * height:
-            out.append(f"{a} {b}")
+            box = (
+                min(upper.box[0], lower.box[0]),
+                min(upper.box[1], lower.box[1]),
+                max(upper.box[2], lower.box[2]),
+                max(upper.box[3], lower.box[3]),
+            )
+            out.append((f"{a} {b}", box))
     return out
+
+
+def _candidates(lines: list[Line]) -> list[str]:
+    return [text for text, _ in _boxed_candidates(lines)]
 
 
 def detect_people(
@@ -94,3 +105,20 @@ def detect_people(
 def pick_person(found: list[str]) -> str | None:
     """Exactly one person found is the person; none or several: nobody."""
     return found[0] if len(found) == 1 else None
+
+
+def person_line(
+    layout: Page1Layout | None, zone: Sequence[float], people: Sequence[Person], name: str
+) -> Box | None:
+    """Where in ``zone`` the person ``name`` was found: the box of the line (or of the two
+    lines) that hold one of their ``match`` strings; None when not found."""
+    if layout is None:
+        return None
+    person = next((p for p in people if p.name == name), None)
+    if person is None:
+        return None
+    patterns = [p for p in (_norm(m) for m in person.match) if p]
+    for text, box in _boxed_candidates(lines_in_zone(layout.lines, zone)):
+        if any(_found(p, [text]) for p in patterns):
+            return box
+    return None

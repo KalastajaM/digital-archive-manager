@@ -4,7 +4,7 @@
  * the current suggestion are drawn faintly on the page, so it shows why the rule fired.
  *
  * Boxes are fractions of the rendered image (origin top left), so the zoom never matters. */
-import { SquareDashed } from "lucide-react";
+import { Layers, SquareDashed } from "lucide-react";
 import { type PointerEvent, type ReactNode, useState } from "react";
 import {
   type FileSuggestions,
@@ -17,11 +17,15 @@ import {
 import { isShortcut, useKeydown } from "../../keyboard";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
+import { AreaLayer, percent } from "./AreaLayer";
 import { BoxPanel, type KeptBox } from "./BoxPanel";
 
 /** Turns the tool on for a preview. ``suggestion``: what the file's current suggestion
  * came from, when the owner already has it (the Inbox card); otherwise it is asked for. */
-export type BoxTool = { suggestion?: Pick<FileSuggestions, "name_source" | "folder_source"> };
+export type BoxTool = {
+  suggestion?: Pick<FileSuggestions, "name_source" | "folder_source"> &
+    Partial<Pick<FileSuggestions, "areas" | "person_line">> & { person?: string | null };
+};
 
 type Drag = { x0: number; y0: number; x1: number; y1: number };
 
@@ -34,13 +38,6 @@ export function ruleIdOf(s: Pick<FileSuggestions, "name_source" | "folder_source
   const source = [s.folder_source, s.name_source].find((x) => x?.startsWith("rule:"));
   return source ? source.slice("rule:".length) : null;
 }
-
-const percent = (box: PageBox) => ({
-  left: `${box[0] * 100}%`,
-  top: `${box[1] * 100}%`,
-  width: `${(box[2] - box[0]) * 100}%`,
-  height: `${(box[3] - box[1]) * 100}%`,
-});
 
 /** What the tool gives a preview: its toolbar button, the layer around the page image and
  * the panel with what was found. */
@@ -94,6 +91,11 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const ruleId = suggestion ? ruleIdOf(suggestion) : null;
   const rules = useRules(active && ruleId !== null);
   const rule = ruleId ? (rules.data?.rules.find((r) => r.id === ruleId) ?? null) : null;
+  // the areas behind the suggestion: shown unless the owner turned them off
+  const areas = suggestion?.areas ?? [];
+  const personLine = suggestion?.person_line ?? null;
+  const [areasOn, setAreasOn] = useState<boolean | null>(null);
+  const showAreas = areasOn ?? areas.length > 0;
 
   const unavailable = page.data?.unavailable ?? null;
   const ready = on && page.data?.read === true;
@@ -155,27 +157,32 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
 
   if (!active) return NONE;
 
-  const zones: { box: PageBox; kind: "area" | "address"; why: string }[] = [];
-  rule?.when.zones.forEach((z, i) => zones.push({ box: z.box, kind: "area", why: `Rule ${rule.id} looks here${rule.when.zones.length > 1 ? ` (area ${i + 1})` : ""}` }));
-  if (rule?.person_zone) zones.push({ box: rule.person_zone, kind: "address", why: `Rule ${rule.id} looks for the address here` });
-
   const button = (
-    <IconButton
-      icon={<SquareDashed />}
-      label="Draw a box"
-      tip="Draw a box on page 1 to make a rule or set the address area"
-      pressed={on}
-      disabled={unavailable !== null}
-      disabledReason={unavailable ?? undefined}
-      onClick={toggle}
-    />
+    <>
+      {(areas.length > 0 || personLine !== null) && (
+        <IconButton
+          icon={<Layers />}
+          label="Show areas"
+          tip="Show the areas of page 1 behind the suggestion"
+          pressed={showAreas}
+          onClick={() => setAreasOn(!showAreas)}
+        />
+      )}
+      <IconButton
+        icon={<SquareDashed />}
+        label="Draw a box"
+        tip="Draw a box on page 1 to make a rule or set the address area"
+        pressed={on}
+        disabled={unavailable !== null}
+        disabledReason={unavailable ?? undefined}
+        onClick={toggle}
+      />
+    </>
   );
   const around = (image: ReactNode) => (
     <span className="page-layer">
       {image}
-      {zones.map((z) => (
-        <span key={`${z.kind}-${z.box.join(",")}`} className={`page-zone page-zone-${z.kind}`} style={percent(z.box)} title={visible(z.why)} data-zone={z.kind} />
-      ))}
+      {showAreas && <AreaLayer areas={areas} person={suggestion?.person ?? null} personLine={personLine} />}
       {ready && (
         <span
           className="page-surface"

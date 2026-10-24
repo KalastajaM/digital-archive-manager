@@ -12,6 +12,7 @@ import {
   type RuleDraft,
   useDeleteRule,
   useExplain,
+  useFileSuggestions,
   useInbox,
   useMoveRule,
   useRules,
@@ -21,6 +22,7 @@ import { plural } from "../../format";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
 import { Sheet } from "../ui/Sheet";
+import { SamplePage } from "../zones/SamplePage";
 import { PeopleSettings } from "./PeopleSettings";
 import { RuleSheet, rewriteNote } from "./RuleSheet";
 
@@ -97,6 +99,13 @@ function TestDocument() {
   const explain = useExplain();
   const [picked, setPicked] = useState("");
   const entries = inbox.data ?? [];
+  const sample = entries.find((e) => e.record.drive_id === picked)?.record;
+  // the address area and the person's line come with the document's suggestion
+  const suggestion = useFileSuggestions(picked, picked !== "");
+  const areas = [
+    ...(explain.data ?? []).flatMap((x) => x.areas ?? []),
+    ...(suggestion.data?.areas ?? []).filter((a) => a.kind === "address"),
+  ];
   return (
     <div className="rules-test">
       <div className="field">
@@ -139,6 +148,15 @@ function TestDocument() {
             </li>
           ))}
         </ul>
+      )}
+      {picked && explain.data && sample && areas.length > 0 && (
+        <SamplePage
+          driveId={sample.drive_id}
+          ext={sample.ext}
+          areas={areas}
+          person={suggestion.data?.person ?? null}
+          personLine={suggestion.data?.person_line ?? null}
+        />
       )}
     </div>
   );

@@ -2893,6 +2893,46 @@ export interface components {
             can_switch: boolean;
         };
         /**
+         * AreaOut
+         * @description An area of page 1 behind a suggestion or in a rule's explanation, for drawing it:
+         *     ``box`` is [x0, y0, x1, y1] as fractions of page 1, origin top left. ``kind``: "text" (a
+         *     rule's words), "image" (a rule's picture) or "address" (where people are looked for;
+         *     ``rule_id`` "" is the archive's own area). ``index`` is the area's place in its rule's
+         *     ``zones``. ``lines`` are the boxes of the lines that matched in it (for an address area,
+         *     the line where the person was found). ``matched`` is whether the rule matched the
+         *     document, ``reason`` why this area or the rule did not, ``wins`` whether the rule gave
+         *     the folder or name, and ``score`` how well a picture matched (0 to 1).
+         */
+        AreaOut: {
+            /** Rule Id */
+            rule_id: string;
+            /** Index */
+            index: number;
+            /** Box */
+            box: number[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "image" | "address";
+            /** Lines */
+            lines: number[][];
+            /** Score */
+            score?: number | null;
+            /**
+             * Matched
+             * @default true
+             */
+            matched: boolean;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Wins
+             * @default false
+             */
+            wins: boolean;
+        };
+        /**
          * AssignmentOut
          * @description Who a document is from (``sender``) and for (``person``), as set by the owner
          *     (``set_by`` "owner") or recorded by a confirmed filing ("filing").
@@ -3647,6 +3687,14 @@ export interface components {
             };
             /** Sources */
             sources: string[];
+            /** Person */
+            person?: string | null;
+            /**
+             * Areas
+             * @default []
+             */
+            areas: components["schemas"]["AreaOut"][];
+            person_line?: components["schemas"]["PersonLineOut"] | null;
         };
         /**
          * FileSummaryIn
@@ -4443,6 +4491,11 @@ export interface components {
             /** Match */
             match: string[];
         };
+        /** PersonLineOut */
+        PersonLineOut: {
+            /** Box */
+            box: number[];
+        };
         /**
          * PreparedOut
          * @description Exactly what ``run`` would send (the sheet shows ``payload_text``), the model,
@@ -4682,6 +4735,11 @@ export interface components {
              * @default []
              */
             zone_lines: string[][];
+            /**
+             * Areas
+             * @default []
+             */
+            areas: components["schemas"]["AreaOut"][];
         };
         /** RuleIn */
         RuleIn: {
@@ -5189,6 +5247,12 @@ export interface components {
              * @default []
              */
             people_found: string[];
+            /**
+             * Areas
+             * @default []
+             */
+            areas: components["schemas"]["AreaOut"][];
+            person_line?: components["schemas"]["PersonLineOut"] | null;
         };
         /** SummaryBody */
         SummaryBody: {
