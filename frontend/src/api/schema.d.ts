@@ -2375,6 +2375,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rules/areas-for": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Areas For
+         * @description The areas of the rule being tested on one document (a document of the test result),
+         *     to draw them on its page 1: matched lines, the best place and score of a picture area.
+         *     The rule's folder condition is left out, as in the test. Reads only the index and the
+         *     cache; changes nothing.
+         */
+        post: operations["areas_for_api_rules_areas_for_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rules/state": {
         parameters: {
             query?: never;
@@ -3033,6 +3056,25 @@ export interface components {
             png: string;
             /** Image */
             image?: string | null;
+        };
+        /**
+         * AreasForIn
+         * @description The rule being tested and the document to draw its areas on.
+         */
+        AreasForIn: {
+            rule: components["schemas"]["RuleIn"];
+            /** Drive Id */
+            drive_id: string;
+        };
+        /**
+         * AreasForOut
+         * @description The rule's areas on this document, as the suggestion has them (``AreaOut``): the
+         *     matched lines of each text area, the best place and score of each picture area, and for
+         *     one that did not match, why. Changes nothing.
+         */
+        AreasForOut: {
+            /** Areas */
+            areas: components["schemas"]["AreaOut"][];
         };
         /**
          * AssignmentOut
@@ -4077,6 +4119,7 @@ export interface components {
             rows: components["schemas"]["IndexErrorOut"][];
             /** Offset */
             offset: number;
+            page1: components["schemas"]["Page1ProgressOut"];
         };
         /**
          * ItemBarcodeOut
@@ -4357,6 +4400,13 @@ export interface components {
             /** Group */
             group?: string | null;
         };
+        /** MarkedDocOut */
+        MarkedDocOut: {
+            /** Path */
+            path: string;
+            /** Drive Id */
+            drive_id: string;
+        };
         /**
          * MarkedOut
          * @description For a rule with a sender: the documents the owner marked as from that sender.
@@ -4369,7 +4419,7 @@ export interface components {
             /** Found */
             found: number;
             /** Missed */
-            missed: string[];
+            missed: components["schemas"]["MarkedDocOut"][];
             /** Not Checked */
             not_checked: components["schemas"]["NotCheckedOut"][];
         };
@@ -4476,6 +4526,8 @@ export interface components {
         NotCheckedOut: {
             /** Path */
             path: string;
+            /** Drive Id */
+            drive_id: string;
             /** Reason */
             reason: string;
         };
@@ -4520,6 +4572,13 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
+        /** Page1BlockedOut */
+        Page1BlockedOut: {
+            /** Reason */
+            reason: string;
+            /** Count */
+            count: number;
+        };
         /** Page1BoxIn */
         Page1BoxIn: {
             /** Box */
@@ -4557,6 +4616,13 @@ export interface components {
             total: number;
             /** Backfill */
             backfill: boolean;
+            /**
+             * Blocked
+             * @default []
+             */
+            blocked: components["schemas"]["Page1BlockedOut"][];
+            /** Rate Per Min */
+            rate_per_min?: number | null;
         };
         /**
          * ParentBody
@@ -4606,10 +4672,14 @@ export interface components {
         PictureScoreOut: {
             /** Path */
             path: string;
+            /** Drive Id */
+            drive_id: string;
             /** Score */
             score: number;
             /** Matched */
             matched: boolean;
+            /** Needed */
+            needed?: number | null;
         };
         /**
          * PreparedOut
@@ -4782,6 +4852,8 @@ export interface components {
             not_checked: components["schemas"]["NotCheckedOut"][];
             /** Reading */
             reading: number;
+            /** Next After */
+            next_after?: string | null;
             marked?: components["schemas"]["MarkedOut"] | null;
             /**
              * Scores
@@ -4917,6 +4989,8 @@ export interface components {
             replaces?: string | null;
             /** Place Above */
             place_above?: string | null;
+            /** After */
+            after?: string | null;
         };
         /**
          * RuleSampleOut
@@ -18322,6 +18396,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleExplainOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    areas_for_api_rules_areas_for_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreasForIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreasForOut"];
                 };
             };
             /** @description Bad Request */

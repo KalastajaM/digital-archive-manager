@@ -1,5 +1,7 @@
 """Writing top-level keys of settings.yaml without losing the rest of the file."""
 
+import time
+
 import pytest
 import yaml
 
@@ -73,7 +75,24 @@ def test_status_carries_the_page1_progress(app, fake_archive):
     )
     app.repo.save_content("b", "sb", ExtractedText("x", "t"), "indexed")
     with make_client(app) as c:
-        assert c.get("/api/status").json()["page1"] == {"read": 1, "total": 2, "backfill": True}
+        assert c.get("/api/status").json()["page1"] == {
+            "read": 1,
+            "total": 2,
+            "backfill": True,
+            "blocked": [],
+            "rate_per_min": None,
+        }
+        # the index summary (Settings) carries the same, and why some cannot be read now
+        app.content._layout_done.extend(time.monotonic() - s for s in (50, 40, 30, 20, 10))
+        assert c.get("/api/status").json()["page1"]["rate_per_min"] == pytest.approx(6.0, abs=0.5)
+        app.content._retry_layout_later("b", "no OCR engine")
+        app.content._retry_layout_later("x", None)
+        page1 = c.get("/api/index/summary").json()["page1"]
+        assert (page1["read"], page1["total"]) == (1, 2)
+        assert page1["blocked"] == [
+            {"reason": "no OCR engine", "count": 1},
+            {"reason": "will be tried again", "count": 1},
+        ]
 
 
 @pytest.mark.parametrize("value", [True, False])

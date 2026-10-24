@@ -244,6 +244,7 @@ class IndexSummaryOut(BaseModel):
     not_readable_by_type: list[TypeCountOut]  # most common first
     rows: list[IndexErrorOut]  # the not readable files, one page, newest file first
     offset: int
+    page1: "Page1ProgressOut"  # how far the page-1 pass has come
 
 
 class RetryIndexOut(BaseModel):
@@ -675,6 +676,11 @@ class ActiveArchiveOut(BaseModel):
     color: str  # #rrggbb
 
 
+class Page1BlockedOut(BaseModel):
+    reason: str  # "no OCR engine", "page 1 took too long to read", ...
+    count: int
+
+
 class Page1ProgressOut(BaseModel):
     """The page-1 layout pass: documents whose page 1 is read, of all it reads, and
     whether the backfill of documents outside the inbox is on."""
@@ -682,6 +688,10 @@ class Page1ProgressOut(BaseModel):
     read: int
     total: int
     backfill: bool
+    # of those not read, the ones waiting because they cannot be read now, and why
+    blocked: list[Page1BlockedOut] = []
+    # reads finished per minute lately (None: too few to say), to estimate the time left
+    rate_per_min: float | None = None
 
 
 class StatusOut(BaseModel):
@@ -1516,6 +1526,24 @@ class RuleReplayIn(_In):
     replaces: str | None = None
     # for a new rule: the learned rule it goes directly above (see ``ZoneDraftOut``)
     place_above: str | None = None
+    # continue a replay that stopped at its time budget: the ``next_after`` it gave. Only
+    # the files whose path comes after it are looked at; the counts are for that part.
+    after: str | None = None
+
+
+class AreasForIn(_In):
+    """The rule being tested and the document to draw its areas on."""
+
+    rule: RuleIn
+    drive_id: str
+
+
+class AreasForOut(BaseModel):
+    """The rule's areas on this document, as the suggestion has them (``AreaOut``): the
+    matched lines of each text area, the best place and score of each picture area, and for
+    one that did not match, why. Changes nothing."""
+
+    areas: list[AreaOut]
 
 
 class RuleMoveIn(_In):
@@ -1623,8 +1651,12 @@ class PictureScoreOut(BaseModel):
     them) and whether the rule matched it."""
 
     path: str
+    drive_id: str
     score: float
     matched: bool
+    # for a document the rule did not match: the score its failing area needed (it is only
+    # listed when within 0.15 of it)
+    needed: float | None = None
 
 
 class NotCheckedOut(BaseModel):
@@ -1632,7 +1664,13 @@ class NotCheckedOut(BaseModel):
     at; ``reason``: "page 1 not read yet", "no OCR engine" or "missing"."""
 
     path: str
+    drive_id: str
     reason: str
+
+
+class MarkedDocOut(BaseModel):
+    path: str
+    drive_id: str
 
 
 class MarkedOut(BaseModel):
@@ -1642,7 +1680,7 @@ class MarkedOut(BaseModel):
 
     total: int
     found: int
-    missed: list[str]
+    missed: list[MarkedDocOut]
     not_checked: list[NotCheckedOut]
 
 
@@ -1658,9 +1696,12 @@ class ReplayOut(BaseModel):
     not_checked: list[NotCheckedOut]
     # how many page-1 reads are queued by this replay (post it again to see them)
     reading: int
-    marked: MarkedOut | None = None  # only for a rule with a sender
+    # when ``truncated``: send it as ``after`` to test the rest, from where this stopped
+    next_after: str | None = None
+    marked: MarkedOut | None = None  # only for a rule with a sender (first call only)
     # only for a rule with picture areas: the lowest scores of its matches and the highest
-    # of the documents it did not match, to see how well they are told apart
+    # of its near misses (documents where only a picture area failed, within 0.15 of the
+    # score it needed), to see how well they are told apart
     scores: list[PictureScoreOut] = []
 
 

@@ -30,8 +30,11 @@ from dam.extract.picture import PICTURE_PAGE_WIDTH, picture_path
 DEFAULT_MIN_SCORE = 0.85
 SEARCH_GROW = 0.05  # the search window: the box grown by this share of the page on each side
 SCALES = (0.9, 0.95, 1.0, 1.05, 1.1)
-MATCH_WIDTH = 500  # pixels across the page while matching (half of the stored picture)
-BLUR = 1.2  # radius of the light blur, in pixels of the matching resolution
+# pixels across the page while matching: the stored picture at full size. At half size small
+# text blurred into a grey block, so two blocks of other words in the same layout scored 0.89;
+# at full size and a lighter blur they score 0.74 and a logo still survives noise and a skew.
+MATCH_WIDTH = 1000
+BLUR = 0.8  # radius of the light blur, in pixels of the matching resolution
 CROP_MAX_SIDE = 300  # the long side of a stored crop, in pixels
 MIN_STD = 2.0  # a flat crop or a flat patch (grey levels) has no picture to match
 AREAS_DIR = "areas"
@@ -112,7 +115,7 @@ def _gray(img: Image.Image) -> np.ndarray:
 
 def load_page(path: Path) -> np.ndarray:
     """The page-1 picture at ``MATCH_WIDTH`` across, lightly blurred, as float32. The JPEG
-    is decoded at half size straight away (cheap)."""
+    is decoded as it is stored."""
     with Image.open(path) as img:
         img.draft("L", (MATCH_WIDTH, 1))
         img.load()

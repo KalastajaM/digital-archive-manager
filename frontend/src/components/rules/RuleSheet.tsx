@@ -29,7 +29,7 @@ import { TagInput } from "../TagInput";
 import { useToast } from "../Toasts";
 import { SamplePage } from "../zones/SamplePage";
 import { Sheet } from "../ui/Sheet";
-import { ReplayResult } from "./ReplayResult";
+import { mergeReplay, ReplayResult } from "./ReplayResult";
 
 const REPLAY_DELAY_MS = 400;
 /** While page 1 of some documents is being read, the replay is asked for again after this
@@ -345,6 +345,23 @@ export function RuleSheet({
     ? Math.min(...areas.filter((a) => a.image).map((a) => a.minScore ?? defaultMin))
     : null;
 
+  // "Test the rest": go on after where the test stopped at its time budget and join the result
+  const rest = useReplay();
+  const testRest = () => {
+    const key = ruleKey;
+    const first = proof?.replay;
+    if (!first || first.next_after == null) return;
+    rest.mutate(
+      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, after: first.next_after },
+      {
+        onSuccess: (more) => {
+          if (key !== latestKey.current) return;
+          setProof((old) => (old && old.key === key && old.replay === first ? { key, replay: mergeReplay(first, more) } : old));
+        },
+      },
+    );
+  };
+
   const tested = proof !== null && proof.key === ruleKey ? proof.replay : null;
   const failed = replay.isError && tested === null;
   const different = tested?.different.length ?? 0;
@@ -585,8 +602,12 @@ export function RuleSheet({
             pending={tested === null && !failed}
             error={failed ? errorText(replay.error) : null}
             onRetry={() => run(epoch.current)}
+            rule={rule}
+            onTestRest={testRest}
+            restPending={rest.isPending}
           />
         )}
+        {rest.isError && <p className="error" role="alert">{visible(errorText(rest.error))}</p>}
         {!draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}
         {error && <p className="error" role="alert">{visible(error)}</p>}
       </Sheet>
@@ -711,18 +732,20 @@ function AreaPictureView({
           id={`${id}-score`}
           type="range"
           min={0.5}
-          max={0.99}
+          max={1}
           step={0.01}
           value={shown}
           aria-label={`Match needed for ${label.toLowerCase()}`}
           onChange={(e) => onScore(Number(e.target.value))}
         />
         <output htmlFor={`${id}-score`}>{shown.toFixed(2)}</output>
-        {minScore !== null && (
-          <button type="button" className="link-button" onClick={() => onScore(null)}>
-            Use the usual {defaultScore.toFixed(2)}
-          </button>
-        )}
+        <span className="rule-score-reset">
+          {minScore !== null && (
+            <button type="button" className="link-button" onClick={() => onScore(null)}>
+              Use the usual {defaultScore.toFixed(2)}
+            </button>
+          )}
+        </span>
       </div>
     </div>
   );

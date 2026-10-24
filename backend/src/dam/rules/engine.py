@@ -225,6 +225,9 @@ class Check:
     # rule did not match because of it): the replay shows how well matches and non-matches
     # are told apart
     picture_score: float | None = None
+    # the score the failing picture area needed (set only when a picture area is what the
+    # rule failed on, every other condition having held): a near miss is judged by it
+    picture_needed: float | None = None
 
 
 def has_text_zones(rule: Rule) -> bool:
@@ -363,7 +366,9 @@ def check(
     ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder). A rule with a
     ``zones`` need ``layout`` (page 1's lines); without one it does not match, and
     ``waiting`` says whether reading page 1 could change that. A picture zone is looked at
-    in ``pictures`` (page-1 pictures from the cache), last, after every cheaper condition;
+    in ``pictures`` (page-1 pictures from the cache), last, after every cheaper condition
+    (the folder, the words, the file name and every text area: a document that fails one of
+    those never gets a picture score, so it is never taken for a near miss);
     a document with no page-1 picture yet is waiting for it, like a missing layout."""
     when = rule.when
     score: float | None = None
@@ -401,7 +406,7 @@ def check(
                 return Check(waiting=on_page1)
             score = found.score if score is None else min(score, found.score)
             if found.score < zone.threshold:
-                return Check(picture_score=score)
+                return Check(picture_score=score, picture_needed=zone.threshold)
     if when.person is not None:
         mine = person_for(people, layout, rule)
         if mine.name is None:

@@ -353,9 +353,13 @@ search window, the box grown by 5 % of the page on every side, at the scales 0.9
 match. A picture zone has no
 text pre-filter, so it is checked last, after every other condition of the rule. A
 document without a page-1 picture yet is not checked (the same as a missing page-1 layout).
-The default 0.85 sits above what other logos and plain text in the same place scored in
-tests (up to about 0.8) and below a rescan with a shift, a size change of 10 %, noise,
-a darker copy or a 2 degree skew (0.94 and over).
+The matching works at the stored width, 1000 px, with a blur of 0.8 px (it used 500 px and
+1.2 px: at that size a block of small text with other words in the same layout scored 0.89,
+above the default). In tests, other dark logos on white score 0.63 or less and a block of
+other small words 0.74; a rescan of a logo with a shift, a size change of 10 %, noise, a
+darker copy or a 2 degree skew scores 0.92 and over, and small text 0.94 and over with
+noise or a darker copy, 0.93 with a 1 degree skew and 0.82 with a 2 degree skew. The default
+0.85 stays; fine print on a crooked scan needs a lower `min_score`. A match takes about 20 ms.
 
 The page-1 pictures are cache, in `<data dir>/cache/page1/<drive id>-<sha256 prefix,
 16 hex digits>.jpg` (8-bit grayscale JPEG, quality 70, 1000 px wide, the page as it is
@@ -374,8 +378,20 @@ document's page-1 picture and returns `{width, height, png (base64), image}`; wi
 (and `rule_id`, which names the file) it also keeps the file and `image` is its path, else
 null. `POST /api/rules/draft-zone` takes `picture_boxes` next to `boxes` and returns the
 saved crops in `pictures`. `GET /api/rules/areas/{name}` serves a saved picture. The
-replay answer has `scores: [{path, score, matched}]` for a rule with picture areas: the
-lowest 20 matches and the highest 10 documents that were not matched. `GET /api/rules`
+replay answer has `scores: [{path, drive_id, score, matched, needed}]` for a rule with picture
+areas: the lowest 20 matches and the highest 10 near misses, which are documents where every
+other condition held and only a picture area failed, with a score within 0.15 of `needed` (the
+score that area asked for; null for a match). A document that fails a word, an area, the file
+name, the folder or the person has no score. Every row of the replay carries `drive_id`
+(`different`, `not_checked`, `scores`, and `marked.missed`, which is a list of `{path,
+drive_id}`) so the document can be opened. `POST /api/rules/replay` takes `after` (a path) and
+answers `next_after`: when `truncated` is true, post the same rule with `after` set to it to go on
+with the files whose path comes after (path order); `total` is still all filed files, the other
+counts are for that part, and `marked` is only computed without `after`. `POST
+/api/rules/areas-for {rule, drive_id}` answers `{areas}`, the rule's areas on that document in the
+shape of a suggestion's `areas` (matched lines, the best place and score of a picture area, and
+`reason` for one that did not match or has no score), with the rule's `folder_is` ignored as in
+the replay; it reads only the index and the cache and changes nothing. `GET /api/rules`
 lists `unused_pictures` (files in `areas` no loaded rule uses) and `default_min_score`.
 `POST /api/rules/unused-pictures/quarantine {names, dry_run}` moves those pictures into
 the quarantine folder as `dam rule picture <name>` (a taken name gets `_2`, ...) and
@@ -763,7 +779,12 @@ Text is read from PDFs (OCR for scans), images, plain text, `.docx`, `.msg`,
 `.doc`/`.dot`/`.dotx`/`.docm`/`.odt`/`.html`/`.webarchive` (macOS only, with `textutil`),
 and Pages, Numbers and Keynote files (the preview inside the bundle, with OCR for
 pictures). `GET /api/index/summary` gives the Index sheet's counts per state, the not
-readable files per type and a page (`limit`, `offset`) of those files with their reasons.
+readable files per type and a page (`limit`, `offset`) of those files with their reasons, and
+`page1`, the progress of the page-1 pass: `{read, total, backfill, rate_per_min, blocked:
+[{reason, count}]}`. `blocked` counts the documents whose page 1 cannot be read now (no OCR
+engine, missing, took too long, no picture can be made, or waiting to be tried again) and
+`rate_per_min` is the reads finished per minute over the last ten minutes (null when there
+were fewer than three). `GET /api/status` has the same `page1`.
 
 A file whose text could not be extracted is `error` (something a retry might fix: a
 crash in the extractor, an extraction over 5 minutes) or `unsupported` (retrying will

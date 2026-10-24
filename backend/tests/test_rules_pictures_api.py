@@ -225,8 +225,57 @@ def test_replay_api_has_the_scores(app, fake_archive):
         data = post(c, "/api/rules/replay", {"rule": rule_body(image)}).json()
     assert data["matched"] == 3 and data["same"] == 3
     assert [s["matched"] for s in data["scores"]] == [True, True, True, False]
-    assert all(set(s) == {"path", "score", "matched"} for s in data["scores"])
-    assert data["scores"][-1]["path"] == "10. Bank/other.pdf" and data["scores"][-1]["score"] < 0.85
+    assert all(set(s) == {"path", "drive_id", "score", "matched", "needed"} for s in data["scores"])
+    last = data["scores"][-1]
+    assert last["path"] == "10. Bank/other.pdf" and last["drive_id"] == "o"
+    assert last["score"] < 0.85 and last["needed"] == 0.85  # a near miss: within 0.15 of it
+    assert data["next_after"] is None and data["truncated"] is False
+    assert {m["drive_id"] for m in data["scores"] if m["matched"]} == {"m0", "m1", "m2"}
+
+
+def test_replay_api_goes_on_after_a_path(app, fake_archive):
+    for i in range(3):
+        add(app, fake_archive, f"Insurance/Acme/20250{i + 1}10_A.pdf", f"m{i}", "x")
+        keep(app, f"m{i}", synth.letter(shift=(2 * i, 3 * i)))
+    with make_client(app) as c:
+        image = post(
+            c,
+            "/api/rules/area-picture",
+            {"drive_id": "m0", "box": BOX, "save": True, "rule_id": "acme"},
+        ).json()["image"]
+        rest = post(
+            c,
+            "/api/rules/replay",
+            {"rule": rule_body(image), "after": "Insurance/Acme/20250210_A.pdf"},
+        ).json()
+    assert rest["matched"] == 1 and rest["total"] == 3 and rest["checked"] == 1
+
+
+def test_areas_for_draws_the_rule_being_tested_on_a_document(app, fake_archive):
+    add(app, fake_archive, "10. Bank/a.pdf", "a", "x")
+    keep(app, "a", synth.letter(shift=(15, 10)))
+    add(app, fake_archive, "10. Bank/b.pdf", "b", "x")
+    keep(app, "b", synth.letter(kind=1))
+    with make_client(app) as c:
+        image = post(
+            c,
+            "/api/rules/area-picture",
+            {"drive_id": "a", "box": BOX, "save": True, "rule_id": "acme"},
+        ).json()["image"]
+        body = rule_body(image)
+        body["when"]["folder_is"] = "Somewhere else"  # a test ignores the folder, as the replay
+        hit = post(c, "/api/rules/areas-for", {"rule": body, "drive_id": "a"})
+        miss = post(c, "/api/rules/areas-for", {"rule": body, "drive_id": "b"})
+        unknown = post(c, "/api/rules/areas-for", {"rule": body, "drive_id": "nope"})
+        # nothing was saved or changed
+        assert "acme" not in [r["id"] for r in c.get("/api/rules").json()["rules"]]
+    assert hit.status_code == 200
+    (area,) = hit.json()["areas"]
+    assert area["kind"] == "image" and area["matched"] is True and area["score"] > 0.9
+    assert len(area["lines"]) == 1 and area["box"] == BOX
+    (other,) = miss.json()["areas"]
+    assert other["matched"] is False and other["score"] < 0.85 and "needs 0.85" in other["reason"]
+    assert unknown.status_code == 404
 
 
 def test_the_inbox_suggestion_names_the_folder_and_draws_the_picture_area(app, doc):

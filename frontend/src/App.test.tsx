@@ -69,6 +69,22 @@ describe("App shell", () => {
     expect(await within(dialog).findByText("damaged")).toBeInTheDocument();
   });
 
+  it("shows the page 1 progress in the status line while it is not complete, and hides it when it is", async () => {
+    const page1 = (read: number) => ({ read, total: 10875, backfill: true, blocked: [], rate_per_min: null });
+    mockFetch({ "GET /api/status": { body: { ...STATUS, page1: page1(1240) } }, ...BASE });
+    const first = renderApp();
+    await waitFor(() =>
+      expect(screen.getByTestId("status-line")).toHaveTextContent(
+        "3 in inbox · 8 searchable · page 1 read 1 240 of 10 875 · 1 waiting · 1 error",
+      ),
+    );
+    first.unmount();
+    mockFetch({ "GET /api/status": { body: { ...STATUS, page1: page1(10875) } }, ...BASE });
+    renderApp();
+    await waitFor(() => expect(screen.getByTestId("status-line")).toHaveTextContent("3 in inbox · 8 searchable · 1 waiting"));
+    expect(screen.getByTestId("status-line")).not.toHaveTextContent("page 1");
+  });
+
   it("shows the sidebar and the status line in its foot, no recovery banner", async () => {
     mockFetch({
       "GET /api/status": { body: STATUS },
