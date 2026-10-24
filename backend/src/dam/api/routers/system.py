@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 
 from dam.api.deps import AppDep, ArchivesDep
 from dam.api.schemas import IndexErrorsOut, IndexSummaryOut, RetryIndexIn, RetryIndexOut, StatusOut
+from dam.app import App
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -22,7 +23,6 @@ def _is_real_dir(app, rel: str) -> bool:
 @router.get("/status", response_model=StatusOut)
 def status(app: AppDep, archives: ArchivesDep) -> dict:
     counts = app.repo.counts()
-    read, total = app.repo.layout_progress()
     return {
         "files": counts["total"],
         "indexed": counts.get("indexed", 0),
@@ -38,8 +38,24 @@ def status(app: AppDep, archives: ArchivesDep) -> dict:
         "archive_available": app.archive_available,
         "special_folders": app.settings.special_folders.model_dump(),
         "inbox_exists": _is_real_dir(app, app.paths.inbox),
-        "page1": {"read": read, "total": total, "backfill": app.settings.page1_backfill},
+        "page1": _page1(app),
         **archives.summary(),
+    }
+
+
+def _page1(app: App) -> dict:
+    read, total = app.repo.layout_progress()
+    text, scans = app.repo.layout_unread()
+    return {
+        "text_left": text,
+        "scans_left": scans,
+        "text_per_min": app.settings.page1_text_reads_per_minute,
+        "scans_per_min": app.settings.indexer_reads_per_minute,
+        "read": read,
+        "total": total,
+        "backfill": app.settings.page1_backfill,
+        "rate_per_min": app.content.layout_rate(),
+        "blocked": [{"reason": r, "count": n} for r, n in app.content.layout_waiting()],
     }
 
 
@@ -87,6 +103,7 @@ def index_summary(
             for p in repo.index_problems(limit=limit, offset=offset, only_unsupported=True)
         ],
         "offset": offset,
+        "page1": _page1(app),
     }
 
 

@@ -2,6 +2,7 @@
 
 import re
 import string
+import time
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
@@ -17,6 +18,7 @@ from dam.rules.fields import DetectedFields, detect_fields
 from dam.rules.model import Rule, fold
 from dam.rules.people import PeopleContext, detect_people, person_line, pick_person
 from dam.rules.picture import Match, Pictures
+from dam.rules.timings import Timings
 
 _COPY_MARKER = re.compile(r"(?:\s*\(\d{1,3}\))+\s*$")
 _ALLOWED_KEYS = frozenset({"doc_date", "year", "stem", "person"})
@@ -225,6 +227,9 @@ class Check:
     # rule did not match because of it): the replay shows how well matches and non-matches
     # are told apart
     picture_score: float | None = None
+    # the score the failing picture area needed (set only when a picture area is what the
+    # rule failed on, every other condition having held): a near miss is judged by it
+    picture_needed: float | None = None
 
 
 def has_text_zones(rule: Rule) -> bool:
@@ -271,14 +276,18 @@ def zones_match(rule: Rule, layout: Page1Layout) -> bool:
 
 
 def picture_match(
-    rule: Rule, index: int, rec: FileRecord, pictures: Pictures | None
+    rule: Rule,
+    index: int,
+    rec: FileRecord,
+    pictures: Pictures | None,
+    timings: Timings | None = None,
 ) -> Match | None:
     """How well the picture of the rule's zone ``index`` appears on page 1 of ``rec``;
     None when that cannot be told yet (no page-1 picture made, or no picture support)."""
     zone = rule.when.zones[index]
     if pictures is None or zone.image is None:
         return None
-    return pictures.match(zone.image, zone.box, rec.drive_id, rec.sha256)
+    return pictures.match(zone.image, zone.box, rec.drive_id, rec.sha256, timings)
 
 
 def rule_areas(
@@ -358,12 +367,15 @@ def check(
     layout: Page1Layout | None = None,
     people: PeopleContext | None = None,
     pictures: Pictures | None = None,
+    timings: Timings | None = None,
 ) -> Check:
     """Does ``rule`` match? ``folder_is`` matches the file's real folder, or
     ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder). A rule with a
     ``zones`` need ``layout`` (page 1's lines); without one it does not match, and
     ``waiting`` says whether reading page 1 could change that. A picture zone is looked at
-    in ``pictures`` (page-1 pictures from the cache), last, after every cheaper condition;
+    in ``pictures`` (page-1 pictures from the cache), last, after every cheaper condition
+    (the folder, the words, the file name and every text area: a document that fails one of
+    those never gets a picture score, so it is never taken for a near miss);
     a document with no page-1 picture yet is waiting for it, like a missing layout."""
     when = rule.when
     score: float | None = None
@@ -391,17 +403,21 @@ def check(
         if has_text_zones(rule):
             if layout is None:
                 return Check(waiting=on_page1)
-            if not zones_match(rule, layout):
+            started = time.perf_counter() if timings is not None else 0.0
+            in_areas = zones_match(rule, layout)
+            if timings is not None:
+                timings.zones += time.perf_counter() - started
+            if not in_areas:
                 return Check()
         for i, zone in enumerate(when.zones):
             if not zone.is_picture:
                 continue
-            found = picture_match(rule, i, rec, pictures)
+            found = picture_match(rule, i, rec, pictures, timings)
             if found is None:
                 return Check(waiting=on_page1)
             score = found.score if score is None else min(score, found.score)
             if found.score < zone.threshold:
-                return Check(picture_score=score)
+                return Check(picture_score=score, picture_needed=zone.threshold)
     if when.person is not None:
         mine = person_for(people, layout, rule)
         if mine.name is None:

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
+import { type Call, mockFetch, renderWithProviders, replayJob } from "../../test-utils";
 import { FilingRules } from "./FilingRules";
 
 const rule = (id: string, extra: Record<string, unknown> = {}, stats: Record<string, unknown> = {}) => ({
@@ -39,7 +39,7 @@ function setup(data: object = DATA(), extra: Record<string, unknown> = {}) {
     "GET /api/trays": { body: { trays: [], errors: [] } },
     "GET /api/tags": { body: [] },
     "GET /api/inbox": { body: [ENTRY("d1", "scan001.pdf"), ENTRY("d2", "bill.pdf")] },
-    "POST /api/rules/replay": { body: { matched: 0, same: 0, different: [], inbox: 0, shadowed: [], checked: 0, total: 0, truncated: false } },
+    ...replayJob({ matched: 0, same: 0, different: [], inbox: 0, shadowed: [], checked: 0, total: 0, truncated: false }),
     ...extra,
   } as never);
   renderWithProviders(
@@ -95,8 +95,8 @@ describe("FilingRules", () => {
     await user.click(await screen.findByRole("button", { name: /New rule/ }));
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
     await user.type(within(sheet).getByLabelText("Add a word"), "sauna{Enter}");
-    await waitFor(() => expect(ofMethod(calls, "POST", "/api/rules/replay").length).toBeGreaterThan(0));
-    expect((ofMethod(calls, "POST", "/api/rules/replay")[0].body as { rule: { id: string }; replaces: unknown }).replaces).toBeNull();
+    await waitFor(() => expect(ofMethod(calls, "POST", "/api/rules/replay/jobs").length).toBeGreaterThan(0));
+    expect((ofMethod(calls, "POST", "/api/rules/replay/jobs")[0].body as { rule: { id: string }; replaces: unknown }).replaces).toBeNull();
     await user.click(await within(sheet).findByRole("button", { name: "Save" }));
     await waitFor(() => expect(ofMethod(calls, "PUT", "/api/rules/new-rule")).toHaveLength(1));
     expect(calls.find((c) => c.method === "PUT" && c.url === "/api/rules/new-rule")?.body).toMatchObject({ id: "new-rule" });

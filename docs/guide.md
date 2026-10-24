@@ -537,16 +537,42 @@ How it works: dam keeps a small grayscale picture of page 1 of each PDF and imag
 the area you drew, allowing a shift of 5 % of the page in any direction, sizes from 90 %
 to 110 %, a lighter or darker scan, scan noise and a skew of a degree or two. The score
 runs from 0 to 1; the rule needs at least **Match needed**, usually 0.85. Another logo in
-the same place scores clearly lower (about 0.7 and under in dam's own tests), and plain
-text in the same font scores about 0.8, which is why the limit is not lower.
+the same place scores clearly lower (0.63 and under in dam's own tests with dark logos on
+white), and a block of small text with other words in the same layout scores about 0.74,
+which is why the limit is not lower. Fine print is the hardest to recognise on a crooked
+scan: a skew of 2 degrees can bring it down to about 0.82, so lower the slider a little for
+a picture of small text. The slider goes from 0.50 to 1.00.
 
-The test under the rule sheet lists the scores: the lowest of the documents the rule
-matched and the highest of the documents it did not. If the two groups are far apart,
-the rule is safe. If they touch, move the slider, or add a text box so the picture only
-has to decide between a few documents. A picture alone also takes longer to test, because
-every filed PDF and image is looked at (the test does not open the files in the archive, only
-the small pictures). Pictures not made yet are made first, inbox before the rest; a
-document without one is listed as not checked, never as a miss.
+The test under the rule sheet lists the scores in two groups. **Matched** has the lowest
+scores of the documents the rule matched. **Close, but not matched** has the highest scores
+of the documents that were not matched but came within 0.15 of what is needed, and only
+documents where the picture was the one thing that failed: a document that has the word
+somewhere else on the page but not in your area is never listed with a score. If the two
+groups are far apart, the rule is safe. If they touch, move the slider, or add a text box
+so the picture only has to decide between a few documents. A picture alone also takes
+longer to test, because every filed PDF and image is looked at (the test does not open the
+files in the archive, only the small pictures). Pictures not made yet are made first,
+inbox before the rest; a document without one is listed as not checked, never as a miss.
+
+Every path in the test result is a button. It opens the document in the preview with the
+rule you are testing drawn on its first page: its areas, and for a picture area the place
+where it fits best with its score. When a picture rule finds nothing, open a letter you
+know it should match and read the score and the place the picture was found. In any
+preview with the box tool (Inbox, Browse, Quick Look, the viewer), the areas of picture
+rules that did not match are drawn dashed too, with the score they got on that document, or
+the reason there is none (for example that the picture of page 1 is not made yet).
+
+The test runs in the background and fills in as it goes: "Checked 1 240 of 10 875
+documents…" with a **Stop** button. It looks at the likely documents first (the ones you
+set as from the rule's sender, the ones in the same folder as the document you drew the
+boxes on, and for a picture area the pages that look most like it), so real matches show
+up early; the final counts are the same in any order. It goes on until every document is
+checked, and ends if you stop it, change the rule or close the sheet. After a stop,
+**Test again** starts over. If some documents are still waiting for page 1 to be read, it
+says "Waiting for page 1 of N" and looks at them again as they are read. **Read page 1 of
+these N now** puts exactly those documents first in the page-1 queue and reads them at full
+speed, one at a time and with the usual time limit for each; the test picks them up as they
+arrive. Without it they are read in the background at the normal pace.
 
 A picture area is only for something that tells who a letter is from or what kind it is.
 The address area never takes a picture: a person is found from text only. The picture of
@@ -618,9 +644,17 @@ when it reads it, and for picture areas a small grayscale picture of the page; t
 costs no extra reading for new scans. Documents read before this feature, and PDFs that
 have a text layer, get theirs in the background, inbox first, when dam has nothing else
 to do.
-Settings → Filing rules shows "Page 1 read for R of T documents", and the switch "Read
-page 1 of older documents in the background" pauses it. Scans need an OCR engine, as for
-their text.
+The Index sheet (click the status line at the foot of the sidebar) shows the same progress,
+how many documents wait because page 1 cannot be read now and why (for example no OCR engine,
+or it took too long), an estimate of the time left, the switch, and **Page 1 reading speed**.
+While reading is not complete, the status line also says "page 1 read 1 240 of 10 875".
+Settings → Indexing has the switch "Read page 1 of older documents in the background"
+(it pauses the reading) and the speed. PDFs that have a text layer are read quickly (300 a
+minute unless you choose another speed), because that takes no OCR; scans and photos need an
+OCR engine and are read at the indexer's pace (30 a minute), and so is any file that is slow
+to fetch, such as a Google Drive file that has to be downloaded first. The estimate of the
+time left adds the two: "about 18 min left (5 000 PDFs with text at 300 a minute, 30 scans
+and photos at 30 a minute)".
 
 ## Trays
 
@@ -812,6 +846,9 @@ each area, grouped by what it applies to; one section shows at a time.
   - **Filing rules**: every rule in the order it applies, with its record; edit, test,
     delete or add rules, test a document from the inbox, and switch the offer to make a
     rule on or off. See [Filing rules](#filing-rules).
+  - **Indexing**: whether page 1 of older documents is read in the background, and the
+    **Page 1 reading speed** for PDFs that have a text layer. See
+    [Reading page 1](#reading-page-1).
 - **This browser** (every archive alike):
   - **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at
     once, and is remembered by this browser (another browser starts on Auto).

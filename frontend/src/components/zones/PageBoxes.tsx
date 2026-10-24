@@ -5,13 +5,16 @@
  *
  * Boxes are fractions of the rendered image (origin top left), so the zoom never matters. */
 import { Layers, SquareDashed } from "lucide-react";
-import { type PointerEvent, type ReactNode, useRef, useState } from "react";
+import { type PointerEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import {
   type Area,
   errorText,
   type FileSuggestions,
   type PageBox,
+  type RuleIn,
   useAreaPicture,
+  useAreasFor,
+  useRuleExplain,
   usePage1,
   usePage1Lines,
   useFileSuggestions,
@@ -27,6 +30,9 @@ import { BoxPanel, type KeptBox } from "./BoxPanel";
 /** Turns the tool on for a preview. ``suggestion``: what the file's current suggestion
  * came from, when the owner already has it (the Inbox card); otherwise it is asked for. */
 export type BoxTool = {
+  /** The rule being tested (the rule sheet's test result): its areas on this document are
+   * drawn instead of the suggestion's, with the best place and score of a picture area. */
+  testRule?: RuleIn;
   suggestion?: Pick<FileSuggestions, "name_source" | "folder_source"> &
     Partial<Pick<FileSuggestions, "areas" | "person_line">> & { person?: string | null };
 };
@@ -94,10 +100,26 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const own = useFileSuggestions(driveId, active && tool.suggestion === undefined);
   const suggestion = tool.suggestion ?? own.data;
   const ruleId = suggestion ? ruleIdOf(suggestion) : null;
-  const rules = useRules(active && ruleId !== null);
+  const rules = useRules(active);
   const rule = ruleId ? (rules.data?.rules.find((r) => r.id === ruleId) ?? null) : null;
   // the areas behind the suggestion: shown unless the owner turned them off
-  const areas = suggestion?.areas ?? [];
+  // the rule being tested, or else the suggestion's areas plus, for diagnosis, the areas of
+  // rules with a picture area that did not match (their best place and score here, or why
+  // no score could be worked out)
+  const tested = useAreasFor(tool.testRule, driveId, active && tool.testRule !== undefined);
+  // only an archive with a picture rule asks (the explanation is a look at every rule)
+  const hasPictureRules = rules.data?.rules.some((r) => r.when.zones.some((z) => z.image)) ?? false;
+  const explained = useRuleExplain(driveId, active && tool.testRule === undefined && hasPictureRules);
+  const areas = useMemo(() => {
+    if (tool.testRule !== undefined) return tested.data?.areas ?? [];
+    const own = suggestion?.areas ?? [];
+    const seen = new Set(own.map((a) => `${a.rule_id}:${a.index}`));
+    const more = (explained.data ?? [])
+      .filter((x) => !x.matched && x.areas.some((a) => a.kind === "image"))
+      .flatMap((x) => x.areas)
+      .filter((a) => !seen.has(`${a.rule_id}:${a.index}`));
+    return [...own, ...more];
+  }, [tool.testRule, tested.data, suggestion?.areas, explained.data]);
   const personLine = suggestion?.person_line ?? null;
   const [areasOn, setAreasOn] = useState<boolean | null>(null);
   const showAreas = areasOn ?? areas.length > 0;
@@ -179,7 +201,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
         <IconButton
           icon={<Layers />}
           label="Show areas"
-          tip="Show the areas of page 1 behind the suggestion"
+          tip="Show the areas of page 1 behind the suggestion, and the score of picture rules that did not match"
           pressed={showAreas}
           onClick={() => setAreasOn(!showAreas)}
         />

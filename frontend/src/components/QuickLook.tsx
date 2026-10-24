@@ -10,6 +10,7 @@ import { DialogStatus, InlineResults, useDialogStatus } from "./FileLaunch";
 import { FIT_LEVEL, FilePreview } from "./FilePreview";
 import { IconButton } from "./ui/IconButton";
 import { MarkToggles } from "./MarkToggles";
+import type { BoxTool } from "./zones/PageBoxes";
 import { TrashButton } from "./Trash";
 
 /** A document Quick Look can show; ``scanned`` are the scan's fields when known. */
@@ -36,9 +37,11 @@ type Props = {
   status?: ReturnType<typeof useDialogStatus>;
   /** Trash for the shown file: ``refusal`` disables the bin, saying why. */
   trash?: { run: () => void; refusal: string | null; busy: boolean };
+  /** The box tool of the page-1 preview (``testRule``: draw the rule being tested). */
+  boxTool?: BoxTool;
 };
 
-export function QuickLook({ files, index, onIndex, onClose, status: given, trash }: Props) {
+export function QuickLook({ files, index, onIndex, onClose, status: given, trash, boxTool = {} }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -103,7 +106,7 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
       <div className="quicklook-body">
         <div className="quicklook-preview preview-fill">
           <InlineResults.Provider value={status.report}>
-            <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} boxTool={{}} />
+            <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} boxTool={boxTool} />
           </InlineResults.Provider>
         </div>
         <aside className="quicklook-details">

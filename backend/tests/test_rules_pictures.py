@@ -527,9 +527,205 @@ def test_an_earlier_text_rule_does_not_make_the_replay_match_pictures_outside_it
         budget_s=0.0, layouts_for=app.repo.layouts_for, pictures=setup.pictures,
     )  # fmt: skip
     assert wide.truncated and calls == []
-    # with time, the matching happens once per document (ten rows), in the main loop
+    # with time, the matching happens once per document that can have a page 1 (nine of the
+    # ten rows: the .docx is settled without a look), in the main loop
     full = replay(
         app.engine, rule, [earlier, rule], app.settings.special_folders,
         layouts_for=app.repo.layouts_for, pictures=setup.pictures,
     )  # fmt: skip
-    assert full.matched == 4 and len(calls) == 10
+    assert full.matched == 4 and len(calls) == 9
+
+
+# --- not mistaking one dark logo or one block of small text for another -----------------
+
+
+@pytest.mark.parametrize("a", ["kela", "KELA", "circle", "folk", "wide"])
+@pytest.mark.parametrize("b", ["kela", "KELA", "circle", "folk", "wide"])
+def test_two_different_dark_logos_on_white_do_not_come_near_the_threshold(a, b, tmp_path):
+    if a == b:
+        return
+    box = synth.TEXT_LOGO_BOX
+    crop = cut_crop(page_picture(synth.dark_logo(a)), box)
+    # measured 0.38 to 0.63; "Kela" against "KELA" (the same word) is the closest pair
+    assert score_of(synth.dark_logo(b), tmp_path, crop=crop, box=box) < 0.70
+
+
+def test_a_block_of_other_words_in_the_same_layout_is_below_the_threshold(tmp_path):
+    box = synth.TEXT_BLOCK_BOX
+    crop = cut_crop(page_picture(synth.text_block(synth.BLOCK_A)), box)
+    other = score_of(synth.text_block(synth.BLOCK_B), tmp_path, crop=crop, box=box)
+    same = score_of(synth.text_block(synth.BLOCK_A), tmp_path, crop=crop, box=box)
+    assert other < DEFAULT_MIN_SCORE - 0.08  # measured 0.74 (0.89 at half the resolution)
+    assert same > 0.98
+
+
+@pytest.mark.parametrize(
+    "label,change",
+    [
+        ("noisy", lambda im: synth.noisy(im, 25)),
+        ("darker", lambda im: synth.brightened(im, 0.6)),
+        ("skewed 1 degree", lambda im: synth.skewed(im, 1)),
+        ("skewed 2 degrees", lambda im: synth.skewed(im, 2)),
+    ],
+)
+def test_a_dark_logo_and_a_block_of_small_text_are_found_in_a_rescan(label, change, tmp_path):
+    for page, box, floor in (
+        (synth.dark_logo("kela"), synth.TEXT_LOGO_BOX, DEFAULT_MIN_SCORE + 0.05),
+        # fine print is the hardest: a 2 degree skew moves its ends by 14 px (measured 0.82)
+        (
+            synth.text_block(synth.BLOCK_A),
+            synth.TEXT_BLOCK_BOX,
+            0.78 if label == "skewed 2 degrees" else DEFAULT_MIN_SCORE,
+        ),
+    ):
+        crop = cut_crop(page_picture(page), box)
+        assert score_of(change(page), tmp_path, crop=crop, box=box) >= floor, label
+
+
+# --- who is listed with a picture score --------------------------------------------------
+
+
+def _zone_rule(setup, text_word="hakemus", min_score=None, **when):
+    picture = {"box": list(BOX), "image": "areas/acme-1.png"}
+    if min_score is not None:
+        picture["min_score"] = min_score
+    return Rule.model_validate(
+        {
+            "id": "acme",
+            "when": {
+                "zones": [{"box": [0.5, 0.05, 0.95, 0.12], "text_contains": [text_word]}, picture],
+                **when,
+            },
+            "then": {"folder": "Acme"},
+        }
+    )
+
+
+def test_a_document_that_fails_a_text_area_is_never_listed_with_a_picture_score(
+    app, setup, fake_archive
+):
+    """The word is in the document's text, only not in the area: whatever the picture
+    shows, it is not a near miss of the picture."""
+    rule = _zone_rule(setup)
+    in_area = layout(("Hakemus", (0.55, 0.06, 0.9, 0.09)))
+    elsewhere = layout(("Hakemus", (0.10, 0.60, 0.40, 0.63)))
+    for drive_id, rel, page, img in (
+        ("w", "10. Bank/wrong-place.pdf", elsewhere, synth.letter()),  # picture matches
+        ("n", "10. Bank/near.pdf", in_area, synth.letter(kind=1)),  # the picture is what fails
+        ("g", "10. Bank/good.pdf", in_area, synth.letter()),
+    ):
+        add(app, fake_archive, rel, drive_id, "hakemus")
+        setup.keep(drive_id, f"sha-{drive_id}", img)
+        app.repo.save_layout(drive_id, f"sha-{drive_id}", page)
+    wrong = FileRecord(
+        drive_id="w", path="10. Bank/wrong-place.pdf", name="x.pdf", ext="pdf", sha256="sha-w"
+    )
+    c = check(rule, wrong, "hakemus", None, elsewhere, None, setup.pictures)
+    assert not c.matched and not c.waiting
+    assert c.picture_score is None and c.picture_needed is None
+    # the picture alone would have matched it: it is the text area that fails
+    in_area_here = check(rule, wrong, "hakemus", None, in_area, None, setup.pictures)
+    assert in_area_here.matched
+    r = run_replay(app, setup, rule)
+    listed = {s.path: s for s in r.scores}
+    assert "10. Bank/wrong-place.pdf" not in listed
+    assert r.matched == 1 and listed["10. Bank/good.pdf"].matched
+    assert r.checked == 3
+
+
+def test_only_near_misses_are_listed_with_a_score_and_each_has_a_drive_id(app, setup, fake_archive):
+    for i in range(2):
+        add(app, fake_archive, f"Insurance/Acme/m{i}.pdf", f"m{i}", "x")
+        setup.keep(f"m{i}", f"sha-m{i}", synth.letter(shift=(i, 0)))
+    add(app, fake_archive, "10. Bank/other.pdf", "o", "x")
+    setup.keep("o", "sha-o", synth.letter(kind=1))
+    other = score_of(synth.letter(kind=1), setup.rules_dir.parent)
+    assert 0.2 < other < 0.84
+    # far below what is needed: not listed; within 0.15 of it: listed, with its id
+    far = Rule.model_validate(
+        {
+            "id": "acme",
+            "when": {
+                "zones": [
+                    {
+                        "box": list(BOX),
+                        "image": "areas/acme-1.png",
+                        "min_score": round(other + 0.2, 2),
+                    }
+                ]
+            },
+        }
+    )
+    close = Rule.model_validate(
+        {
+            "id": "acme",
+            "when": {
+                "zones": [
+                    {
+                        "box": list(BOX),
+                        "image": "areas/acme-1.png",
+                        "min_score": round(other + 0.1, 2),
+                    }
+                ]
+            },
+        }
+    )
+    r = run_replay(app, setup, far)
+    assert [s for s in r.scores if not s.matched] == []
+    r = run_replay(app, setup, close)
+    (near,) = [s for s in r.scores if not s.matched]
+    assert near.path == "10. Bank/other.pdf" and near.drive_id == "o"
+    assert near.needed == pytest.approx(round(other + 0.1, 2)) and near.needed - near.score <= 0.15
+    assert all(s.drive_id for s in r.scores)
+
+
+# --- testing the rest ---------------------------------------------------------------------
+
+
+def test_a_replay_that_stopped_at_its_budget_goes_on_from_where_it_stopped(
+    app, setup, fake_archive, monkeypatch
+):
+    import types
+
+    from dam.rules import replay as replay_module
+
+    fill(app, setup, fake_archive, n_match=4, n_other=3)
+    rule = setup.rule()
+    whole = run_replay(app, setup, rule)
+
+    ticks = iter(range(10_000))
+    monkeypatch.setattr(
+        replay_module, "time", types.SimpleNamespace(monotonic=lambda: float(next(ticks)))
+    )
+    parts, after = [], None
+    while True:
+        part = run_replay(app, setup, rule, budget_s=4.5, after=after)
+        parts.append(part)
+        if not part.truncated:
+            break
+        assert part.next_after is not None and part.next_after != after
+        after = part.next_after
+    assert len(parts) > 1
+    assert all(p.total == whole.total for p in parts)
+    assert sum(p.matched for p in parts) == whole.matched
+    assert sum(p.same for p in parts) == whole.same
+    assert sum(p.checked for p in parts) == whole.checked
+    assert sorted(h.drive_id for p in parts for h in p.different) == sorted(
+        h.drive_id for h in whole.different
+    )
+    assert sorted(n.path for p in parts for n in p.not_checked) == sorted(
+        n.path for n in whole.not_checked
+    )
+    # nothing is looked at twice: each part starts after the one before
+    assert parts[-1].next_after is None
+
+
+def test_after_skips_what_comes_before_it(app, setup, fake_archive):
+    fill(app, setup, fake_archive)
+    whole = run_replay(app, setup, setup.rule())
+    rest = run_replay(app, setup, setup.rule(), after="10. Bank/s0.pdf")
+    assert rest.total == whole.total and rest.matched == 3
+    assert rest.checked == whole.checked - 1  # s0 comes before the cursor
+    assert [s.path for s in rest.scores if not s.matched] == [
+        "10. Bank/s1.pdf"
+    ]  # s0 is before the cursor

@@ -22,6 +22,8 @@ export type RuleIn = Schemas["RuleIn"];
 export type RuleDraft = Schemas["RuleDraftOut"];
 export type RuleOffer = Schemas["RuleOfferOut"];
 export type Replay = Schemas["ReplayOut"];
+/** A rule test running in the background: its state, how far it is and the result so far. */
+export type ReplayJob = Schemas["ReplayJobOut"];
 export type RulesData = Schemas["RulesOut"];
 export type RuleExplain = Schemas["RuleExplainOut"];
 export type RulesState = Schemas["RulesStateOut"];
@@ -848,7 +850,24 @@ export const usePage1Backfill = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (enabled: boolean) => put<{ enabled: boolean }>("/api/settings/page1-backfill", { enabled }),
-    onSettled: () => void client.invalidateQueries({ queryKey: keys.status }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.status });
+      void client.invalidateQueries({ queryKey: keys.indexErrors });
+    },
+  });
+};
+
+/** How many PDFs with a text layer have page 1 read per minute (scans and slow downloads keep
+ * the indexer's pace). */
+export const usePage1Speed = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (readsPerMinute: number) =>
+      put<{ reads_per_minute: number }>("/api/settings/page1-speed", { reads_per_minute: readsPerMinute }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.status });
+      void client.invalidateQueries({ queryKey: keys.indexErrors });
+    },
   });
 };
 
@@ -1355,6 +1374,7 @@ export const useIndexSummary = () =>
   useQuery({
     queryKey: [...keys.indexErrors, "summary"],
     queryFn: () => get<IndexSummary>("/api/index/summary?limit=1"),
+    refetchInterval: 15_000, // the page-1 pass moves on while the sheet is open
   });
 
 /** Queue files for indexing again; the list and the status follow. */
@@ -1508,13 +1528,53 @@ export const useSaveFilingCodes = () => {
 export const useRules = (enabled = true) =>
   useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules"), enabled });
 
-/** What a rule would do to the documents filed so far (nothing changes). ``replaces``:
- * the rule it would take the place of; ``placeAbove``: for a new rule, the learned rule it
- * goes directly above. */
-export const useReplay = () =>
-  useMutation({
-    mutationFn: ({ rule, replaces, placeAbove }: { rule: RuleIn; replaces?: string | null; placeAbove?: string | null }) =>
-      post<Replay>("/api/rules/replay", { rule, replaces: replaces ?? null, place_above: placeAbove ?? null }),
+/** Test a rule in the background (one test per ``sheet``: an earlier one for it is ended). */
+export const startReplayJob = (body: {
+  rule: RuleIn;
+  sheet: string;
+  replaces?: string | null;
+  placeAbove?: string | null;
+  nearDriveId?: string | null;
+}) =>
+  post<ReplayJob>("/api/rules/replay/jobs", {
+    rule: body.rule,
+    sheet: body.sheet,
+    replaces: body.replaces ?? null,
+    place_above: body.placeAbove ?? null,
+    near_drive_id: body.nearDriveId ?? null,
+  });
+
+/** The state of a background test and its result so far; with ``since`` (the version
+ * already held) the result is null while nothing is new. */
+export const getReplayJob = (id: string, since?: number) =>
+  get<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}${since !== undefined ? `?since=${since}` : ""}`);
+
+/** End a background test where it is; what it found so far stays. */
+export const stopReplayJob = (id: string) => post<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}/stop`);
+
+/** Queue page 1 of the documents a background test waits for to be read now (one at a
+ * time, ahead of everything else); the test picks them up as they arrive. */
+export const readReplayJobNow = (id: string) => post<{ queued: number }>(`/api/rules/replay/jobs/${enc(id)}/read-now`);
+
+/** End a background test and forget it (the sheet that asked for it closed). */
+export const dropReplayJob = (id: string) => del<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}`);
+
+/** The areas of the rule being tested on one document (matched lines, the best place and
+ * score of a picture area, why one did not match), to draw them on its page 1. */
+export const useAreasFor = (rule: RuleIn | undefined, driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: ["areas-for", driveId, JSON.stringify(rule)],
+    queryFn: () => post<{ areas: Area[] }>("/api/rules/areas-for", { rule, drive_id: driveId }),
+    enabled: enabled && rule !== undefined,
+  });
+
+/** Which rules match a document and why not (their areas, with the score of a picture
+ * area), as a query: for diagnosing a picture rule on a document. */
+export const useRuleExplain = (driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...keys.file, driveId, "explain"],
+    queryFn: () => post<RuleExplain[]>("/api/rules/explain", { drive_id: driveId }),
+    enabled,
   });
 
 /** Save a rule (``replaces``: the id of the rule this one takes the place of;

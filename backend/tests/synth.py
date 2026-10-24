@@ -63,3 +63,58 @@ def noisy(img: Image.Image, sigma: float, seed: int = 0) -> Image.Image:
 
 def skewed(img: Image.Image, degrees: float) -> Image.Image:
     return img.rotate(degrees, resample=Image.Resampling.BICUBIC, fillcolor=255)
+
+
+# -- dark logos and small text on white, as real letterheads have them ------------------
+
+TEXT_LOGO_BOX = (0.05, 0.02, 0.40, 0.10)
+TEXT_BLOCK_BOX = (0.05, 0.02, 0.45, 0.08)
+BLOCK_A = [
+    "Kansaneläkelaitos  PL 450",
+    "00101 Helsinki  puh 020 634 11",
+    "www.kela.fi  kela@kela.fi",
+    "Y-tunnus 0000000-0 Hakemus",
+    "Päätös annettu ajalla 1.2.2025",
+]
+BLOCK_B = [
+    "Pohjola Vakuutus Oy  PL 1",
+    "00013 Pohjola  puh 010 253 01",
+    "www.pohjola.fi  info@pohjola.fi",
+    "Y-tunnus 1111111-1 Vakuutus",
+    "Maksettu ajalla 3.4.2025",
+]
+
+
+def _font(size: int):
+    from PIL import ImageFont
+
+    return ImageFont.load_default(size=size)
+
+
+def dark_logo(kind: str) -> Image.Image:
+    """A page with a dark logo on white: ``kela`` (a word), ``KELA`` (the same word in
+    capitals), ``circle`` (a ring and a word), ``folk`` and ``wide`` (other words)."""
+    page = Image.new("L", PAGE, 255)
+    d = ImageDraw.Draw(page)
+    if kind == "kela":
+        d.text((60, 40), "Kela", font=_font(60), fill=20)
+    elif kind == "KELA":
+        d.text((60, 40), "KELA", font=_font(64), fill=0)
+    elif kind == "circle":
+        d.ellipse((55, 30, 125, 100), fill=20)
+        d.ellipse((75, 50, 105, 80), fill=255)
+        d.text((135, 50), "Pohjola", font=_font(40), fill=20)
+    elif kind == "folk":
+        d.text((60, 40), "Folkhalsan", font=_font(50), fill=20)
+    else:
+        d.text((60, 45), "Kansaneläkelaitos", font=_font(40), fill=20)
+    return page
+
+
+def text_block(lines: list[str]) -> Image.Image:
+    """A page with a block of small text (about 8 pt) at the top: other words, same layout."""
+    page = Image.new("L", PAGE, 255)
+    d = ImageDraw.Draw(page)
+    for i, line in enumerate(lines):
+        d.text((60, 40 + i * 14), line, font=_font(11), fill=40)
+    return page

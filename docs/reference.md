@@ -279,7 +279,9 @@ All in the data folder under `config/`:
   ongoing, important, quarantine), `protected_paths`, `indexer_reads_per_minute`,
   `ops_throttle_ms`, `server_port`, `ocr_languages`, `reminders` (`hour`, `mac`, `email`),
   `ai` (see AI setup), `page1_backfill` (read page 1 of older documents in the background,
-  default `true`), `people` (a list of `name` and `match` strings) and `address_zone`
+  default `true`), `page1_text_reads_per_minute` (how fast page 1 of PDFs with a text layer
+  is read, 1 to 6000, default 300; scans, photos and slow reads keep
+  `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings) and `address_zone`
   (`[x0, y0, x1, y1]` as fractions of page 1, origin top left).
 - `trays/*.yaml`: one tray per file (see Tray files).
 - `filing_codes.yaml`: the filing code table (see Filing codes file below).
@@ -353,9 +355,13 @@ search window, the box grown by 5 % of the page on every side, at the scales 0.9
 match. A picture zone has no
 text pre-filter, so it is checked last, after every other condition of the rule. A
 document without a page-1 picture yet is not checked (the same as a missing page-1 layout).
-The default 0.85 sits above what other logos and plain text in the same place scored in
-tests (up to about 0.8) and below a rescan with a shift, a size change of 10 %, noise,
-a darker copy or a 2 degree skew (0.94 and over).
+The matching works at the stored width, 1000 px, with a blur of 0.8 px (it used 500 px and
+1.2 px: at that size a block of small text with other words in the same layout scored 0.89,
+above the default). In tests, other dark logos on white score 0.63 or less and a block of
+other small words 0.74; a rescan of a logo with a shift, a size change of 10 %, noise, a
+darker copy or a 2 degree skew scores 0.92 and over, and small text 0.94 and over with
+noise or a darker copy, 0.93 with a 1 degree skew and 0.82 with a 2 degree skew. The default
+0.85 stays; fine print on a crooked scan needs a lower `min_score`. A match takes about 20 ms.
 
 The page-1 pictures are cache, in `<data dir>/cache/page1/<drive id>-<sha256 prefix,
 16 hex digits>.jpg` (8-bit grayscale JPEG, quality 70, 1000 px wide, the page as it is
@@ -369,13 +375,66 @@ current one (symlinks are never touched, nor anything outside `cache/page1`). Th
 app's own cache, not the archive; the no-delete AST test allows that one function in that
 one module. Nothing in the archive is written.
 
+Next to them the cache holds `page1-thumbs.npz`: a 48 x 68 grayscale thumbnail of every
+page-1 picture (about 3 KB each) in one array file, keyed by the picture's file name. It is
+added to when a picture is made, made from the pictures already in the cache by the
+indexer when it is idle, and written as one whole file (a torn or unreadable file counts as
+empty and is made again; a thumbnail of a picture that is gone is dropped from the next
+write). A rule test with a picture area scores every thumbnail in one numpy operation (the
+crop reduced to the size of its box, best normalised correlation over the same search window)
+to decide which documents to look at first. It only orders them: the precise match decides.
+Nothing removes this file.
+
 API: `POST /api/rules/area-picture {drive_id, box, save?, rule_id?}` cuts the box from the
 document's page-1 picture and returns `{width, height, png (base64), image}`; with `save`
 (and `rule_id`, which names the file) it also keeps the file and `image` is its path, else
 null. `POST /api/rules/draft-zone` takes `picture_boxes` next to `boxes` and returns the
 saved crops in `pictures`. `GET /api/rules/areas/{name}` serves a saved picture. The
-replay answer has `scores: [{path, score, matched}]` for a rule with picture areas: the
-lowest 20 matches and the highest 10 documents that were not matched. `GET /api/rules`
+replay answer has `scores: [{path, drive_id, score, matched, needed}]` for a rule with picture
+areas: the lowest 20 matches and the highest 10 near misses, which are documents where every
+other condition held and only a picture area failed, with a score within 0.15 of `needed` (the
+score that area asked for; null for a match). A document that fails a word, an area, the file
+name, the folder or the person has no score. Every row of the replay carries `drive_id`
+(`different`, `not_checked`, `scores`, and `marked.missed`, which is a list of `{path,
+drive_id}`) so the document can be opened. The rule sheet tests a rule with a background job
+(next paragraph); `POST /api/rules/replay` is the same test as one blocking request with a
+time budget (5 s), kept for other callers. It takes `after` and answers `next_after`: when
+`truncated` is true, post the same rule with `after` set to it to go on with the documents
+not looked at yet, in the same order. The cursor is opaque (`r1.<id>.<n>`): the server
+remembers the order of the last six tests, and answers 400 "run it again" for a cursor it
+no longer has. A plain path as `after` still works (path order). `total` is still all filed
+files, the other counts are for that part, and `marked` is only computed without `after`.
+Both take `near_drive_id` (the document the areas were drawn on).
+
+The documents are tested in this order, which changes when things show up and never the
+result: the documents assigned to the rule's `sender`, then those in the folder of
+`near_drive_id`, then, for a picture rule, the rest by the thumbnail score above (best first),
+then the rest by path. The lists in a result (`different`, `shadowed`, `not_checked`,
+`marked`) are always in path order.
+
+**Background tests**: `POST /api/rules/replay/jobs {rule, sheet, replaces?, place_above?,
+near_drive_id?}` starts a test and answers at once with `{job_id, state, version, looked_at,
+total, waiting, elapsed_s, error, result}` (`result` null: nothing yet). `GET
+/api/rules/replay/jobs/{job_id}?since=<version>` answers the same with `result`, a replay
+answer for what has been found so far, left null when it has not changed since `since`;
+`state` is `running` (going through the documents), `waiting` (all looked at; `waiting`
+documents wait for page 1 to be read and are looked at again as it is), `done`, `stopped` or
+`error` (a fixed message; the details are in the log). `looked_at` of `total` is the progress.
+`POST .../stop` ends it where it is and keeps the result so far; `DELETE .../{job_id}` ends
+it and forgets it (404 for a job that is gone). One job per `sheet` (a new start for the same
+sheet ends the first), at most four jobs, finished ones go first; a job nobody has asked
+about for two minutes stops by itself, a `waiting` job with nothing new for 30 minutes ends
+as `done`. `POST .../{job_id}/read-now` answers `{queued}`: it asks the page-1 pass to read the
+documents the job waits for at full speed (see below); 404 for a job that is gone. A job reads
+the index and the cache only; it writes nothing. The time of each step
+of a test (listing, fetching text, folding, loading layouts, word checks, picture decoding,
+matching) is written to `dam.log` at INFO, as numbers only, once per test.
+
+`POST
+/api/rules/areas-for {rule, drive_id}` answers `{areas}`, the rule's areas on that document in the
+shape of a suggestion's `areas` (matched lines, the best place and score of a picture area, and
+`reason` for one that did not match or has no score), with the rule's `folder_is` ignored as in
+the replay; it reads only the index and the cache and changes nothing. `GET /api/rules`
 lists `unused_pictures` (files in `areas` no loaded rule uses) and `default_min_score`.
 `POST /api/rules/unused-pictures/quarantine {names, dry_run}` moves those pictures into
 the quarantine folder as `dam rule picture <name>` (a taken name gets `_2`, ...) and
@@ -763,7 +822,24 @@ Text is read from PDFs (OCR for scans), images, plain text, `.docx`, `.msg`,
 `.doc`/`.dot`/`.dotx`/`.docm`/`.odt`/`.html`/`.webarchive` (macOS only, with `textutil`),
 and Pages, Numbers and Keynote files (the preview inside the bundle, with OCR for
 pictures). `GET /api/index/summary` gives the Index sheet's counts per state, the not
-readable files per type and a page (`limit`, `offset`) of those files with their reasons.
+readable files per type and a page (`limit`, `offset`) of those files with their reasons, and
+`page1`, the progress of the page-1 pass: `{read, total, backfill, rate_per_min, blocked:
+[{reason, count}], text_left, scans_left, text_per_min, scans_per_min}`. `text_left` counts the
+unread PDFs whose text came from their text layer (read quickly, no OCR) and `scans_left` the
+unread scans and photos (OCR); `text_per_min` is `page1_text_reads_per_minute` and
+`scans_per_min` the indexer's rate, so the time left is `text_left / text_per_min +
+scans_left / scans_per_min`. `PUT /api/settings/page1-speed {reads_per_minute}` sets the
+first (400 outside 1 to 6000). A read is "slow" and followed by the indexer's pause when it
+needs OCR, fails to fetch the file or takes more than 3 seconds (a cloud-only file that had
+to be downloaded; dam does not detect a cloud-only file beforehand, the indexer does not
+either); a quick local text-layer read is followed by the shorter pause. "Read now" (the
+test's button, `ContentIndexer.read_now`) adds the documents to the files the pass reads
+next (after the inbox) and, until they are read, cannot be read now (timed out, no OCR
+engine, missing) or 30 minutes have passed, the pause after every step is 50 ms; reads stay
+one at a time and each keeps its time limit. `blocked` counts the documents whose page 1 cannot be read now (no OCR
+engine, missing, took too long, no picture can be made, or waiting to be tried again) and
+`rate_per_min` is the reads finished per minute over the last ten minutes (null when there
+were fewer than three). `GET /api/status` has the same `page1`.
 
 A file whose text could not be extracted is `error` (something a retry might fix: a
 crash in the extractor, an extraction over 5 minutes) or `unsupported` (retrying will

@@ -244,6 +244,7 @@ class IndexSummaryOut(BaseModel):
     not_readable_by_type: list[TypeCountOut]  # most common first
     rows: list[IndexErrorOut]  # the not readable files, one page, newest file first
     offset: int
+    page1: "Page1ProgressOut"  # how far the page-1 pass has come
 
 
 class RetryIndexOut(BaseModel):
@@ -675,6 +676,11 @@ class ActiveArchiveOut(BaseModel):
     color: str  # #rrggbb
 
 
+class Page1BlockedOut(BaseModel):
+    reason: str  # "no OCR engine", "page 1 took too long to read", ...
+    count: int
+
+
 class Page1ProgressOut(BaseModel):
     """The page-1 layout pass: documents whose page 1 is read, of all it reads, and
     whether the backfill of documents outside the inbox is on."""
@@ -682,6 +688,17 @@ class Page1ProgressOut(BaseModel):
     read: int
     total: int
     backfill: bool
+    # of those not read, the ones waiting because they cannot be read now, and why
+    blocked: list[Page1BlockedOut] = []
+    # reads finished per minute lately (None: too few to say)
+    rate_per_min: float | None = None
+    # what is left to read, by kind, and how fast each kind is read (a minute's worth of
+    # reads): PDFs with a text layer are read quickly, scans and photos (OCR) and slow
+    # downloads at the indexer's pace. The time left follows from these.
+    text_left: int = 0
+    scans_left: int = 0
+    text_per_min: int = 0
+    scans_per_min: int = 0
 
 
 class StatusOut(BaseModel):
@@ -1516,6 +1533,39 @@ class RuleReplayIn(_In):
     replaces: str | None = None
     # for a new rule: the learned rule it goes directly above (see ``ZoneDraftOut``)
     place_above: str | None = None
+    # continue a replay that stopped at its time budget: the ``next_after`` it gave (an
+    # opaque cursor, good for a little while). Only the documents it had not reached are
+    # looked at; the counts are for that part.
+    after: str | None = None
+    # the document the areas were drawn on: the documents in its folder are looked at early
+    near_drive_id: str | None = None
+
+
+class RuleReplayJobIn(_In):
+    """Start a test of a rule in the background (same placement fields as ``RuleReplayIn``).
+    ``sheet`` names the open sheet it is for: starting another test for the same sheet ends
+    the first."""
+
+    rule: RuleIn
+    sheet: str = Field(min_length=1, max_length=64)
+    replaces: str | None = None
+    place_above: str | None = None
+    near_drive_id: str | None = None
+
+
+class AreasForIn(_In):
+    """The rule being tested and the document to draw its areas on."""
+
+    rule: RuleIn
+    drive_id: str
+
+
+class AreasForOut(BaseModel):
+    """The rule's areas on this document, as the suggestion has them (``AreaOut``): the
+    matched lines of each text area, the best place and score of each picture area, and for
+    one that did not match, why. Changes nothing."""
+
+    areas: list[AreaOut]
 
 
 class RuleMoveIn(_In):
@@ -1623,8 +1673,12 @@ class PictureScoreOut(BaseModel):
     them) and whether the rule matched it."""
 
     path: str
+    drive_id: str
     score: float
     matched: bool
+    # for a document the rule did not match: the score its failing area needed (it is only
+    # listed when within 0.15 of it)
+    needed: float | None = None
 
 
 class NotCheckedOut(BaseModel):
@@ -1632,7 +1686,13 @@ class NotCheckedOut(BaseModel):
     at; ``reason``: "page 1 not read yet", "no OCR engine" or "missing"."""
 
     path: str
+    drive_id: str
     reason: str
+
+
+class MarkedDocOut(BaseModel):
+    path: str
+    drive_id: str
 
 
 class MarkedOut(BaseModel):
@@ -1642,7 +1702,7 @@ class MarkedOut(BaseModel):
 
     total: int
     found: int
-    missed: list[str]
+    missed: list[MarkedDocOut]
     not_checked: list[NotCheckedOut]
 
 
@@ -1658,10 +1718,42 @@ class ReplayOut(BaseModel):
     not_checked: list[NotCheckedOut]
     # how many page-1 reads are queued by this replay (post it again to see them)
     reading: int
-    marked: MarkedOut | None = None  # only for a rule with a sender
+    # when ``truncated``: send it as ``after`` to test the rest, from where this stopped (an
+    # opaque cursor: the order of the test is remembered for a little while)
+    next_after: str | None = None
+    # the filed documents gone through, those that could not be checked included
+    looked_at: int = 0
+    marked: MarkedOut | None = None  # only for a rule with a sender (first call only)
     # only for a rule with picture areas: the lowest scores of its matches and the highest
-    # of the documents it did not match, to see how well they are told apart
+    # of its near misses (documents where only a picture area failed, within 0.15 of the
+    # score it needed), to see how well they are told apart
     scores: list[PictureScoreOut] = []
+
+
+class ReplayJobOut(BaseModel):
+    """A test running in the background. ``state``: "running" (going through the
+    documents), "waiting" (all looked at; ``waiting`` of them wait for page 1 to be read and
+    are looked at again as it is), "done", "stopped" (by the user, or the sheet was not
+    heard from) or "error". ``looked_at`` of ``total`` filed documents are gone through.
+    ``result`` is what has been found so far, as a finished test gives it; it is left out
+    (null) when nothing changed since the ``version`` the poll said it had."""
+
+    job_id: str
+    sheet: str
+    state: Literal["running", "waiting", "done", "stopped", "error"]
+    version: int
+    looked_at: int
+    total: int
+    waiting: int
+    elapsed_s: float
+    error: str | None = None
+    result: ReplayOut | None = None
+
+
+class ReadNowOut(BaseModel):
+    """How many of a test's documents were queued to have page 1 read now."""
+
+    queued: int
 
 
 class Page1LineOut(BaseModel):
@@ -1770,6 +1862,16 @@ class Page1BackfillIn(_In):
 
 class Page1BackfillOut(BaseModel):
     enabled: bool
+
+
+class Page1SpeedIn(_In):
+    """How many PDFs with a text layer have page 1 read per minute (1 to 6000)."""
+
+    reads_per_minute: int
+
+
+class Page1SpeedOut(BaseModel):
+    reads_per_minute: int
 
 
 class PersonIO(_In):

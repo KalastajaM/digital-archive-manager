@@ -363,7 +363,9 @@ def test_replay_api_shape_queues_reads_and_wakes_the_indexer(app, fake_archive):
     }
     with make_client(app) as c:
         data = post(c, "/api/rules/replay", body).json()
-    assert data["not_checked"] == [{"path": "20. Home/20260301_Letter.pdf", "reason": NOT_READ}]
+    assert data["not_checked"] == [
+        {"path": "20. Home/20260301_Letter.pdf", "drive_id": "c", "reason": NOT_READ}
+    ]
     assert data["reading"] == 1 and woken and "c" in app.content._wanted
     # once page 1 is read the document is checked
     app.repo.save_layout("c", "sha-c", LETTER)

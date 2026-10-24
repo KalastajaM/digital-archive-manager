@@ -7,6 +7,8 @@ from dam.api.deps import AppDep
 from dam.api.schemas import (
     Page1BackfillIn,
     Page1BackfillOut,
+    Page1SpeedIn,
+    Page1SpeedOut,
     PeopleIn,
     PeopleOut,
 )
@@ -23,6 +25,15 @@ def put_page1_backfill(app: AppDep, body: Page1BackfillIn) -> dict:
     400 when settings.yaml could not be written (it is left as it was)."""
     app.set_page1_backfill(body.enabled)
     return {"enabled": app.settings.page1_backfill}
+
+
+@router.put("/page1-speed", response_model=Page1SpeedOut)
+def put_page1_speed(app: AppDep, body: Page1SpeedIn) -> dict:
+    """Set how many PDFs with a text layer have page 1 read per minute (scans, photos and
+    slow downloads keep the indexer's pace). 400 for a rate outside 1 to 6000, or when
+    settings.yaml could not be written (it is left as it was)."""
+    app.set_page1_speed(body.reads_per_minute)
+    return {"reads_per_minute": app.settings.page1_text_reads_per_minute}
 
 
 def _people_out(app) -> dict:

@@ -7,6 +7,7 @@ import { Navigate, NavLink, useParams } from "react-router-dom";
 import { useArchives } from "../api/client";
 import { AppearanceSettings } from "../components/AppearanceSettings";
 import { FilingCodes } from "../components/codes/FilingCodes";
+import { IndexingSettings } from "../components/IndexingSettings";
 import { FilingRules } from "../components/rules/FilingRules";
 import { Toolbar } from "../components/ui/Toolbar";
 import { visible } from "../text";
@@ -16,6 +17,7 @@ type Section = { id: string; label: string; scope: "archive" | "browser"; render
 export const SECTIONS: Section[] = [
   { id: "filing-codes", label: "Filing codes", scope: "archive", render: () => <FilingCodes /> },
   { id: "filing-rules", label: "Filing rules", scope: "archive", render: () => <FilingRules /> },
+  { id: "indexing", label: "Indexing", scope: "archive", render: () => <IndexingSettings /> },
   { id: "appearance", label: "Appearance", scope: "browser", render: () => <AppearanceSettings /> },
 ];
 
