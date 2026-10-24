@@ -2,7 +2,7 @@
  * rule sheet with the changed area (and the replay, with how the rule did before, so the
  * owner sees the effect on past documents before saving); the archive-wide address area asks
  * once and is saved to the settings. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type Area,
   errorText,
@@ -38,22 +38,31 @@ function RuleAreaSheet({ driveId, area, box, onClose }: { driveId: string; area:
   const rules = useRules();
   const toast = useToast();
   const recut = useAreaPicture();
-  // a picture area's crop is cut again from the current document before the sheet opens
+  // a picture area's crop is cut again from the current document before the sheet opens.
+  // The cut belongs to one area and one box: when either changes, or the sheet goes, a reply
+  // that comes back later is dropped (it would give the newer box another box's crop).
   const [image, setImage] = useState<string | null>(null);
-  const started = useRef(false);
   const picture = area.kind === "image";
+  const boxKey = box.join(",");
   useEffect(() => {
-    if (!picture || started.current) return;
-    started.current = true;
+    if (!picture) return;
+    let current = true;
+    setImage(null);
     recut
       .mutateAsync({ driveId, box, save: true, ruleId: area.rule_id })
-      .then((cut) => setImage(cut.image ?? null))
+      .then((cut) => {
+        if (current) setImage(cut.image ?? null);
+      })
       .catch((e) => {
+        if (!current) return;
         toast({ kind: "error", text: errorText(e) });
         onClose();
       });
+    return () => {
+      current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [picture, driveId, area.rule_id, area.index, boxKey]);
   const rule = rules.data?.rules.find((r) => r.id === area.rule_id);
   const gone = rules.data !== undefined && rule === undefined;
   useEffect(() => {

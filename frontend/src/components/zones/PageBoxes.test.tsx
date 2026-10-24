@@ -498,6 +498,86 @@ describe("Draw a box", () => {
       expect(rounded(body.when.zones[0].box)).toEqual([0.15, 0.12, 0.55, 0.24]);
     });
 
+    describe("a picture area moved twice before the first cut comes back", () => {
+      const PICTURE_RULE = {
+        ...RULE,
+        when: { ...RULE.when, zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: null, image: "areas/pohjola-1.png", min_score: 0.9 }] },
+      };
+      const OTHER_RULE = {
+        ...RULE,
+        id: "plain",
+        when: { ...RULE.when, zones: [{ box: [0.5, 0.5, 0.9, 0.6], text_contains: ["lasku"], image: null }] },
+        person_zone: null,
+      };
+      const PICTURE_AREA = { ...AREA, kind: "image", score: 0.93, lines: [[0.06, 0.03, 0.4, 0.1]] };
+      const TEXT_AREA = { ...AREA, rule_id: "plain", box: [0.5, 0.5, 0.9, 0.6], lines: [], wins: false };
+      /** Moves area ``id`` by (dx, dy) pixels on the 200 x 400 page. */
+      function move(id: string, dx: number, dy: number) {
+        layerSize();
+        fireEvent.pointerDown(area(id), { clientX: 50, clientY: 20, button: 0 });
+        fireEvent.pointerDown(area(id), { clientX: 50, clientY: 20, button: 0 });
+        fireEvent.pointerMove(area(id), { clientX: 50 + dx, clientY: 20 + dy });
+        fireEvent.pointerUp(area(id), { clientX: 50 + dx, clientY: 20 + dy });
+      }
+      function pictureSetup(rules: object[], areas: object[]) {
+        const waiting: { box: number[]; rule: string; answer: (image: string) => void }[] = [];
+        const made = setup(
+          {
+            "GET /api/rules": { body: { rules, errors: [], state: { offer: true, declined: 0 }, unused_pictures: [], default_min_score: 0.85 } },
+            "POST /api/rules/area-picture": (call) => {
+              const body = call.body as { box: number[]; rule_id: string };
+              return new Promise((resolve) =>
+                waiting.push({ box: body.box, rule: body.rule_id, answer: (image) => resolve({ body: { width: 3, height: 1, png: "iVBORw0KGgo=", image } }) }),
+              );
+            },
+            "POST /api/rules/replay": { body: REPLAY },
+            "PUT /api/rules/pohjola": SAVED,
+            "PUT /api/rules/plain": SAVED,
+          },
+          pdf,
+          tool(areas),
+        );
+        return { ...made, waiting };
+      }
+
+      it("uses the newer cut for the newer box when the older reply comes back last", async () => {
+        const { calls, user, waiting } = pictureSetup([PICTURE_RULE], [PICTURE_AREA]);
+        await screen.findByTitle("pohjola: picture 0.93");
+        move("pohjola:0", 20, 40);
+        await waitFor(() => expect(waiting).toHaveLength(1));
+        move("pohjola:0", 40, 80);
+        await waitFor(() => expect(waiting).toHaveLength(2));
+        waiting[1].answer("areas/pohjola-3.png");
+        const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+        waiting[0].answer("areas/pohjola-2.png"); // the older cut, late: dropped
+        await within(sheet).findByText(/Matches 2 documents/);
+        expect(within(sheet).getByRole("img", { name: "Picture of area" })).toHaveAttribute("src", "/api/rules/areas/pohjola-3.png");
+        await user.click(within(sheet).getByRole("button", { name: "Save" }));
+        await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+        const body = calls.find((c) => c.method === "PUT")?.body as { when: { zones: { box: number[]; image: string }[] } };
+        expect(body.when.zones[0].image).toBe("areas/pohjola-3.png");
+        expect(rounded(body.when.zones[0].box)).toEqual([0.25, 0.22, 0.65, 0.34]);
+      });
+
+      it("never gives a text area of another rule the picture cut for the first one", async () => {
+        const { calls, user, waiting } = pictureSetup([PICTURE_RULE, OTHER_RULE], [PICTURE_AREA, TEXT_AREA]);
+        await screen.findByTitle("pohjola: picture 0.93");
+        move("pohjola:0", 20, 40);
+        await waitFor(() => expect(waiting).toHaveLength(1));
+        move("plain:0", 20, 40); // another rule's text area, before the cut is back
+        const sheet = await screen.findByRole("dialog", { name: "Edit rule plain" });
+        waiting[0].answer("areas/pohjola-2.png"); // late, and not for this rule
+        await within(sheet).findByText(/Matches 2 documents/);
+        await user.click(within(sheet).getByRole("button", { name: "Save" }));
+        await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+        const put = calls.find((c) => c.method === "PUT") as Call;
+        expect(put.url).toBe("/api/rules/plain?replaces=plain");
+        const zone = (put.body as { when: { zones: Record<string, unknown>[] } }).when.zones[0];
+        expect(zone.image ?? null).toBeNull();
+        expect(zone.text_contains).toEqual(["lasku"]);
+      });
+    });
+
     it("cannot change areas while the Draw a box tool is on", async () => {
       const { user } = setup({}, pdf, tool([AREA]));
       await screen.findByTitle("pohjola");

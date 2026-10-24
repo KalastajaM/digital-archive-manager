@@ -228,7 +228,15 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   );
   const panel = (
     <>
-      {changed && <AreaChange driveId={driveId} area={changed.area} box={changed.box} onClose={() => setChanged(null)} />}
+      {changed && (
+        <AreaChange
+          key={`${changed.area.kind}:${changed.area.rule_id}:${changed.area.index}:${changed.box.join(",")}`}
+          driveId={driveId}
+          area={changed.area}
+          box={changed.box}
+          onClose={() => setChanged(null)}
+        />
+      )}
       {on && (
     <>
       {unavailable !== null ? (
