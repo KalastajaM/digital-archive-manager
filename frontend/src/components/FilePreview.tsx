@@ -419,7 +419,6 @@ function PdfPages({
             {boxes.button}
             {tools}
           </ZoomControls>
-          {boxes.panel}
           <ZoomFrame zoom={zoom}>
             {boxes.around(
               <ZoomImage
@@ -439,6 +438,7 @@ function PdfPages({
               />,
             )}
           </ZoomFrame>
+          {boxes.panel}
           <figcaption>
             <button
               type="button"
@@ -492,7 +492,6 @@ function ImagePreview({
             {boxes.button}
             {tools}
           </ZoomControls>
-          {boxes.panel}
           <ZoomFrame zoom={zoom}>
             {boxes.around(
               <ZoomImage
@@ -505,6 +504,7 @@ function ImagePreview({
               />,
             )}
           </ZoomFrame>
+          {boxes.panel}
         </figure>
       )}
     </WithBoxes>
