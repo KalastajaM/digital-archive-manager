@@ -20,7 +20,7 @@ from dam.index.locks import INDEX_LOCK
 from dam.index.repo import FileRepo
 from dam.ops import identity, primitives
 from dam.ops import undo as _undo
-from dam.ops.guards import fold_parts
+from dam.ops.guards import check_areas_source, fold_parts
 from dam.ops.model import (
     ABS_TARGET,
     UNDO_ORIGIN,
@@ -42,14 +42,23 @@ _RELOCATE = _undo.RELOCATE
 _FAILURES = (OSError, OpFailed, GuardError, OutsideArchiveError)
 # Ops that only touch links and folders inside a publish root (##. Ongoing or
 # ##. Important; no Drive uploads of documents)
+_PICTURE_KINDS = {OpKind.PICTURE_TO_QUARANTINE, OpKind.PICTURE_BACK}
 _ONGOING_KINDS = {OpKind.MKDIR, OpKind.SYMLINK, OpKind.UNLINK_SYMLINK, OpKind.REMOVE_EMPTY_DIR}
 
 
 class Executor:
     def __init__(
-        self, paths: ArchivePaths, engine: Engine, repo: FileRepo, throttle_ms: int = 0
+        self,
+        paths: ArchivePaths,
+        engine: Engine,
+        repo: FileRepo,
+        throttle_ms: int = 0,
+        areas_dir: Path | None = None,
     ) -> None:
         self.paths = paths
+        # the rules' picture folder (config/rules/areas): the one place outside the archive
+        # that PICTURE_TO_QUARANTINE takes a file from and PICTURE_BACK returns it to
+        self.areas_dir = areas_dir
         self.engine = engine
         self.repo = repo
         self.throttle_ms = throttle_ms
@@ -62,7 +71,7 @@ class Executor:
         """
         if plan.origin == UNDO_ORIGIN:
             raise GuardError('origin "undo" is reserved for Executor.undo()')
-        return Planner(self.paths).resolve(plan)
+        return Planner(self.paths, self.areas_dir).resolve(plan)
 
     def apply(
         self,
@@ -187,6 +196,12 @@ class Executor:
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
+        if rop.kind is OpKind.PICTURE_BACK:
+            try:
+                self.repo.mark_missing_path(rop.src)  # left the archive: out of the index now
+            except SQLAlchemyError as e:
+                result.index_error = f"index update failed for {rop.src}: {e}"
+                return True
         if rop.kind in _RELOCATE:
             try:
                 self.repo.update_path(rop.src, rop.dst)
@@ -245,6 +260,10 @@ class Executor:
             st = os.stat(Path(rop.src[len(ABS_TARGET) :]))
             snap.update(size=st.st_size, mtime=st.st_mtime, is_file=stat.S_ISREG(st.st_mode))
             return snap
+        if rop.kind is OpKind.PICTURE_TO_QUARANTINE:  # a link is not followed
+            st = os.lstat(Path(rop.src[len(ABS_TARGET) :]))
+            snap.update(size=st.st_size, mtime=st.st_mtime, is_file=stat.S_ISREG(st.st_mode))
+            return snap
         if rop.src.startswith(ABS_TARGET) and rop.kind is OpKind.SYMLINK:
             return snap  # a link target outside the archive: never looked at
         p = self.paths.abs(rop.src)
@@ -294,12 +313,12 @@ class Executor:
                     # a COPY keeps only the file's name: the path it was read from (an
                     # upload's temporary file) says nothing, and undo never needs it
                     src=Path(rop.src[len(ABS_TARGET) :]).name
-                    if rop.kind is OpKind.COPY
+                    if rop.kind in (OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE)
                     else rop.src,
                     # UNLINK_SYMLINK: dst records the link's target so undo can recreate
                     # it: an archive-relative path if the target is inside the archive,
                     # otherwise "abs:" + the absolute path (see _link_record).
-                    dst=snap["link"] if rop.kind is OpKind.UNLINK_SYMLINK else rop.dst,
+                    dst=self._journal_dst(rop, snap),
                     drive_id=snap["drive_id"],
                     size=snap["size"],
                     mtime=snap["mtime"],
@@ -312,6 +331,14 @@ class Executor:
                 )
             )
             return res.inserted_primary_key[0]
+
+    @staticmethod
+    def _journal_dst(rop: ResolvedOp, snap: dict) -> str:
+        if rop.kind is OpKind.UNLINK_SYMLINK:
+            return snap["link"]
+        if rop.kind is OpKind.PICTURE_BACK:  # the name in the areas folder, not its path
+            return Path(rop.dst[len(ABS_TARGET) :]).name
+        return rop.dst
 
     def _journal_finish(
         self,
@@ -344,7 +371,40 @@ class Executor:
         except OSError:
             return False
 
+    def _areas(self) -> Path:
+        if self.areas_dir is None:
+            raise OpFailed("The rules' picture folder is not known here.")
+        return Path(self.areas_dir)
+
+    def _precheck_picture(self, rop: ResolvedOp) -> None:
+        """PICTURE_TO_QUARANTINE / PICTURE_BACK, checked again right before acting."""
+        areas = self._areas()
+        if rop.kind is OpKind.PICTURE_TO_QUARANTINE:
+            check_areas_source(Path(rop.src[len(ABS_TARGET) :]), areas)
+            dst = self.paths.abs(rop.dst)
+            if os.path.lexists(dst):
+                raise OpFailed(f"{rop.dst} already exists.")
+            if not dst.parent.is_dir() or dst.parent.is_symlink():
+                raise OpFailed(f"The folder for {rop.dst} is missing.")
+            return
+        src = self.paths.abs(rop.src)
+        target = Path(rop.dst[len(ABS_TARGET) :])
+        if not os.path.lexists(src):
+            raise OpFailed(f"{rop.src} is no longer there.")
+        if not stat.S_ISREG(os.lstat(src).st_mode):
+            raise OpFailed(f"{rop.src} is no longer a plain file.")
+        if fold_parts(str(target.parent)) != fold_parts(str(areas)):
+            raise OpFailed(f"{target.name} is not going into the rules' picture folder.")
+        if os.path.lexists(target):
+            raise OpFailed(f"{target.name} already exists in the rules' picture folder.")
+        folder = os.lstat(areas)
+        if stat.S_ISLNK(folder.st_mode) or not stat.S_ISDIR(folder.st_mode):
+            raise OpFailed("The rules' picture folder is not a real folder.")
+
     def _precheck(self, rop: ResolvedOp) -> None:
+        if rop.kind in _PICTURE_KINDS:
+            self._precheck_picture(rop)
+            return
         dst = self.paths.abs(rop.dst)
         if rop.kind is OpKind.MKDIR:
             if os.path.lexists(dst):
@@ -386,6 +446,16 @@ class Executor:
             raise OpFailed(f"The folder for {rop.dst} is missing.")
 
     def _act(self, rop: ResolvedOp) -> None:
+        if rop.kind is OpKind.PICTURE_TO_QUARANTINE:
+            primitives.move_between_folders(
+                Path(rop.src[len(ABS_TARGET) :]), self.paths.abs(rop.dst)
+            )
+            return
+        if rop.kind is OpKind.PICTURE_BACK:
+            primitives.move_between_folders(
+                self.paths.abs(rop.src), Path(rop.dst[len(ABS_TARGET) :])
+            )
+            return
         dst = self.paths.abs(rop.dst)
         match rop.kind:
             case OpKind.MKDIR:
@@ -409,6 +479,16 @@ class Executor:
                     primitives.rename_excl(src, dst)
 
     def _verify(self, rop: ResolvedOp, snap: dict) -> None:
+        if rop.kind in _PICTURE_KINDS:
+            moved_to = (
+                Path(rop.dst[len(ABS_TARGET) :])
+                if rop.kind is OpKind.PICTURE_BACK
+                else self.paths.abs(rop.dst)
+            )
+            st = os.lstat(moved_to)
+            if not (stat.S_ISREG(st.st_mode) and st.st_size == snap["size"]):
+                raise OpFailed(f"Could not confirm that {rop.src} was moved to {rop.dst}.")
+            return
         dst = self.paths.abs(rop.dst)
         match rop.kind:
             case OpKind.MKDIR:

@@ -32,7 +32,7 @@ from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
 from dam.rules.learned import rule_file, write_rules_file
 from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
-from dam.rules.picture import Pictures
+from dam.rules.picture import AREAS_DIR, Pictures
 from dam.search import SearchHit, search
 from dam.services.activity import ActivityService
 from dam.services.area_pictures import AreaPictures
@@ -144,6 +144,7 @@ class App:
             self.app_paths.cache_dir,
             lambda: self.rules_dir,
             want_layouts=lambda ids: self.content.want_layouts(ids),
+            executor=self.executor,
         )
         self.assignments = AssignmentService(self.engine, self.repo, lambda: self.settings.people)
         self.inbox = InboxService(
@@ -269,7 +270,13 @@ class App:
                 engine=engine,
                 repo=repo,
                 tags=TagRepo(engine),
-                executor=Executor(paths, engine, repo, throttle_ms=settings.ops_throttle_ms),
+                executor=Executor(
+                    paths,
+                    engine,
+                    repo,
+                    throttle_ms=settings.ops_throttle_ms,
+                    areas_dir=app_paths.config_dir / "rules" / AREAS_DIR,
+                ),
                 registry=registry,
                 content=ContentIndexer(
                     paths,

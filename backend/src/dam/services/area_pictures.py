@@ -14,14 +14,19 @@ from dam.codes.configfile import write_config_bytes
 from dam.extract.layout import Box, check_box
 from dam.extract.picture import picture_path
 from dam.index.repo import FileRepo
+from dam.ops.executor import Executor
+from dam.ops.model import ABS_TARGET, BatchResult, Op, OpKind, Plan
 from dam.rules.model import Rule
 from dam.rules.picture import AREAS_DIR, PictureError, crop_file, cut_crop, png_bytes
+from dam.services import check_origin
 from dam.services.errors import InvalidRequest, NotFound
 
 _NOT_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 MAX_PER_RULE = 99
 # a smaller crop would be under 4 px at matching size and always score 0
 MIN_SIDE = 0.01
+# the name a picture gets in ##. To Delete, so it is recognisable there
+QUARANTINE_PREFIX = "dam rule picture "
 
 
 def file_stem(rule_id: str) -> str:
@@ -37,11 +42,13 @@ class AreaPictures:
         cache_dir: Path,
         rules_dir: Callable[[], Path],
         want_layouts: Callable[[Collection[str]], None] | None = None,
+        executor: Executor | None = None,
     ) -> None:
         self.repo = repo
         self.cache_dir = cache_dir
         self.rules_dir = rules_dir
         self._want = want_layouts
+        self.executor = executor
         self._save_lock = threading.Lock()  # picking a free name and writing it are one step
 
     def crop(self, drive_id: str, box: list[float]) -> Image.Image:
@@ -132,6 +139,48 @@ class AreaPictures:
         except OSError:
             return []
         return [n for n in names if f"{AREAS_DIR}/{n}" not in used]
+
+    def quarantine_unused(
+        self,
+        names: list[str],
+        rules: Callable[[], list[Rule]],
+        origin: str,
+        dry_run: bool = False,
+    ) -> BatchResult:
+        """Move the unused pictures ``names`` (files in ``areas``) into the quarantine
+        folder as ``dam rule picture <name>``, through the operation layer: previewed with
+        ``dry_run``, journaled, undoable. Never a delete. ``InvalidRequest`` (nothing
+        planned) when ``names`` is empty or names a picture that a loaded rule uses, or
+        that is not there. The list of unused pictures is read under the save lock, so
+        no picture is being saved in between."""
+        check_origin(origin)
+        if self.executor is None:
+            raise InvalidRequest("Pictures cannot be moved here.")
+        wanted = list(dict.fromkeys(names))
+        if not wanted:
+            raise InvalidRequest("Pick at least one unused picture.")
+        quarantine = self.executor.paths.quarantine
+        with self._save_lock:
+            unused = set(self.unused(rules()))
+            for name in wanted:
+                if name not in unused:
+                    raise InvalidRequest(
+                        f"The picture {name} is used by a rule or is not in the rules'"
+                        " picture folder, so it is not moved."
+                    )
+            folder = Path(self.rules_dir()) / AREAS_DIR
+            ops = [
+                Op(
+                    OpKind.PICTURE_TO_QUARANTINE,
+                    f"{ABS_TARGET}{folder / name}",
+                    quarantine,
+                    name=f"{QUARANTINE_PREFIX}{name}",
+                )
+                for name in wanted
+            ]
+            what = wanted[0] if len(wanted) == 1 else f"{len(wanted)} unused rule pictures"
+            plan = Plan(ops, origin=origin, label=f"Moved {what} to To Delete")
+            return self.executor.apply(plan, dry_run=dry_run)
 
 
 def check_pictures_exist(rules_dir: Path, rule: Rule) -> None:

@@ -51,6 +51,14 @@ class QuarantineBody(_In):
     dry_run: bool = False
 
 
+class UnusedPicturesIn(_In):
+    """Move these unused rule pictures (names of files in ``config/rules/areas``) into the
+    quarantine folder. ``dry_run``: only resolve the plan."""
+
+    names: list[str]
+    dry_run: bool = False
+
+
 class MoveBody(_In):
     """Move these files (drive ids) into ``folder`` (archive-relative), names kept."""
 

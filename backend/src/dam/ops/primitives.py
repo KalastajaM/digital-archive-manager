@@ -91,6 +91,32 @@ def rename_case_only(src: Path, dst: Path) -> None:
     os.rename(src, dst)
 
 
+DIFFERENT_DISKS = (
+    "The rules' picture folder and the archive are on different disks, so the file cannot be "
+    "moved between them. dam never copies and deletes: move it yourself."
+)
+
+
+def move_between_folders(src: Path, dst: Path) -> None:
+    """Move the file ``src`` to the new name ``dst`` without overwriting (``rename_excl``).
+    Only a rename: on different disks that cannot work, and the file is left where it is
+    (``OpFailed`` says so) because the app never deletes."""
+    try:
+        rename_excl(src, dst)
+    except FileExistsError:
+        raise
+    except OSError as e:
+        if e.errno == errno.EXDEV or getattr(e, "winerror", None) == 17:
+            raise OpFailed(DIFFERENT_DISKS) from None
+        raise
+
+
+def same_disk(a: Path, b: Path) -> bool:
+    """``a`` and ``b`` (existing entries) are on the same disk, so one can be renamed
+    into the other's folder."""
+    return os.stat(a).st_dev == os.stat(b).st_dev
+
+
 def make_dir(p: Path) -> None:
     p.mkdir(parents=False, exist_ok=False)
 

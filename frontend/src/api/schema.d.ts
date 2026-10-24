@@ -2265,6 +2265,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rules/unused-pictures/quarantine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quarantine Unused Pictures
+         * @description Move picture files no loaded rule uses from ``config/rules/areas`` into the
+         *     quarantine folder (``dam rule picture <name>``): ``dry_run`` shows the plan, otherwise
+         *     the move is journaled and the batch can be undone. 400 when a name is used by a rule,
+         *     is not there, is a link, or the folders are on different disks; 409 when it fails.
+         */
+        post: operations["quarantine_unused_pictures_api_rules_unused_pictures_quarantine_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rules/draft-zone": {
         parameters: {
             query?: never;
@@ -4476,7 +4499,7 @@ export interface components {
          * OpKind
          * @enum {string}
          */
-        OpKind: "rename" | "move" | "mkdir" | "symlink" | "unlink_symlink" | "quarantine" | "remove_empty_dir" | "copy";
+        OpKind: "rename" | "move" | "mkdir" | "symlink" | "unlink_symlink" | "quarantine" | "remove_empty_dir" | "copy" | "picture_to_quarantine" | "picture_back";
         /** OverviewOut */
         OverviewOut: {
             /** Inbox */
@@ -5629,6 +5652,20 @@ export interface components {
              * @default []
              */
             kept: string[];
+        };
+        /**
+         * UnusedPicturesIn
+         * @description Move these unused rule pictures (names of files in ``config/rules/areas``) into the
+         *     quarantine folder. ``dry_run``: only resolve the plan.
+         */
+        UnusedPicturesIn: {
+            /** Names */
+            names: string[];
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
         };
         /**
          * ZoneDraftAreaOut
@@ -17808,6 +17845,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReplayOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    quarantine_unused_pictures_api_rules_unused_pictures_quarantine_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnusedPicturesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResultOut"];
                 };
             };
             /** @description Bad Request */
