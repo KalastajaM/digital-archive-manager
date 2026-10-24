@@ -1,8 +1,9 @@
 """Path-level safety guards for operations (enforced here, never in the UI)."""
 
 import os
+import stat
 from functools import lru_cache
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind
@@ -16,7 +17,15 @@ _NEEDS_SRC = {
     OpKind.QUARANTINE,
     OpKind.REMOVE_EMPTY_DIR,
 }
-_NEEDS_DST = {OpKind.RENAME, OpKind.MOVE, OpKind.MKDIR, OpKind.SYMLINK, OpKind.COPY}
+_NEEDS_DST = {
+    OpKind.RENAME,
+    OpKind.MOVE,
+    OpKind.MKDIR,
+    OpKind.SYMLINK,
+    OpKind.COPY,
+    OpKind.PICTURE_TO_QUARANTINE,
+    OpKind.PICTURE_BACK,
+}
 
 
 @lru_cache(maxsize=8192)
@@ -115,6 +124,85 @@ def _check_copy(op: Op, paths: ArchivePaths) -> None:
         raise GuardError(f"Files are only copied into {paths.inbox!r}.")
 
 
+def _check_picture_name(name: str, what: str) -> None:
+    _check_name(name)
+    _check_not_ds_store(name)
+    if (
+        not name.endswith(".png")
+        or name.startswith(".")
+        or name != name.strip()
+        or "\\" in name
+        or len(name) > 240
+    ):
+        raise GuardError(f"{what} {name!r} is not the name of a picture file (a .png)")
+
+
+def _check_picture_to_quarantine(op: Op, paths: ArchivePaths) -> None:
+    """PICTURE_TO_QUARANTINE: a file of the rules' areas folder into the quarantine
+    folder itself, under a plain name. Where that folder is, and that the file really is
+    a regular file directly in it, is checked against the disk (``check_areas_source``)."""
+    if op.exact or op.allow_top_level or op.identity is not None or op.made:
+        raise GuardError(f"{op.kind} takes only a source file, the quarantine folder and a name")
+    if not (isinstance(op.src, str) and op.src.startswith(ABS_TARGET)):
+        raise GuardError(f"{op.kind} needs the picture file as an absolute path")
+    source = op.src[len(ABS_TARGET) :]
+    if "\0" in source or not os.path.isabs(source):
+        raise GuardError(f"invalid picture file {op.src!r}")
+    if op.name is None:
+        raise GuardError(f"{op.kind} needs a file name")
+    _check_picture_name(op.name, "The name")
+    _check_picture_name(Path(source).name, "The file")
+    folder = canonical(op.dst, paths)
+    if fold_parts(folder) != fold_parts(paths.quarantine):
+        raise GuardError(f"Pictures are only moved into {paths.quarantine!r}.")
+
+
+def _check_picture_back(op: Op, paths: ArchivePaths, restore: bool) -> None:
+    """PICTURE_BACK: only an undo (``restore`` and ``exact``) puts a picture back, from
+    inside the quarantine folder to a plain name in the areas folder."""
+    if not _is_restore(op, restore):
+        raise GuardError("Only an undo puts a picture back into the rules' areas folder.")
+    if op.allow_top_level or op.identity is not None or op.made or op.name is not None:
+        raise GuardError(f"{op.kind} takes only a source file and a picture name")
+    if op.src is None:
+        raise GuardError(f"{op.kind} needs a source")
+    src = canonical(op.src, paths)
+    if not is_under(src, paths.quarantine, strict=True):
+        raise GuardError(f"{src!r} is not in the quarantine folder")
+    _check_picture_name(PurePosixPath(src).name, "The file")
+    _check_picture_name(op.dst, "The name")
+
+
+def fold_parts_of(p: Path) -> tuple[str, ...]:
+    """``fold_parts`` for an absolute disk path."""
+    return tuple(nfc(x).casefold() for x in Path(p).parts)
+
+
+def check_areas_source(source: Path, areas_dir: Path) -> None:
+    """Disk check for PICTURE_TO_QUARANTINE (planning and again right before acting):
+    ``source`` is a regular file (not a link) directly inside ``areas_dir``, which is a
+    real folder (not a link) and the very folder the executor was told about."""
+    if fold_parts_of(source.parent) != fold_parts_of(areas_dir):
+        raise GuardError(f"{source.name} is not directly inside the rules' areas folder")
+    try:
+        folder = os.lstat(areas_dir)
+        st = os.lstat(source)
+    except FileNotFoundError:
+        raise GuardError(f"{source.name} is not in the rules' areas folder") from None
+    except OSError as e:
+        raise GuardError(f"cannot read {source.name}: {e.strerror}") from None
+    if stat.S_ISLNK(folder.st_mode) or not stat.S_ISDIR(folder.st_mode):
+        raise GuardError("the rules' areas folder is not a real folder (links are not followed)")
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+        raise GuardError(f"{source.name} is not a plain file (links are not followed)")
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    if reparse and (
+        getattr(st, "st_file_attributes", 0) & reparse
+        or getattr(folder, "st_file_attributes", 0) & reparse
+    ):
+        raise GuardError(f"{source.name} is not a plain file (links are not followed)")
+
+
 def _check_name(name: str) -> None:
     if not isinstance(name, str) or name in ("", ".", "..") or "/" in name or "\0" in name:
         raise GuardError(f"{name!r} is not a valid name.")
@@ -179,11 +267,17 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
     if op.kind in _NEEDS_DST and op.dst is None:
         raise GuardError(f"{op.kind} needs a destination")
     if op.name is not None:
-        if op.kind not in (OpKind.MOVE, OpKind.COPY):
+        if op.kind not in (OpKind.MOVE, OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE):
             raise GuardError(f"{op.kind} does not take a name (only MOVE and COPY do)")
         _check_name(op.name)
     if op.kind is OpKind.COPY:
         _check_copy(op, paths)
+        return
+    if op.kind is OpKind.PICTURE_TO_QUARANTINE:
+        _check_picture_to_quarantine(op, paths)
+        return
+    if op.kind is OpKind.PICTURE_BACK:
+        _check_picture_back(op, paths, restore)
         return
 
     if is_abs_target(op):

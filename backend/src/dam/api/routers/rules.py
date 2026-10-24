@@ -7,10 +7,11 @@ from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
-from dam.api.deps import AppDep
+from dam.api.deps import UI_ORIGIN, AppDep
 from dam.api.schemas import (
     AreaPictureIn,
     AreaPictureOut,
+    BatchResultOut,
     ReplayOut,
     RuleExplainIn,
     RuleExplainOut,
@@ -21,6 +22,7 @@ from dam.api.schemas import (
     RulesOut,
     RulesStateIn,
     RulesStateOut,
+    UnusedPicturesIn,
     ZoneDraftIn,
     ZoneDraftOut,
 )
@@ -127,6 +129,17 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
     out = asdict(result)
     out["shadowed"] = [{"drive_id": d, "rule_id": r} for d, r in result.shadowed]
     return out
+
+
+@router.post("/unused-pictures/quarantine", response_model=BatchResultOut)
+def quarantine_unused_pictures(app: AppDep, body: UnusedPicturesIn):
+    """Move picture files no loaded rule uses from ``config/rules/areas`` into the
+    quarantine folder (``dam rule picture <name>``): ``dry_run`` shows the plan, otherwise
+    the move is journaled and the batch can be undone. 400 when a name is used by a rule,
+    is not there, is a link, or the folders are on different disks; 409 when it fails."""
+    return app.area_pictures.quarantine_unused(
+        body.names, lambda: app.rules, origin=UI_ORIGIN, dry_run=body.dry_run
+    )
 
 
 @router.post("/draft-zone", response_model=ZoneDraftOut)
