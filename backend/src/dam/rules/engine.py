@@ -409,7 +409,8 @@ def check(
                 return Check(waiting=True)  # who it is for is on page 1, not read yet
             return Check(person_unknown=True, picture_score=score)
         if fold(mine.name) != fold(when.person):
-            return Check(picture_score=score)
+            # the picture passed: it was not what failed, so it reports no score
+            return Check()
     return Check(matched=True, picture_score=score)
 
 

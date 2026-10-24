@@ -459,3 +459,27 @@ def test_a_rule_without_picture_areas_never_touches_the_picture_machinery(app, s
     rule = Rule.model_validate({"id": "p", "when": {"text_contains": ["pohjola"]}})
     r = run_replay(app, setup, rule)
     assert r.matched == 1 and r.scores == []
+
+
+def test_a_document_that_passes_the_picture_but_fails_the_person_has_no_picture_score(
+    app, setup, fake_archive
+):
+    from dam.config import Person
+    from dam.rules.people import PeopleContext
+
+    people = [Person(name="Anna", match=["anna"]), Person(name="Ben", match=["ben"])]
+    rule = setup.rule(person="Anna")
+    setup.keep("a", "sha-a", synth.letter())
+    ben = PeopleContext(people, (0.0, 0.0, 1.0, 1.0), "Ben")
+    c = check(rule, record(), "", people=ben, pictures=setup.pictures)
+    assert not c.matched and c.picture_score is None
+    # in the replay, the picture score of a non-match is only the picture's own failure
+    add(app, fake_archive, "10. Bank/b.pdf", "b", "x")
+    setup.keep("b", "sha-b", synth.letter())
+    r = run_replay(app, setup, rule, people=people, assigned_persons=lambda: {"b": "Ben"})
+    assert r.matched == 0 and r.scores == []
+    add(app, fake_archive, "10. Bank/c.pdf", "c", "x")
+    setup.keep("c", "sha-c", synth.letter(kind=1))  # another picture: this one is a score
+    assigned = {"b": "Ben", "c": "Anna"}
+    r = run_replay(app, setup, rule, people=people, assigned_persons=lambda: assigned)
+    assert [(s.path, s.matched) for s in r.scores] == [("10. Bank/c.pdf", False)]
