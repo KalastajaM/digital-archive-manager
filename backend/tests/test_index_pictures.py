@@ -177,3 +177,59 @@ def test_a_stored_picture_loads_at_the_matching_width(tmp_path):
     write_picture(tmp_path, "d", "f" * 64, Image.new("L", (1000, 1414), 200))
     page = load_page(picture_path(tmp_path, "d", "f" * 64))
     assert page.shape[1] == MATCH_WIDTH and page.dtype.name == "float32"
+
+
+def test_a_picture_failure_of_old_content_does_not_block_the_changed_file(
+    fake_archive, engine, tmp_path
+):
+    repo, indexer = _indexer(fake_archive, engine, cache_dir=tmp_path / "cache")
+    path = _indexed(fake_archive, repo, f"{INBOX}/a.pdf", "d1")
+    repo.save_layout("d1", repo.get("d1").sha256, Page1Layout([], "text-layer"))
+    path.write_bytes(path.read_bytes()[:50])
+    assert indexer.run_layouts_once() == 1
+    assert indexer.layout_blocked("d1") == content.LAYOUT_NO_PICTURE
+    # the file is indexed again with other content: the old failure says nothing about it
+    new_sha = hashlib.sha256(b"other").hexdigest()
+    repo.save_content("d1", new_sha, content.ExtractedText("Fortum", "t", False), "indexed")
+    assert indexer.layout_blocked("d1") is None
+
+
+def test_an_idle_picture_pass_lists_nothing_and_checks_a_bounded_page(
+    fake_archive, engine, tmp_path, monkeypatch
+):
+    cache = tmp_path / "cache"
+    repo, indexer = _indexer(fake_archive, engine, cache_dir=cache)
+    names = [(f"10. Home/f{i}.pdf", f"d{i}") for i in range(5)]
+    for rel, drive_id in names:
+        _indexed(fake_archive, repo, rel, drive_id)
+        sha = repo.get(drive_id).sha256
+        repo.save_layout(drive_id, sha, Page1Layout([], "text-layer"))
+        path = picture_path(cache, drive_id, sha)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"jpg")
+    monkeypatch.setattr(content, "PICTURE_PAGE_ROWS", 2)
+    checked: list[str] = []
+    real = content.picture_path
+
+    def counting(cache_dir, drive_id, sha):
+        checked.append(drive_id)
+        return real(cache_dir, drive_id, sha)
+
+    monkeypatch.setattr(content, "picture_path", counting)
+    listed: list = []
+    real_iterdir = type(cache).iterdir
+    monkeypatch.setattr(
+        type(cache), "iterdir", lambda self: (listed.append(self), real_iterdir(self))[1]
+    )
+    for _ in range(3):  # 2 + 2 + 1 rows: a lap of the five files, two at most per pass
+        checked.clear()
+        assert indexer.run_layouts_once(limit=10, backfill=True) == 0
+        assert len(checked) <= 2
+    assert listed == []
+    # the cursor wraps and goes on from the top
+    checked.clear()
+    assert indexer.run_layouts_once(limit=10, backfill=True) == 0 and len(checked) == 2
+    # a file whose picture is gone is found when the lap reaches it
+    picture_path(cache, "d0", repo.get("d0").sha256).unlink()
+    done = sum(indexer.run_layouts_once(limit=10, backfill=True) for _ in range(3))
+    assert done == 1 and picture_path(cache, "d0", repo.get("d0").sha256).is_file()

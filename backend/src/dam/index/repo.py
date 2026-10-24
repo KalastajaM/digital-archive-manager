@@ -615,12 +615,15 @@ class FileRepo:
         wanted: Collection[str] = (),
         skip: Collection[str] = (),
         everything: bool = True,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[tuple[str, str]]:
         """``(drive id, sha256)`` of the indexed PDFs and images that have a page-1 layout
         for their current content, in the order the layout pass reads them: inbox files
         first, then the ``wanted`` ones, then by path (only those two without
         ``everything``). The caller keeps the ones whose page-1 picture is not in the cache:
-        a file listing, not a database column."""
+        a file check, not a database column. ``limit`` and ``offset`` page through the
+        list."""
         in_inbox = self._in_inbox()
         is_wanted = files.c.drive_id.in_(list(wanted))
         stmt = (
@@ -633,6 +636,8 @@ class FileRepo:
             )
             .order_by(in_inbox.desc(), is_wanted.desc(), files.c.path)
         )
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
         with self._conn() as conn:
             return [(r.drive_id, r.sha256) for r in conn.execute(stmt).all()]
 
