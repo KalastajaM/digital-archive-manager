@@ -483,3 +483,36 @@ def test_a_document_that_passes_the_picture_but_fails_the_person_has_no_picture_
     assigned = {"b": "Ben", "c": "Anna"}
     r = run_replay(app, setup, rule, people=people, assigned_persons=lambda: assigned)
     assert [(s.path, s.matched) for s in r.scores] == [("10. Bank/c.pdf", False)]
+
+
+def test_an_earlier_text_rule_does_not_make_the_replay_match_pictures_outside_its_budget(
+    app, setup, fake_archive, monkeypatch
+):
+    fill(app, setup, fake_archive, n_match=4, n_other=4)
+    earlier = Rule.model_validate(
+        {
+            "id": "earlier",
+            "when": {"zones": [{"box": [0.5, 0.05, 0.95, 0.12], "text_contains": ["x"]}]},
+            "then": {"folder": "Elsewhere"},
+        }
+    )
+    rule = setup.rule()
+    calls = []
+    real = setup.pictures.match
+
+    def counting(*args, **kw):
+        calls.append(args)
+        return real(*args, **kw)
+
+    monkeypatch.setattr(setup.pictures, "match", counting)
+    wide = replay(
+        app.engine, rule, [earlier, rule], app.settings.special_folders,
+        budget_s=0.0, layouts_for=app.repo.layouts_for, pictures=setup.pictures,
+    )  # fmt: skip
+    assert wide.truncated and calls == []
+    # with time, the matching happens once per document (ten rows), in the main loop
+    full = replay(
+        app.engine, rule, [earlier, rule], app.settings.special_folders,
+        layouts_for=app.repo.layouts_for, pictures=setup.pictures,
+    )  # fmt: skip
+    assert full.matched == 4 and len(calls) == 10
