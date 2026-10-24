@@ -25,12 +25,21 @@ export type Replay = Schemas["ReplayOut"];
 export type RulesData = Schemas["RulesOut"];
 export type RuleExplain = Schemas["RuleExplainOut"];
 export type RulesState = Schemas["RulesStateOut"];
+/** An area of page 1 behind a suggestion or a rule's explanation (see ``AreaOut``). */
+export type Area = Schemas["AreaOut"];
 /** A box drawn on page 1: [x0, y0, x1, y1] as fractions of the page, origin top left. */
 export type PageBox = number[];
 /** Page 1's text lines with their boxes (``read`` false: not read yet, or ``unavailable`` says why). */
 export type Page1 = Schemas["Page1Out"];
 /** The draft a box drawn on page 1 starts from: a rule draft plus the box. */
 export type ZoneDraft = Schemas["ZoneDraftOut"];
+/** The crop of a picture area: a base64 PNG (8-bit grayscale, long side at most 300 px) and,
+ * once saved with the rule's files, the path a zone's ``image`` names. */
+export type AreaPicture = Schemas["AreaPictureOut"];
+/** An area of a rule as the save call takes it (words or a picture). */
+export type ZoneIn = Schemas["ZoneIn"];
+/** One score of a picture rule's replay: a document, how well it matched, and whether the rule did. */
+export type PictureScore = Schemas["PictureScoreOut"];
 export type People = Schemas["PeopleOut"];
 export type Person = Schemas["PersonIO"];
 /** Who a document is from (``sender``) and for (``person``), as the owner said or a filing recorded. */
@@ -83,6 +92,7 @@ export type SearchHit = Schemas["SearchHitOut"];
 export type JournalEntry = Schemas["JournalEntryOut"];
 export type BatchSummary = Schemas["BatchSummaryOut"];
 export type QuarantineBody = Schemas["QuarantineBody"];
+export type UnusedPicturesBody = Schemas["UnusedPicturesIn"];
 export type MoveBody = Schemas["MoveBody"];
 export type MoveResult = Schemas["MoveResultOut"];
 export type RenameBody = Schemas["RenameBody"];
@@ -265,6 +275,11 @@ const fileUrl = (driveId: string) => `/api/files/${encodeURIComponent(driveId)}`
 export const pageUrl = (driveId: string, page: number, width: PageWidth = 900) =>
   `${fileUrl(driveId)}/page/${page}.png?w=${width}`;
 export const rawUrl = (driveId: string) => `${fileUrl(driveId)}/raw`;
+/** A saved picture of a picture area (``image``: ``areas/<name>.png``). */
+export const areaPictureUrl = (image: string) =>
+  `/api/rules/areas/${encodeURIComponent(image.replace(/^areas\//, ""))}`;
+/** The crop as an ``img`` source. */
+export const pngSrc = (png: string) => `data:image/png;base64,${png}`;
 
 /** Quick Look thumbnail widths the API renders (others snap up to one of these). */
 export type ThumbWidth = 600 | 1200 | 2000;
@@ -741,7 +756,8 @@ export const usePage1 = (driveId: string, enabled = true) =>
   });
 
 /** A suggestion that waits for page 1 (``waiting_for_page1``) asks for it until it is read,
- * then reloads what the inbox and the file show. */
+ * then reloads what the inbox and the file show (and keeps reloading for a while if it
+ * still waits, for the picture of the page). */
 export function useWaitForPage1(driveId: string, waiting: boolean) {
   const client = useQueryClient();
   const page = usePage1(driveId, waiting);
@@ -750,6 +766,20 @@ export function useWaitForPage1(driveId: string, waiting: boolean) {
     if (!waiting || !read) return;
     void client.invalidateQueries({ queryKey: keys.inbox });
     void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, read]);
+  // page 1 is read but the suggestion still waits: a picture area has no picture of the
+  // page yet (made in the background), so ask again for a while
+  useEffect(() => {
+    if (!waiting || !read) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
+      if (tries >= PAGE1_POLLS) clearInterval(timer);
+    }, PAGE1_POLL_MS);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting, read]);
 }
@@ -761,11 +791,20 @@ export const usePage1Lines = () =>
       post<Page1>(`/api/files/${enc(driveId)}/page1/lines`, { box }),
   });
 
-/** The rule a box drawn on page 1 starts from (a 400 says why not). */
+/** The rule the boxes drawn on page 1 start from, one area per box (a 400 says why not). */
 export const useDraftZone = () =>
   useMutation({
-    mutationFn: (body: { drive_id: string; box: PageBox; sender?: string | null }) =>
+    mutationFn: (body: { drive_id: string; boxes: PageBox[]; picture_boxes?: PageBox[]; sender?: string | null }) =>
       post<ZoneDraft>("/api/rules/draft-zone", body),
+  });
+
+/** The picture of a box on page 1, cut from the document's page-1 picture (nothing is
+ * written). With ``save`` and the rule's id it is also kept with the rules and ``image``
+ * names the file. A 400 says why not (the picture is not made yet, ...). */
+export const useAreaPicture = () =>
+  useMutation({
+    mutationFn: ({ driveId, box, save = false, ruleId }: { driveId: string; box: PageBox; save?: boolean; ruleId?: string }) =>
+      post<AreaPicture>("/api/rules/area-picture", { drive_id: driveId, box, save, rule_id: ruleId ?? null }),
   });
 
 /** The senders in use, with the number of documents each has. */
@@ -1470,21 +1509,46 @@ export const useRules = (enabled = true) =>
   useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules"), enabled });
 
 /** What a rule would do to the documents filed so far (nothing changes). ``replaces``:
- * the rule it would take the place of. */
+ * the rule it would take the place of; ``placeAbove``: for a new rule, the learned rule it
+ * goes directly above. */
 export const useReplay = () =>
   useMutation({
-    mutationFn: ({ rule, replaces }: { rule: RuleIn; replaces?: string | null }) =>
-      post<Replay>("/api/rules/replay", { rule, replaces: replaces ?? null }),
+    mutationFn: ({ rule, replaces, placeAbove }: { rule: RuleIn; replaces?: string | null; placeAbove?: string | null }) =>
+      post<Replay>("/api/rules/replay", { rule, replaces: replaces ?? null, place_above: placeAbove ?? null }),
   });
 
-/** Save a rule (``replaces``: the id of the rule this one takes the place of); a 400 says why not. */
+/** Save a rule (``replaces``: the id of the rule this one takes the place of;
+ * ``placeAbove``: for a new rule, the learned rule it goes directly above); a 400 says why not. */
 export const useSaveRule = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ rule, replaces }: { rule: RuleIn; replaces?: string | null }) =>
-      put<RulesData>(`/api/rules/${enc(rule.id)}${replaces ? `?replaces=${enc(replaces)}` : ""}`, rule),
+    mutationFn: ({ rule, replaces, placeAbove }: { rule: RuleIn; replaces?: string | null; placeAbove?: string | null }) => {
+      const query = replaces ? `?replaces=${enc(replaces)}` : placeAbove ? `?place_above=${enc(placeAbove)}` : "";
+      return put<RulesData>(`/api/rules/${enc(rule.id)}${query}`, rule);
+    },
     onSuccess: (saved) => client.setQueryData(keys.rules, saved),
-    onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.rules });
+      // the areas behind a suggestion follow the rule
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: keys.file, predicate: (q) => q.queryKey.at(-1) === "suggestions" });
+    },
+  });
+};
+
+/** Move the rule pictures no rule uses (names in ``config/rules/areas``) into ``##. To Delete``
+ * as ``dam rule picture <name>``; a dry run only resolves the plan. A real move is journaled
+ * (so Activity and the toast can undo it) and drops the pictures from the unused list. */
+export const useQuarantineUnusedPictures = () => {
+  const client = useQueryClient();
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: UnusedPicturesBody) => post<BatchResult>("/api/rules/unused-pictures/quarantine", body),
+    onSettled: (_data, _error, body) => {
+      if (body.dry_run) return;
+      refresh();
+      void client.invalidateQueries({ queryKey: keys.rules });
+    },
   });
 };
 

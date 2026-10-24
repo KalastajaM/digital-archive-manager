@@ -9,7 +9,7 @@ const rule = (id: string, extra: Record<string, unknown> = {}, stats: Record<str
   id,
   file: "rules.toml",
   learned: true,
-  when: { text_contains: ["fortum", "lasku"], filename_matches: null, folder_is: null },
+  when: { text_contains: ["fortum", "lasku"], filename_matches: null, folder_is: null, zones: [], person: null },
   then: { folder: "10. Financial/{year}", name: null, tags: [], tray: null, payee: null },
   stats: { suggested: 9, changed: 0, last_used: null, flagged: false, ...stats },
   ...extra,
@@ -29,7 +29,7 @@ const PEOPLE = {
   address_zone: [0.06, 0.1, 0.52, 0.3],
   default_address_zone: [0.05, 0.12, 0.5, 0.28],
 };
-const ENTRY = (id: string, name: string) => ({ record: { drive_id: id, path: `##. Organize/${name}`, name } });
+const ENTRY = (id: string, name: string) => ({ record: { drive_id: id, path: `##. Organize/${name}`, name, ext: "pdf" } });
 
 function setup(data: object = DATA(), extra: Record<string, unknown> = {}) {
   const calls = mockFetch({
@@ -175,23 +175,70 @@ describe("FilingRules", () => {
   });
   it("marks a rule that looks in an area of page 1, and lists the area's words", async () => {
     const zoned = rule("pohjola", {
-      when: { text_contains: [], filename_matches: null, folder_is: null, zone: { box: [0, 0, 0.5, 0.2], text_contains: ["pohjola"] }, person: null },
+      when: { text_contains: [], filename_matches: null, folder_is: null, zones: [{ box: [0, 0, 0.5, 0.2], text_contains: ["pohjola"], image: null }], person: null },
     });
     setup(DATA({ rules: [zoned] }));
     const line = await screen.findByRole("button", { name: /^pohjola/ });
     expect(line).toHaveTextContent("pohjola · area on page 1");
   });
 
+  it("shows a rule's areas on the document it matched last when the rule is opened, and not for a plain rule", async () => {
+    const zoned = rule("pohjola", {
+      when: { text_contains: [], filename_matches: null, folder_is: null, zones: [{ box: [0, 0, 0.5, 0.2], text_contains: ["pohjola"], image: null }], person: null },
+      sample: { drive_id: "s1", name: "policy.pdf", ext: "pdf" },
+    });
+    const { user } = setup(DATA({ rules: [zoned, rule("fortum")] }));
+    await user.click(await screen.findByRole("button", { name: /^pohjola/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+    expect(await within(sheet).findByAltText("Page 1")).toHaveAttribute("src", "/api/files/s1/page/1.png?w=900");
+    expect(sheet.querySelector('[data-area="pohjola:0"]')).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: /^fortum/ }));
+    const plain = await screen.findByRole("dialog", { name: "Edit rule fortum" });
+    expect(within(plain).queryByRole("combobox", { name: "Areas on a sample page" })).toBeNull();
+  });
+
   it("shows the page-1 lines in a rule's area when testing a document", async () => {
     const { user } = setup(DATA(), {
       "POST /api/rules/explain": {
-        body: [{ rule_id: "fortum", matched: false, why: "no pohjola in the area", wins: [], zone_lines: ["Pohjola Oy", "PL 1"] }],
+        body: [{ rule_id: "fortum", matched: false, why: "no pohjola in the area", wins: [], zone_lines: [["Pohjola Oy", "PL 1"]] }],
       },
     });
     await screen.findByRole("option", { name: "bill.pdf" });
     await user.selectOptions(screen.getByLabelText("Test a document"), "d2");
     const list = await screen.findByRole("list", { name: "Rules for this document" });
     expect(list).toHaveTextContent("Page 1 in the area: “Pohjola Oy”, “PL 1”");
+  });
+
+  it("draws the areas of every rule on page 1 when testing a document, dashed with the reason for the ones that did not match", async () => {
+    const area = (rule_id: string, index: number, box: number[], matched: boolean, reason: string | null) => ({
+      rule_id, index, box, kind: "text", lines: matched ? [[0.1, 0.05, 0.3, 0.08]] : [], score: null, matched, reason, wins: matched,
+    });
+    const { user } = setup(DATA(), {
+      "POST /api/rules/explain": {
+        body: [
+          { rule_id: "pohjola", matched: true, why: "word", wins: ["folder"], zone_lines: [["Pohjola Oy"]], areas: [area("pohjola", 0, [0.05, 0.02, 0.45, 0.14], true, null)] },
+          { rule_id: "fortum", matched: false, why: "x", wins: [], zone_lines: [[]], areas: [area("fortum", 0, [0.5, 0.5, 0.9, 0.6], false, "no word found in the area")] },
+        ],
+      },
+      "GET /api/files/d2/suggestions": {
+        body: {
+          person: "Tiina",
+          areas: [{ rule_id: "", index: 0, box: [0.06, 0.1, 0.52, 0.3], kind: "address", lines: [[0.08, 0.15, 0.3, 0.17]], score: null, matched: true, reason: null, wins: false }],
+          person_line: { box: [0.08, 0.15, 0.3, 0.17] },
+        },
+      },
+    });
+    await screen.findByRole("option", { name: "bill.pdf" });
+    await user.selectOptions(screen.getByLabelText("Test a document"), "d2");
+    const page = await screen.findByAltText("Page 1");
+    expect(page).toHaveAttribute("src", "/api/files/d2/page/1.png?w=900");
+    expect(document.querySelector('[data-area="pohjola:0"]')).toHaveAttribute("data-matched", "true");
+    const off = document.querySelector('[data-area="fortum:0"]') as HTMLElement;
+    expect(off).toHaveClass("area-off");
+    expect(off).toHaveAttribute("title", "fortum: no word found in the area");
+    expect(await screen.findByTestId("person-line")).toHaveTextContent("For: Tiina, found here");
+    expect(document.querySelector('[data-kind="address"]')).toBeInTheDocument();
   });
 
   describe("People and page 1", () => {
@@ -249,6 +296,100 @@ describe("FilingRules", () => {
       await user.click(within(people).getByRole("button", { name: "Save people" }));
       expect(await within(people).findByText("Two people are called Tiina.")).toBeInTheDocument();
       expect(within(people).queryByText("Saved.")).toBeNull();
+    });
+  });
+
+  it("names the pictures of a rule and lists the picture files no rule uses", async () => {
+    const withPicture = rule("acme", {
+      when: {
+        text_contains: [],
+        filename_matches: null,
+        folder_is: null,
+        zones: [{ box: [0.1, 0.1, 0.3, 0.2], text_contains: null, image: "areas/acme-1.png", min_score: null }],
+        person: null,
+      },
+    });
+    setup(DATA({ rules: [withPicture], unused_pictures: ["old-1.png", "old-2.png"] }));
+    expect(await screen.findByRole("button", { name: /^acme/ })).toHaveTextContent("a picture");
+    expect(screen.getByText(/2 picture files in config\/rules\/areas \(old-1.png, old-2.png\) are not used by any rule/)).toBeInTheDocument();
+  });
+
+  describe("moving the unused pictures to To Delete", () => {
+    const NAMES = ["old-1.png", "old-2.png"];
+    const OPS = NAMES.map((n) => ({
+      kind: "picture_to_quarantine",
+      src: `abs:/home/me/config/rules/areas/${n}`,
+      dst: `##. To Delete/dam rule picture ${n}`,
+      drive_id: null,
+      note: null,
+    }));
+    const batch = (dry_run: boolean, over: Record<string, unknown> = {}) => ({
+      batch_id: "b1",
+      dry_run,
+      done: OPS,
+      failed: null,
+      error: null,
+      index_error: null,
+      ...over,
+    });
+    const quarantine = (calls: Call[]) => calls.filter((c) => c.url === "/api/rules/unused-pictures/quarantine");
+
+    it("previews the plan, moves on confirm and offers Undo, which asks first", async () => {
+      const { calls, user } = setup(DATA({ unused_pictures: NAMES }), {
+        "POST /api/rules/unused-pictures/quarantine": (call: Call) => ({
+          body: batch((call.body as { dry_run: boolean }).dry_run),
+        }),
+        "POST /api/activity/b1/undo/preview": {
+          body: [
+            { kind: "picture_back", src: OPS[0].dst, dst: "abs:/home/me/config/rules/areas/old-1.png", drive_id: null, note: null },
+          ],
+        },
+      });
+      await user.click(await screen.findByRole("button", { name: "Move 2 unused pictures to To Delete" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(quarantine(calls).map((c) => c.body)).toEqual([{ names: NAMES, dry_run: true }]);
+      expect(dialog).toHaveTextContent("##. To Delete/dam rule picture old-1.png");
+      expect(within(dialog).getAllByText("Move to To Delete")).toHaveLength(2);
+      expect(dialog).toHaveTextContent("old-2.png → ##. To Delete/dam rule picture old-2.png"); // source by file name, no computer path
+      expect(dialog).not.toHaveTextContent("/home/me");
+      await user.click(within(dialog).getByRole("button", { name: /^Move 2/ }));
+      expect(await screen.findByText("Moved 2 unused pictures to To Delete")).toBeInTheDocument();
+      expect(quarantine(calls).map((c) => c.body)).toEqual([
+        { names: NAMES, dry_run: true },
+        { names: NAMES, dry_run: false },
+      ]);
+      await user.click(screen.getByRole("button", { name: "Undo" }));
+      const undo = await screen.findByRole("dialog", { name: "Undo these changes?" });
+      expect(await within(undo).findByText("Put back")).toBeInTheDocument();
+      expect(within(undo).getByText("rules/areas/old-1.png")).toBeInTheDocument();
+    });
+
+    it("moves nothing when the plan is cancelled", async () => {
+      const { calls, user } = setup(DATA({ unused_pictures: NAMES }), {
+        "POST /api/rules/unused-pictures/quarantine": { body: batch(true) },
+      });
+      await user.click(await screen.findByRole("button", { name: "Move 2 unused pictures to To Delete" }));
+      await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(quarantine(calls)).toHaveLength(1); // only the dry run
+    });
+
+    it("shows the server's refusal and offers no confirm", async () => {
+      const { user } = setup(DATA({ unused_pictures: ["old-1.png"] }), {
+        "POST /api/rules/unused-pictures/quarantine": {
+          status: 400,
+          body: { error: "The picture old-1.png is used by a rule or is not in the rules' picture folder, so it is not moved." },
+        },
+      });
+      await user.click(await screen.findByRole("button", { name: "Move 1 unused picture to To Delete" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("old-1.png is used by a rule");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("has no button when every picture is used", async () => {
+      setup(DATA({ unused_pictures: [] }));
+      await screen.findByRole("button", { name: /^fortum/ });
+      expect(screen.queryByRole("button", { name: /to To Delete/ })).not.toBeInTheDocument();
     });
   });
 });

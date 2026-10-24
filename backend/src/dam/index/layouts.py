@@ -1,8 +1,13 @@
 """Read where the text of page 1 sits, for files indexed before positions were kept
 (the layout pass of ``ContentIndexer``). New files get theirs while their content is
-extracted (``dam.extract``)."""
+extracted (``dam.extract``).
+
+The same pass makes the page-1 picture (``dam.extract.picture``): a read that renders the
+page for OCR gives it along; a text-layer PDF is rendered once more for it, and
+``render_picture`` makes it alone for a file whose layout is read already."""
 
 import io
+import logging
 from pathlib import Path
 
 import pypdfium2
@@ -12,9 +17,53 @@ from dam.extract import ocr
 from dam.extract.base import UnsupportedContent
 from dam.extract.layout import TEXT_LAYER, Page1Layout, text_layer_lines
 from dam.extract.pdf import OCR_DPI
+from dam.extract.picture import PICTURE_PAGE_WIDTH, page_picture
 from dam.pdfium import PDFIUM_LOCK
 
+log = logging.getLogger(__name__)
+
 IMAGE_EXTS = {"jpg", "jpeg", "png"}
+
+
+def _render_page(page) -> Image.Image | None:
+    """The page-1 picture of an open PDFium page (call it with the lock held); None if it
+    cannot be rendered, which never fails a layout read."""
+    try:
+        width = page.get_size()[0] or 1.0
+        return page_picture(page.render(scale=PICTURE_PAGE_WIDTH / width).to_pil())
+    except Exception:
+        log.warning("could not render page 1 for its picture", exc_info=True)
+        return None
+
+
+def render_picture(path: Path, ext: str, data: bytes | None) -> Image.Image:
+    """The grayscale page-1 picture of a PDF or image, in the frame of the positions (the
+    page's own rotation, the EXIF orientation of an image). ``UnsupportedContent`` when the
+    file cannot be rendered. No OCR engine is needed."""
+    ext = ext.lower().lstrip(".")
+    if ext == "pdf":
+        with PDFIUM_LOCK:
+            doc = _open(path, data)
+            try:
+                if len(doc) == 0:
+                    raise UnsupportedContent("a PDF without pages")
+                page = doc[0]
+                try:
+                    width = page.get_size()[0] or 1.0
+                    image = page.render(scale=PICTURE_PAGE_WIDTH / width).to_pil()
+                finally:
+                    page.close()
+            finally:
+                doc.close()
+        return page_picture(image)
+    if ext in IMAGE_EXTS:
+        try:
+            with Image.open(io.BytesIO(data) if data is not None else path) as img:
+                img.load()
+                return page_picture(ocr.upright(img))
+        except (OSError, Image.DecompressionBombError) as exc:
+            raise UnsupportedContent(f"unreadable image: {exc}") from exc
+    raise UnsupportedContent(f"no page 1 to render in a .{ext} file")
 
 
 def read_layout(
@@ -35,7 +84,9 @@ def read_layout(
                         return Page1Layout([], TEXT_LAYER)
                     page = doc[0]
                     try:
-                        return Page1Layout(text_layer_lines(page), TEXT_LAYER)
+                        return Page1Layout(
+                            text_layer_lines(page), TEXT_LAYER, picture=_render_page(page)
+                        )
                     finally:
                         page.close()
                 finally:

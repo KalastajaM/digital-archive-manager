@@ -474,7 +474,7 @@ In the preview of an Inbox document (or in Browse), turn on **Draw a box** and d
 rectangle over page 1. dam lists the text it found in the box and offers:
 
 - **Sender…**: give the sender a name if you like, and a rule sheet opens with the
-  words in the box as chips, noted "Matches only in the area you drew on page 1". The
+  words in the box as chips under "In the area you drew on page 1". The
   proof works as above. Documents whose page 1 has not been read yet are read first
   ("Reading page 1 of N documents…"); any that cannot be read are listed as not checked,
   never counted as a miss. With a sender, the proof also says how many of the documents
@@ -483,8 +483,96 @@ rectangle over page 1. dam lists the text it found in the box and offers:
   somewhere unusual; shown when a rule made the current suggestion.
 - **Address area for all letters**: where dam looks for who a letter is for.
 
-The areas of the rule behind a suggestion are shown faintly on page 1, so you can see
-why it matched. A box allows for a few millimetres of shift between scans.
+A box allows for a few millimetres of shift between scans.
+
+#### Several areas for one rule
+
+A sender writes many kinds of letters, and the kind is usually printed in a fixed place
+too, such as the title under the letterhead. A rule can need more than one area: every
+area must have one of its words, so "Pohjola in the letterhead" and "vakuutuskirja in the
+title" together file a policy and leave a Pohjola bill alone.
+
+Draw the first box and choose **Add another box**. The box stays on the page, numbered,
+and is listed in the panel with its lines; remove it with its x. Draw the next one the
+same way. **Sender…** then **Make a rule…** uses all the kept boxes, with one word
+ticked in each. The rule sheet shows each area as its own group of word chips with a
+**Remove** button; a rule needs at least one word or area. Within an area any ticked
+word is enough.
+
+For folder and name the first matching rule wins, so a rule with more areas has to come
+before a plainer rule for the same sender. When you make a rule from boxes drawn on a
+document that a learned rule matches already, dam saves the new rule directly above that
+rule. Rules you wrote in your own files are never reordered; the proof still says "For N
+of them rule X comes first" if the order is wrong.
+
+#### Picture areas
+
+Some letterheads are only a picture: a logo, and the box holds no text. Then dam can
+recognise the picture itself. Draw the box and choose **Match the picture in this area**
+(it is offered for any box, not only an empty one). The box stays on the page, numbered,
+and the panel shows the picture that was cut out of it. **Sender…** and **Make a rule…**
+then make a rule with that area; the rule sheet shows the picture and a slider, **Match
+needed**.
+
+How it works: dam keeps a small grayscale picture of page 1 of each PDF and image (about
+25 KB, in the cache folder, never in the archive). It looks for the cut-out picture in
+the area you drew, allowing a shift of 5 % of the page in any direction, sizes from 90 %
+to 110 %, a lighter or darker scan, scan noise and a skew of a degree or two. The score
+runs from 0 to 1; the rule needs at least **Match needed**, usually 0.85. Another logo in
+the same place scores clearly lower (about 0.7 and under in dam's own tests), and plain
+text in the same font scores about 0.8, which is why the limit is not lower.
+
+The test under the rule sheet lists the scores: the lowest of the documents the rule
+matched and the highest of the documents it did not. If the two groups are far apart,
+the rule is safe. If they touch, move the slider, or add a text box so the picture only
+has to decide between a few documents. A picture alone also takes longer to test, because
+every filed PDF and image is looked at (the test does not open the files in the archive, only
+the small pictures). Pictures not made yet are made first, inbox before the rest; a
+document without one is listed as not checked, never as a miss.
+
+A picture area is only for something that tells who a letter is from or what kind it is.
+The address area never takes a picture: a person is found from text only. The picture of
+an area is a few KB and is kept with the rules, in `config/rules/areas`. Deleting a rule
+leaves its pictures there; Settings → Filing rules lists the ones no rule uses. Next to
+that list, **Move N unused pictures to To Delete** shows the plan and, once you confirm,
+moves them into `##. To Delete` as `dam rule picture <name>.png`. You empty that folder
+yourself, like for any file you mark for deletion. The result has an **Undo** (also in
+Activity), which puts the pictures back into `config/rules/areas`; it refuses if a picture
+with the same name has been saved there since. Only pictures no rule uses can be moved. If
+your rules folder and your archive are on different disks (for example the archive is in
+Google Drive), dam copies each picture into `##. To Delete`, checks the copy against the
+original, and only then removes its own copy from the rules folder; the plan says
+"copied, then removed from dam's settings folder". These pictures are dam's own files, not
+documents from your archive. If anything fails, the copy stays in `##. To Delete` and the
+original stays too, and the message says so. Undo across disks copies the picture back and
+leaves the one in `##. To Delete` for you to empty. Moving or resizing a picture area cuts the picture again from
+the document you changed it on.
+
+#### Seeing the areas
+
+On page 1 of a preview, **Show areas** (on by default when there are areas) draws the
+areas of every rule that matched the document, labelled with the rule's id. The rule that
+gave the folder or name is drawn stronger. The lines that matched inside each area are
+highlighted; a picture area shows where the picture fits best, with its score ("acme:
+picture 0.93"). The address area that was used (the archive's or the rule's own) is drawn
+too, with the line where the person was found: "For: Tiina, found here".
+
+In Settings → Filing rules, **Test a document** draws the areas of all rules on page 1.
+The areas of rules that did not match are dashed and say why ("no word found in area 2").
+
+#### Changing an area
+
+Click an area on page 1 to select it. Drag it to move it, or drag one of its handles to
+resize it. When you let go, the rule sheet opens with the changed area and the test runs
+again, with a line saying how the rule did before ("Before the change it matched 14
+documents"), so you see the effect on the documents you filed before you save. Cancel
+leaves the rule as it was. The address area works the same way: a rule's own address area
+changes that rule; the area for all letters asks once and is saved to the settings.
+Areas cannot be moved while **Draw a box** is on.
+
+In Settings → Filing rules, open a rule that has areas and the sheet shows them on a
+sample page: the last document the rule was used on, or any file in the Inbox you pick.
+Drag them there in the same way; the test below follows.
 
 ### Who a letter is for
 
@@ -508,8 +596,10 @@ records the person. These are kept in dam's index, not in the files.
 ### Reading page 1
 
 To match by area, dam keeps the position of the text on page 1 of each PDF and image
-when it reads it; this costs no extra reading for new documents. Documents read before
-this feature get it in the background, inbox first, when dam has nothing else to do.
+when it reads it, and for picture areas a small grayscale picture of the page; this
+costs no extra reading for new scans. Documents read before this feature, and PDFs that
+have a text layer, get theirs in the background, inbox first, when dam has nothing else
+to do.
 Settings → Filing rules shows "Page 1 read for R of T documents", and the switch "Read
 page 1 of older documents in the background" pauses it. Scans need an OCR engine, as for
 their text.

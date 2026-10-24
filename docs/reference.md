@@ -291,8 +291,11 @@ All in the data folder under `config/`:
   documents the format. In `when`, all *given* conditions must match; for
   `text_contains`, one matching term is enough. `{doc_date}` and `{year}` need a
   detected date; without one, the rule's template is not applied.
-  A `zone` matches when one of its words is in a line of page 1 that lies at least half
-  inside the box (grown by 3 % of the page on every side). `{person}` needs a person
+  `zones` is a list of areas of page 1, and every one must match. A zone matches when one
+  of its words is in a line of page 1 that lies at least half inside its box (grown by
+  3 % of the page on every side). A zone has `box` and either `text_contains` or, for a
+  picture area, `image` (see "Picture areas" below). A rule with more zones has to come
+  before a plainer rule for the same sender. `{person}` needs a person
   (set by you, or found in the address area); without one the template is not applied.
 - `rules/learned.yaml`: rules made or edited in the app, a YAML list created when first
   needed. It is read **before** the other rule files, so a learned rule wins over broad
@@ -310,9 +313,14 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
     text_contains: ["acme benefits", "eläkekassa"]   # case/diacritics-insensitive
     filename_matches: "(?i)scan"         # optional regex on the file name
     folder_is: "##. Organize"            # optional; see below
-    # zone:                              # optional: words in an area of page 1
-    #   box: [0.05, 0.02, 0.45, 0.14]    # x0, y0, x1, y1 as fractions, origin top left
-    #   text_contains: ["acme benefits"]
+    # zones:                             # optional: areas of page 1, all must match
+    #   - box: [0.05, 0.02, 0.45, 0.14]  # x0, y0, x1, y1 as fractions, origin top left
+    #     text_contains: ["acme benefits"]   # any one of these words in the area
+    #   - box: [0.55, 0.05, 0.95, 0.12]  # a second area, such as the title
+    #     text_contains: ["policy"]
+    #   - box: [0.05, 0.02, 0.35, 0.10]  # a picture area, such as a logo
+    #     image: areas/acme-1.png        # a file in config/rules/areas
+    #     min_score: 0.9                 # optional, 0 to 1 (default 0.85)
     # person: Tiina                      # optional: the document is for this person
   # person_zone: [0.06, 0.10, 0.52, 0.30]  # optional: this sender's address area
   # sender: Acme Benefits                # optional: the sender the rule identifies
@@ -323,6 +331,64 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
     # tray: to-pay                       # optional: the tray it is guessed to belong in
     # payee: "Acme Benefits"        # optional: prefills the To pay tray's payee
 ```
+
+**Picture areas.** A zone with `image` matches when the picture in the file appears in
+its `box` on page 1. `image` is `areas/<name>.png`: a plain file name in the folder
+`config/rules/areas` (a path that leaves it, with `..`, a drive or a backslash, is
+refused, and so is a link that points outside). The file is an 8-bit grayscale PNG of the
+box, cut from page 1 rendered 1000 px wide, its long side at most 300 px; the app makes it
+(`<rule id>-<n>.png`, the first free number, never overwriting) and keeps a `.bak-<time>`
+copy if it ever replaces one. A zone has words or a picture, not both, and `min_score`
+(above 0, at most 1; default 0.85) is only for a picture.
+
+The score is the best normalised cross-correlation (numpy) of the picture over the
+search window, the box grown by 5 % of the page on every side, at the scales 0.9, 0.95,
+1, 1.05 and 1.1, after a light blur of both; about 6 ms a document, 3 for loading the picture and 3 for the
+match. A picture zone has no
+text pre-filter, so it is checked last, after every other condition of the rule. A
+document without a page-1 picture yet is not checked (the same as a missing page-1 layout).
+The default 0.85 sits above what other logos and plain text in the same place scored in
+tests (up to about 0.8) and below a rescan with a shift, a size change of 10 %, noise,
+a darker copy or a 2 degree skew (0.94 and over).
+
+The page-1 pictures are cache, in `<data dir>/cache/page1/<drive id>-<sha256 prefix,
+16 hex digits>.jpg` (8-bit grayscale JPEG, quality 70, 1000 px wide, the page as it is
+shown: its own rotation and an image's EXIF orientation). They are made while a scan is
+read for OCR, and by the page-1 background pass for the rest (inbox first, then files a
+test asked for, then the others while `page1_backfill` is on); they are made again when the
+content changes. Once after the first full scan at startup, `prune_page1_pictures` removes the stale
+pictures: files directly in that folder, named exactly like a cache picture, that are regular
+files and whose drive id is unknown or whose sha256 prefix is not the file's
+current one (symlinks are never touched, nor anything outside `cache/page1`). This is the
+app's own cache, not the archive; the no-delete AST test allows that one function in that
+one module. Nothing in the archive is written.
+
+API: `POST /api/rules/area-picture {drive_id, box, save?, rule_id?}` cuts the box from the
+document's page-1 picture and returns `{width, height, png (base64), image}`; with `save`
+(and `rule_id`, which names the file) it also keeps the file and `image` is its path, else
+null. `POST /api/rules/draft-zone` takes `picture_boxes` next to `boxes` and returns the
+saved crops in `pictures`. `GET /api/rules/areas/{name}` serves a saved picture. The
+replay answer has `scores: [{path, score, matched}]` for a rule with picture areas: the
+lowest 20 matches and the highest 10 documents that were not matched. `GET /api/rules`
+lists `unused_pictures` (files in `areas` no loaded rule uses) and `default_min_score`.
+`POST /api/rules/unused-pictures/quarantine {names, dry_run}` moves those pictures into
+the quarantine folder as `dam rule picture <name>` (a taken name gets `_2`, ...) and
+answers like `POST /api/quarantine` (a batch with `done`, `failed`, `error`, `batch_id`);
+with `dry_run: true` it only resolves the plan. Every name must be in `unused_pictures` at
+that moment (400 otherwise, nothing planned); a link is also a 400. On two disks the plan notes say so. It runs as two operation kinds: `picture_to_quarantine` (`src` is the `abs:` path of a
+regular file directly inside `config/rules/areas`, never a link; `dst` the quarantine folder)
+and its undo-only inverse `picture_back` (refused when the name is taken in `areas`, or the
+file in `##. To Delete` was changed or moved). Both never overwrite. On one disk they are
+renames. On two disks `picture_to_quarantine` copies the file (exclusive create, fsync, size
+and sha256 of the copy checked) and only then removes the original with `remove_moved_picture`,
+and `picture_back` copies it back and leaves the file in `##. To Delete`. The journal records
+the `method` (`rename` or `copy`) and the `content_hash` (sha256), which undo and crash
+recovery use: after a crash, a verified copy with the original still there is finished by
+removing the original only if its hash matches, and a partial or unverified copy leaves both
+files and is reported. The journal keeps the file name only, not the path on this computer. Undo goes through
+`POST /api/activity/{batch_id}/undo`, as for every batch.
+A suggestion's `areas` has `kind: "image"` with `score` and, in `lines`, where the picture
+fits best.
 
 `folder_is` is the folder the file sits in. The inbox (`##. Organize`) also matches files
 directly in a filing code's inbox folder (such as `##. Organize/To pay`); naming a code's
@@ -609,12 +675,21 @@ The user guide's "What dam never does" gives the short version. The details:
   cache: before removing such an empty folder, the app deletes a `.DS_Store` in it, but
   only a genuine Finder cache file (regular, a single link, Finder's magic bytes, no
   Drive id), only inside that folder, never anywhere else. Outside the archive the app
-  removes only its own export cache (`prune_exports`) and its reminder LaunchAgent plist
-  (`--uninstall`). An AST test pins these few calls, and only the operation layer writes
+  removes only its own export cache (`prune_exports`), the stale files of its own page-1
+  picture cache (`prune_page1_pictures`, see "Picture areas"), its reminder LaunchAgent
+  plist (`--uninstall`) and, when the rules folder and the archive are on different disks,
+  its own copy of a rule picture in `config/rules/areas` after the picture was copied to
+  `##. To Delete` and the copy was verified by size and content hash
+  (`remove_moved_picture`: only a regular file, not a link, directly inside the real
+  `areas` folder, with the same hash as the copy; the owner's rule is that "no delete" is
+  for archive files, not for dam's own temporary or cached files). An AST test pins these few calls, and only the operation layer writes
   to the archive. One more thing is removed, by undo and only when it is certain it is the
   app's own: an empty folder that a New folder / layout batch made (identity-checked,
   never one with anything in it). Undo of "Choose files…"/`dam add` *moves* the copy to
-  `##. To Delete`.
+  `##. To Delete`. Rule pictures no rule uses (`config/rules/areas`) are moved to
+  `##. To Delete` the same way (renamed on one disk, copied and then removed across disks),
+  as `dam rule picture <name>`, previewed and undoable; the
+  one file source outside the archive other than `dam add` is exactly that folder.
 - **"Is this still the folder/link the app made?" is answered by file identity.** The
   app records, right after it creates a folder or link, its device number, inode number
   and **creation time**. It removes or touches the entry later only while the device and

@@ -24,7 +24,7 @@ from dam.db.engine import write_tx
 from dam.db.tables import made_folders, ongoing_entries, operations
 from dam.index.driveid import read_drive_id
 from dam.index.locks import INDEX_LOCK
-from dam.ops import identity
+from dam.ops import identity, primitives
 from dam.ops.guards import fold_parts, is_under, join, parent, rebase
 from dam.ops.model import (
     UNDO_ORIGIN,
@@ -76,6 +76,8 @@ class JournalEntry:
     created: float
     finished: float | None
     label: str | None = None
+    method: str | None = None  # rule pictures: "rename" or "copy"
+    content_hash: str | None = None  # rule pictures: sha256 of the file
 
 
 @dataclass
@@ -172,7 +174,7 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
     # restore=True enables the restore-only guard exceptions for these exact ops;
     # Executor.preview/apply refuse origin "undo", so no other caller gets them.
     try:
-        return Planner(ex.paths).resolve(plan, restore=True), kept
+        return Planner(ex.paths, ex.areas_dir).resolve(plan, restore=True), kept
     except GuardError as e:
         if str(e).startswith("not empty:") and any(
             op.kind is OpKind.REMOVE_EMPTY_DIR for op in inverses
@@ -319,13 +321,15 @@ def _check_unchanged(ex: Executor, row: JournalEntry, now_at: str) -> None:
             same = read_drive_id(p) == row.drive_id
         if not same:
             raise OpFailed(f"{now_at} has changed since, so this cannot be undone.")
-    elif kind is OpKind.COPY:  # the copy must still be the file that was copied in
+    elif kind in (OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE):  # still the file that came in
         p = ex.paths.abs(now_at)
         try:
             st = os.lstat(p)
         except FileNotFoundError:
             raise OpFailed(f"{now_at} is missing, so this cannot be undone.") from None
         if not stat.S_ISREG(st.st_mode) or (row.size is not None and st.st_size != row.size):
+            raise OpFailed(f"{now_at} has changed since, so this cannot be undone.")
+        if row.content_hash is not None and primitives.file_sha256(p) != row.content_hash:
             raise OpFailed(f"{now_at} has changed since, so this cannot be undone.")
     elif kind is OpKind.MKDIR:  # only folders that replaced a vacated entry (_replaces)
         p = ex.paths.abs(now_at)
@@ -383,6 +387,9 @@ def _inverse(ex: Executor, row: JournalEntry, made: dict | None = None) -> Op:
     if kind is OpKind.COPY:
         # a file copied into the inbox: moved to the quarantine folder, never deleted
         return Op(OpKind.QUARANTINE, row.dst, None)
+    if kind is OpKind.PICTURE_TO_QUARANTINE:
+        # back to its plain name in the rules' areas folder, refused if that is taken
+        return Op(OpKind.PICTURE_BACK, row.dst, row.src, exact=True)
     if kind is OpKind.MKDIR:  # a folder that replaced a vacated entry (_replaces)
         # removed only while it is still that recorded folder (checked again on the
         # opened fd at act time)
@@ -446,6 +453,8 @@ def mark_reverted(
                 hit = r["kind"] == OpKind.REMOVE_EMPTY_DIR and same(r["src"], dst)
             case OpKind.REMOVE_EMPTY_DIR:
                 hit = r["kind"] == OpKind.MKDIR and same(r["dst"], src)
+            case OpKind.PICTURE_BACK:
+                hit = r["kind"] == OpKind.PICTURE_TO_QUARANTINE and same(r["dst"], src)
             case k if k in RELOCATE:
                 hit = (r["kind"] in RELOCATE and same(r["dst"], src) and same(r["src"], dst)) or (
                     k is OpKind.QUARANTINE and r["kind"] == OpKind.COPY and same(r["dst"], src)
@@ -522,6 +531,21 @@ def _happened(ex: Executor, e: JournalEntry) -> bool | None:
             st = os.lstat(dst)
             # complete only when it has the size of the source (a cut-short copy is not)
             return True if stat.S_ISREG(st.st_mode) and st.st_size == e.size else None
+        case OpKind.PICTURE_TO_QUARANTINE | OpKind.PICTURE_BACK:
+            if ex.areas_dir is None:
+                return None
+            if OpKind(e.kind) is OpKind.PICTURE_TO_QUARANTINE:
+                here, there = ex.paths.abs(e.dst), Path(ex.areas_dir) / e.src
+            else:  # back: the file was in the archive (src) and goes to the areas folder
+                here, there = Path(ex.areas_dir) / e.dst, ex.paths.abs(e.src)
+            if e.method == primitives.PICTURE_COPY:
+                return _picture_copy_happened(ex, e, here, there)
+            if os.path.lexists(there) and not os.path.lexists(here):
+                return False  # still where it was
+            if os.path.lexists(here) and not os.path.lexists(there):
+                st = os.lstat(here)
+                return True if stat.S_ISREG(st.st_mode) and st.st_size == e.size else None
+            return None
         case OpKind.SYMLINK:
             link = ex.paths.abs(e.dst)
             if not os.path.lexists(link):
@@ -549,6 +573,35 @@ def _happened(ex: Executor, e: JournalEntry) -> bool | None:
     if src_here and not dst_here:
         return False
     return None
+
+
+def _picture_copy_happened(ex: Executor, e: JournalEntry, here: Path, there: Path) -> bool | None:
+    """A rule picture that crosses disks is copied (``here``, the new file) and the original
+    (``there``) is removed afterwards. Both files present with the journaled hash: the
+    copy is complete, so a move out of the areas folder is finished by removing the
+    original (only if its hash matches too). A copy that is partial or does not match,
+    or anything else unclear: both files are left alone and the row is reported. A copy
+    back never removes anything: it is done when the new file has the journaled hash."""
+    if e.content_hash is None:
+        return None
+    here_ok = (
+        os.path.lexists(here)
+        and stat.S_ISREG(os.lstat(here).st_mode)
+        and primitives.file_sha256(here) == e.content_hash
+    )
+    if not os.path.lexists(there):
+        return True if here_ok else None
+    if not os.path.lexists(here):
+        return False  # nothing was copied
+    if not here_ok:
+        return None  # a partial or different copy: leave both
+    if OpKind(e.kind) is OpKind.PICTURE_BACK:
+        return True  # the archive file stays, always
+    try:
+        primitives.remove_moved_picture(there, Path(ex.areas_dir), here, e.content_hash)
+    except (OSError, OpFailed, GuardError):
+        return None
+    return True
 
 
 def _same_entry(dst: Path, e: JournalEntry) -> bool:

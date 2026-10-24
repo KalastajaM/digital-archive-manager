@@ -374,6 +374,14 @@ class FileRepo:
             ).scalar()
         return body or ""
 
+    def content_keys(self) -> list[tuple[str, str]]:
+        """(drive id, sha256) of every indexed file whose content is known."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                select(files.c.drive_id, files.c.sha256).where(files.c.sha256.is_not(None))
+            ).all()
+        return [(r[0], r[1]) for r in rows]
+
     def barcode_for(self, drive_id: str) -> str | None:
         """The bank barcode read from the file's current content; None if none was read
         (or it was read from content the file no longer has)."""
@@ -609,6 +617,37 @@ class FileRepo:
         )
         with self._conn() as conn:
             return [_record(r) for r in conn.execute(stmt).all()]
+
+    def next_for_pictures(
+        self,
+        wanted: Collection[str] = (),
+        skip: Collection[str] = (),
+        everything: bool = True,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[tuple[str, str]]:
+        """``(drive id, sha256)`` of the indexed PDFs and images that have a page-1 layout
+        for their current content, in the order the layout pass reads them: inbox files
+        first, then the ``wanted`` ones, then by path (only those two without
+        ``everything``). The caller keeps the ones whose page-1 picture is not in the cache:
+        a file check, not a database column. ``limit`` and ``offset`` page through the
+        list."""
+        in_inbox = self._in_inbox()
+        is_wanted = files.c.drive_id.in_(list(wanted))
+        stmt = (
+            select(files.c.drive_id, files.c.sha256)
+            .where(
+                *self._layout_population(),
+                self._has_layout(),
+                files.c.drive_id.not_in(list(skip)),
+                *(() if everything else (or_(in_inbox, is_wanted),)),
+            )
+            .order_by(in_inbox.desc(), is_wanted.desc(), files.c.path)
+        )
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
+        with self._conn() as conn:
+            return [(r.drive_id, r.sha256) for r in conn.execute(stmt).all()]
 
     def layout_progress(self) -> tuple[int, int]:
         """``(read, total)`` over the files the layout pass reads: how many have a layout

@@ -130,6 +130,9 @@ operations = Table(
     Column("created", Float),
     Column("finished", Float, nullable=True),
     Column("label", Text, nullable=True),  # the batch's title for Activity (0022)
+    # rule pictures only (0030): "rename" or "copy", and the sha256 of the file's content
+    Column("method", Text, nullable=True),
+    Column("content_hash", Text, nullable=True),
     Index("ix_operations_batch_id", "batch_id"),  # migration 0004
 )
 

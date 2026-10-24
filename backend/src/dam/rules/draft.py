@@ -38,15 +38,40 @@ class RuleDraft:
 
 
 @dataclass
-class ZoneDraft(RuleDraft):
-    """A draft made from a box on page 1: the rule's ``when`` is ``folder_is`` (the inbox)
-    and a ``zone`` of ``box`` with one ticked word; ``lines`` are the page-1 lines that lie
-    in the box, ``sender`` the sender the rule identifies."""
+class ZoneDraftArea:
+    """One box of a zone draft: the page-1 ``lines`` in it and its candidate ``words``
+    (one ticked)."""
 
-    box: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+    box: tuple[float, float, float, float]
+    words: list[DraftWord]
+    lines: list[str]
+
+
+@dataclass
+class ZoneDraftPicture:
+    """One picture box of a zone draft: the crop kept for it (``image``, a path under the
+    rules' ``areas`` folder), its size and a base64 PNG to show."""
+
+    box: tuple[float, float, float, float]
+    image: str
+    width: int
+    height: int
+    png: str
+
+
+@dataclass
+class ZoneDraft(RuleDraft):
+    """A draft made from boxes on page 1: the rule's ``when`` is ``folder_is`` (the inbox)
+    and one ``zone`` per box, each with its one ticked word. ``sender`` is the sender the
+    rule identifies; ``place_above`` the learned rule the new one goes directly above when
+    it is saved (a learned rule that matches the document already), else None. The
+    draft's own ``words`` are empty: the words are per area."""
+
+    zones: list[ZoneDraftArea] = field(default_factory=list)
+    pictures: list[ZoneDraftPicture] = field(default_factory=list)
     folder_is: str | None = None
-    lines: list[str] = field(default_factory=list)
     sender: str | None = None
+    place_above: str | None = None
 
 
 def _literal(s: str) -> str:
@@ -95,6 +120,51 @@ def _unique(base: str, taken: set[str]) -> str:
     return f"{base}-{n}"
 
 
+def filed_patterns(
+    filed_name: str | None,
+    filed_folder: str | None,
+    original_name: str,
+    doc_date: date | None,
+    person: str | None = None,
+) -> tuple[str | None, str | None]:
+    """The folder and name templates for a document that is filed already (each None
+    without one)."""
+    folder = folder_pattern(filed_folder, doc_date, person) if filed_folder else None
+    name = (
+        name_pattern(PurePosixPath(filed_name).stem, PurePosixPath(original_name).stem, doc_date)
+        if filed_name
+        else None
+    )
+    for template in (folder, name):
+        if template is not None:
+            check_template(template)
+    return folder, name
+
+
+def picture_draft(
+    *,
+    sender: str | None,
+    filed_name: str | None,
+    filed_folder: str | None,
+    doc_date: date | None,
+    tags: list[str],
+    taken_ids: set[str],
+    person: str | None = None,
+) -> RuleDraft:
+    """The start of a rule made from picture areas only: it has no words, so its id comes
+    from the sender (else "picture")."""
+    folder, name = filed_patterns(filed_name, filed_folder, "", doc_date, person)
+    return RuleDraft(
+        id=_unique(_slug(sender or "picture"), taken_ids),
+        words=[],
+        folder=folder,
+        name=name,
+        tags=list(tags),
+        tray=None,
+        payee=None,
+    )
+
+
 def draft_rule(
     *,
     text: str,
@@ -117,15 +187,7 @@ def draft_rule(
     if not words:
         return None
     pick = min(range(len(words)), key=lambda i: (doc_frequency(words[i]), i))
-    folder = folder_pattern(filed_folder, doc_date, person) if filed_folder else None
-    name = (
-        name_pattern(PurePosixPath(filed_name).stem, PurePosixPath(original_name).stem, doc_date)
-        if filed_name
-        else None
-    )
-    for template in (folder, name):
-        if template is not None:
-            check_template(template)
+    folder, name = filed_patterns(filed_name, filed_folder, original_name, doc_date, person)
     return RuleDraft(
         id=_unique(_slug(words[pick]), taken_ids),
         words=[DraftWord(w, i == pick) for i, w in enumerate(words)],

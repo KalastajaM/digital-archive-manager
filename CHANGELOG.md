@@ -8,6 +8,38 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Rules can recognise a picture, such as a logo that has no text. In Draw a box, choose
+  **Match the picture in this area**; the rule sheet shows the picture and a **Match
+  needed** slider, and the test lists how well the documents it matched and the ones it
+  did not matched the picture, so you can see how far apart they are. It finds the logo
+  on a rescan that is shifted, a little bigger or smaller, lighter or darker, noisy or
+  slightly crooked. Page 1 pictures are kept as small grayscale files in the cache
+  folder, never in the archive; the picture of an area is kept with your rules, in
+  `config/rules/areas`. Moving a picture area cuts it again from the document you moved
+  it on. Settings lists picture files that no rule uses any more, and **Move N unused
+  pictures to To Delete** puts them in `##. To Delete` as `dam rule picture <name>.png`,
+  after a preview, with Undo (it puts them back, and refuses if the name is taken again).
+  Only pictures no rule uses can be moved. If your rules folder and your archive are on
+  different disks, dam copies each picture into To Delete, checks the copy, and only then
+  removes its own copy from the rules folder (these are dam's own files, not your
+  documents); if anything fails, both stay. Undo across disks copies the picture back and
+  leaves the one in To Delete. dam never deletes anything else. The small page 1
+  pictures in the cache folder are dam's own temporary files: once after the first scan at
+  startup dam removes the ones that no indexed file matches any more. A picture area must
+  be at least 1% of the page wide and high; smaller ones are refused.
+- A rule can need several areas of page 1, such as "Pohjola in the letterhead" and
+  "vakuutuskirja in the title", so each kind of letter from a sender files to its own
+  place. In Draw a box, **Add another box** keeps a box and lets you draw the next; the
+  rule sheet shows each area as its own group of words, and a rule made from boxes is
+  saved directly above the learned rule that matches the document already.
+- You can see why a document matched: **Show areas** in the preview draws the areas of
+  every rule that matched, the lines that matched in them, the address area and the line
+  where the person was found. Test a document draws the areas of rules that did not
+  match as dashed outlines with the reason.
+- You can change an area after it is saved: select it on page 1, drag it or its handles,
+  and the rule sheet opens with the test showing how the rule did before and after. The
+  address area works the same way, and Settings → Filing rules shows a rule's areas on a
+  sample page where they can be dragged too.
 - Rules that match by where text sits on page 1: draw a box on page 1 of a document in
   the preview (Draw a box) and make a rule from it, such as "Pohjola in the letterhead
   means a letter from Pohjola". A word only counts when it is inside the area, so a

@@ -11,6 +11,7 @@ import ctypes
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 TEXT_LAYER = "text-layer"
 SCALE = 10000  # PDFium's device matrix works in whole pixels: ask for a fine one
@@ -32,6 +33,10 @@ class Line:
 class Page1Layout:
     lines: list[Line] = field(default_factory=list)
     source: str = TEXT_LAYER
+    # the grayscale page-1 picture (a PIL image, ``dam.extract.picture``) when this read
+    # rendered the page anyway: kept in the cache by whoever saves the layout, never stored
+    # with the lines
+    picture: Any = field(default=None, repr=False, compare=False)
 
     @property
     def text(self) -> str:

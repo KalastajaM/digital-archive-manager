@@ -16,6 +16,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from dam.extract.base import ExtractedText, UnsupportedContent
 from dam.extract.layout import Line, Page1Layout, clamp_box
+from dam.extract.picture import page_picture
 
 log = logging.getLogger(__name__)
 
@@ -150,13 +151,26 @@ def _tesseract_lines(image: Image.Image, languages: list[str]) -> list[Line]:
 def ocr_page(image: Image.Image, languages: list[str]) -> Page1Layout:
     """The lines of text of ``image`` with their boxes and the engine that read them;
     ``UnsupportedContent`` when no OCR engine is installed. The text of the page is
-    ``Page1Layout.text``: the very lines the boxes belong to."""
+    ``Page1Layout.text``: the very lines the boxes belong to. The layout also carries the
+    page-1 picture of ``image`` (``dam.extract.picture``)."""
     which = engine()
     if which == VISION:
-        return Page1Layout(_vision_lines(image, languages), VISION)
-    if which == TESSERACT:
-        return Page1Layout(_tesseract_lines(image, languages), TESSERACT)
-    raise UnsupportedContent(NO_OCR)
+        layout = Page1Layout(_vision_lines(image, languages), VISION)
+    elif which == TESSERACT:
+        layout = Page1Layout(_tesseract_lines(image, languages), TESSERACT)
+    else:
+        raise UnsupportedContent(NO_OCR)
+    layout.picture = _picture_of(image)
+    return layout
+
+
+def _picture_of(image: Image.Image) -> Image.Image | None:
+    """The page-1 picture of the page just read; never fails the read."""
+    try:
+        return page_picture(image)
+    except Exception:
+        log.warning("could not make the page-1 picture", exc_info=True)
+        return None
 
 
 def ocr_image(image: Image.Image, languages: list[str]) -> str:

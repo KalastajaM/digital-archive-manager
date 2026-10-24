@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
 
 from dam.ops.model import OpKind
 from dam.trays.model import TrayDef
@@ -48,6 +48,14 @@ class FileBody(_In):
 
 class QuarantineBody(_In):
     drive_ids: list[str]
+    dry_run: bool = False
+
+
+class UnusedPicturesIn(_In):
+    """Move these unused rule pictures (names of files in ``config/rules/areas``) into the
+    quarantine folder. ``dry_run``: only resolve the plan."""
+
+    names: list[str]
     dry_run: bool = False
 
 
@@ -369,6 +377,31 @@ class CodeHitOut(BaseModel):
     unclear: bool
 
 
+class AreaOut(BaseModel):
+    """An area of page 1 behind a suggestion or in a rule's explanation, for drawing it:
+    ``box`` is [x0, y0, x1, y1] as fractions of page 1, origin top left. ``kind``: "text" (a
+    rule's words), "image" (a rule's picture) or "address" (where people are looked for;
+    ``rule_id`` "" is the archive's own area). ``index`` is the area's place in its rule's
+    ``zones``. ``lines`` are the boxes of the lines that matched in it (for an address area,
+    the line where the person was found). ``matched`` is whether the rule matched the
+    document, ``reason`` why this area or the rule did not, ``wins`` whether the rule gave
+    the folder or name, and ``score`` how well a picture matched (0 to 1)."""
+
+    rule_id: str
+    index: int
+    box: list[float]
+    kind: Literal["text", "image", "address"]
+    lines: list[list[float]]
+    score: float | None = None
+    matched: bool = True
+    reason: str | None = None
+    wins: bool = False
+
+
+class PersonLineOut(BaseModel):
+    box: list[float]
+
+
 class SuggestionOut(BaseModel):
     name: str
     folder: str | None
@@ -405,6 +438,10 @@ class SuggestionOut(BaseModel):
     person: str | None = None
     person_source: str | None = None
     people_found: list[str] = []
+    # the areas of page 1 behind the suggestion (every matching rule's, and the address
+    # area used) and the line where the person was found
+    areas: list[AreaOut] = []
+    person_line: PersonLineOut | None = None
 
 
 class FileSuggestionsOut(BaseModel):
@@ -418,6 +455,11 @@ class FileSuggestionsOut(BaseModel):
     tags: list[str]
     tag_sources: dict[str, str]
     sources: list[str]
+    # who the document is for, the areas of page 1 behind the suggestion and the line where
+    # the person was found
+    person: str | None = None
+    areas: list[AreaOut] = []
+    person_line: PersonLineOut | None = None
 
 
 class FileTagsIn(_In):
@@ -1433,18 +1475,23 @@ class BatchRowOut(BaseModel):
 
 
 class ZoneIn(_In):
-    """Words that must be in an area of page 1: ``box`` is [x0, y0, x1, y1] as fractions
-    of the page, origin top left."""
+    """An area of page 1: ``box`` is [x0, y0, x1, y1] as fractions of the page, origin top
+    left. It has words (``text_contains``) or a picture (``image``, ``areas/<name>.png``
+    from ``POST /api/rules/area-picture``): exactly one. ``min_score`` (a picture's, 0 to 1)
+    is the score the picture needs; left out, the default (0.85)."""
 
     box: list[float] = Field(min_length=4, max_length=4)
-    text_contains: list[str]
+    text_contains: list[str] | None = None
+    image: str | None = None
+    min_score: float | None = None
 
 
 class RuleWhenIn(_In):
     text_contains: list[str] = Field(default_factory=list)
     filename_matches: str | None = None
     folder_is: str | None = None
-    zone: ZoneIn | None = None
+    # areas of page 1: every one must match, within an area any one of its words
+    zones: list[ZoneIn] = Field(default_factory=list)
     person: str | None = None
 
 
@@ -1467,6 +1514,8 @@ class RuleIn(_In):
 class RuleReplayIn(_In):
     rule: RuleIn
     replaces: str | None = None
+    # for a new rule: the learned rule it goes directly above (see ``ZoneDraftOut``)
+    place_above: str | None = None
 
 
 class RuleMoveIn(_In):
@@ -1488,14 +1537,16 @@ class RulesDeclineIn(_In):
 
 class ZoneOut(BaseModel):
     box: list[float]
-    text_contains: list[str]
+    text_contains: list[str] | None
+    image: str | None
+    min_score: float | None = None
 
 
 class RuleWhenOut(BaseModel):
     text_contains: list[str]
     filename_matches: str | None
     folder_is: str | None
-    zone: ZoneOut | None
+    zones: list[ZoneOut]
     person: str | None
 
 
@@ -1514,6 +1565,15 @@ class RuleStatsOut(BaseModel):
     flagged: bool
 
 
+class RuleSampleOut(BaseModel):
+    """A document the rule was last used on (still in the archive): a page to show its
+    areas on."""
+
+    drive_id: str
+    name: str | None
+    ext: str | None
+
+
 class RuleOut(BaseModel):
     id: str
     file: str
@@ -1523,6 +1583,7 @@ class RuleOut(BaseModel):
     person_zone: list[float] | None
     sender: str | None
     stats: RuleStatsOut
+    sample: RuleSampleOut | None = None
 
 
 class RuleErrorOut(BaseModel):
@@ -1539,6 +1600,11 @@ class RulesOut(BaseModel):
     rules: list[RuleOut]
     errors: list[RuleErrorOut]
     state: RulesStateOut
+    # picture files in config/rules/areas that no loaded rule uses (a deleted rule leaves
+    # its pictures)
+    unused_pictures: list[str] = []
+    # the score a picture area needs when it names none
+    default_min_score: float = 0.85
 
 
 class ReplayHitOut(BaseModel):
@@ -1550,6 +1616,15 @@ class ReplayHitOut(BaseModel):
 class ShadowOut(BaseModel):
     drive_id: str
     rule_id: str  # the earlier rule that wins
+
+
+class PictureScoreOut(BaseModel):
+    """How well page 1 of a document matched a rule's picture areas (the lowest score of
+    them) and whether the rule matched it."""
+
+    path: str
+    score: float
+    matched: bool
 
 
 class NotCheckedOut(BaseModel):
@@ -1584,6 +1659,9 @@ class ReplayOut(BaseModel):
     # how many page-1 reads are queued by this replay (post it again to see them)
     reading: int
     marked: MarkedOut | None = None  # only for a rule with a sender
+    # only for a rule with picture areas: the lowest scores of its matches and the highest
+    # of the documents it did not match, to see how well they are told apart
+    scores: list[PictureScoreOut] = []
 
 
 class Page1LineOut(BaseModel):
@@ -1600,25 +1678,78 @@ class Page1Out(BaseModel):
     unavailable: str | None = None
 
 
+class AreaPictureIn(_In):
+    """Cut the picture of ``box`` (fractions of page 1) from the document's page-1 picture.
+    With ``save`` (and the rule's id, for the file name) it is also kept in
+    ``config/rules/areas`` and the answer names it."""
+
+    drive_id: str
+    box: list[float] = Field(min_length=4, max_length=4)
+    save: bool = False
+    rule_id: str | None = None
+
+
+class AreaPictureOut(BaseModel):
+    """The crop: 8-bit grayscale, its long side at most 300 px; ``png`` is base64.
+    ``image`` is the path for a zone's ``image`` once it is saved, else null."""
+
+    width: int
+    height: int
+    png: str
+    image: str | None = None
+
+
 class Page1BoxIn(_In):
     box: list[float] = Field(min_length=4, max_length=4)
 
 
 class ZoneDraftIn(_In):
     drive_id: str
-    box: list[float] = Field(min_length=4, max_length=4)
+    # one box, or several: each is an area of the rule, with one ticked word
+    boxes: list[list[float]] = Field(default_factory=list, max_length=8)
+    # boxes that become picture areas (the crop is kept as a picture file), after the others
+    picture_boxes: list[list[float]] = Field(default_factory=list, max_length=4)
     sender: str | None = None
+
+    @field_validator("boxes", "picture_boxes")
+    @classmethod
+    def _four_numbers(cls, boxes: list[list[float]]) -> list[list[float]]:
+        if any(len(b) != 4 for b in boxes):
+            raise ValueError("a box is four numbers: x0, y0, x1, y1")
+        return boxes
+
+
+class ZoneDraftAreaOut(BaseModel):
+    """One box of a draft: the page-1 lines in it and its candidate words (one ticked)."""
+
+    box: list[float]
+    words: list[DraftWordOut]
+    lines: list[str]
+
+
+class ZoneDraftPictureOut(BaseModel):
+    """A picture box of a draft: ``image`` is the saved crop (the zone's ``image``), ``png``
+    the same picture in base64 to show."""
+
+    box: list[float]
+    image: str
+    width: int
+    height: int
+    png: str
 
 
 class ZoneDraftOut(RuleDraftOut):
-    """The draft a box drawn on page 1 starts from. The rule's ``when`` is
-    ``{folder_is, zone: {box, text_contains: [the ticked word]}}``; ``words`` are the
-    candidate words from the lines in the box, ``lines`` those lines."""
+    """The draft boxes drawn on page 1 start from. The rule's ``when`` is ``{folder_is,
+    zones: [{box, text_contains: [the ticked word]}, ...]}``; ``zones`` has the candidate
+    words and the page-1 lines of each box (``words`` itself is empty). ``place_above``: the
+    learned rule that already matches the document; send it back when replaying or saving
+    so the new rule is placed directly above it."""
 
-    box: list[float]
+    zones: list[ZoneDraftAreaOut]
+    pictures: list[ZoneDraftPictureOut] = []
     folder_is: str | None
-    lines: list[str]
     sender: str | None
+    place_above: str | None
 
 
 class RuleExplainOut(BaseModel):
@@ -1626,7 +1757,8 @@ class RuleExplainOut(BaseModel):
     matched: bool
     why: str
     wins: list[str]
-    zone_lines: list[str] = []  # page-1 lines in the rule's zone
+    zone_lines: list[list[str]] = []  # page-1 lines in each of the rule's zones
+    areas: list[AreaOut] = []  # the rule's areas for drawing, matched or not
 
 
 # -- settings written to settings.yaml ---------------------------------------------

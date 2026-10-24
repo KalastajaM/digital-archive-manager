@@ -15,6 +15,8 @@ class OpKind(StrEnum):
     QUARANTINE = auto()
     REMOVE_EMPTY_DIR = auto()
     COPY = auto()
+    PICTURE_TO_QUARANTINE = auto()
+    PICTURE_BACK = auto()
 
 
 class GuardError(ValueError):
@@ -40,6 +42,16 @@ class Op:
     COPY: ``src`` is ``"abs:<file>"`` (a regular file anywhere on this computer, only
     read), ``dst`` the archive folder it is copied into (the inbox, nowhere else) and
     ``name`` the file name there; a taken name gets ``_N``, nothing is overwritten.
+    PICTURE_TO_QUARANTINE: ``src`` is ``"abs:<file>"``, a regular file (no link) directly
+    inside the rules' ``areas`` folder (the executor is told where that is; without it the
+    op is refused), ``dst`` the quarantine folder itself and ``name`` the file name there
+    (a taken name gets ``_N``, nothing is overwritten). On one disk the file is
+    renamed. On different disks it is copied (exclusively, verified by size and hash) and
+    only then removed from the areas folder (dam's own settings, not the archive).
+    PICTURE_BACK (undo of the above, restore only): ``src`` the file in the quarantine
+    folder, ``dst`` its plain name in the ``areas`` folder; ``exact``: refused when that
+    name is taken. On different disks it is copied back and the copy in the quarantine
+    folder stays.
     ``made`` (REMOVE_EMPTY_DIR only, set only by undo): the folder was made by a
     user-confirmed "New folder" / layout batch (``Plan.new_folders``); it is removed
     again only while it is still the folder with the journaled ``identity`` and empty,
@@ -90,6 +102,8 @@ class ResolvedOp:
 
     For UNLINK_SYMLINK, ``dst`` is the link path itself (the journal row stores the
     link's target in ``dst`` instead, so the link can be recreated). For
+    PICTURE_TO_QUARANTINE, ``src`` is ``"abs:<file>"``; for PICTURE_BACK, ``dst`` is
+    ``"abs:<file>"`` (the journal keeps only the plain names). For
     REMOVE_EMPTY_DIR, ``dst`` is the removed folder itself (as is the journal's), and
     ``identity`` the identity it must still have at act time (if given).
     """
@@ -103,6 +117,11 @@ class ResolvedOp:
     # MKDIR: made by a ``Plan.new_folders`` batch (its identity is recorded after the
     # act). REMOVE_EMPTY_DIR: removing such a folder (undo only).
     made: bool = False
+    # PICTURE_TO_QUARANTINE / PICTURE_BACK: "rename" (one disk) or "copy" (two disks), as
+    # decided when planned
+    method: str | None = None
+    # the sha256 of that picture, read and journaled just before acting (set by the executor)
+    content_hash: str | None = None
 
 
 @dataclass

@@ -4,23 +4,30 @@
  * loaded, and the switch for the offer to make a rule after a hand filing. Editing and
  * making a rule use the rule sheet, which asks for a replay before it saves. */
 import { ChevronDown, ChevronRight, ChevronUp, Plus, Trash2, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   errorText,
+  type ResolvedOp,
   type Rule,
   type RuleDraft,
   useDeleteRule,
   useExplain,
+  useFileSuggestions,
   useInbox,
   useMoveRule,
+  useQuarantineUnusedPictures,
   useRules,
   useRulesState,
 } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
+import { ConfirmPlan, snapshotKey } from "../PlanPreview";
+import { undoAction, useToast } from "../Toasts";
+import { useUndoConfirm } from "../UndoConfirm";
 import { IconButton } from "../ui/IconButton";
 import { Sheet } from "../ui/Sheet";
+import { SamplePage } from "../zones/SamplePage";
 import { PeopleSettings } from "./PeopleSettings";
 import { RuleSheet, rewriteNote } from "./RuleSheet";
 
@@ -54,8 +61,13 @@ function RuleLine({
   onMove: (delta: number) => void;
   onDelete: () => void;
 }) {
-  const zone = r.when.zone;
-  const words = [...r.when.text_contains, ...(zone?.text_contains ?? [])].join(", ");
+  const zones = r.when.zones;
+  const pictures = zones.filter((z) => z.image).length;
+  const words = [
+    ...r.when.text_contains,
+    ...zones.flatMap((z) => z.text_contains ?? []),
+    ...(pictures > 0 ? [pictures === 1 ? "a picture" : `${pictures} pictures`] : []),
+  ].join(", ");
   const target = r.then.folder ? `→ ${r.then.folder}` : "";
   return (
     <li className="rule-line">
@@ -63,7 +75,9 @@ function RuleLine({
         <code className="code-line-code">{visible(r.id)}</code>
         <span className="code-line-label">
           {visible(words)}
-          {zone && <span className="code-line-zone"> · area on page 1</span>}
+          {zones.length > 0 && (
+            <span className="code-line-zone"> · {zones.length === 1 ? "area" : `${zones.length} areas`} on page 1</span>
+          )}
         </span>
         <span className="code-line-summary">
           {[target, record(r.stats), r.learned ? "" : r.file].filter(Boolean).map(visible).join(" · ")}
@@ -90,11 +104,97 @@ function RuleLine({
   );
 }
 
+/** The picture files no rule uses, and "Move N unused pictures to To Delete": a dry run
+ * first (the usual plan in a confirm), then the move, then a toast with Undo. Nothing is
+ * deleted; the files wait in To Delete as ``dam rule picture <name>``. */
+function UnusedPictures({ names }: { names: string[] }) {
+  const move = useQuarantineUnusedPictures();
+  const toast = useToast();
+  const undo = useUndoConfirm();
+  const [plan, setPlan] = useState<{ names: string[]; ops: ResolvedOp[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false); // synchronous: a second click sees it at once
+
+  const guarded = async (work: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setError(null);
+    try {
+      await work();
+    } catch (e) {
+      setPlan(null);
+      setError(errorText(e));
+    } finally {
+      inFlight.current = false;
+    }
+  };
+  const preview = () =>
+    guarded(async () => {
+      const dry = await move.mutateAsync({ names, dry_run: true });
+      if (dry.error || dry.failed) throw new Error(dry.error ?? "an operation failed");
+      setPlan({ names, ops: dry.done });
+    });
+  const apply = (previewed: { names: string[]; ops: ResolvedOp[] }) =>
+    guarded(async () => {
+      setPlan(null);
+      const result = await move.mutateAsync({ names: previewed.names, dry_run: false });
+      const moved = result.done.filter((o) => o.kind === "picture_to_quarantine").length;
+      if (result.error || result.failed) {
+        setError(`Stopped after ${moved} of ${previewed.names.length}: ${result.error ?? "an operation failed"}`);
+      }
+      if (moved > 0) {
+        toast({
+          kind: "info",
+          text: `Moved ${plural(moved, "unused picture")} to To Delete`,
+          action: undoAction(() => {
+            if (undo.undoing.current) return;
+            undo.open({ batchId: result.batch_id });
+          }),
+        });
+      }
+    });
+
+  return (
+    <>
+      <p className="hint rules-unused-pictures">
+        {plural(names.length, "picture file")} in config/rules/areas ({names.map(visible).join(", ")}) {names.length === 1 ? "is" : "are"} not used by any rule. Deleting a rule leaves them.{" "}
+        <button type="button" onClick={() => void preview()} disabled={move.isPending}>
+          Move {plural(names.length, "unused picture")} to To Delete
+        </button>
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {visible(error)}
+        </p>
+      )}
+      {plan && (
+        <ConfirmPlan
+          planKey={snapshotKey(plan.names)}
+          title="Move unused pictures to To Delete?"
+          intro={<p>They wait in To Delete until you empty it, and Undo puts them back.</p>}
+          confirmLabel={`Move ${plan.names.length}`}
+          ops={plan.ops}
+          busy={move.isPending}
+          onConfirm={() => void apply(plan)}
+          onCancel={() => setPlan(null)}
+        />
+      )}
+    </>
+  );
+}
+
 function TestDocument() {
   const inbox = useInbox();
   const explain = useExplain();
   const [picked, setPicked] = useState("");
   const entries = inbox.data ?? [];
+  const sample = entries.find((e) => e.record.drive_id === picked)?.record;
+  // the address area and the person's line come with the document's suggestion
+  const suggestion = useFileSuggestions(picked, picked !== "");
+  const areas = [
+    ...(explain.data ?? []).flatMap((x) => x.areas ?? []),
+    ...(suggestion.data?.areas ?? []).filter((a) => a.kind === "address"),
+  ];
   return (
     <div className="rules-test">
       <div className="field">
@@ -126,15 +226,26 @@ function TestDocument() {
             <li key={x.rule_id}>
               <code>{visible(x.rule_id)}</code> {x.matched ? "matches" : "no match"}: {visible(x.why)}
               {x.wins.length > 0 && <> ({gives(x.wins)})</>}
-              {(x.zone_lines ?? []).length > 0 && (
-                <>
-                  {" "}
-                  Page 1 in the area: {x.zone_lines.map((l) => `“${visible(l)}”`).join(", ")}
-                </>
+              {(x.zone_lines ?? []).map((lines, i) =>
+                lines.length > 0 ? (
+                  <span key={i}>
+                    {" "}
+                    Page 1 in {x.zone_lines.length === 1 ? "the area" : `area ${i + 1}`}: {lines.map((l) => `“${visible(l)}”`).join(", ")}
+                  </span>
+                ) : null,
               )}
             </li>
           ))}
         </ul>
+      )}
+      {picked && explain.data && sample && areas.length > 0 && (
+        <SamplePage
+          driveId={sample.drive_id}
+          ext={sample.ext}
+          areas={areas}
+          person={suggestion.data?.person ?? null}
+          personLine={suggestion.data?.person_line ?? null}
+        />
       )}
     </div>
   );
@@ -234,6 +345,7 @@ export function FilingRules() {
           ))}
         </ul>
       )}
+      {(rules.data.unused_pictures ?? []).length > 0 && <UnusedPictures names={rules.data.unused_pictures ?? []} />}
       <TestDocument />
       <div className="rules-offer">
         <label className="check">
@@ -256,6 +368,7 @@ export function FilingRules() {
           key={editing.id}
           initial={editing}
           replaces={"learned" in editing ? editing.id : undefined}
+          samplePage
           onClose={() => setEditing(null)}
         />
       )}

@@ -44,7 +44,7 @@ def test_list_has_stats_file_and_state(app, api):
         "text_contains": ["fortum"],
         "filename_matches": None,
         "folder_is": None,
-        "zone": None,
+        "zones": [],
         "person": None,
     }
     assert r["then"]["tags"] == ["bill"]

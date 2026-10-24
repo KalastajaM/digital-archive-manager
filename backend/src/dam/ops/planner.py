@@ -5,14 +5,17 @@ Nothing here touches the disk except to read it.
 
 import dataclasses
 import os
+import stat
 from pathlib import Path, PurePosixPath
 
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.naming import unique_name
 from dam.core.paths import ArchivePaths
 from dam.index.driveid import read_drive_id
+from dam.ops import primitives
 from dam.ops.guards import (
     canonical,
+    check_areas_source,
     fold_parts,
     is_abs_target,
     is_under,
@@ -23,12 +26,18 @@ from dam.ops.guards import (
     touches_protected,
     validate,
 )
-from dam.ops.model import GuardError, Op, OpKind, Plan, ResolvedOp
-from dam.ops.primitives import DS_STORE  # the only entry REMOVE_EMPTY_DIR may delete
+from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind, Plan, ResolvedOp
+from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME
 
 _EXACT_SOURCE = {OpKind.QUARANTINE, OpKind.REMOVE_EMPTY_DIR}  # never follow a redirect
 
+# ops whose source is not (only) an archive path: COPY and PICTURE_TO_QUARANTINE read an
+# "abs:" file; PICTURE_BACK is handled by its own case (its source is in the archive)
+_OUTSIDE_SOURCE = {OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE}
+
 COLLISION_NOTE = "renamed to avoid collision"
+COPY_NOTE = "copied, then removed from dam's settings folder"
+COPY_BACK_NOTE = "copied back; the copy in To Delete stays"
 MKDIR_NOTE = "create missing folder"
 
 
@@ -165,8 +174,9 @@ class _Sim:
 
 
 class Planner:
-    def __init__(self, paths: ArchivePaths) -> None:
+    def __init__(self, paths: ArchivePaths, areas_dir: Path | None = None) -> None:
         self.paths = paths
+        self.areas_dir = areas_dir  # the rules' picture folder (PICTURE_* ops only)
 
     def resolve(self, plan: Plan, *, restore: bool = False) -> list[ResolvedOp]:
         """``restore``: only for plans built by ``dam.ops.undo`` (see ``validate``)."""
@@ -181,7 +191,7 @@ class Planner:
         for op in ops:
             validate(op, self.paths, restore=restore)
             redirect = None
-            if op.kind is not OpKind.COPY and op.src is not None and not is_abs_target(op):
+            if op.kind not in _OUTSIDE_SOURCE and op.src is not None and not is_abs_target(op):
                 src = self.sim.spell(canonical(op.src, self.paths))
                 src, redirect = self._alias(src)
                 if redirect is not None and op.kind in _EXACT_SOURCE:
@@ -345,6 +355,71 @@ class Planner:
         self.sim.events.append(("move", src, dst))
         self._track_protected(src, dst)
 
+    def _areas(self) -> Path:
+        if self.areas_dir is None:
+            raise GuardError("The rules' picture folder is not known here, so no picture is moved.")
+        return Path(self.areas_dir)
+
+    def _picture_to_quarantine(self, op: Op) -> None:
+        """A regular file directly in the rules' areas folder into the quarantine folder
+        (made if missing, as for QUARANTINE), under a free variant of ``op.name``."""
+        areas = self._areas()
+        source = Path(op.src[len(ABS_TARGET) :])
+        check_areas_source(source, areas)
+        folder = self.sim.spell(canonical(op.dst, self.paths))
+        self._ensure_folder(folder, False, quarantine_root=True)
+        # a rename works only on one disk: look at the folder, or at what holds it
+        disk = self.paths.root / folder
+        while not os.path.lexists(disk) and disk != disk.parent:
+            disk = disk.parent
+        method = PICTURE_RENAME if primitives.same_disk(areas, disk) else PICTURE_COPY
+        name = self.sim.free_name(folder, op.name)
+        dst = join(folder, name)
+        notes = [COLLISION_NOTE] if name != op.name else []
+        if method == PICTURE_COPY:
+            notes.append(COPY_NOTE)
+        self.out.append(
+            ResolvedOp(op.kind, op.src, dst, None, "; ".join(notes) or None, method=method)
+        )
+        self.sim.events.append(("create", dst, "file"))
+
+    def _picture_back(self, op: Op) -> None:
+        """Undo of the above: the file in the quarantine folder back to its plain name in
+        the areas folder, refused when that name is taken or the folder is gone."""
+        areas = self._areas()
+        src = op.src
+        self._require_src(src, kinds=("file",))
+        target = areas / op.dst
+        try:
+            folder = os.lstat(areas)
+        except OSError:
+            raise GuardError(
+                "The rules' picture folder is gone, so the picture cannot go back."
+            ) from None
+        if stat.S_ISLNK(folder.st_mode) or not stat.S_ISDIR(folder.st_mode):
+            raise GuardError(
+                "the rules' areas folder is not a real folder (links are not followed)"
+            )
+        if os.path.lexists(target):
+            raise GuardError(
+                f"cannot put {op.dst!r} back: a picture with that name is already in the"
+                " rules' areas folder"
+            )
+        disk = self.sim.disk_path(src)
+        copy = disk is not None and not primitives.same_disk(areas, disk)
+        self.out.append(
+            ResolvedOp(
+                op.kind,
+                src,
+                f"{ABS_TARGET}{target}",
+                None,
+                COPY_BACK_NOTE if copy else None,
+                method=PICTURE_COPY if copy else PICTURE_RENAME,
+            )
+        )
+        if not copy:  # a copy back leaves the file in the quarantine folder
+            self.sim.events.append(("remove", src))
+
     def _resolve_one(self, op: Op) -> None:
         paths = self.paths
         match op.kind:
@@ -372,6 +447,10 @@ class Planner:
                 note = COLLISION_NOTE if name != op.name else None
                 self.out.append(ResolvedOp(op.kind, op.src, dst, None, note))
                 self.sim.events.append(("create", dst, "file"))
+            case OpKind.PICTURE_TO_QUARANTINE:
+                self._picture_to_quarantine(op)
+            case OpKind.PICTURE_BACK:
+                self._picture_back(op)
             case OpKind.SYMLINK:
                 outside = is_abs_target(op)  # only in undo restores (guards); never looked at
                 if not outside:
