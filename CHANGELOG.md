@@ -16,8 +16,11 @@ All notable changes are listed here. The format follows
   slightly crooked. Page 1 pictures are kept as small grayscale files in the cache
   folder, never in the archive; the picture of an area is kept with your rules, in
   `config/rules/areas`. Moving a picture area cuts it again from the document you moved
-  it on. Settings lists picture files that no rule uses any more. A picture area must be at least
-  1% of the page wide and high; smaller ones are refused.
+  it on. Settings lists picture files that no rule uses any more, and **Move N unused
+  pictures to To Delete** puts them in `##. To Delete` as `dam rule picture <name>.png`,
+  after a preview, with Undo (it puts them back, and refuses if the name is taken again).
+  Only pictures no rule uses can be moved, and dam never deletes them. A picture area must
+  be at least 1% of the page wide and high; smaller ones are refused.
 - A rule can need several areas of page 1, such as "Pohjola in the letterhead" and
   "vakuutuskirja in the title", so each kind of letter from a sender files to its own
   place. In Draw a box, **Add another box** keeps a box and lets you draw the next; the
