@@ -35,14 +35,21 @@ def two_zones(first="pohjola", second="maksu", **extra):
 # --- the model ---------------------------------------------------------------------
 
 
-def test_a_zone_with_a_picture_is_refused_for_now_with_a_clear_message():
-    with pytest.raises(ValueError, match="picture areas are not supported yet"):
-        Rule.model_validate(
-            {
-                "id": "x",
-                "when": {"zones": [{"box": [0.1, 0.1, 0.2, 0.2], "image": "areas/x-1.png"}]},
-            }
-        )
+def test_a_zone_with_a_picture_is_accepted_and_keeps_its_place_among_the_others():
+    rule = Rule.model_validate(
+        {
+            "id": "x",
+            "when": {
+                "zones": [
+                    {"box": [0.1, 0.1, 0.2, 0.2], "image": "areas/x-1.png"},
+                    {"box": [0.3, 0.1, 0.5, 0.2], "text_contains": ["lasku"]},
+                ]
+            },
+        }
+    )
+    assert [z.is_picture for z in rule.when.zones] == [True, False]
+    # the words of a picture area are none: the text check ignores it
+    assert rule._folded_zones == [[], ["lasku"]]
 
 
 def test_a_zone_needs_words_and_cannot_have_both():

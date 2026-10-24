@@ -24,6 +24,8 @@ from pydantic import (
     model_validator,
 )
 
+from dam.rules.picture import DEFAULT_MIN_SCORE, check_image_path
+
 
 def fold(s: str) -> str:
     """Case- and diacritics-insensitive form: NFKD, drop combining marks, casefold."""
@@ -36,13 +38,16 @@ class Zone(BaseModel):
     fractions of the page, origin top left. Exactly one of ``text_contains`` (words: a line
     of page 1 in the box has one of them; a line lies in the box when at least half of it is
     inside the box grown by a small margin, ``dam.extract.layout.ZONE_MARGIN``) or ``image``
-    (a picture of the area, kept for later: not accepted yet)."""
+    (a picture area: ``areas/<name>.png``, a grayscale crop of the area kept in the rules'
+    ``areas`` folder, ``dam.rules.picture``; it matches when its best score on page 1 is at
+    least ``min_score``, ``DEFAULT_MIN_SCORE`` when that is not given)."""
 
     model_config = ConfigDict(extra="forbid")
 
     box: tuple[float, float, float, float]
     text_contains: list[str] | None = None
     image: str | None = None
+    min_score: float | None = None
 
     @field_validator("box")
     @classmethod
@@ -59,12 +64,26 @@ class Zone(BaseModel):
         if self.image is not None:
             if self.text_contains is not None:
                 raise ValueError("an area has words (text_contains) or a picture (image), not both")
-            raise ValueError("picture areas are not supported yet; give text_contains")
+            check_image_path(self.image)
+            if self.min_score is not None and not 0 < self.min_score <= 1:
+                raise ValueError("min_score must be above 0 and at most 1")
+            return self
+        if self.min_score is not None:
+            raise ValueError("min_score is for a picture area (image)")
         if not self.text_contains:
             raise ValueError("an area needs at least one word in text_contains")
         if any(not t.strip() for t in self.text_contains):
             raise ValueError("text_contains entries must not be blank")
         return self
+
+    @property
+    def is_picture(self) -> bool:
+        return self.image is not None
+
+    @property
+    def threshold(self) -> float:
+        """The score a picture area needs."""
+        return self.min_score if self.min_score is not None else DEFAULT_MIN_SCORE
 
 
 class When(BaseModel):
@@ -181,7 +200,7 @@ def _format_validation(e: ValidationError) -> str:
 
 LEARNED_FILE = "learned.yaml"  # rules made in the app; read before every other file
 # rule ids the API cannot take: they are fixed routes under ``/api/rules``
-RESERVED_IDS = frozenset({"state", "replay", "explain", "draft-zone"})
+RESERVED_IDS = frozenset({"state", "replay", "explain", "draft-zone", "area-picture", "areas"})
 
 MAX_CONFIG_BYTES = 256 * 1024
 TOO_DEEP_MESSAGE = "file skipped: too deeply nested or too large to load"

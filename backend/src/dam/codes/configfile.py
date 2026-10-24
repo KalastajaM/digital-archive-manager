@@ -14,6 +14,26 @@ def write_config_file(path: Path, text: str, verify: Callable[[], bool]) -> None
     anything raises, the old content is written back (an empty file when there was none:
     files are never deleted) and the error is raised (``OSError`` for a failed check). If
     the restore fails too, that is logged and the original error is still raised."""
+
+    def write() -> None:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+
+    _replace(path, write, verify)
+
+
+def write_config_bytes(path: Path, data: bytes, verify: Callable[[], bool]) -> None:
+    """``write_config_file`` for a file that is not text (a picture): the same backup, read
+    back and restore."""
+
+    def write() -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+
+    _replace(path, write, verify)
+
+
+def _replace(path: Path, write: Callable[[], None], verify: Callable[[], bool]) -> None:
     original = path.read_bytes() if path.exists() else None
     if original is not None:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -24,8 +44,7 @@ def write_config_file(path: Path, text: str, verify: Callable[[], bool]) -> None
             pass  # a backup from this very second exists already
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
+        write()
         if not verify():
             raise OSError(f"{path.name} did not read back as written")
     except Exception:

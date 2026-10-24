@@ -2287,6 +2287,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rules/area-picture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Area Picture
+         * @description The picture of a box drawn on page 1, cut from the document's page-1 picture (in the
+         *     cache: the archive is not read), to show before it is kept. With ``save`` and a
+         *     ``rule_id`` it is also saved as ``areas/<rule-id>-<n>.png`` next to the rules and
+         *     ``image`` names it. 400 when the box is bad or the picture is not made yet (it is queued),
+         *     404 for an unknown document.
+         */
+        post: operations["area_picture_api_rules_area_picture_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/areas/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Area File
+         * @description A saved picture of a picture area (a file in ``config/rules/areas``).
+         */
+        get: operations["area_file_api_rules_areas__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rules/explain": {
         parameters: {
             query?: never;
@@ -2931,6 +2975,40 @@ export interface components {
              * @default false
              */
             wins: boolean;
+        };
+        /**
+         * AreaPictureIn
+         * @description Cut the picture of ``box`` (fractions of page 1) from the document's page-1 picture.
+         *     With ``save`` (and the rule's id, for the file name) it is also kept in
+         *     ``config/rules/areas`` and the answer names it.
+         */
+        AreaPictureIn: {
+            /** Drive Id */
+            drive_id: string;
+            /** Box */
+            box: number[];
+            /**
+             * Save
+             * @default false
+             */
+            save: boolean;
+            /** Rule Id */
+            rule_id?: string | null;
+        };
+        /**
+         * AreaPictureOut
+         * @description The crop: 8-bit grayscale, its long side at most 300 px; ``png`` is base64.
+         *     ``image`` is the path for a zone's ``image`` once it is saved, else null.
+         */
+        AreaPictureOut: {
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Png */
+            png: string;
+            /** Image */
+            image?: string | null;
         };
         /**
          * AssignmentOut
@@ -4497,6 +4575,19 @@ export interface components {
             box: number[];
         };
         /**
+         * PictureScoreOut
+         * @description How well page 1 of a document matched a rule's picture areas (the lowest score of
+         *     them) and whether the rule matched it.
+         */
+        PictureScoreOut: {
+            /** Path */
+            path: string;
+            /** Score */
+            score: number;
+            /** Matched */
+            matched: boolean;
+        };
+        /**
          * PreparedOut
          * @description Exactly what ``run`` would send (the sheet shows ``payload_text``), the model,
          *     the worst-case estimate, why it is blocked (or null) and the token for ``run``.
@@ -4668,6 +4759,11 @@ export interface components {
             /** Reading */
             reading: number;
             marked?: components["schemas"]["MarkedOut"] | null;
+            /**
+             * Scores
+             * @default []
+             */
+            scores: components["schemas"]["PictureScoreOut"][];
         };
         /** ResolvedOpOut */
         ResolvedOpOut: {
@@ -4886,6 +4982,16 @@ export interface components {
             /** Errors */
             errors: components["schemas"]["RuleErrorOut"][];
             state: components["schemas"]["RulesStateOut"];
+            /**
+             * Unused Pictures
+             * @default []
+             */
+            unused_pictures: string[];
+            /**
+             * Default Min Score
+             * @default 0.85
+             */
+            default_min_score: number;
         };
         /** RulesStateIn */
         RulesStateIn: {
@@ -5541,7 +5647,9 @@ export interface components {
             /** Drive Id */
             drive_id: string;
             /** Boxes */
-            boxes: number[][];
+            boxes?: number[][];
+            /** Picture Boxes */
+            picture_boxes?: number[][];
             /** Sender */
             sender?: string | null;
         };
@@ -5570,6 +5678,11 @@ export interface components {
             payee: string | null;
             /** Zones */
             zones: components["schemas"]["ZoneDraftAreaOut"][];
+            /**
+             * Pictures
+             * @default []
+             */
+            pictures: components["schemas"]["ZoneDraftPictureOut"][];
             /** Folder Is */
             folder_is: string | null;
             /** Sender */
@@ -5578,10 +5691,28 @@ export interface components {
             place_above: string | null;
         };
         /**
+         * ZoneDraftPictureOut
+         * @description A picture box of a draft: ``image`` is the saved crop (the zone's ``image``), ``png``
+         *     the same picture in base64 to show.
+         */
+        ZoneDraftPictureOut: {
+            /** Box */
+            box: number[];
+            /** Image */
+            image: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Png */
+            png: string;
+        };
+        /**
          * ZoneIn
          * @description An area of page 1: ``box`` is [x0, y0, x1, y1] as fractions of the page, origin top
-         *     left. It has words (``text_contains``) or, later, a picture (``image``): exactly one
-         *     (``image`` is refused for now).
+         *     left. It has words (``text_contains``) or a picture (``image``, ``areas/<name>.png``
+         *     from ``POST /api/rules/area-picture``): exactly one. ``min_score`` (a picture's, 0 to 1)
+         *     is the score the picture needs; left out, the default (0.85).
          */
         ZoneIn: {
             /** Box */
@@ -5590,6 +5721,8 @@ export interface components {
             text_contains?: string[] | null;
             /** Image */
             image?: string | null;
+            /** Min Score */
+            min_score?: number | null;
         };
         /** ZoneOut */
         ZoneOut: {
@@ -5599,6 +5732,8 @@ export interface components {
             text_contains: string[] | null;
             /** Image */
             image: string | null;
+            /** Min Score */
+            min_score?: number | null;
         };
     };
     responses: never;
@@ -17770,6 +17905,194 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ZoneDraftOut"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    area_picture_api_rules_area_picture_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaPictureIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreaPictureOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    area_file_api_rules_areas__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

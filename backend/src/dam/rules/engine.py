@@ -16,6 +16,7 @@ from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.rules.fields import DetectedFields, detect_fields
 from dam.rules.model import Rule, fold
 from dam.rules.people import PeopleContext, detect_people, person_line, pick_person
+from dam.rules.picture import Match, Pictures
 
 _COPY_MARKER = re.compile(r"(?:\s*\(\d{1,3}\))+\s*$")
 _ALLOWED_KEYS = frozenset({"doc_date", "year", "stem", "person"})
@@ -40,9 +41,10 @@ class CodeHit:
 @dataclass
 class Area:
     """An area of page 1 that took part in a rule or in finding the person, for drawing on
-    the page. ``kind``: "text" (a rule's words), "image" (a rule's picture, later) or
+    the page. ``kind``: "text" (a rule's words), "image" (a rule's picture) or
     "address" (where people are looked for: ``rule_id`` is "" for the archive's own area).
-    ``lines``: boxes of the lines that matched (the person's line for an address area).
+    ``lines``: boxes of the lines that matched (the person's line for an address area; for a
+    picture the place where it fits best).
     ``matched``: the rule matched the document; ``reason``: why this area or its rule did
     not (a short phrase); ``wins``: the rule gave the document its folder or name;
     ``score``: for a picture, how well it matched (0 to 1)."""
@@ -213,11 +215,24 @@ class Check:
     matched: bool = False
     timed_out: bool = False
     # every other condition matched but the rule's page-1 area (or the person it needs)
-    # could not be checked, because page 1 of this file has not been read yet
+    # could not be checked, because page 1 of this file has not been read yet (or its
+    # picture has not been made)
     waiting: bool = False
     # every other condition matched, but ``when.person`` has no person to compare (none
     # found on page 1, or several, or a file with no page 1): neither a match nor a mismatch
     person_unknown: bool = False
+    # the lowest score of the rule's picture areas, when they were looked at (also when the
+    # rule did not match because of it): the replay shows how well matches and non-matches
+    # are told apart
+    picture_score: float | None = None
+
+
+def has_text_zones(rule: Rule) -> bool:
+    return any(not z.is_picture for z in rule.when.zones)
+
+
+def has_picture_zones(rule: Rule) -> bool:
+    return any(z.is_picture for z in rule.when.zones)
 
 
 def zone_hits(rule: Rule, index: int, layout: Page1Layout) -> list[Line]:
@@ -239,12 +254,31 @@ def zone_matches(rule: Rule, index: int, layout: Page1Layout) -> bool:
 def zones_in_text(rule: Rule, folded_text: str) -> bool:
     """Every text zone has one of its words in the document's text. Page 1's lines are
     part of the indexed text, so a zone whose words are not there cannot match."""
-    return all(any(t in folded_text for t in terms) for terms in rule._folded_zones)
+    return all(
+        any(t in folded_text for t in terms)
+        for zone, terms in zip(rule.when.zones, rule._folded_zones, strict=True)
+        if not zone.is_picture
+    )
 
 
 def zones_match(rule: Rule, layout: Page1Layout) -> bool:
-    """Every zone matches page 1."""
-    return all(zone_matches(rule, i, layout) for i in range(len(rule.when.zones)))
+    """Every text zone matches page 1."""
+    return all(
+        zone_matches(rule, i, layout)
+        for i, zone in enumerate(rule.when.zones)
+        if not zone.is_picture
+    )
+
+
+def picture_match(
+    rule: Rule, index: int, rec: FileRecord, pictures: Pictures | None
+) -> Match | None:
+    """How well the picture of the rule's zone ``index`` appears on page 1 of ``rec``;
+    None when that cannot be told yet (no page-1 picture made, or no picture support)."""
+    zone = rule.when.zones[index]
+    if pictures is None or zone.image is None:
+        return None
+    return pictures.match(zone.image, zone.box, rec.drive_id, rec.sha256)
 
 
 def rule_areas(
@@ -254,15 +288,44 @@ def rule_areas(
     matched: bool = True,
     wins: bool = False,
     why: str | None = None,
+    rec: FileRecord | None = None,
+    pictures: Pictures | None = None,
 ) -> list[Area]:
-    """The areas of ``rule`` for drawing: the matched lines of each text zone. For a rule
-    that did not match, ``why`` is the reason shown for every area that matched itself;
-    an area that did not match says so itself."""
+    """The areas of ``rule`` for drawing: the matched lines of each text zone, the best
+    place and the score of each picture zone (``rec`` and ``pictures`` look at the
+    document's page-1 picture). For a rule that did not match, ``why`` is the reason shown
+    for every area that matched itself; an area that did not match says so itself."""
     out: list[Area] = []
     many = len(rule.when.zones) > 1
     for i, zone in enumerate(rule.when.zones):
         reason = None
         lines: list[Box] = []
+        if zone.is_picture:
+            found = picture_match(rule, i, rec, pictures) if rec is not None else None
+            score = None
+            if found is None:
+                reason = "the picture of page 1 is not made yet"
+            else:
+                score = found.score
+                lines = [found.box] if found.box is not None else []
+                if found.score < zone.threshold:
+                    reason = f"picture {found.score:.2f}, needs {zone.threshold:.2f}"
+            if reason is None and not matched:
+                reason = why
+            out.append(
+                Area(
+                    rule.id,
+                    i,
+                    zone.box,
+                    "image",
+                    lines,
+                    score=score,
+                    matched=matched,
+                    reason=reason,
+                    wins=wins,
+                )
+            )
+            continue
         if layout is None:
             reason = "page 1 has not been read yet"
         else:
@@ -294,12 +357,16 @@ def check(
     inbox_alias: str | None = None,
     layout: Page1Layout | None = None,
     people: PeopleContext | None = None,
+    pictures: Pictures | None = None,
 ) -> Check:
     """Does ``rule`` match? ``folder_is`` matches the file's real folder, or
     ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder). A rule with a
     ``zones`` need ``layout`` (page 1's lines); without one it does not match, and
-    ``waiting`` says whether reading page 1 could change that."""
+    ``waiting`` says whether reading page 1 could change that. A picture zone is looked at
+    in ``pictures`` (page-1 pictures from the cache), last, after every cheaper condition;
+    a document with no page-1 picture yet is waiting for it, like a missing layout."""
     when = rule.when
+    score: float | None = None
     if when.folder_is is not None:
         want = nfc(when.folder_is).strip("/").casefold()
         here = {nfc(_parent(rec.path)).casefold()}
@@ -320,19 +387,30 @@ def check(
         # and nothing to wait for
         if not zones_in_text(rule, folded_text):
             return Check()
-        if layout is None:
-            return Check(waiting=(rec.ext or "").lower() in BARCODE_EXTS)
-        if not zones_match(rule, layout):
-            return Check()
+        on_page1 = (rec.ext or "").lower() in BARCODE_EXTS
+        if has_text_zones(rule):
+            if layout is None:
+                return Check(waiting=on_page1)
+            if not zones_match(rule, layout):
+                return Check()
+        for i, zone in enumerate(when.zones):
+            if not zone.is_picture:
+                continue
+            found = picture_match(rule, i, rec, pictures)
+            if found is None:
+                return Check(waiting=on_page1)
+            score = found.score if score is None else min(score, found.score)
+            if found.score < zone.threshold:
+                return Check(picture_score=score)
     if when.person is not None:
         mine = person_for(people, layout, rule)
         if mine.name is None:
             if layout is None and (rec.ext or "").lower() in BARCODE_EXTS:
                 return Check(waiting=True)  # who it is for is on page 1, not read yet
-            return Check(person_unknown=True)
+            return Check(person_unknown=True, picture_score=score)
         if fold(mine.name) != fold(when.person):
-            return Check()
-    return Check(matched=True)
+            return Check(picture_score=score)
+    return Check(matched=True, picture_score=score)
 
 
 def _matches(
@@ -342,9 +420,10 @@ def _matches(
     inbox_alias: str | None = None,
     layout: Page1Layout | None = None,
     people: PeopleContext | None = None,
+    pictures: Pictures | None = None,
 ) -> tuple[bool, bool]:
     """Return ``(matched, regex_timed_out)`` (see ``check``)."""
-    c = check(rule, rec, folded_text, inbox_alias, layout, people)
+    c = check(rule, rec, folded_text, inbox_alias, layout, people, pictures)
     return c.matched, c.timed_out
 
 
@@ -438,12 +517,14 @@ def suggest(
     inbox_alias: str | None = None,
     layout: Page1Layout | None = None,
     people: PeopleContext | None = None,
+    pictures: Pictures | None = None,
 ) -> Suggestion:
     """``inbox_alias``: for a file directly in a filing code's inbox folder, the inbox,
     so a rule whose ``folder_is`` is the inbox matches it as well (a rule naming the
     code's folder itself still matches only that folder). ``layout``: page 1's lines,
     for rules with ``zones``. ``people``: the people list, the address zone and the
-    document's assigned person, for ``{person}`` and ``when.person``."""
+    document's assigned person, for ``{person}`` and ``when.person``. ``pictures``: the
+    page-1 pictures, for rules with picture areas."""
     special = special or SpecialFolders()
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
@@ -471,7 +552,7 @@ def suggest(
     matching: list[Rule] = []
     waiting = False
     for r in rules:
-        c = check(r, rec, folded_text, inbox_alias, layout, people)
+        c = check(r, rec, folded_text, inbox_alias, layout, people, pictures)
         if c.timed_out:
             sources.append(f"rule:{r.id} (regex timeout)")
         elif c.matched:
@@ -523,7 +604,11 @@ def suggest(
     who = person_for(people, layout, person_rule)
 
     winners = {r.id for r in (folder_rule, name_rule) if r is not None}
-    areas = [a for r in matching for a in rule_areas(r, layout, wins=r.id in winners)]
+    areas = [
+        a
+        for r in matching
+        for a in rule_areas(r, layout, wins=r.id in winners, rec=rec, pictures=pictures)
+    ]
     if layout is not None and people is not None and people.people and who.zone is not None:
         areas.append(
             Area(
