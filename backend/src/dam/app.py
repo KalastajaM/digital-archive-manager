@@ -212,6 +212,7 @@ class App:
         self.launch = LaunchService(self.paths)
         self.previews = PreviewService(self.paths, self.app_paths.cache_dir / "thumbs")
         self.content.barcode_trays = self.barcode_trays
+        self.content.thumbs = self.pictures.thumbs
         self.content.page1_backfill = lambda: self.settings.page1_backfill
         # DAM_AI_FAKE=1 (demos, tests): a deterministic provider that counts as a key
         provider = None

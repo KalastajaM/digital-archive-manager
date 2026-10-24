@@ -4854,6 +4854,11 @@ export interface components {
             reading: number;
             /** Next After */
             next_after?: string | null;
+            /**
+             * Looked At
+             * @default 0
+             */
+            looked_at: number;
             marked?: components["schemas"]["MarkedOut"] | null;
             /**
              * Scores
@@ -4991,6 +4996,8 @@ export interface components {
             place_above?: string | null;
             /** After */
             after?: string | null;
+            /** Near Drive Id */
+            near_drive_id?: string | null;
         };
         /**
          * RuleSampleOut

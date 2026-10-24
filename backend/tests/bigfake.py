@@ -75,6 +75,7 @@ class Fake:
     special: SpecialFolders
     n_files: int
     kela_ids: list[str]
+    logo_ids: set[str]  # the ones whose page-1 picture has the logo (the crop is cut from it)
     text_bytes: int
     layouts: int
 
@@ -147,6 +148,7 @@ def build(
     blobs = _blobs(rnd)
     file_rows, text_rows, layout_rows = [], [], []
     kela_ids: list[str] = []
+    logo_ids: set[str] = set()
     text_bytes = layouts = 0
     n_media = int(n_files * 0.82)
     for i in range(n_files):
@@ -198,7 +200,10 @@ def build(
                     read_at=1.7e9,
                 )
             )  # fmt: skip
-            variant = variants[rnd.randrange(6)] if is_kela else variants[rnd.randrange(12)]
+            which = rnd.randrange(6) if is_kela else rnd.randrange(12)
+            variant = variants[which]
+            if which < 6:
+                logo_ids.add(drive_id)
             p = picture_path(cache_dir, drive_id, sha)
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(variant)
@@ -220,7 +225,7 @@ def build(
     pictures = Pictures(lambda: rules_dir, cache_dir)
     return Fake(
         root, engine, cache_dir, rules_dir, repo, pictures, special, n_files, kela_ids,
-        text_bytes, layouts,
+        logo_ids, text_bytes, layouts,
     )  # fmt: skip
 
 
@@ -277,6 +282,21 @@ def main() -> None:
                 f"not_checked {len(r.not_checked)}"
             )
             print("    " + run.timings.summary(total))
+        # how soon real matches show up: ranked order against path order
+        rule = rules()["c_text_picture"]
+        for label, ranked in (("path order", False), ("ranked", True)):
+            run = ReplayRun(
+                fake.engine, rule, [rule], fake.special,
+                layouts_for=fake.repo.layouts_for, pictures=fake.pictures,
+            )  # fmt: skip
+            if not ranked:
+                run.rows.sort(key=lambda r: r.path)
+            t = time.perf_counter()
+            run.advance(stop=lambda run=run: run.matched >= 5)
+            print(
+                f"5 matches, {label:10s}: after {run.looked_at} documents, "
+                f"{time.perf_counter() - t:.2f} s"
+            )
         fake.engine.dispose()
 
 

@@ -1522,18 +1522,22 @@ export const useReplay = () =>
       replaces,
       placeAbove,
       after,
+      nearDriveId,
     }: {
       rule: RuleIn;
       replaces?: string | null;
       placeAbove?: string | null;
-      /** go on after this path (the ``next_after`` of a replay that stopped at its time budget) */
+      /** go on from this cursor (the ``next_after`` of a replay that stopped at its time budget) */
       after?: string | null;
+      /** the document the areas were drawn on: the documents in its folder are tested early */
+      nearDriveId?: string | null;
     }) =>
       post<Replay>("/api/rules/replay", {
         rule,
         replaces: replaces ?? null,
         place_above: placeAbove ?? null,
         after: after ?? null,
+        near_drive_id: nearDriveId ?? null,
       }),
   });
 

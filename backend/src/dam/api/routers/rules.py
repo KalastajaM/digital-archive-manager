@@ -34,7 +34,7 @@ from dam.rules import state as rules_state
 from dam.rules.learned import learned_ids, rule_file
 from dam.rules.model import LEARNED_FILE, RESERVED_IDS, Rule
 from dam.rules.picture import DEFAULT_MIN_SCORE
-from dam.rules.replay import explain, replay, without_folder
+from dam.rules.replay import StaleCursor, explain, folder_of, replay, without_folder
 from dam.services.area_pictures import check_pictures_exist
 from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleStats
@@ -96,6 +96,35 @@ def list_rules(app: AppDep) -> dict:
 def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
     """What the rule would have done to the files already filed. ``replaces`` puts it
     where that rule stands, otherwise where a new rule is saved. Changes nothing."""
+    rule, order = _placed(app, body)
+    near = app.repo.get(body.near_drive_id) if body.near_drive_id else None
+    try:
+        result = replay(
+            app.engine,
+            rule,
+            order,
+            app.settings.special_folders,
+            inbox_code_of=app.repo.inbox_code_of,
+            layouts_for=app.repo.layouts_for,
+            want_layouts=app.content.want_layouts,
+            layout_blocked=app.content.layout_blocked,
+            people=app.settings.people,
+            address_zone=app.settings.address_zone,
+            assigned_persons=app.assignments.persons,
+            sender_ids=app.assignments.with_sender,
+            pictures=app.pictures,
+            after=body.after,
+            near_folder=folder_of(near.path) if near is not None else None,
+        )
+    except StaleCursor as e:
+        raise InvalidRequest(str(e)) from e
+    if result.reading:
+        app.wake_indexer()  # the layout pass reads what the rule needs next
+    return _replay_out(result)
+
+
+def _placed(app: App, body: RuleReplayIn) -> tuple[Rule, list[Rule]]:
+    """The rule of a replay request and the load order with it in its place."""
     rule = _rule(body.rule)
     order = list(app.rules)
     if body.replaces is not None:
@@ -111,24 +140,10 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
         else:
             last = max((i for i, r in enumerate(order) if r.id in learned), default=-1)
             order.insert(last + 1, rule)
-    result = replay(
-        app.engine,
-        rule,
-        order,
-        app.settings.special_folders,
-        inbox_code_of=app.repo.inbox_code_of,
-        layouts_for=app.repo.layouts_for,
-        want_layouts=app.content.want_layouts,
-        layout_blocked=app.content.layout_blocked,
-        people=app.settings.people,
-        address_zone=app.settings.address_zone,
-        assigned_persons=app.assignments.persons,
-        sender_ids=app.assignments.with_sender,
-        pictures=app.pictures,
-        after=body.after,
-    )
-    if result.reading:
-        app.wake_indexer()  # the layout pass reads what the rule needs next
+    return rule, order
+
+
+def _replay_out(result) -> dict:
     out = asdict(result)
     out["shadowed"] = [{"drive_id": d, "rule_id": r} for d, r in result.shadowed]
     return out

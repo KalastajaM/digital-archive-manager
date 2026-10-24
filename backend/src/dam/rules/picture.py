@@ -26,7 +26,15 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 from dam.extract.layout import Box, clamp_box
-from dam.extract.picture import PICTURE_PAGE_WIDTH, picture_path
+from dam.extract.picture import (
+    PICTURE_PAGE_WIDTH,
+    THUMB_H,
+    THUMB_W,
+    PageThumbs,
+    have_pictures,
+    picture_name,
+    picture_path,
+)
 from dam.rules.timings import Timings
 
 DEFAULT_MIN_SCORE = 0.85
@@ -293,6 +301,46 @@ def _match_window(
     return Match(round(score, 4), found)
 
 
+# -- a coarse ranking from the thumbnails ----------------------------------------------------
+
+
+def coarse_scores(template: Template, thumbs: np.ndarray, present: np.ndarray) -> np.ndarray:
+    """A rough score (0 to 1) of every page for the template, from the thumbnails
+    (``PageThumbs.get_many``) in one numpy operation: the best normalised correlation of
+    the crop, reduced to the size of its box in a thumbnail, over the same search window as
+    the precise match. A page without a thumbnail scores -1. It only orders the documents:
+    the precise match still decides."""
+    n = len(thumbs)
+    out = np.full(n, -1.0, dtype=np.float32)
+    x0, y0, x1, y1 = template.box
+    tw = max(2, round((x1 - x0) * THUMB_W))
+    th = max(2, round((y1 - y0) * THUMB_H))
+    wx0, wy0, wx1, wy1 = _window_bounds(template.box, THUMB_W, THUMB_H)
+    wx1, wy1 = max(wx1, wx0 + tw), max(wy1, wy0 + th)
+    wx1, wy1 = min(wx1, THUMB_W), min(wy1, THUMB_H)
+    if wx1 - wx0 < tw or wy1 - wy0 < th or n == 0 or template.flat:
+        return np.where(present, 0.0, -1.0).astype(np.float32)
+    t = np.asarray(template.crop.resize((tw, th), Image.Resampling.BOX), dtype=np.float32)
+    t = t - t.mean()
+    t_norm = float(np.sqrt((t * t).sum()))
+    if t_norm < 1e-3:
+        return np.where(present, 0.0, -1.0).astype(np.float32)
+    count = tw * th
+    for start in range(0, n, 1000):
+        stop = min(n, start + 1000)
+        window = thumbs[start:stop, wy0:wy1, wx0:wx1].astype(np.float32)
+        patches = np.lib.stride_tricks.sliding_window_view(window, (th, tw), axis=(1, 2))
+        corr = np.einsum("nijhw,hw->nij", patches, t, optimize=True)
+        total = patches.sum(axis=(3, 4))
+        total_sq = np.einsum("nijhw,nijhw->nij", patches, patches, optimize=True)
+        var = total_sq - total * total / count
+        ok = var > 1e-3 * count
+        ncc = np.zeros_like(corr)
+        np.divide(corr, np.sqrt(np.where(ok, var, 1.0)) * t_norm, out=ncc, where=ok)
+        out[start:stop] = ncc.reshape(stop - start, -1).max(axis=1)
+    return np.where(present, np.clip(out, 0.0, 1.0), -1.0).astype(np.float32)
+
+
 # -- what a check uses -------------------------------------------------------------------
 
 
@@ -331,6 +379,10 @@ class Pictures:
     _pages: _Lru = field(default_factory=lambda: _Lru(6), repr=False)
     _templates: _Lru = field(default_factory=lambda: _Lru(64), repr=False)
     _scores: _Lru = field(default_factory=lambda: _Lru(20000), repr=False)
+    thumbs: PageThumbs = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.thumbs = PageThumbs(self.cache_dir)
 
     def has_page(self, drive_id: str, sha256: str | None) -> bool:
         return bool(sha256) and picture_path(self.cache_dir, drive_id, sha256 or "").is_file()
@@ -351,6 +403,37 @@ class Pictures:
             return found, token
         except (OSError, PictureError, ValueError, Image.DecompressionBombError):
             return None, None
+
+    def rank(
+        self, rule, items: list[tuple[str, str | None]], budget_s: float = 2.0
+    ) -> dict[str, float]:
+        """A rough score of each document (``items``: drive id and sha256) for the picture
+        areas of ``rule`` (the lowest of them), from the thumbnails of its page-1 picture.
+        Thumbnails that are missing are made from the pictures in the cache first, for at
+        most ``budget_s`` seconds. A document with no picture or no thumbnail scores -1.
+        It orders the documents; it never decides a match."""
+        zones = [z for z in rule.when.zones if z.is_picture and z.image is not None]
+        have = have_pictures(self.cache_dir)
+        names = {
+            d: picture_name(d, sha) for d, sha in items if sha and picture_name(d, sha) in have
+        }
+        self.thumbs.ensure(
+            {n: picture_path(self.cache_dir, d, sha) for d, sha in items if (n := names.get(d))},
+            budget_s,
+        )
+        ids = list(names)
+        thumbs, present = self.thumbs.get_many([names[d] for d in ids])
+        best: np.ndarray | None = None
+        for zone in zones:
+            template, _ = self._template(zone.image, zone.box)
+            if template is None:
+                continue
+            got = coarse_scores(template, thumbs, present)
+            best = got if best is None else np.minimum(best, got)
+        out = {d: -1.0 for d, _ in items}
+        if best is not None:
+            out.update({d: float(best[i]) for i, d in enumerate(ids)})
+        return out
 
     def match(
         self,
@@ -408,6 +491,7 @@ __all__ = [
     "load_gray",
     "load_page",
     "match",
+    "coarse_scores",
     "match_gray",
     "png_bytes",
 ]

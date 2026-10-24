@@ -6,7 +6,11 @@ document, which rules match and which of them wins each field.
 """
 
 import logging
+import re
+import secrets
+import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
@@ -273,6 +277,35 @@ LAYOUT_CHUNK = 100  # documents whose text and layouts are fetched with one quer
 log = logging.getLogger(__name__)
 
 
+class StaleCursor(ValueError):
+    """A ``next_after`` cursor of a test that the server no longer remembers."""
+
+
+# The order of the documents of a test that stopped at its time budget, so that "test the
+# rest" goes on in the same order (a few at a time: the cursor is opaque to the caller).
+_PLANS: OrderedDict[str, list[str]] = OrderedDict()
+_PLANS_LOCK = threading.Lock()
+MAX_PLANS = 6
+_CURSOR = re.compile(r"r1\.([0-9a-f]{8})\.(\d+)")
+
+
+def _remember(ids: list[str]) -> str:
+    plan_id = secrets.token_hex(4)
+    with _PLANS_LOCK:
+        _PLANS[plan_id] = ids
+        while len(_PLANS) > MAX_PLANS:
+            _PLANS.popitem(last=False)
+    return plan_id
+
+
+def _recall(plan_id: str) -> list[str] | None:
+    with _PLANS_LOCK:
+        ids = _PLANS.get(plan_id)
+        if ids is not None:
+            _PLANS.move_to_end(plan_id)
+        return ids
+
+
 @dataclass
 class PlanRow:
     """A document to look at: the columns a check needs (not its text, which is fetched
@@ -324,6 +357,8 @@ class ReplayRun:
         sender_ids: Callable[[str], Sequence[str]] | None = None,
         pictures: Pictures | None = None,
         after: str | None = None,
+        near_folder: str | None = None,
+        register: bool = False,
         with_marked: bool = True,
     ) -> None:
         self.engine = engine
@@ -358,7 +393,13 @@ class ReplayRun:
             assigned_persons() if assigned_persons is not None and self.needs_layouts else {}
         )
         self.with_marked = with_marked and bool(rule.sender) and sender_ids is not None
+        self.near_folder = None if near_folder is None else nfc(near_folder)
+        self.register = register
+        # ``after`` is a cursor (``next_after`` of an earlier part of this test) or, from
+        # callers older than the cursor, the path to go on after (the path order)
         self.after = after
+        self.plan_id: str | None = None
+        self.base = 0  # where in the whole order the documents of this run begin
         # what has been found
         self.matched = self.same = self.inbox = self.checked = self.looked_at = 0
         self.different: list[ReplayHit] = []
@@ -406,15 +447,49 @@ class ReplayRun:
             found = conn.execute(
                 select(*cols).select_from(joined).where(*where).order_by(files.c.path)
             ).all()
+        self.timings.sql += perf_counter() - started
         rows = [PlanRow(*r) for r in found if not self._skipped(r.path)]
         self.total = sum(1 for r in rows if not is_under(r.path, self.special.inbox))
         self.paths = {r.drive_id: r.path for r in rows}
-        if self.after is not None:
-            rows = [r for r in rows if r.path > self.after]
-        self.rows = self._ordered(rows)
-        self.timings.sql += perf_counter() - started
+        cursor = _CURSOR.fullmatch(self.after) if self.after is not None else None
+        if cursor is not None:
+            ids = _recall(cursor.group(1))
+            if ids is None:
+                raise StaleCursor("that test is no longer there: run it again")
+            self.plan_id, self.base = cursor.group(1), min(int(cursor.group(2)), len(ids))
+            by_id = {r.drive_id: r for r in rows}
+            rows = [by_id[d] for d in ids[self.base :] if d in by_id]
+        elif self.after is not None:
+            rows = [r for r in rows if r.path > self.after]  # path order, as before cursors
+        else:
+            rows = self._ordered(rows)
+            if self.register:
+                self.plan_id = _remember([r.drive_id for r in rows])
+        self.rows = rows
 
     def _ordered(self, rows: list[PlanRow]) -> list[PlanRow]:
+        """The likely documents first: those assigned to the rule's sender, those in the
+        folder of the document the areas were drawn on, then (for a picture rule) the rest
+        by a rough picture score from thumbnails, best first, then by path. Only the order
+        changes, never the result."""
+        started = perf_counter()
+        rule = self.rule
+        mine: set[str] = set()
+        if rule.sender and self.sender_ids is not None:
+            mine = set(self.sender_ids(rule.sender))
+        near = self.near_folder
+        scores: dict[str, float] = {}
+        if self.pictures is not None and has_picture_zones(rule):
+            can = [(r.drive_id, r.sha256) for r in rows if (r.ext or "").lower() in BARCODE_EXTS]
+            scores = self.pictures.rank(rule, can)
+
+        def key(r: PlanRow) -> tuple[int, float, str]:
+            group = 0 if r.drive_id in mine else 1 if near and nfc(_parent(r.path)) == near else 2
+            return (group, -scores.get(r.drive_id, -1.0), r.path)
+
+        if mine or near or scores:
+            rows = sorted(rows, key=key)
+        self.timings.plan += perf_counter() - started
         return rows
 
     # -- fetching ----------------------------------------------------------------------
@@ -705,11 +780,18 @@ class ReplayRun:
             truncated=truncated,
             not_checked=sorted(self.not_checked.values(), key=lambda n: n.path),
             reading=len(self._unread) + len(self._marked_unread),
-            next_after=self.last_path if truncated else None,
+            next_after=self._cursor() if truncated else None,
             marked=marked,
             scores=pick_scores(self.scores),
             looked_at=self.looked_at,
         )
+
+    def _cursor(self) -> str | None:
+        """Where to go on: the opaque cursor of this test's order (or, for a test that began
+        with a path, the last path)."""
+        if self.plan_id is not None:
+            return f"r1.{self.plan_id}.{self.base + self.pos}"
+        return self.last_path
 
     def log_summary(self, total_s: float) -> None:
         log.info("%s", self.timings.summary(total_s))
@@ -732,6 +814,7 @@ def replay(
     sender_ids: Callable[[str], Sequence[str]] | None = None,
     pictures: Pictures | None = None,
     after: str | None = None,
+    near_folder: str | None = None,
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
@@ -759,11 +842,15 @@ def replay(
     it needed (a document that failed a text area, the person or anything else never has a
     picture score).
 
-    The files are taken in path order. ``after`` continues a replay that stopped at its time
-    budget: only the files whose path comes after it are looked at (and counted), and
-    ``total`` is still the number of all filed files. ``next_after`` is then where it
-    stopped. The marked documents of the rule's sender are compared on the first call only
-    (without ``after``).
+    The likely documents are taken first, the rest in path order: those assigned to the
+    rule's sender, those in ``near_folder`` (the folder of the document the areas were
+    drawn on), and for a picture rule the rest best-looking first (a rough score from the
+    thumbnails). The order changes when things show up, never the result. A replay that
+    stopped at its time budget gives ``next_after``, an opaque cursor: pass it as ``after``
+    to go on with the documents not looked at yet (they are counted on their own, and
+    ``total`` is still the number of all filed files). It is remembered for a while only
+    (``StaleCursor`` after that). The marked documents of the rule's sender are compared on
+    the first call only (without ``after``).
 
     The time of each step is written to the log (``Timings``)."""
     started = time.monotonic()
@@ -782,6 +869,8 @@ def replay(
         sender_ids=sender_ids,
         pictures=pictures,
         after=after,
+        near_folder=near_folder,
+        register=True,
     )
     finished = run.advance(max(0.0, budget_s - (time.monotonic() - started)))
     result = run.snapshot(truncated=not finished)
@@ -943,3 +1032,8 @@ def explain(
             )
         )
     return out
+
+
+def folder_of(path: str) -> str:
+    """The folder a document is in (``""`` at the top)."""
+    return _parent(path)

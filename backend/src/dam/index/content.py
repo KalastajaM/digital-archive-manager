@@ -15,7 +15,14 @@ from dam.core.paths import ArchivePaths
 from dam.extract import ocr
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
 from dam.extract.layout import Page1Layout
-from dam.extract.picture import picture_path, write_picture
+from dam.extract.picture import (
+    PICTURE_DIR,
+    PageThumbs,
+    have_pictures,
+    picture_name,
+    picture_path,
+    write_picture,
+)
 from dam.index.barcodes import read_page1
 from dam.index.layouts import IMAGE_EXTS, read_layout, render_picture
 from dam.index.repo import FileRecord, FileRepo
@@ -116,6 +123,8 @@ class ContentIndexer:
         self._layout_why: dict[str, str] = {}  # drive_id -> why it waits (no OCR engine)
         # the page-1 pictures (picture areas) are kept in this cache folder; None: not kept
         self.cache_dir = cache_dir
+        # tiny thumbnails of the pictures (a rough ranking for a rule test): set by the App
+        self.thumbs: PageThumbs | None = None
         # files whose picture cannot be made (until the content changes or dam restarts)
         self._no_picture: dict[str, str] = {}  # drive_id -> sha256
         self._picture_cursor = 0  # where the next backfill page of picture checks starts
@@ -134,6 +143,8 @@ class ContentIndexer:
     def close(self) -> None:
         """Stop accepting work. Abandoned daemon threads never block interpreter exit."""
         self._closed = True
+        if self.thumbs is not None:
+            self.thumbs.flush(force=True)
 
     def run_once(self, limit: int = 20, now: float | None = None) -> int:
         now = time.time() if now is None else now
@@ -394,7 +405,29 @@ class ContentIndexer:
         except Exception:
             log.warning("could not keep the page-1 picture of %s", drive_id, exc_info=True)
             return False
+        if self.thumbs is not None:
+            try:
+                self.thumbs.add(picture_name(drive_id, sha256), picture)
+            except Exception:
+                log.warning("could not make the thumbnail of %s", drive_id, exc_info=True)
         return True
+
+    def run_thumbs_once(self, limit: int = 300) -> int:
+        """Make the thumbnails of up to ``limit`` page-1 pictures in the cache that have
+        none (pictures made before thumbnails were kept), drop those of pictures that are
+        gone, and write the file when it changed. It reads only the cache, never the
+        archive. Returns how many thumbnails were made."""
+        if self._closed or self.thumbs is None or self.cache_dir is None:
+            return 0
+        have = have_pictures(self.cache_dir)
+        self.thumbs.forget_missing(have)
+        folder = Path(self.cache_dir) / PICTURE_DIR
+        todo = {n: folder / n for n in sorted(have) if not self.thumbs.has(n)}
+        wanted = dict(list(todo.items())[:limit])
+        if wanted:
+            self.thumbs.ensure(wanted, budget_s=5.0)
+        self.thumbs.flush()
+        return len(wanted)
 
     def _next_for_pictures(
         self, limit: int, wanted: set[str], waiting: set[str], backfill: bool
@@ -594,11 +627,12 @@ class ContentIndexer:
 
     def step(self, now: float | None = None) -> int:
         """One unit of background work: a pending file's content, else a barcode read,
-        else a page-1 layout read."""
+        else a page-1 layout read, else the thumbnails of page-1 pictures."""
         return (
             self.run_once(limit=1, now=now)
             or self.run_barcodes_once(limit=1)
             or self.run_layouts_once(limit=1)
+            or self.run_thumbs_once()
         )
 
     def _cloud_pending(self, rec: FileRecord, now: float, exc: BaseException, expect) -> None:
