@@ -8,6 +8,17 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Every document in the test result of a rule is a button that opens it in the preview with
+  the rule's areas drawn on its first page, and for a picture area the place where it fits best
+  and its score. In any preview with the box tool, picture rules that did not match are
+  drawn dashed with the score they got on that document, or the reason there is none, so you
+  can find out why a rule found nothing.
+- **Test the rest**: when the test stops at its time limit, it continues from where it
+  stopped and adds to the result instead of starting over.
+- The Index sheet shows how far reading page 1 has come, how many documents wait because
+  page 1 cannot be read now and why, the switch for reading older documents in the
+  background, and an estimate of the time left. The status line at the foot of the sidebar
+  says "page 1 read 1 240 of 10 875" until it is complete.
 - Rules can recognise a picture, such as a logo that has no text. In Draw a box, choose
   **Match the picture in this area**; the rule sheet shows the picture and a **Match
   needed** slider, and the test lists how well the documents it matched and the ones it
@@ -197,6 +208,18 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- The test of a picture rule no longer shows documents that did not match as if they were
+  results. Documents are listed under **Matched**, and the ones that missed are listed
+  under **Close, but not matched** only when the picture was the one thing that failed and
+  the score was within 0.15 of what is needed. A document that has the word somewhere
+  else on the page but not in your area is never listed with a picture score.
+- The **Match needed** slider can now be set to 1.00 (it stopped at 0.99 because the
+  value and the link beside it changed its length).
+- Pictures are compared at full size with a lighter blur, so a block of small text is no
+  longer taken for another block with other words in the same layout (0.89 before, 0.74
+  now), and other logos on white score 0.63 or less. A rescan of a logo with a shift, a size
+  change, noise, a darker copy or a 2 degree skew still scores 0.92 and over. Small text on
+  a scan that is 2 degrees crooked scores about 0.82, so lower the slider a little for it.
 - Draw a box no longer lists the lines next to the one you drew around: a box holds
   only the words inside it. A rule still finds its words when a copy is shifted by a few
   millimetres, but a line below no longer counts for the box. The box list and notes now

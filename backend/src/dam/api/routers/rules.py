@@ -11,6 +11,8 @@ from dam.api.deps import UI_ORIGIN, AppDep
 from dam.api.schemas import (
     AreaPictureIn,
     AreaPictureOut,
+    AreasForIn,
+    AreasForOut,
     BatchResultOut,
     ReplayOut,
     RuleExplainIn,
@@ -32,7 +34,7 @@ from dam.rules import state as rules_state
 from dam.rules.learned import learned_ids, rule_file
 from dam.rules.model import LEARNED_FILE, RESERVED_IDS, Rule
 from dam.rules.picture import DEFAULT_MIN_SCORE
-from dam.rules.replay import explain, replay
+from dam.rules.replay import explain, replay, without_folder
 from dam.services.area_pictures import check_pictures_exist
 from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleStats
@@ -123,6 +125,7 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
         assigned_persons=app.assignments.persons,
         sender_ids=app.assignments.with_sender,
         pictures=app.pictures,
+        after=body.after,
     )
     if result.reading:
         app.wake_indexer()  # the layout pass reads what the rule needs next
@@ -183,6 +186,22 @@ def explain_document(app: AppDep, body: RuleExplainIn) -> list:
         rec, text, app.rules, app.settings.special_folders, alias, layout, people, app.pictures
     )
     return [asdict(x) for x in found]
+
+
+@router.post("/areas-for", response_model=AreasForOut)
+def areas_for(app: AppDep, body: AreasForIn) -> dict:
+    """The areas of the rule being tested on one document (a document of the test result),
+    to draw them on its page 1: matched lines, the best place and score of a picture area.
+    The rule's folder condition is left out, as in the test. Reads only the index and the
+    cache; changes nothing."""
+    rule = without_folder(_rule(body.rule))
+    rec, text, alias = app.inbox.rule_context(body.drive_id)
+    layout = app.repo.layout_for(rec.drive_id)
+    people = app.inbox.people_context(rec.drive_id)
+    (found,) = explain(
+        rec, text, [rule], app.settings.special_folders, alias, layout, people, app.pictures
+    )
+    return {"areas": [asdict(a) for a in found.areas]}
 
 
 @router.put("/state", response_model=RulesStateOut)

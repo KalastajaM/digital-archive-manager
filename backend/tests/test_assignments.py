@@ -303,7 +303,8 @@ def test_replay_compares_the_rule_with_the_documents_marked_as_its_sender(app, f
         sender_ids=app.assignments.with_sender,
     )
     m = r.marked
-    assert (m.total, m.found, m.missed) == (4, 2, ["20. Home/c.pdf"])
+    assert (m.total, m.found) == (4, 2)
+    assert [(x.path, x.drive_id) for x in m.missed] == [("20. Home/c.pdf", "c")]
     assert [(n.path, n.reason) for n in m.not_checked] == [("20. Home/d.pdf", NOT_READ)]
     assert "d" in queued
 

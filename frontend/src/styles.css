@@ -2066,10 +2066,18 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .area-match { outline-style: dashed; }
 .box-kept-picture { display: block; max-width: 100%; max-height: 4rem; margin: var(--sp-1) 0; border: 0.5px solid var(--hairline); background: #fff; }
 .rule-picture { display: block; max-width: 100%; max-height: 6rem; margin: 0 0 var(--sp-2); border: 0.5px solid var(--hairline); background: #fff; }
-.rule-score { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin: 0 0 var(--sp-2); }
-.rule-score input[type="range"] { flex: 1 1 8rem; min-width: 6rem; }
-.rule-score output { min-width: 3ch; font-variant-numeric: tabular-nums; }
+/* a fixed grid: the value has its own width and the link its own row (always there), so the
+   slider never changes length and 1.00 stays reachable */
+.rule-score { display: grid; grid-template-columns: auto minmax(6rem, 1fr) 4ch; align-items: center; column-gap: var(--sp-3); row-gap: var(--sp-1); margin: 0 0 var(--sp-2); }
+.rule-score input[type="range"] { width: 100%; min-width: 0; margin: 0; }
+.rule-score output { width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.rule-score-reset { grid-column: 2 / 4; min-height: 1.5em; }
+.rule-score-reset .link-button { text-align: left; }
 .replay-scores { margin: var(--sp-1) 0; font-size: var(--fs-sm); }
 .replay-scores ul { list-style: none; margin: var(--sp-1) 0; padding: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
 .replay-score { font-variant-numeric: tabular-nums; font-weight: 600; margin-right: var(--sp-2); }
 .replay-score-off { color: var(--muted); }
+
+.replay-scores-title { margin: var(--sp-2) 0 0; font-weight: 600; }
+.replay-near { margin-top: var(--sp-2); padding: var(--sp-2); border: 1px dashed var(--hairline); border-radius: var(--radius, 6px); color: var(--muted); }
+.replay-path { text-align: left; overflow-wrap: anywhere; }

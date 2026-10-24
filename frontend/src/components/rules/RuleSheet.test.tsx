@@ -26,6 +26,8 @@ const REPLAY = {
   total: 4,
   truncated: false,
 };
+/** The list item whose whole text is ``text`` (a path is a button inside it). */
+const row = (text: string) => (_: string, el: Element | null) => el?.tagName === "LI" && el.textContent === text;
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 
 function setup(replay: object = REPLAY, props: Partial<Parameters<typeof RuleSheet>[0]> = {}, extra: Record<string, unknown> = {}) {
@@ -53,7 +55,7 @@ describe("RuleSheet", () => {
     expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/2026/a.pdf");
     expect(within(sheet).getByText("Any ticked word is enough; more words catch more documents.")).toBeInTheDocument();
     expect(await within(sheet).findByText(/Matches 4 documents you filed before: 3 would land exactly where they are\./)).toBeInTheDocument();
-    expect(within(sheet).getByText("10. Financial/a.pdf → 20. Health/2026/a.pdf")).toBeInTheDocument();
+    expect(within(sheet).getByText(row("10. Financial/a.pdf → 20. Health/2026/a.pdf"))).toBeInTheDocument();
     expect(within(sheet).getByText("It also catches 2 documents in the inbox now.")).toBeInTheDocument();
     expect(within(sheet).getByText("For 1 of them rule bank comes first")).toBeInTheDocument();
   });
@@ -88,7 +90,7 @@ describe("RuleSheet", () => {
 
   it("a pattern that cannot be filled says it would fail", async () => {
     setup({ ...REPLAY, different: [{ drive_id: "x1", path_now: "a/b.pdf", path_rule: "" }] });
-    expect(await screen.findByText("a/b.pdf → would fail: the pattern cannot be filled for it")).toBeInTheDocument();
+    expect(await screen.findByText(row("a/b.pdf → would fail: the pattern cannot be filled for it"))).toBeInTheDocument();
   });
 
   it("refreshes the replay 400 ms after the last edit with the rule built from the sheet", async () => {
@@ -432,13 +434,13 @@ describe("RuleSheet", () => {
       const { user } = setup({
         ...REPLAY,
         not_checked: [
-          { path: "Insurance/a.pdf", reason: "page 1 not read yet" },
-          { path: "Insurance/b.pdf", reason: "no OCR engine" },
+          { path: "Insurance/a.pdf", drive_id: "na", reason: "page 1 not read yet" },
+          { path: "Insurance/b.pdf", drive_id: "nb", reason: "no OCR engine" },
         ],
       });
       expect(await screen.findByText(/\(2 not checked yet\)/)).toBeInTheDocument();
       await user.click(screen.getByText("Not checked yet (2)"));
-      expect(screen.getByText("Insurance/b.pdf: no OCR engine")).toBeVisible();
+      expect(screen.getByText(row("Insurance/b.pdf: no OCR engine"))).toBeVisible();
     });
 
     it("asks again while page 1 is being read and shows the count", async () => {
@@ -504,12 +506,12 @@ describe("RuleSheet", () => {
 
     it("compares a sender rule with the documents marked as from that sender", async () => {
       setup(
-        { ...REPLAY, marked: { total: 16, found: 14, missed: ["Insurance/x.pdf", "Insurance/y.pdf"], not_checked: [] } },
+        { ...REPLAY, marked: { total: 16, found: 14, missed: [{ path: "Insurance/x.pdf", drive_id: "mx" }, { path: "Insurance/y.pdf", drive_id: "my" }], not_checked: [] } },
         { initial: ZONE_RULE, filed: undefined },
       );
       expect(await screen.findByText("Finds 14 of the 16 documents you set as from Pohjola.")).toBeInTheDocument();
-      expect(screen.getByText("Insurance/x.pdf")).toBeInTheDocument();
-      expect(screen.getByText("Insurance/y.pdf")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Insurance/x.pdf" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Insurance/y.pdf" })).toBeInTheDocument();
     });
   });
 
@@ -562,6 +564,69 @@ describe("RuleSheet", () => {
       expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("0.8");
     });
 
+    it("the match slider reaches 1.00 and keeps its length when the link and the value change", async () => {
+      const { calls, user } = sheetFor();
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      const slider = within(sheet).getByRole("slider", { name: "Match needed for area 1" });
+      expect(slider).toHaveAttribute("min", "0.5");
+      expect(slider).toHaveAttribute("max", "1");
+      expect(slider).toHaveAttribute("step", "0.01");
+      // the value and the link sit in cells of their own, so the slider never shrinks
+      const cell = slider.closest(".rule-score") as HTMLElement;
+      expect(Array.from(cell.children).map((c) => c.tagName)).toEqual(["LABEL", "INPUT", "OUTPUT", "SPAN"]);
+      fireEvent.change(slider, { target: { value: "1" } });
+      await waitFor(() => expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("1"));
+      expect(within(sheet).getByText("1.00")).toBeInTheDocument();
+      await waitFor(() => {
+        const last = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { min_score?: number }[] } } };
+        expect(last.rule.when.zones[0].min_score).toBe(1);
+      });
+      // the same cells with the link away
+      await user.click(within(sheet).getByRole("button", { name: "Use the usual 0.80" }));
+      expect(Array.from(cell.children).map((c) => c.tagName)).toEqual(["LABEL", "INPUT", "OUTPUT", "SPAN"]);
+    });
+
+    it("opens a document of the result with the tested rule drawn on it", async () => {
+      const { calls, user } = sheetFor({
+        ...REPLAY,
+        scores: [{ path: "Insurance/a.pdf", drive_id: "da", score: 0.93, matched: true }],
+      });
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      await user.click(await within(sheet).findByRole("button", { name: "Insurance/a.pdf" }));
+      expect(await screen.findByRole("dialog", { name: "Quick Look: a.pdf" })).toBeInTheDocument();
+      await waitFor(() => expect(posts(calls, "/api/rules/areas-for").length).toBeGreaterThan(0));
+      const sent = posts(calls, "/api/rules/areas-for")[0].body as { drive_id: string; rule: { id: string } };
+      expect(sent.drive_id).toBe("da");
+      expect(sent.rule.id).toBe("acme");
+    });
+
+    it("tests the rest from where the test stopped, and joins the results", async () => {
+      const first = {
+        ...REPLAY, matched: 2, same: 2, different: [], inbox: 0, shadowed: [], checked: 500, total: 900,
+        truncated: true, next_after: "20. Home/m.pdf",
+        scores: [{ path: "Insurance/a.pdf", drive_id: "da", score: 0.91, matched: true }],
+      };
+      const rest = {
+        ...REPLAY, matched: 1, same: 1, different: [], inbox: 0, shadowed: [], checked: 400, total: 900,
+        truncated: false, next_after: null,
+        scores: [{ path: "Insurance/z.pdf", drive_id: "dz", score: 0.88, matched: true }],
+      };
+      const { calls, user } = setup(first, { initial: PICTURE_RULE, filed: undefined }, {
+        "GET /api/rules": { body: RULES },
+        "POST /api/rules/replay": (call: Call) => ({ body: (call.body as { after?: string | null }).after ? rest : first }),
+      });
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      expect(await within(sheet).findByText(/Checked 500 of 900 documents/)).toBeInTheDocument();
+      await user.click(within(sheet).getByRole("button", { name: "Test the rest" }));
+      const asked = posts(calls, "/api/rules/replay").at(-1)?.body as { after: string };
+      expect(asked.after).toBe("20. Home/m.pdf");
+      // 2 + 1 matches over 500 + 400 checked, both lists, and no more button
+      expect(await within(sheet).findByText(/Matches 3 documents/)).toBeInTheDocument();
+      expect(within(sheet).getByRole("button", { name: "Insurance/a.pdf" })).toBeInTheDocument();
+      expect(within(sheet).getByRole("button", { name: "Insurance/z.pdf" })).toBeInTheDocument();
+      expect(within(sheet).queryByRole("button", { name: "Test the rest" })).toBeNull();
+    });
+
     it("removing the picture area leaves the words, and a picture alone is told to add a text box", async () => {
       const { user } = sheetFor();
       const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
@@ -576,16 +641,20 @@ describe("RuleSheet", () => {
       sheetFor({
         ...REPLAY,
         scores: [
-          { path: "Insurance/a.pdf", score: 0.91, matched: true },
-          { path: "Insurance/b.pdf", score: 0.96, matched: true },
-          { path: "10. Bank/c.pdf", score: 0.62, matched: false },
+          { path: "Insurance/a.pdf", drive_id: "a", score: 0.91, matched: true },
+          { path: "Insurance/b.pdf", drive_id: "b", score: 0.96, matched: true },
+          { path: "10. Bank/c.pdf", drive_id: "c", score: 0.78, matched: false, needed: 0.9 },
         ],
       });
       const list = await screen.findByRole("region", { name: "Picture scores" });
       expect(within(list).getByText(/0\.90 is needed/)).toBeInTheDocument();
       const matched = within(list).getByRole("list", { name: "Matched documents" });
       expect(within(matched).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["0.91Insurance/a.pdf", "0.96Insurance/b.pdf"]);
-      expect(within(within(list).getByRole("list", { name: "Documents not matched" })).getByText("10. Bank/c.pdf", { exact: false })).toBeInTheDocument();
+      // a non-match is set apart, labelled as not matched, with the score it fell short of
+      expect(within(list).getByText("Close, but not matched (below 0.90)")).toBeInTheDocument();
+      const near = within(list).getByRole("list", { name: "Documents close to matching" });
+      expect(within(near).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["0.78" + "10. Bank/c.pdf"]);
+      expect(within(list).getByText("Matched (0.90 is needed)")).toBeInTheDocument();
     });
   });
 });
