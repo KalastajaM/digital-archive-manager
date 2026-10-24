@@ -547,4 +547,3 @@ def _folder_exists(root: Path, rel: str) -> bool:
         except (StopIteration, OSError):
             return False
     return True
-

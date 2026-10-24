@@ -106,7 +106,7 @@ def test_a_word_in_the_zone_matches_and_a_word_elsewhere_does_not():
 
 
 def test_matching_folds_case_and_diacritics_and_uses_the_margin():
-    near = layout(("POHJOLA", (0.10, 0.155, 0.30, 0.175)))  # just under the box, in the margin
+    near = layout(("POHJOLA", (0.10, 0.138, 0.30, 0.148)))  # just under the box, in the margin
     assert suggest(rec(), "pohjola", [zone_rule()], layout=near).folder == "Insurance/Pohjola"
     far = layout(("POHJOLA", (0.10, 0.30, 0.30, 0.32)))
     assert suggest(rec(), "pohjola", [zone_rule()], layout=far).folder is None
