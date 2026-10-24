@@ -135,7 +135,7 @@ class Then(BaseModel):
     tray: str | None = None
     payee: str | None = None
 
-    @field_validator("tray", "payee")
+    @field_validator("folder", "name", "tray", "payee")
     @classmethod
     def _blank_is_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value is not None else None

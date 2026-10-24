@@ -1970,6 +1970,13 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .rule-field-row { display: flex; gap: var(--sp-3); align-items: center; }
 .rule-field-row > :first-child { flex: 1 1 auto; min-width: 0; }
 .rule-field .rule-off, .field .rule-off { display: inline-flex; align-items: center; gap: 4px; margin: 0; flex: none; font-size: var(--fs-sm); color: var(--muted); }
+.field-label-row { display: flex; align-items: center; gap: var(--sp-1); }
+.field-label-row > label { margin: 0; }
+.info-tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--grey-bg); color: var(--muted); font-size: var(--fs-xs); cursor: help; }
+.info-tip[data-tip]::after { left: 0; transform: none; white-space: normal; width: max-content; max-width: 18rem; }
+.rule-more { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+.rule-more .hint { margin: 0; }
+.replay-result h4 { margin: 0 0 var(--sp-2); }
 .rule-filed { margin: 0 0 var(--sp-3); }
 .replay-result { margin-top: var(--sp-3); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
 .replay-result p { margin: 0 0 var(--sp-1); }

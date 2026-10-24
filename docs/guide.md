@@ -408,9 +408,12 @@ or when a filing code did the filing.
   filed documents are not offered. When no usable word is left, there is no offer.
 - **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
   document's year, its date and its original file name, and are filled in for each
-  document the rule files.
-- **Tags, tray and payee**, each with a box to leave it out.
-- **More conditions**: a file-name pattern, and the folder the file must be in.
+  document the rule files (the tips beside Folder and Name list them).
+- **Tags, tray and payee**: what the rule sets. An empty field is one the rule does not
+  set; to leave a field out, clear it.
+- **More conditions** (closed to begin with; a line beside it says what is set, such as
+  "Only in the inbox"): a file-name pattern (a regular expression searched anywhere in the
+  file name, see the tip beside it), and the folder the file must be in.
 - **Filed as**: the folder and name you gave the document just now, which the patterns
   were made from.
 

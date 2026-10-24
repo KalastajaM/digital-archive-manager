@@ -60,7 +60,25 @@ describe("RuleSheet", () => {
 
   it("says when nothing matches, and when only part was checked", async () => {
     setup({ ...REPLAY, matched: 0, same: 0, different: [], inbox: 0, shadowed: [] });
-    expect(await screen.findByText("Not tested yet: no filed document matches it")).toBeInTheDocument();
+    expect(await screen.findByText("No filed document matches this rule yet, so it could not be tested against them.")).toBeInTheDocument();
+  });
+
+  it("gives the test a heading", async () => {
+    setup();
+    expect(await screen.findByRole("heading", { name: "Test against your filed documents" })).toBeInTheDocument();
+  });
+
+  it("explains in tooltips, not fixed text, and keeps More conditions closed with a summary", async () => {
+    const { user } = setup();
+    await screen.findByText(/Matches 4/);
+    expect(screen.queryByText(/With a sender, the test also says/)).toBeNull();
+    expect(screen.getByLabelText("From (sender)")).toHaveAccessibleDescription(/how many of them this rule finds/);
+    expect(screen.getByLabelText("Folder")).toHaveAccessibleDescription(/\{doc_date:%Y%m%d\}.*\{stem\}.*\{person\}/);
+    expect(screen.getByLabelText("Name")).toHaveAccessibleDescription(/\{stem\}/);
+    expect(screen.queryByLabelText("File name matches")).toBeNull();
+    expect(screen.getByText(/Only in /)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "More conditions" }));
+    expect(screen.getByLabelText("File name matches")).toHaveAccessibleDescription(/regular expression.*\(\?i\)scan.*\^IMG_/);
   });
 
   it("says how many documents were checked when truncated", async () => {
@@ -149,12 +167,13 @@ describe("RuleSheet", () => {
     expect(screen.getByText("Tick at least one word")).toBeInTheDocument();
   });
 
-  it("adds a word and leaves a field out", async () => {
+  it("adds a word, and a cleared field is one the rule does not set", async () => {
     const { calls, user } = setup();
     await screen.findByText(/Matches 4/);
     await user.type(screen.getByLabelText("Add a word"), "sähkö{Enter}");
     expect(screen.getByRole("button", { name: "sähkö" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(screen.getByLabelText("Leave out folder"));
+    expect(screen.queryByLabelText(/Leave out/)).toBeNull();
+    await user.clear(screen.getByLabelText("Folder"));
     await waitFor(() => {
       const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { then: { folder: unknown }; when: { text_contains: string[] } } };
       expect(sent.rule.then.folder).toBeNull();
@@ -189,7 +208,7 @@ describe("RuleSheet", () => {
     expect(screen.getByRole("button", { name: "Testing…" })).toBeDisabled();
     await new Promise((r) => setTimeout(r, 600)); // the replay is in flight, held
     expect(screen.getByRole("button", { name: "Testing…" })).toBeDisabled();
-    expect(screen.getByRole("region", { name: "Test result" })).toHaveAttribute("aria-busy", "true"); // the old proof stays
+    expect(screen.getByRole("region", { name: "Test against your filed documents" })).toHaveAttribute("aria-busy", "true"); // the old proof stays
     expect(screen.getByText(/Matches 4/)).toBeInTheDocument();
     held.resolve({ body: { ...REPLAY, different: [] } });
     expect(await screen.findByRole("button", { name: "Save" })).toBeEnabled();

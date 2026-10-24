@@ -223,6 +223,13 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- The rule sheet is easier to read. The "Leave out" boxes are gone: an empty Folder, Name,
+  Tags, Tray or Payee is one the rule does not set, and clearing a field never saves an
+  empty pattern. The explanations (the From sender, the Folder and Name patterns, and the
+  file name pattern, which is a regular expression with examples) are tooltips beside the
+  labels. More conditions starts closed and a line beside it says what is set, such as
+  "Only in the inbox". The test at the bottom has the heading "Test against your filed
+  documents", and when no filed document matches it says so in plain words.
 - Draw a box: every box you draw is kept at once, numbered Box 1, Box 2 and so on, and the
   panel "Boxes on page 1" lists each with the words found in it (or "No text found", or
   its picture) and its own x. There is no "Add another box" step any more. Each box has a

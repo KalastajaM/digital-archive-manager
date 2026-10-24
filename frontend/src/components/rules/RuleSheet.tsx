@@ -45,8 +45,28 @@ type RuleArea = { box: PageBox; words: Word[]; image?: string; minScore?: number
 /** The score a picture area needs when the rule names none (the API says; this is the
  * value until it has answered). */
 const DEFAULT_MIN_SCORE = 0.85;
-/** A field of the "then" part: ``off`` leaves it out of the rule. */
-type Text = { off: boolean; value: string };
+
+/** An info mark after a label: the explanation is its tooltip, and the field it explains
+ * points at it with aria-describedby. */
+function InfoTip({ id, tip }: { id: string; tip: string }) {
+  return (
+    <>
+      <span className="info-tip" role="img" tabIndex={0} aria-label={tip} data-tip={tip}>
+        ?
+      </span>
+      <span id={id} className="visually-hidden">{tip}</span>
+    </>
+  );
+}
+
+const FILENAME_TIP =
+  "A regular expression searched anywhere in the file name, not wildcards. It is case-sensitive unless it starts with (?i). Examples: (?i)scan finds Scan and SCAN anywhere in the name; ^IMG_\\d+ finds names that start with IMG_ and a number.";
+const FOLDER_TIP =
+  "Leave it empty and the rule does not set the folder. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
+const NAME_TIP =
+  "Leave it empty and the rule does not set the name. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
+const FROM_TIP =
+  "Optional. Who these letters are from. If you have set From on documents, the test below also shows how many of them this rule finds.";
 
 const isDraft = (r: RuleDraft | Rule): r is RuleDraft => "words" in r;
 const isZoneDraft = (r: RuleDraft | ZoneDraft | Rule): r is ZoneDraft => "zones" in r && "words" in r;
@@ -58,7 +78,6 @@ const waiting = (r: Replay) =>
 /** What saving or deleting a rule kept in a file written by hand does to that file. */
 export const rewriteNote = (doing: "Saving" | "Deleting", file: string) =>
   `${doing} rewrites ${file}, so the comments in it are lost. A copy of the old file is kept next to it (.bak).`;
-const text = (value: string | null): Text => ({ off: value === null, value: value ?? "" });
 
 /** The sheet an offer on the filed toast opens. "Make a rule…" starts from the draft;
  * "Update rule …" starts from that rule as it is (its id, words and other conditions)
@@ -157,15 +176,14 @@ export function RuleSheet({
   );
   const [adding, setAdding] = useState("");
   const start = draft ? initial : initial.then; // a draft's actions sit on the draft itself
-  const [folder, setFolder] = useState(() => text(start.folder));
-  const [name, setName] = useState(() => text(start.name));
-  const [payee, setPayee] = useState(() => text(start.payee));
-  const [tray, setTray] = useState(() => text(start.tray));
+  // an empty field is one the rule does not set
+  const [folder, setFolder] = useState(() => start.folder ?? "");
+  const [name, setName] = useState(() => start.name ?? "");
+  const [payee, setPayee] = useState(() => start.payee ?? "");
+  const [tray, setTray] = useState(() => start.tray ?? "");
   const [tags, setTags] = useState<string[]>(() => start.tags);
-  const [tagsOff, setTagsOff] = useState(() => tags.length === 0);
-  const [more, setMore] = useState(
-    () => (!draft && !!(initial.when.filename_matches || initial.when.folder_is)) || !!zoneDraft?.folder_is,
-  );
+  // closed to begin with; what is set in it shows beside the toggle
+  const [more, setMore] = useState(false);
   const [filename, setFilename] = useState(() => (draft ? "" : (initial.when.filename_matches ?? "")));
   // A draft has no folder condition: a new rule applies to what is in the inbox. Until
   // the user types, an edited rule keeps its own.
@@ -201,17 +219,17 @@ export function RuleSheet({
         ...(person ? { person } : {}),
       },
       then: {
-        folder: folder.off ? null : folder.value,
-        name: name.off ? null : name.value,
-        tags: tagsOff ? [] : tags,
-        tray: tray.off || !tray.value ? null : tray.value,
-        payee: payee.off ? null : payee.value,
+        folder: folder.trim() || null,
+        name: name.trim() || null,
+        tags,
+        tray: tray || null,
+        payee: payee.trim() || null,
       },
       ...(personZone ? { person_zone: personZone } : {}),
       ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.id, sender, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
+    [initial.id, sender, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tray, payee],
   );
   const ruleKey = JSON.stringify(rule);
 
@@ -349,29 +367,26 @@ export function RuleSheet({
       : "Make a rule"
     : `${filed ? "Update" : "Edit"} rule ${initial.id}`;
 
-  const textField = (label: string, state: Text, set: (t: Text) => void, hint?: string) => (
+  const textField = (label: string, value: string, set: (v: string) => void, tip?: string) => (
     <div className="field rule-field">
-      <label htmlFor={`${ids}-${label}`}>{label}</label>
-      <div className="rule-field-row">
-        <input
-          id={`${ids}-${label}`}
-          value={state.value}
-          disabled={state.off}
-          onChange={(e) => set({ ...state, value: e.target.value })}
-        />
-        <label className="rule-off">
-          <input
-            type="checkbox"
-            checked={state.off}
-            aria-label={`Leave out ${label.toLowerCase()}`}
-            onChange={(e) => set({ ...state, off: e.target.checked })}
-          />
-          Leave out
-        </label>
+      <div className="field-label-row">
+        <label htmlFor={`${ids}-${label}`}>{label}</label>
+        {tip && <InfoTip id={`${ids}-${label}-tip`} tip={tip} />}
       </div>
-      {hint && <p className="hint">{hint}</p>}
+      <input
+        id={`${ids}-${label}`}
+        value={value}
+        aria-describedby={tip ? `${ids}-${label}-tip` : undefined}
+        onChange={(e) => set(e.target.value)}
+      />
     </div>
   );
+  const moreSummary = [
+    folderIs.trim() ? (inbox && folderIs.trim() === inbox ? "Only in the inbox" : `Only in ${folderIs.trim()}`) : "",
+    filename.trim() ? `File name matches ${filename.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
 
   return (
     <>
@@ -486,9 +501,13 @@ export function RuleSheet({
           />
         )}
         <div className="field">
-          <label htmlFor={`${ids}-from`}>From (sender)</label>
+          <div className="field-label-row">
+            <label htmlFor={`${ids}-from`}>From (sender)</label>
+            <InfoTip id={`${ids}-from-tip`} tip={FROM_TIP} />
+          </div>
           <input
             id={`${ids}-from`}
+            aria-describedby={`${ids}-from-tip`}
             value={fromText}
             placeholder="Optional, such as Pohjola"
             onChange={(e) => setFromText(e.target.value)}
@@ -509,54 +528,47 @@ export function RuleSheet({
               ))}
             </ul>
           )}
-          <p className="hint">With a sender, the test also says how many of the letters you set as from it the rule finds.</p>
         </div>
         {filed && (
           <p className="hint rule-filed">
             Filed as: {visible(`${filed.folder}/${filed.name}`)}
           </p>
         )}
-        {textField("Folder", folder, setFolder, "Patterns like {year} are filled in for each document.")}
-        {textField("Name", name, setName)}
+        {textField("Folder", folder, setFolder, FOLDER_TIP)}
+        {textField("Name", name, setName, NAME_TIP)}
         <div className="field">
           <label htmlFor={`${ids}-tags`}>Tags</label>
-          <div className="rule-field-row">
-            <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} disabled={tagsOff} />
-            <label className="rule-off">
-              <input type="checkbox" checked={tagsOff} aria-label="Leave out tags" onChange={(e) => setTagsOff(e.target.checked)} />
-              Leave out
-            </label>
-          </div>
+          <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} />
         </div>
         <div className="field rule-field">
           <label htmlFor={`${ids}-tray`}>Tray</label>
-          <div className="rule-field-row">
-            <select
-              id={`${ids}-tray`}
-              value={tray.value}
-              disabled={tray.off}
-              onChange={(e) => setTray({ ...tray, value: e.target.value })}
-            >
-              <option value="">None</option>
-              {trays.map((t) => (
-                <option key={t.id} value={t.id}>{visible(t.name)}</option>
-              ))}
-            </select>
-            <label className="rule-off">
-              <input type="checkbox" checked={tray.off} aria-label="Leave out tray" onChange={(e) => setTray({ ...tray, off: e.target.checked })} />
-              Leave out
-            </label>
-          </div>
+          <select id={`${ids}-tray`} value={tray} onChange={(e) => setTray(e.target.value)}>
+            <option value="">None</option>
+            {trays.map((t) => (
+              <option key={t.id} value={t.id}>{visible(t.name)}</option>
+            ))}
+          </select>
         </div>
         {textField("Payee", payee, setPayee)}
-        <button type="button" className="link-button" aria-expanded={more} onClick={() => setMore(!more)}>
-          More conditions
-        </button>
+        <div className="rule-more">
+          <button type="button" className="link-button" aria-expanded={more} onClick={() => setMore(!more)}>
+            More conditions
+          </button>
+          {!more && <span className="hint">{visible(moreSummary || "None set")}</span>}
+        </div>
         {more && (
           <>
             <div className="field">
-              <label htmlFor={`${ids}-file`}>File name matches</label>
-              <input id={`${ids}-file`} value={filename} onChange={(e) => setFilename(e.target.value)} />
+              <div className="field-label-row">
+                <label htmlFor={`${ids}-file`}>File name matches</label>
+                <InfoTip id={`${ids}-file-tip`} tip={FILENAME_TIP} />
+              </div>
+              <input
+                id={`${ids}-file`}
+                value={filename}
+                aria-describedby={`${ids}-file-tip`}
+                onChange={(e) => setFilename(e.target.value)}
+              />
             </div>
             <div className="field">
               <label htmlFor={`${ids}-in`}>Document is in folder</label>
