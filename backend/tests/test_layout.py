@@ -20,7 +20,7 @@ from dam.extract.layout import (
 )
 from dam.extract.ocr import ImageOcrExtractor
 from dam.extract.pdf import PdfExtractor
-from pdfs import make_layout_pdf, make_scan_pdf, make_text_pdf
+from pdfs import make_layout_pdf, make_scan_pdf, make_text_pdf, make_words_pdf
 
 LANGS = ["fi-FI", "en-US"]
 
@@ -77,6 +77,32 @@ def test_text_layer_lines_are_placed_as_the_page_is_shown(tmp_path: Path, rotate
     assert second[1] > first[1] and second[0] == pytest.approx(first[0], abs=0.01)
     assert right[0] > first[2] and right[1] == pytest.approx(first[1], abs=0.01)
     assert all(0 <= v <= 1 for ln in lines for v in ln.box)
+
+
+def test_words_drawn_one_by_one_stay_in_one_line(tmp_path: Path):
+    from dam.config import Person
+    from dam.rules.people import detect_people
+
+    pdf = make_words_pdf(
+        tmp_path / "w.pdf", [(50, 700, "Michiel"), (95, 700, "Visser"), (135, 700, "Kotikatu")]
+    )
+    doc = pypdfium2.PdfDocument(str(pdf))
+    try:
+        page = doc[0]
+        lines = text_layer_lines(page)
+        full = page.get_textpage().get_text_range()
+        page.close()
+    finally:
+        doc.close()
+    assert [ln.text for ln in lines] == ["Michiel Visser Kotikatu"]
+    assert "Michiel Visser Kotikatu" in full.replace("\r\n", " ")
+    layout = Page1Layout(lines, "text-layer")
+    zone = (0.0, 0.0, 1.0, 1.0)
+    people = [
+        Person(name="Michiel", match=["Michiel Visser"]),
+        Person(name="Kati", match=["Michiel Visser Kotikatu"]),
+    ]
+    assert detect_people(layout, zone, people) == ["Michiel", "Kati"]
 
 
 def test_a_wide_gap_starts_a_new_line(tmp_path: Path):

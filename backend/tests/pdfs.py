@@ -30,6 +30,36 @@ def make_barcode_pdf(path: Path, widths: list[int], page: int = 1) -> Path:
     return path
 
 
+def make_words_pdf(
+    path: Path, words: list[tuple[float, float, str]], *, size: int = 12
+) -> Path:
+    """One-page PDF where every word is placed by its own ``Td`` / ``Tj`` and there are
+    no space glyphs: PDFium has to generate the spaces between the words."""
+    stream = b""
+    for x, y, word in words:
+        stream += b"BT /F1 %d Tf %f %f Td (%s) Tj ET\n" % (size, x, y, word.encode("cp1252"))
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+        b"/Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, body in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % i + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    for off in offsets:
+        out += b"%010d 00000 n \n" % off
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+    path.write_bytes(bytes(out))
+    return path
+
+
 def make_layout_pdf(
     path: Path,
     items: list[tuple[float, float, str]],

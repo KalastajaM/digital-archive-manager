@@ -149,11 +149,12 @@ def text_layer_lines(page) -> list[Line]:
         return clamp_box((min(xs), min(ys), max(xs), max(ys)))
 
     lines: list[Line] = []
-    chars: list[tuple[str, Box]] = []
+    chars: list[tuple[str, Box]] = []  # characters with a real box: the geometry
+    parts: list[str] = []  # the text of the line, which also has the boxless characters
 
     def flush() -> None:
-        text = "".join(t for t, _ in chars).strip()
-        if text:
+        text = "".join(parts).strip()
+        if text and chars:
             lines.append(
                 Line(
                     text,
@@ -166,10 +167,20 @@ def text_layer_lines(page) -> list[Line]:
                 )
             )
         chars.clear()
+        parts.clear()
 
     for ch, raw_box in zip(texts, boxes, strict=True):
-        if ch in "\r\n" or (raw_box[2] - raw_box[0] == 0 and raw_box[3] - raw_box[1] == 0):
+        if ch in "\r\n":
             flush()
+            continue
+        if raw_box[2] - raw_box[0] == 0 and raw_box[3] - raw_box[1] == 0:
+            # PDFium's generated spaces (and other boxless characters) have no size:
+            # they are text but take no part in the geometry
+            if ch.isspace():
+                if parts and not parts[-1].isspace():
+                    parts.append(" ")
+            else:
+                parts.append(ch)
             continue
         box = place(raw_box)
         if chars:
@@ -184,5 +195,6 @@ def text_layer_lines(page) -> list[Line]:
             if not same_row or gap > 2.5 * max(height, box[3] - box[1]) or gap < -0.05:
                 flush()
         chars.append((ch, box))
+        parts.append(ch)
     flush()
     return lines
