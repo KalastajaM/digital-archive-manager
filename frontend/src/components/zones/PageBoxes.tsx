@@ -117,6 +117,11 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
     setKept((all) => [...all, { box, lines: (lines.data?.lines ?? []).map((l) => l.text) }]);
     dropBox();
   };
+  const keepPicture = (png: string) => {
+    if (!box) return;
+    setKept((all) => [...all, { box, lines: [], picture: png }]);
+    dropBox();
+  };
   const toggle = () => {
     close();
     setOn(!on);
@@ -223,7 +228,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   );
   const panel = (
     <>
-      {changed && <AreaChange area={changed.area} box={changed.box} onClose={() => setChanged(null)} />}
+      {changed && <AreaChange driveId={driveId} area={changed.area} box={changed.box} onClose={() => setChanged(null)} />}
       {on && (
     <>
       {unavailable !== null ? (
@@ -241,6 +246,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
           box={box}
           kept={kept}
           onAddAnother={addAnother}
+          onKeepPicture={keepPicture}
           onRemoveKept={(i) => setKept((all) => all.filter((_, at) => at !== i))}
           found={lines.data}
           pending={lines.isPending}

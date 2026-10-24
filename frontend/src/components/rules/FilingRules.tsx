@@ -57,7 +57,12 @@ function RuleLine({
   onDelete: () => void;
 }) {
   const zones = r.when.zones;
-  const words = [...r.when.text_contains, ...zones.flatMap((z) => z.text_contains ?? [])].join(", ");
+  const pictures = zones.filter((z) => z.image).length;
+  const words = [
+    ...r.when.text_contains,
+    ...zones.flatMap((z) => z.text_contains ?? []),
+    ...(pictures > 0 ? [pictures === 1 ? "a picture" : `${pictures} pictures`] : []),
+  ].join(", ");
   const target = r.then.folder ? `→ ${r.then.folder}` : "";
   return (
     <li className="rule-line">
@@ -255,6 +260,11 @@ export function FilingRules() {
             />
           ))}
         </ul>
+      )}
+      {(rules.data.unused_pictures ?? []).length > 0 && (
+        <p className="hint rules-unused-pictures">
+          {plural((rules.data.unused_pictures ?? []).length, "picture file")} in config/rules/areas ({(rules.data.unused_pictures ?? []).map(visible).join(", ")}) {(rules.data.unused_pictures ?? []).length === 1 ? "is" : "are"} not used by any rule. Deleting a rule leaves them; you can remove them yourself.
+        </p>
       )}
       <TestDocument />
       <div className="rules-offer">

@@ -33,6 +33,13 @@ export type PageBox = number[];
 export type Page1 = Schemas["Page1Out"];
 /** The draft a box drawn on page 1 starts from: a rule draft plus the box. */
 export type ZoneDraft = Schemas["ZoneDraftOut"];
+/** The crop of a picture area: a base64 PNG (8-bit grayscale, long side at most 300 px) and,
+ * once saved with the rule's files, the path a zone's ``image`` names. */
+export type AreaPicture = Schemas["AreaPictureOut"];
+/** An area of a rule as the save call takes it (words or a picture). */
+export type ZoneIn = Schemas["ZoneIn"];
+/** One score of a picture rule's replay: a document, how well it matched, and whether the rule did. */
+export type PictureScore = Schemas["PictureScoreOut"];
 export type People = Schemas["PeopleOut"];
 export type Person = Schemas["PersonIO"];
 /** Who a document is from (``sender``) and for (``person``), as the owner said or a filing recorded. */
@@ -267,6 +274,11 @@ const fileUrl = (driveId: string) => `/api/files/${encodeURIComponent(driveId)}`
 export const pageUrl = (driveId: string, page: number, width: PageWidth = 900) =>
   `${fileUrl(driveId)}/page/${page}.png?w=${width}`;
 export const rawUrl = (driveId: string) => `${fileUrl(driveId)}/raw`;
+/** A saved picture of a picture area (``image``: ``areas/<name>.png``). */
+export const areaPictureUrl = (image: string) =>
+  `/api/rules/areas/${encodeURIComponent(image.replace(/^areas\//, ""))}`;
+/** The crop as an ``img`` source. */
+export const pngSrc = (png: string) => `data:image/png;base64,${png}`;
 
 /** Quick Look thumbnail widths the API renders (others snap up to one of these). */
 export type ThumbWidth = 600 | 1200 | 2000;
@@ -743,7 +755,8 @@ export const usePage1 = (driveId: string, enabled = true) =>
   });
 
 /** A suggestion that waits for page 1 (``waiting_for_page1``) asks for it until it is read,
- * then reloads what the inbox and the file show. */
+ * then reloads what the inbox and the file show (and keeps reloading for a while if it
+ * still waits, for the picture of the page). */
 export function useWaitForPage1(driveId: string, waiting: boolean) {
   const client = useQueryClient();
   const page = usePage1(driveId, waiting);
@@ -752,6 +765,20 @@ export function useWaitForPage1(driveId: string, waiting: boolean) {
     if (!waiting || !read) return;
     void client.invalidateQueries({ queryKey: keys.inbox });
     void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, read]);
+  // page 1 is read but the suggestion still waits: a picture area has no picture of the
+  // page yet (made in the background), so ask again for a while
+  useEffect(() => {
+    if (!waiting || !read) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
+      if (tries >= PAGE1_POLLS) clearInterval(timer);
+    }, PAGE1_POLL_MS);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting, read]);
 }
@@ -766,8 +793,17 @@ export const usePage1Lines = () =>
 /** The rule the boxes drawn on page 1 start from, one area per box (a 400 says why not). */
 export const useDraftZone = () =>
   useMutation({
-    mutationFn: (body: { drive_id: string; boxes: PageBox[]; sender?: string | null }) =>
+    mutationFn: (body: { drive_id: string; boxes: PageBox[]; picture_boxes?: PageBox[]; sender?: string | null }) =>
       post<ZoneDraft>("/api/rules/draft-zone", body),
+  });
+
+/** The picture of a box on page 1, cut from the document's page-1 picture (nothing is
+ * written). With ``save`` and the rule's id it is also kept with the rules and ``image``
+ * names the file. A 400 says why not (the picture is not made yet, ...). */
+export const useAreaPicture = () =>
+  useMutation({
+    mutationFn: ({ driveId, box, save = false, ruleId }: { driveId: string; box: PageBox; save?: boolean; ruleId?: string }) =>
+      post<AreaPicture>("/api/rules/area-picture", { drive_id: driveId, box, save, rule_id: ruleId ?? null }),
   });
 
 /** The senders in use, with the number of documents each has. */

@@ -2,27 +2,58 @@
  * rule sheet with the changed area (and the replay, with how the rule did before, so the
  * owner sees the effect on past documents before saving); the archive-wide address area asks
  * once and is saved to the settings. */
-import { useEffect } from "react";
-import { type Area, errorText, type PageBox, type Rule, usePeople, useRules, useSavePeople } from "../../api/client";
+import { useEffect, useRef, useState } from "react";
+import {
+  type Area,
+  errorText,
+  type PageBox,
+  type Rule,
+  useAreaPicture,
+  usePeople,
+  useRules,
+  useSavePeople,
+} from "../../api/client";
 import { visible } from "../../text";
 import { RuleSheet } from "../rules/RuleSheet";
 import { useToast } from "../Toasts";
 import { Sheet } from "../ui/Sheet";
 
-/** ``rule`` with the box of the area changed. */
-export function withChangedArea(rule: Rule, area: Area, box: PageBox): Rule {
+/** ``rule`` with the box of the area changed. A picture area also gets ``image``, the crop
+ * cut again for the new box. */
+export function withChangedArea(rule: Rule, area: Area, box: PageBox, image?: string): Rule {
   if (area.kind === "address") return { ...rule, person_zone: box };
-  return { ...rule, when: { ...rule.when, zones: rule.when.zones.map((z, i) => (i === area.index ? { ...z, box } : z)) } };
+  return {
+    ...rule,
+    when: { ...rule.when, zones: rule.when.zones.map((z, i) => (i === area.index ? { ...z, box, ...(image ? { image } : {}) } : z)) },
+  };
 }
 
-export function AreaChange({ area, box, onClose }: { area: Area; box: PageBox; onClose: () => void }) {
+/** ``driveId``: the document the area was changed on (a picture area is cut again from it). */
+export function AreaChange({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
   if (area.kind === "address" && area.rule_id === "") return <AddressAreaSheet box={box} onClose={onClose} />;
-  return <RuleAreaSheet area={area} box={box} onClose={onClose} />;
+  return <RuleAreaSheet driveId={driveId} area={area} box={box} onClose={onClose} />;
 }
 
-function RuleAreaSheet({ area, box, onClose }: { area: Area; box: PageBox; onClose: () => void }) {
+function RuleAreaSheet({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
   const rules = useRules();
   const toast = useToast();
+  const recut = useAreaPicture();
+  // a picture area's crop is cut again from the current document before the sheet opens
+  const [image, setImage] = useState<string | null>(null);
+  const started = useRef(false);
+  const picture = area.kind === "image";
+  useEffect(() => {
+    if (!picture || started.current) return;
+    started.current = true;
+    recut
+      .mutateAsync({ driveId, box, save: true, ruleId: area.rule_id })
+      .then((cut) => setImage(cut.image ?? null))
+      .catch((e) => {
+        toast({ kind: "error", text: errorText(e) });
+        onClose();
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const rule = rules.data?.rules.find((r) => r.id === area.rule_id);
   const gone = rules.data !== undefined && rule === undefined;
   useEffect(() => {
@@ -31,8 +62,10 @@ function RuleAreaSheet({ area, box, onClose }: { area: Area; box: PageBox; onClo
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gone]);
-  if (!rule) return null;
-  return <RuleSheet initial={withChangedArea(rule, area, box)} replaces={rule.id} before={rule} onClose={onClose} />;
+  if (!rule || (picture && image === null)) return null;
+  return (
+    <RuleSheet initial={withChangedArea(rule, area, box, image ?? undefined)} replaces={rule.id} before={rule} onClose={onClose} />
+  );
 }
 
 function AddressAreaSheet({ box, onClose }: { box: PageBox; onClose: () => void }) {

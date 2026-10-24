@@ -21,10 +21,44 @@ function NotChecked({ items }: { items: Replay["not_checked"] }) {
   );
 }
 
+/** The scores of a picture rule's replay: the lowest of the documents it matched and the
+ * highest of the ones it did not, so the gap between them (or the lack of one) can be seen. */
+function Scores({ scores, needed }: { scores: Replay["scores"]; needed: number | null }) {
+  if (!scores || scores.length === 0) return null;
+  const matched = scores.filter((s) => s.matched);
+  const others = scores.filter((s) => !s.matched);
+  const row = (s: (typeof scores)[number]) => (
+    <li key={`${s.matched}-${s.path}`}>
+      <span className={s.matched ? "replay-score" : "replay-score replay-score-off"}>{s.score.toFixed(2)}</span>
+      {visible(s.path)}
+    </li>
+  );
+  return (
+    <section className="replay-scores" aria-label="Picture scores">
+      <p>
+        How well the picture matched{needed !== null ? ` (${needed.toFixed(2)} is needed)` : ""}:
+      </p>
+      {matched.length > 0 && (
+        <>
+          <p className="hint">Lowest of the documents it matched</p>
+          <ul aria-label="Matched documents">{matched.map(row)}</ul>
+        </>
+      )}
+      {others.length > 0 && (
+        <>
+          <p className="hint">Highest of the documents it did not match</p>
+          <ul aria-label="Documents not matched">{others.map(row)}</ul>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function ReplayResult({
   replay,
   before = null,
   sender = null,
+  needed = null,
   pending = false,
   error = null,
   onRetry,
@@ -34,6 +68,8 @@ export function ReplayResult({
   before?: Replay | null;
   /** The rule's sender: with it, the documents marked as from that sender are compared. */
   sender?: string | null;
+  /** The lowest score a picture area of the rule needs (shown with the scores). */
+  needed?: number | null;
   pending?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -78,6 +114,7 @@ export function ReplayResult({
           {before.marked && before.marked.total > 0 ? `, and found ${before.marked.found} of the ${before.marked.total} you set as from ${sender ?? "this sender"}` : ""}.
         </p>
       )}
+      <Scores scores={replay.scores ?? []} needed={needed} />
       {replay.different.length > 0 && (
         <ul className="replay-different">
           {replay.different.map((d) => (

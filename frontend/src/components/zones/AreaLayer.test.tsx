@@ -41,6 +41,32 @@ describe("changedBox", () => {
   });
 });
 
+describe("AreaLayer picture areas", () => {
+  it("names a picture with its score and draws where it fits best", () => {
+    setup(undefined, [area({ kind: "image", score: 0.934, lines: [[0.12, 0.12, 0.45, 0.25]] })]);
+    expect(screen.getByTitle("pohjola: picture 0.93")).toHaveAttribute("data-kind", "image");
+    const line = screen.getByTestId("area-line");
+    expect(line).toHaveClass("area-match");
+    expect(line).toHaveStyle({ left: "12%", top: "12%" });
+  });
+
+  it("says why a picture did not match instead of repeating the score", () => {
+    setup(undefined, [area({ kind: "image", score: 0.71, matched: false, reason: "picture 0.71, needs 0.85" })]);
+    expect(screen.getByTitle("pohjola: picture 0.71, needs 0.85")).toHaveClass("area-off");
+  });
+
+  it("can be changed like a text area", () => {
+    const onChange = vi.fn();
+    const { el } = setup(onChange, [area({ kind: "image", score: 0.9 })]);
+    fireEvent.pointerDown(el(), { clientX: 40, clientY: 80, button: 0 });
+    fireEvent.pointerDown(el(), { clientX: 40, clientY: 120, button: 0 });
+    fireEvent.pointerMove(el(), { clientX: 60, clientY: 160 });
+    fireEvent.pointerUp(el(), { clientX: 60, clientY: 160 });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]).toMatchObject({ kind: "image" });
+  });
+});
+
 describe("AreaLayer changing areas", () => {
   it("cannot be changed without onChange: no handles, no selection", () => {
     const { el } = setup();

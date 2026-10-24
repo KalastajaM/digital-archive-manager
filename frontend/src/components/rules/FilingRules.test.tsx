@@ -298,4 +298,19 @@ describe("FilingRules", () => {
       expect(within(people).queryByText("Saved.")).toBeNull();
     });
   });
+
+  it("names the pictures of a rule and lists the picture files no rule uses", async () => {
+    const withPicture = rule("acme", {
+      when: {
+        text_contains: [],
+        filename_matches: null,
+        folder_is: null,
+        zones: [{ box: [0.1, 0.1, 0.3, 0.2], text_contains: null, image: "areas/acme-1.png", min_score: null }],
+        person: null,
+      },
+    });
+    setup(DATA({ rules: [withPicture], unused_pictures: ["old-1.png", "old-2.png"] }));
+    expect(await screen.findByRole("button", { name: /^acme/ })).toHaveTextContent("a picture");
+    expect(screen.getByText(/2 picture files in config\/rules\/areas \(old-1.png, old-2.png\) are not used by any rule/)).toBeInTheDocument();
+  });
 });
