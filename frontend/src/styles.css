@@ -1961,3 +1961,28 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .sticker-marks { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); align-items: center; }
 .sticker-marks-title { flex-basis: 100%; font-size: var(--fs-sm); color: var(--muted); }
 .sticker-marks .notice { flex-basis: 100%; margin: 0; }
+
+/* ---- Filing rules: the rule sheet ------------------------------------------------- */
+.rule-words { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0 0 var(--sp-2); padding: 0; }
+.rule-word { border-radius: var(--r-pill); padding: 0 10px; font-size: var(--fs-sm); background: var(--grey-bg); color: var(--muted); text-decoration: line-through; }
+.rule-word[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); text-decoration: none; }
+.rule-field-row { display: flex; gap: var(--sp-3); align-items: center; }
+.rule-field-row > :first-child { flex: 1 1 auto; min-width: 0; }
+.rule-field .rule-off, .field .rule-off { display: inline-flex; align-items: center; gap: 4px; margin: 0; flex: none; font-size: var(--fs-sm); color: var(--muted); }
+.rule-filed { margin: 0 0 var(--sp-3); }
+.replay-result { margin-top: var(--sp-3); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
+.replay-result p { margin: 0 0 var(--sp-1); }
+.replay-different { margin: var(--sp-1) 0; padding-left: var(--sp-4); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.replay-result[aria-busy="true"] { opacity: 0.6; }
+
+/* Settings → Filing rules: a rule's line is the code-line button with its tools beside it */
+.rule-line { display: flex; align-items: center; }
+.rule-line > .code-line { flex: 1; min-width: 0; grid-template-columns: minmax(5rem, 10rem) minmax(0, 1fr) minmax(0, 2fr) auto auto; }
+.rule-line-tools { display: inline-flex; gap: 2px; padding-right: var(--sp-2); }
+.rules-test, .rules-offer { margin-bottom: var(--sp-3); }
+.rules-test-list { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
+.rules-offer { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+@media (max-width: 700px) {
+  .rule-line > .code-line { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .rule-line > .code-line .code-line-label { display: none; }
+}

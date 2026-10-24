@@ -227,7 +227,7 @@ def test_unknown_drive_id_is_404_json(client, inbox_file):
 
 
 def test_op_failed_is_409(client, inbox_file, monkeypatch):
-    def failing(self, reqs, dry_run=False, origin="ui"):
+    def failing(self, reqs, dry_run=False, origin="ui", via="form"):
         raise OpFailed("disk went away")
 
     monkeypatch.setattr(InboxService, "file_it", failing)

@@ -179,7 +179,7 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
     setChoice((old) => new Map(old).set(row.drive_id, !isTicked(row)));
   };
   const fileThem = () => {
-    if (ticked.length > 0) filing.fileIt(ticked, true);
+    if (ticked.length > 0) filing.fileIt(ticked, true, "codes");
   };
   const byId = new Map(entries.map((e) => [e.record.drive_id, e]));
   const flagged = rows.filter((r) => r.flag !== null).length;

@@ -39,7 +39,7 @@ describe("Settings", () => {
     expect(await within(nav).findByRole("heading", { name: "This archive · Home" })).toBeInTheDocument();
     expect(within(nav).getByRole("heading", { name: "This browser" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Filing codes" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/settings/filing-codes", "/settings/appearance"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/settings/filing-codes", "/settings/filing-rules", "/settings/appearance"]);
   });
 
   it("an unknown section opens the first", async () => {

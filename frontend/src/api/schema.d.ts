@@ -2134,6 +2134,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Rules
+         * @description The loaded rules in load order (the file each is in, whether it is a learned rule
+         *     and how its suggestions have fared), files that were skipped, and the offer state.
+         */
+        get: operations["list_rules_api_rules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replay Rule
+         * @description What the rule would have done to the files already filed. ``replaces`` puts it
+         *     where that rule stands, otherwise where a new rule is saved. Changes nothing.
+         */
+        post: operations["replay_rule_api_rules_replay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explain Document
+         * @description For one document: which rules match, why (not), and what each one wins.
+         */
+        post: operations["explain_document_api_rules_explain_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put State
+         * @description Turn the offer to make a rule on or off; ``clear_declined`` forgets the word
+         *     sets that were turned down.
+         */
+        put: operations["put_state_api_rules_state_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/state/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline
+         * @description Remember a set of words the user turned down (not offered again).
+         */
+        post: operations["decline_api_rules_state_decline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Rule
+         * @description Save a rule: new ones go at the end of ``learned.yaml``; with ``replaces`` that
+         *     rule is rewritten in place. ``rule_id`` is the rule's (new) id and must equal the
+         *     body's; ``replaces`` is the id being replaced (the old one, for a rename). 400 for an
+         *     invalid, repeated or reserved one.
+         */
+        put: operations["save_rule_api_rules__rule_id__put"];
+        post?: never;
+        /** Delete Rule */
+        delete: operations["delete_rule_api_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/{rule_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Rule
+         * @description Move a learned rule up (negative) or down within ``learned.yaml``.
+         */
+        post: operations["move_rule_api_rules__rule_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/archives": {
         parameters: {
             query?: never;
@@ -2986,6 +3133,13 @@ export interface components {
                 [key: string]: components["schemas"]["FieldDef"];
             };
         };
+        /** DraftWordOut */
+        DraftWordOut: {
+            /** Word */
+            word: string;
+            /** Ticked */
+            ticked: boolean;
+        };
         /** DriveIdBody */
         DriveIdBody: {
             /** Drive Id */
@@ -3112,6 +3266,12 @@ export interface components {
              * @default false
              */
             dry_run: boolean;
+            /**
+             * Via
+             * @default form
+             * @enum {string}
+             */
+            via: "form" | "batch" | "codes";
         };
         /** FileDetailOut */
         FileDetailOut: {
@@ -3150,6 +3310,7 @@ export interface components {
             items: number[];
             /** Follow Up Error */
             follow_up_error: string | null;
+            offer?: components["schemas"]["RuleOfferOut"] | null;
         };
         /** FileLinksOut */
         FileLinksOut: {
@@ -4125,6 +4286,34 @@ export interface components {
             /** Folder */
             folder: string;
         };
+        /** ReplayHitOut */
+        ReplayHitOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path Now */
+            path_now: string;
+            /** Path Rule */
+            path_rule: string;
+        };
+        /** ReplayOut */
+        ReplayOut: {
+            /** Matched */
+            matched: number;
+            /** Same */
+            same: number;
+            /** Different */
+            different: components["schemas"]["ReplayHitOut"][];
+            /** Inbox */
+            inbox: number;
+            /** Shadowed */
+            shadowed: components["schemas"]["ShadowOut"][];
+            /** Checked */
+            checked: number;
+            /** Total */
+            total: number;
+            /** Truncated */
+            truncated: boolean;
+        };
         /** ResolvedOpOut */
         ResolvedOpOut: {
             kind: components["schemas"]["OpKind"];
@@ -4147,12 +4336,176 @@ export interface components {
             /** Queued */
             queued: number;
         };
+        /** RuleDraftOut */
+        RuleDraftOut: {
+            /** Id */
+            id: string;
+            /** Words */
+            words: components["schemas"]["DraftWordOut"][];
+            /** Folder */
+            folder: string | null;
+            /** Name */
+            name: string | null;
+            /** Tags */
+            tags: string[];
+            /** Tray */
+            tray: string | null;
+            /** Payee */
+            payee: string | null;
+        };
         /** RuleErrorOut */
         RuleErrorOut: {
             /** File */
             file: string;
             /** Message */
             message: string;
+        };
+        /** RuleExplainIn */
+        RuleExplainIn: {
+            /** Drive Id */
+            drive_id: string;
+        };
+        /** RuleExplainOut */
+        RuleExplainOut: {
+            /** Rule Id */
+            rule_id: string;
+            /** Matched */
+            matched: boolean;
+            /** Why */
+            why: string;
+            /** Wins */
+            wins: string[];
+        };
+        /** RuleIn */
+        RuleIn: {
+            /** Id */
+            id: string;
+            when?: components["schemas"]["RuleWhenIn"];
+            then?: components["schemas"]["RuleThenIn"];
+        };
+        /** RuleMoveIn */
+        RuleMoveIn: {
+            /** Delta */
+            delta: number;
+        };
+        /**
+         * RuleOfferOut
+         * @description Offer to make a rule (``new``) or change a learned one (``update``) from a filing.
+         */
+        RuleOfferOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "new" | "update";
+            /** Rule Id */
+            rule_id: string | null;
+            /** Drive Id */
+            drive_id: string;
+            draft: components["schemas"]["RuleDraftOut"];
+        };
+        /** RuleOut */
+        RuleOut: {
+            /** Id */
+            id: string;
+            /** File */
+            file: string;
+            /** Learned */
+            learned: boolean;
+            when: components["schemas"]["RuleWhenOut"];
+            then: components["schemas"]["RuleThenOut"];
+            stats: components["schemas"]["RuleStatsOut"];
+        };
+        /** RuleReplayIn */
+        RuleReplayIn: {
+            rule: components["schemas"]["RuleIn"];
+            /** Replaces */
+            replaces?: string | null;
+        };
+        /** RuleStatsOut */
+        RuleStatsOut: {
+            /** Suggested */
+            suggested: number;
+            /** Changed */
+            changed: number;
+            /** Last Used */
+            last_used: number | null;
+            /** Flagged */
+            flagged: boolean;
+        };
+        /** RuleThenIn */
+        RuleThenIn: {
+            /** Folder */
+            folder?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Tray */
+            tray?: string | null;
+            /** Payee */
+            payee?: string | null;
+        };
+        /** RuleThenOut */
+        RuleThenOut: {
+            /** Folder */
+            folder: string | null;
+            /** Name */
+            name: string | null;
+            /** Tags */
+            tags: string[];
+            /** Tray */
+            tray: string | null;
+            /** Payee */
+            payee: string | null;
+        };
+        /** RuleWhenIn */
+        RuleWhenIn: {
+            /** Text Contains */
+            text_contains?: string[];
+            /** Filename Matches */
+            filename_matches?: string | null;
+            /** Folder Is */
+            folder_is?: string | null;
+        };
+        /** RuleWhenOut */
+        RuleWhenOut: {
+            /** Text Contains */
+            text_contains: string[];
+            /** Filename Matches */
+            filename_matches: string | null;
+            /** Folder Is */
+            folder_is: string | null;
+        };
+        /** RulesDeclineIn */
+        RulesDeclineIn: {
+            /** Words */
+            words: string[];
+        };
+        /** RulesOut */
+        RulesOut: {
+            /** Rules */
+            rules: components["schemas"]["RuleOut"][];
+            /** Errors */
+            errors: components["schemas"]["RuleErrorOut"][];
+            state: components["schemas"]["RulesStateOut"];
+        };
+        /** RulesStateIn */
+        RulesStateIn: {
+            /** Offer */
+            offer?: boolean | null;
+            /**
+             * Clear Declined
+             * @default false
+             */
+            clear_declined: boolean;
+        };
+        /** RulesStateOut */
+        RulesStateOut: {
+            /** Offer */
+            offer: boolean;
+            /** Declined */
+            declined: number;
         };
         /** RunOut */
         RunOut: {
@@ -4321,6 +4674,13 @@ export interface components {
              * @default 0
              */
             item_count: number;
+        };
+        /** ShadowOut */
+        ShadowOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Rule Id */
+            rule_id: string;
         };
         /** SheetLayoutIn */
         SheetLayoutIn: {
@@ -16157,6 +16517,774 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_rules_api_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    replay_rule_api_rules_replay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleReplayIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    explain_document_api_rules_explain_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleExplainIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleExplainOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_state_api_rules_state_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesStateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesStateOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    decline_api_rules_state_decline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesDeclineIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesStateOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    save_rule_api_rules__rule_id__put: {
+        parameters: {
+            query?: {
+                replaces?: string | null;
+            };
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_rule_api_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    move_rule_api_rules__rule_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleMoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             /** @description Forbidden */

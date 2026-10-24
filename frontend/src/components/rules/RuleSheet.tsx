@@ -1,0 +1,345 @@
+/** Make, update or edit a filing rule: the words a document must contain, what the rule
+ * then does, and the proof (a replay over the documents filed so far) below, refreshed
+ * 400 ms after the last edit. Saving asks first when the rule would have filed some
+ * document somewhere else. */
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  errorText,
+  type Replay,
+  type Rule,
+  type RuleDraft,
+  type RuleIn,
+  type RuleOffer,
+  useReplay,
+  useRules,
+  useSaveRule,
+  useTrays,
+} from "../../api/client";
+import { plural } from "../../format";
+import { visible } from "../../text";
+import { useInboxFolder } from "../MoveTo";
+import { TagInput } from "../TagInput";
+import { useToast } from "../Toasts";
+import { Sheet } from "../ui/Sheet";
+import { ReplayResult } from "./ReplayResult";
+
+const REPLAY_DELAY_MS = 400;
+
+type Word = { word: string; ticked: boolean };
+/** A field of the "then" part: ``off`` leaves it out of the rule. */
+type Text = { off: boolean; value: string };
+
+const isDraft = (r: RuleDraft | Rule): r is RuleDraft => "words" in r;
+
+/** What saving or deleting a rule kept in a file written by hand does to that file. */
+export const rewriteNote = (doing: "Saving" | "Deleting", file: string) =>
+  `${doing} rewrites ${file}, so the comments in it are lost. A copy of the old file is kept next to it (.bak).`;
+const text = (value: string | null): Text => ({ off: value === null, value: value ?? "" });
+
+/** The sheet an offer on the filed toast opens. "Make a rule…" starts from the draft;
+ * "Update rule …" starts from that rule as it is (its id, words and other conditions)
+ * with only the folder and name patterns of the filing just done. A rule that is gone
+ * by now is offered as a new one. */
+export function OfferRuleSheet({
+  offer,
+  filed,
+  onClose,
+}: {
+  offer: RuleOffer;
+  filed?: { folder: string; name: string };
+  onClose: () => void;
+}) {
+  const update = offer.kind === "update" && offer.rule_id ? offer.rule_id : null;
+  const rules = useRules();
+  const toast = useToast();
+  const failed = update !== null && rules.isError;
+  useEffect(() => {
+    if (!failed) return;
+    toast({ kind: "error", text: `Could not open rule ${update}: ${errorText(rules.error)}` });
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failed]);
+  if (update === null) return <RuleSheet initial={offer.draft} filed={filed} onClose={onClose} />;
+  if (!rules.data) return null;
+  const rule = rules.data.rules.find((r) => r.id === update);
+  if (!rule) return <RuleSheet initial={offer.draft} filed={filed} onClose={onClose} />;
+  const initial: Rule = { ...rule, then: { ...rule.then, folder: offer.draft.folder, name: offer.draft.name } };
+  return <RuleSheet initial={initial} replaces={rule.id} filed={filed} onClose={onClose} />;
+}
+
+export function RuleSheet({
+  initial,
+  replaces,
+  filed,
+  onClose,
+}: {
+  initial: RuleDraft | Rule;
+  /** The id of the rule this one takes the place of (an update, or an edit). */
+  replaces?: string;
+  /** Offer mode: what was just filed (its folder and name, shown under the words). */
+  filed?: { folder: string; name: string };
+  onClose: () => void;
+}) {
+  const draft = isDraft(initial);
+  const replacing = replaces ?? (draft ? undefined : initial.id);
+  const inbox = useInboxFolder();
+  const trays = useTrays().data?.trays ?? [];
+  const toast = useToast();
+  const replay = useReplay();
+  const save = useSaveRule();
+  const ids = useId();
+
+  const [words, setWords] = useState<Word[]>(() =>
+    draft ? initial.words.map((w) => ({ ...w })) : initial.when.text_contains.map((word) => ({ word, ticked: true })),
+  );
+  const [adding, setAdding] = useState("");
+  const start = draft ? initial : initial.then; // a draft's actions sit on the draft itself
+  const [folder, setFolder] = useState(() => text(start.folder));
+  const [name, setName] = useState(() => text(start.name));
+  const [payee, setPayee] = useState(() => text(start.payee));
+  const [tray, setTray] = useState(() => text(start.tray));
+  const [tags, setTags] = useState<string[]>(() => start.tags);
+  const [tagsOff, setTagsOff] = useState(() => tags.length === 0);
+  const [more, setMore] = useState(() => !draft && !!(initial.when.filename_matches || initial.when.folder_is));
+  const [filename, setFilename] = useState(() => (draft ? "" : (initial.when.filename_matches ?? "")));
+  // A draft has no folder condition: a new rule applies to what is in the inbox. Until
+  // the user types, an edited rule keeps its own.
+  const [folderIsEdited, setFolderIs] = useState<string | null>(null);
+  const folderIs = folderIsEdited ?? (draft ? inbox : initial.when.folder_is) ?? "";
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const ticked = words.filter((w) => w.ticked).map((w) => w.word);
+  const rule: RuleIn = useMemo(
+    () => ({
+      id: initial.id,
+      when: {
+        text_contains: ticked,
+        filename_matches: filename.trim() || null,
+        folder_is: folderIs.trim() || null,
+      },
+      then: {
+        folder: folder.off ? null : folder.value,
+        name: name.off ? null : name.value,
+        tags: tagsOff ? [] : tags,
+        tray: tray.off || !tray.value ? null : tray.value,
+        payee: payee.off ? null : payee.value,
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initial.id, JSON.stringify(ticked), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
+  );
+  const ruleKey = JSON.stringify(rule);
+
+  // The last successful replay with the rule it was made for: Save needs one for exactly
+  // the rule on screen, so the proof is never skipped.
+  const [proof, setProof] = useState<{ key: string; replay: Replay } | null>(null);
+  const latestKey = useRef(ruleKey);
+  latestKey.current = ruleKey;
+  const { mutate: runReplay } = replay;
+  const run = () => {
+    const key = ruleKey;
+    runReplay(
+      { rule, replaces: replacing },
+      { onSuccess: (result) => key === latestKey.current && setProof({ key, replay: result }) },
+    );
+  };
+  useEffect(() => {
+    if (ticked.length === 0) return;
+    const timer = setTimeout(run, REPLAY_DELAY_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ruleKey, replacing, runReplay]);
+
+  const addWord = () => {
+    const w = adding.trim().toLowerCase();
+    setAdding("");
+    if (!w) return;
+    setWords((all) =>
+      all.some((x) => x.word === w) ? all.map((x) => (x.word === w ? { ...x, ticked: true } : x)) : [...all, { word: w, ticked: true }],
+    );
+  };
+
+  const tested = proof !== null && proof.key === ruleKey ? proof.replay : null;
+  const failed = replay.isError && tested === null;
+  const different = tested?.different.length ?? 0;
+  const doSave = async () => {
+    setAsking(false);
+    setError(null);
+    try {
+      await save.mutateAsync({ rule, replaces: replacing });
+      toast({ kind: "info", text: `Rule ${rule.id} saved.` });
+      onClose();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+  const canSave = ticked.length > 0 && tested !== null && !save.isPending;
+  // an existing rule opened from a filing is an update of it
+  const title = draft
+    ? replaces
+      ? `Update rule ${replaces}`
+      : "Make a rule"
+    : `${filed ? "Update" : "Edit"} rule ${initial.id}`;
+
+  const textField = (label: string, state: Text, set: (t: Text) => void, hint?: string) => (
+    <div className="field rule-field">
+      <label htmlFor={`${ids}-${label}`}>{label}</label>
+      <div className="rule-field-row">
+        <input
+          id={`${ids}-${label}`}
+          value={state.value}
+          disabled={state.off}
+          onChange={(e) => set({ ...state, value: e.target.value })}
+        />
+        <label className="rule-off">
+          <input
+            type="checkbox"
+            checked={state.off}
+            aria-label={`Leave out ${label.toLowerCase()}`}
+            onChange={(e) => set({ ...state, off: e.target.checked })}
+          />
+          Leave out
+        </label>
+      </div>
+      {hint && <p className="hint">{hint}</p>}
+    </div>
+  );
+
+  return (
+    <>
+      <Sheet
+        open
+        title={title}
+        onClose={onClose}
+        className="rule-sheet"
+        footer={
+          <>
+            {ticked.length === 0 && <span className="hint footer-start">Tick at least one word</span>}
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!canSave}
+              onClick={() => (different > 0 ? setAsking(true) : void doSave())}
+            >
+              {ticked.length > 0 && tested === null && !failed ? "Testing…" : "Save"}
+            </button>
+          </>
+        }
+      >
+        <div className="field">
+          <span className="field-label" id={`${ids}-words`}>When the text contains</span>
+          <ul className="rule-words" aria-labelledby={`${ids}-words`}>
+            {words.map((w) => (
+              <li key={w.word}>
+                <button
+                  type="button"
+                  className="rule-word"
+                  aria-pressed={w.ticked}
+                  onClick={() => setWords((all) => all.map((x) => (x.word === w.word ? { ...x, ticked: !x.ticked } : x)))}
+                >
+                  {visible(w.word)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <input
+            aria-label="Add a word"
+            placeholder="Add a word"
+            value={adding}
+            onChange={(e) => setAdding(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addWord();
+              }
+            }}
+            onBlur={addWord}
+          />
+          <p className="hint">Any ticked word is enough; more words catch more documents.</p>
+        </div>
+        {filed && (
+          <p className="hint rule-filed">
+            Filed as: {visible(`${filed.folder}/${filed.name}`)}
+          </p>
+        )}
+        {textField("Folder", folder, setFolder, "Patterns like {year} are filled in for each document.")}
+        {textField("Name", name, setName)}
+        <div className="field">
+          <label htmlFor={`${ids}-tags`}>Tags</label>
+          <div className="rule-field-row">
+            <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} disabled={tagsOff} />
+            <label className="rule-off">
+              <input type="checkbox" checked={tagsOff} aria-label="Leave out tags" onChange={(e) => setTagsOff(e.target.checked)} />
+              Leave out
+            </label>
+          </div>
+        </div>
+        <div className="field rule-field">
+          <label htmlFor={`${ids}-tray`}>Tray</label>
+          <div className="rule-field-row">
+            <select
+              id={`${ids}-tray`}
+              value={tray.value}
+              disabled={tray.off}
+              onChange={(e) => setTray({ ...tray, value: e.target.value })}
+            >
+              <option value="">None</option>
+              {trays.map((t) => (
+                <option key={t.id} value={t.id}>{visible(t.name)}</option>
+              ))}
+            </select>
+            <label className="rule-off">
+              <input type="checkbox" checked={tray.off} aria-label="Leave out tray" onChange={(e) => setTray({ ...tray, off: e.target.checked })} />
+              Leave out
+            </label>
+          </div>
+        </div>
+        {textField("Payee", payee, setPayee)}
+        <button type="button" className="link-button" aria-expanded={more} onClick={() => setMore(!more)}>
+          More conditions
+        </button>
+        {more && (
+          <>
+            <div className="field">
+              <label htmlFor={`${ids}-file`}>File name matches</label>
+              <input id={`${ids}-file`} value={filename} onChange={(e) => setFilename(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor={`${ids}-in`}>Document is in folder</label>
+              <input id={`${ids}-in`} value={folderIs} onChange={(e) => setFolderIs(e.target.value)} />
+            </div>
+          </>
+        )}
+        {ticked.length > 0 && (
+          <ReplayResult
+            replay={proof?.replay}
+            pending={tested === null && !failed}
+            error={failed ? errorText(replay.error) : null}
+            onRetry={run}
+          />
+        )}
+        {!draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}
+        {error && <p className="error" role="alert">{visible(error)}</p>}
+      </Sheet>
+      {asking && (
+        <Sheet
+          open
+          title="Save anyway?"
+          onClose={() => setAsking(false)}
+          footer={
+            <>
+              <button type="button" onClick={() => setAsking(false)}>Cancel</button>
+              <button type="button" className="primary" onClick={() => void doSave()}>Save anyway</button>
+            </>
+          }
+        >
+          <p>
+            {plural(different, "document")} would land somewhere else. Save anyway?
+          </p>
+        </Sheet>
+      )}
+    </>
+  );
+}

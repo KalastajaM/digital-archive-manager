@@ -426,6 +426,9 @@ def test_the_examples_as_shipped_in_0_1_0_are_still_replaced(blank):
     """The examples' comments changed after 0.1.0: an unedited 0.1.0 copy (any line
     endings) still counts as the user's no rules."""
     shipped = (layouts.DEFAULTS_DIR / "rules" / "00-examples.yaml").read_text(encoding="utf-8")
+    shipped = shipped.replace(
+        "# Rules you make in the app are kept in learned.yaml, which is read first.\n#\n", ""
+    )  # added after 0.1.0
     old_line = "#   folder_is:        folder the file currently sits in\n"
     start = shipped.index("#   folder_is:")
     end = shipped.index("# then:")

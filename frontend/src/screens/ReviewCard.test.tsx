@@ -229,7 +229,7 @@ describe("ReviewCard", () => {
     const [file] = posts(calls, "/api/inbox/file");
     expect(file.headers["Content-Type"]).toBe("application/json");
     expect(file.credentials).toBe("same-origin");
-    expect(file.body).toEqual({ requests: [request], dry_run: false });
+    expect(file.body).toEqual({ requests: [request], dry_run: false, via: "form" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     // Advances to the next entry and offers undo.
@@ -332,7 +332,7 @@ describe("ReviewCard", () => {
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "File" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
     const previewed = posts(calls, "/api/inbox/preview").at(-1)!.body;
-    expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: previewed, dry_run: false });
+    expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: previewed, dry_run: false, via: "form" });
   });
 
   it("a collision note opens the confirm dialog", async () => {
@@ -439,6 +439,7 @@ describe("ReviewCard", () => {
     await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
     expect(posts(calls, "/api/inbox/file")[0].body).toEqual({
       dry_run: false,
+      via: "batch",
       requests: [
         {
           drive_id: "d1",
@@ -699,6 +700,7 @@ describe("ReviewCard", () => {
     expect(posts(calls, "/api/inbox/file")[0].body).toEqual({
       requests: previewBodies[1],
       dry_run: false,
+      via: "form",
     });
     expect((previewBodies[1] as { folder: string }[])[0].folder).toBe("10. Financial/Banks");
   });
@@ -860,7 +862,7 @@ describe("ReviewCard", () => {
         note: "Pay before the trip",
       };
       expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([request]);
-      expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: [request], dry_run: false });
+      expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: [request], dry_run: false, via: "form" });
       expect(
         await screen.findByText(
           "Filed as 10. Financial/Banks/2026-10-01 Kotihoito lasku.pdf · added to To pay, Kitchen, Legal",
@@ -884,7 +886,7 @@ describe("ReviewCard", () => {
       expect(previews).toHaveLength(2);
       expect(previews[0][0].tray).toBeUndefined();
       expect(previews[1][0]).toMatchObject({ tray: "to-read", tray_fields: {} });
-      expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: previews[1], dry_run: false });
+      expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: previews[1], dry_run: false, via: "form" });
     });
 
     it("1–9 pick a tray and 0 picks Nothing, never while typing", async () => {
@@ -1118,6 +1120,7 @@ describe("ReviewCard", () => {
       };
       expect(posts(calls, "/api/inbox/file")[0].body).toEqual({
         dry_run: false,
+        via: "batch",
         requests: [
           { drive_id: "d1", name: "2026-10-01 Kotihoito lasku.pdf", ...shared },
           { drive_id: "d2", name: "2026-10-02 Sähkölasku.pdf", ...shared },
@@ -1479,6 +1482,29 @@ describe("Suggestion chips (rules and scan)", () => {
     await setup();
     noChips();
     expect(screen.queryByRole("button", { name: "Use all" })).not.toBeInTheDocument();
+  });
+
+  it("a chip of a rule that was corrected recently says so in its tip", async () => {
+    const flagged = (flag: boolean) => ({
+      rules: [{ id: "kotihoito", file: "learned.toml", learned: true, when: { text_contains: ["x"], filename_matches: null, folder_is: null }, then: { folder: null, name: null, tags: [], tray: null, payee: null }, stats: { suggested: 5, changed: 2, last_used: null, flagged: flag } }],
+      errors: [],
+      state: { offer: true, declined: 0 },
+    });
+    const { user, name } = await setup({ "GET /api/rules": { body: flagged(true) } });
+    await user.clear(name);
+    await user.type(name, "mine.pdf");
+    const nameChip = chip(/^Suggested Name: 2026-10-01 Kotihoito lasku\.pdf \(rule kotihoito\)$/);
+    await waitFor(() => expect(within(nameChip).getByText("rule kotihoito")).toHaveAttribute("title", "rule kotihoito: this rule was corrected recently"));
+  });
+
+  it("a chip of a rule that was not flagged has no note", async () => {
+    const { user, name } = await setup({
+      "GET /api/rules": { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } },
+    });
+    await user.clear(name);
+    await user.type(name, "mine.pdf");
+    const nameChip = chip(/^Suggested Name: 2026-10-01 Kotihoito lasku\.pdf \(rule kotihoito\)$/);
+    expect(within(nameChip).getByText("rule kotihoito")).toHaveAttribute("title", "rule kotihoito");
   });
 
   it("a field edited away from the rule's value gets a chip; Use changes only that field", async () => {
@@ -1991,5 +2017,145 @@ describe("Filing codes in the form", () => {
     expect(screen.getByText("These filing codes disagree; pick the values here.")).toBeInTheDocument();
     const row = document.querySelector("[data-inbox-entry]") as HTMLElement;
     expect(within(row).getByText("P")).toBeInTheDocument();
+  });
+});
+
+const DRAFT = {
+  id: "kotihoito",
+  words: [
+    { word: "kotihoito", ticked: true },
+    { word: "lasku", ticked: false },
+  ],
+  folder: "20. Health/Kotihoito",
+  name: "{doc_date}_{stem}",
+  tags: ["invoice"],
+  tray: null,
+  payee: null,
+};
+const OFFER = { kind: "new", rule_id: null, drive_id: "d1", draft: DRAFT };
+const REPLAY = {
+  matched: 3,
+  same: 3,
+  different: [],
+  inbox: 0,
+  shadowed: [],
+  checked: 3,
+  total: 3,
+  truncated: false,
+};
+
+describe("Filing says where it came from and offers a rule", () => {
+  it("a single document sends via form, a batch via batch", async () => {
+    const { calls, user } = await setup({
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult() },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/file")[0].body).toMatchObject({ via: "form" });
+
+    await user.click(await screen.findByRole("checkbox", { name: "Select scan001.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select scan002.pdf" }));
+    await setFolder(user, "10. Financial/Banks");
+    await user.click(screen.getByRole("button", { name: "File 2 files" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "File" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(2));
+    expect(posts(calls, "/api/inbox/file")[1].body).toMatchObject({ via: "batch" });
+  });
+
+  it("a result with an offer adds Make a rule and Not for these to the toast", async () => {
+    const { user } = await setup({
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult({ offer: OFFER }) },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make a rule…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Not for these" })).toBeInTheDocument();
+  });
+
+  it("an update offer says which rule", async () => {
+    const { user } = await setup({
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult({ offer: { ...OFFER, kind: "update", rule_id: "kotihoito" } }) },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    expect(await screen.findByRole("button", { name: "Update rule kotihoito…" })).toBeInTheDocument();
+  });
+
+  it("no offer, no extra buttons", async () => {
+    const { user } = await setup({
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult() },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await screen.findByRole("button", { name: "Undo" });
+    expect(screen.queryByRole("button", { name: "Make a rule…" })).toBeNull();
+  });
+
+  it("Make a rule opens the sheet with the filed document and the inbox as folder_is", async () => {
+    const { calls, user } = await setup({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult({ offer: OFFER }) },
+      "POST /api/rules/replay": { body: REPLAY },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(await screen.findByRole("button", { name: "Make a rule…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
+    expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf");
+    await waitFor(() => expect(posts(calls, "/api/rules/replay").length).toBeGreaterThan(0));
+    const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { folder_is: string; text_contains: string[] } } };
+    expect(sent.rule.when.text_contains).toEqual(["kotihoito"]);
+    expect(sent.rule.when.folder_is).toBe("##. Organize");
+  });
+
+  it("Update rule opens the existing rule and saves it under its own id with its own conditions", async () => {
+    const when = { text_contains: ["kotihoito", "hoitomaksu"], filename_matches: "(?i)hoito", folder_is: "##. Organize" };
+    const existing = {
+      id: "kotihoito",
+      file: "learned.yaml",
+      learned: true,
+      when,
+      then: { folder: "20. Health/{year}", name: "{doc_date}_Kotihoito", tags: ["health"], tray: null, payee: null },
+      stats: { suggested: 3, changed: 1, last_used: null, flagged: false },
+    };
+    const draft = { ...DRAFT, id: "kotihoito-2", words: [{ word: "lasku", ticked: true }] };
+    const { calls, user } = await setup({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/rules": { body: { rules: [existing], errors: [], state: { offer: true, declined: 0 } } },
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult({ offer: { ...OFFER, kind: "update", rule_id: "kotihoito", draft } }) },
+      "POST /api/rules/replay": { body: REPLAY },
+      "PUT /api/rules/kotihoito": { body: { rules: [existing], errors: [], state: { offer: true, declined: 0 } } },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(await screen.findByRole("button", { name: "Update rule kotihoito…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Update rule kotihoito" });
+    expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf");
+    const save = await within(sheet).findByRole("button", { name: "Save" });
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.url).toBe("/api/rules/kotihoito?replaces=kotihoito");
+    const body = put.body as { id: string; when: unknown; then: Record<string, unknown> };
+    expect(body.id).toBe("kotihoito");
+    expect(body.when).toEqual(when);
+    // the filing's folder and name patterns; the rule's other actions stay
+    expect(body.then).toMatchObject({ folder: DRAFT.folder, name: DRAFT.name, tags: ["health"] });
+  });
+
+  it("Not for these posts the ticked words", async () => {
+    const { calls, user } = await setup({
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+      "POST /api/inbox/file": { body: fileResult({ offer: OFFER }) },
+      "POST /api/rules/state/decline": { body: { offer: true, declined: 1 } },
+    });
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(await screen.findByRole("button", { name: "Not for these" }));
+    await waitFor(() => expect(posts(calls, "/api/rules/state/decline")).toHaveLength(1));
+    expect(posts(calls, "/api/rules/state/decline")[0].body).toEqual({ words: ["kotihoito"] });
   });
 });

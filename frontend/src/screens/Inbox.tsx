@@ -8,7 +8,9 @@ import {
   type FileRequest,
   type InboxEntry,
   type ResolvedOp,
+  type RuleOffer,
   type TrayDef,
+  useDeclineRule,
   useInbox,
   useStatus,
   useToday,
@@ -21,7 +23,8 @@ import { MarkedBatch, markedFollowUps } from "../components/codes/MarkedBatch";
 import { useSetupFolders } from "../components/SetupFolders";
 import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
 import { useLocalToday } from "../components/RelativeDate";
-import { useBlockToastActions, useToast } from "../components/Toasts";
+import { OfferRuleSheet } from "../components/rules/RuleSheet";
+import { type ToastAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { isTrashKey, useTrash } from "../components/Trash";
 import { IconButton } from "../components/ui/IconButton";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
@@ -154,6 +157,33 @@ export default function Inbox() {
   const current = entries[index] as InboxEntry | undefined;
   const batch = entries.filter((e) => checked.has(e.record.drive_id));
 
+  const declineRule = useDeclineRule();
+  const [ruleOffer, setRuleOffer] = useState<{ offer: RuleOffer; filed?: { folder: string; name: string } } | null>(null);
+  /** "Make a rule…" / "Update rule …" and "Not for these", on the filed toast. */
+  const offerActions = (offer: RuleOffer, requests: FileRequest[]): ToastAction[] => {
+    const request = requests.find((r) => r.drive_id === offer.drive_id);
+    const filed = request ? { folder: request.folder, name: request.name } : undefined;
+    return [
+      {
+        label: offer.kind === "update" ? `Update rule ${offer.rule_id}…` : "Make a rule…",
+        run: () => {
+          if (dialogOpen()) return;
+          setRuleOffer({ offer, filed });
+        },
+      },
+      {
+        label: "Not for these",
+        run: () => {
+          if (dialogOpen()) return;
+          declineRule.mutate(
+            offer.draft.words.filter((w) => w.ticked).map((w) => w.word),
+            { onError: (e) => toast({ kind: "error", text: `Could not save that: ${errorText(e)}` }) },
+          );
+        },
+      },
+    ];
+  };
+
   const filing = useFiling((result, complete, requests) => {
     const added = addedTo(result, requests, trayList);
     if (result.done.length > 0) {
@@ -171,6 +201,7 @@ export default function Inbox() {
             undo.open(target);
           },
         },
+        actions: result.offer ? offerActions(result.offer, requests) : undefined,
       });
     } else if (complete) {
       toast({ kind: "info", text: `No file changes needed.${added}` });
@@ -525,6 +556,14 @@ export default function Inbox() {
       </section>
       {quickLook.view}
       {trash.view}
+      {ruleOffer && (
+        <OfferRuleSheet
+          key={`${ruleOffer.offer.drive_id}-${ruleOffer.offer.draft.id}`}
+          offer={ruleOffer.offer}
+          filed={ruleOffer.filed}
+          onClose={() => setRuleOffer(null)}
+        />
+      )}
       {addFiles.view}
       {setupFolders.view}
       {filing.confirm && (

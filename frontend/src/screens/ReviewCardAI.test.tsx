@@ -281,7 +281,7 @@ describe("ReviewCard: Ask AI", () => {
     await user.click(within(dialog).getByRole("button", { name: "File" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
     // the snapshot rule: what is filed is what was previewed, which is the form
-    expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: [expected], dry_run: false });
+    expect(posts(calls, "/api/inbox/file")[0].body).toEqual({ requests: [expected], dry_run: false, via: "form" });
     expect(posts(calls, "/api/inbox/preview")).toHaveLength(1);
   });
 

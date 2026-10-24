@@ -8,6 +8,15 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Learned filing rules: after you file a document by hand, dam can offer to make a rule
+  from it (**Make a rule…**, or **Update rule** for a rule made in the app). Before you
+  save, it replays the rule against the documents you filed before and shows how many
+  would land exactly where they are and which would not. Each rule keeps a record of how
+  often its suggestion was kept or changed, and one corrected in 2 of its last 5 filings
+  is flagged. Settings → Filing rules lists every rule in the order it applies, lets you
+  edit, add, delete and reorder them, test a document from the inbox, and switch the
+  offer off. Rules made in the app are kept in `config/rules/learned.yaml`, read before
+  the other rule files. Nothing is filed without your confirm.
 - Settings → Appearance: choose Light, Dark, or Auto to follow the system setting. It
   applies at once, to every archive, and is remembered by this browser.
 - Filing codes: drop files into a code's folder in the inbox (To pay, To action, To

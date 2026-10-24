@@ -289,6 +289,13 @@ All in the data folder under `config/`:
   documents the format. In `when`, all *given* conditions must match; for
   `text_contains`, one matching term is enough. `{doc_date}` and `{year}` need a
   detected date; without one, the rule's template is not applied.
+- `rules/learned.yaml`: rules made or edited in the app, a YAML list created when first
+  needed. It is read **before** the other rule files, so a learned rule wins over broad
+  ones. Saving a rule that lives in another file rewrites that file (comments are lost; a
+  `.bak-<time>` copy is kept). See the user guide, "Filing rules".
+- `<data dir>/rules-state.json` (beside the config folder, not in it): the switch for
+  offering a rule after a manual filing, and the match words of documents you answered
+  "Not for these".
 
 To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
 

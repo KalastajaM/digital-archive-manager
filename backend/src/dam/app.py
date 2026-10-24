@@ -30,16 +30,18 @@ from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
-from dam.rules.model import Rule, RuleError, load_rules
+from dam.rules.learned import rule_file, write_rules_file
+from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
 from dam.search import SearchHit, search
 from dam.services.activity import ActivityService
 from dam.services.browse import BrowseService
-from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotConfigured
+from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotConfigured, NotFound
 from dam.services.inbox import InboxService
 from dam.services.intake import IntakeService
 from dam.services.launch import LaunchService
 from dam.services.layout import LayoutService
 from dam.services.preview import PreviewService
+from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService
 from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
@@ -64,6 +66,7 @@ class App:
     content: ContentIndexer
     trays: TrayService = field(init=False)
     notes: NotesService = field(init=False)
+    rule_record: RuleRecord = field(init=False)
     publishers: PublisherRegistry = field(init=False)
     collections: CollectionService = field(init=False)
     marks: MarkService = field(init=False)
@@ -126,6 +129,7 @@ class App:
         self.scan_fields = ScanFieldService(
             self.engine, lambda drive_id: self.inbox.detected_fields(drive_id)
         )
+        self.rule_record = RuleRecord(self.engine)
         self.inbox = InboxService(
             self.paths,
             self.repo,
@@ -138,6 +142,9 @@ class App:
             self.notes,
             self.scan_fields,
             lambda: self.codes,
+            rule_record=self.rule_record,
+            rules_dir=lambda: self.rules_dir,
+            data_dir=self.app_paths.data_dir,
         )
         self.layout = LayoutService(
             self.paths,
@@ -157,7 +164,12 @@ class App:
             important_lock=self.collections.important_lock,
         )
         self.activity = ActivityService(
-            self.executor, self.trays, self.collections, self.notes, self.ongoing
+            self.executor,
+            self.trays,
+            self.collections,
+            self.notes,
+            self.rule_record,
+            self.ongoing,
         )
         self.today = TodayService(
             self.trays,
@@ -280,6 +292,56 @@ class App:
         except Exception:
             log.warning("recomputing tray item dates failed", exc_info=True)
         return [*self.rule_errors, *self.tray_errors]
+
+    def _rule_file_rules(self, path: Path) -> list[Rule]:
+        try:
+            return _load_file(path) if path.exists() else []
+        except ValueError as e:
+            raise InvalidRequest(f"{path.name} could not be read: {e}") from e
+
+    def _write_rule_file(self, path: Path, rules: list[Rule]) -> None:
+        try:
+            write_rules_file(path, rules)
+        except OSError as e:
+            raise InvalidRequest(f"the rule could not be saved: {e}") from e
+        self.reload_rules()
+
+    def save_rule(self, rule: Rule, replaces: str | None = None) -> None:
+        """Save ``rule``. A new rule goes at the end of ``learned.yaml``; with
+        ``replaces`` (an id) that rule is rewritten in place, in whichever file holds it,
+        and the file's other rules are kept as they are. A repeated id raises
+        ``InvalidRequest``; ``NotFound`` if ``replaces`` is unknown."""
+        if rule.id != replaces and any(r.id == rule.id for r in self.rules):
+            raise InvalidRequest(f"a rule with the id {rule.id!r} exists already")
+        if replaces is None:
+            path = self.rules_dir / LEARNED_FILE
+            self._write_rule_file(path, [*self._rule_file_rules(path), rule])
+            return
+        path = rule_file(self.rules_dir, replaces)
+        if path is None:
+            raise NotFound(replaces)
+        current = self._rule_file_rules(path)
+        self._write_rule_file(path, [rule if r.id == replaces else r for r in current])
+
+    def delete_rule(self, rule_id: str) -> None:
+        """Remove a rule from the file that holds it (the file is backed up first)."""
+        path = rule_file(self.rules_dir, rule_id)
+        if path is None:
+            raise NotFound(rule_id)
+        self._write_rule_file(path, [r for r in self._rule_file_rules(path) if r.id != rule_id])
+
+    def move_rule(self, rule_id: str, delta: int) -> None:
+        """Move a learned rule ``delta`` places within ``learned.yaml`` (clamped)."""
+        path = rule_file(self.rules_dir, rule_id)
+        if path is None:
+            raise NotFound(rule_id)
+        if path.name != LEARNED_FILE:
+            raise InvalidRequest("only learned rules can be moved here")
+        rules = self._rule_file_rules(path)
+        i = next(n for n, r in enumerate(rules) if r.id == rule_id)
+        j = max(0, min(len(rules) - 1, i + delta))
+        rules.insert(j, rules.pop(i))
+        self._write_rule_file(path, rules)
 
     def save_codes(self, codes: list[FilingCode]) -> list[CodeProblem]:
         """Replace the code table with ``codes`` and reload. Raises ``InvalidRequest``

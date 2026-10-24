@@ -105,6 +105,10 @@ def _format_validation(e: ValidationError) -> str:
     )
 
 
+LEARNED_FILE = "learned.yaml"  # rules made in the app; read before every other file
+# rule ids the API cannot take: they are fixed routes under ``/api/rules``
+RESERVED_IDS = frozenset({"state", "replay", "explain"})
+
 MAX_CONFIG_BYTES = 256 * 1024
 TOO_DEEP_MESSAGE = "file skipped: too deeply nested or too large to load"
 
@@ -158,17 +162,26 @@ def _load_file(path: Path) -> list[Rule]:
     return rules
 
 
+def rule_files(rules_dir: Path) -> list[Path]:
+    """The rule files in load order: ``learned.yaml`` first, then the rest by name."""
+    if not Path(rules_dir).is_dir():
+        return []
+    return sorted(
+        (
+            p
+            for p in Path(rules_dir).iterdir()
+            if p.suffix.lower() in (".yaml", ".yml") and p.is_file()
+        ),
+        key=lambda p: (p.name != LEARNED_FILE, p.name),
+    )
+
+
 def load_rules(rules_dir: Path) -> tuple[list[Rule], list[RuleError]]:
-    """Load ``*.yaml``/``*.yml`` in name order. A bad file is reported and skipped."""
+    """Load ``*.yaml``/``*.yml``: ``learned.yaml`` first, then the others in name order.
+    A bad file is reported and skipped."""
     rules: list[Rule] = []
     errors: list[RuleError] = []
-    rules_dir = Path(rules_dir)
-    if not rules_dir.is_dir():
-        return rules, errors
-    files = sorted(
-        (p for p in rules_dir.iterdir() if p.suffix.lower() in (".yaml", ".yml") and p.is_file()),
-        key=lambda p: p.name,
-    )
+    files = rule_files(rules_dir)
     owner: dict[str, str] = {}
     for path in files:
         try:

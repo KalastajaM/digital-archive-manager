@@ -43,6 +43,7 @@ class FileRequestIn(_In):
 class FileBody(_In):
     requests: list[FileRequestIn]
     dry_run: bool = False
+    via: Literal["form", "batch", "codes"] = "form"
 
 
 class QuarantineBody(_In):
@@ -470,6 +471,30 @@ class BatchResultOut(BaseModel):
     index_error: str | None
 
 
+class DraftWordOut(BaseModel):
+    word: str
+    ticked: bool
+
+
+class RuleDraftOut(BaseModel):
+    id: str
+    words: list[DraftWordOut]
+    folder: str | None
+    name: str | None
+    tags: list[str]
+    tray: str | None
+    payee: str | None
+
+
+class RuleOfferOut(BaseModel):
+    """Offer to make a rule (``new``) or change a learned one (``update``) from a filing."""
+
+    kind: Literal["new", "update"]
+    rule_id: str | None
+    drive_id: str
+    draft: RuleDraftOut
+
+
 class FileItResultOut(BatchResultOut):
     """The batch, plus tagging and follow-up problems: the files were filed even if
     tagging or creating the items/memberships/notes failed."""
@@ -478,6 +503,7 @@ class FileItResultOut(BatchResultOut):
     untagged: list[str]
     items: list[int]  # tray items created
     follow_up_error: str | None
+    offer: RuleOfferOut | None = None
 
 
 class MoveResultOut(BatchResultOut):
@@ -1366,3 +1392,123 @@ class BatchRowOut(BaseModel):
     tray_fields: dict[str, str]
     flag: Literal["unclear", "conflict", "needs_input"] | None
     problem: str | None
+
+
+# -- rules --------------------------------------------------------------------
+
+
+class RuleWhenIn(_In):
+    text_contains: list[str] = Field(default_factory=list)
+    filename_matches: str | None = None
+    folder_is: str | None = None
+
+
+class RuleThenIn(_In):
+    folder: str | None = None
+    name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    tray: str | None = None
+    payee: str | None = None
+
+
+class RuleIn(_In):
+    id: str
+    when: RuleWhenIn = Field(default_factory=RuleWhenIn)
+    then: RuleThenIn = Field(default_factory=RuleThenIn)
+
+
+class RuleReplayIn(_In):
+    rule: RuleIn
+    replaces: str | None = None
+
+
+class RuleMoveIn(_In):
+    delta: int
+
+
+class RuleExplainIn(_In):
+    drive_id: str
+
+
+class RulesStateIn(_In):
+    offer: bool | None = None
+    clear_declined: bool = False
+
+
+class RulesDeclineIn(_In):
+    words: list[str]
+
+
+class RuleWhenOut(BaseModel):
+    text_contains: list[str]
+    filename_matches: str | None
+    folder_is: str | None
+
+
+class RuleThenOut(BaseModel):
+    folder: str | None
+    name: str | None
+    tags: list[str]
+    tray: str | None
+    payee: str | None
+
+
+class RuleStatsOut(BaseModel):
+    suggested: int
+    changed: int
+    last_used: float | None
+    flagged: bool
+
+
+class RuleOut(BaseModel):
+    id: str
+    file: str
+    learned: bool
+    when: RuleWhenOut
+    then: RuleThenOut
+    stats: RuleStatsOut
+
+
+class RuleErrorOut(BaseModel):
+    file: str
+    message: str
+
+
+class RulesStateOut(BaseModel):
+    offer: bool
+    declined: int
+
+
+class RulesOut(BaseModel):
+    rules: list[RuleOut]
+    errors: list[RuleErrorOut]
+    state: RulesStateOut
+
+
+class ReplayHitOut(BaseModel):
+    drive_id: str
+    path_now: str
+    path_rule: str
+
+
+class ShadowOut(BaseModel):
+    drive_id: str
+    rule_id: str  # the earlier rule that wins
+
+
+class ReplayOut(BaseModel):
+    matched: int
+    same: int
+    different: list[ReplayHitOut]
+    inbox: int
+    shadowed: list[ShadowOut]
+    checked: int
+    total: int
+    truncated: bool
+
+
+class RuleExplainOut(BaseModel):
+    rule_id: str
+    matched: bool
+    why: str
+    wins: list[str]

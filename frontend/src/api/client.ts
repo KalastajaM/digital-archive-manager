@@ -16,6 +16,15 @@ export type FileRequest = Omit<Schemas["FileRequestIn"], FollowUps> &
 export type FileBody = Omit<Schemas["FileBody"], "requests"> & { requests: FileRequest[] };
 export type ResolvedOp = Schemas["ResolvedOpOut"];
 export type FileItResult = Schemas["FileItResultOut"];
+export type Via = FileBody["via"];
+export type Rule = Schemas["RuleOut"];
+export type RuleIn = Schemas["RuleIn"];
+export type RuleDraft = Schemas["RuleDraftOut"];
+export type RuleOffer = Schemas["RuleOfferOut"];
+export type Replay = Schemas["ReplayOut"];
+export type RulesData = Schemas["RulesOut"];
+export type RuleExplain = Schemas["RuleExplainOut"];
+export type RulesState = Schemas["RulesStateOut"];
 export type BatchResult = Schemas["BatchResultOut"];
 export type FilingCode = Schemas["FilingCodeIn"];
 export type FilingCodes = Schemas["FilingCodesOut"];
@@ -284,6 +293,7 @@ const keys = {
   ai: ["ai"],
   fileFields: ["file-fields"],
   filingCodes: ["filing-codes"],
+  rules: ["rules"],
   // under the inbox's key: whatever reloads the inbox reloads the marked batch too
   markedBatch: ["inbox", "marked"],
 } as const;
@@ -434,8 +444,8 @@ function useRefresh() {
 export const useFileIt = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (requests: FileRequest[]) =>
-      post<FileItResult>("/api/inbox/file", { requests, dry_run: false } satisfies FileBody),
+    mutationFn: ({ requests, via }: { requests: FileRequest[]; via: Via }) =>
+      post<FileItResult>("/api/inbox/file", { requests, dry_run: false, via } satisfies FileBody),
     onSettled: refresh,
   });
 };
@@ -1344,6 +1354,72 @@ export const useSaveFilingCodes = () => {
       void client.invalidateQueries({ queryKey: keys.filingCodes }); // also the folders below it
       refresh();
     },
+  });
+};
+
+// -- learned filing rules -----------------------------------------------------
+
+/** The rules in order, the files that were skipped (``errors``) and the offer state. */
+export const useRules = () => useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules") });
+
+/** What a rule would do to the documents filed so far (nothing changes). ``replaces``:
+ * the rule it would take the place of. */
+export const useReplay = () =>
+  useMutation({
+    mutationFn: ({ rule, replaces }: { rule: RuleIn; replaces?: string | null }) =>
+      post<Replay>("/api/rules/replay", { rule, replaces: replaces ?? null }),
+  });
+
+/** Save a rule (``replaces``: the id of the rule this one takes the place of); a 400 says why not. */
+export const useSaveRule = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rule, replaces }: { rule: RuleIn; replaces?: string | null }) =>
+      put<RulesData>(`/api/rules/${enc(rule.id)}${replaces ? `?replaces=${enc(replaces)}` : ""}`, rule),
+    onSuccess: (saved) => client.setQueryData(keys.rules, saved),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
+  });
+};
+
+export const useDeleteRule = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => del<RulesData>(`/api/rules/${enc(id)}`),
+    onSuccess: (saved) => client.setQueryData(keys.rules, saved),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
+  });
+};
+
+/** Move a rule up (``delta`` -1) or down (1) in the order. */
+export const useMoveRule = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, delta }: { id: string; delta: number }) =>
+      post<RulesData>(`/api/rules/${enc(id)}/move`, { delta }),
+    onSuccess: (saved) => client.setQueryData(keys.rules, saved),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
+  });
+};
+
+/** Which rules match a document and which of them wins. */
+export const useExplain = () =>
+  useMutation({ mutationFn: (driveId: string) => post<RuleExplain[]>("/api/rules/explain", { drive_id: driveId }) });
+
+/** Turn the offers on or off, or forget the declined word sets. */
+export const useRulesState = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { offer?: boolean | null; clear_declined?: boolean }) => put<RulesState>("/api/rules/state", body),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
+  });
+};
+
+/** "Not for these": never offer a rule for this set of words again. */
+export const useDeclineRule = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (words: string[]) => post<RulesState>("/api/rules/state/decline", { words }),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
   });
 };
 

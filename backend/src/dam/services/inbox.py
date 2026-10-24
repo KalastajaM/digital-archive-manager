@@ -5,6 +5,9 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
+from pathlib import Path
+
+from sqlalchemy import text as sql_text
 
 from dam.bills.barcode import BarcodeError
 from dam.bills.barcode import parse as parse_barcode
@@ -18,14 +21,18 @@ from dam.notes import NotesService, check_note
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
+from dam.rules.draft import draft_rule
 from dam.rules.engine import Suggestion, stem_and_ext, suggest
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
-from dam.rules.model import Rule
+from dam.rules.model import RESERVED_IDS, Rule
+from dam.rules.offer import RuleOffer, make_doc_frequency, offer_target, outcomes
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
 from dam.rules.similar import similar_folder
+from dam.rules.state import load_state
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.errors import InvalidRequest, NotFound
+from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService, detected_of, prefill_from
 from dam.trays.service import TrayService
 
@@ -89,6 +96,7 @@ class FileItResult:
     untagged: list[str] = field(default_factory=list)
     items: list[int] = field(default_factory=list)
     follow_up_error: str | None = None
+    offer: RuleOffer | None = None  # "make a rule from this?", see ``file_it``
 
 
 @dataclass
@@ -154,6 +162,10 @@ class InboxService:
         notes: NotesService,
         scan_fields: ScanFieldService,
         codes: Callable[[], list[FilingCode]] = list,
+        *,
+        rule_record: RuleRecord | None = None,
+        rules_dir: Callable[[], Path] | None = None,
+        data_dir: Path | None = None,
     ) -> None:
         self.paths = paths
         self.repo = repo
@@ -166,6 +178,9 @@ class InboxService:
         self.notes = notes
         self.scan_fields = scan_fields
         self._codes = codes
+        self._rule_record = rule_record
+        self._rules_dir = rules_dir
+        self._data_dir = data_dir
 
     def list(self) -> list[InboxEntry]:
         """Files directly in the inbox or in a filing code's inbox folder (no folders,
@@ -242,7 +257,11 @@ class InboxService:
         return resolved
 
     def file_it(
-        self, reqs: list[FileRequest], dry_run: bool = False, origin: str = "ui"
+        self,
+        reqs: list[FileRequest],
+        dry_run: bool = False,
+        origin: str = "ui",
+        via: str = "form",
     ) -> FileItResult:
         """Apply the plan, then tag the files it filed and run their follow-ups.
 
@@ -269,9 +288,15 @@ class InboxService:
         if the item could not be created), else on the file. A filing note never
         overwrites: if the target already has one, it is not added and that is
         reported in ``follow_up_error``.
+
+        ``via`` is how the filing was made (``"form"``, ``"batch"`` or ``"codes"``, not
+        to be confused with the journal ``origin``). Form and batch filings record
+        whether each rule-suggested value was kept; only a form filing of one file can
+        come back with an ``offer`` to make or update a rule (``dam.rules.offer``).
         """
         pairs = self._ops(reqs)
         follow_ups = [self._follow_up(req) for req, _ in pairs]
+        suggested = {} if dry_run else self._suggestions_before(reqs, via)
         plan = self._plan(pairs, origin)
         result = self.executor.apply(
             plan, dry_run=dry_run, check=lambda ops: self._check_identity(pairs, ops)
@@ -295,7 +320,111 @@ class InboxService:
                     outcome.untagged.append(req.drive_id)
                     outcome.tag_error = outcome.tag_error or f"{type(e).__name__}: {e}"
             self._run_follow_up(req.drive_id, follow, batch_id, outcome)
+            if req.drive_id in suggested:
+                self._learn(req, suggested[req.drive_id], batch_id, via, len(reqs), outcome)
         return outcome
+
+    def _suggestions_before(self, reqs: list[FileRequest], via: str) -> dict:
+        """``drive_id -> (suggestion, record, text)``, taken before the file moves."""
+        found: dict = {}
+        if via not in ("form", "batch") or self._rule_record is None:
+            return found
+        for req in reqs:
+            try:
+                rec = self._record(req.drive_id)
+                text = self.repo.text_for(req.drive_id)
+                found[req.drive_id] = (self._suggest(rec, text), rec, text)
+            except Exception:
+                log.warning("no suggestion to record for %s", req.drive_id, exc_info=True)
+        return found
+
+    def _learn(
+        self,
+        req: FileRequest,
+        before: tuple,
+        batch_id: str | None,
+        via: str,
+        count: int,
+        outcome: FileItResult,
+    ) -> None:
+        """Record which rule values were kept; maybe set ``outcome.offer``. Never fails
+        the filing."""
+        found, rec, text = before
+        try:
+            if batch_id is not None and self._rule_record is not None:
+                done = outcomes(found, req.name, req.folder, req.tray)
+                if done:
+                    self._rule_record.record(batch_id, req.drive_id, done)
+        except Exception:
+            log.warning("recording the filing of %s failed", req.drive_id, exc_info=True)
+        try:
+            if via == "form" and count == 1 and batch_id is not None:
+                outcome.offer = self._offer(req, found, rec, text)
+        except Exception:
+            log.warning("offering a rule for %s failed", req.drive_id, exc_info=True)
+
+    def _offer(
+        self, req: FileRequest, found: Suggestion, rec: FileRecord, text: str
+    ) -> RuleOffer | None:
+        if self._data_dir is None or self._rules_dir is None:
+            return None
+        state = load_state(self._data_dir)
+        if not state.offer:
+            return None
+        wanted, kind, rule_id = offer_target(found, req.name, req.folder, self._rules_dir())
+        if not wanted:
+            return None
+        frequency = make_doc_frequency(*self._frequency_counter())
+        draft = draft_rule(
+            text=text,
+            original_name=rec.name or "",
+            filed_name=req.name,
+            filed_folder=req.folder,
+            doc_date=found.doc_date,
+            tags=list(req.tags),
+            tray=req.tray,
+            payee=req.tray_fields.get("payee") if isinstance(req.tray_fields, dict) else None,
+            doc_frequency=frequency,
+            taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
+        )
+        if draft is None:
+            return None
+        ticked = {w.word for w in draft.words if w.ticked}
+        if any(ticked == set(d) for d in state.declined):
+            return None
+        return RuleOffer(kind, rule_id, req.drive_id, draft)
+
+    def _frequency_counter(self) -> tuple[Callable[[str], int], Callable[[], int]]:
+        """(documents matching a word, documents in all): filed documents with text,
+        outside the configured special folders. Counted in SQL, lazily."""
+        names = [
+            self.special.inbox,
+            self.special.ongoing,
+            self.special.important,
+            self.special.quarantine,
+        ]
+        params: dict = {}
+        clauses = []
+        for i, name in enumerate(names):
+            escaped = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            params[f"s{i}"] = name
+            params[f"s{i}p"] = escaped + "/%"
+            clauses.append(f"f.path = :s{i} OR f.path LIKE :s{i}p ESCAPE '\\'")
+        base = (
+            "SELECT count(*) FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "
+            "WHERE f.missing IS NOT 1 AND f.parked_at IS NULL "
+            f"AND NOT ({' OR '.join(clauses)})"
+        )
+
+        def number(extra: str, more: dict) -> int:
+            with self.repo.engine.connect() as conn:
+                return conn.execute(sql_text(base + extra), {**params, **more}).scalar() or 0
+
+        def count(word: str) -> int:
+            quoted = '"' + word.replace('"', '""') + '"'
+            return number(" AND file_fts MATCH :q", {"q": quoted})
+
+        return count, lambda: number("", {})
 
     def _follow_up(self, req: FileRequest) -> _FollowUp:
         """Validate a request's tray/collections/note (no DB writes)."""
@@ -390,6 +519,13 @@ class InboxService:
         if rec is None or rec.missing or rec.parked_at is not None:
             raise NotFound(drive_id)
         return rec
+
+    def rule_context(self, drive_id: str) -> tuple[FileRecord, str, str | None]:
+        """``(record, text, inbox_alias)`` for judging the rules against one document;
+        ``NotFound`` for a file that is gone."""
+        rec = self._record(drive_id)
+        alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
+        return rec, self.repo.text_for(drive_id), alias
 
     def _suggest(self, rec: FileRecord, text: str) -> Suggestion:
         # a file in a code's inbox folder counts as in the inbox for ``folder_is``

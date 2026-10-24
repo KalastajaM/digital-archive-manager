@@ -31,7 +31,10 @@ RULES_FILE = "00-examples.yaml"  # the rules file the app seeds (and a layout ma
 # sha256 (LF line endings) of ``RULES_FILE`` as earlier versions shipped it: a copy left
 # unedited since then still holds no rules of the user's
 _EARLIER_EXAMPLES = frozenset(
-    {"f69b67bb2b93eef4791b3f435860adea39c9f2920e0b418d4fab4d5a378ba12d"}  # 0.1.0
+    {
+        "f69b67bb2b93eef4791b3f435860adea39c9f2920e0b418d4fab4d5a378ba12d",  # 0.1.0
+        "2c1c79699dc1a93e944b3de4f5aea6ef1f5e88fb44dbf6bf7c95fb53b7eb37bd",  # no learned.yaml note
+    }
 )
 SPECIAL_ROLES = ("inbox", "ongoing", "important", "quarantine")
 _KEY_REF = re.compile(r"<([a-z][a-z0-9_]*)>")
