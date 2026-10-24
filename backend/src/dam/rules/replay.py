@@ -326,8 +326,13 @@ def replay(
         its text first)."""
         if own_layouts:
             return zones_in_text(rule, folded)
-        # only an earlier rule looks at it, and only for a file this rule matches
-        return not in_inbox and check(free, rec, folded, None, None, None, pictures).matched
+        # only an earlier rule looks at it, and only for a file this rule may match. The
+        # picture is not looked at here (that is the expensive part, and it belongs to the
+        # main loop under the time budget): "waiting" is every other condition holding.
+        if in_inbox:
+            return False
+        c = check(free, rec, folded, None, None, None, None)
+        return c.matched or c.waiting
 
     def load_layouts(chunk: list) -> None:
         if layouts_for is None or not needs_layouts:
