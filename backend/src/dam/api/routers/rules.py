@@ -42,6 +42,7 @@ def _state_out(app: App, state: rules_state.RulesState | None = None) -> dict:
 
 def _out(app: App) -> dict:
     stats = app.rule_record.stats()
+    samples = app.rule_record.last_documents()
     rules = []
     for r in app.rules:
         path = rule_file(app.rules_dir, r.id)
@@ -56,6 +57,7 @@ def _out(app: App) -> dict:
                 "person_zone": list(r.person_zone) if r.person_zone else None,
                 "sender": r.sender,
                 "stats": asdict(stats.get(r.id, _NO_STATS)),
+                "sample": asdict(samples[r.id]) if r.id in samples else None,
             }
         )
     return {

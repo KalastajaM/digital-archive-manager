@@ -4788,6 +4788,7 @@ export interface components {
             /** Sender */
             sender: string | null;
             stats: components["schemas"]["RuleStatsOut"];
+            sample?: components["schemas"]["RuleSampleOut"] | null;
         };
         /** RuleReplayIn */
         RuleReplayIn: {
@@ -4796,6 +4797,19 @@ export interface components {
             replaces?: string | null;
             /** Place Above */
             place_above?: string | null;
+        };
+        /**
+         * RuleSampleOut
+         * @description A document the rule was last used on (still in the archive): a page to show its
+         *     areas on.
+         */
+        RuleSampleOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Name */
+            name: string | null;
+            /** Ext */
+            ext: string | null;
         };
         /** RuleStatsOut */
         RuleStatsOut: {

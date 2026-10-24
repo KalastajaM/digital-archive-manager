@@ -1554,6 +1554,15 @@ class RuleStatsOut(BaseModel):
     flagged: bool
 
 
+class RuleSampleOut(BaseModel):
+    """A document the rule was last used on (still in the archive): a page to show its
+    areas on."""
+
+    drive_id: str
+    name: str | None
+    ext: str | None
+
+
 class RuleOut(BaseModel):
     id: str
     file: str
@@ -1563,6 +1572,7 @@ class RuleOut(BaseModel):
     person_zone: list[float] | None
     sender: str | None
     stats: RuleStatsOut
+    sample: RuleSampleOut | None = None
 
 
 class RuleErrorOut(BaseModel):

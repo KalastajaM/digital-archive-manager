@@ -182,6 +182,22 @@ describe("FilingRules", () => {
     expect(line).toHaveTextContent("pohjola · area on page 1");
   });
 
+  it("shows a rule's areas on the document it matched last when the rule is opened, and not for a plain rule", async () => {
+    const zoned = rule("pohjola", {
+      when: { text_contains: [], filename_matches: null, folder_is: null, zones: [{ box: [0, 0, 0.5, 0.2], text_contains: ["pohjola"], image: null }], person: null },
+      sample: { drive_id: "s1", name: "policy.pdf", ext: "pdf" },
+    });
+    const { user } = setup(DATA({ rules: [zoned, rule("fortum")] }));
+    await user.click(await screen.findByRole("button", { name: /^pohjola/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+    expect(await within(sheet).findByAltText("Page 1")).toHaveAttribute("src", "/api/files/s1/page/1.png?w=900");
+    expect(sheet.querySelector('[data-area="pohjola:0"]')).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: /^fortum/ }));
+    const plain = await screen.findByRole("dialog", { name: "Edit rule fortum" });
+    expect(within(plain).queryByRole("combobox", { name: "Areas on a sample page" })).toBeNull();
+  });
+
   it("shows the page-1 lines in a rule's area when testing a document", async () => {
     const { user } = setup(DATA(), {
       "POST /api/rules/explain": {

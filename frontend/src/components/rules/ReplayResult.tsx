@@ -23,12 +23,15 @@ function NotChecked({ items }: { items: Replay["not_checked"] }) {
 
 export function ReplayResult({
   replay,
+  before = null,
   sender = null,
   pending = false,
   error = null,
   onRetry,
 }: {
   replay: Replay | undefined;
+  /** The same rule before the change being made: how it did, to compare with. */
+  before?: Replay | null;
   /** The rule's sender: with it, the documents marked as from that sender are compared. */
   sender?: string | null;
   pending?: boolean;
@@ -67,6 +70,12 @@ export function ReplayResult({
       {reading > 0 && (
         <p className="busy" role="status">
           Reading page 1 of {plural(reading, "document")}…
+        </p>
+      )}
+      {before && (
+        <p className="hint">
+          Before the change it matched {plural(before.matched, "document")}
+          {before.marked && before.marked.total > 0 ? `, and found ${before.marked.found} of the ${before.marked.total} you set as from ${sender ?? "this sender"}` : ""}.
         </p>
       )}
       {replay.different.length > 0 && (
