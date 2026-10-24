@@ -169,6 +169,7 @@ class Executor:
             snap, snap_error = self._snapshot(rop), None
         except _FAILURES as e:
             snap, snap_error = self._empty_snapshot(), f"cannot read source: {e}"
+        rop.content_hash = snap["content_hash"]  # a rule picture's hash, for the act
         op_id = self._journal_planned(result.batch_id, seq, rop, snap, origin, undo_of, label)
         if snap_error is not None:
             self._stop(result, op_id, rop, "failed", snap_error)
@@ -196,7 +197,7 @@ class Executor:
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
-        if rop.kind is OpKind.PICTURE_BACK:
+        if rop.kind is OpKind.PICTURE_BACK and rop.method != primitives.PICTURE_COPY:
             try:
                 self.repo.mark_missing_path(rop.src)  # left the archive: out of the index now
             except SQLAlchemyError as e:
@@ -245,7 +246,14 @@ class Executor:
 
     @staticmethod
     def _empty_snapshot() -> dict:
-        return {"drive_id": None, "size": None, "mtime": None, "is_file": False, "link": None}
+        return {
+            "drive_id": None,
+            "size": None,
+            "mtime": None,
+            "is_file": False,
+            "link": None,
+            "content_hash": None,
+        }
 
     def _snapshot(self, rop: ResolvedOp) -> dict:
         """Size/mtime/drive_id of the source (the target, for SYMLINK) before acting.
@@ -261,8 +269,10 @@ class Executor:
             snap.update(size=st.st_size, mtime=st.st_mtime, is_file=stat.S_ISREG(st.st_mode))
             return snap
         if rop.kind is OpKind.PICTURE_TO_QUARANTINE:  # a link is not followed
-            st = os.lstat(Path(rop.src[len(ABS_TARGET) :]))
+            source = Path(rop.src[len(ABS_TARGET) :])
+            st = os.lstat(source)
             snap.update(size=st.st_size, mtime=st.st_mtime, is_file=stat.S_ISREG(st.st_mode))
+            snap["content_hash"] = primitives.file_sha256(source)  # journaled for undo/recovery
             return snap
         if rop.src.startswith(ABS_TARGET) and rop.kind is OpKind.SYMLINK:
             return snap  # a link target outside the archive: never looked at
@@ -278,6 +288,8 @@ class Executor:
             is_file=stat.S_ISREG(st.st_mode),
             link=self._link_record(p) if stat.S_ISLNK(st.st_mode) else None,
         )
+        if rop.kind is OpKind.PICTURE_BACK:
+            snap["content_hash"] = primitives.file_sha256(p)
         return snap
 
     def _link_record(self, link: Path) -> str:
@@ -327,6 +339,8 @@ class Executor:
                     origin=origin,
                     undo_of=undo_of,
                     label=label,
+                    method=rop.method,
+                    content_hash=snap["content_hash"],
                     created=time.time(),
                 )
             )
@@ -447,14 +461,19 @@ class Executor:
 
     def _act(self, rop: ResolvedOp) -> None:
         if rop.kind is OpKind.PICTURE_TO_QUARANTINE:
-            primitives.move_between_folders(
-                Path(rop.src[len(ABS_TARGET) :]), self.paths.abs(rop.dst)
-            )
+            source, dst = Path(rop.src[len(ABS_TARGET) :]), self.paths.abs(rop.dst)
+            if rop.method == primitives.PICTURE_COPY:
+                self._copy_picture_out(source, dst, rop.content_hash)
+            else:
+                primitives.move_between_folders(source, dst)
             return
         if rop.kind is OpKind.PICTURE_BACK:
-            primitives.move_between_folders(
-                self.paths.abs(rop.src), Path(rop.dst[len(ABS_TARGET) :])
-            )
+            source, target = self.paths.abs(rop.src), Path(rop.dst[len(ABS_TARGET) :])
+            if rop.method == primitives.PICTURE_COPY:
+                # undo never removes an archive file: the copy in the quarantine folder stays
+                primitives.copy_picture(source, target, rop.content_hash)
+            else:
+                primitives.move_between_folders(source, target)
             return
         dst = self.paths.abs(rop.dst)
         match rop.kind:
@@ -478,6 +497,23 @@ class Executor:
                 else:
                     primitives.rename_excl(src, dst)
 
+    def _copy_picture_out(self, source: Path, dst: Path, sha256: str) -> None:
+        """A rule picture to the archive across disks: copy and verify it (size and hash);
+        only then remove dam's own file. Whatever fails, the copy stays and so does the
+        original (unless it was removed), and the error says which."""
+        try:
+            primitives.copy_picture(source, dst, sha256)
+        except (OSError, OpFailed) as e:
+            raise OpFailed(f"{e} The original stays in the rules' picture folder.") from None
+        try:
+            primitives.remove_moved_picture(source, self._areas(), dst, sha256)
+        except (OSError, OpFailed, GuardError) as e:
+            raise OpFailed(
+                f"{source.name} was copied to {dst.name} in To Delete and the copy checks out,"
+                f" but the original in the rules' picture folder was not removed ({e})."
+                " Both files exist."
+            ) from None
+
     def _verify(self, rop: ResolvedOp, snap: dict) -> None:
         if rop.kind in _PICTURE_KINDS:
             moved_to = (
@@ -486,7 +522,12 @@ class Executor:
                 else self.paths.abs(rop.dst)
             )
             st = os.lstat(moved_to)
-            if not (stat.S_ISREG(st.st_mode) and st.st_size == snap["size"]):
+            source_left = (
+                rop.kind is OpKind.PICTURE_TO_QUARANTINE
+                and rop.method == primitives.PICTURE_COPY
+                and os.path.lexists(Path(rop.src[len(ABS_TARGET) :]))
+            )
+            if source_left or not (stat.S_ISREG(st.st_mode) and st.st_size == snap["size"]):
                 raise OpFailed(f"Could not confirm that {rop.src} was moved to {rop.dst}.")
             return
         dst = self.paths.abs(rop.dst)

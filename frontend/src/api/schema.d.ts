@@ -2279,7 +2279,8 @@ export interface paths {
          * @description Move picture files no loaded rule uses from ``config/rules/areas`` into the
          *     quarantine folder (``dam rule picture <name>``): ``dry_run`` shows the plan, otherwise
          *     the move is journaled and the batch can be undone. 400 when a name is used by a rule,
-         *     is not there, is a link, or the folders are on different disks; 409 when it fails.
+         *     is not there, or is a link; 409 when it fails. On two disks the picture is copied and
+         *     verified before dam's own copy is removed.
          */
         post: operations["quarantine_unused_pictures_api_rules_unused_pictures_quarantine_post"];
         delete?: never;

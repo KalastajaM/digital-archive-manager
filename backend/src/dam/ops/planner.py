@@ -12,6 +12,7 @@ from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.naming import unique_name
 from dam.core.paths import ArchivePaths
 from dam.index.driveid import read_drive_id
+from dam.ops import primitives
 from dam.ops.guards import (
     canonical,
     check_areas_source,
@@ -26,7 +27,7 @@ from dam.ops.guards import (
     validate,
 )
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind, Plan, ResolvedOp
-from dam.ops.primitives import DIFFERENT_DISKS, DS_STORE, same_disk
+from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME
 
 _EXACT_SOURCE = {OpKind.QUARANTINE, OpKind.REMOVE_EMPTY_DIR}  # never follow a redirect
 
@@ -35,6 +36,8 @@ _EXACT_SOURCE = {OpKind.QUARANTINE, OpKind.REMOVE_EMPTY_DIR}  # never follow a r
 _OUTSIDE_SOURCE = {OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE}
 
 COLLISION_NOTE = "renamed to avoid collision"
+COPY_NOTE = "copied, then removed from dam's settings folder"
+COPY_BACK_NOTE = "copied back; the copy in To Delete stays"
 MKDIR_NOTE = "create missing folder"
 
 
@@ -369,12 +372,15 @@ class Planner:
         disk = self.paths.root / folder
         while not os.path.lexists(disk) and disk != disk.parent:
             disk = disk.parent
-        if not same_disk(areas, disk):
-            raise GuardError(DIFFERENT_DISKS)
+        method = PICTURE_RENAME if primitives.same_disk(areas, disk) else PICTURE_COPY
         name = self.sim.free_name(folder, op.name)
         dst = join(folder, name)
-        note = COLLISION_NOTE if name != op.name else None
-        self.out.append(ResolvedOp(op.kind, op.src, dst, None, note))
+        notes = [COLLISION_NOTE] if name != op.name else []
+        if method == PICTURE_COPY:
+            notes.append(COPY_NOTE)
+        self.out.append(
+            ResolvedOp(op.kind, op.src, dst, None, "; ".join(notes) or None, method=method)
+        )
         self.sim.events.append(("create", dst, "file"))
 
     def _picture_back(self, op: Op) -> None:
@@ -400,10 +406,19 @@ class Planner:
                 " rules' areas folder"
             )
         disk = self.sim.disk_path(src)
-        if disk is not None and not same_disk(areas, disk):
-            raise GuardError(DIFFERENT_DISKS)
-        self.out.append(ResolvedOp(op.kind, src, f"{ABS_TARGET}{target}", None, None))
-        self.sim.events.append(("remove", src))
+        copy = disk is not None and not primitives.same_disk(areas, disk)
+        self.out.append(
+            ResolvedOp(
+                op.kind,
+                src,
+                f"{ABS_TARGET}{target}",
+                None,
+                COPY_BACK_NOTE if copy else None,
+                method=PICTURE_COPY if copy else PICTURE_RENAME,
+            )
+        )
+        if not copy:  # a copy back leaves the file in the quarantine folder
+            self.sim.events.append(("remove", src))
 
     def _resolve_one(self, op: Op) -> None:
         paths = self.paths
