@@ -16,6 +16,7 @@ from dam.core.paths import nfc
 from dam.db.engine import write_tx
 from dam.db.tables import (
     file_barcodes,
+    file_layouts,
     file_qr_codes,
     file_tags,
     file_text,
@@ -25,6 +26,7 @@ from dam.db.tables import (
     tags,
 )
 from dam.extract.base import ExtractedText
+from dam.extract.layout import Page1Layout
 from dam.rules.model import fold
 
 
@@ -491,6 +493,135 @@ class FileRepo:
         with self._conn() as conn:
             return [_record(r) for r in conn.execute(stmt).all()]
 
+    # -- page-1 layouts (where the text of page 1 sits) -------------------------------
+
+    def layout_for(self, drive_id: str) -> Page1Layout | None:
+        """The page-1 layout read from the file's current content; None if none was read
+        (or it was read from content the file no longer has). An empty layout means page 1
+        was read and has no text."""
+        return self.layouts_for([drive_id]).get(drive_id)
+
+    def layouts_for(self, drive_ids: Collection[str]) -> dict[str, Page1Layout]:
+        """``layout_for`` for many files in one query (files without a current layout are
+        left out)."""
+        ids = list(drive_ids)
+        out: dict[str, Page1Layout] = {}
+        with self._conn() as conn:
+            for start in range(0, len(ids), 500):
+                chunk = ids[start : start + 500]
+                rows = conn.execute(
+                    select(file_layouts.c.drive_id, file_layouts.c.lines, file_layouts.c.source)
+                    .join(files, files.c.drive_id == file_layouts.c.drive_id)
+                    .where(
+                        file_layouts.c.drive_id.in_(chunk),
+                        files.c.sha256 == file_layouts.c.sha256,
+                    )
+                ).all()
+                for row in rows:
+                    try:
+                        out[row.drive_id] = Page1Layout.from_json(row.lines, row.source)
+                    except (ValueError, KeyError, TypeError):
+                        continue  # unreadable row: as if it was not read
+        return out
+
+    @staticmethod
+    def _write_layout(conn: Connection, drive_id: str, sha256: str, layout: Page1Layout) -> None:
+        stmt = sqlite_insert(file_layouts).values(
+            drive_id=drive_id,
+            sha256=sha256,
+            lines=layout.lines_json(),
+            source=layout.source,
+            read_at=time.time(),
+        )
+        conn.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["drive_id"],
+                set_={c: stmt.excluded[c] for c in ("sha256", "lines", "source", "read_at")},
+            )
+        )
+
+    def save_layout(self, drive_id: str, sha256: str, layout: Page1Layout) -> bool:
+        """Record the page-1 layout read from content ``sha256`` (no lines: read, no
+        text). Not saved (False) when the file's content is no longer ``sha256``."""
+        with self._conn(write=True) as conn:
+            current = conn.execute(
+                select(files.c.sha256).where(files.c.drive_id == drive_id)
+            ).scalar()
+            if current is None or current != sha256:
+                return False
+            self._write_layout(conn, drive_id, sha256, layout)
+        return True
+
+    def _layout_population(self):
+        """Where clauses of the files the layout pass reads: indexed PDFs and images with
+        a hash, not folders, links, missing or parked."""
+        return (
+            files.c.is_dir.is_not(True),
+            files.c.is_link.is_not(True),
+            files.c.missing.is_not(True),
+            files.c.parked_at.is_(None),
+            files.c.index_state == "indexed",
+            files.c.sha256.is_not(None),
+            files.c.ext.in_(BARCODE_EXTS),
+        )
+
+    @staticmethod
+    def _has_layout():
+        return (
+            select(file_layouts.c.drive_id)
+            .where(
+                file_layouts.c.drive_id == files.c.drive_id,
+                file_layouts.c.sha256 == files.c.sha256,
+            )
+            .exists()
+        )
+
+    def text_was_ocrd(self, drive_id: str) -> bool | None:
+        """Whether the file's indexed text came from OCR (None: it has no indexed text)."""
+        with self._conn() as conn:
+            return conn.execute(
+                select(file_text.c.ocr_used).where(file_text.c.drive_id == drive_id)
+            ).scalar()
+
+    def next_for_layouts(
+        self,
+        limit: int,
+        wanted: Collection[str] = (),
+        skip: Collection[str] = (),
+        everything: bool = True,
+    ) -> list[FileRecord]:
+        """Indexed PDFs and images with no page-1 layout for their current content:
+        inbox files first, then the ``wanted`` drive ids (a replay asked for them), then
+        by path. ``skip``: drive ids to leave out (reads that timed out). Without
+        ``everything`` only the inbox files and the wanted ones are returned."""
+        in_inbox = self._in_inbox()
+        is_wanted = files.c.drive_id.in_(list(wanted))
+        stmt = (
+            select(files)
+            .where(
+                *self._layout_population(),
+                not_(self._has_layout()),
+                files.c.drive_id.not_in(list(skip)),
+                *(() if everything else (or_(in_inbox, is_wanted),)),
+            )
+            .order_by(in_inbox.desc(), is_wanted.desc(), files.c.path)
+            .limit(limit)
+        )
+        with self._conn() as conn:
+            return [_record(r) for r in conn.execute(stmt).all()]
+
+    def layout_progress(self) -> tuple[int, int]:
+        """``(read, total)`` over the files the layout pass reads: how many have a layout
+        for their current content, and how many there are."""
+        read = case((self._has_layout(), 1), else_=0)
+        with self._conn() as conn:
+            row = conn.execute(
+                select(func.count(), func.coalesce(func.sum(read), 0)).where(
+                    *self._layout_population()
+                )
+            ).one()
+        return int(row[1]), int(row[0])
+
     def _in_inbox(self):
         return or_(
             files.c.path_nfc == self.inbox,
@@ -518,6 +649,7 @@ class FileRepo:
             conn.execute(file_tags.delete().where(file_tags.c.drive_id == drive_id))
             conn.execute(file_barcodes.delete().where(file_barcodes.c.drive_id == drive_id))
             conn.execute(file_qr_codes.delete().where(file_qr_codes.c.drive_id == drive_id))
+            conn.execute(file_layouts.delete().where(file_layouts.c.drive_id == drive_id))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
             conn.execute(files.delete().where(files.c.drive_id == drive_id))
@@ -584,10 +716,10 @@ class FileRepo:
 
     def rekey(self, old_id: str, new_id: str) -> None:
         """Replace a synthetic id by the real one, carrying text, fts, tags and the
-        barcode and QR sticker reads along."""
+        barcode, QR sticker and page-1 layout reads along."""
         with self._conn(write=True) as conn:
             conn.exec_driver_sql("PRAGMA defer_foreign_keys = ON")
-            for table in (file_text, file_tags, file_barcodes, file_qr_codes, files):
+            for table in (file_text, file_tags, file_barcodes, file_qr_codes, file_layouts, files):
                 conn.execute(
                     update(table).where(table.c.drive_id == old_id).values(drive_id=new_id)
                 )
@@ -812,6 +944,15 @@ class FileRepo:
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
+            if extracted and extracted.page1 is not None:
+                sha = (
+                    sha256
+                    or conn.execute(
+                        select(files.c.sha256).where(files.c.drive_id == drive_id)
+                    ).scalar()
+                )
+                if sha is not None:
+                    self._write_layout(conn, drive_id, sha, extracted.page1)
             if extracted:
                 conn.execute(
                     file_text.insert().values(

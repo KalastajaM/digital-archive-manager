@@ -22,6 +22,7 @@ def _is_real_dir(app, rel: str) -> bool:
 @router.get("/status", response_model=StatusOut)
 def status(app: AppDep, archives: ArchivesDep) -> dict:
     counts = app.repo.counts()
+    read, total = app.repo.layout_progress()
     return {
         "files": counts["total"],
         "indexed": counts.get("indexed", 0),
@@ -37,6 +38,7 @@ def status(app: AppDep, archives: ArchivesDep) -> dict:
         "archive_available": app.archive_available,
         "special_folders": app.settings.special_folders.model_dump(),
         "inbox_exists": _is_real_dir(app, app.paths.inbox),
+        "page1": {"read": read, "total": total, "backfill": app.settings.page1_backfill},
         **archives.summary(),
     }
 

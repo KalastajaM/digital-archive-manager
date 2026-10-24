@@ -11,8 +11,11 @@ from pathlib import Path
 from sqlalchemy import Engine
 
 from dam.core.paths import ArchivePaths
+from dam.extract import ocr
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
+from dam.extract.layout import Page1Layout
 from dam.index.barcodes import read_page1
+from dam.index.layouts import read_layout
 from dam.index.repo import FileRecord, FileRepo
 
 log = logging.getLogger(__name__)
@@ -71,6 +74,10 @@ class ContentIndexer:
         barcode_timeout_s: float = 120,
         barcode_retry_s: float = 3600,
         barcode_trays: Callable[[], Collection[str]] | None = None,
+        page1_backfill: Callable[[], bool] | None = None,
+        ocr_languages: list[str] | None = None,
+        layout_timeout_s: float = 120,
+        layout_retry_s: float = 3600,
     ) -> None:
         if reads_per_minute <= 0:
             raise ValueError("reads_per_minute must be positive")
@@ -89,6 +96,17 @@ class ContentIndexer:
         # the trays whose open items' files get the barcode pass too (besides the
         # inbox); the App wires the trays with an IBAN field
         self.barcode_trays = barcode_trays
+        # the layout pass (page 1's lines with their boxes, for files indexed before
+        # positions were kept): whether it also reads files outside the inbox (the
+        # inbox and the wanted files are always read), and the OCR languages of scans
+        self.page1_backfill = page1_backfill
+        self.ocr_languages = ocr_languages or ["en-US"]
+        self.layout_timeout_s = layout_timeout_s
+        self.layout_retry_s = layout_retry_s
+        self._layout_retry: dict[str, float] = {}  # drive_id -> monotonic retry time
+        self._layout_why: dict[str, str] = {}  # drive_id -> why it waits (no OCR engine)
+        self._wanted: set[str] = set()  # asked for by a replay, read next
+        self._layout_busy = False
         # the barcode pass runs one read at a time; a hung read pauses it until it
         # returns on its own
         self._barcode_busy = False
@@ -303,9 +321,127 @@ class ContentIndexer:
         self.repo.save_qr(rec.drive_id, rec.sha256, out.get("qr", []))
         return True
 
+    # -- the layout pass -------------------------------------------------------
+
+    def want_layouts(self, drive_ids: Collection[str]) -> None:
+        """Ask for page 1 of these files to be read next (after the inbox); forgotten
+        once read. Cheap and safe to call from any thread."""
+        with self._lock:
+            self._wanted.update(drive_ids)
+
+    def layout_blocked(self, drive_id: str) -> str | None:
+        """Why page 1 of this file cannot be read right now ("no OCR engine installed"),
+        else None."""
+        with self._lock:
+            return self._layout_why.get(drive_id)
+
+    def run_layouts_once(self, limit: int = 1) -> int:
+        """Read page 1 of up to ``limit`` indexed PDFs and images that have no layout
+        for their current content: inbox files, then the wanted ones, then (while
+        ``page1_backfill`` is on) the rest by path. Each finished read is recorded, an
+        empty page included, so a file is read again only when its sha256 changes. A read
+        has ``layout_timeout_s``; one that times out, or needs an OCR engine that is not
+        installed, is not recorded and waits ``layout_retry_s``. Returns the number of
+        files attempted."""
+        if self._closed:
+            return 0
+        with self._lock:
+            if self._layout_busy:
+                return 0
+        now = time.monotonic()
+        with self._lock:
+            self._layout_retry = {d: t for d, t in self._layout_retry.items() if t > now}
+            self._layout_why = {
+                d: w for d, w in self._layout_why.items() if d in self._layout_retry
+            }
+            waiting = set(self._layout_retry)
+            wanted = set(self._wanted)
+        try:
+            backfill = True if self.page1_backfill is None else bool(self.page1_backfill())
+        except Exception:
+            log.warning("could not read the page-1 setting", exc_info=True)
+            backfill = True
+        done = 0
+        for rec in self.repo.next_for_layouts(limit, wanted, skip=waiting, everything=backfill):
+            if self._closed:
+                break
+            done += 1
+            try:
+                if not self._read_layout(rec):
+                    break  # the read hangs: pause the pass
+            except Exception:
+                log.warning("layout pass failed for %s", rec.path, exc_info=True)
+        return done
+
+    def _read_layout(self, rec: FileRecord) -> bool:
+        """Read and record ``rec``'s page-1 layout in a daemon thread; False if it timed
+        out."""
+        assert rec.sha256 is not None and rec.ext is not None
+        path = self.paths.abs(rec.path)
+        ocr_used = self.repo.text_was_ocrd(rec.drive_id)
+        out: dict = {}
+        finished = threading.Event()
+
+        def job() -> None:
+            try:
+                sha, data = _read_file(path)
+                if sha == rec.sha256 and data is not None:  # else: changed, or too big
+                    out["layout"] = read_layout(
+                        path,
+                        rec.ext,
+                        data,
+                        ocr_used=bool(ocr_used),
+                        languages=self.ocr_languages,
+                    )
+            except BaseException as exc:  # noqa: BLE001 - classified by the caller
+                out["error"] = exc
+            finally:
+                with self._lock:
+                    self._layout_busy = False
+                finished.set()
+
+        with self._lock:
+            self._layout_busy = True
+        try:
+            threading.Thread(target=job, daemon=True, name="dam-layout").start()
+        except BaseException:
+            with self._lock:
+                self._layout_busy = False
+            raise
+        if not finished.wait(self.layout_timeout_s):
+            log.warning("page-1 reading timed out for %s; retrying later", rec.path)
+            self._retry_layout_later(rec.drive_id, None)
+            return False
+        error = out.get("error")
+        if isinstance(error, UnsupportedContent) and str(error) == ocr.NO_OCR:
+            self._retry_layout_later(rec.drive_id, ocr.NO_OCR)  # not "read": try again later
+            return True
+        if error is not None:
+            log.warning("page-1 reading failed for %s: %r", rec.path, error)
+        # a finished read with anything but lines (an error, changed or oversize
+        # content) is recorded as "no text" for this content, so it is not read again
+        # until the content changes
+        self.repo.save_layout(
+            rec.drive_id, rec.sha256, out.get("layout") or Page1Layout([], "text-layer")
+        )
+        with self._lock:
+            self._wanted.discard(rec.drive_id)
+        return True
+
+    def _retry_layout_later(self, drive_id: str, why: str | None) -> None:
+        with self._lock:
+            self._layout_retry[drive_id] = time.monotonic() + self.layout_retry_s
+            if why is not None:
+                self._layout_why[drive_id] = why
+
     def step(self, now: float | None = None) -> int:
-        """One unit of background work: a pending file's content, else a barcode read."""
-        return self.run_once(limit=1, now=now) or self.run_barcodes_once(limit=1)
+        """One unit of background work: a pending file's content, else a barcode read,
+        else a page-1 layout read."""
+        return (
+            self.run_once(limit=1, now=now)
+            or self.run_barcodes_once(limit=1)
+            or self.run_layouts_once(limit=1)
+        )
 
     def _cloud_pending(self, rec: FileRecord, now: float, exc: BaseException, expect) -> None:
         attempts = rec.attempts + 1

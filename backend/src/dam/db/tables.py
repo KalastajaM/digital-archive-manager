@@ -81,6 +81,20 @@ file_qr_codes = Table(
     Column("read_at", Float, nullable=False),
 )
 
+# Where the text of page 1 sits (migration 0028): ``lines`` is a JSON list of
+# ``{text, box}`` (``[]``: read, no text on page 1), ``source`` the reader
+# (``text-layer`` | ``vision`` | ``tesseract``). Same lifetime as ``file_barcodes``: a row
+# for other content than ``sha256`` is ignored and read again.
+file_layouts = Table(
+    "file_layouts",
+    metadata,
+    Column("drive_id", Text, ForeignKey("files.drive_id"), primary_key=True),
+    Column("sha256", Text, nullable=True),
+    Column("lines", Text, nullable=False),
+    Column("source", Text, nullable=False),
+    Column("read_at", Float, nullable=False),
+)
+
 tags = Table(
     "tags",
     metadata,

@@ -375,6 +375,7 @@ def test_poison_records_do_not_leak_slots(fake_archive, engine):
 
 def test_ocr_runs_without_pdfium_lock(tmp_path, monkeypatch):
     from dam.extract import ocr
+    from dam.extract.layout import Line, Page1Layout
     from dam.pdfium import PDFIUM_LOCK
     from pdfs import make_scan_pdf
 
@@ -382,9 +383,9 @@ def test_ocr_runs_without_pdfium_lock(tmp_path, monkeypatch):
 
     def fake_ocr(image, languages):
         held.append(PDFIUM_LOCK.locked())
-        return "Kotihoito"
+        return Page1Layout([Line("Kotihoito", (0.1, 0.1, 0.5, 0.2))], "tesseract")
 
-    monkeypatch.setattr(ocr, "ocr_image", fake_ocr)
+    monkeypatch.setattr(ocr, "ocr_page", fake_ocr)
     monkeypatch.setattr(ocr, "engine", lambda: "tesseract")  # ocr_image is faked: no engine needed
     pdf = make_scan_pdf(tmp_path / "s.pdf")
     got = PdfExtractor(["en-US"]).extract(pdf, pdf.read_bytes())

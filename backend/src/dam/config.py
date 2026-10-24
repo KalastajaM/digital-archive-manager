@@ -131,6 +131,9 @@ class Settings(BaseModel):
     special_folders: SpecialFolders = Field(default_factory=SpecialFolders)
     protected_paths: list[str] = Field(default_factory=lambda: ["##. Important"])
     indexer_reads_per_minute: int = 30
+    # read where the text sits on page 1 of the documents indexed before positions were
+    # kept (inbox files are always read); off pauses that backfill
+    page1_backfill: bool = True
     ops_throttle_ms: int = 250
     server_port: int = 8765
     ocr_languages: list[str] = Field(default_factory=lambda: ["en-US"])

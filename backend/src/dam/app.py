@@ -45,6 +45,7 @@ from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService
 from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
+from dam.settings_write import write_keys
 from dam.setup import NOT_CONFIGURED
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
@@ -187,6 +188,7 @@ class App:
         self.launch = LaunchService(self.paths)
         self.previews = PreviewService(self.paths, self.app_paths.cache_dir / "thumbs")
         self.content.barcode_trays = self.barcode_trays
+        self.content.page1_backfill = lambda: self.settings.page1_backfill
         # DAM_AI_FAKE=1 (demos, tests): a deterministic provider that counts as a key
         provider = None
         if os.environ.get("DAM_AI_FAKE") == "1":
@@ -247,7 +249,12 @@ class App:
                 executor=Executor(paths, engine, repo, throttle_ms=settings.ops_throttle_ms),
                 registry=registry,
                 content=ContentIndexer(
-                    paths, repo, engine, registry, settings.indexer_reads_per_minute
+                    paths,
+                    repo,
+                    engine,
+                    registry,
+                    settings.indexer_reads_per_minute,
+                    ocr_languages=settings.ocr_languages,
                 ),
             )
         except BaseException:
@@ -343,6 +350,19 @@ class App:
         rules.insert(j, rules.pop(i))
         self._write_rule_file(path, rules)
 
+    def set_page1_backfill(self, enabled: bool) -> None:
+        """Turn the page-1 backfill on or off (``page1_backfill`` in settings.yaml) and use
+        it from now on. ``InvalidRequest`` when the file could not be written."""
+        try:
+            write_keys(
+                self.app_paths, {"page1_backfill": enabled}, lambda s: s.page1_backfill == enabled
+            )
+        except OSError as e:
+            raise InvalidRequest(f"the setting could not be saved: {e}") from e
+        self.settings.page1_backfill = enabled
+        if enabled:
+            self.wake_indexer()
+
     def save_codes(self, codes: list[FilingCode]) -> list[CodeProblem]:
         """Replace the code table with ``codes`` and reload. Raises ``InvalidRequest``
         (nothing written) for a repeated code or inbox folder or an unknown tray."""
@@ -425,7 +445,8 @@ class App:
 
     def index(self, limit: int | None = None) -> int:
         """Index file contents until nothing is left to process or ``limit`` files are done,
-        then read bank barcodes (``ContentIndexer.run_barcodes_once``) the same way."""
+        then read bank barcodes (``ContentIndexer.run_barcodes_once``) and page-1 layouts
+        (``run_layouts_once``) the same way."""
         # Hard cap: a file is attempted at most about once per call, so never more than
         # the number of rows, even if a failing file were somehow picked again.
         with self.engine.connect() as conn:
@@ -438,13 +459,15 @@ class App:
             if n == 0:
                 break
             total += n
-        # then the barcode pass (its reads are not counted as indexed files)
-        read = 0
-        while read < cap:
-            n = self.content.run_barcodes_once(min(20, cap - read))
-            if n == 0:
-                break
-            read += n
+        # then the barcode and page-1 layout passes (their reads are not counted as
+        # indexed files)
+        for read_pass in (self.content.run_barcodes_once, self.content.run_layouts_once):
+            read = 0
+            while read < cap:
+                n = read_pass(min(20, cap - read))
+                if n == 0:
+                    break
+                read += n
         return total
 
     def search(self, query: str, folder: str | None = None, limit: int = 50) -> list[SearchHit]:

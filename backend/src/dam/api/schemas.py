@@ -608,6 +608,15 @@ class ActiveArchiveOut(BaseModel):
     color: str  # #rrggbb
 
 
+class Page1ProgressOut(BaseModel):
+    """The page-1 layout pass: documents whose page 1 is read, of all it reads, and
+    whether the backfill of documents outside the inbox is on."""
+
+    read: int
+    total: int
+    backfill: bool
+
+
 class StatusOut(BaseModel):
     files: int
     indexed: int
@@ -623,6 +632,7 @@ class StatusOut(BaseModel):
     archive_available: bool
     special_folders: SpecialFoldersOut  # the configured names of the app's folders
     inbox_exists: bool = True  # the inbox folder is there (False: a new archive, no layout yet)
+    page1: Page1ProgressOut | None = None  # None only from the setup-mode server
     # False only from the setup-mode server (then only ``archive`` and ``profiles_count``
     # are set besides it): no archive folder yet
     configured: bool = True
@@ -1512,3 +1522,14 @@ class RuleExplainOut(BaseModel):
     matched: bool
     why: str
     wins: list[str]
+
+
+# -- settings written to settings.yaml ---------------------------------------------
+
+
+class Page1BackfillIn(_In):
+    enabled: bool
+
+
+class Page1BackfillOut(BaseModel):
+    enabled: bool

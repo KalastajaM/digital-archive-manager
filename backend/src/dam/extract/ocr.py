@@ -15,6 +15,7 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 
 from dam.extract.base import ExtractedText, UnsupportedContent
+from dam.extract.layout import Line, Page1Layout, clamp_box
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +96,69 @@ def _ocr_tesseract(image: Image.Image, languages: list[str]) -> str:
         raise UnsupportedContent(f"OCR failed: {str(exc).strip()[:200]}") from exc
 
 
+def _vision_lines(image: Image.Image, languages: list[str]) -> list[Line]:
+    from ocrmac import ocrmac
+
+    results = ocrmac.OCR(
+        image, language_preference=usable_languages(languages), recognition_level="accurate"
+    ).recognize()
+    lines = []
+    for text, _confidence, (x, y, w, h) in results:
+        # Vision boxes are fractions of the image with the origin at the bottom left
+        lines.append(Line(text, clamp_box((x, 1 - (y + h), x + w, 1 - y))))
+    return lines
+
+
+def _tesseract_lines(image: Image.Image, languages: list[str]) -> list[Line]:
+    import pytesseract
+
+    try:
+        data = pytesseract.image_to_data(
+            image, lang=tesseract_languages(languages), output_type=pytesseract.Output.DICT
+        )
+    except pytesseract.TesseractError as exc:  # typically a missing language pack
+        raise UnsupportedContent(f"OCR failed: {str(exc).strip()[:200]}") from exc
+    width, height = image.size
+    grouped: dict[tuple[int, int, int], list[tuple[str, int, int, int, int]]] = {}
+    for i, word in enumerate(data["text"]):
+        if not str(word).strip():
+            continue
+        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+        grouped.setdefault(key, []).append(
+            (
+                str(word).strip(),
+                data["left"][i],
+                data["top"][i],
+                data["width"][i],
+                data["height"][i],
+            )
+        )
+    lines = []
+    for words in grouped.values():
+        box = clamp_box(
+            (
+                min(w[1] for w in words) / width,
+                min(w[2] for w in words) / height,
+                max(w[1] + w[3] for w in words) / width,
+                max(w[2] + w[4] for w in words) / height,
+            )
+        )
+        lines.append(Line(" ".join(w[0] for w in words), box))
+    return lines
+
+
+def ocr_page(image: Image.Image, languages: list[str]) -> Page1Layout:
+    """The lines of text of ``image`` with their boxes and the engine that read them;
+    ``UnsupportedContent`` when no OCR engine is installed. The text of the page is
+    ``Page1Layout.text``: the very lines the boxes belong to."""
+    which = engine()
+    if which == VISION:
+        return Page1Layout(_vision_lines(image, languages), VISION)
+    if which == TESSERACT:
+        return Page1Layout(_tesseract_lines(image, languages), TESSERACT)
+    raise UnsupportedContent(NO_OCR)
+
+
 def ocr_image(image: Image.Image, languages: list[str]) -> str:
     """Text of ``image``; ``UnsupportedContent`` when no OCR engine is installed."""
     which = engine()
@@ -121,7 +185,8 @@ class ImageOcrExtractor:
         try:
             with Image.open(io.BytesIO(data) if data is not None else path) as img:
                 img.load()
-                text = ocr_image(img, self.languages)
+                page = ocr_page(img, self.languages)
         except (UnidentifiedImageError, Image.DecompressionBombError) as exc:
             raise UnsupportedContent(f"unreadable image: {exc}") from exc
-        return ExtractedText(text=text, extractor=self.name, ocr_used=True)
+        # the indexed text and the page-1 lines are one read
+        return ExtractedText(text=page.text, extractor=self.name, ocr_used=True, page1=page)

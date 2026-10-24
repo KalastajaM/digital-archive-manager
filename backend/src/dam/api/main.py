@@ -23,6 +23,7 @@ from dam.api.routers import (
     notes,
     ongoing,
     rules,
+    settings,
     setup,
     system,
     tags,
@@ -165,6 +166,7 @@ def create_api(
         rules,
         archives_router,
         setup,
+        settings,
         tags,
     ):
         api.include_router(module.router)
