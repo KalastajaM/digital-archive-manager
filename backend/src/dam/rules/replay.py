@@ -60,6 +60,18 @@ class NotChecked:
 
 
 @dataclass
+class Marked:
+    """The documents the owner marked as from the rule's sender, against what the rule
+    matches: how many, how many it finds, the ones it misses (a miss is a document whose
+    page 1 was read and does not match), and the ones that could not be checked."""
+
+    total: int = 0
+    found: int = 0
+    missed: list[str] = field(default_factory=list)  # paths
+    not_checked: list[NotChecked] = field(default_factory=list)
+
+
+@dataclass
 class ReplayResult:
     matched: int
     same: int
@@ -71,6 +83,7 @@ class ReplayResult:
     truncated: bool
     not_checked: list[NotChecked] = field(default_factory=list)
     reading: int = 0  # of the not checked, how many page 1 reads are queued now
+    marked: Marked | None = None  # only for a rule with a ``sender``
 
 
 MAX_CANDIDATES = 20000  # more words hits than this: no narrowing, every file is looked at
@@ -143,6 +156,64 @@ def _rule_path(
     return f"{folder}/{new}" if folder else new
 
 
+def _marked(
+    engine: Engine,
+    free: Rule,
+    ids: list[str],
+    layouts_for: Callable[[Collection[str]], dict[str, Page1Layout]] | None,
+    layout_blocked: Callable[[str], str | None] | None,
+    context: Callable[[str], PeopleContext],
+) -> tuple[Marked, list[str]]:
+    """``free`` (the rule without ``folder_is``) against the documents ``ids``, which the
+    owner marked as from its sender. Returns the comparison and the ids whose page 1 is
+    waiting to be read."""
+    marked = Marked()
+    unread: list[str] = []
+    if not ids:
+        return marked, unread
+    cols = [files.c.drive_id, files.c.path, files.c.name, files.c.ext, files.c.doc_date]
+    with engine.connect() as conn:
+        rows = conn.execute(
+            select(*cols, files.c.index_state, file_text.c.text)
+            .select_from(files.outerjoin(file_text, file_text.c.drive_id == files.c.drive_id))
+            .where(
+                files.c.drive_id.in_(ids),
+                files.c.missing.is_not(True),
+                files.c.parked_at.is_(None),
+                files.c.is_dir.is_not(True),
+            )
+            .order_by(files.c.path)
+        ).all()
+    layouts = layouts_for([r.drive_id for r in rows]) if layouts_for is not None else {}
+    marked.total = len(rows)
+    for row in rows:
+        rec = FileRecord(
+            drive_id=row.drive_id,
+            path=row.path,
+            name=row.name,
+            ext=row.ext,
+            doc_date=row.doc_date,
+        )
+        if row.index_state != "indexed":
+            marked.not_checked.append(NotChecked(row.path, "not indexed yet"))
+            continue
+        c = check(
+            free, rec, fold(row.text or ""), None, layouts.get(row.drive_id), context(row.drive_id)
+        )
+        if c.matched:
+            marked.found += 1
+        elif c.waiting:
+            reason = (layout_blocked(row.drive_id) if layout_blocked else None) or NOT_READ
+            marked.not_checked.append(NotChecked(row.path, reason))
+            if reason == NOT_READ:
+                unread.append(row.drive_id)
+        elif c.person_unknown:
+            marked.not_checked.append(NotChecked(row.path, PERSON_UNKNOWN))
+        else:
+            marked.missed.append(row.path)
+    return marked, unread
+
+
 def replay(
     engine: Engine,
     rule: Rule,
@@ -157,6 +228,7 @@ def replay(
     people: Sequence[Person] = (),
     address_zone: Sequence[float] = (0.0, 0.0, 1.0, 1.0),
     assigned_persons: Callable[[], dict[str, str]] | None = None,
+    sender_ids: Callable[[str], Sequence[str]] | None = None,
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
@@ -310,6 +382,11 @@ def replay(
         # a document without one of the zone's words in its text cannot match: checked
         left = max(0, len(candidates) - evaluated) if result.truncated else 0
         result.checked = max(0, result.total - left - len(result.not_checked))
+    if rule.sender and sender_ids is not None:
+        result.marked, more = _marked(
+            engine, free, list(sender_ids(rule.sender)), layouts_for, layout_blocked, context
+        )
+        unread.extend(more)
     result.reading = len(unread)
     if unread and want_layouts is not None:
         want_layouts(unread)

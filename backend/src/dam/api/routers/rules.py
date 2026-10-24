@@ -54,6 +54,7 @@ def _out(app: App) -> dict:
                 "when": r.when.model_dump(),
                 "then": r.then.model_dump(),
                 "person_zone": list(r.person_zone) if r.person_zone else None,
+                "sender": r.sender,
                 "stats": asdict(stats.get(r.id, _NO_STATS)),
             }
         )
@@ -107,6 +108,8 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
         layout_blocked=app.content.layout_blocked,
         people=app.settings.people,
         address_zone=app.settings.address_zone,
+        assigned_persons=app.assignments.persons,
+        sender_ids=app.assignments.with_sender,
     )
     if result.reading:
         app.wake_indexer()  # the layout pass reads what the rule needs next

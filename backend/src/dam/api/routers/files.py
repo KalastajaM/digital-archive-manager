@@ -117,6 +117,9 @@ def file_detail(app: AppDep, drive_id: str) -> dict:
     detail = {
         "record": asdict(rec),
         "tags": app.tags.for_file(drive_id),
+        "assignment": (
+            asdict(a) if (a := app.assignments.get([drive_id]).get(drive_id)) is not None else None
+        ),
         "link_target_id": target.drive_id if target else None,
         "link_target_path": target_path,
         "link_target_inside": target is not None,

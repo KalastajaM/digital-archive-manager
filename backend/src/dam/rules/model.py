@@ -120,10 +120,20 @@ class Rule(BaseModel):
     # when this rule matched, people are looked for in this area of page 1 instead of in
     # the archive's address zone (x0, y0, x1, y1), for this rule's folder and name only
     person_zone: tuple[float, float, float, float] | None = None
+    # the sender (a name from the owner's list of senders) this rule identifies: the
+    # replay compares the documents the owner marked as from it with what the rule matches
+    sender: str | None = None
 
     _folded_terms: list[str] = PrivateAttr(default_factory=list)
     _folded_zone_terms: list[str] = PrivateAttr(default_factory=list)
     _regex: "regex.Pattern[str] | None" = PrivateAttr(default=None)
+
+    @field_validator("sender")
+    @classmethod
+    def _no_blank_sender(cls, sender: str | None) -> str | None:
+        if sender is not None and not sender.strip():
+            raise ValueError("sender must not be blank")
+        return sender.strip() if sender is not None else None
 
     @field_validator("person_zone")
     @classmethod

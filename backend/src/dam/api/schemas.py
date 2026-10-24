@@ -284,6 +284,17 @@ class MarkBody(_In):
     group: str | None = None
 
 
+class AssignmentOut(BaseModel):
+    """Who a document is from (``sender``) and for (``person``), as set by the owner
+    (``set_by`` "owner") or recorded by a confirmed filing ("filing")."""
+
+    drive_id: str
+    sender: str | None
+    person: str | None
+    set_by: Literal["owner", "filing"]
+    set_at: float
+
+
 class FileRecordOut(BaseModel):
     drive_id: str
     path: str
@@ -315,6 +326,7 @@ class FileDetailOut(BaseModel):
     # the archive, or missing); null for anything that is not a link
     link_target_path: str | None
     link_target_inside: bool
+    assignment: AssignmentOut | None = None  # From / For
 
 
 class SummaryOut(BaseModel):
@@ -461,6 +473,8 @@ class InboxEntryOut(BaseModel):
     tray_guess: str | None
     # the trays the file already has an open item in
     open_trays: list[str]
+    # From / For chips: what the owner (or a confirmed filing) said; null when nothing
+    assignment: AssignmentOut | None = None
 
 
 class ResolvedOpOut(BaseModel):
@@ -1445,6 +1459,7 @@ class RuleIn(_In):
     when: RuleWhenIn = Field(default_factory=RuleWhenIn)
     then: RuleThenIn = Field(default_factory=RuleThenIn)
     person_zone: list[float] | None = Field(default=None, min_length=4, max_length=4)
+    sender: str | None = None
 
 
 class RuleReplayIn(_In):
@@ -1504,6 +1519,7 @@ class RuleOut(BaseModel):
     when: RuleWhenOut
     then: RuleThenOut
     person_zone: list[float] | None
+    sender: str | None
     stats: RuleStatsOut
 
 
@@ -1542,6 +1558,17 @@ class NotCheckedOut(BaseModel):
     reason: str
 
 
+class MarkedOut(BaseModel):
+    """For a rule with a sender: the documents the owner marked as from that sender.
+    ``missed`` are documents whose page 1 was read and the rule does not match (paths);
+    ``not_checked`` those that could not be looked at yet (never counted as missed)."""
+
+    total: int
+    found: int
+    missed: list[str]
+    not_checked: list[NotCheckedOut]
+
+
 class ReplayOut(BaseModel):
     matched: int
     same: int
@@ -1554,6 +1581,7 @@ class ReplayOut(BaseModel):
     not_checked: list[NotCheckedOut]
     # how many page-1 reads are queued by this replay (post it again to see them)
     reading: int
+    marked: MarkedOut | None = None  # only for a rule with a sender
 
 
 class Page1LineOut(BaseModel):
@@ -1627,3 +1655,17 @@ class PeopleOut(BaseModel):
     people: list[PersonIO]
     address_zone: list[float]
     default_address_zone: list[float]
+
+
+class AssignmentsIn(_In):
+    """``PUT /api/assignments``: set From and/or For on documents. A field left out stays
+    as it is; an explicit null clears it. ``person`` must be in the people list."""
+
+    drive_ids: list[str] = Field(min_length=1)
+    sender: str | None = None
+    person: str | None = None
+
+
+class SenderOut(BaseModel):
+    sender: str
+    count: int

@@ -441,3 +441,17 @@ rule_outcomes = Table(
     Index("ix_rule_outcomes_batch_id", "batch_id"),
     Index("ix_rule_outcomes_rule_id", "rule_id"),
 )
+
+# Who a document is from and for, as the owner (or a confirmed filing) said (migration
+# 0029). Index data only: not journaled. Keyed by ``drive_id`` alone, not by content:
+# who a document is from does not change when its content is saved again. No FK, as
+# ``rule_outcomes``: files rows may be parked or purged.
+file_assignments = Table(
+    "file_assignments",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("sender", Text, nullable=True),
+    Column("person", Text, nullable=True),
+    Column("set_by", Text, nullable=False),  # "owner" | "filing"
+    Column("set_at", Float, nullable=False),
+)

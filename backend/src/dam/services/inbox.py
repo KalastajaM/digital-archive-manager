@@ -24,16 +24,31 @@ from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
 from dam.rules.draft import ZoneDraft, draft_rule
-from dam.rules.engine import Suggestion, _parent, person_for, stem_and_ext, suggest
+from dam.rules.engine import (
+    Suggestion,
+    _parent,
+    person_for,
+    stem_and_ext,
+    suggest,
+    template_uses_person,
+)
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
 from dam.rules.model import RESERVED_IDS, Rule
-from dam.rules.offer import RuleOffer, make_doc_frequency, offer_target, outcomes
+from dam.rules.offer import (
+    RuleOffer,
+    make_doc_frequency,
+    offer_target,
+    outcomes,
+    rule_id_of,
+    same,
+)
 from dam.rules.people import PeopleContext
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
 from dam.rules.similar import similar_folder
 from dam.rules.state import load_state
 from dam.services import check_destination_area, check_disk_identity, check_origin
+from dam.services.assignments import Assignment, AssignmentService
 from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService, detected_of, prefill_from
@@ -116,6 +131,8 @@ class InboxEntry:
     # the scan fields: the user's saved list, else the detected one (``scan_fields``)
     fields: list[dict[str, str | None]] = field(default_factory=list)
     fields_edited: bool = False
+    # who the owner says the document is from and for (None: nothing set)
+    assignment: Assignment | None = None
 
 
 @dataclass
@@ -173,6 +190,7 @@ class InboxService:
         people: Callable[[], Sequence[Person]] = list,
         address_zone: Callable[[], Sequence[float]] = lambda: DEFAULT_ADDRESS_ZONE,
         assigned_person: Callable[[str], str | None] = lambda drive_id: None,
+        assignments: AssignmentService | None = None,
     ) -> None:
         self.paths = paths
         self.repo = repo
@@ -195,6 +213,7 @@ class InboxService:
         self._people = people
         self._address_zone = address_zone
         self._assigned_person = assigned_person
+        self._assignments = assignments
 
     def people_context(self, drive_id: str) -> PeopleContext:
         return PeopleContext(
@@ -209,6 +228,7 @@ class InboxService:
         tray_ids = [t.id for t in self.trays.defs()]
         open_trays = self.trays.open_trays([r.drive_id for r in records])
         entries = []
+        assigned = self._assignments.get([r.drive_id for r in records]) if self._assignments else {}
         for rec in records:
             text = self.repo.text_for(rec.drive_id)
             found = self._suggest(rec, text)
@@ -225,6 +245,7 @@ class InboxService:
                     open_trays.get(rec.drive_id, []),
                     detected if saved is None else saved,
                     saved is not None,
+                    assigned.get(rec.drive_id),
                 )
             )
         return entries
@@ -341,6 +362,7 @@ class InboxService:
             self._run_follow_up(req.drive_id, follow, batch_id, outcome)
             if req.drive_id in suggested:
                 self._learn(req, suggested[req.drive_id], batch_id, via, len(reqs), outcome)
+                self._record_person(req, suggested[req.drive_id][0])
         return outcome
 
     def _suggestions_before(self, reqs: list[FileRequest], via: str) -> dict:
@@ -381,6 +403,22 @@ class InboxService:
                 outcome.offer = self._offer(req, found, rec, text)
         except Exception:
             log.warning("offering a rule for %s failed", req.drive_id, exc_info=True)
+
+    def _record_person(self, req: FileRequest, found: Suggestion) -> None:
+        """The folder came from a rule whose template has ``{person}`` and the owner kept
+        it: that person is who the document is for (unless the owner said otherwise).
+        Never fails the filing."""
+        try:
+            rule_id = rule_id_of(found.folder_source)
+            if self._assignments is None or rule_id is None or found.person is None:
+                return
+            rule = next((r for r in self._rules() if r.id == rule_id), None)
+            if rule is None or not template_uses_person(rule.then.folder):
+                return
+            if same(found.folder, req.folder):
+                self._assignments.record_filing(req.drive_id, found.person)
+        except Exception:
+            log.warning("recording the person of %s failed", req.drive_id, exc_info=True)
 
     def _offer(
         self, req: FileRequest, found: Suggestion, rec: FileRecord, text: str

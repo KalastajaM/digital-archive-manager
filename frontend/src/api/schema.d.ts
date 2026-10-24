@@ -277,6 +277,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/files/{drive_id}/page1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Page1
+         * @description The text of page 1 with where each line sits (fractions of the page, origin top
+         *     left). ``read`` is false while page 1 has not been read: a read is queued, ask again.
+         */
+        get: operations["page1_api_files__drive_id__page1_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/files/{drive_id}/page1/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Page1 Lines
+         * @description The lines of page 1 that lie in a box (the rule that matching uses). Read only.
+         */
+        post: operations["page1_lines_api_files__drive_id__page1_lines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/{drive_id}": {
         parameters: {
             query?: never;
@@ -1952,6 +1993,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Assignments
+         * @description The assignments of these documents (one ``drive_id`` query parameter each);
+         *     documents with none are left out.
+         */
+        get: operations["get_assignments_api_assignments_get"];
+        /**
+         * Put Assignments
+         * @description Set From and/or For on documents (the owner's word: it beats what page 1 says and
+         *     is not overwritten by a filing). A field left out is unchanged, null clears it.
+         *     400 for a blank sender or a person not in the people list, 404 for an unknown document;
+         *     nothing is written then. Answers the documents' assignments (a cleared one is absent).
+         */
+        put: operations["put_assignments_api_assignments_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/senders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Senders
+         * @description The senders in use, by name, with the number of documents each has.
+         */
+        get: operations["senders_api_senders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/filing-codes": {
         parameters: {
             query?: never;
@@ -2170,6 +2259,28 @@ export interface paths {
          *     where that rule stands, otherwise where a new rule is saved. Changes nothing.
          */
         post: operations["replay_rule_api_rules_replay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/draft-zone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Zone
+         * @description The rule a box drawn on page 1 starts from (see ``ZoneDraftOut``). 400 when page 1
+         *     is not read yet, the box is empty or holds no usable word; 404 for an unknown
+         *     document. Changes nothing.
+         */
+        post: operations["draft_zone_api_rules_draft_zone_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2465,6 +2576,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/page1-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Page1 Backfill
+         * @description Turn the backfill of page-1 positions for documents outside the inbox on or off.
+         *     400 when settings.yaml could not be written (it is left as it was).
+         */
+        put: operations["put_page1_backfill_api_settings_page1_backfill_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get People
+         * @description The people documents can be for, and where on page 1 their address is (x0, y0, x1,
+         *     y1 as fractions of the page, origin top left).
+         */
+        get: operations["get_people_api_settings_people_get"];
+        /**
+         * Put People
+         * @description Save the people list (the whole list) and, when given, the address zone to
+         *     settings.yaml; used at once. 400 for a bad name, a repeated name, an empty or blank
+         *     ``match``, or a bad zone; nothing is written then.
+         */
+        put: operations["put_people_api_settings_people_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tags": {
         parameters: {
             query?: never;
@@ -2731,6 +2890,39 @@ export interface components {
             current: string;
             /** Can Switch */
             can_switch: boolean;
+        };
+        /**
+         * AssignmentOut
+         * @description Who a document is from (``sender``) and for (``person``), as set by the owner
+         *     (``set_by`` "owner") or recorded by a confirmed filing ("filing").
+         */
+        AssignmentOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Sender */
+            sender: string | null;
+            /** Person */
+            person: string | null;
+            /**
+             * Set By
+             * @enum {string}
+             */
+            set_by: "owner" | "filing";
+            /** Set At */
+            set_at: number;
+        };
+        /**
+         * AssignmentsIn
+         * @description ``PUT /api/assignments``: set From and/or For on documents. A field left out stays
+         *     as it is; an explicit null clears it. ``person`` must be in the people list.
+         */
+        AssignmentsIn: {
+            /** Drive Ids */
+            drive_ids: string[];
+            /** Sender */
+            sender?: string | null;
+            /** Person */
+            person?: string | null;
         };
         /** AttentionItemOut */
         AttentionItemOut: {
@@ -3284,6 +3476,7 @@ export interface components {
             link_target_path: string | null;
             /** Link Target Inside */
             link_target_inside: boolean;
+            assignment?: components["schemas"]["AssignmentOut"] | null;
         };
         /**
          * FileItResultOut
@@ -3671,6 +3864,7 @@ export interface components {
             tray_guess: string | null;
             /** Open Trays */
             open_trays: string[];
+            assignment?: components["schemas"]["AssignmentOut"] | null;
         };
         /** InboxStatsOut */
         InboxStatsOut: {
@@ -4013,6 +4207,22 @@ export interface components {
             group?: string | null;
         };
         /**
+         * MarkedOut
+         * @description For a rule with a sender: the documents the owner marked as from that sender.
+         *     ``missed`` are documents whose page 1 was read and the rule does not match (paths);
+         *     ``not_checked`` those that could not be looked at yet (never counted as missed).
+         */
+        MarkedOut: {
+            /** Total */
+            total: number;
+            /** Found */
+            found: number;
+            /** Missed */
+            missed: string[];
+            /** Not Checked */
+            not_checked: components["schemas"]["NotCheckedOut"][];
+        };
+        /**
          * MemberAttentionOut
          * @description A member that needs attention: its open tray items, and whether it is still
          *     directly in the inbox or in a filing code's inbox folder (not filed yet).
@@ -4107,6 +4317,17 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * NotCheckedOut
+         * @description A document the rule could match by its words but whose page 1 could not be looked
+         *     at; ``reason``: "page 1 not read yet", "no OCR engine" or "missing".
+         */
+        NotCheckedOut: {
+            /** Path */
+            path: string;
+            /** Reason */
+            reason: string;
+        };
         /** NotIncludedOut */
         NotIncludedOut: {
             /** Path */
@@ -4138,6 +4359,54 @@ export interface components {
             /** Collections */
             collections: components["schemas"]["CollectionSummaryOut"][];
         };
+        /** Page1BackfillIn */
+        Page1BackfillIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** Page1BackfillOut */
+        Page1BackfillOut: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** Page1BoxIn */
+        Page1BoxIn: {
+            /** Box */
+            box: number[];
+        };
+        /** Page1LineOut */
+        Page1LineOut: {
+            /** Text */
+            text: string;
+            /** Box */
+            box: number[];
+        };
+        /**
+         * Page1Out
+         * @description Page 1's lines. ``read`` false: not read yet (a read is queued), or it cannot be
+         *     (``unavailable`` says why: "no OCR engine"; None while it is just waiting).
+         */
+        Page1Out: {
+            /** Read */
+            read: boolean;
+            /** Lines */
+            lines: components["schemas"]["Page1LineOut"][];
+            /** Unavailable */
+            unavailable?: string | null;
+        };
+        /**
+         * Page1ProgressOut
+         * @description The page-1 layout pass: documents whose page 1 is read, of all it reads, and
+         *     whether the backfill of documents outside the inbox is on.
+         */
+        Page1ProgressOut: {
+            /** Read */
+            read: number;
+            /** Total */
+            total: number;
+            /** Backfill */
+            backfill: boolean;
+        };
         /**
          * ParentBody
          * @description The new parent collection; required, null for the top.
@@ -4145,6 +4414,33 @@ export interface components {
         ParentBody: {
             /** Parent Id */
             parent_id: number | null;
+        };
+        /**
+         * PeopleIn
+         * @description The people list; ``address_zone`` (x0, y0, x1, y1 of page 1) is left as it is when
+         *     omitted.
+         */
+        PeopleIn: {
+            /** People */
+            people: components["schemas"]["PersonIO"][];
+            /** Address Zone */
+            address_zone?: number[] | null;
+        };
+        /** PeopleOut */
+        PeopleOut: {
+            /** People */
+            people: components["schemas"]["PersonIO"][];
+            /** Address Zone */
+            address_zone: number[];
+            /** Default Address Zone */
+            default_address_zone: number[];
+        };
+        /** PersonIO */
+        PersonIO: {
+            /** Name */
+            name: string;
+            /** Match */
+            match: string[];
         };
         /**
          * PreparedOut
@@ -4313,6 +4609,11 @@ export interface components {
             total: number;
             /** Truncated */
             truncated: boolean;
+            /** Not Checked */
+            not_checked: components["schemas"]["NotCheckedOut"][];
+            /** Reading */
+            reading: number;
+            marked?: components["schemas"]["MarkedOut"] | null;
         };
         /** ResolvedOpOut */
         ResolvedOpOut: {
@@ -4375,6 +4676,11 @@ export interface components {
             why: string;
             /** Wins */
             wins: string[];
+            /**
+             * Zone Lines
+             * @default []
+             */
+            zone_lines: string[];
         };
         /** RuleIn */
         RuleIn: {
@@ -4382,6 +4688,10 @@ export interface components {
             id: string;
             when?: components["schemas"]["RuleWhenIn"];
             then?: components["schemas"]["RuleThenIn"];
+            /** Person Zone */
+            person_zone?: number[] | null;
+            /** Sender */
+            sender?: string | null;
         };
         /** RuleMoveIn */
         RuleMoveIn: {
@@ -4414,6 +4724,10 @@ export interface components {
             learned: boolean;
             when: components["schemas"]["RuleWhenOut"];
             then: components["schemas"]["RuleThenOut"];
+            /** Person Zone */
+            person_zone: number[] | null;
+            /** Sender */
+            sender: string | null;
             stats: components["schemas"]["RuleStatsOut"];
         };
         /** RuleReplayIn */
@@ -4467,6 +4781,9 @@ export interface components {
             filename_matches?: string | null;
             /** Folder Is */
             folder_is?: string | null;
+            zone?: components["schemas"]["ZoneIn"] | null;
+            /** Person */
+            person?: string | null;
         };
         /** RuleWhenOut */
         RuleWhenOut: {
@@ -4476,6 +4793,9 @@ export interface components {
             filename_matches: string | null;
             /** Folder Is */
             folder_is: string | null;
+            zone: components["schemas"]["ZoneOut"] | null;
+            /** Person */
+            person: string | null;
         };
         /** RulesDeclineIn */
         RulesDeclineIn: {
@@ -4572,6 +4892,13 @@ export interface components {
             mtime: number | null;
             /** Marks */
             marks: ("starred" | "important")[];
+        };
+        /** SenderOut */
+        SenderOut: {
+            /** Sender */
+            sender: string;
+            /** Count */
+            count: number;
         };
         /** SetupCandidateOut */
         SetupCandidateOut: {
@@ -4787,6 +5114,7 @@ export interface components {
              * @default true
              */
             inbox_exists: boolean;
+            page1?: components["schemas"]["Page1ProgressOut"] | null;
             /**
              * Configured
              * @default true
@@ -4840,6 +5168,20 @@ export interface components {
             important: boolean | null;
             /** Marks Unclear */
             marks_unclear: boolean;
+            /**
+             * Waiting For Page1
+             * @default false
+             */
+            waiting_for_page1: boolean;
+            /** Person */
+            person?: string | null;
+            /** Person Source */
+            person_source?: string | null;
+            /**
+             * People Found
+             * @default []
+             */
+            people_found: string[];
         };
         /** SummaryBody */
         SummaryBody: {
@@ -5096,6 +5438,63 @@ export interface components {
              * @default []
              */
             kept: string[];
+        };
+        /** ZoneDraftIn */
+        ZoneDraftIn: {
+            /** Drive Id */
+            drive_id: string;
+            /** Box */
+            box: number[];
+            /** Sender */
+            sender?: string | null;
+        };
+        /**
+         * ZoneDraftOut
+         * @description The draft a box drawn on page 1 starts from. The rule's ``when`` is
+         *     ``{folder_is, zone: {box, text_contains: [the ticked word]}}``; ``words`` are the
+         *     candidate words from the lines in the box, ``lines`` those lines.
+         */
+        ZoneDraftOut: {
+            /** Id */
+            id: string;
+            /** Words */
+            words: components["schemas"]["DraftWordOut"][];
+            /** Folder */
+            folder: string | null;
+            /** Name */
+            name: string | null;
+            /** Tags */
+            tags: string[];
+            /** Tray */
+            tray: string | null;
+            /** Payee */
+            payee: string | null;
+            /** Box */
+            box: number[];
+            /** Folder Is */
+            folder_is: string | null;
+            /** Lines */
+            lines: string[];
+            /** Sender */
+            sender: string | null;
+        };
+        /**
+         * ZoneIn
+         * @description Words that must be in an area of page 1: ``box`` is [x0, y0, x1, y1] as fractions
+         *     of the page, origin top left.
+         */
+        ZoneIn: {
+            /** Box */
+            box: number[];
+            /** Text Contains */
+            text_contains: string[];
+        };
+        /** ZoneOut */
+        ZoneOut: {
+            /** Box */
+            box: number[];
+            /** Text Contains */
+            text_contains: string[];
         };
     };
     responses: never;
@@ -6357,6 +6756,198 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    page1_api_files__drive_id__page1_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page1Out"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    page1_lines_api_files__drive_id__page1_lines_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Page1BoxIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page1Out"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -15645,6 +16236,288 @@ export interface operations {
             };
         };
     };
+    get_assignments_api_assignments_get: {
+        parameters: {
+            query?: {
+                drive_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_assignments_api_assignments_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    senders_api_senders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SenderOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_codes_api_filing_codes_get: {
         parameters: {
             query?: never;
@@ -16696,6 +17569,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReplayOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    draft_zone_api_rules_draft_zone_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZoneDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoneDraftOut"];
                 };
             };
             /** @description Bad Request */
@@ -18230,6 +19199,290 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_page1_backfill_api_settings_page1_backfill_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Page1BackfillIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page1BackfillOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_people_api_settings_people_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_people_api_settings_people_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeopleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleOut"];
                 };
             };
             /** @description Bad Request */

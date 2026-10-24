@@ -34,6 +34,7 @@ from dam.rules.learned import rule_file, write_rules_file
 from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
 from dam.search import SearchHit, search
 from dam.services.activity import ActivityService
+from dam.services.assignments import AssignmentService
 from dam.services.browse import BrowseService
 from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotConfigured, NotFound
 from dam.services.inbox import InboxService
@@ -68,6 +69,7 @@ class App:
     trays: TrayService = field(init=False)
     notes: NotesService = field(init=False)
     rule_record: RuleRecord = field(init=False)
+    assignments: AssignmentService = field(init=False)
     publishers: PublisherRegistry = field(init=False)
     collections: CollectionService = field(init=False)
     marks: MarkService = field(init=False)
@@ -131,6 +133,7 @@ class App:
             self.engine, lambda drive_id: self.inbox.detected_fields(drive_id)
         )
         self.rule_record = RuleRecord(self.engine)
+        self.assignments = AssignmentService(self.engine, self.repo, lambda: self.settings.people)
         self.inbox = InboxService(
             self.paths,
             self.repo,
@@ -149,6 +152,8 @@ class App:
             want_layouts=lambda ids: self.content.want_layouts(ids),
             people=lambda: self.settings.people,
             address_zone=lambda: self.settings.address_zone,
+            assigned_person=self.assignments.person_of,
+            assignments=self.assignments,
         )
         self.layout = LayoutService(
             self.paths,
