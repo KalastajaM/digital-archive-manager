@@ -80,9 +80,18 @@ export function useReplayJob({
   const [error, setError] = useState<string | null>(null);
   const [readingNow, setReadingNow] = useState(false);
 
+  // A test that ended (stopped, done, error) stays ended: a poll sent before Stop can answer
+  // after it, and must not bring "running" back.
+  const ended = useRef(false);
+
+  /** Shows ``job``; false (and nothing shown) for a late "running" answer after the end. */
   const take = useCallback((job: ReplayJob, key: string) => {
+    const live = LIVE.includes(job.state);
+    if (ended.current && live) return false;
+    if (!live) ended.current = true;
     if (job.result) version.current = job.version;
     setView((v) => ({ job, held: job.result ? { replay: job.result, key } : v.held }));
+    return true;
   }, []);
 
   useEffect(() => {
@@ -95,8 +104,7 @@ export function useReplayJob({
     const follow = async (id: string) => {
       try {
         const job = await getReplayJob(id, version.current);
-        if (!alive()) return;
-        take(job, jobKey);
+        if (!alive() || !take(job, jobKey)) return;
         if (LIVE.includes(job.state)) poll = setTimeout(() => void follow(id), jobPolling.ms);
       } catch (e) {
         if (alive()) setError(errorText(e));
@@ -119,6 +127,7 @@ export function useReplayJob({
     setError(null);
     setReadingNow(false);
     version.current = 0;
+    ended.current = false;
     setView((v) => (v.job === null ? v : { ...v, job: null }));
     const wait = immediate.current ? 0 : delayMs;
     immediate.current = false;
