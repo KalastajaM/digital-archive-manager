@@ -28,6 +28,24 @@ describe("visible", () => {
   });
 });
 
+describe("PlanList picture ops", () => {
+  it("shows the picture by its file name and where it goes back to by the rules folder", () => {
+    render(
+      <PlanList
+        ops={[
+          { kind: "picture_to_quarantine", src: "abs:/Users/me/config/rules/areas/old-1.png", dst: "##. To Delete/dam rule picture old-1.png", drive_id: null, note: null },
+          { kind: "picture_back", src: "##. To Delete/dam rule picture old-1.png", dst: "abs:C:\\cfg\\rules\\areas\\old-1.png", drive_id: null, note: null },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Move to To Delete")).toBeInTheDocument();
+    expect(screen.getByText("Put back")).toBeInTheDocument();
+    expect(screen.getByText("old-1.png")).toBeInTheDocument();
+    expect(screen.getByText("rules/areas/old-1.png")).toBeInTheDocument();
+    expect(screen.queryByText(/Users/)).not.toBeInTheDocument();
+  });
+});
+
 describe("PlanList", () => {
   it("shows single-path ops (folders made or removed, links removed) with one path and no arrow", () => {
     const one = "##. Ongoing/C/New group";
