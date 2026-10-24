@@ -94,6 +94,20 @@ def test_without_an_ocr_engine_a_scan_waits_and_says_why(fake_archive, engine, m
     assert indexer.run_layouts_once() == 0  # waits for the retry time
 
 
+def test_without_an_ocr_engine_the_file_is_not_read_at_all(fake_archive, engine, monkeypatch):
+    monkeypatch.setattr(ocr, "engine", lambda: None)
+
+    def not_called(path):
+        raise AssertionError("the file must not be read when OCR is missing")
+
+    monkeypatch.setattr(content, "_read_file", not_called)
+    repo, indexer = _indexer(fake_archive, engine)
+    _indexed(fake_archive, repo, f"{INBOX}/s.pdf", "d1", ocr_used=True, scan=True)
+    assert indexer.run_layouts_once() == 1
+    assert indexer.layout_blocked("d1") == "no OCR engine"
+    assert repo.layout_for("d1") is None
+
+
 def test_backfill_off_reads_only_the_inbox_and_wanted_files(fake_archive, engine):
     flag = {"on": False}
     repo, indexer = _indexer(fake_archive, engine, page1_backfill=lambda: flag["on"])
@@ -174,6 +188,7 @@ def test_a_hung_read_is_not_recorded_and_retried_later(fake_archive, engine, mon
     assert indexer.run_layouts_once() == 1
     assert time.monotonic() - started < 2
     assert repo.layout_for("d1") is None
+    assert indexer.layout_blocked("d1") == "page 1 took too long to read"
     assert indexer.run_layouts_once() == 0  # busy, then waiting for its retry time
     release.set()
 

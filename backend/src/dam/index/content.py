@@ -15,7 +15,7 @@ from dam.extract import ocr
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
 from dam.extract.layout import Page1Layout
 from dam.index.barcodes import read_page1
-from dam.index.layouts import read_layout
+from dam.index.layouts import IMAGE_EXTS, read_layout
 from dam.index.repo import FileRecord, FileRepo
 
 log = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ MAX_READERS = 3
 MAX_BYTES = 256 * 1024 * 1024
 LAYOUT_NO_OCR = "no OCR engine"  # why a file's page 1 cannot be read now
 LAYOUT_MISSING = "missing"
+LAYOUT_TIMEOUT = "page 1 took too long to read"
 MAX_REASON = 500  # characters of an error reason kept in the index
 
 
@@ -332,8 +333,8 @@ class ContentIndexer:
             self._wanted.update(drive_ids)
 
     def layout_blocked(self, drive_id: str) -> str | None:
-        """Why page 1 of this file cannot be read right now (``LAYOUT_NO_OCR`` or
-        ``LAYOUT_MISSING``), else None."""
+        """Why page 1 of this file cannot be read right now (``LAYOUT_NO_OCR``,
+        ``LAYOUT_MISSING`` or ``LAYOUT_TIMEOUT``), else None."""
         with self._lock:
             return self._layout_why.get(drive_id)
 
@@ -381,6 +382,11 @@ class ContentIndexer:
         assert rec.sha256 is not None and rec.ext is not None
         path = self.paths.abs(rec.path)
         ocr_used = self.repo.text_was_ocrd(rec.drive_id)
+        ext = rec.ext.lower().lstrip(".")
+        if (ext in IMAGE_EXTS or (ext == "pdf" and ocr_used)) and ocr.engine() is None:
+            # this read needs OCR: do not read the whole file just to find that out
+            self._retry_layout_later(rec.drive_id, LAYOUT_NO_OCR)
+            return True
         out: dict = {}
         finished = threading.Event()
 
@@ -412,7 +418,7 @@ class ContentIndexer:
             raise
         if not finished.wait(self.layout_timeout_s):
             log.warning("page-1 reading timed out for %s; retrying later", rec.path)
-            self._retry_layout_later(rec.drive_id, None)
+            self._retry_layout_later(rec.drive_id, LAYOUT_TIMEOUT)
             return False
         error = out.get("error")
         if isinstance(error, UnsupportedContent) and str(error) == ocr.NO_OCR:
