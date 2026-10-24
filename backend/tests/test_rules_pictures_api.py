@@ -278,3 +278,48 @@ def test_write_config_bytes_keeps_a_copy_and_restores_when_the_read_back_fails(t
     assert path.read_bytes() == b"first"  # restored
     backups = [p.name for p in path.parent.iterdir() if ".bak-" in p.name]
     assert backups and (path.parent / backups[0]).read_bytes() == b"first"
+
+
+# --- two saves at once, and boxes too small to match ------------------------------------
+
+
+def test_two_saves_at_once_get_two_files_and_neither_overwrites_the_other(app, monkeypatch):
+    import threading
+    import time
+
+    from dam.services import area_pictures
+
+    real = area_pictures.write_config_bytes
+
+    def slow(path, data, verify):
+        time.sleep(0.2)  # the other save runs while this one is between pick and write
+        real(path, data, verify)
+
+    monkeypatch.setattr(area_pictures, "write_config_bytes", slow)
+    crops = [Image.new("L", (20, 20), 60), Image.new("L", (20, 20), 200)]
+    names: list[str] = []
+    threads = [
+        threading.Thread(target=lambda c=c: names.append(app.area_pictures.save("acme", c)))
+        for c in crops
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(names) == ["areas/acme-1.png", "areas/acme-2.png"]
+    stored = sorted(crop_file(app.rules_dir, n).read_bytes() for n in names)
+    assert stored == sorted(png_bytes(c) for c in crops)
+
+
+def test_a_picture_box_under_one_percent_of_the_page_is_refused(app, doc):
+    tiny = [0.1, 0.1, 0.105, 0.3]  # 0.5% wide
+    flat = [0.1, 0.1, 0.4, 0.105]
+    with make_client(app) as c:
+        for box in (tiny, flat):
+            r = post(c, "/api/rules/area-picture", {"drive_id": doc, "box": box})
+            assert r.status_code == 400 and "too small" in r.json()["error"]
+            r = post(c, "/api/rules/draft-zone", {"drive_id": doc, "picture_boxes": [box]})
+            assert r.status_code == 400 and "too small" in r.json()["error"]
+        ok = [0.1, 0.1, 0.12, 0.12]
+        assert post(c, "/api/rules/area-picture", {"drive_id": doc, "box": ok}).status_code == 200
+    assert not areas_dir(app).exists()
