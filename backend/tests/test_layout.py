@@ -319,3 +319,27 @@ def test_migration_0028_adds_the_table(engine):
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(file_layouts)"))]
     assert cols == ["drive_id", "sha256", "lines", "source", "read_at"]
+
+
+def _rotated_jpeg(path: Path) -> Path:
+    exif = Image.Exif()
+    exif[0x0112] = 6  # shown turned a quarter clockwise: width and height swap
+    Image.new("RGB", (40, 20), "white").save(path, exif=exif)
+    return path
+
+
+def test_exif_orientation_is_applied_before_ocr(tmp_path: Path, monkeypatch):
+    from dam.index.layouts import read_layout
+
+    seen = []
+
+    def fake(image, languages):
+        seen.append(image.size)
+        return Page1Layout([], "vision")
+
+    monkeypatch.setattr(ocr, "ocr_page", fake)
+    monkeypatch.setattr(ocr, "engine", lambda: "vision")
+    jpg = _rotated_jpeg(tmp_path / "a.jpg")
+    ImageOcrExtractor(LANGS).extract(jpg)
+    read_layout(jpg, "jpg", jpg.read_bytes(), ocr_used=True, languages=LANGS)
+    assert seen == [(20, 40), (20, 40)]

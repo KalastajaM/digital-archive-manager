@@ -60,7 +60,7 @@ def read_layout(
             raise UnsupportedContent(ocr.NO_OCR)
         with Image.open(io.BytesIO(data) if data is not None else path) as img:
             img.load()
-            return ocr.ocr_page(img, languages)
+            return ocr.ocr_page(ocr.upright(img), languages)
     raise UnsupportedContent(f"no page 1 to read in a .{ext} file")
 
 

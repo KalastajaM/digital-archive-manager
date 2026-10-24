@@ -12,7 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from dam.extract.base import ExtractedText, UnsupportedContent
 from dam.extract.layout import Line, Page1Layout, clamp_box
@@ -169,6 +169,12 @@ def ocr_image(image: Image.Image, languages: list[str]) -> str:
     raise UnsupportedContent(NO_OCR)
 
 
+def upright(img: Image.Image) -> Image.Image:
+    """``img`` turned the way it is shown (EXIF orientation applied), so the OCR boxes are
+    in the frame of what the browser displays."""
+    return ImageOps.exif_transpose(img) or img
+
+
 class ImageOcrExtractor:
     name = "image-ocr"
     suffixes = {".jpg", ".jpeg", ".png"}
@@ -185,7 +191,7 @@ class ImageOcrExtractor:
         try:
             with Image.open(io.BytesIO(data) if data is not None else path) as img:
                 img.load()
-                page = ocr_page(img, self.languages)
+                page = ocr_page(upright(img), self.languages)
         except (UnidentifiedImageError, Image.DecompressionBombError) as exc:
             raise UnsupportedContent(f"unreadable image: {exc}") from exc
         # the indexed text and the page-1 lines are one read
