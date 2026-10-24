@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from dam.api.routers import (
     activity,
     ai,
+    assignments,
     browse,
     codes,
     collections,
@@ -23,6 +24,7 @@ from dam.api.routers import (
     notes,
     ongoing,
     rules,
+    settings,
     setup,
     system,
     tags,
@@ -161,10 +163,12 @@ def create_api(
         important,
         export,
         ai,
+        assignments,
         codes,
         rules,
         archives_router,
         setup,
+        settings,
         tags,
     ):
         api.include_router(module.router)

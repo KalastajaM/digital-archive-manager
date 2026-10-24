@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from dam.extract.layout import Page1Layout
+
 
 class UnsupportedContent(Exception):
     """Recognised file type whose content cannot be read (encrypted, corrupt, bad image)."""
@@ -15,6 +17,9 @@ class ExtractedText:
     text: str
     extractor: str
     ocr_used: bool = False
+    # where the text of page 1 sits (PDFs and images); the page-1 part of ``text`` is
+    # taken from the same read
+    page1: Page1Layout | None = None
 
 
 class Extractor(Protocol):

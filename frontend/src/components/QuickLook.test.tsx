@@ -46,7 +46,7 @@ function entry(id: string, name: string, suggested: string): InboxEntry {
       collections: [],
       collection_sources: {},
       codes: [],
-      conflict: false, star: null, important: null, marks_unclear: false,
+      conflict: false, star: null, important: null, marks_unclear: false, waiting_for_page1: false, people_found: [],
     },
     text_excerpt: "",
     prefill: {},

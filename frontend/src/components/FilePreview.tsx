@@ -30,6 +30,7 @@ import { inFileManager } from "../fileManager";
 import { visible, visibleText } from "../text";
 import { LaunchButtons, useFileLaunch } from "./FileLaunch";
 import { IconButton } from "./ui/IconButton";
+import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
 
 // Shown with <img> from /raw (never an iframe: /raw is CSP-sandboxed).
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
@@ -396,11 +397,13 @@ function PdfPages({
   driveId,
   tools,
   control,
+  boxTool,
   onFail,
 }: {
   driveId: string;
   tools?: ReactNode;
   control?: ZoomControl;
+  boxTool?: BoxTool;
   onFail: () => void;
 }) {
   const [page, setPage] = useState(1);
@@ -409,48 +412,58 @@ function PdfPages({
   const zoom = useZoom(root, control);
 
   return (
-    <figure className="pdf-pages" ref={root}>
-      <ZoomControls zoom={zoom}>{tools}</ZoomControls>
-      <ZoomFrame zoom={zoom}>
-        <ZoomImage
-          key={page}
-          zoom={zoom.zoom}
-          draggable={false}
-          src={pageUrl(driveId, page, renderWidth(zoom.zoom))}
-          alt={`Page ${page}`}
-          onError={() => {
-            if (page === 1) {
-              onFail();
-            } else {
-              setLastPage(page - 1);
-              setPage(page - 1);
-            }
-          }}
-        />
-      </ZoomFrame>
-      <figcaption>
-        <button
-          type="button"
-          aria-label="Previous page"
-          disabled={page <= 1}
-          onClick={() => setPage(page - 1)}
-        >
-          ‹
-        </button>
-        <span>
-          Page {page}
-          {lastPage !== null && ` of ${lastPage}`}
-        </span>
-        <button
-          type="button"
-          aria-label="Next page"
-          disabled={lastPage !== null && page >= lastPage}
-          onClick={() => setPage(page + 1)}
-        >
-          ›
-        </button>
-      </figcaption>
-    </figure>
+    <WithBoxes driveId={driveId} tool={boxTool} pageOne={page === 1}>
+      {(boxes) => (
+        <figure className="pdf-pages" ref={root}>
+          <ZoomControls zoom={zoom}>
+            {boxes.button}
+            {tools}
+          </ZoomControls>
+          {boxes.panel}
+          <ZoomFrame zoom={zoom}>
+            {boxes.around(
+              <ZoomImage
+                key={page}
+                zoom={zoom.zoom}
+                draggable={false}
+                src={pageUrl(driveId, page, renderWidth(zoom.zoom))}
+                alt={`Page ${page}`}
+                onError={() => {
+                  if (page === 1) {
+                    onFail();
+                  } else {
+                    setLastPage(page - 1);
+                    setPage(page - 1);
+                  }
+                }}
+              />,
+            )}
+          </ZoomFrame>
+          <figcaption>
+            <button
+              type="button"
+              aria-label="Previous page"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              ‹
+            </button>
+            <span>
+              Page {page}
+              {lastPage !== null && ` of ${lastPage}`}
+            </span>
+            <button
+              type="button"
+              aria-label="Next page"
+              disabled={lastPage !== null && page >= lastPage}
+              onClick={() => setPage(page + 1)}
+            >
+              ›
+            </button>
+          </figcaption>
+        </figure>
+      )}
+    </WithBoxes>
   );
 }
 
@@ -459,30 +472,42 @@ function ImagePreview({
   path,
   tools,
   control,
+  boxTool,
   onFail,
 }: {
   driveId: string;
   path: string;
   tools?: ReactNode;
   control?: ZoomControl;
+  boxTool?: BoxTool;
   onFail: () => void;
 }) {
   const root = useRef<HTMLElement>(null);
   const zoom = useZoom(root, control);
   return (
-    <figure className="image-figure" ref={root}>
-      <ZoomControls zoom={zoom}>{tools}</ZoomControls>
-      <ZoomFrame zoom={zoom}>
-        <ZoomImage
-          zoom={zoom.zoom}
-          className="image-preview"
-          draggable={false}
-          src={rawUrl(driveId)}
-          alt={path}
-          onError={onFail}
-        />
-      </ZoomFrame>
-    </figure>
+    <WithBoxes driveId={driveId} tool={boxTool} pageOne>
+      {(boxes) => (
+        <figure className="image-figure" ref={root}>
+          <ZoomControls zoom={zoom}>
+            {boxes.button}
+            {tools}
+          </ZoomControls>
+          {boxes.panel}
+          <ZoomFrame zoom={zoom}>
+            {boxes.around(
+              <ZoomImage
+                zoom={zoom.zoom}
+                className="image-preview"
+                draggable={false}
+                src={rawUrl(driveId)}
+                alt={path}
+                onError={onFail}
+              />,
+            )}
+          </ZoomFrame>
+        </figure>
+      )}
+    </WithBoxes>
   );
 }
 
@@ -498,6 +523,8 @@ type PreviewProps = {
   zoomControl?: ZoomControl;
   /** More buttons at the right end of the toolbar (the ★ and ! toggles). */
   extraTools?: ReactNode;
+  /** The "Draw a box" tool on page 1 of a PDF or an image (off when left out). */
+  boxTool?: BoxTool;
 };
 
 type LinkProps = {
@@ -517,7 +544,7 @@ type Stage = "doc" | "text" | "thumb" | "none";
 const firstStage = (kind: string): Stage =>
   kind === "pdf" || IMAGE_EXTS.has(kind) ? "doc" : TEXT_EXTS.has(kind) ? "text" : "thumb";
 
-function Preview({ file, windowButton, zoomControl, extraTools }: PreviewProps & { windowButton: boolean }) {
+function Preview({ file, windowButton, zoomControl, extraTools, boxTool }: PreviewProps & { windowButton: boolean }) {
   const { drive_id: driveId, path, ext } = file;
   const kind = ext?.toLowerCase() ?? "";
   const [stage, setStage] = useState<Stage>(() => firstStage(kind));
@@ -530,8 +557,8 @@ function Preview({ file, windowButton, zoomControl, extraTools }: PreviewProps &
     </>
   );
   const next = (to: Stage) => () => setStage(to);
-  if (stage === "doc" && kind === "pdf") return <PdfPages driveId={driveId} tools={tools} control={zoomControl} onFail={next("thumb")} />;
-  if (stage === "doc") return <ImagePreview driveId={driveId} path={path} tools={tools} control={zoomControl} onFail={next("thumb")} />;
+  if (stage === "doc" && kind === "pdf") return <PdfPages driveId={driveId} tools={tools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
+  if (stage === "doc") return <ImagePreview driveId={driveId} path={path} tools={tools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
   if (stage === "text") return <TextPreview driveId={driveId} tools={tools} onFail={next("thumb")} />;
   if (stage === "thumb") return <ThumbPreview file={file} tools={tools} onFail={next("none")} />;
   return (
@@ -641,6 +668,7 @@ export function FilePreview({
   beforeGoToTarget,
   zoomControl,
   extraTools,
+  boxTool,
 }: PreviewProps & LinkProps) {
   // key: a different file starts again at its first step, page 1 and "fit"
   if (file.is_link) {
@@ -657,6 +685,13 @@ export function FilePreview({
     );
   }
   return (
-    <Preview key={file.drive_id} file={file} windowButton={windowButton} zoomControl={zoomControl} extraTools={extraTools} />
+    <Preview
+      key={file.drive_id}
+      file={file}
+      windowButton={windowButton}
+      zoomControl={zoomControl}
+      extraTools={extraTools}
+      boxTool={boxTool}
+    />
   );
 }

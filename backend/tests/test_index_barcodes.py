@@ -169,6 +169,7 @@ def test_backfill_reads_files_indexed_before_0009_once(fake_archive, engine, mon
     repo, indexer = _indexer(fake_archive, engine)
     _indexed_before_0009(fake_archive, repo, f"{INBOX}/bill.pdf", "d1", modules(CODE))
     _indexed_before_0009(fake_archive, repo, f"{INBOX}/letter.pdf", "d2")
+    indexer.run_layouts_once = lambda limit=1: 0  # the layout pass is tested on its own
     assert indexer.run_once(now=NOW) == 0  # no content work
     assert indexer.step(now=NOW) == 1 and indexer.step(now=NOW) == 1
     assert repo.barcode_for("d1") == CODE
@@ -385,7 +386,7 @@ def test_migrations_upgrade_an_existing_db(tmp_path: Path, new_engine):
         cols = {r[1]: r[3] for r in conn.execute(text("PRAGMA table_info(file_barcodes)"))}
         assert conn.execute(text("SELECT count(*) FROM files")).scalar() == 1
         assert conn.execute(text("SELECT code FROM file_barcodes")).scalar() == CODE
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0027"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0029"
     assert list(cols) == ["drive_id", "code", "sha256", "read_at"]
     assert cols["code"] == 0 and cols["read_at"] == 1  # code nullable: "none found"
     engine.dispose()

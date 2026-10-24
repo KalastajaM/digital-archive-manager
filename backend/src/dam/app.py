@@ -18,7 +18,7 @@ from dam.collections.ongoing import PUBLISHER_ID as ONGOING
 from dam.collections.ongoing import OngoingPublisher
 from dam.collections.publishers import PublisherRegistry
 from dam.collections.service import CollectionService
-from dam.config import DEFAULTS_DIR, AppPaths, Settings, load_settings
+from dam.config import DEFAULTS_DIR, AppPaths, Person, Settings, load_settings
 from dam.core.paths import ArchivePaths
 from dam.db.engine import make_engine, migrate
 from dam.db.tables import files
@@ -34,6 +34,7 @@ from dam.rules.learned import rule_file, write_rules_file
 from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
 from dam.search import SearchHit, search
 from dam.services.activity import ActivityService
+from dam.services.assignments import AssignmentService
 from dam.services.browse import BrowseService
 from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotConfigured, NotFound
 from dam.services.inbox import InboxService
@@ -45,6 +46,7 @@ from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService
 from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
+from dam.settings_write import write_keys
 from dam.setup import NOT_CONFIGURED
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
@@ -67,6 +69,7 @@ class App:
     trays: TrayService = field(init=False)
     notes: NotesService = field(init=False)
     rule_record: RuleRecord = field(init=False)
+    assignments: AssignmentService = field(init=False)
     publishers: PublisherRegistry = field(init=False)
     collections: CollectionService = field(init=False)
     marks: MarkService = field(init=False)
@@ -130,6 +133,7 @@ class App:
             self.engine, lambda drive_id: self.inbox.detected_fields(drive_id)
         )
         self.rule_record = RuleRecord(self.engine)
+        self.assignments = AssignmentService(self.engine, self.repo, lambda: self.settings.people)
         self.inbox = InboxService(
             self.paths,
             self.repo,
@@ -145,6 +149,12 @@ class App:
             rule_record=self.rule_record,
             rules_dir=lambda: self.rules_dir,
             data_dir=self.app_paths.data_dir,
+            want_layouts=lambda ids: self.content.want_layouts(ids),
+            layout_blocked=lambda drive_id: self.content.layout_blocked(drive_id),
+            people=lambda: self.settings.people,
+            address_zone=lambda: self.settings.address_zone,
+            assigned_person=self.assignments.person_of,
+            assignments=self.assignments,
         )
         self.layout = LayoutService(
             self.paths,
@@ -187,6 +197,7 @@ class App:
         self.launch = LaunchService(self.paths)
         self.previews = PreviewService(self.paths, self.app_paths.cache_dir / "thumbs")
         self.content.barcode_trays = self.barcode_trays
+        self.content.page1_backfill = lambda: self.settings.page1_backfill
         # DAM_AI_FAKE=1 (demos, tests): a deterministic provider that counts as a key
         provider = None
         if os.environ.get("DAM_AI_FAKE") == "1":
@@ -247,7 +258,12 @@ class App:
                 executor=Executor(paths, engine, repo, throttle_ms=settings.ops_throttle_ms),
                 registry=registry,
                 content=ContentIndexer(
-                    paths, repo, engine, registry, settings.indexer_reads_per_minute
+                    paths,
+                    repo,
+                    engine,
+                    registry,
+                    settings.indexer_reads_per_minute,
+                    ocr_languages=settings.ocr_languages,
                 ),
             )
         except BaseException:
@@ -343,6 +359,40 @@ class App:
         rules.insert(j, rules.pop(i))
         self._write_rule_file(path, rules)
 
+    def set_page1_backfill(self, enabled: bool) -> None:
+        """Turn the page-1 backfill on or off (``page1_backfill`` in settings.yaml) and use
+        it from now on. ``InvalidRequest`` when the file could not be written."""
+        try:
+            write_keys(
+                self.app_paths, {"page1_backfill": enabled}, lambda s: s.page1_backfill == enabled
+            )
+        except OSError as e:
+            raise InvalidRequest(f"the setting could not be saved: {e}") from e
+        self.settings.page1_backfill = enabled
+        if enabled:
+            self.wake_indexer()
+
+    def set_people(
+        self, people: list[Person], address_zone: tuple[float, float, float, float] | None
+    ) -> None:
+        """Save the people list (and, when given, the address zone of page 1) to
+        settings.yaml and use them from now on. ``InvalidRequest`` when the file could not
+        be written (it is left as it was)."""
+        updates: dict[str, object] = {"people": [p.model_dump() for p in people]}
+        if address_zone is not None:
+            updates["address_zone"] = list(address_zone)
+
+        def read_back(s: Settings) -> bool:
+            return s.people == people and (address_zone is None or s.address_zone == address_zone)
+
+        try:
+            write_keys(self.app_paths, updates, read_back)
+        except OSError as e:
+            raise InvalidRequest(f"the people could not be saved: {e}") from e
+        self.settings.people = people
+        if address_zone is not None:
+            self.settings.address_zone = address_zone
+
     def save_codes(self, codes: list[FilingCode]) -> list[CodeProblem]:
         """Replace the code table with ``codes`` and reload. Raises ``InvalidRequest``
         (nothing written) for a repeated code or inbox folder or an unknown tray."""
@@ -425,7 +475,9 @@ class App:
 
     def index(self, limit: int | None = None) -> int:
         """Index file contents until nothing is left to process or ``limit`` files are done,
-        then read bank barcodes (``ContentIndexer.run_barcodes_once``) the same way."""
+        then read bank barcodes (``ContentIndexer.run_barcodes_once``) and page-1 layouts
+        (``run_layouts_once``) the same way. The layout pass reads only the inbox and the
+        wanted files here, never the whole archive: the background pass does the rest."""
         # Hard cap: a file is attempted at most about once per call, so never more than
         # the number of rows, even if a failing file were somehow picked again.
         with self.engine.connect() as conn:
@@ -438,13 +490,18 @@ class App:
             if n == 0:
                 break
             total += n
-        # then the barcode pass (its reads are not counted as indexed files)
-        read = 0
-        while read < cap:
-            n = self.content.run_barcodes_once(min(20, cap - read))
-            if n == 0:
-                break
-            read += n
+        # then the barcode and page-1 layout passes (their reads are not counted as
+        # indexed files)
+        for read_pass in (
+            self.content.run_barcodes_once,
+            lambda n: self.content.run_layouts_once(n, backfill=False),
+        ):
+            read = 0
+            while read < cap:
+                n = read_pass(min(20, cap - read))
+                if n == 0:
+                    break
+                read += n
         return total
 
     def search(self, query: str, folder: str | None = None, limit: int = 50) -> list[SearchHit]:

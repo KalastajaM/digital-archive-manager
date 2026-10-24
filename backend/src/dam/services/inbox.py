@@ -2,7 +2,7 @@
 put them in a tray, in collections and give them a note."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -14,23 +14,41 @@ from dam.bills.barcode import parse as parse_barcode
 from dam.codes.apply import apply_codes, apply_ticks, codes_for, known_reads
 from dam.codes.model import FilingCode
 from dam.collections.service import CollectionService, check_collection_name
-from dam.config import SpecialFolders
+from dam.config import DEFAULT_ADDRESS_ZONE, Person, SpecialFolders
+from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchivePaths
+from dam.extract.layout import check_box, lines_in_zone
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.notes import NotesService, check_note
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
-from dam.rules.draft import draft_rule
-from dam.rules.engine import Suggestion, stem_and_ext, suggest
+from dam.rules.draft import ZoneDraft, draft_rule
+from dam.rules.engine import (
+    Suggestion,
+    _parent,
+    person_for,
+    stem_and_ext,
+    suggest,
+    template_uses_person,
+)
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
 from dam.rules.model import RESERVED_IDS, Rule
-from dam.rules.offer import RuleOffer, make_doc_frequency, offer_target, outcomes
+from dam.rules.offer import (
+    RuleOffer,
+    make_doc_frequency,
+    offer_target,
+    outcomes,
+    rule_id_of,
+    same,
+)
+from dam.rules.people import PeopleContext
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
 from dam.rules.similar import similar_folder
 from dam.rules.state import load_state
 from dam.services import check_destination_area, check_disk_identity, check_origin
+from dam.services.assignments import Assignment, AssignmentService
 from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService, detected_of, prefill_from
@@ -113,6 +131,8 @@ class InboxEntry:
     # the scan fields: the user's saved list, else the detected one (``scan_fields``)
     fields: list[dict[str, str | None]] = field(default_factory=list)
     fields_edited: bool = False
+    # who the owner says the document is from and for (None: nothing set)
+    assignment: Assignment | None = None
 
 
 @dataclass
@@ -166,6 +186,12 @@ class InboxService:
         rule_record: RuleRecord | None = None,
         rules_dir: Callable[[], Path] | None = None,
         data_dir: Path | None = None,
+        want_layouts: Callable[[Collection[str]], None] | None = None,
+        layout_blocked: Callable[[str], str | None] | None = None,
+        people: Callable[[], Sequence[Person]] = list,
+        address_zone: Callable[[], Sequence[float]] = lambda: DEFAULT_ADDRESS_ZONE,
+        assigned_person: Callable[[str], str | None] = lambda drive_id: None,
+        assignments: AssignmentService | None = None,
     ) -> None:
         self.paths = paths
         self.repo = repo
@@ -181,6 +207,21 @@ class InboxService:
         self._rule_record = rule_record
         self._rules_dir = rules_dir
         self._data_dir = data_dir
+        # asks the layout pass to read page 1 of these files next (a rule needs it)
+        self._want_layouts = want_layouts
+        # why page 1 of a file cannot be read right now (None: it can, or will be)
+        self._layout_blocked = layout_blocked
+        # who documents are for: the people list, the address zone of page 1, and the
+        # person the owner assigned to a document
+        self._people = people
+        self._address_zone = address_zone
+        self._assigned_person = assigned_person
+        self._assignments = assignments
+
+    def people_context(self, drive_id: str) -> PeopleContext:
+        return PeopleContext(
+            self._people(), tuple(self._address_zone()), self._assigned_person(drive_id)
+        )
 
     def list(self) -> list[InboxEntry]:
         """Files directly in the inbox or in a filing code's inbox folder (no folders,
@@ -190,6 +231,7 @@ class InboxService:
         tray_ids = [t.id for t in self.trays.defs()]
         open_trays = self.trays.open_trays([r.drive_id for r in records])
         entries = []
+        assigned = self._assignments.get([r.drive_id for r in records]) if self._assignments else {}
         for rec in records:
             text = self.repo.text_for(rec.drive_id)
             found = self._suggest(rec, text)
@@ -206,6 +248,7 @@ class InboxService:
                     open_trays.get(rec.drive_id, []),
                     detected if saved is None else saved,
                     saved is not None,
+                    assigned.get(rec.drive_id),
                 )
             )
         return entries
@@ -322,6 +365,7 @@ class InboxService:
             self._run_follow_up(req.drive_id, follow, batch_id, outcome)
             if req.drive_id in suggested:
                 self._learn(req, suggested[req.drive_id], batch_id, via, len(reqs), outcome)
+                self._record_person(req, suggested[req.drive_id][0])
         return outcome
 
     def _suggestions_before(self, reqs: list[FileRequest], via: str) -> dict:
@@ -363,6 +407,22 @@ class InboxService:
         except Exception:
             log.warning("offering a rule for %s failed", req.drive_id, exc_info=True)
 
+    def _record_person(self, req: FileRequest, found: Suggestion) -> None:
+        """The folder came from a rule whose template has ``{person}`` and the owner kept
+        it: that person is who the document is for (unless the owner said otherwise).
+        Never fails the filing."""
+        try:
+            rule_id = rule_id_of(found.folder_source)
+            if self._assignments is None or rule_id is None or found.person is None:
+                return
+            rule = next((r for r in self._rules() if r.id == rule_id), None)
+            if rule is None or not template_uses_person(rule.then.folder):
+                return
+            if same(found.folder, req.folder):
+                self._assignments.record_filing(req.drive_id, found.person)
+        except Exception:
+            log.warning("recording the person of %s failed", req.drive_id, exc_info=True)
+
     def _offer(
         self, req: FileRequest, found: Suggestion, rec: FileRecord, text: str
     ) -> RuleOffer | None:
@@ -386,6 +446,7 @@ class InboxService:
             payee=req.tray_fields.get("payee") if isinstance(req.tray_fields, dict) else None,
             doc_frequency=frequency,
             taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
+            person=found.person,
         )
         if draft is None:
             return None
@@ -393,6 +454,52 @@ class InboxService:
         if any(ticked == set(d) for d in state.declined):
             return None
         return RuleOffer(kind, rule_id, req.drive_id, draft)
+
+    def draft_zone(self, drive_id: str, box: list[float], sender: str | None = None) -> ZoneDraft:
+        """The rule a box drawn on page 1 starts from: ``when.zone`` is the box with the
+        most distinctive word of the lines in it ticked (the draft's usual choice), and
+        ``when.folder_is`` is the inbox. A document that is filed already gives the folder
+        and name it has now as patterns; one in the inbox gives none. ``InvalidRequest``
+        when the box is bad, page 1 is not read yet, or no usable word is in the box."""
+        rec = self._record(drive_id)
+        try:
+            area = check_box(box)
+        except ValueError as e:
+            raise InvalidRequest(str(e)) from e
+        layout = self.repo.layout_for(drive_id)
+        if layout is None:
+            if self._want_layouts is not None:
+                self._want_layouts([drive_id])
+            raise InvalidRequest("Page 1 of this document has not been read yet.")
+        lines = [ln.text for ln in lines_in_zone(layout.lines, area)]
+        if not lines:
+            raise InvalidRequest("There is no text in that area of page 1.")
+        filed = not self._in_inbox(rec)
+        folder = _parent(rec.path) if filed else ""
+        name = rec.name or ""
+        doc_date = parse_doc_date(name) or rec.doc_date
+        draft = draft_rule(
+            text="\n".join(lines),
+            original_name="",
+            filed_name=name if filed and name else None,
+            filed_folder=folder or None,
+            doc_date=doc_date,
+            tags=self.tags.for_file(drive_id) if filed else [],
+            tray=None,
+            payee=None,
+            doc_frequency=make_doc_frequency(*self._frequency_counter()),
+            taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
+            person=person_for(self.people_context(drive_id), layout).name,
+        )
+        if draft is None:
+            raise InvalidRequest("There is no usable word in that area of page 1.")
+        return ZoneDraft(
+            **{f: getattr(draft, f) for f in draft.__dataclass_fields__},
+            box=area,
+            folder_is=self.special.inbox,
+            lines=lines,
+            sender=sender,
+        )
 
     def _frequency_counter(self) -> tuple[Callable[[str], int], Callable[[], int]]:
         """(documents matching a word, documents in all): filed documents with text,
@@ -530,7 +637,23 @@ class InboxService:
     def _suggest(self, rec: FileRecord, text: str) -> Suggestion:
         # a file in a code's inbox folder counts as in the inbox for ``folder_is``
         alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
-        found = suggest(rec, text, self._rules(), self.special, inbox_alias=alias)
+        layout = self.repo.layout_for(rec.drive_id)
+        found = suggest(
+            rec,
+            text,
+            self._rules(),
+            self.special,
+            inbox_alias=alias,
+            layout=layout,
+            people=self.people_context(rec.drive_id),
+        )
+        if found.waiting_for_page1:
+            why = self._layout_blocked(rec.drive_id) if self._layout_blocked else None
+            if why:  # no read will come: say so instead of "Reading page 1..."
+                found.waiting_for_page1 = False
+                found.page1_unavailable = why
+            elif self._want_layouts is not None:
+                self._want_layouts([rec.drive_id])
         if found.folder is None and self._in_inbox(rec):
             folder = similar_folder(self.repo.engine, rec.drive_id, rec.name or "", text, rec.ext)
             if folder is not None:

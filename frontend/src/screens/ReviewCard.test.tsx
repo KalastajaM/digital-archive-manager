@@ -58,7 +58,7 @@ function entry(id: string, name: string, suggested: string, folder: string | nul
       collections: [],
       collection_sources: {},
       codes: [],
-      conflict: false, star: null, important: null, marks_unclear: false,
+      conflict: false, star: null, important: null, marks_unclear: false, waiting_for_page1: false, people_found: [],
     },
     text_excerpt: "Kotihoito lasku",
     prefill: {},
@@ -1172,6 +1172,32 @@ describe("ReviewCard", () => {
   describe("three columns and multi-select", () => {
     const THREE = [...ENTRIES, entry("d3", "scan003.pdf", "2026-10-03 Vesilasku.pdf", "30. Home/Water")];
     const row = (suggested: RegExp) => screen.getByRole("button", { name: suggested });
+
+    it("the batch sets From and For for every selected file", async () => {
+      const { calls, user } = await setup({
+        "GET /api/inbox": { body: THREE },
+        "GET /api/senders": { body: [] },
+        "GET /api/settings/people": { body: { people: [{ name: "Tiina", match: [] }], address_zone: [0, 0, 1, 1], default_address_zone: [0, 0, 1, 1] } },
+        "PUT /api/assignments": { body: [] },
+      });
+      await user.keyboard("{Meta>}");
+      await user.click(row(/Sähkölasku/));
+      await user.keyboard("{/Meta}");
+      await user.click(screen.getByRole("button", { name: "For…" }));
+      const sheet = await screen.findByRole("dialog", { name: "For (2 documents)" });
+      await user.click(await within(sheet).findByRole("button", { name: "Tiina" }));
+      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+      expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ drive_ids: ["d1", "d2"], person: "Tiina" });
+      expect(screen.getByRole("button", { name: "From…" })).toBeInTheDocument();
+    });
+
+    it("the card shows who a file is from and for, with the Draw a box tool", async () => {
+      await setup();
+      expect(screen.getByRole("button", { name: "From: not set" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "For: not set" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Draw a box" })).toBeInTheDocument();
+    });
 
     it("⌘-click selects two entries and shows the batch form; a plain click goes back to one", async () => {
       const { user } = await setup({ "GET /api/inbox": { body: THREE } });

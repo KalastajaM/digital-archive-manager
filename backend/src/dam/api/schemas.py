@@ -284,6 +284,17 @@ class MarkBody(_In):
     group: str | None = None
 
 
+class AssignmentOut(BaseModel):
+    """Who a document is from (``sender``) and for (``person``), as set by the owner
+    (``set_by`` "owner") or recorded by a confirmed filing ("filing")."""
+
+    drive_id: str
+    sender: str | None
+    person: str | None
+    set_by: Literal["owner", "filing"]
+    set_at: float
+
+
 class FileRecordOut(BaseModel):
     drive_id: str
     path: str
@@ -315,6 +326,7 @@ class FileDetailOut(BaseModel):
     # the archive, or missing); null for anything that is not a link
     link_target_path: str | None
     link_target_inside: bool
+    assignment: AssignmentOut | None = None  # From / For
 
 
 class SummaryOut(BaseModel):
@@ -382,6 +394,17 @@ class SuggestionOut(BaseModel):
     important: bool | None
     # a tick box could not be read (the batch row is flagged "unclear")
     marks_unclear: bool
+    # a rule with a page-1 area could not be checked: page 1 is being read ("Reading
+    # page 1...")
+    waiting_for_page1: bool = False
+    # page 1 cannot be read now (the reason), so "Reading page 1..." would never end
+    page1_unavailable: str | None = None
+    # who the document is for: "assigned" (the owner said so), "address area" (page 1) or
+    # "rule:<id>" (that rule's own address area); people_found: everyone the address area
+    # names (two or more: no person, ask)
+    person: str | None = None
+    person_source: str | None = None
+    people_found: list[str] = []
 
 
 class FileSuggestionsOut(BaseModel):
@@ -452,6 +475,8 @@ class InboxEntryOut(BaseModel):
     tray_guess: str | None
     # the trays the file already has an open item in
     open_trays: list[str]
+    # From / For chips: what the owner (or a confirmed filing) said; null when nothing
+    assignment: AssignmentOut | None = None
 
 
 class ResolvedOpOut(BaseModel):
@@ -608,6 +633,15 @@ class ActiveArchiveOut(BaseModel):
     color: str  # #rrggbb
 
 
+class Page1ProgressOut(BaseModel):
+    """The page-1 layout pass: documents whose page 1 is read, of all it reads, and
+    whether the backfill of documents outside the inbox is on."""
+
+    read: int
+    total: int
+    backfill: bool
+
+
 class StatusOut(BaseModel):
     files: int
     indexed: int
@@ -623,6 +657,7 @@ class StatusOut(BaseModel):
     archive_available: bool
     special_folders: SpecialFoldersOut  # the configured names of the app's folders
     inbox_exists: bool = True  # the inbox folder is there (False: a new archive, no layout yet)
+    page1: Page1ProgressOut | None = None  # None only from the setup-mode server
     # False only from the setup-mode server (then only ``archive`` and ``profiles_count``
     # are set besides it): no archive folder yet
     configured: bool = True
@@ -1397,10 +1432,20 @@ class BatchRowOut(BaseModel):
 # -- rules --------------------------------------------------------------------
 
 
+class ZoneIn(_In):
+    """Words that must be in an area of page 1: ``box`` is [x0, y0, x1, y1] as fractions
+    of the page, origin top left."""
+
+    box: list[float] = Field(min_length=4, max_length=4)
+    text_contains: list[str]
+
+
 class RuleWhenIn(_In):
     text_contains: list[str] = Field(default_factory=list)
     filename_matches: str | None = None
     folder_is: str | None = None
+    zone: ZoneIn | None = None
+    person: str | None = None
 
 
 class RuleThenIn(_In):
@@ -1415,6 +1460,8 @@ class RuleIn(_In):
     id: str
     when: RuleWhenIn = Field(default_factory=RuleWhenIn)
     then: RuleThenIn = Field(default_factory=RuleThenIn)
+    person_zone: list[float] | None = Field(default=None, min_length=4, max_length=4)
+    sender: str | None = None
 
 
 class RuleReplayIn(_In):
@@ -1439,10 +1486,17 @@ class RulesDeclineIn(_In):
     words: list[str]
 
 
+class ZoneOut(BaseModel):
+    box: list[float]
+    text_contains: list[str]
+
+
 class RuleWhenOut(BaseModel):
     text_contains: list[str]
     filename_matches: str | None
     folder_is: str | None
+    zone: ZoneOut | None
+    person: str | None
 
 
 class RuleThenOut(BaseModel):
@@ -1466,6 +1520,8 @@ class RuleOut(BaseModel):
     learned: bool
     when: RuleWhenOut
     then: RuleThenOut
+    person_zone: list[float] | None
+    sender: str | None
     stats: RuleStatsOut
 
 
@@ -1496,6 +1552,25 @@ class ShadowOut(BaseModel):
     rule_id: str  # the earlier rule that wins
 
 
+class NotCheckedOut(BaseModel):
+    """A document the rule could match by its words but whose page 1 could not be looked
+    at; ``reason``: "page 1 not read yet", "no OCR engine" or "missing"."""
+
+    path: str
+    reason: str
+
+
+class MarkedOut(BaseModel):
+    """For a rule with a sender: the documents the owner marked as from that sender.
+    ``missed`` are documents whose page 1 was read and the rule does not match (paths);
+    ``not_checked`` those that could not be looked at yet (never counted as missed)."""
+
+    total: int
+    found: int
+    missed: list[str]
+    not_checked: list[NotCheckedOut]
+
+
 class ReplayOut(BaseModel):
     matched: int
     same: int
@@ -1505,6 +1580,45 @@ class ReplayOut(BaseModel):
     checked: int
     total: int
     truncated: bool
+    not_checked: list[NotCheckedOut]
+    # how many page-1 reads are queued by this replay (post it again to see them)
+    reading: int
+    marked: MarkedOut | None = None  # only for a rule with a sender
+
+
+class Page1LineOut(BaseModel):
+    text: str
+    box: list[float]  # x0, y0, x1, y1 as fractions of page 1, origin top left
+
+
+class Page1Out(BaseModel):
+    """Page 1's lines. ``read`` false: not read yet (a read is queued), or it cannot be
+    (``unavailable`` says why: "no OCR engine"; None while it is just waiting)."""
+
+    read: bool
+    lines: list[Page1LineOut]
+    unavailable: str | None = None
+
+
+class Page1BoxIn(_In):
+    box: list[float] = Field(min_length=4, max_length=4)
+
+
+class ZoneDraftIn(_In):
+    drive_id: str
+    box: list[float] = Field(min_length=4, max_length=4)
+    sender: str | None = None
+
+
+class ZoneDraftOut(RuleDraftOut):
+    """The draft a box drawn on page 1 starts from. The rule's ``when`` is
+    ``{folder_is, zone: {box, text_contains: [the ticked word]}}``; ``words`` are the
+    candidate words from the lines in the box, ``lines`` those lines."""
+
+    box: list[float]
+    folder_is: str | None
+    lines: list[str]
+    sender: str | None
 
 
 class RuleExplainOut(BaseModel):
@@ -1512,3 +1626,48 @@ class RuleExplainOut(BaseModel):
     matched: bool
     why: str
     wins: list[str]
+    zone_lines: list[str] = []  # page-1 lines in the rule's zone
+
+
+# -- settings written to settings.yaml ---------------------------------------------
+
+
+class Page1BackfillIn(_In):
+    enabled: bool
+
+
+class Page1BackfillOut(BaseModel):
+    enabled: bool
+
+
+class PersonIO(_In):
+    name: str
+    match: list[str]
+
+
+class PeopleIn(_In):
+    """The people list; ``address_zone`` (x0, y0, x1, y1 of page 1) is left as it is when
+    omitted."""
+
+    people: list[PersonIO]
+    address_zone: list[float] | None = Field(default=None, min_length=4, max_length=4)
+
+
+class PeopleOut(BaseModel):
+    people: list[PersonIO]
+    address_zone: list[float]
+    default_address_zone: list[float]
+
+
+class AssignmentsIn(_In):
+    """``PUT /api/assignments``: set From and/or For on documents. A field left out stays
+    as it is; an explicit null clears it. ``person`` must be in the people list."""
+
+    drive_ids: list[str] = Field(min_length=1)
+    sender: str | None = None
+    person: str | None = None
+
+
+class SenderOut(BaseModel):
+    sender: str
+    count: int

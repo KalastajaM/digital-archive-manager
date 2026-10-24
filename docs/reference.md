@@ -182,7 +182,7 @@ API and does not open the browser.
 | `dam archives forget NAME [--switch-to OTHER]` | Remove an archive from the list; nothing is deleted, the paths are printed |
 | `dam archives where NAME` | Print an archive's data folder and archive folder |
 | `dam scan` | Sync the file index with the archive |
-| `dam index [--limit N]` | Extract text / OCR for files not yet indexed |
+| `dam index [--limit N]` | Extract text / OCR for files not yet indexed, and read page 1 of inbox files (older documents get theirs in the background) |
 | `dam errors [--all] [--retry]` | List the files whose text could not be indexed, with the reason (`--all`: also unsupported files); `--retry` queues every listed file for indexing again |
 | `dam inbox` | List inbox files with suggested name, folder and sources |
 | `dam add FILE... [--yes]` | Copy files into the inbox (the originals stay) |
@@ -278,7 +278,9 @@ All in the data folder under `config/`:
   `settings.yaml.bak-<time>` copy, or edit the line by hand), `special_folders` (inbox,
   ongoing, important, quarantine), `protected_paths`, `indexer_reads_per_minute`,
   `ops_throttle_ms`, `server_port`, `ocr_languages`, `reminders` (`hour`, `mac`, `email`),
-  `ai` (see AI setup).
+  `ai` (see AI setup), `page1_backfill` (read page 1 of older documents in the background,
+  default `true`), `people` (a list of `name` and `match` strings) and `address_zone`
+  (`[x0, y0, x1, y1]` as fractions of page 1, origin top left).
 - `trays/*.yaml`: one tray per file (see Tray files).
 - `filing_codes.yaml`: the filing code table (see Filing codes file below).
 - `sticker_sheets.yaml`: the saved custom sticker sheet, if any (see Sticker sheet
@@ -289,6 +291,9 @@ All in the data folder under `config/`:
   documents the format. In `when`, all *given* conditions must match; for
   `text_contains`, one matching term is enough. `{doc_date}` and `{year}` need a
   detected date; without one, the rule's template is not applied.
+  A `zone` matches when one of its words is in a line of page 1 that lies at least half
+  inside the box (grown by 3 % of the page on every side). `{person}` needs a person
+  (set by you, or found in the address area); without one the template is not applied.
 - `rules/learned.yaml`: rules made or edited in the app, a YAML list created when first
   needed. It is read **before** the other rule files, so a learned rule wins over broad
   ones. Saving a rule that lives in another file rewrites that file (comments are lost; a
@@ -305,8 +310,14 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
     text_contains: ["acme benefits", "eläkekassa"]   # case/diacritics-insensitive
     filename_matches: "(?i)scan"         # optional regex on the file name
     folder_is: "##. Organize"            # optional; see below
+    # zone:                              # optional: words in an area of page 1
+    #   box: [0.05, 0.02, 0.45, 0.14]    # x0, y0, x1, y1 as fractions, origin top left
+    #   text_contains: ["acme benefits"]
+    # person: Tiina                      # optional: the document is for this person
+  # person_zone: [0.06, 0.10, 0.52, 0.30]  # optional: this sender's address area
+  # sender: Acme Benefits                # optional: the sender the rule identifies
   then:
-    folder: "13. Taxes/{year}"           # templates: {doc_date:%Y%m%d}, {year}, {stem}
+    folder: "13. Taxes/{year}"           # templates: {doc_date:%Y%m%d}, {year}, {stem}, {person}
     name: "{doc_date:%Y%m%d}_Benefits"      # stem only; the extension is added
     tags: ["benefits"]
     # tray: to-pay                       # optional: the tray it is guessed to belong in

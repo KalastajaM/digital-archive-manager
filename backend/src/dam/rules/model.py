@@ -30,12 +30,25 @@ def fold(s: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
 
 
-class When(BaseModel):
+class Zone(BaseModel):
+    """Text in an area of page 1: ``box`` is ``(x0, y0, x1, y1)`` as fractions of the
+    page, origin top left; a line of page 1 lies in it when at least half of the line is
+    inside the box grown by a small margin (``dam.extract.layout.ZONE_MARGIN``)."""
+
     model_config = ConfigDict(extra="forbid")
 
-    text_contains: list[str] = Field(default_factory=list)
-    filename_matches: str | None = None
-    folder_is: str | None = None
+    box: tuple[float, float, float, float]
+    text_contains: list[str] = Field(min_length=1)
+
+    @field_validator("box")
+    @classmethod
+    def _a_real_box(cls, box: tuple[float, float, float, float]):
+        x0, y0, x1, y1 = box
+        if not all(0 <= v <= 1 for v in box):
+            raise ValueError("box values must be between 0 and 1")
+        if not (x0 < x1 and y0 < y1):
+            raise ValueError("box must have x0 < x1 and y0 < y1")
+        return box
 
     @field_validator("text_contains")
     @classmethod
@@ -43,6 +56,32 @@ class When(BaseModel):
         if any(not t.strip() for t in terms):
             raise ValueError("text_contains entries must not be blank")
         return terms
+
+
+class When(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text_contains: list[str] = Field(default_factory=list)
+    filename_matches: str | None = None
+    folder_is: str | None = None
+    zone: Zone | None = None
+    # the document is for this person (the owner's assignment, else the one found in the
+    # address area of page 1), compared like rule words
+    person: str | None = None
+
+    @field_validator("text_contains")
+    @classmethod
+    def _no_blank_terms(cls, terms: list[str]) -> list[str]:
+        if any(not t.strip() for t in terms):
+            raise ValueError("text_contains entries must not be blank")
+        return terms
+
+    @field_validator("person")
+    @classmethod
+    def _no_blank_person(cls, person: str | None) -> str | None:
+        if person is not None and not person.strip():
+            raise ValueError("person must not be blank")
+        return person
 
     @field_validator("filename_matches")
     @classmethod
@@ -78,9 +117,32 @@ class Rule(BaseModel):
     id: str = Field(min_length=1)
     when: When = Field(default_factory=When)
     then: Then = Field(default_factory=Then)
+    # when this rule matched, people are looked for in this area of page 1 instead of in
+    # the archive's address zone (x0, y0, x1, y1), for this rule's folder and name only
+    person_zone: tuple[float, float, float, float] | None = None
+    # the sender (a name from the owner's list of senders) this rule identifies: the
+    # replay compares the documents the owner marked as from it with what the rule matches
+    sender: str | None = None
 
     _folded_terms: list[str] = PrivateAttr(default_factory=list)
+    _folded_zone_terms: list[str] = PrivateAttr(default_factory=list)
     _regex: "regex.Pattern[str] | None" = PrivateAttr(default=None)
+
+    @field_validator("sender")
+    @classmethod
+    def _no_blank_sender(cls, sender: str | None) -> str | None:
+        if sender is not None and not sender.strip():
+            raise ValueError("sender must not be blank")
+        return sender.strip() if sender is not None else None
+
+    @field_validator("person_zone")
+    @classmethod
+    def _a_real_person_zone(cls, box):
+        if box is not None:
+            x0, y0, x1, y1 = box
+            if not all(0 <= v <= 1 for v in box) or not (x0 < x1 and y0 < y1):
+                raise ValueError("person_zone must be x0, y0, x1, y1 between 0 and 1")
+        return box
 
     @field_validator("when", "then", mode="before")
     @classmethod
@@ -89,6 +151,8 @@ class Rule(BaseModel):
 
     def model_post_init(self, __context) -> None:
         self._folded_terms = [fold(t) for t in self.when.text_contains]
+        zone = self.when.zone
+        self._folded_zone_terms = [fold(t) for t in zone.text_contains] if zone else []
         pattern = self.when.filename_matches
         self._regex = regex.compile(pattern) if pattern is not None else None
 
@@ -107,7 +171,7 @@ def _format_validation(e: ValidationError) -> str:
 
 LEARNED_FILE = "learned.yaml"  # rules made in the app; read before every other file
 # rule ids the API cannot take: they are fixed routes under ``/api/rules``
-RESERVED_IDS = frozenset({"state", "replay", "explain"})
+RESERVED_IDS = frozenset({"state", "replay", "explain", "draft-zone"})
 
 MAX_CONFIG_BYTES = 256 * 1024
 TOO_DEEP_MESSAGE = "file skipped: too deeply nested or too large to load"

@@ -21,6 +21,7 @@ import { plural } from "../../format";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
 import { Sheet } from "../ui/Sheet";
+import { PeopleSettings } from "./PeopleSettings";
 import { RuleSheet, rewriteNote } from "./RuleSheet";
 
 /** "kept 9 of 9", "changed 2 of 5", "not used yet". */
@@ -53,13 +54,17 @@ function RuleLine({
   onMove: (delta: number) => void;
   onDelete: () => void;
 }) {
-  const words = r.when.text_contains.join(", ");
+  const zone = r.when.zone;
+  const words = [...r.when.text_contains, ...(zone?.text_contains ?? [])].join(", ");
   const target = r.then.folder ? `→ ${r.then.folder}` : "";
   return (
     <li className="rule-line">
       <button type="button" className="code-line" onClick={onOpen}>
         <code className="code-line-code">{visible(r.id)}</code>
-        <span className="code-line-label">{visible(words)}</span>
+        <span className="code-line-label">
+          {visible(words)}
+          {zone && <span className="code-line-zone"> · area on page 1</span>}
+        </span>
         <span className="code-line-summary">
           {[target, record(r.stats), r.learned ? "" : r.file].filter(Boolean).map(visible).join(" · ")}
         </span>
@@ -121,6 +126,12 @@ function TestDocument() {
             <li key={x.rule_id}>
               <code>{visible(x.rule_id)}</code> {x.matched ? "matches" : "no match"}: {visible(x.why)}
               {x.wins.length > 0 && <> ({gives(x.wins)})</>}
+              {(x.zone_lines ?? []).length > 0 && (
+                <>
+                  {" "}
+                  Page 1 in the area: {x.zone_lines.map((l) => `“${visible(l)}”`).join(", ")}
+                </>
+              )}
             </li>
           ))}
         </ul>
@@ -239,6 +250,7 @@ export function FilingRules() {
           </button>
         )}
       </div>
+      <PeopleSettings />
       {editing && (
         <RuleSheet
           key={editing.id}

@@ -8,6 +8,22 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Rules that match by where text sits on page 1: draw a box on page 1 of a document in
+  the preview (Draw a box) and make a rule from it, such as "Pohjola in the letterhead
+  means a letter from Pohjola". A word only counts when it is inside the area, so a
+  bill that merely mentions Pohjola no longer matches. The replay shows how many past
+  documents could not be checked yet, and reads their page 1 first.
+- Who a letter is for: list the people in your household in Settings → Filing rules,
+  and dam finds them in the address area of page 1. Use `{person}` in a rule's folder or
+  name to file per person. A letter to two people asks "For whom?". The address area
+  can be drawn once for all letters, or per sender for letters with an unusual layout.
+- From and For: say by hand who a document is from and who it is for, on the Inbox
+  card, for an Inbox batch, or for a selection in Browse. What you set always wins over
+  what dam detects, and a sender rule's replay shows how many of the documents you set
+  as from that sender it finds, and which it misses.
+- dam now keeps the position of the text on page 1 when it reads a document. Documents
+  read before this update get theirs in the background, inbox first; Settings →
+  Filing rules shows the progress and can pause it. Nothing in the archive changes.
 - Learned filing rules: after you file a document by hand, dam can offer to make a rule
   from it (**Make a rule…**, or **Update rule** for a rule made in the app). Before you
   save, it replays the rule against the documents you filed before and shows how many

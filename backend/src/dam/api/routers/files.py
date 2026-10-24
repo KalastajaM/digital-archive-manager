@@ -21,13 +21,16 @@ from dam.api.schemas import (
     FileSummaryOut,
     FileTagsIn,
     FileTagsOut,
+    Page1BoxIn,
+    Page1Out,
     ScanFieldsIn,
     ScanFieldsOut,
     TextPreviewOut,
 )
 from dam.app import App
-from dam.index.repo import FileRecord
-from dam.services.errors import NotFound
+from dam.extract.layout import check_box, lines_in_zone
+from dam.index.repo import BARCODE_EXTS, FileRecord
+from dam.services.errors import InvalidRequest, NotFound
 from dam.services.inbox import normalise_tags
 from dam.services.links import NO_LINK_PREVIEW, link_target
 from dam.services.preview import (
@@ -61,6 +64,45 @@ def shown_record(app: App, drive_id: str) -> FileRecord:
     return target
 
 
+def _page1(app: App, drive_id: str, box: list[float] | None = None) -> dict:
+    """Page 1's lines (those in ``box`` when given). A page that is not read yet is queued
+    for the layout pass, and the answer says so."""
+    rec = shown_record(app, drive_id)
+    layout = app.repo.layout_for(rec.drive_id)
+    if layout is None:
+        why = None
+        if (rec.ext or "").lower() in BARCODE_EXTS:
+            app.content.want_layouts([rec.drive_id])
+            app.wake_indexer()
+            why = app.content.layout_blocked(rec.drive_id)
+        else:
+            why = "no page 1 to read in this kind of file"
+        return {"read": False, "lines": [], "unavailable": why}
+    lines = layout.lines if box is None else lines_in_zone(layout.lines, check_box(box))
+    return {
+        "read": True,
+        "lines": [{"text": ln.text, "box": list(ln.box)} for ln in lines],
+        "unavailable": None,
+    }
+
+
+@router.get("/{drive_id}/page1", response_model=Page1Out)
+def page1(app: AppDep, drive_id: str) -> dict:
+    """The text of page 1 with where each line sits (fractions of the page, origin top
+    left). ``read`` is false while page 1 has not been read: a read is queued, ask again."""
+    return _page1(app, drive_id)
+
+
+@router.post("/{drive_id}/page1/lines", response_model=Page1Out)
+def page1_lines(app: AppDep, drive_id: str, body: Page1BoxIn) -> dict:
+    """The lines of page 1 that lie in a box (the rule that matching uses). Read only."""
+    try:
+        check_box(body.box)
+    except ValueError as e:
+        raise InvalidRequest(str(e)) from e
+    return _page1(app, drive_id, body.box)
+
+
 @router.get("/{drive_id}", response_model=FileDetailOut)
 def file_detail(app: AppDep, drive_id: str) -> dict:
     """The record and tags; for a link, the file it stands for (``link_target_id`` and
@@ -75,6 +117,9 @@ def file_detail(app: AppDep, drive_id: str) -> dict:
     detail = {
         "record": asdict(rec),
         "tags": app.tags.for_file(drive_id),
+        "assignment": (
+            asdict(a) if (a := app.assignments.get([drive_id]).get(drive_id)) is not None else None
+        ),
         "link_target_id": target.drive_id if target else None,
         "link_target_path": target_path,
         "link_target_inside": target is not None,

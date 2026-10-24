@@ -109,8 +109,10 @@ describe("RuleSheet", () => {
       id: "kotihoito",
       file,
       learned,
-      when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null },
+      when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zone: null, person: null },
       then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
+      person_zone: null,
+      sender: null,
       stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
     });
     setup(REPLAY, { initial: own(false, "my-rules.yaml"), filed: undefined });
@@ -126,8 +128,10 @@ describe("RuleSheet", () => {
         id: "kotihoito",
         file: "learned.yaml",
         learned: true,
-        when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null },
+        when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zone: null, person: null },
         then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
+        person_zone: null,
+        sender: null,
         stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
       },
       filed: undefined,
@@ -204,5 +208,104 @@ describe("RuleSheet", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(/Matches 4/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+  describe("zones and senders", () => {
+    const ZONE_RULE = {
+      id: "pohjola",
+      file: "learned.yaml",
+      learned: true,
+      when: {
+        text_contains: [],
+        filename_matches: null,
+        folder_is: "##. Organize",
+        zone: { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola", "vakuutus"] },
+        person: "Tiina",
+      },
+      then: { folder: "Insurance/{person}", name: null, tags: [], tray: null, payee: null },
+      person_zone: [0.1, 0.2, 0.6, 0.4],
+      sender: "Pohjola",
+      stats: { suggested: 2, changed: 0, last_used: null, flagged: false },
+    };
+
+    it("edits the words of a rule's area and keeps its area, person, address area and sender", async () => {
+      const { calls, user } = setup(REPLAY, { initial: ZONE_RULE, filed: undefined });
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+      expect(within(sheet).getByRole("button", { name: "pohjola" })).toHaveAttribute("aria-pressed", "true");
+      expect(within(sheet).getByText("Matches only in the area you drew on page 1.")).toBeInTheDocument();
+      await within(sheet).findByText(/Matches 4/);
+      await user.click(within(sheet).getByRole("button", { name: "vakuutus" })); // unticked
+      await waitFor(() => {
+        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: Record<string, unknown> };
+        expect(sent.rule).toMatchObject({
+          when: {
+            text_contains: [],
+            folder_is: "##. Organize",
+            zone: { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"] },
+            person: "Tiina",
+          },
+          person_zone: [0.1, 0.2, 0.6, 0.4],
+          sender: "Pohjola",
+        });
+      });
+    });
+
+    it("says what is not checked, and lists it", async () => {
+      const { user } = setup({
+        ...REPLAY,
+        not_checked: [
+          { path: "Insurance/a.pdf", reason: "page 1 not read yet" },
+          { path: "Insurance/b.pdf", reason: "no OCR engine" },
+        ],
+      });
+      expect(await screen.findByText(/\(2 not checked yet\)/)).toBeInTheDocument();
+      await user.click(screen.getByText("Not checked yet (2)"));
+      expect(screen.getByText("Insurance/b.pdf: no OCR engine")).toBeVisible();
+    });
+
+    it("asks again while page 1 is being read and shows the count", async () => {
+      let reads = 0;
+      mockFetch({
+        "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+        "GET /api/trays": { body: { trays: [], errors: [] } },
+        "GET /api/tags": { body: [] },
+        "POST /api/rules/replay": () => ({ body: ++reads < 2 ? { ...REPLAY, reading: 23 } : { ...REPLAY, reading: 0 } }),
+      } as never);
+      renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+      expect(await screen.findByText("Reading page 1 of 23 documents…")).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByText(/Reading page 1 of/)).toBeNull(), { timeout: 4000 });
+      expect(reads).toBe(2);
+    });
+
+    it("does not poll again once the sheet is closed", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const held = deferred<{ body: object }>();
+        const calls = mockFetch({
+          "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+          "GET /api/trays": { body: { trays: [], errors: [] } },
+          "GET /api/tags": { body: [] },
+          "POST /api/rules/replay": () => held.promise,
+        } as never);
+        const { unmount } = renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+        await vi.advanceTimersByTimeAsync(500);
+        await waitFor(() => expect(posts(calls, "/api/rules/replay")).toHaveLength(1)); // in flight
+        unmount();
+        held.resolve({ body: { ...REPLAY, reading: 23 } });
+        await vi.advanceTimersByTimeAsync(10000);
+        expect(posts(calls, "/api/rules/replay")).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("compares a sender rule with the documents marked as from that sender", async () => {
+      setup(
+        { ...REPLAY, marked: { total: 16, found: 14, missed: ["Insurance/x.pdf", "Insurance/y.pdf"], not_checked: [] } },
+        { initial: ZONE_RULE, filed: undefined },
+      );
+      expect(await screen.findByText("Finds 14 of the 16 documents you set as from Pohjola.")).toBeInTheDocument();
+      expect(screen.getByText("Insurance/x.pdf")).toBeInTheDocument();
+      expect(screen.getByText("Insurance/y.pdf")).toBeInTheDocument();
+    });
   });
 });
