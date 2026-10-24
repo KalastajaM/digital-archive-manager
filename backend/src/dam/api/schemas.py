@@ -1534,6 +1534,18 @@ class RuleReplayIn(_In):
     near_drive_id: str | None = None
 
 
+class RuleReplayJobIn(_In):
+    """Start a test of a rule in the background (same placement fields as ``RuleReplayIn``).
+    ``sheet`` names the open sheet it is for: starting another test for the same sheet ends
+    the first."""
+
+    rule: RuleIn
+    sheet: str = Field(min_length=1, max_length=64)
+    replaces: str | None = None
+    place_above: str | None = None
+    near_drive_id: str | None = None
+
+
 class AreasForIn(_In):
     """The rule being tested and the document to draw its areas on."""
 
@@ -1709,6 +1721,26 @@ class ReplayOut(BaseModel):
     # of its near misses (documents where only a picture area failed, within 0.15 of the
     # score it needed), to see how well they are told apart
     scores: list[PictureScoreOut] = []
+
+
+class ReplayJobOut(BaseModel):
+    """A test running in the background. ``state``: "running" (going through the
+    documents), "waiting" (all looked at; ``waiting`` of them wait for page 1 to be read and
+    are looked at again as it is), "done", "stopped" (by the user, or the sheet was not
+    heard from) or "error". ``looked_at`` of ``total`` filed documents are gone through.
+    ``result`` is what has been found so far, as a finished test gives it; it is left out
+    (null) when nothing changed since the ``version`` the poll said it had."""
+
+    job_id: str
+    sheet: str
+    state: Literal["running", "waiting", "done", "stopped", "error"]
+    version: int
+    looked_at: int
+    total: int
+    waiting: int
+    elapsed_s: float
+    error: str | None = None
+    result: ReplayOut | None = None
 
 
 class Page1LineOut(BaseModel):

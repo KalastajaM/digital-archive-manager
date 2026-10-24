@@ -1,8 +1,13 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { type Call, deferred, mockFetch, renderWithProviders } from "../../test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { type Call, deferred, mockFetch, renderWithProviders, replayJob } from "../../test-utils";
 import { RuleSheet } from "./RuleSheet";
+import { jobPolling } from "./useReplayJob";
+
+beforeEach(() => {
+  jobPolling.ms = 20;
+});
 
 const DRAFT = {
   id: "kotihoito",
@@ -36,7 +41,7 @@ function setup(replay: object = REPLAY, props: Partial<Parameters<typeof RuleShe
     "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
     "GET /api/trays": { body: { trays: [{ id: "to-pay", name: "To pay", order: 1, item_title: "{name}", fields: {} }], errors: [] } },
     "GET /api/tags": { body: [] },
-    "POST /api/rules/replay": { body: replay },
+    ...replayJob(replay),
     "PUT /api/rules/kotihoito": { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } },
     ...extra,
   } as never);
@@ -83,9 +88,40 @@ describe("RuleSheet", () => {
     expect(screen.getByLabelText("File name matches")).toHaveAccessibleDescription(/regular expression.*\(\?i\)scan.*\^IMG_/);
   });
 
-  it("says how many documents were checked when truncated", async () => {
-    setup({ ...REPLAY, different: [], truncated: true, checked: 500, total: 900 });
-    expect(await screen.findByText("Checked 500 of 900 documents")).toBeInTheDocument();
+  it("shows how far the background test has come and lets it be stopped", async () => {
+    let state = "running";
+    mockFetch({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/trays": { body: { trays: [], errors: [] } },
+      "GET /api/tags": { body: [] },
+      ...replayJob(() => REPLAY, { state, looked_at: 500, total: 900 }),
+      "POST /api/rules/replay/jobs/job-1/stop": () => {
+        state = "stopped";
+        return { body: { job_id: "job-1", sheet: "s", state, version: 2, looked_at: 520, total: 900, waiting: 0, elapsed_s: 1, error: null, result: { ...REPLAY, looked_at: 520 } } };
+      },
+    } as never);
+    const user = userEvent.setup();
+    renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+    expect(await screen.findByText(/Checked 500 of 900 documents…/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save|Testing…/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+    expect(await screen.findByText(/Stopped at 520 of 900 documents\./)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    // what it found so far is the proof: Save is possible, and Test again starts over
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Test again" }));
+    expect(await screen.findByText(/Checked 500 of 900 documents…/)).toBeInTheDocument();
+  });
+
+  it("says it is waiting for page 1 when all documents are looked at", async () => {
+    mockFetch({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/trays": { body: { trays: [], errors: [] } },
+      "GET /api/tags": { body: [] },
+      ...replayJob({ ...REPLAY, total: 900 }, { state: "waiting", looked_at: 900, total: 900, waiting: 23 }),
+    } as never);
+    renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+    expect(await screen.findByText(/Checked all 900 documents\. Waiting for page 1 of 23…/)).toBeInTheDocument();
   });
 
   it("a pattern that cannot be filled says it would fail", async () => {
@@ -96,10 +132,10 @@ describe("RuleSheet", () => {
   it("refreshes the replay 400 ms after the last edit with the rule built from the sheet", async () => {
     const { calls, user } = setup();
     await screen.findByText(/Matches 4/);
-    const before = posts(calls, "/api/rules/replay").length;
+    const before = posts(calls, "/api/rules/replay/jobs").length;
     await user.click(screen.getByRole("button", { name: "lasku" }));
-    await waitFor(() => expect(posts(calls, "/api/rules/replay").length).toBe(before + 1));
-    const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { id: string; when: unknown; then: unknown } };
+    await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs").length).toBe(before + 1));
+    const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { id: string; when: unknown; then: unknown } };
     expect(sent.rule.id).toBe("kotihoito");
     expect(sent.rule.when).toEqual({ text_contains: ["kotihoito", "lasku"], filename_matches: null, folder_is: "##. Organize" });
     expect(sent.rule.then).toEqual({ folder: "20. Health/{year}", name: "{doc_date}_{stem}", tags: ["invoice"], tray: null, payee: null });
@@ -108,7 +144,7 @@ describe("RuleSheet", () => {
   it("tells the test which document the areas were drawn on, so its folder is tested early", async () => {
     const { calls } = setup(REPLAY, { nearDriveId: "doc-9" });
     await screen.findByText(/Matches 4/);
-    expect((posts(calls, "/api/rules/replay")[0].body as { near_drive_id: string }).near_drive_id).toBe("doc-9");
+    expect((posts(calls, "/api/rules/replay/jobs")[0].body as { near_drive_id: string }).near_drive_id).toBe("doc-9");
   });
 
   it("Save with differences asks first, then saves", async () => {
@@ -183,7 +219,7 @@ describe("RuleSheet", () => {
     expect(screen.queryByLabelText(/Leave out/)).toBeNull();
     await user.clear(screen.getByLabelText("Folder"));
     await waitFor(() => {
-      const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { then: { folder: unknown }; when: { text_contains: string[] } } };
+      const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { then: { folder: unknown }; when: { text_contains: string[] } } };
       expect(sent.rule.then.folder).toBeNull();
       expect(sent.rule.when.text_contains).toEqual(["kotihoito", "sähkö"]);
     });
@@ -200,13 +236,15 @@ describe("RuleSheet", () => {
     const held = deferred<{ body: object }>();
     let first = true;
     const { user } = setup();
+    const routes = replayJob(REPLAY);
     mockFetch({
       "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
       "GET /api/trays": { body: { trays: [], errors: [] } },
-      "POST /api/rules/replay": () => {
+      ...routes,
+      "POST /api/rules/replay/jobs": (call: Call) => {
         if (first) {
           first = false;
-          return { body: REPLAY };
+          return (routes["POST /api/rules/replay/jobs"] as (c: Call) => object)(call);
         }
         return held.promise;
       },
@@ -218,17 +256,20 @@ describe("RuleSheet", () => {
     expect(screen.getByRole("button", { name: "Testing…" })).toBeDisabled();
     expect(screen.getByRole("region", { name: "Test against your filed documents" })).toHaveAttribute("aria-busy", "true"); // the old proof stays
     expect(screen.getByText(/Matches 4/)).toBeInTheDocument();
-    held.resolve({ body: { ...REPLAY, different: [] } });
+    held.resolve({ body: { job_id: "job-2", sheet: "s", state: "done", version: 1, looked_at: 4, total: 4, waiting: 0, elapsed_s: 0, error: null, result: null } });
     expect(await screen.findByRole("button", { name: "Save" })).toBeEnabled();
   });
 
   it("after a failed replay Save stays disabled until Try again succeeds", async () => {
     let fail = true;
     const { user } = setup();
+    const routes = replayJob(REPLAY);
     mockFetch({
       "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
       "GET /api/trays": { body: { trays: [], errors: [] } },
-      "POST /api/rules/replay": () => (fail ? { status: 500, body: { error: "boom" } } : { body: REPLAY }),
+      ...routes,
+      "POST /api/rules/replay/jobs": (call: Call) =>
+        fail ? { status: 500, body: { error: "boom" } } : (routes["POST /api/rules/replay/jobs"] as (c: Call) => object)(call),
     } as never);
     await user.click(await screen.findByRole("button", { name: "Try again" }));
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
@@ -263,7 +304,7 @@ describe("RuleSheet", () => {
       await within(sheet).findByText(/Matches 4/);
       await user.click(within(sheet).getByRole("button", { name: "vakuutus" })); // unticked
       await waitFor(() => {
-        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: Record<string, unknown> };
+        const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: Record<string, unknown> };
         expect(sent.rule).toMatchObject({
           when: {
             text_contains: [],
@@ -304,13 +345,13 @@ describe("RuleSheet", () => {
       await user.click(within(two).getByRole("button", { name: "policy" }));
       await user.type(within(two).getByLabelText("Add a word to area 2"), "kirja{Enter}");
       await waitFor(() => {
-        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { text_contains: string[] }[] } } };
+        const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { zones: { text_contains: string[] }[] } } };
         expect(sent.rule.when.zones.map((z) => z.text_contains)).toEqual([["pohjola"], ["vakuutuskirja", "kirja"]]);
       });
       await user.click(within(screen.getByRole("group", { name: "Area 1" })).getByRole("button", { name: "Remove area 1" }));
       expect(screen.queryByRole("group", { name: "Area 2" })).toBeNull();
       await waitFor(() => {
-        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { box: number[] }[] } } };
+        const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { zones: { box: number[] }[] } } };
         expect(sent.rule.when.zones).toHaveLength(1);
         expect(sent.rule.when.zones[0].box).toEqual([0.55, 0.05, 0.95, 0.12]);
       });
@@ -374,10 +415,10 @@ describe("RuleSheet", () => {
         const { calls } = setup(REPLAY, props, { "GET /api/inbox": { body: INBOX } });
         await screen.findByAltText("Page 1");
         await screen.findByText(/Matches 4/);
-        const before = posts(calls, "/api/rules/replay").length;
+        const before = posts(calls, "/api/rules/replay/jobs").length;
         drag("pohjola:0"); // selects it, then moves it
-        await waitFor(() => expect(posts(calls, "/api/rules/replay").length).toBeGreaterThan(before));
-        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { box: number[] }[] } } };
+        await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs").length).toBeGreaterThan(before));
+        const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { zones: { box: number[] }[] } } };
         expect(sent.rule.when.zones.map((z) => z.box.map((v) => Math.round(v * 1000) / 1000))).toEqual([
           [0.15, 0.12, 0.55, 0.24],
           [0.55, 0.05, 0.95, 0.12],
@@ -412,7 +453,7 @@ describe("RuleSheet", () => {
         await new Promise((r) => setTimeout(r, 20));
         expect(screen.getAllByRole("img", { name: /Picture of area/ })[0]).toHaveAttribute("src", "/api/rules/areas/pohjola-3.png");
         await waitFor(() => {
-          const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { box: number[]; image: string }[] } } };
+          const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { zones: { box: number[]; image: string }[] } } };
           expect(sent.rule.when.zones[0].image).toBe("areas/pohjola-3.png");
           expect(sent.rule.when.zones[0].box.map((v) => Math.round(v * 1000) / 1000)).toEqual([0.25, 0.22, 0.65, 0.34]);
         });
@@ -430,7 +471,7 @@ describe("RuleSheet", () => {
         fireEvent.pointerMove(address, { clientX: 80, clientY: 160 });
         fireEvent.pointerUp(address, { clientX: 80, clientY: 160 });
         await waitFor(() => {
-          const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { person_zone: number[] } };
+          const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { person_zone: number[] } };
           expect(sent.rule.person_zone.map((v) => Math.round(v * 1000) / 1000)).toEqual([0.2, 0.3, 0.7, 0.5]);
         });
       });
@@ -449,40 +490,59 @@ describe("RuleSheet", () => {
       expect(screen.getByText(row("Insurance/b.pdf: no OCR engine"))).toBeVisible();
     });
 
-    it("asks again while page 1 is being read and shows the count", async () => {
-      let reads = 0;
+    it("keeps asking while page 1 is being read, shows the count and picks the pages up as they arrive", async () => {
+      let polls = 0;
+      const job = (n: number) => ({
+        job_id: "job-1", sheet: "s", version: n, elapsed_s: 1, error: null,
+        state: n < 3 ? "waiting" : "done", looked_at: 4, total: 4, waiting: n < 3 ? 23 : 0,
+        result: { ...REPLAY, reading: n < 3 ? 23 : 0, not_checked: n < 3 ? [{ path: "a/x.pdf", drive_id: "x", reason: "page 1 not read yet" }] : [] },
+      });
       mockFetch({
         "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
         "GET /api/trays": { body: { trays: [], errors: [] } },
         "GET /api/tags": { body: [] },
-        "POST /api/rules/replay": () => ({ body: ++reads < 2 ? { ...REPLAY, reading: 23 } : { ...REPLAY, reading: 0 } }),
+        "POST /api/rules/replay/jobs": () => ({ body: { ...job(1), result: null } }),
+        "GET /api/rules/replay/jobs/job-1": () => ({ body: job(++polls + 1) }),
+        "DELETE /api/rules/replay/jobs/job-1": { body: job(3) },
       } as never);
       renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
-      expect(await screen.findByText("Reading page 1 of 23 documents…")).toBeInTheDocument();
-      await waitFor(() => expect(screen.queryByText(/Reading page 1 of/)).toBeNull(), { timeout: 4000 });
-      expect(reads).toBe(2);
+      expect(await screen.findByText(/Waiting for page 1 of 23…/)).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByText(/Waiting for page 1 of/)).toBeNull());
+      expect(screen.queryByText(/not checked yet/)).toBeNull();
     });
 
-    it("does not poll again once the sheet is closed", async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      try {
-        const held = deferred<{ body: object }>();
-        const calls = mockFetch({
-          "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
-          "GET /api/trays": { body: { trays: [], errors: [] } },
-          "GET /api/tags": { body: [] },
-          "POST /api/rules/replay": () => held.promise,
-        } as never);
-        const { unmount } = renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
-        await vi.advanceTimersByTimeAsync(500);
-        await waitFor(() => expect(posts(calls, "/api/rules/replay")).toHaveLength(1)); // in flight
-        unmount();
-        held.resolve({ body: { ...REPLAY, reading: 23 } });
-        await vi.advanceTimersByTimeAsync(10000);
-        expect(posts(calls, "/api/rules/replay")).toHaveLength(1);
-      } finally {
-        vi.useRealTimers();
-      }
+    it("ends the test on the server when the sheet is closed", async () => {
+      const calls = mockFetch({
+        "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+        "GET /api/trays": { body: { trays: [], errors: [] } },
+        "GET /api/tags": { body: [] },
+        ...replayJob(REPLAY, { state: "running", looked_at: 1, total: 4 }),
+      } as never);
+      const { unmount } = renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+      await screen.findByText(/Checked 1 of 4 documents…/);
+      const polls = () => calls.filter((c) => c.method === "GET" && c.url.startsWith("/api/rules/replay/jobs/job-1")).length;
+      unmount();
+      await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/rules/replay/jobs/job-1")).toBe(true));
+      const after = polls();
+      await new Promise((r) => setTimeout(r, 200));
+      expect(polls()).toBe(after); // no more polling once it is closed
+    });
+
+    it("ends a test that was started just as the sheet closed", async () => {
+      const held = deferred<{ body: object }>();
+      const calls = mockFetch({
+        "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+        "GET /api/trays": { body: { trays: [], errors: [] } },
+        "GET /api/tags": { body: [] },
+        "POST /api/rules/replay/jobs": () => held.promise,
+        "DELETE /api/rules/replay/jobs/job-9": { body: {} },
+      } as never);
+      const { unmount } = renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+      await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(1)); // in flight
+      unmount();
+      held.resolve({ body: { job_id: "job-9", sheet: "s", state: "running", version: 0, looked_at: 0, total: 0, waiting: 0, elapsed_s: 0, error: null, result: null } });
+      await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith("/job-9"))).toBe(true));
+      expect(calls.filter((c) => c.method === "GET" && c.url.includes("/replay/jobs/"))).toHaveLength(0);
     });
 
     it("has an optional From (sender) field, prefilled from the rule, that sets the rule's sender", async () => {
@@ -498,10 +558,10 @@ describe("RuleSheet", () => {
       // a sender used before is one click away
       await user.click(await within(sheet).findByRole("button", { name: "Fortum" }));
       expect(from).toHaveValue("Fortum");
-      await waitFor(() => expect((posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { sender: string } }).rule.sender).toBe("Fortum"));
+      await waitFor(() => expect((posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { sender: string } }).rule.sender).toBe("Fortum"));
       // empty: the rule is not about a sender
       await user.clear(from);
-      await waitFor(() => expect((posts(calls, "/api/rules/replay").at(-1)?.body as { rule: Record<string, unknown> }).rule).not.toHaveProperty("sender"));
+      await waitFor(() => expect((posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: Record<string, unknown> }).rule).not.toHaveProperty("sender"));
     });
 
     it("starts the From field empty for a rule that has no sender", async () => {
@@ -560,13 +620,13 @@ describe("RuleSheet", () => {
       const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
       await within(sheet).findByText(/Matches 4 documents/);
       const zones = (c: Call) => (c.body as { rule: { when: { zones: unknown[] } } }).rule.when.zones;
-      expect(zones(posts(calls, "/api/rules/replay")[0])).toEqual([
+      expect(zones(posts(calls, "/api/rules/replay/jobs")[0])).toEqual([
         { box: [0.05, 0.03, 0.35, 0.1], image: "areas/acme-1.png", min_score: 0.9 },
         { box: [0.5, 0.05, 0.9, 0.1], text_contains: ["lasku"] },
       ]);
       await user.click(within(sheet).getByRole("button", { name: "Use the usual 0.80" }));
-      await waitFor(() => expect(posts(calls, "/api/rules/replay")).toHaveLength(2));
-      expect(zones(posts(calls, "/api/rules/replay")[1])[0]).toEqual({ box: [0.05, 0.03, 0.35, 0.1], image: "areas/acme-1.png" });
+      await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(2));
+      expect(zones(posts(calls, "/api/rules/replay/jobs")[1])[0]).toEqual({ box: [0.05, 0.03, 0.35, 0.1], image: "areas/acme-1.png" });
       expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("0.8");
     });
 
@@ -584,7 +644,7 @@ describe("RuleSheet", () => {
       await waitFor(() => expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("1"));
       expect(within(sheet).getByText("1.00")).toBeInTheDocument();
       await waitFor(() => {
-        const last = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { min_score?: number }[] } } };
+        const last = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { zones: { min_score?: number }[] } } };
         expect(last.rule.when.zones[0].min_score).toBe(1);
       });
       // the same cells with the link away
@@ -604,33 +664,6 @@ describe("RuleSheet", () => {
       const sent = posts(calls, "/api/rules/areas-for")[0].body as { drive_id: string; rule: { id: string } };
       expect(sent.drive_id).toBe("da");
       expect(sent.rule.id).toBe("acme");
-    });
-
-    it("tests the rest from where the test stopped, and joins the results", async () => {
-      const first = {
-        ...REPLAY, matched: 2, same: 2, different: [], inbox: 0, shadowed: [], checked: 500, total: 900,
-        truncated: true, next_after: "20. Home/m.pdf",
-        scores: [{ path: "Insurance/a.pdf", drive_id: "da", score: 0.91, matched: true }],
-      };
-      const rest = {
-        ...REPLAY, matched: 1, same: 1, different: [], inbox: 0, shadowed: [], checked: 400, total: 900,
-        truncated: false, next_after: null,
-        scores: [{ path: "Insurance/z.pdf", drive_id: "dz", score: 0.88, matched: true }],
-      };
-      const { calls, user } = setup(first, { initial: PICTURE_RULE, filed: undefined }, {
-        "GET /api/rules": { body: RULES },
-        "POST /api/rules/replay": (call: Call) => ({ body: (call.body as { after?: string | null }).after ? rest : first }),
-      });
-      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
-      expect(await within(sheet).findByText(/Checked 500 of 900 documents/)).toBeInTheDocument();
-      await user.click(within(sheet).getByRole("button", { name: "Test the rest" }));
-      const asked = posts(calls, "/api/rules/replay").at(-1)?.body as { after: string };
-      expect(asked.after).toBe("20. Home/m.pdf");
-      // 2 + 1 matches over 500 + 400 checked, both lists, and no more button
-      expect(await within(sheet).findByText(/Matches 3 documents/)).toBeInTheDocument();
-      expect(within(sheet).getByRole("button", { name: "Insurance/a.pdf" })).toBeInTheDocument();
-      expect(within(sheet).getByRole("button", { name: "Insurance/z.pdf" })).toBeInTheDocument();
-      expect(within(sheet).queryByRole("button", { name: "Test the rest" })).toBeNull();
     });
 
     it("removing the picture area leaves the words, and a picture alone is told to add a text box", async () => {

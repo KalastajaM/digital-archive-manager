@@ -2,8 +2,9 @@
 reorder, explain a document, and the "offer a rule" setting."""
 
 from dataclasses import asdict
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
@@ -14,12 +15,14 @@ from dam.api.schemas import (
     AreasForIn,
     AreasForOut,
     BatchResultOut,
+    ReplayJobOut,
     ReplayOut,
     RuleExplainIn,
     RuleExplainOut,
     RuleIn,
     RuleMoveIn,
     RuleReplayIn,
+    RuleReplayJobIn,
     RulesDeclineIn,
     RulesOut,
     RulesStateIn,
@@ -31,10 +34,11 @@ from dam.api.schemas import (
 from dam.app import App
 from dam.codes.model import format_validation
 from dam.rules import state as rules_state
+from dam.rules.jobs import ReplayJob
 from dam.rules.learned import learned_ids, rule_file
 from dam.rules.model import LEARNED_FILE, RESERVED_IDS, Rule
 from dam.rules.picture import DEFAULT_MIN_SCORE
-from dam.rules.replay import StaleCursor, explain, folder_of, replay, without_folder
+from dam.rules.replay import ReplayRun, StaleCursor, explain, folder_of, replay, without_folder
 from dam.services.area_pictures import check_pictures_exist
 from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleStats
@@ -147,6 +151,103 @@ def _replay_out(result) -> dict:
     out = asdict(result)
     out["shadowed"] = [{"drive_id": d, "rule_id": r} for d, r in result.shadowed]
     return out
+
+
+def _job_out(view, since: int | None = None) -> dict:
+    out = {
+        "job_id": view.job_id,
+        "sheet": view.sheet,
+        "state": view.state,
+        "version": view.version,
+        "looked_at": view.looked_at,
+        "total": view.total,
+        "waiting": view.waiting,
+        "elapsed_s": view.elapsed_s,
+        "error": view.error,
+        "result": None,
+    }
+    if view.result is not None and since != view.version:
+        out["result"] = _replay_out(view.result)
+    return out
+
+
+def _job(app: App, job_id: str) -> ReplayJob:
+    job = app.replay_jobs.get(job_id)
+    if job is None:
+        raise NotFound(job_id)
+    return job
+
+
+@router.post("/replay/jobs", response_model=ReplayJobOut)
+def start_replay_job(app: AppDep, body: RuleReplayJobIn) -> dict:
+    """Test a rule against the filed documents in the background: the answer comes at once
+    and the test goes on, looking at the likely documents first. Poll it with
+    ``GET /api/rules/replay/jobs/{job_id}`` for the result so far, stop it, or drop it when
+    the sheet closes. One test per ``sheet`` (an earlier one for it is ended). Read-only.
+    404 for an unknown ``replaces``, 400 for an invalid rule."""
+    rule, order = _placed(
+        app,
+        RuleReplayIn(
+            rule=body.rule,
+            replaces=body.replaces,
+            place_above=body.place_above,
+        ),
+    )
+    near = app.repo.get(body.near_drive_id) if body.near_drive_id else None
+    near_folder = folder_of(near.path) if near is not None else None
+
+    def want(ids) -> None:
+        app.content.want_layouts(ids)
+        app.wake_indexer()  # the layout pass reads what the rule needs next
+
+    def make() -> ReplayRun:
+        return ReplayRun(
+            app.engine,
+            rule,
+            order,
+            app.settings.special_folders,
+            inbox_code_of=app.repo.inbox_code_of,
+            layouts_for=app.repo.layouts_for,
+            want_layouts=want,
+            layout_blocked=app.content.layout_blocked,
+            people=app.settings.people,
+            address_zone=app.settings.address_zone,
+            assigned_persons=app.assignments.persons,
+            sender_ids=app.assignments.with_sender,
+            pictures=app.pictures,
+            near_folder=near_folder,
+        )
+
+    job = app.replay_jobs.start(body.sheet, make)
+    return _job_out(job.view(with_result=False))
+
+
+@router.get("/replay/jobs/{job_id}", response_model=ReplayJobOut)
+def get_replay_job(
+    app: AppDep, job_id: str, since: Annotated[int | None, Query(ge=0)] = None
+) -> dict:
+    """The state of a background test and what it has found so far. Pass the ``version`` you
+    already have as ``since`` and ``result`` is null while nothing is new. 404 for a job
+    that is gone (dropped, or pushed out by newer ones)."""
+    return _job_out(_job(app, job_id).view(), since)
+
+
+@router.post("/replay/jobs/{job_id}/stop", response_model=ReplayJobOut)
+def stop_replay_job(app: AppDep, job_id: str) -> dict:
+    """End a background test where it is; what it has found so far stays. Idempotent."""
+    job = _job(app, job_id)
+    job.stop()
+    job.join(1.0)
+    return _job_out(job.view())
+
+
+@router.delete("/replay/jobs/{job_id}", response_model=ReplayJobOut)
+def drop_replay_job(app: AppDep, job_id: str) -> dict:
+    """End a background test and forget it (its sheet was closed). 404 if it is gone."""
+    job = _job(app, job_id)
+    view = job.view()
+    app.replay_jobs.drop(job_id)
+    return _job_out(view)
 
 
 @router.post("/unused-pictures/quarantine", response_model=BatchResultOut)

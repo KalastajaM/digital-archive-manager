@@ -30,6 +30,7 @@ from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
+from dam.rules.jobs import ReplayJobs
 from dam.rules.learned import rule_file, write_rules_file
 from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
 from dam.rules.picture import AREAS_DIR, Pictures
@@ -80,6 +81,7 @@ class App:
     convert_important: ImportantConverter = field(init=False)
     inbox: InboxService = field(init=False)
     pictures: Pictures = field(init=False)
+    replay_jobs: ReplayJobs = field(init=False)
     area_pictures: AreaPictures = field(init=False)
     browse: BrowseService = field(init=False)
     activity: ActivityService = field(init=False)
@@ -139,6 +141,7 @@ class App:
         self.rule_record = RuleRecord(self.engine)
         # page-1 pictures (cache) and the crops of picture areas (the rules' folder)
         self.pictures = Pictures(lambda: self.rules_dir, self.app_paths.cache_dir)
+        self.replay_jobs = ReplayJobs()  # rule tests that run in the background
         self.area_pictures = AreaPictures(
             self.repo,
             self.app_paths.cache_dir,
@@ -539,5 +542,6 @@ class App:
         return search(self.engine, query, limit=limit, folder=folder)
 
     def close(self) -> None:
+        self.replay_jobs.close()
         self.content.close()
         self.engine.dispose()
