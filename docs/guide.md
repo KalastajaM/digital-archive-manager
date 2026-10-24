@@ -533,8 +533,15 @@ document without one is listed as not checked, never as a miss.
 A picture area is only for something that tells who a letter is from or what kind it is.
 The address area never takes a picture: a person is found from text only. The picture of
 an area is a few KB and is kept with the rules, in `config/rules/areas`. Deleting a rule
-leaves its pictures there; Settings → Filing rules lists the ones no rule uses, and you
-can remove them yourself. Moving or resizing a picture area cuts the picture again from
+leaves its pictures there; Settings → Filing rules lists the ones no rule uses. Next to
+that list, **Move N unused pictures to To Delete** shows the plan and, once you confirm,
+moves them into `##. To Delete` as `dam rule picture <name>.png`. You empty that folder
+yourself, like for any file you mark for deletion. The result has an **Undo** (also in
+Activity), which puts the pictures back into `config/rules/areas`; it refuses if a picture
+with the same name has been saved there since. Only pictures no rule uses can be moved. If
+your rules folder and your archive are on different disks, the move is refused with a
+message, because dam only renames files and never copies and deletes: move them by hand
+then. Moving or resizing a picture area cuts the picture again from
 the document you changed it on.
 
 #### Seeing the areas

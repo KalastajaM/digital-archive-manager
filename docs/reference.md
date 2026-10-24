@@ -368,6 +368,17 @@ saved crops in `pictures`. `GET /api/rules/areas/{name}` serves a saved picture.
 replay answer has `scores: [{path, score, matched}]` for a rule with picture areas: the
 lowest 20 matches and the highest 10 documents that were not matched. `GET /api/rules`
 lists `unused_pictures` (files in `areas` no loaded rule uses) and `default_min_score`.
+`POST /api/rules/unused-pictures/quarantine {names, dry_run}` moves those pictures into
+the quarantine folder as `dam rule picture <name>` (a taken name gets `_2`, ...) and
+answers like `POST /api/quarantine` (a batch with `done`, `failed`, `error`, `batch_id`);
+with `dry_run: true` it only resolves the plan. Every name must be in `unused_pictures` at
+that moment (400 otherwise, nothing planned); a link, or folders on different disks, is also
+a 400. It runs as two operation kinds: `picture_to_quarantine` (`src` is the `abs:` path of a
+regular file directly inside `config/rules/areas`, never a link; `dst` the quarantine folder)
+and its undo-only inverse `picture_back` (refused when the name is taken in `areas`, or the
+file in `##. To Delete` was changed or moved). Both are plain renames that never overwrite.
+The journal keeps the file name only, not the path on this computer. Undo goes through
+`POST /api/activity/{batch_id}/undo`, as for every batch.
 A suggestion's `areas` has `kind: "image"` with `score` and, in `lines`, where the picture
 fits best.
 
@@ -661,7 +672,9 @@ The user guide's "What dam never does" gives the short version. The details:
   to the archive. One more thing is removed, by undo and only when it is certain it is the
   app's own: an empty folder that a New folder / layout batch made (identity-checked,
   never one with anything in it). Undo of "Choose files…"/`dam add` *moves* the copy to
-  `##. To Delete`.
+  `##. To Delete`. Rule pictures no rule uses (`config/rules/areas`) are moved to
+  `##. To Delete` the same way, as `dam rule picture <name>`, previewed and undoable; the
+  one file source outside the archive other than `dam add` is exactly that folder.
 - **"Is this still the folder/link the app made?" is answered by file identity.** The
   app records, right after it creates a folder or link, its device number, inode number
   and **creation time**. It removes or touches the entry later only while the device and
