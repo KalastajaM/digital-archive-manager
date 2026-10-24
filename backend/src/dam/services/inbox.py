@@ -21,7 +21,7 @@ from dam.extract.layout import TEXT_LAYER, Page1Layout, check_box, lines_in_zone
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.notes import NotesService, check_note
 from dam.ops.executor import Executor
-from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
+from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
 from dam.rules.draft import (
     RuleDraft,
@@ -54,6 +54,7 @@ from dam.rules.offer import (
 )
 from dam.rules.people import PeopleContext
 from dam.rules.picture import Pictures
+from dam.rules.replay import without_folder
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
 from dam.rules.similar import similar_folder
 from dam.rules.state import load_state
@@ -580,14 +581,17 @@ class InboxService:
         learned = learned_ids(self._rules_dir())
         if not learned:
             return None
+        in_inbox = is_under(rec.path, self.special.inbox)
         alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
         folded = fold(self.repo.text_for(rec.drive_id))
         people = self.people_context(rec.drive_id)
         for rule in self._rules():
-            if (
-                rule.id in learned
-                and check(rule, rec, folded, alias, layout, people, self.pictures).matched
-            ):
+            if rule.id not in learned:
+                continue
+            # learned rules carry folder_is: <inbox>, which no filed document satisfies;
+            # for a filed document the rest of the rule is what counts (as in the replay)
+            probe = rule if (in_inbox or alias is not None) else without_folder(rule)
+            if check(probe, rec, folded, alias, layout, people, self.pictures).matched:
                 return rule.id
         return None
 

@@ -287,3 +287,33 @@ def test_replay_puts_the_new_rule_above_place_above(app, fake_archive):
 def test_a_page_that_is_read_but_empty_does_not_match_any_zone():
     empty = Page1Layout([], "text-layer")
     assert suggest(rec(), "pohjola maksu", [two_zones()], layout=empty).folder is None
+
+
+def test_place_above_is_found_for_boxes_drawn_on_a_filed_letter(app, fake_archive):
+    """Learned rules carry ``folder_is: <inbox>``; a filed document is not in the inbox,
+    so the rest of the rule is what counts."""
+    seed_frequency(app, fake_archive)
+    learned = Rule.model_validate(
+        {
+            "id": "pohjola",
+            "when": {"text_contains": ["pohjola"], "folder_is": INBOX},
+            "then": {"folder": "Insurance"},
+        }
+    )
+    app.save_rule(learned)
+    add(app, fake_archive, "Insurance/Pohjola/20250110_A.pdf", "a", "pohjola vakuutus", LETTER)
+    with make_client(app) as c:
+        d = post(c, "/api/rules/draft-zone", {"drive_id": "a", "boxes": [list(HEADER)]}).json()
+        assert d["place_above"] == "pohjola"
+        rule = {
+            "id": d["id"],
+            "when": {
+                "folder_is": INBOX,
+                "zones": [{"box": list(HEADER), "text_contains": ["pohjola"]}],
+            },
+            "then": {"folder": "X"},
+        }
+        above = post(c, "/api/rules/replay", {"rule": rule, "place_above": d["place_above"]})
+        below = post(c, "/api/rules/replay", {"rule": rule})
+    assert above.json()["shadowed"] == []
+    assert below.json()["shadowed"] == [{"drive_id": "a", "rule_id": "pohjola"}]
