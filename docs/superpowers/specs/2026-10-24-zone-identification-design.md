@@ -39,7 +39,7 @@ Where a word sits on page 1 says far more than whether it is in the text at all.
 - Matching logos as images (no text in them). Text in or next to the letterhead covers
   most senders; image matching is a later design if real examples need it.
 - Pages after page 1.
-- Deskewing or rotating scans. A small tolerance around each box absorbs the usual shift
+- Deskewing or rotating scans. A small margin around each box (when matching) absorbs the usual shift
   and skew of a scanner; a page scanned sideways does not match, and the replay shows it.
 - Filing without a confirm (CONTRIBUTING safety rules). Zone rules and detected people
   only fill in the Inbox form, as rules do today.
@@ -151,9 +151,14 @@ A rule can require text in an area of page 1:
   that are at least half inside the box, joined per line; a line without word boxes
   counts whole), by the same folding as today (`fold` in `rules/model.py`). All other conditions in `when`
   still have to match too.
-- **Tolerance**: a word (or a line without word boxes) lies in the box when at least half of its area is inside the box
-  grown by a margin on every side (builder's call: about 3 % of the page). Scans shift a
-  few millimetres between letters; a small margin is what makes a box usable.
+- **Tolerance**: what a box *contains*, as listed for the box that was drawn (the lines
+  endpoint, the draft, the box rows, the explain lines), uses no margin: words at least
+  half inside the box itself. Matching a rule on another document grows the box by 2 %
+  of the page across (about 4 mm on A4) and 0.6 % down (about 1.8 mm, which still absorbs a 3 mm shift of a line), because scans shift a
+  few millimetres between letters. Down is smaller on purpose: ordinary lines sit 4 to 6
+  mm apart with their boxes only about 1 mm apart, and a bigger vertical margin would pull the neighbouring line into a box
+  drawn around one line. People detection in the address area keeps its own 3 % margin
+  (the area is an approximation of the standard).
 - A file without a current layout row does not match a zone condition. In the Inbox
   this is rare (inbox files are read first); while it is the case, the suggestion says
   "Reading page 1…" instead of silently offering nothing.

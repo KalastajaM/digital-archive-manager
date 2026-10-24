@@ -538,9 +538,11 @@ def with_ai_exclude_folders(text: str, folders: list[str]) -> str:
     if comment:  # the key line's own comment stays
         new[0] += f"  {comment.group(1)}"
     if not _value_of(rest):  # a block list: its items
-        while stop < end and (not lines[stop].strip() or _indent(lines[stop]) > len(child) or (
-            lines[stop].lstrip().startswith("-") and _indent(lines[stop]) == len(child)
-        )):
+        while stop < end and (
+            not lines[stop].strip()
+            or _indent(lines[stop]) > len(child)
+            or (lines[stop].lstrip().startswith("-") and _indent(lines[stop]) == len(child))
+        ):
             stop += 1
         while stop > at + 1 and not lines[stop - 1].strip():  # keep blank lines after it
             stop -= 1

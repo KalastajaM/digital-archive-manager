@@ -175,7 +175,7 @@ def qr_drawings(html: str) -> list[str]:
 
 def decode(group: str) -> str:
     """Rasterise one QR group (module rectangles) and read it back with zxing."""
-    shift = re.search(r'translate\((-?[\d.]+)[ ,](-?[\d.]+)\)', group)
+    shift = re.search(r"translate\((-?[\d.]+)[ ,](-?[\d.]+)\)", group)
     dx, dy = (float(shift.group(1)), float(shift.group(2))) if shift else (0, 0)
     scale, quiet = 10, 4
     img = Image.new("L", ((21 + 2 * quiet) * scale,) * 2, 255)
@@ -246,8 +246,17 @@ def test_label_shrinks_to_fit():
 
 def test_custom_layout_saved(tmp_path):
     custom = sheets.SheetLayout(
-        id="x", name="Mine", columns=3, rows=8, label_w_mm=63.5, label_h_mm=33.9,
-        top_mm=12.9, left_mm=7.2, gap_x_mm=2.5, gap_y_mm=0, cut_lines=False,
+        id="x",
+        name="Mine",
+        columns=3,
+        rows=8,
+        label_w_mm=63.5,
+        label_h_mm=33.9,
+        top_mm=12.9,
+        left_mm=7.2,
+        gap_x_mm=2.5,
+        gap_y_mm=0,
+        cut_lines=False,
     )
     sheets.save_custom(tmp_path, custom)
     lays = {lay.id: lay for lay in sheets.load_layouts(tmp_path)}
@@ -268,9 +277,7 @@ def test_fresh_install_has_no_sheet_file(tmp_path):
 
 def test_dev_seeded_list_is_ignored_quietly(tmp_path, caplog):
     """An early build of this branch seeded a list of built-ins into config."""
-    (tmp_path / "sticker_sheets.yaml").write_text(
-        "- id: l7651\n  name: x\n", encoding="utf-8"
-    )
+    (tmp_path / "sticker_sheets.yaml").write_text("- id: l7651\n  name: x\n", encoding="utf-8")
     assert [lay.id for lay in sheets.load_layouts(tmp_path)] == ["l7651", "plain"]
     assert not caplog.records
 
@@ -305,8 +312,14 @@ def test_failed_save_restores_previous(tmp_path, monkeypatch):
 
 def test_minimum_label_size():
     base = {
-        "id": "custom", "name": "Small", "columns": 1, "rows": 1, "top_mm": 0, "left_mm": 0,
-        "gap_x_mm": 0, "gap_y_mm": 0,
+        "id": "custom",
+        "name": "Small",
+        "columns": 1,
+        "rows": 1,
+        "top_mm": 0,
+        "left_mm": 0,
+        "gap_x_mm": 0,
+        "gap_y_mm": 0,
     }
     assert sheets.MIN_LABEL_W == pytest.approx(52 * 12 / 21 + 2)  # about 31.7 mm
     sheets.SheetLayout(**base, label_w_mm=31.8, label_h_mm=14)
@@ -331,8 +344,17 @@ def test_too_many_stickers():
 def test_custom_must_fit_a4():
     with pytest.raises(ValueError):
         sheets.SheetLayout(
-            id="custom", name="Too big", columns=6, rows=13, label_w_mm=38.1, label_h_mm=21.2,
-            top_mm=10.7, left_mm=4.7, gap_x_mm=2.5, gap_y_mm=0, cut_lines=False,
+            id="custom",
+            name="Too big",
+            columns=6,
+            rows=13,
+            label_w_mm=38.1,
+            label_h_mm=21.2,
+            top_mm=10.7,
+            left_mm=4.7,
+            gap_x_mm=2.5,
+            gap_y_mm=0,
+            cut_lines=False,
         )
 
 
@@ -464,8 +486,16 @@ def test_huge_count_is_refused_before_any_sticker_is_built(app, monkeypatch):
 
 def test_api_layouts_and_custom(app):
     body = {
-        "name": "Mine", "columns": 3, "rows": 8, "label_w_mm": 63.5, "label_h_mm": 33.9,
-        "top_mm": 12.9, "left_mm": 7.2, "gap_x_mm": 2.5, "gap_y_mm": 0, "cut_lines": True,
+        "name": "Mine",
+        "columns": 3,
+        "rows": 8,
+        "label_w_mm": 63.5,
+        "label_h_mm": 33.9,
+        "top_mm": 12.9,
+        "left_mm": 7.2,
+        "gap_x_mm": 2.5,
+        "gap_y_mm": 0,
+        "cut_lines": True,
     }
     with make_client(app) as c:
         ids = [lay["id"] for lay in c.get("/api/filing-codes/sheets").json()]

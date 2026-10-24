@@ -197,6 +197,10 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- Draw a box no longer lists the lines next to the one you drew around: a box holds
+  only the words inside it. A rule still finds its words when a copy is shifted by a few
+  millimetres, but a line below no longer counts for the box. The box list and notes now
+  sit below the page, so the page stays put while you draw more boxes.
 - On Linux, an excluded AI folder typed in another case (`10. financial`) no longer
   shows as "not in the archive"; it is found as the exclusion itself finds it.
 - Dropping a folder from Browse on a collection in the sidebar now adds it; the row lit up

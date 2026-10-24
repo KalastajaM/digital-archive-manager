@@ -32,10 +32,10 @@ def test_a_line_is_in_the_box_by_half_its_area_with_a_margin():
     box = (0.1, 0.1, 0.5, 0.2)
     assert in_zone(Line("a", (0.12, 0.12, 0.3, 0.18)), box)
     assert not in_zone(Line("b", (0.12, 0.5, 0.3, 0.55)), box)
-    # just outside the box, but inside the 3 % margin
-    assert in_zone(Line("c", (0.12, 0.21, 0.3, 0.225)), box)
+    # just outside the box, but inside the 0.6 % margin down
+    assert in_zone(Line("c", (0.12, 0.202, 0.3, 0.208)), box)
     # half in, half out of the grown box: counts; a bit less than half: does not
-    grown_right = 0.5 + 0.03
+    grown_right = 0.5 + 0.02
     assert in_zone(Line("d", (grown_right - 0.1, 0.12, grown_right + 0.1, 0.18)), box)
     assert not in_zone(Line("e", (grown_right - 0.09, 0.12, grown_right + 0.11, 0.18)), box)
     assert [ln.text for ln in lines_in_zone([Line("a", (0.2, 0.12, 0.3, 0.18))], box)] == ["a"]
@@ -383,9 +383,7 @@ def test_in_a_box_only_the_words_inside_count_and_old_lines_count_whole():
 
 
 def test_a_box_around_one_word_of_a_text_layer_line_gives_only_that_word(tmp_path: Path):
-    pdf = make_words_pdf(
-        tmp_path / "w.pdf", [(50, 700, "Asiakastiedote"), (138, 700, "1.11.2019")]
-    )
+    pdf = make_words_pdf(tmp_path / "w.pdf", [(50, 700, "Asiakastiedote"), (138, 700, "1.11.2019")])
     doc = pypdfium2.PdfDocument(str(pdf))
     try:
         page = doc[0]
@@ -446,3 +444,60 @@ def test_vision_word_boxes_are_estimated_by_character_count(monkeypatch):
     assert [w.text for w in line.words] == ["ab", "cdef"]
     assert line.words[0].box == pytest.approx((0.0, 0.05, 0.2, 0.1))
     assert line.words[1].box == pytest.approx((0.3, 0.05, 0.7, 0.1))
+
+
+# --- a box holds what is drawn in it; matching keeps a small margin ---------------------
+
+
+def _page1_lines(pdf: Path) -> list:
+    doc = pypdfium2.PdfDocument(str(pdf))
+    try:
+        page = doc[0]
+        lines = text_layer_lines(page)
+        page.close()
+    finally:
+        doc.close()
+    return lines
+
+
+def _two_lines(tmp_path: Path, name: str, dy: float = 0.0, term_first: bool = True):
+    # normal letter spacing: 12 pt type on a 14 pt pitch (about 5 mm on a 792 pt page)
+    first, second = ("Vesilaitos Oy - Lasku", "Vesimaksu 10/2026")
+    if not term_first:
+        first, second = second, first
+    pdf = make_words_pdf(tmp_path / name, [(50, 700 - dy, first), (50, 686 - dy, second)])
+    return _page1_lines(pdf)
+
+
+def test_a_box_drawn_tightly_around_one_line_lists_only_that_line(tmp_path: Path):
+    lines = _two_lines(tmp_path, "a.pdf")
+    assert [ln.text for ln in lines] == ["Vesilaitos Oy - Lasku", "Vesimaksu 10/2026"]
+    x0, y0, x1, y1 = lines[0].box
+    tight = (x0, y0, x1, y1)
+    assert [ln.text for ln in lines_in_zone(lines, tight)] == ["Vesilaitos Oy - Lasku"]
+    # a rule from that box would otherwise see the line below on the same letter
+    from dam.extract.layout import ZONE_MARGIN
+
+    assert [ln.text for ln in lines_in_zone(lines, tight, ZONE_MARGIN)] == ["Vesilaitos Oy - Lasku"]
+
+
+def test_a_rule_from_a_tight_box_matches_a_shifted_copy_but_not_the_next_line(tmp_path: Path):
+    from dam.extract.layout import ZONE_MARGIN, Page1Layout
+    from dam.rules.engine import zone_matches
+    from dam.rules.model import Rule
+
+    drawn = _two_lines(tmp_path, "a.pdf")
+    rule = Rule.model_validate(
+        {
+            "id": "vesi",
+            "when": {"zones": [{"box": list(drawn[0].box), "text_contains": ["lasku"]}]},
+            "then": {"folder": "Water"},
+        }
+    )
+    assert ZONE_MARGIN == (0.02, 0.006)
+    same = Page1Layout(drawn, "text-layer")
+    shifted = Page1Layout(_two_lines(tmp_path, "b.pdf", dy=8.5), "text-layer")  # about 3 mm
+    other = Page1Layout(_two_lines(tmp_path, "c.pdf", term_first=False), "text-layer")
+    assert zone_matches(rule, 0, same)
+    assert zone_matches(rule, 0, shifted)
+    assert not zone_matches(rule, 0, other)

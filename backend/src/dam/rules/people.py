@@ -15,6 +15,10 @@ from dam.config import Person
 from dam.extract.layout import Box, Line, Page1Layout, lines_in_zone
 from dam.rules.model import fold
 
+# The address area is an approximation of the standard (see config.DEFAULT_ADDRESS_ZONE),
+# so people detection keeps its own, wider tolerance of 3 % of the page on every side.
+PEOPLE_MARGIN = 0.03
+
 FUZZY_MIN_LETTERS = 8  # a match string this long may differ by one character
 _SPACES = re.compile(r"\s+")
 
@@ -91,7 +95,7 @@ def detect_people(
     page 1; ``[]`` for a page that is not read or has none."""
     if layout is None or not people:
         return []
-    candidates = _candidates(lines_in_zone(layout.lines, zone))
+    candidates = _candidates(lines_in_zone(layout.lines, zone, PEOPLE_MARGIN))
     if not candidates:
         return []
     found = []
@@ -118,7 +122,7 @@ def person_line(
     if person is None:
         return None
     patterns = [p for p in (_norm(m) for m in person.match) if p]
-    for text, box in _boxed_candidates(lines_in_zone(layout.lines, zone)):
+    for text, box in _boxed_candidates(lines_in_zone(layout.lines, zone, PEOPLE_MARGIN)):
         if any(_found(p, [text]) for p in patterns):
             return box
     return None

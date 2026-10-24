@@ -18,9 +18,19 @@ SCALE = 10000  # PDFium's device matrix works in whole pixels: ask for a fine on
 
 Box = tuple[float, float, float, float]
 
-# a line is in a box when at least half of its area is inside the box grown by this
-# much of the page on every side (scans shift a few millimetres between letters)
-ZONE_MARGIN = 0.03
+# What a box CONTAINS (what the owner sees listed for a drawn box) uses no margin: words
+# at least half inside the box itself. Matching a rule on other documents grows the box
+# by ZONE_MARGIN = (across, down), as fractions of the page, because scans shift a few
+# millimetres between letters. Across 0.02 is about 4 mm on A4 (210 mm), down 0.006 about
+# 1.8 mm (297 mm). Down is much smaller on purpose: in a normal letter (12 pt type on a
+# 14 pt pitch) the boxes of two lines are only about 1 mm apart, so a tight box grown by
+# 0.01 already holds more than half of the line below. With 0.006 that neighbour stays
+# at about a fifth inside, while a copy shifted 3 mm up or down still has more than half
+# of the line in the box (it holds up to about 4 mm) and a sideways shift of 4 mm is fine.
+ZONE_MARGIN = (0.02, 0.006)
+NO_MARGIN = (0.0, 0.0)
+
+Margin = float | tuple[float, float]
 
 
 @dataclass(frozen=True)
@@ -118,12 +128,15 @@ def share_inside(line: Box, area: Box) -> float:
     return 1.0 if area[0] <= lx0 <= area[2] and area[1] <= ly0 <= area[3] else 0.0
 
 
-def grown(box: Sequence[float], margin: float = ZONE_MARGIN) -> Box:
+def grown(box: Sequence[float], margin: Margin = ZONE_MARGIN) -> Box:
+    """``box`` grown by ``margin`` on every side: one number for both axes, or
+    ``(across, down)``."""
+    mx, my = (margin, margin) if isinstance(margin, (int, float)) else margin
     x0, y0, x1, y1 = box
-    return clamp_box((x0 - margin, y0 - margin, x1 + margin, y1 + margin))
+    return clamp_box((x0 - mx, y0 - my, x1 + mx, y1 + my))
 
 
-def in_zone(line: Line, box: Sequence[float], margin: float = ZONE_MARGIN) -> bool:
+def in_zone(line: Line, box: Sequence[float], margin: Margin = ZONE_MARGIN) -> bool:
     """The line lies in ``box``: at least half of it is inside the box grown by ``margin``."""
     return share_inside(line.box, grown(box, margin)) >= 0.5
 
@@ -157,9 +170,10 @@ def union(boxes: Sequence[Box]) -> Box:
 
 
 def lines_in_zone(
-    lines: Sequence[Line], box: Sequence[float], margin: float = ZONE_MARGIN
+    lines: Sequence[Line], box: Sequence[float], margin: Margin = NO_MARGIN
 ) -> list[Line]:
     """The text of page 1 in ``box``, one ``Line`` per line of the page that has any.
+    No margin by default: this is what the box contains. Pass ``ZONE_MARGIN`` to match.
 
     A line with word positions contributes the words that are at least half inside the
     grown box (joined with spaces, in reading order, with the box that holds those words);

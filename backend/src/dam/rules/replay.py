@@ -16,7 +16,7 @@ from dam.config import Person, SpecialFolders
 from dam.core.naming import _DATE_PREFIX, parse_doc_date
 from dam.core.paths import nfc
 from dam.db.tables import file_text, files
-from dam.extract.layout import ZONE_MARGIN, Page1Layout, lines_in_zone
+from dam.extract.layout import Page1Layout, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.ops.guards import is_under
 from dam.rules.engine import (
@@ -590,7 +590,7 @@ def explain(
         if matched and any(src == mine for src in s.tag_sources.values()):
             wins.append("tags")
         zone_lines = [
-            [ln.text for ln in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN)]
+            [ln.text for ln in lines_in_zone(layout.lines, zone.box)]
             if layout is not None and not zone.is_picture
             else []
             for zone in rule.when.zones

@@ -178,8 +178,12 @@ def _whole(name: str, value: str) -> int:
 
 
 def _sheet_query(
-    codes: str, layout: str, start_at: str | None, boxes: str | None,
-    blank_labels: str | None, outlines_only: str | None,
+    codes: str,
+    layout: str,
+    start_at: str | None,
+    boxes: str | None,
+    blank_labels: str | None,
+    outlines_only: str | None,
 ) -> StickerSheetIn:
     """The query as a ``StickerSheetIn``: ``codes`` is ``P:12,A:3`` (a code repeated
     adds up)."""
