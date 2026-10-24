@@ -356,9 +356,12 @@ The page-1 pictures are cache, in `<data dir>/cache/page1/<drive id>-<sha256 pre
 shown: its own rotation and an image's EXIF orientation). They are made while a scan is
 read for OCR, and by the page-1 background pass for the rest (inbox first, then files a
 test asked for, then the others while `page1_backfill` is on); they are made again when the
-content changes. Pictures of changed or removed files are left in the folder: dam deletes
-nothing outside the archive code's short allowed list, so clear the folder by hand if you
-want the space back. Nothing in the archive is written.
+content changes. Once after the first full scan at startup, `prune_page1_pictures` removes the stale
+pictures: files directly in that folder, named exactly like a cache picture, that are regular
+files and whose drive id is unknown or whose sha256 prefix is not the file's
+current one (symlinks are never touched, nor anything outside `cache/page1`). This is the
+app's own cache, not the archive; the no-delete AST test allows that one function in that
+one module. Nothing in the archive is written.
 
 API: `POST /api/rules/area-picture {drive_id, box, save?, rule_id?}` cuts the box from the
 document's page-1 picture and returns `{width, height, png (base64), image}`; with `save`
@@ -667,8 +670,9 @@ The user guide's "What dam never does" gives the short version. The details:
   cache: before removing such an empty folder, the app deletes a `.DS_Store` in it, but
   only a genuine Finder cache file (regular, a single link, Finder's magic bytes, no
   Drive id), only inside that folder, never anywhere else. Outside the archive the app
-  removes only its own export cache (`prune_exports`) and its reminder LaunchAgent plist
-  (`--uninstall`). An AST test pins these few calls, and only the operation layer writes
+  removes only its own export cache (`prune_exports`), the stale files of its own page-1
+  picture cache (`prune_page1_pictures`, see "Picture areas") and its reminder LaunchAgent
+  plist (`--uninstall`). An AST test pins these few calls, and only the operation layer writes
   to the archive. One more thing is removed, by undo and only when it is certain it is the
   app's own: an empty folder that a New folder / layout batch made (identity-checked,
   never one with anything in it). Undo of "Choose files…"/`dam add` *moves* the copy to

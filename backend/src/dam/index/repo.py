@@ -374,6 +374,14 @@ class FileRepo:
             ).scalar()
         return body or ""
 
+    def content_keys(self) -> list[tuple[str, str]]:
+        """(drive id, sha256) of every indexed file whose content is known."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                select(files.c.drive_id, files.c.sha256).where(files.c.sha256.is_not(None))
+            ).all()
+        return [(r[0], r[1]) for r in rows]
+
     def barcode_for(self, drive_id: str) -> str | None:
         """The bank barcode read from the file's current content; None if none was read
         (or it was read from content the file no longer has)."""
