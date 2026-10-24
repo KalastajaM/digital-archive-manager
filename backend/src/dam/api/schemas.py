@@ -1750,6 +1750,12 @@ class ReplayJobOut(BaseModel):
     result: ReplayOut | None = None
 
 
+class ReadNowOut(BaseModel):
+    """How many of a test's documents were queued to have page 1 read now."""
+
+    queued: int
+
+
 class Page1LineOut(BaseModel):
     text: str
     box: list[float]  # x0, y0, x1, y1 as fractions of page 1, origin top left

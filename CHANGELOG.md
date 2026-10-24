@@ -13,6 +13,9 @@ All notable changes are listed here. The format follows
   and its score. In any preview with the box tool, picture rules that did not match are
   drawn dashed with the score they got on that document, or the reason there is none, so you
   can find out why a rule found nothing.
+- When a test has documents whose page 1 is not read yet, **Read page 1 of these N now**
+  reads exactly those first, at full speed (still one at a time, and each read still has its
+  time limit). The test picks them up as they are read.
 - Page 1 of PDFs that have a text layer is read much faster than the indexer's 30 files a
   minute (300 a minute unless you choose another speed in Settings → Indexing or on the
   Index sheet, **Page 1 reading speed**): it needs no OCR. Scans, photos and any read that

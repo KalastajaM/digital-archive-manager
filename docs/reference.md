@@ -424,7 +424,9 @@ documents wait for page 1 to be read and are looked at again as it is), `done`, 
 it and forgets it (404 for a job that is gone). One job per `sheet` (a new start for the same
 sheet ends the first), at most four jobs, finished ones go first; a job nobody has asked
 about for two minutes stops by itself, a `waiting` job with nothing new for 30 minutes ends
-as `done`. A job reads the index and the cache only; it writes nothing. The time of each step
+as `done`. `POST .../{job_id}/read-now` answers `{queued}`: it asks the page-1 pass to read the
+documents the job waits for at full speed (see below); 404 for a job that is gone. A job reads
+the index and the cache only; it writes nothing. The time of each step
 of a test (listing, fetching text, folding, loading layouts, word checks, picture decoding,
 matching) is written to `dam.log` at INFO, as numbers only, once per test.
 
@@ -830,7 +832,11 @@ scans_left / scans_per_min`. `PUT /api/settings/page1-speed {reads_per_minute}` 
 first (400 outside 1 to 6000). A read is "slow" and followed by the indexer's pause when it
 needs OCR, fails to fetch the file or takes more than 3 seconds (a cloud-only file that had
 to be downloaded; dam does not detect a cloud-only file beforehand, the indexer does not
-either); a quick local text-layer read is followed by the shorter pause. `blocked` counts the documents whose page 1 cannot be read now (no OCR
+either); a quick local text-layer read is followed by the shorter pause. "Read now" (the
+test's button, `ContentIndexer.read_now`) adds the documents to the files the pass reads
+next (after the inbox) and, until they are read, cannot be read now (timed out, no OCR
+engine, missing) or 30 minutes have passed, the pause after every step is 50 ms; reads stay
+one at a time and each keeps its time limit. `blocked` counts the documents whose page 1 cannot be read now (no OCR
 engine, missing, took too long, no picture can be made, or waiting to be tried again) and
 `rate_per_min` is the reads finished per minute over the last ten minutes (null when there
 were fewer than three). `GET /api/status` has the same `page1`.

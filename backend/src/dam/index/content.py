@@ -37,6 +37,8 @@ LAYOUT_MISSING = "missing"
 LAYOUT_TIMEOUT = "page 1 took too long to read"
 PICTURE_PAGE_ROWS = 200  # files whose picture is checked per idle pass (backfill)
 LAYOUT_NO_PICTURE = "no picture of page 1 can be made"
+BURST_S = 1800.0  # "read now" gives up after this long
+BURST_PAUSE_S = 0.05  # the pause between reads while documents are read now
 CLOUD_SLOW_S = 3.0  # a page-1 read that took this long counts as slow (a download, a big scan)
 MAX_REASON = 500  # characters of an error reason kept in the index
 
@@ -135,6 +137,10 @@ class ContentIndexer:
         self._no_picture: dict[str, str] = {}  # drive_id -> sha256
         self._picture_cursor = 0  # where the next backfill page of picture checks starts
         self._wanted: set[str] = set()  # asked for by a replay, read next
+        # asked for by the user to be read now: read at full speed (one at a time, with
+        # the usual time limit) until none is left, or for at most ``BURST_S``
+        self._burst: set[str] = set()
+        self._burst_until = 0.0
         self._layout_busy = False
         # the barcode pass runs one read at a time; a hung read pauses it until it
         # returns on its own
@@ -364,6 +370,30 @@ class ContentIndexer:
         once read. Cheap and safe to call from any thread."""
         with self._lock:
             self._wanted.update(drive_ids)
+
+    def read_now(self, drive_ids: Collection[str]) -> int:
+        """Read page 1 of these files next, one at a time and without the pause between
+        reads (each read still has its time limit), until they are all read or cannot be
+        read now. Returns how many were queued. Cheap and safe to call from any thread."""
+        ids = set(drive_ids)
+        with self._lock:
+            self._wanted.update(ids)
+            self._burst.update(ids)
+            self._burst_until = time.monotonic() + BURST_S
+        return len(ids)
+
+    def reading_now(self) -> int:
+        """How many files asked for with ``read_now`` are still waiting to be read."""
+        with self._lock:
+            return len(self._burst_pending())
+
+    def _burst_pending(self) -> set[str]:
+        """The ``read_now`` files not read yet and not put off (call with the lock held)."""
+        if time.monotonic() > self._burst_until:
+            self._burst.clear()
+        self._burst &= self._wanted
+        self._burst -= set(self._layout_retry) | set(self._no_picture)
+        return self._burst
 
     def layout_blocked(self, drive_id: str) -> str | None:
         """Why page 1 of this file cannot be read right now (``LAYOUT_NO_OCR``,
@@ -658,6 +688,9 @@ class ContentIndexer:
         after content, barcode and slow page-1 reads (a scan, a slow download), the faster
         page-1 pace after a quick text-layer read. Never slower than the indexer's pace."""
         slow = 60 / self.reads_per_minute
+        with self._lock:
+            if self._burst_pending():
+                return min(slow, BURST_PAUSE_S)
         if self._last_slow or self.page1_fast_per_minute is None:
             return slow
         try:
