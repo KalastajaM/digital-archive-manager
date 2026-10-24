@@ -125,6 +125,39 @@ class AISettings(BaseModel):
     max_tokens: dict[str, int] = Field(default_factory=_default_max_tokens)
 
 
+class Person(BaseModel):
+    """Someone documents are for: ``name`` is what ``{person}`` becomes in a folder or a
+    name, ``match`` the names that identify them in the address area of page 1."""
+
+    name: str
+    match: list[str] = Field(min_length=1)
+
+    @field_validator("name")
+    @classmethod
+    def _folder_name(cls, value: str) -> str:
+        from dam.core.foldernames import FolderNameError, check_folder_name
+
+        try:
+            return check_folder_name(value)
+        except FolderNameError as e:
+            raise ValueError(str(e)) from e
+
+    @field_validator("match")
+    @classmethod
+    def _no_blank(cls, value: list[str]) -> list[str]:
+        if any(not m.strip() for m in value):
+            raise ValueError("match entries must not be blank")
+        return [m.strip() for m in value]
+
+
+# Where the addressee sits on page 1 of a Finnish business letter (SFS 2487, window
+# envelope), as fractions of an A4 page (210 x 297 mm), origin top left: about 20 mm from
+# the left edge, 90 mm wide, from roughly 40 to 80 mm from the top. This is an
+# approximation from memory of the standard, to be checked against real letters; lines
+# are matched with a 3 % margin around the field, which absorbs most of the difference.
+DEFAULT_ADDRESS_ZONE = (0.095, 0.135, 0.524, 0.27)  # 20-110 mm across, 40-80 mm down
+
+
 class Settings(BaseModel):
     # unset until first-run setup (``dam init`` or the app's first-run screen) writes it
     archive_root: Path | None = None
@@ -137,8 +170,29 @@ class Settings(BaseModel):
     ops_throttle_ms: int = 250
     server_port: int = 8765
     ocr_languages: list[str] = Field(default_factory=lambda: ["en-US"])
+    # the people documents are for, and where on page 1 their address is (``dam.rules.people``)
+    people: list[Person] = Field(default_factory=list)
+    address_zone: tuple[float, float, float, float] = DEFAULT_ADDRESS_ZONE
     reminders: RemindersSettings = Field(default_factory=RemindersSettings)
     ai: AISettings = Field(default_factory=AISettings)
+
+    @field_validator("address_zone")
+    @classmethod
+    def _a_real_box(cls, box: tuple[float, float, float, float]):
+        x0, y0, x1, y1 = box
+        if not all(0 <= v <= 1 for v in box) or not (x0 < x1 and y0 < y1):
+            raise ValueError(
+                "address_zone must be x0, y0, x1, y1 between 0 and 1 with x0 < x1 and y0 < y1"
+            )
+        return box
+
+    @field_validator("people")
+    @classmethod
+    def _distinct_names(cls, people: list[Person]) -> list[Person]:
+        names = [p.name.casefold() for p in people]
+        if len(set(names)) != len(names):
+            raise ValueError("each person needs a different name")
+        return people
 
     @field_validator("archive_root", mode="before")
     @classmethod

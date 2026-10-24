@@ -7,13 +7,13 @@ document, which rules match and which of them wins each field.
 
 import re
 import time
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
 from sqlalchemy import Engine, select, text
 
-from dam.config import SpecialFolders
+from dam.config import Person, SpecialFolders
 from dam.core.naming import _DATE_PREFIX, parse_doc_date
 from dam.core.paths import nfc
 from dam.db.tables import file_text, files
@@ -27,10 +27,15 @@ from dam.rules.engine import (
     _render_folder,
     _render_name,
     check,
+    person_for,
+    rule_needs_person,
     stem_and_ext,
     suggest,
+    template_uses_person,
+    zone_matches,
 )
 from dam.rules.model import Rule, fold
+from dam.rules.people import PeopleContext
 
 
 @dataclass
@@ -41,6 +46,7 @@ class ReplayHit:
 
 
 NOT_READ = "page 1 not read yet"
+PERSON_UNKNOWN = "person unknown"
 
 
 @dataclass
@@ -119,17 +125,19 @@ def _replay_stem(rec: FileRecord) -> str:
     return stem or "document"
 
 
-def _rule_path(rule: Rule, rec: FileRecord, special: SpecialFolders) -> str:
+def _rule_path(
+    rule: Rule, rec: FileRecord, special: SpecialFolders, person: str | None = None
+) -> str:
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
     doc_date = parse_doc_date(name) or rec.doc_date
     stem = _replay_stem(rec)
     if rule.then.folder is not None:
-        folder = _render_folder(rule.then.folder, doc_date, stem, special)
+        folder = _render_folder(rule.then.folder, doc_date, stem, special, person)
     else:
         folder = _parent(rec.path)
     if rule.then.name is not None:
-        new = _render_name(rule.then.name, doc_date, stem, ext) + (f".{ext}" if ext else "")
+        new = _render_name(rule.then.name, doc_date, stem, ext, person) + (f".{ext}" if ext else "")
     else:
         new = name
     return f"{folder}/{new}" if folder else new
@@ -146,6 +154,9 @@ def replay(
     layouts_for: Callable[[Collection[str]], dict[str, Page1Layout]] | None = None,
     want_layouts: Callable[[Collection[str]], None] | None = None,
     layout_blocked: Callable[[str], str | None] | None = None,
+    people: Sequence[Person] = (),
+    address_zone: Sequence[float] = (0.0, 0.0, 1.0, 1.0),
+    assigned_persons: Callable[[], dict[str, str]] | None = None,
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
@@ -157,7 +168,12 @@ def replay(
     (``zone_candidates``, one FTS query). Those among them without a page-1 layout are
     handed to ``want_layouts`` and listed in ``not_checked`` with the reason
     (``layout_blocked`` says why a read cannot happen now); they are never counted as
-    non-matches."""
+    non-matches.
+
+    ``{person}`` and ``when.person`` use the document's person: its assignment
+    (``assigned_persons``: drive id -> person) if there is one, else the one found in the
+    address area of page 1. A document whose person is unknown is not checked
+    ("person unknown"), not a mismatch."""
     started = time.monotonic()
     free = _without_folder(rule)
     earlier: list[Rule] = []
@@ -184,7 +200,17 @@ def replay(
     result = ReplayResult(0, 0, [], 0, [], 0, 0, False)
     candidates = zone_candidates(engine, rule) if rule.when.zone is not None else None
     layouts: dict[str, Page1Layout] = {}
-    needs_layouts = rule.when.zone is not None or any(r.when.zone is not None for r in earlier)
+    needs_person = rule_needs_person(rule)
+    needs_layouts = (
+        rule.when.zone is not None
+        or needs_person
+        or any(r.when.zone is not None or rule_needs_person(r) for r in earlier)
+    )
+    assigned = assigned_persons() if assigned_persons is not None and needs_layouts else {}
+
+    def context(drive_id: str) -> PeopleContext:
+        return PeopleContext(people, tuple(address_zone), assigned.get(drive_id))
+
     if candidates is not None and layouts_for is not None:
         layouts = layouts_for(candidates)
     unread: list[str] = []  # candidates (filed or in the inbox) to hand to the layout pass
@@ -197,6 +223,16 @@ def replay(
 
     def skipped(path: str) -> bool:
         return any(is_under(path, base) for base in others)
+
+    def unreadable(drive_id: str) -> str:
+        """Why page 1 of this document is not there: waiting for the layout pass, or
+        something stops it."""
+        return (layout_blocked(drive_id) if layout_blocked else None) or NOT_READ
+
+    def not_checked(drive_id: str, path: str, reason: str) -> None:
+        result.not_checked.append(NotChecked(path, reason))
+        if reason == NOT_READ:
+            unread.append(drive_id)
 
     with engine.connect() as conn:
         # paths only, to say how many filed files there are even when the budget runs out
@@ -227,26 +263,39 @@ def replay(
             if is_under(row.path, special.inbox):
                 code = inbox_code_of(row.path) if inbox_code_of is not None else None
                 alias = special.inbox if code is not None else None
-                c = check(rule, rec, folded, alias, layout)
+                c = check(rule, rec, folded, alias, layout, context(row.drive_id))
                 if c.matched:
                     result.inbox += 1
                 elif c.waiting:
                     unread.append(row.drive_id)
                 continue
-            c = check(free, rec, folded, None, layout)
+            ctx = context(row.drive_id)
+            c = check(free, rec, folded, None, layout, ctx)
+
             if c.waiting:
                 # every other condition holds: only page 1 is missing. Not a non-match.
-                reason = (layout_blocked(row.drive_id) if layout_blocked else None) or NOT_READ
-                result.not_checked.append(NotChecked(row.path, reason))
-                if reason == NOT_READ:
-                    unread.append(row.drive_id)
+                not_checked(row.drive_id, row.path, unreadable(row.drive_id))
                 continue
-            result.checked += 1
+            if c.person_unknown:
+                not_checked(row.drive_id, row.path, PERSON_UNKNOWN)
+                continue
             if not c.matched:
+                result.checked += 1
                 continue
+            person = None
+            if template_uses_person(rule.then.folder) or template_uses_person(rule.then.name):
+                person = person_for(ctx, layout, rule).name
+                if person is None:
+                    supported = (row.ext or "").lower() in BARCODE_EXTS
+                    if layout is None and supported and not ctx.assigned:
+                        not_checked(row.drive_id, row.path, unreadable(row.drive_id))
+                    else:
+                        not_checked(row.drive_id, row.path, PERSON_UNKNOWN)
+                    continue
+            result.checked += 1
             result.matched += 1
             try:
-                path_rule = _rule_path(rule, rec, special)
+                path_rule = _rule_path(rule, rec, special, person)
             except TemplateError:
                 path_rule = ""
             if path_rule and nfc(path_rule).casefold() == nfc(row.path).casefold():
@@ -254,7 +303,7 @@ def replay(
             else:
                 result.different.append(ReplayHit(row.drive_id, row.path, path_rule))
             for r in earlier:
-                if _matches(r, rec, folded, None, layout)[0]:
+                if _matches(r, rec, folded, None, layout, ctx)[0]:
                     result.shadowed.append((row.drive_id, r.id))
                     break
     if candidates is not None:
@@ -274,9 +323,10 @@ def _why(
     inbox_alias: str | None,
     special,
     layout: Page1Layout | None = None,
+    people: PeopleContext | None = None,
 ) -> str:
     when = rule.when
-    c = check(rule, rec, folded_text, inbox_alias, layout)
+    c = check(rule, rec, folded_text, inbox_alias, layout, people)
     if c.matched:
         parts = [
             f"word ‘{raw}’"
@@ -307,6 +357,8 @@ def _why(
         return "file name check took too long"
     if c.waiting:
         return "page 1 has not been read yet"
+    if c.person_unknown:
+        return "the document has no single person (address area)"
     if when.folder_is is not None:
         # the folder test is first in _matches: failing it, nothing else was looked at
         here = {nfc(_parent(rec.path)).casefold()}
@@ -327,8 +379,10 @@ def _why(
         and not rule._regex.search(nfc(rec.name or ""))
     ):
         return "file name does not match"
-    if when.zone is not None:
+    if when.zone is not None and (layout is None or not zone_matches(rule, layout)):
         return "no word found in the area"
+    if when.person is not None:
+        return f"the document is not for {when.person}"
     return "file name does not match"
 
 
@@ -339,16 +393,17 @@ def explain(
     special: SpecialFolders,
     inbox_alias: str | None,
     layout: Page1Layout | None = None,
+    people: PeopleContext | None = None,
 ) -> list[RuleExplain]:
     """For each rule: does it match this document, why (not), and which fields it wins.
     For a rule with a zone, the page-1 lines in the zone (so a missed match can be
     explained)."""
     folded = fold(text)
-    s = suggest(rec, text, rules, special, inbox_alias, layout=layout)
+    s = suggest(rec, text, rules, special, inbox_alias, layout=layout, people=people)
     out: list[RuleExplain] = []
     for rule in rules:
         mine = f"rule:{rule.id}"
-        matched = _matches(rule, rec, folded, inbox_alias, layout)[0]
+        matched = _matches(rule, rec, folded, inbox_alias, layout, people)[0]
         wins = [
             label
             for label, source in (
@@ -370,7 +425,7 @@ def explain(
             RuleExplain(
                 rule.id,
                 matched,
-                _why(rule, rec, folded, inbox_alias, special, layout),
+                _why(rule, rec, folded, inbox_alias, special, layout, people),
                 wins,
                 zone_lines,
             )

@@ -65,6 +65,9 @@ class When(BaseModel):
     filename_matches: str | None = None
     folder_is: str | None = None
     zone: Zone | None = None
+    # the document is for this person (the owner's assignment, else the one found in the
+    # address area of page 1), compared like rule words
+    person: str | None = None
 
     @field_validator("text_contains")
     @classmethod
@@ -72,6 +75,13 @@ class When(BaseModel):
         if any(not t.strip() for t in terms):
             raise ValueError("text_contains entries must not be blank")
         return terms
+
+    @field_validator("person")
+    @classmethod
+    def _no_blank_person(cls, person: str | None) -> str | None:
+        if person is not None and not person.strip():
+            raise ValueError("person must not be blank")
+        return person
 
     @field_validator("filename_matches")
     @classmethod
@@ -107,10 +117,22 @@ class Rule(BaseModel):
     id: str = Field(min_length=1)
     when: When = Field(default_factory=When)
     then: Then = Field(default_factory=Then)
+    # when this rule matched, people are looked for in this area of page 1 instead of in
+    # the archive's address zone (x0, y0, x1, y1), for this rule's folder and name only
+    person_zone: tuple[float, float, float, float] | None = None
 
     _folded_terms: list[str] = PrivateAttr(default_factory=list)
     _folded_zone_terms: list[str] = PrivateAttr(default_factory=list)
     _regex: "regex.Pattern[str] | None" = PrivateAttr(default=None)
+
+    @field_validator("person_zone")
+    @classmethod
+    def _a_real_person_zone(cls, box):
+        if box is not None:
+            x0, y0, x1, y1 = box
+            if not all(0 <= v <= 1 for v in box) or not (x0 < x1 and y0 < y1):
+                raise ValueError("person_zone must be x0, y0, x1, y1 between 0 and 1")
+        return box
 
     @field_validator("when", "then", mode="before")
     @classmethod

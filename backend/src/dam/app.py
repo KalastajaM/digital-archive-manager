@@ -18,7 +18,7 @@ from dam.collections.ongoing import PUBLISHER_ID as ONGOING
 from dam.collections.ongoing import OngoingPublisher
 from dam.collections.publishers import PublisherRegistry
 from dam.collections.service import CollectionService
-from dam.config import DEFAULTS_DIR, AppPaths, Settings, load_settings
+from dam.config import DEFAULTS_DIR, AppPaths, Person, Settings, load_settings
 from dam.core.paths import ArchivePaths
 from dam.db.engine import make_engine, migrate
 from dam.db.tables import files
@@ -147,6 +147,8 @@ class App:
             rules_dir=lambda: self.rules_dir,
             data_dir=self.app_paths.data_dir,
             want_layouts=lambda ids: self.content.want_layouts(ids),
+            people=lambda: self.settings.people,
+            address_zone=lambda: self.settings.address_zone,
         )
         self.layout = LayoutService(
             self.paths,
@@ -363,6 +365,27 @@ class App:
         self.settings.page1_backfill = enabled
         if enabled:
             self.wake_indexer()
+
+    def set_people(
+        self, people: list[Person], address_zone: tuple[float, float, float, float] | None
+    ) -> None:
+        """Save the people list (and, when given, the address zone of page 1) to
+        settings.yaml and use them from now on. ``InvalidRequest`` when the file could not
+        be written (it is left as it was)."""
+        updates: dict[str, object] = {"people": [p.model_dump() for p in people]}
+        if address_zone is not None:
+            updates["address_zone"] = list(address_zone)
+
+        def read_back(s: Settings) -> bool:
+            return s.people == people and (address_zone is None or s.address_zone == address_zone)
+
+        try:
+            write_keys(self.app_paths, updates, read_back)
+        except OSError as e:
+            raise InvalidRequest(f"the people could not be saved: {e}") from e
+        self.settings.people = people
+        if address_zone is not None:
+            self.settings.address_zone = address_zone
 
     def save_codes(self, codes: list[FilingCode]) -> list[CodeProblem]:
         """Replace the code table with ``codes`` and reload. Raises ``InvalidRequest``

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import PurePosixPath
 
+from dam.core.paths import nfc
 from dam.rules.engine import check_template, clean_stem
 from dam.rules.model import RESERVED_IDS
 from dam.rules.similar import _tokens
@@ -52,10 +53,20 @@ def _literal(s: str) -> str:
     return s.replace("{", "{{").replace("}", "}}")
 
 
-def folder_pattern(folder: str, doc_date: date | None) -> str:
+def folder_pattern(folder: str, doc_date: date | None, person: str | None = None) -> str:
+    """``folder`` as a template: a part that is the year becomes ``{year}``, a part that is
+    the document's person becomes ``{person}``."""
     year = str(doc_date.year) if doc_date else None
-    parts = ["{year}" if year and p == year else _literal(p) for p in folder.split("/")]
-    return "/".join(parts)
+    who = nfc(person).casefold() if person else None
+
+    def part(p: str) -> str:
+        if year and p == year:
+            return "{year}"
+        if who and nfc(p).casefold() == who:
+            return "{person}"
+        return _literal(p)
+
+    return "/".join(part(p) for p in folder.split("/"))
 
 
 def name_pattern(filed_stem: str, original_stem: str, doc_date: date | None) -> str:
@@ -96,15 +107,17 @@ def draft_rule(
     payee: str | None,
     doc_frequency: Callable[[str], float],
     taken_ids: set[str],
+    person: str | None = None,
 ) -> RuleDraft | None:
     """The rule a click on "make a rule" starts from, or None when no usable word is left.
     Without ``filed_folder`` / ``filed_name`` (a document still in the inbox) the draft has
-    no folder / name."""
+    no folder / name. ``person``: the document's person, proposed as ``{person}`` where
+    the folder path has a part with that name."""
     words = [w for w in _tokens("", text) if doc_frequency(w) <= MAX_FREQUENCY][:MAX_WORDS]
     if not words:
         return None
     pick = min(range(len(words)), key=lambda i: (doc_frequency(words[i]), i))
-    folder = folder_pattern(filed_folder, doc_date) if filed_folder else None
+    folder = folder_pattern(filed_folder, doc_date, person) if filed_folder else None
     name = (
         name_pattern(PurePosixPath(filed_name).stem, PurePosixPath(original_name).stem, doc_date)
         if filed_name

@@ -45,6 +45,7 @@ def test_list_has_stats_file_and_state(app, api):
         "filename_matches": None,
         "folder_is": None,
         "zone": None,
+        "person": None,
     }
     assert r["then"]["tags"] == ["bill"]
     assert r["stats"] == {"suggested": 0, "changed": 0, "last_used": None, "flagged": False}

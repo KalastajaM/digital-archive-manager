@@ -385,6 +385,12 @@ class SuggestionOut(BaseModel):
     # a rule with a page-1 area could not be checked: page 1 is being read ("Reading
     # page 1...")
     waiting_for_page1: bool = False
+    # who the document is for: "assigned" (the owner said so), "address area" (page 1) or
+    # "rule:<id>" (that rule's own address area); people_found: everyone the address area
+    # names (two or more: no person, ask)
+    person: str | None = None
+    person_source: str | None = None
+    people_found: list[str] = []
 
 
 class FileSuggestionsOut(BaseModel):
@@ -1423,6 +1429,7 @@ class RuleWhenIn(_In):
     filename_matches: str | None = None
     folder_is: str | None = None
     zone: ZoneIn | None = None
+    person: str | None = None
 
 
 class RuleThenIn(_In):
@@ -1437,6 +1444,7 @@ class RuleIn(_In):
     id: str
     when: RuleWhenIn = Field(default_factory=RuleWhenIn)
     then: RuleThenIn = Field(default_factory=RuleThenIn)
+    person_zone: list[float] | None = Field(default=None, min_length=4, max_length=4)
 
 
 class RuleReplayIn(_In):
@@ -1471,6 +1479,7 @@ class RuleWhenOut(BaseModel):
     filename_matches: str | None
     folder_is: str | None
     zone: ZoneOut | None
+    person: str | None
 
 
 class RuleThenOut(BaseModel):
@@ -1494,6 +1503,7 @@ class RuleOut(BaseModel):
     learned: bool
     when: RuleWhenOut
     then: RuleThenOut
+    person_zone: list[float] | None
     stats: RuleStatsOut
 
 
@@ -1598,3 +1608,22 @@ class Page1BackfillIn(_In):
 
 class Page1BackfillOut(BaseModel):
     enabled: bool
+
+
+class PersonIO(_In):
+    name: str
+    match: list[str]
+
+
+class PeopleIn(_In):
+    """The people list; ``address_zone`` (x0, y0, x1, y1 of page 1) is left as it is when
+    omitted."""
+
+    people: list[PersonIO]
+    address_zone: list[float] | None = Field(default=None, min_length=4, max_length=4)
+
+
+class PeopleOut(BaseModel):
+    people: list[PersonIO]
+    address_zone: list[float]
+    default_address_zone: list[float]

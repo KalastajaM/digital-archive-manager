@@ -2,7 +2,7 @@
 put them in a tray, in collections and give them a note."""
 
 import logging
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -14,7 +14,7 @@ from dam.bills.barcode import parse as parse_barcode
 from dam.codes.apply import apply_codes, apply_ticks, codes_for, known_reads
 from dam.codes.model import FilingCode
 from dam.collections.service import CollectionService, check_collection_name
-from dam.config import SpecialFolders
+from dam.config import DEFAULT_ADDRESS_ZONE, Person, SpecialFolders
 from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchivePaths
 from dam.extract.layout import check_box, lines_in_zone
@@ -24,11 +24,12 @@ from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
 from dam.rules.draft import ZoneDraft, draft_rule
-from dam.rules.engine import Suggestion, _parent, stem_and_ext, suggest
+from dam.rules.engine import Suggestion, _parent, person_for, stem_and_ext, suggest
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
 from dam.rules.model import RESERVED_IDS, Rule
 from dam.rules.offer import RuleOffer, make_doc_frequency, offer_target, outcomes
+from dam.rules.people import PeopleContext
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
 from dam.rules.similar import similar_folder
 from dam.rules.state import load_state
@@ -169,6 +170,9 @@ class InboxService:
         rules_dir: Callable[[], Path] | None = None,
         data_dir: Path | None = None,
         want_layouts: Callable[[Collection[str]], None] | None = None,
+        people: Callable[[], Sequence[Person]] = list,
+        address_zone: Callable[[], Sequence[float]] = lambda: DEFAULT_ADDRESS_ZONE,
+        assigned_person: Callable[[str], str | None] = lambda drive_id: None,
     ) -> None:
         self.paths = paths
         self.repo = repo
@@ -186,6 +190,16 @@ class InboxService:
         self._data_dir = data_dir
         # asks the layout pass to read page 1 of these files next (a rule needs it)
         self._want_layouts = want_layouts
+        # who documents are for: the people list, the address zone of page 1, and the
+        # person the owner assigned to a document
+        self._people = people
+        self._address_zone = address_zone
+        self._assigned_person = assigned_person
+
+    def people_context(self, drive_id: str) -> PeopleContext:
+        return PeopleContext(
+            self._people(), tuple(self._address_zone()), self._assigned_person(drive_id)
+        )
 
     def list(self) -> list[InboxEntry]:
         """Files directly in the inbox or in a filing code's inbox folder (no folders,
@@ -391,6 +405,7 @@ class InboxService:
             payee=req.tray_fields.get("payee") if isinstance(req.tray_fields, dict) else None,
             doc_frequency=frequency,
             taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
+            person=found.person,
         )
         if draft is None:
             return None
@@ -433,6 +448,7 @@ class InboxService:
             payee=None,
             doc_frequency=make_doc_frequency(*self._frequency_counter()),
             taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
+            person=person_for(self.people_context(drive_id), layout).name,
         )
         if draft is None:
             raise InvalidRequest("There is no usable word in that area of page 1.")
@@ -581,7 +597,15 @@ class InboxService:
         # a file in a code's inbox folder counts as in the inbox for ``folder_is``
         alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
         layout = self.repo.layout_for(rec.drive_id)
-        found = suggest(rec, text, self._rules(), self.special, inbox_alias=alias, layout=layout)
+        found = suggest(
+            rec,
+            text,
+            self._rules(),
+            self.special,
+            inbox_alias=alias,
+            layout=layout,
+            people=self.people_context(rec.drive_id),
+        )
         if found.waiting_for_page1 and self._want_layouts is not None:
             self._want_layouts([rec.drive_id])
         if found.folder is None and self._in_inbox(rec):

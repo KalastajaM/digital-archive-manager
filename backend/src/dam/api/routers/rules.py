@@ -53,6 +53,7 @@ def _out(app: App) -> dict:
                 "learned": name == LEARNED_FILE,
                 "when": r.when.model_dump(),
                 "then": r.then.model_dump(),
+                "person_zone": list(r.person_zone) if r.person_zone else None,
                 "stats": asdict(stats.get(r.id, _NO_STATS)),
             }
         )
@@ -104,6 +105,8 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
         layouts_for=app.repo.layouts_for,
         want_layouts=app.content.want_layouts,
         layout_blocked=app.content.layout_blocked,
+        people=app.settings.people,
+        address_zone=app.settings.address_zone,
     )
     if result.reading:
         app.wake_indexer()  # the layout pass reads what the rule needs next
@@ -125,10 +128,9 @@ def explain_document(app: AppDep, body: RuleExplainIn) -> list:
     """For one document: which rules match, why (not), and what each one wins."""
     rec, text, alias = app.inbox.rule_context(body.drive_id)
     layout = app.repo.layout_for(rec.drive_id)
-    return [
-        asdict(x)
-        for x in explain(rec, text, app.rules, app.settings.special_folders, alias, layout)
-    ]
+    people = app.inbox.people_context(rec.drive_id)
+    found = explain(rec, text, app.rules, app.settings.special_folders, alias, layout, people)
+    return [asdict(x) for x in found]
 
 
 @router.put("/state", response_model=RulesStateOut)
