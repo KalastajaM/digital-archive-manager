@@ -4,6 +4,7 @@ page-1 picture is in the cache."""
 
 import base64
 import re
+import threading
 from collections.abc import Callable, Collection
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from dam.services.errors import InvalidRequest, NotFound
 
 _NOT_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 MAX_PER_RULE = 99
+# a smaller crop would be under 4 px at matching size and always score 0
+MIN_SIDE = 0.01
 
 
 def file_stem(rule_id: str) -> str:
@@ -39,6 +42,7 @@ class AreaPictures:
         self.cache_dir = cache_dir
         self.rules_dir = rules_dir
         self._want = want_layouts
+        self._save_lock = threading.Lock()  # picking a free name and writing it are one step
 
     def crop(self, drive_id: str, box: list[float]) -> Image.Image:
         """The part of the document's page-1 picture inside ``box``. ``NotFound`` for an
@@ -47,6 +51,10 @@ class AreaPictures:
             area: Box = check_box(box)
         except ValueError as e:
             raise InvalidRequest(str(e)) from e
+        if area[2] - area[0] < MIN_SIDE or area[3] - area[1] < MIN_SIDE:
+            raise InvalidRequest(
+                "That picture area is too small: draw it at least 1% of the page wide and high."
+            )
         rec = self.repo.get(drive_id)
         if rec is None or rec.missing or rec.parked_at is not None:
             raise NotFound(drive_id)
@@ -75,30 +83,33 @@ class AreaPictures:
         """Keep ``crop`` as ``areas/<rule-id>-<n>.png`` (the first free number, so no
         picture a rule uses is overwritten) with the same safe write as the rule files.
         Returns the path a zone's ``image`` names."""
-        folder = Path(self.rules_dir()) / AREAS_DIR
         stem = file_stem(rule_id)
-        for n in range(1, MAX_PER_RULE + 1):
-            name = f"{stem}-{n}.png"
-            if not (folder / name).exists():
-                break
-        else:
-            raise InvalidRequest("That rule has too many picture files; remove some first.")
-        image = f"{AREAS_DIR}/{name}"
-        try:
-            path = crop_file(self.rules_dir(), image)
-        except PictureError as e:
-            raise InvalidRequest(str(e)) from e
         data = png_bytes(crop)
+        # the lock covers picking the name and writing the file: two saves at once would
+        # otherwise pick the same free name and the second would overwrite the first
+        with self._save_lock:
+            folder = Path(self.rules_dir()) / AREAS_DIR
+            for n in range(1, MAX_PER_RULE + 1):
+                name = f"{stem}-{n}.png"
+                if not (folder / name).exists():
+                    break
+            else:
+                raise InvalidRequest("That rule has too many picture files; remove some first.")
+            image = f"{AREAS_DIR}/{name}"
+            try:
+                path = crop_file(self.rules_dir(), image)
+            except PictureError as e:
+                raise InvalidRequest(str(e)) from e
 
-        def verify() -> bool:
-            with Image.open(path) as back:
-                back.load()
-                return back.size == crop.size and path.read_bytes() == data
+            def verify() -> bool:
+                with Image.open(path) as back:
+                    back.load()
+                    return back.size == crop.size and path.read_bytes() == data
 
-        try:
-            write_config_bytes(path, data, verify)
-        except OSError as e:
-            raise InvalidRequest(f"The picture could not be saved: {e}") from e
+            try:
+                write_config_bytes(path, data, verify)
+            except OSError as e:
+                raise InvalidRequest(f"The picture could not be saved: {e}") from e
         return image
 
     def file(self, name: str) -> Path:
