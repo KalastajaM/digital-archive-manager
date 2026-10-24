@@ -19,7 +19,9 @@ All notable changes are listed here. The format follows
   it on. Settings lists picture files that no rule uses any more, and **Move N unused
   pictures to To Delete** puts them in `##. To Delete` as `dam rule picture <name>.png`,
   after a preview, with Undo (it puts them back, and refuses if the name is taken again).
-  Only pictures no rule uses can be moved, and dam never deletes them. A picture area must
+  Only pictures no rule uses can be moved, and dam never deletes them. The small page 1
+  pictures in the cache folder are dam's own temporary files: once after the first scan at
+  startup dam removes the ones that no indexed file matches any more. A picture area must
   be at least 1% of the page wide and high; smaller ones are refused.
 - A rule can need several areas of page 1, such as "Pohjola in the letterhead" and
   "vakuutuskirja in the title", so each kind of letter from a sender files to its own

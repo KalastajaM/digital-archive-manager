@@ -34,6 +34,7 @@ from fastapi import FastAPI
 from dam import setup
 from dam.app import App
 from dam.config import AppPaths
+from dam.extract.picture import prune_page1_pictures
 from dam.index.watcher import Watcher
 from dam.profiles import Profile, ProfileStore, ServeLock
 from dam.reminders.notify import RemindResult, run_reminders
@@ -107,6 +108,17 @@ def _sync_ongoing(app: App) -> None:
         log.exception("ongoing sync failed (the next scan will retry)")
 
 
+def _prune_pictures(app: App) -> None:
+    """Remove the stale page-1 pictures from the cache, once after the first full scan;
+    errors are logged, never raised."""
+    try:
+        removed = prune_page1_pictures(app.app_paths.cache_dir, app.repo.content_keys())
+        if removed:
+            log.info("removed %d stale page-1 pictures from the cache", len(removed))
+    except Exception:
+        log.exception("pruning the page-1 picture cache failed (it is tried again at restart)")
+
+
 def _initial_scan(app: App, wake: threading.Event) -> None:
     synced = False
     try:
@@ -121,6 +133,7 @@ def _initial_scan(app: App, wake: threading.Event) -> None:
             wake.set()  # the indexer need not wait for the sync
             _sync_ongoing(app)
             synced = True
+            _prune_pictures(app)
     except Exception:
         log.exception("initial scan failed (the watcher's reconcile will retry)")
     finally:

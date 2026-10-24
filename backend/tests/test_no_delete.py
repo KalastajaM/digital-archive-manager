@@ -24,6 +24,8 @@ ALLOWED = Counter(
         # the same removal by path where dir_fd does not exist (Windows): empty folders only
         ("ops/primitives.py", "_remove_empty_dir_by_path", "os.rmdir"): 1,
         ("collections/export.py", "prune_exports", "shutil.rmtree"): 1,
+        # dam's own page-1 picture cache (cache/page1), stale files only; never the archive
+        ("extract/picture.py", "prune_page1_pictures", "Path.unlink"): 1,
         # Task 12: the reminder LaunchAgent plist, exact path only (outside the archive)
         ("reminders/launchd.py", "uninstall", "Path.unlink"): 1,
         ("ops/primitives.py", "rename_excl", "os.rename"): 1,
