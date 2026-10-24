@@ -30,9 +30,7 @@ def make_barcode_pdf(path: Path, widths: list[int], page: int = 1) -> Path:
     return path
 
 
-def make_words_pdf(
-    path: Path, words: list[tuple[float, float, str]], *, size: int = 12
-) -> Path:
+def make_words_pdf(path: Path, words: list[tuple[float, float, str]], *, size: int = 12) -> Path:
     """One-page PDF where every word is placed by its own ``Td`` / ``Tj`` and there are
     no space glyphs: PDFium has to generate the spaces between the words."""
     stream = b""

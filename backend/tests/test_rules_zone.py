@@ -108,11 +108,11 @@ def test_a_word_in_the_zone_matches_and_a_word_elsewhere_does_not():
 
 def test_matching_folds_case_and_diacritics_and_uses_the_margin():
     near = layout(("POHJOLA", (0.10, 0.155, 0.30, 0.175)))  # just under the box, in the margin
-    assert suggest(rec(), "x", [zone_rule()], layout=near).folder == "Insurance/Pohjola"
+    assert suggest(rec(), "pohjola", [zone_rule()], layout=near).folder == "Insurance/Pohjola"
     far = layout(("POHJOLA", (0.10, 0.30, 0.30, 0.32)))
-    assert suggest(rec(), "x", [zone_rule()], layout=far).folder is None
+    assert suggest(rec(), "pohjola", [zone_rule()], layout=far).folder is None
     accent = layout(("Pöhjölä", (0.1, 0.04, 0.3, 0.07)))
-    assert suggest(rec(), "x", [zone_rule("pohjola")], layout=accent).folder == "Insurance/Pohjola"
+    assert suggest(rec(), "pöhjölä", [zone_rule("pohjola")], layout=accent).folder == "Insurance/Pohjola"
 
 
 def test_no_layout_means_no_match_and_waiting():
@@ -125,9 +125,9 @@ def test_no_layout_means_no_match_and_waiting():
 
 def test_waiting_only_when_the_other_conditions_hold():
     elsewhere = rec("10. Home/a.pdf")  # folder_is is the inbox
-    assert suggest(elsewhere, "x", [zone_rule()]).waiting_for_page1 is False
+    assert suggest(elsewhere, "pohjola", [zone_rule()]).waiting_for_page1 is False
     docx = rec(f"{INBOX}/a.docx", ext="docx")  # no page 1 will ever be read
-    assert suggest(docx, "x", [zone_rule()]).waiting_for_page1 is False
+    assert suggest(docx, "pohjola", [zone_rule()]).waiting_for_page1 is False
     both = Rule.model_validate(
         {
             "id": "both",
@@ -138,7 +138,7 @@ def test_waiting_only_when_the_other_conditions_hold():
         }
     )
     assert suggest(rec(), "nothing", [both]).waiting_for_page1 is False
-    assert suggest(rec(), "fortum", [both]).waiting_for_page1 is True
+    assert suggest(rec(), "fortum a", [both]).waiting_for_page1 is True
 
 
 def test_all_conditions_still_have_to_match():
@@ -152,8 +152,8 @@ def test_all_conditions_still_have_to_match():
             "then": {"tags": ["t"]},
         }
     )
-    assert suggest(rec(), "fortum", [both], layout=LETTER).tags == ["t"]
-    assert suggest(rec(), "other", [both], layout=LETTER).tags == []
+    assert suggest(rec(), "fortum pohjola", [both], layout=LETTER).tags == ["t"]
+    assert suggest(rec(), "other pohjola", [both], layout=LETTER).tags == []
 
 
 # --- explain --------------------------------------------------------------------------
@@ -355,3 +355,50 @@ def test_replay_of_a_plain_rule_is_unchanged(app, fake_archive):
     rule = Rule.model_validate({"id": "p", "when": {"text_contains": ["pohjola"]}})
     r = replay(app.engine, rule, [rule], app.settings.special_folders)
     assert r.not_checked == [] and r.reading == 0 and r.matched == 3
+
+
+def test_replay_finds_a_zone_word_inside_a_longer_word(app, fake_archive):
+    inside = layout(("Henkivakuutus Oy", (0.08, 0.04, 0.30, 0.07)))
+    add(app, fake_archive, "10. Bank/a.pdf", "a", "Henkivakuutus Oy", inside)
+    rule = zone_rule("vakuutus")
+    r = replay(
+        app.engine, rule, [rule], app.settings.special_folders, layouts_for=app.repo.layouts_for
+    )
+    assert r.matched == 1 and r.not_checked == [] and r.checked == 1
+
+
+def test_a_document_without_the_zone_word_in_its_text_is_a_plain_non_match(app, fake_archive):
+    add(app, fake_archive, "10. Bank/a.pdf", "a", "nothing relevant")  # page 1 not read
+    rule = zone_rule()
+    assert suggest(rec(), "nothing relevant", [rule]).waiting_for_page1 is False
+    r = replay(
+        app.engine, rule, [rule], app.settings.special_folders, layouts_for=app.repo.layouts_for
+    )
+    assert (r.matched, r.checked, r.reading) == (0, 1, 0) and r.not_checked == []
+
+
+def test_replay_loads_layouts_in_chunks_not_per_row(app, fake_archive, monkeypatch):
+    from dam.rules import replay as replay_module
+
+    monkeypatch.setattr(replay_module, "LAYOUT_CHUNK", 2)
+    for i in range(5):
+        add(app, fake_archive, f"10. Bank/s{i}.pdf", f"s{i}", "pohjola", LETTER)
+    earlier = zone_rule()
+    later = Rule.model_validate(
+        {"id": "plain", "when": {"text_contains": ["pohjola"]}, "then": {"folder": "X"}}
+    )
+    calls = []
+
+    def counting(ids):
+        calls.append(list(ids))
+        return app.repo.layouts_for(ids)
+
+    r = replay(
+        app.engine,
+        later,
+        [earlier, later],
+        app.settings.special_folders,
+        layouts_for=counting,
+    )
+    assert r.matched == 5 and len(calls) <= 3  # ceil(5 / 2), not one per file
+    assert r.shadowed  # the earlier zone rule was evaluated with the layouts

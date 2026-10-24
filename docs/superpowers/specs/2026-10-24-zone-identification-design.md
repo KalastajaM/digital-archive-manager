@@ -172,13 +172,12 @@ The replay of `2026-10-23-learned-filing-rules-design.md` gains one step and one
 
 - **Exact candidates.** A line in a zone is part of page 1's text, and page 1's text is
   part of `file_text` (1, "When"). So every document a zone rule can match already
-  contains one of its words in its indexed text. One FTS query over `file_fts` with the
-  zone's words gives every possible match; documents outside it cannot match. As
-  built, the query is a prefix search per word (FTS tokens), while live matching is a
-  substring test: a zone word inside a longer word ("vakuutus" in "henkivakuutus")
-  matches live but is not a replay candidate. The replay can undercount for such words,
-  never overstate.
-- **Reading what is missing.** Candidates without a current layout row are put on the
+  contains one of its words in its indexed text. The rule check tests this first: if none
+  of the zone's folded words is a substring of the document's folded text, the rule does
+  not match and the document is not waiting for page 1. This is the same substring test
+  live matching uses, so it is exact, also for a word inside a longer one ("vakuutus" in
+  "henkivakuutus"). The replay goes through the same rows as for a plain rule.
+- **Reading what is missing.** Candidates (documents that pass that test) without a current layout row are put on the
   wanted list and read first by the layout pass (2). The replay sheet shows "Reading
   page 1 of 23 documents…" and updates as they come in; this is usually tens of
   documents, not the archive.

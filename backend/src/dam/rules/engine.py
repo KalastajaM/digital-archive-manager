@@ -211,6 +211,10 @@ def check(
         except TimeoutError:
             return Check(timed_out=True)
     if when.zone is not None:
+        # page 1's lines are part of the indexed text, so a zone word that is not in the
+        # document's text cannot be on page 1: no match, and nothing to wait for
+        if not any(t in folded_text for t in rule._folded_zone_terms):
+            return Check()
         if layout is None:
             return Check(waiting=(rec.ext or "").lower() in BARCODE_EXTS)
         if not zone_matches(rule, layout):

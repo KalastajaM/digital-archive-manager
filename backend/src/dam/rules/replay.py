@@ -5,13 +5,12 @@ compares the path it would give with the path the file has. ``explain`` says, fo
 document, which rules match and which of them wins each field.
 """
 
-import re
 import time
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, select
 
 from dam.config import Person, SpecialFolders
 from dam.core.naming import _DATE_PREFIX, parse_doc_date
@@ -86,30 +85,7 @@ class ReplayResult:
     marked: Marked | None = None  # only for a rule with a ``sender``
 
 
-MAX_CANDIDATES = 20000  # more words hits than this: no narrowing, every file is looked at
-
-
-def zone_candidates(engine: Engine, rule: Rule) -> set[str] | None:
-    """The drive ids whose indexed text can contain one of the zone's words: one FTS
-    query over the text column. A line in a zone is part of page 1's text, which is part of
-    the indexed text, so no other document can match. None: not narrowed (a word without
-    letters or digits cannot be searched, or there are too many hits)."""
-    zone = rule.when.zone
-    assert zone is not None
-    phrases = []
-    for term in zone.text_contains:
-        tokens = re.findall(r"\w+", term)
-        if not tokens:
-            return None
-        phrases.append('"' + " ".join(t.replace('"', '""') for t in tokens) + '"*')
-    match = "text : (" + " OR ".join(phrases) + ")"
-    with engine.connect() as conn:
-        found = conn.execute(
-            text("SELECT drive_id FROM file_fts WHERE file_fts MATCH :q LIMIT :n"),
-            {"q": match, "n": MAX_CANDIDATES + 1},
-        ).scalars()
-        ids = set(found)
-    return None if len(ids) > MAX_CANDIDATES else ids
+LAYOUT_CHUNK = 500  # rows whose layouts are loaded with one query
 
 
 @dataclass
@@ -236,11 +212,11 @@ def replay(
     its ``folder_is``, matches them as live filing would; ``inbox_code_of`` tells which
     files sit in a filing code's inbox folder (they count as in the inbox).
 
-    A rule with a ``zone`` is looked at in the documents whose text has one of its words
-    (``zone_candidates``, one FTS query). Those among them without a page-1 layout are
-    handed to ``want_layouts`` and listed in ``not_checked`` with the reason
-    (``layout_blocked`` says why a read cannot happen now); they are never counted as
-    non-matches.
+    A rule with a ``zone`` can only match a document whose text has one of its words
+    (``check`` tests that first). Of those, the ones without a page-1 layout are handed to
+    ``want_layouts`` and listed in ``not_checked`` with the reason (``layout_blocked``
+    says why a read cannot happen now); they are never counted as non-matches. Layouts
+    are loaded in chunks of ``LAYOUT_CHUNK`` rows, only for the rows that need one.
 
     ``{person}`` and ``when.person`` use the document's person: its assignment
     (``assigned_persons``: drive id -> person) if there is one, else the one found in the
@@ -270,7 +246,6 @@ def replay(
         files.c.doc_date,
     ]
     result = ReplayResult(0, 0, [], 0, [], 0, 0, False)
-    candidates = zone_candidates(engine, rule) if rule.when.zone is not None else None
     layouts: dict[str, Page1Layout] = {}
     needs_person = rule_needs_person(rule)
     needs_layouts = (
@@ -283,15 +258,29 @@ def replay(
     def context(drive_id: str) -> PeopleContext:
         return PeopleContext(people, tuple(address_zone), assigned.get(drive_id))
 
-    if candidates is not None and layouts_for is not None:
-        layouts = layouts_for(candidates)
     unread: list[str] = []  # candidates (filed or in the inbox) to hand to the layout pass
-    evaluated = 0
+    own_layouts = rule.when.zone is not None or needs_person
 
-    def layout_of(drive_id: str) -> Page1Layout | None:
-        if drive_id not in layouts and layouts_for is not None and needs_layouts:
-            layouts.update(layouts_for([drive_id]))
-        return layouts.get(drive_id)
+    def wants_layout(rec: FileRecord, folded: str, in_inbox: bool) -> bool:
+        """Whether this row's layout can change the outcome (the cheap conditions on
+        its text first)."""
+        if own_layouts:
+            return rule.when.zone is None or any(t in folded for t in rule._folded_zone_terms)
+        # only an earlier rule looks at it, and only for a file this rule matches
+        return not in_inbox and check(free, rec, folded, None, None, None).matched
+
+    def load_layouts(chunk: list) -> None:
+        if layouts_for is None or not needs_layouts:
+            return
+        ids = []
+        for row in chunk:
+            if skipped(row.path):
+                continue
+            rec = FileRecord(drive_id=row.drive_id, path=row.path, name=row.name, ext=row.ext)
+            if wants_layout(rec, fold(row.text or ""), is_under(row.path, special.inbox)):
+                ids.append(row.drive_id)
+        if ids:
+            layouts.update(layouts_for(ids))
 
     def skipped(path: str) -> bool:
         return any(is_under(path, base) for base in others)
@@ -313,75 +302,71 @@ def replay(
             if not skipped(path) and not is_under(path, special.inbox):
                 result.total += 1
         query = select(*cols, file_text.c.text).select_from(joined).where(*where)
-        if candidates is not None:
-            query = query.where(files.c.drive_id.in_(candidates))
-        rows = conn.execute(query.order_by(files.c.path))
-        for row in rows:
-            if skipped(row.path):
-                continue
-            if time.monotonic() - started >= budget_s:
-                result.truncated = True
-                break
-            evaluated += 1
-            folded = fold(row.text or "")
-            rec = FileRecord(
-                drive_id=row.drive_id,
-                path=row.path,
-                name=row.name,
-                ext=row.ext,
-                doc_date=row.doc_date,
-            )
-            layout = layout_of(row.drive_id) if needs_layouts else None
-            if is_under(row.path, special.inbox):
-                code = inbox_code_of(row.path) if inbox_code_of is not None else None
-                alias = special.inbox if code is not None else None
-                c = check(rule, rec, folded, alias, layout, context(row.drive_id))
-                if c.matched:
-                    result.inbox += 1
-                elif c.waiting:
-                    unread.append(row.drive_id)
-                continue
-            ctx = context(row.drive_id)
-            c = check(free, rec, folded, None, layout, ctx)
-
-            if c.waiting:
-                # every other condition holds: only page 1 is missing. Not a non-match.
-                not_checked(row.drive_id, row.path, unreadable(row.drive_id))
-                continue
-            if c.person_unknown:
-                not_checked(row.drive_id, row.path, PERSON_UNKNOWN)
-                continue
-            if not c.matched:
-                result.checked += 1
-                continue
-            person = None
-            if template_uses_person(rule.then.folder) or template_uses_person(rule.then.name):
-                person = person_for(ctx, layout, rule).name
-                if person is None:
-                    supported = (row.ext or "").lower() in BARCODE_EXTS
-                    if layout is None and supported and not ctx.assigned:
-                        not_checked(row.drive_id, row.path, unreadable(row.drive_id))
-                    else:
-                        not_checked(row.drive_id, row.path, PERSON_UNKNOWN)
+        for chunk in conn.execute(query.order_by(files.c.path)).partitions(LAYOUT_CHUNK):
+            load_layouts(chunk)
+            for row in chunk:
+                if skipped(row.path):
                     continue
-            result.checked += 1
-            result.matched += 1
-            try:
-                path_rule = _rule_path(rule, rec, special, person)
-            except TemplateError:
-                path_rule = ""
-            if path_rule and nfc(path_rule).casefold() == nfc(row.path).casefold():
-                result.same += 1
-            else:
-                result.different.append(ReplayHit(row.drive_id, row.path, path_rule))
-            for r in earlier:
-                if _matches(r, rec, folded, None, layout, ctx)[0]:
-                    result.shadowed.append((row.drive_id, r.id))
+                if time.monotonic() - started >= budget_s:
+                    result.truncated = True
                     break
-    if candidates is not None:
-        # a document without one of the zone's words in its text cannot match: checked
-        left = max(0, len(candidates) - evaluated) if result.truncated else 0
-        result.checked = max(0, result.total - left - len(result.not_checked))
+                folded = fold(row.text or "")
+                rec = FileRecord(
+                    drive_id=row.drive_id,
+                    path=row.path,
+                    name=row.name,
+                    ext=row.ext,
+                    doc_date=row.doc_date,
+                )
+                layout = layouts.get(row.drive_id) if needs_layouts else None
+                if is_under(row.path, special.inbox):
+                    code = inbox_code_of(row.path) if inbox_code_of is not None else None
+                    alias = special.inbox if code is not None else None
+                    c = check(rule, rec, folded, alias, layout, context(row.drive_id))
+                    if c.matched:
+                        result.inbox += 1
+                    elif c.waiting:
+                        unread.append(row.drive_id)
+                    continue
+                ctx = context(row.drive_id)
+                c = check(free, rec, folded, None, layout, ctx)
+
+                if c.waiting:
+                    # every other condition holds: only page 1 is missing. Not a non-match.
+                    not_checked(row.drive_id, row.path, unreadable(row.drive_id))
+                    continue
+                if c.person_unknown:
+                    not_checked(row.drive_id, row.path, PERSON_UNKNOWN)
+                    continue
+                if not c.matched:
+                    result.checked += 1
+                    continue
+                person = None
+                if template_uses_person(rule.then.folder) or template_uses_person(rule.then.name):
+                    person = person_for(ctx, layout, rule).name
+                    if person is None:
+                        supported = (row.ext or "").lower() in BARCODE_EXTS
+                        if layout is None and supported and not ctx.assigned:
+                            not_checked(row.drive_id, row.path, unreadable(row.drive_id))
+                        else:
+                            not_checked(row.drive_id, row.path, PERSON_UNKNOWN)
+                        continue
+                result.checked += 1
+                result.matched += 1
+                try:
+                    path_rule = _rule_path(rule, rec, special, person)
+                except TemplateError:
+                    path_rule = ""
+                if path_rule and nfc(path_rule).casefold() == nfc(row.path).casefold():
+                    result.same += 1
+                else:
+                    result.different.append(ReplayHit(row.drive_id, row.path, path_rule))
+                for r in earlier:
+                    if _matches(r, rec, folded, None, layout, ctx)[0]:
+                        result.shadowed.append((row.drive_id, r.id))
+                        break
+            if result.truncated:
+                break
     if rule.sender and sender_ids is not None:
         result.marked, more = _marked(
             engine, free, list(sender_ids(rule.sender)), layouts_for, layout_blocked, context
