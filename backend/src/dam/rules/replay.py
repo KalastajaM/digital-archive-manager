@@ -31,7 +31,9 @@ from dam.rules.engine import (
     stem_and_ext,
     suggest,
     template_uses_person,
+    zone_hits,
     zone_matches,
+    zones_in_text,
 )
 from dam.rules.model import Rule, fold
 from dam.rules.people import PeopleContext
@@ -94,7 +96,8 @@ class RuleExplain:
     matched: bool
     why: str
     wins: list[str] = field(default_factory=list)
-    zone_lines: list[str] = field(default_factory=list)  # page-1 lines in the rule's zone
+    # the page-1 lines in each of the rule's zones (one list per zone)
+    zone_lines: list[list[str]] = field(default_factory=list)
 
 
 def _without_folder(rule: Rule) -> Rule:
@@ -212,7 +215,7 @@ def replay(
     its ``folder_is``, matches them as live filing would; ``inbox_code_of`` tells which
     files sit in a filing code's inbox folder (they count as in the inbox).
 
-    A rule with a ``zone`` can only match a document whose text has one of its words
+    A rule with ``zones`` can only match a document whose text has one of its words
     (``check`` tests that first). Of those, the ones without a page-1 layout are handed to
     ``want_layouts`` and listed in ``not_checked`` with the reason (``layout_blocked``
     says why a read cannot happen now); they are never counted as non-matches. Layouts
@@ -249,9 +252,9 @@ def replay(
     layouts: dict[str, Page1Layout] = {}
     needs_person = rule_needs_person(rule)
     needs_layouts = (
-        rule.when.zone is not None
+        bool(rule.when.zones)
         or needs_person
-        or any(r.when.zone is not None or rule_needs_person(r) for r in earlier)
+        or any(r.when.zones or rule_needs_person(r) for r in earlier)
     )
     assigned = assigned_persons() if assigned_persons is not None and needs_layouts else {}
 
@@ -259,13 +262,13 @@ def replay(
         return PeopleContext(people, tuple(address_zone), assigned.get(drive_id))
 
     unread: list[str] = []  # candidates (filed or in the inbox) to hand to the layout pass
-    own_layouts = rule.when.zone is not None or needs_person
+    own_layouts = bool(rule.when.zones) or needs_person
 
     def wants_layout(rec: FileRecord, folded: str, in_inbox: bool) -> bool:
         """Whether this row's layout can change the outcome (the cheap conditions on
         its text first)."""
         if own_layouts:
-            return rule.when.zone is None or any(t in folded for t in rule._folded_zone_terms)
+            return zones_in_text(rule, folded)
         # only an earlier rule looks at it, and only for a file this rule matches
         return not in_inbox and check(free, rec, folded, None, None, None).matched
 
@@ -378,6 +381,11 @@ def replay(
     return result
 
 
+def _area(index: int, total: int) -> str:
+    """ "the area", or "area 2" when the rule has several."""
+    return "the area" if total == 1 else f"area {index + 1}"
+
+
 def _why(
     rule: Rule,
     rec: FileRecord,
@@ -397,21 +405,19 @@ def _why(
         ][:1]
         if when.filename_matches is not None:
             parts.append(f"file name matches {when.filename_matches}")
-        if when.zone is not None and layout is not None:
-            hit = next(
-                (
-                    raw
-                    for raw, term in zip(
-                        when.zone.text_contains, rule._folded_zone_terms, strict=True
-                    )
-                    if any(
-                        term in fold(ln.text)
-                        for ln in lines_in_zone(layout.lines, when.zone.box, ZONE_MARGIN)
-                    )
-                ),
-                None,
-            )
-            parts.append(f"word ‘{hit}’ in the area")
+        if layout is not None:
+            for i, zone in enumerate(when.zones):
+                hit = next(
+                    (
+                        raw
+                        for raw, term in zip(
+                            zone.text_contains or [], rule._folded_zones[i], strict=True
+                        )
+                        if any(term in fold(ln.text) for ln in zone_hits(rule, i, layout))
+                    ),
+                    None,
+                )
+                parts.append(f"word ‘{hit}’ in {_area(i, len(when.zones))}")
         if not parts and when.folder_is is not None:
             parts.append(f"in the folder ‘{when.folder_is}’")
         return ", ".join(parts) or "no condition: matches every file"
@@ -433,7 +439,7 @@ def _why(
             return f"not in the folder ‘{when.folder_is}’"
     if rule._folded_terms and not any(t in folded_text for t in rule._folded_terms):
         return "no word found"
-    if when.zone is not None and (rec.ext or "").lower() not in BARCODE_EXTS:
+    if when.zones and (rec.ext or "").lower() not in BARCODE_EXTS:
         return "no page 1 to look at in this kind of file"
     if (
         when.filename_matches is not None
@@ -441,8 +447,10 @@ def _why(
         and not rule._regex.search(nfc(rec.name or ""))
     ):
         return "file name does not match"
-    if when.zone is not None and (layout is None or not zone_matches(rule, layout)):
-        return "no word found in the area"
+    if when.zones:
+        for i in range(len(when.zones)):
+            if layout is None or not zone_matches(rule, i, layout):
+                return f"no word found in {_area(i, len(when.zones))}"
     if when.person is not None:
         return f"the document is not for {when.person}"
     return "file name does not match"
@@ -458,7 +466,7 @@ def explain(
     people: PeopleContext | None = None,
 ) -> list[RuleExplain]:
     """For each rule: does it match this document, why (not), and which fields it wins.
-    For a rule with a zone, the page-1 lines in the zone (so a missed match can be
+    For a rule with zones, the page-1 lines in each zone (so a missed match can be
     explained)."""
     folded = fold(text)
     s = suggest(rec, text, rules, special, inbox_alias, layout=layout, people=people)
@@ -477,12 +485,12 @@ def explain(
         ]
         if matched and any(src == mine for src in s.tag_sources.values()):
             wins.append("tags")
-        zone = rule.when.zone
-        zone_lines = (
+        zone_lines = [
             [ln.text for ln in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN)]
-            if zone is not None and layout is not None
+            if layout is not None
             else []
-        )
+            for zone in rule.when.zones
+        ]
         out.append(
             RuleExplain(
                 rule.id,

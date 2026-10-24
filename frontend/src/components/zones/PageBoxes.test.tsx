@@ -15,7 +15,7 @@ const RULE = {
   id: "pohjola",
   file: "learned.yaml",
   learned: true,
-  when: { text_contains: [], filename_matches: null, folder_is: "##. Organize", zone: { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"] }, person: null },
+  when: { text_contains: [], filename_matches: null, folder_is: "##. Organize", zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"], image: null }], person: null },
   then: { folder: "Insurance/Pohjola", name: null, tags: [], tray: null, payee: null },
   person_zone: [0.1, 0.2, 0.6, 0.4],
   sender: "Pohjola",
@@ -23,16 +23,16 @@ const RULE = {
 };
 const DRAFT = {
   id: "pohjola",
-  words: [{ word: "pohjola", ticked: true }, { word: "vakuutus", ticked: false }],
   folder: "Insurance/Pohjola",
   name: null,
   tags: [],
   tray: null,
   payee: null,
-  box: [0.1, 0.1, 0.5, 0.3],
+  words: [],
+  zones: [{ box: [0.1, 0.1, 0.5, 0.3], words: [{ word: "pohjola", ticked: true }, { word: "vakuutus", ticked: false }], lines: ["Pohjola Vakuutus Oy"] }],
   folder_is: "##. Organize",
-  lines: ["Pohjola Vakuutus Oy"],
   sender: "Pohjola",
+  place_above: null,
 };
 const REPLAY = {
   matched: 2, same: 2, different: [], inbox: 0, shadowed: [], checked: 2, total: 2, truncated: false,
@@ -157,25 +157,115 @@ describe("Draw a box", () => {
     await user.click(within(panel).getByRole("button", { name: "Sender…" }));
     await user.click(await within(panel).findByRole("button", { name: "Pohjola" })); // a sender in use
     await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
-    expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({ drive_id: "d1", box: [0.1, 0.1, 0.5, 0.3], sender: "Pohjola" });
+    expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({ drive_id: "d1", boxes: [[0.1, 0.1, 0.5, 0.3]], sender: "Pohjola" });
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
     expect(within(sheet).getByRole("button", { name: "pohjola" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(sheet).getByText("Matches only in the area you drew on page 1.")).toBeInTheDocument();
+    expect(within(sheet).getByRole("group", { name: "Area" })).toBeInTheDocument();
     await within(sheet).findByText(/Matches 2 documents/);
     const sent = posts(calls, "/api/rules/replay")[0].body as { rule: { when: unknown; sender: string } };
     expect(sent.rule.when).toEqual({
       text_contains: [],
       filename_matches: null,
       folder_is: "##. Organize",
-      zone: { box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] },
+      zones: [{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] }],
     });
     expect(sent.rule.sender).toBe("Pohjola");
     await user.click(within(sheet).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
     expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({
       id: "pohjola",
-      when: { zone: { box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] } },
+      when: { zones: [{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] }] },
       sender: "Pohjola",
+    });
+  });
+
+  describe("several boxes", () => {
+    /** Draws from (20, 160) to (100, 200): the box [0.1, 0.4, 0.5, 0.5]. */
+    async function drawSecond() {
+      const surface = await screen.findByTestId("box-surface");
+      fireEvent.pointerDown(surface, { clientX: 20, clientY: 160, button: 0 });
+      fireEvent.pointerMove(surface, { clientX: 100, clientY: 200 });
+      fireEvent.pointerUp(surface, { clientX: 100, clientY: 200 });
+    }
+    const TWO = {
+      ...DRAFT,
+      zones: [
+        DRAFT.zones[0],
+        { box: [0.1, 0.4, 0.5, 0.5], words: [{ word: "vakuutuskirja", ticked: true }], lines: ["Vakuutuskirja"] },
+      ],
+      place_above: "pohjola-old",
+    };
+
+    it("Add another box keeps the box, lists it with its lines, and lets it be removed", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Draw a box" }));
+      await draw();
+      const panel = await screen.findByRole("region", { name: "The box" });
+      await within(panel).findByText("Pohjola Vakuutus Oy");
+      await user.click(within(panel).getByRole("button", { name: "Add another box" }));
+      const kept = within(panel).getByRole("list", { name: "Kept boxes" });
+      expect(within(kept).getByText("Pohjola Vakuutus Oy")).toBeInTheDocument();
+      expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
+      expect(screen.queryByTestId("drawn-box")).toBeNull();
+      // the address choices are for a single box
+      expect(within(panel).queryByRole("button", { name: "Address area for all letters" })).toBeNull();
+      await user.click(within(panel).getByRole("button", { name: "Remove box 1" }));
+      expect(screen.queryByTestId("kept-box")).toBeNull();
+    });
+
+    it("Make a rule… sends every kept box and the one just drawn, and the sheet has a group per area", async () => {
+      const { calls, user } = setup({
+        "POST /api/rules/draft-zone": { body: TWO },
+        "POST /api/rules/replay": { body: REPLAY },
+        "PUT /api/rules/pohjola": { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } },
+      });
+      await user.click(screen.getByRole("button", { name: "Draw a box" }));
+      await draw();
+      const panel = await screen.findByRole("region", { name: "The box" });
+      await within(panel).findByText("Pohjola Vakuutus Oy");
+      await user.click(within(panel).getByRole("button", { name: "Add another box" }));
+      await drawSecond();
+      await user.click(within(panel).getByRole("button", { name: "Sender…" }));
+      await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
+      expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({
+        drive_id: "d1",
+        boxes: [
+          [0.1, 0.1, 0.5, 0.3],
+          [0.1, 0.4, 0.5, 0.5],
+        ],
+        sender: null,
+      });
+      const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
+      expect(within(sheet).getByRole("group", { name: "Area 1" })).toBeInTheDocument();
+      expect(within(sheet).getByRole("group", { name: "Area 2" })).toBeInTheDocument();
+      await within(sheet).findByText(/Matches 2 documents/);
+      const sent = posts(calls, "/api/rules/replay")[0].body as { rule: { when: { zones: unknown } }; place_above: string };
+      expect(sent.rule.when.zones).toEqual([
+        { box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] },
+        { box: [0.1, 0.4, 0.5, 0.5], text_contains: ["vakuutuskirja"] },
+      ]);
+      expect(sent.place_above).toBe("pohjola-old");
+      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+      expect(calls.find((c) => c.method === "PUT")?.url).toBe("/api/rules/pohjola?place_above=pohjola-old");
+    });
+
+    it("Esc drops the box just drawn, then the kept boxes, then the tool", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Draw a box" }));
+      await draw();
+      const panel = await screen.findByRole("region", { name: "The box" });
+      await within(panel).findByText("Pohjola Vakuutus Oy");
+      await user.click(within(panel).getByRole("button", { name: "Add another box" }));
+      await drawSecond();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(screen.queryByTestId("drawn-box")).toBeNull();
+      expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(screen.queryByTestId("kept-box")).toBeNull();
+      expect(screen.getByTestId("box-surface")).toBeInTheDocument();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(screen.queryByTestId("box-surface")).toBeNull();
     });
   });
 
@@ -217,7 +307,7 @@ describe("Draw a box", () => {
     expect(put.url).toBe("/api/rules/pohjola?replaces=pohjola");
     expect(put.body).toEqual({
       id: "pohjola",
-      when: { text_contains: [], filename_matches: null, folder_is: "##. Organize", zone: RULE.when.zone, person: null },
+      when: { text_contains: [], filename_matches: null, folder_is: "##. Organize", zones: RULE.when.zones, person: null },
       then: RULE.then,
       person_zone: [0.1, 0.1, 0.5, 0.3],
       sender: "Pohjola",

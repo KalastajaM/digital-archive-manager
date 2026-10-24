@@ -11,7 +11,7 @@ from typing import Literal
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
 from dam.core.paths import nfc
-from dam.extract.layout import ZONE_MARGIN, Page1Layout, lines_in_zone
+from dam.extract.layout import ZONE_MARGIN, Line, Page1Layout, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.rules.fields import DetectedFields, detect_fields
 from dam.rules.model import Rule, fold
@@ -174,15 +174,31 @@ class Check:
     person_unknown: bool = False
 
 
-def zone_matches(rule: Rule, layout: Page1Layout) -> bool:
+def zone_hits(rule: Rule, index: int, layout: Page1Layout) -> list[Line]:
+    """The lines of page 1 in the rule's zone ``index`` that have one of its words."""
+    zone = rule.when.zones[index]
+    terms = rule._folded_zones[index]
+    return [
+        line
+        for line in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN)
+        if any(t in fold(line.text) for t in terms)
+    ]
+
+
+def zone_matches(rule: Rule, index: int, layout: Page1Layout) -> bool:
     """Any of the zone's words is in a line of page 1 that lies in the zone's box."""
-    zone = rule.when.zone
-    assert zone is not None
-    for line in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN):
-        folded = fold(line.text)
-        if any(t in folded for t in rule._folded_zone_terms):
-            return True
-    return False
+    return bool(zone_hits(rule, index, layout))
+
+
+def zones_in_text(rule: Rule, folded_text: str) -> bool:
+    """Every text zone has one of its words in the document's text. Page 1's lines are
+    part of the indexed text, so a zone whose words are not there cannot match."""
+    return all(any(t in folded_text for t in terms) for terms in rule._folded_zones)
+
+
+def zones_match(rule: Rule, layout: Page1Layout) -> bool:
+    """Every zone matches page 1."""
+    return all(zone_matches(rule, i, layout) for i in range(len(rule.when.zones)))
 
 
 def check(
@@ -195,7 +211,7 @@ def check(
 ) -> Check:
     """Does ``rule`` match? ``folder_is`` matches the file's real folder, or
     ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder). A rule with a
-    ``zone`` needs ``layout`` (page 1's lines); without one it does not match, and
+    ``zones`` need ``layout`` (page 1's lines); without one it does not match, and
     ``waiting`` says whether reading page 1 could change that."""
     when = rule.when
     if when.folder_is is not None:
@@ -213,14 +229,14 @@ def check(
                 return Check()
         except TimeoutError:
             return Check(timed_out=True)
-    if when.zone is not None:
-        # page 1's lines are part of the indexed text, so a zone word that is not in the
-        # document's text cannot be on page 1: no match, and nothing to wait for
-        if not any(t in folded_text for t in rule._folded_zone_terms):
+    if when.zones:
+        # a zone word that is not in the document's text cannot be on page 1: no match,
+        # and nothing to wait for
+        if not zones_in_text(rule, folded_text):
             return Check()
         if layout is None:
             return Check(waiting=(rec.ext or "").lower() in BARCODE_EXTS)
-        if not zone_matches(rule, layout):
+        if not zones_match(rule, layout):
             return Check()
     if when.person is not None:
         mine = person_for(people, layout, rule)
@@ -340,7 +356,7 @@ def suggest(
     """``inbox_alias``: for a file directly in a filing code's inbox folder, the inbox,
     so a rule whose ``folder_is`` is the inbox matches it as well (a rule naming the
     code's folder itself still matches only that folder). ``layout``: page 1's lines,
-    for rules with a ``zone``. ``people``: the people list, the address zone and the
+    for rules with ``zones``. ``people``: the people list, the address zone and the
     document's assigned person, for ``{person}`` and ``when.person``."""
     special = special or SpecialFolders()
     name = rec.name or PurePosixPath(rec.path).name

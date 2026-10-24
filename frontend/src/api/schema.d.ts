@@ -2276,8 +2276,8 @@ export interface paths {
         put?: never;
         /**
          * Draft Zone
-         * @description The rule a box drawn on page 1 starts from (see ``ZoneDraftOut``). 400 when page 1
-         *     is not read yet, the box is empty or holds no usable word; 404 for an unknown
+         * @description The rule the boxes drawn on page 1 start from (see ``ZoneDraftOut``). 400 when
+         *     page 1 is not read yet, a box is empty or holds no usable word; 404 for an unknown
          *     document. Changes nothing.
          */
         post: operations["draft_zone_api_rules_draft_zone_post"];
@@ -2358,10 +2358,11 @@ export interface paths {
         get?: never;
         /**
          * Save Rule
-         * @description Save a rule: new ones go at the end of ``learned.yaml``; with ``replaces`` that
-         *     rule is rewritten in place. ``rule_id`` is the rule's (new) id and must equal the
-         *     body's; ``replaces`` is the id being replaced (the old one, for a rename). 400 for an
-         *     invalid, repeated or reserved one.
+         * @description Save a rule: new ones go at the end of ``learned.yaml``, or directly above the
+         *     learned rule ``place_above`` (ignored when it is not in ``learned.yaml``); with
+         *     ``replaces`` that rule is rewritten in place. ``rule_id`` is the rule's (new) id and
+         *     must equal the body's; ``replaces`` is the id being replaced (the old one, for a
+         *     rename). 400 for an invalid, repeated or reserved one.
          */
         put: operations["save_rule_api_rules__rule_id__put"];
         post?: never;
@@ -4680,7 +4681,7 @@ export interface components {
              * Zone Lines
              * @default []
              */
-            zone_lines: string[];
+            zone_lines: string[][];
         };
         /** RuleIn */
         RuleIn: {
@@ -4735,6 +4736,8 @@ export interface components {
             rule: components["schemas"]["RuleIn"];
             /** Replaces */
             replaces?: string | null;
+            /** Place Above */
+            place_above?: string | null;
         };
         /** RuleStatsOut */
         RuleStatsOut: {
@@ -4781,7 +4784,8 @@ export interface components {
             filename_matches?: string | null;
             /** Folder Is */
             folder_is?: string | null;
-            zone?: components["schemas"]["ZoneIn"] | null;
+            /** Zones */
+            zones?: components["schemas"]["ZoneIn"][];
             /** Person */
             person?: string | null;
         };
@@ -4793,7 +4797,8 @@ export interface components {
             filename_matches: string | null;
             /** Folder Is */
             folder_is: string | null;
-            zone: components["schemas"]["ZoneOut"] | null;
+            /** Zones */
+            zones: components["schemas"]["ZoneOut"][];
             /** Person */
             person: string | null;
         };
@@ -5441,20 +5446,34 @@ export interface components {
              */
             kept: string[];
         };
+        /**
+         * ZoneDraftAreaOut
+         * @description One box of a draft: the page-1 lines in it and its candidate words (one ticked).
+         */
+        ZoneDraftAreaOut: {
+            /** Box */
+            box: number[];
+            /** Words */
+            words: components["schemas"]["DraftWordOut"][];
+            /** Lines */
+            lines: string[];
+        };
         /** ZoneDraftIn */
         ZoneDraftIn: {
             /** Drive Id */
             drive_id: string;
-            /** Box */
-            box: number[];
+            /** Boxes */
+            boxes: number[][];
             /** Sender */
             sender?: string | null;
         };
         /**
          * ZoneDraftOut
-         * @description The draft a box drawn on page 1 starts from. The rule's ``when`` is
-         *     ``{folder_is, zone: {box, text_contains: [the ticked word]}}``; ``words`` are the
-         *     candidate words from the lines in the box, ``lines`` those lines.
+         * @description The draft boxes drawn on page 1 start from. The rule's ``when`` is ``{folder_is,
+         *     zones: [{box, text_contains: [the ticked word]}, ...]}``; ``zones`` has the candidate
+         *     words and the page-1 lines of each box (``words`` itself is empty). ``place_above``: the
+         *     learned rule that already matches the document; send it back when replaying or saving
+         *     so the new rule is placed directly above it.
          */
         ZoneDraftOut: {
             /** Id */
@@ -5471,32 +5490,37 @@ export interface components {
             tray: string | null;
             /** Payee */
             payee: string | null;
-            /** Box */
-            box: number[];
+            /** Zones */
+            zones: components["schemas"]["ZoneDraftAreaOut"][];
             /** Folder Is */
             folder_is: string | null;
-            /** Lines */
-            lines: string[];
             /** Sender */
             sender: string | null;
+            /** Place Above */
+            place_above: string | null;
         };
         /**
          * ZoneIn
-         * @description Words that must be in an area of page 1: ``box`` is [x0, y0, x1, y1] as fractions
-         *     of the page, origin top left.
+         * @description An area of page 1: ``box`` is [x0, y0, x1, y1] as fractions of the page, origin top
+         *     left. It has words (``text_contains``) or, later, a picture (``image``): exactly one
+         *     (``image`` is refused for now).
          */
         ZoneIn: {
             /** Box */
             box: number[];
             /** Text Contains */
-            text_contains: string[];
+            text_contains?: string[] | null;
+            /** Image */
+            image?: string | null;
         };
         /** ZoneOut */
         ZoneOut: {
             /** Box */
             box: number[];
             /** Text Contains */
-            text_contains: string[];
+            text_contains: string[] | null;
+            /** Image */
+            image: string | null;
         };
     };
     responses: never;
@@ -18035,6 +18059,7 @@ export interface operations {
         parameters: {
             query?: {
                 replaces?: string | null;
+                place_above?: string | null;
             };
             header?: never;
             path: {

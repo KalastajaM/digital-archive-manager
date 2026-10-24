@@ -1,5 +1,6 @@
-/** What a box drawn on page 1 can mean: the lines found in it and the choices. "Sender…"
- * makes a rule from the box (the rule sheet, with a replay as proof); the two address
+/** What a box drawn on page 1 can mean: the lines found in it and the choices. "Add another
+ * box" keeps it, so a rule can need several areas; "Sender…" makes a rule from all the kept
+ * boxes and the one just drawn (the rule sheet, with a replay as proof); the two address
  * choices keep the box as the area where the person a letter is for is looked for. */
 import { X } from "lucide-react";
 import { useState } from "react";
@@ -27,7 +28,7 @@ const ruleIn = (r: Rule, over: Partial<RuleIn>): RuleIn => ({
     text_contains: r.when.text_contains,
     filename_matches: r.when.filename_matches,
     folder_is: r.when.folder_is,
-    zone: r.when.zone,
+    zones: r.when.zones,
     person: r.when.person,
   },
   then: r.then,
@@ -36,22 +37,32 @@ const ruleIn = (r: Rule, over: Partial<RuleIn>): RuleIn => ({
   ...over,
 });
 
+/** A box kept for the rule being made, with the lines of page 1 that lie in it. */
+export type KeptBox = { box: PageBox; lines: string[] };
+
 export function BoxPanel({
   driveId,
   box,
+  kept,
   found,
   pending,
   error,
   rule,
+  onAddAnother,
+  onRemoveKept,
   onClose,
 }: {
   driveId: string;
-  box: PageBox;
+  /** The box just drawn (null: the kept boxes only, the next one is not drawn yet). */
+  box: PageBox | null;
+  kept: KeptBox[];
   found: Page1 | undefined;
   pending: boolean;
   error: unknown;
   /** The rule behind the current suggestion (offers "Address area for this sender"). */
   rule: Rule | null;
+  onAddAnother: () => void;
+  onRemoveKept: (index: number) => void;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -66,6 +77,7 @@ export function BoxPanel({
   const [problem, setProblem] = useState<string | null>(null);
 
   const lines = found?.lines ?? [];
+  const boxes: PageBox[] = [...kept.map((k) => k.box), ...(box ? [box] : [])];
   const run = async (action: () => Promise<unknown>, done: string) => {
     setProblem(null);
     try {
@@ -79,7 +91,7 @@ export function BoxPanel({
   const makeRule = async () => {
     setProblem(null);
     try {
-      setDraft(await draftZone.mutateAsync({ drive_id: driveId, box, sender: sender.trim() || null }));
+      setDraft(await draftZone.mutateAsync({ drive_id: driveId, boxes, sender: sender.trim() || null }));
     } catch (e) {
       setProblem(errorText(e));
     }
@@ -93,23 +105,43 @@ export function BoxPanel({
           <X size={14} aria-hidden="true" />
         </button>
       </header>
-      {pending ? (
-        <p className="busy" role="status">Reading the box…</p>
-      ) : error ? (
-        <p className="error" role="alert">{visible(errorText(error))}</p>
-      ) : lines.length === 0 ? (
-        <p className="hint">No text found in this box.</p>
-      ) : (
-        <ul className="box-lines">
-          {lines.map((l, i) => (
-            <li key={`${i}-${l.text}`}>{visible(l.text)}</li>
+      {kept.length > 0 && (
+        <ul className="box-kept" aria-label="Kept boxes">
+          {kept.map((k, i) => (
+            <li key={`${i}-${k.box.join(",")}`}>
+              <span className="box-kept-text">
+                <strong>Box {i + 1}</strong> {visible(k.lines.join(" / "))}
+              </span>
+              <button type="button" className="icon-button" aria-label={`Remove box ${i + 1}`} onClick={() => onRemoveKept(i)}>
+                <X size={14} aria-hidden="true" />
+              </button>
+            </li>
           ))}
         </ul>
       )}
+      {box &&
+        (pending ? (
+          <p className="busy" role="status">Reading the box…</p>
+        ) : error ? (
+          <p className="error" role="alert">{visible(errorText(error))}</p>
+        ) : lines.length === 0 ? (
+          <p className="hint">No text found in this box.</p>
+        ) : (
+          <ul className="box-lines">
+            {lines.map((l, i) => (
+              <li key={`${i}-${l.text}`}>{visible(l.text)}</li>
+            ))}
+          </ul>
+        ))}
       {!naming ? (
         <div className="box-actions">
           <button type="button" onClick={() => setNaming(true)}>Sender…</button>
-          {rule && (
+          {box && (
+            <button type="button" disabled={pending || lines.length === 0} onClick={onAddAnother}>
+              Add another box
+            </button>
+          )}
+          {box && kept.length === 0 && rule && (
             <button
               type="button"
               disabled={saveRule.isPending}
@@ -123,6 +155,7 @@ export function BoxPanel({
               Address area for this sender
             </button>
           )}
+          {box && kept.length === 0 && (
           <button
             type="button"
             disabled={!people.data || savePeople.isPending}
@@ -135,6 +168,7 @@ export function BoxPanel({
           >
             Address area for all letters
           </button>
+          )}
         </div>
       ) : (
         <form
@@ -172,7 +206,7 @@ export function BoxPanel({
           </div>
           <div className="actions">
             <button type="button" onClick={() => setNaming(false)}>Back</button>
-            <button type="submit" className="primary" disabled={draftZone.isPending}>Make a rule…</button>
+            <button type="submit" className="primary" disabled={draftZone.isPending || boxes.length === 0}>Make a rule…</button>
           </div>
         </form>
       )}

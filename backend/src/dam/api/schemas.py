@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
 
 from dam.ops.model import OpKind
 from dam.trays.model import TrayDef
@@ -1433,18 +1433,21 @@ class BatchRowOut(BaseModel):
 
 
 class ZoneIn(_In):
-    """Words that must be in an area of page 1: ``box`` is [x0, y0, x1, y1] as fractions
-    of the page, origin top left."""
+    """An area of page 1: ``box`` is [x0, y0, x1, y1] as fractions of the page, origin top
+    left. It has words (``text_contains``) or, later, a picture (``image``): exactly one
+    (``image`` is refused for now)."""
 
     box: list[float] = Field(min_length=4, max_length=4)
-    text_contains: list[str]
+    text_contains: list[str] | None = None
+    image: str | None = None
 
 
 class RuleWhenIn(_In):
     text_contains: list[str] = Field(default_factory=list)
     filename_matches: str | None = None
     folder_is: str | None = None
-    zone: ZoneIn | None = None
+    # areas of page 1: every one must match, within an area any one of its words
+    zones: list[ZoneIn] = Field(default_factory=list)
     person: str | None = None
 
 
@@ -1467,6 +1470,8 @@ class RuleIn(_In):
 class RuleReplayIn(_In):
     rule: RuleIn
     replaces: str | None = None
+    # for a new rule: the learned rule it goes directly above (see ``ZoneDraftOut``)
+    place_above: str | None = None
 
 
 class RuleMoveIn(_In):
@@ -1488,14 +1493,15 @@ class RulesDeclineIn(_In):
 
 class ZoneOut(BaseModel):
     box: list[float]
-    text_contains: list[str]
+    text_contains: list[str] | None
+    image: str | None
 
 
 class RuleWhenOut(BaseModel):
     text_contains: list[str]
     filename_matches: str | None
     folder_is: str | None
-    zone: ZoneOut | None
+    zones: list[ZoneOut]
     person: str | None
 
 
@@ -1606,19 +1612,37 @@ class Page1BoxIn(_In):
 
 class ZoneDraftIn(_In):
     drive_id: str
-    box: list[float] = Field(min_length=4, max_length=4)
+    # one box, or several: each is an area of the rule, with one ticked word
+    boxes: list[list[float]] = Field(min_length=1, max_length=8)
     sender: str | None = None
+
+    @field_validator("boxes")
+    @classmethod
+    def _four_numbers(cls, boxes: list[list[float]]) -> list[list[float]]:
+        if any(len(b) != 4 for b in boxes):
+            raise ValueError("a box is four numbers: x0, y0, x1, y1")
+        return boxes
+
+
+class ZoneDraftAreaOut(BaseModel):
+    """One box of a draft: the page-1 lines in it and its candidate words (one ticked)."""
+
+    box: list[float]
+    words: list[DraftWordOut]
+    lines: list[str]
 
 
 class ZoneDraftOut(RuleDraftOut):
-    """The draft a box drawn on page 1 starts from. The rule's ``when`` is
-    ``{folder_is, zone: {box, text_contains: [the ticked word]}}``; ``words`` are the
-    candidate words from the lines in the box, ``lines`` those lines."""
+    """The draft boxes drawn on page 1 start from. The rule's ``when`` is ``{folder_is,
+    zones: [{box, text_contains: [the ticked word]}, ...]}``; ``zones`` has the candidate
+    words and the page-1 lines of each box (``words`` itself is empty). ``place_above``: the
+    learned rule that already matches the document; send it back when replaying or saving
+    so the new rule is placed directly above it."""
 
-    box: list[float]
+    zones: list[ZoneDraftAreaOut]
     folder_is: str | None
-    lines: list[str]
     sender: str | None
+    place_above: str | None
 
 
 class RuleExplainOut(BaseModel):
@@ -1626,7 +1650,7 @@ class RuleExplainOut(BaseModel):
     matched: bool
     why: str
     wins: list[str]
-    zone_lines: list[str] = []  # page-1 lines in the rule's zone
+    zone_lines: list[list[str]] = []  # page-1 lines in each of the rule's zones
 
 
 # -- settings written to settings.yaml ---------------------------------------------

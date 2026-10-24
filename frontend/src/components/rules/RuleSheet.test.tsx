@@ -109,7 +109,7 @@ describe("RuleSheet", () => {
       id: "kotihoito",
       file,
       learned,
-      when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zone: null, person: null },
+      when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zones: [], person: null },
       then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
       person_zone: null,
       sender: null,
@@ -128,7 +128,7 @@ describe("RuleSheet", () => {
         id: "kotihoito",
         file: "learned.yaml",
         learned: true,
-        when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zone: null, person: null },
+        when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zones: [], person: null },
         then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
         person_zone: null,
         sender: null,
@@ -218,7 +218,7 @@ describe("RuleSheet", () => {
         text_contains: [],
         filename_matches: null,
         folder_is: "##. Organize",
-        zone: { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola", "vakuutus"] },
+        zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola", "vakuutus"], image: null }],
         person: "Tiina",
       },
       then: { folder: "Insurance/{person}", name: null, tags: [], tray: null, payee: null },
@@ -231,7 +231,7 @@ describe("RuleSheet", () => {
       const { calls, user } = setup(REPLAY, { initial: ZONE_RULE, filed: undefined });
       const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
       expect(within(sheet).getByRole("button", { name: "pohjola" })).toHaveAttribute("aria-pressed", "true");
-      expect(within(sheet).getByText("Matches only in the area you drew on page 1.")).toBeInTheDocument();
+      expect(within(sheet).getByRole("group", { name: "Area" })).toBeInTheDocument();
       await within(sheet).findByText(/Matches 4/);
       await user.click(within(sheet).getByRole("button", { name: "vakuutus" })); // unticked
       await waitFor(() => {
@@ -240,13 +240,66 @@ describe("RuleSheet", () => {
           when: {
             text_contains: [],
             folder_is: "##. Organize",
-            zone: { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"] },
+            zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"] }],
             person: "Tiina",
           },
           person_zone: [0.1, 0.2, 0.6, 0.4],
           sender: "Pohjola",
         });
       });
+    });
+
+    const TWO_AREAS = {
+      ...ZONE_RULE,
+      when: {
+        ...ZONE_RULE.when,
+        person: null,
+        zones: [
+          { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"], image: null },
+          { box: [0.55, 0.05, 0.95, 0.12], text_contains: ["vakuutuskirja", "policy"], image: null },
+        ],
+      },
+    };
+
+    it("shows one group of word chips per area, each with its own words", async () => {
+      setup(REPLAY, { initial: TWO_AREAS, filed: undefined });
+      const one = await screen.findByRole("group", { name: "Area 1" });
+      const two = screen.getByRole("group", { name: "Area 2" });
+      expect(within(one).getByRole("button", { name: "pohjola" })).toBeInTheDocument();
+      expect(within(two).getByRole("button", { name: "policy" })).toBeInTheDocument();
+      expect(screen.queryByText("When the text contains")).toBeNull();
+    });
+
+    it("unticks a word in one area only, adds a word to an area, and removes an area", async () => {
+      const { calls, user } = setup(REPLAY, { initial: TWO_AREAS, filed: undefined });
+      const two = await screen.findByRole("group", { name: "Area 2" });
+      await user.click(within(two).getByRole("button", { name: "policy" }));
+      await user.type(within(two).getByLabelText("Add a word to area 2"), "kirja{Enter}");
+      await waitFor(() => {
+        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { text_contains: string[] }[] } } };
+        expect(sent.rule.when.zones.map((z) => z.text_contains)).toEqual([["pohjola"], ["vakuutuskirja", "kirja"]]);
+      });
+      await user.click(within(screen.getByRole("group", { name: "Area 1" })).getByRole("button", { name: "Remove area 1" }));
+      expect(screen.queryByRole("group", { name: "Area 2" })).toBeNull();
+      await waitFor(() => {
+        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { box: number[] }[] } } };
+        expect(sent.rule.when.zones).toHaveLength(1);
+        expect(sent.rule.when.zones[0].box).toEqual([0.55, 0.05, 0.95, 0.12]);
+      });
+    });
+
+    it("needs a condition: no words and no area cannot be saved, and an area without a ticked word is named", async () => {
+      const { user } = setup(REPLAY, { initial: TWO_AREAS, filed: undefined });
+      const two = await screen.findByRole("group", { name: "Area 2" });
+      await screen.findByText(/Matches 4/);
+      await user.click(within(two).getByRole("button", { name: "vakuutuskirja" }));
+      await user.click(within(two).getByRole("button", { name: "policy" }));
+      expect(screen.getByText("Tick a word in area 2")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      await user.click(within(two).getByRole("button", { name: "Remove area 2" }));
+      await user.click(within(screen.getByRole("group", { name: "Area" })).getByRole("button", { name: "Remove area" }));
+      expect(screen.getByText("A rule needs a word or an area")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     });
 
     it("says what is not checked, and lists it", async () => {

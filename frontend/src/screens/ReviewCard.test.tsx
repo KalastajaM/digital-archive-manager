@@ -1512,7 +1512,7 @@ describe("Suggestion chips (rules and scan)", () => {
 
   it("a chip of a rule that was corrected recently says so in its tip", async () => {
     const flagged = (flag: boolean) => ({
-      rules: [{ id: "kotihoito", file: "learned.toml", learned: true, when: { text_contains: ["x"], filename_matches: null, folder_is: null }, then: { folder: null, name: null, tags: [], tray: null, payee: null }, stats: { suggested: 5, changed: 2, last_used: null, flagged: flag } }],
+      rules: [{ id: "kotihoito", file: "learned.toml", learned: true, when: { text_contains: ["x"], filename_matches: null, folder_is: null, zones: [], person: null }, then: { folder: null, name: null, tags: [], tray: null, payee: null }, stats: { suggested: 5, changed: 2, last_used: null, flagged: flag } }],
       errors: [],
       state: { offer: true, declined: 0 },
     });
@@ -2143,7 +2143,7 @@ describe("Filing says where it came from and offers a rule", () => {
       id: "kotihoito",
       file: "learned.yaml",
       learned: true,
-      when,
+      when: { ...when, zones: [], person: null },
       then: { folder: "20. Health/{year}", name: "{doc_date}_Kotihoito", tags: ["health"], tray: null, payee: null },
       stats: { suggested: 3, changed: 1, last_used: null, flagged: false },
     };

@@ -9,7 +9,7 @@ const rule = (id: string, extra: Record<string, unknown> = {}, stats: Record<str
   id,
   file: "rules.toml",
   learned: true,
-  when: { text_contains: ["fortum", "lasku"], filename_matches: null, folder_is: null },
+  when: { text_contains: ["fortum", "lasku"], filename_matches: null, folder_is: null, zones: [], person: null },
   then: { folder: "10. Financial/{year}", name: null, tags: [], tray: null, payee: null },
   stats: { suggested: 9, changed: 0, last_used: null, flagged: false, ...stats },
   ...extra,
@@ -175,7 +175,7 @@ describe("FilingRules", () => {
   });
   it("marks a rule that looks in an area of page 1, and lists the area's words", async () => {
     const zoned = rule("pohjola", {
-      when: { text_contains: [], filename_matches: null, folder_is: null, zone: { box: [0, 0, 0.5, 0.2], text_contains: ["pohjola"] }, person: null },
+      when: { text_contains: [], filename_matches: null, folder_is: null, zones: [{ box: [0, 0, 0.5, 0.2], text_contains: ["pohjola"], image: null }], person: null },
     });
     setup(DATA({ rules: [zoned] }));
     const line = await screen.findByRole("button", { name: /^pohjola/ });
@@ -185,7 +185,7 @@ describe("FilingRules", () => {
   it("shows the page-1 lines in a rule's area when testing a document", async () => {
     const { user } = setup(DATA(), {
       "POST /api/rules/explain": {
-        body: [{ rule_id: "fortum", matched: false, why: "no pohjola in the area", wins: [], zone_lines: ["Pohjola Oy", "PL 1"] }],
+        body: [{ rule_id: "fortum", matched: false, why: "no pohjola in the area", wins: [], zone_lines: [["Pohjola Oy", "PL 1"]] }],
       },
     });
     await screen.findByRole("option", { name: "bill.pdf" });
