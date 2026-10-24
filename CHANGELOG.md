@@ -208,6 +208,15 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- Testing a rule with a word area is much faster. It folded the whole text of every
+  document twice (once to pick the documents that need page 1, once to test them), one
+  character at a time, so a long text cost milliseconds, and a rule that only looks at a
+  picture folded it as well. The text is now folded once, only for a rule that has words,
+  with a much faster fold that gives exactly the same result; a file that cannot have a
+  page 1 is settled without its text; and a picture is blurred only where it is searched.
+  On a test archive of 11 000 files (120 MB of text) a rule with a word area went from
+  13.5 s to 1.2 s, a plain word rule from 7.5 s to 1.5 s, and a picture rule from 55 s to
+  18 s. The log (`dam.log`) now has one line per test with the seconds each step took.
 - The test of a picture rule no longer shows documents that did not match as if they were
   results. Documents are listed under **Matched**, and the ones that missed are listed
   under **Close, but not matched** only when the picture was the one thing that failed and
