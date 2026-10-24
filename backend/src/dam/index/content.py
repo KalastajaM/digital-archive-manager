@@ -338,14 +338,14 @@ class ContentIndexer:
         with self._lock:
             return self._layout_why.get(drive_id)
 
-    def run_layouts_once(self, limit: int = 1) -> int:
+    def run_layouts_once(self, limit: int = 1, backfill: bool | None = None) -> int:
         """Read page 1 of up to ``limit`` indexed PDFs and images that have no layout
         for their current content: inbox files, then the wanted ones, then (while
-        ``page1_backfill`` is on) the rest by path. Each finished read is recorded, an
-        empty page included, so a file is read again only when its sha256 changes. A read
-        has ``layout_timeout_s``; one that times out, or needs an OCR engine that is not
-        installed, is not recorded and waits ``layout_retry_s``. Returns the number of
-        files attempted."""
+        ``page1_backfill`` is on, or ``backfill`` says so) the rest by path. Each finished
+        read is recorded, an empty page included, so a file is read again only when its
+        sha256 changes. A read has ``layout_timeout_s``; one that times out, or needs an
+        OCR engine that is not installed, is not recorded and waits ``layout_retry_s``.
+        Returns the number of files attempted."""
         if self._closed:
             return 0
         with self._lock:
@@ -359,11 +359,12 @@ class ContentIndexer:
             }
             waiting = set(self._layout_retry)
             wanted = set(self._wanted)
-        try:
-            backfill = True if self.page1_backfill is None else bool(self.page1_backfill())
-        except Exception:
-            log.warning("could not read the page-1 setting", exc_info=True)
-            backfill = True
+        if backfill is None:
+            try:
+                backfill = True if self.page1_backfill is None else bool(self.page1_backfill())
+            except Exception:
+                log.warning("could not read the page-1 setting", exc_info=True)
+                backfill = True
         done = 0
         for rec in self.repo.next_for_layouts(limit, wanted, skip=waiting, everything=backfill):
             if self._closed:

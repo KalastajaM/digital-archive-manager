@@ -475,7 +475,8 @@ class App:
     def index(self, limit: int | None = None) -> int:
         """Index file contents until nothing is left to process or ``limit`` files are done,
         then read bank barcodes (``ContentIndexer.run_barcodes_once``) and page-1 layouts
-        (``run_layouts_once``) the same way."""
+        (``run_layouts_once``) the same way. The layout pass reads only the inbox and the
+        wanted files here, never the whole archive: the background pass does the rest."""
         # Hard cap: a file is attempted at most about once per call, so never more than
         # the number of rows, even if a failing file were somehow picked again.
         with self.engine.connect() as conn:
@@ -490,7 +491,10 @@ class App:
             total += n
         # then the barcode and page-1 layout passes (their reads are not counted as
         # indexed files)
-        for read_pass in (self.content.run_barcodes_once, self.content.run_layouts_once):
+        for read_pass in (
+            self.content.run_barcodes_once,
+            lambda n: self.content.run_layouts_once(n, backfill=False),
+        ):
             read = 0
             while read < cap:
                 n = read_pass(min(20, cap - read))

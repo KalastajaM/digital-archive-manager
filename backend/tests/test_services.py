@@ -369,6 +369,20 @@ def test_app_scan_and_index(app, fake_archive):
     assert app.index() == 0
 
 
+def test_app_index_reads_page_1_only_for_inbox_and_wanted_files(app, fake_archive, monkeypatch):
+    calls = []
+    real = app.content.run_layouts_once
+
+    def spy(limit=1, backfill=None):
+        calls.append(backfill)
+        return real(limit, backfill=backfill)
+
+    monkeypatch.setattr(app.content, "run_layouts_once", spy)
+    app.scan()
+    app.index()
+    assert calls and set(calls) == {False}
+
+
 def test_service_errors_are_typed(app, fake_archive):
     from dam.services.errors import InvalidRequest, NotFound
 

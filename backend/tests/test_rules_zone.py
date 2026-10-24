@@ -112,7 +112,10 @@ def test_matching_folds_case_and_diacritics_and_uses_the_margin():
     far = layout(("POHJOLA", (0.10, 0.30, 0.30, 0.32)))
     assert suggest(rec(), "pohjola", [zone_rule()], layout=far).folder is None
     accent = layout(("Pöhjölä", (0.1, 0.04, 0.3, 0.07)))
-    assert suggest(rec(), "pöhjölä", [zone_rule("pohjola")], layout=accent).folder == "Insurance/Pohjola"
+    assert (
+        suggest(rec(), "pöhjölä", [zone_rule("pohjola")], layout=accent).folder
+        == "Insurance/Pohjola"
+    )
 
 
 def test_no_layout_means_no_match_and_waiting():
