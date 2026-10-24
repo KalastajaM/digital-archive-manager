@@ -166,17 +166,20 @@ export function RuleSheet({
   // Documents whose page 1 is being read are not counted yet: ask again, a few times.
   const again = useRef<ReturnType<typeof setTimeout>>(undefined);
   const polls = useRef(0);
-  const run = () => {
+  // Which run of the effect below a replay belongs to: its cleanup (a new rule, or the
+  // sheet closing) ends it, and a reply that arrives later schedules nothing.
+  const epoch = useRef(0);
+  const run = (mine: number) => {
     const key = ruleKey;
     runReplay(
       { rule, replaces: replacing },
       {
         onSuccess: (result) => {
-          if (key !== latestKey.current) return;
+          if (mine !== epoch.current || key !== latestKey.current) return;
           setProof({ key, replay: result });
           if (waiting(result) && polls.current < READING_POLLS) {
             polls.current += 1;
-            again.current = setTimeout(run, READING_POLL_MS);
+            again.current = setTimeout(() => run(mine), READING_POLL_MS);
           }
         },
       },
@@ -185,8 +188,10 @@ export function RuleSheet({
   useEffect(() => {
     if (ticked.length === 0) return;
     polls.current = 0;
-    const timer = setTimeout(run, REPLAY_DELAY_MS);
+    const mine = ++epoch.current;
+    const timer = setTimeout(() => run(mine), REPLAY_DELAY_MS);
     return () => {
+      epoch.current += 1;
       clearTimeout(timer);
       clearTimeout(again.current);
     };
@@ -362,7 +367,7 @@ export function RuleSheet({
             sender={sender}
             pending={tested === null && !failed}
             error={failed ? errorText(replay.error) : null}
-            onRetry={run}
+            onRetry={() => run(epoch.current)}
           />
         )}
         {!draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}

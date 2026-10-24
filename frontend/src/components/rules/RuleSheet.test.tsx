@@ -276,6 +276,28 @@ describe("RuleSheet", () => {
       expect(reads).toBe(2);
     });
 
+    it("does not poll again once the sheet is closed", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const held = deferred<{ body: object }>();
+        const calls = mockFetch({
+          "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+          "GET /api/trays": { body: { trays: [], errors: [] } },
+          "GET /api/tags": { body: [] },
+          "POST /api/rules/replay": () => held.promise,
+        } as never);
+        const { unmount } = renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+        await vi.advanceTimersByTimeAsync(500);
+        await waitFor(() => expect(posts(calls, "/api/rules/replay")).toHaveLength(1)); // in flight
+        unmount();
+        held.resolve({ body: { ...REPLAY, reading: 23 } });
+        await vi.advanceTimersByTimeAsync(10000);
+        expect(posts(calls, "/api/rules/replay")).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("compares a sender rule with the documents marked as from that sender", async () => {
       setup(
         { ...REPLAY, marked: { total: 16, found: 14, missed: ["Insurance/x.pdf", "Insurance/y.pdf"], not_checked: [] } },
