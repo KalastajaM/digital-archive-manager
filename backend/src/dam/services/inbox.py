@@ -17,16 +17,24 @@ from dam.collections.service import CollectionService, check_collection_name
 from dam.config import DEFAULT_ADDRESS_ZONE, Person, SpecialFolders
 from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchivePaths
-from dam.extract.layout import check_box, lines_in_zone
+from dam.extract.layout import TEXT_LAYER, Page1Layout, check_box, lines_in_zone
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.notes import NotesService, check_note
 from dam.ops.executor import Executor
-from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
+from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
-from dam.rules.draft import ZoneDraft, draft_rule
+from dam.rules.draft import (
+    RuleDraft,
+    ZoneDraft,
+    ZoneDraftArea,
+    ZoneDraftPicture,
+    draft_rule,
+    picture_draft,
+)
 from dam.rules.engine import (
     Suggestion,
     _parent,
+    check,
     person_for,
     stem_and_ext,
     suggest,
@@ -34,7 +42,8 @@ from dam.rules.engine import (
 )
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
-from dam.rules.model import RESERVED_IDS, Rule
+from dam.rules.learned import learned_ids
+from dam.rules.model import RESERVED_IDS, Rule, fold
 from dam.rules.offer import (
     RuleOffer,
     make_doc_frequency,
@@ -44,10 +53,13 @@ from dam.rules.offer import (
     same,
 )
 from dam.rules.people import PeopleContext
+from dam.rules.picture import Pictures
+from dam.rules.replay import without_folder
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
 from dam.rules.similar import similar_folder
 from dam.rules.state import load_state
 from dam.services import check_destination_area, check_disk_identity, check_origin
+from dam.services.area_pictures import AreaPictures
 from dam.services.assignments import Assignment, AssignmentService
 from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleRecord
@@ -192,6 +204,8 @@ class InboxService:
         address_zone: Callable[[], Sequence[float]] = lambda: DEFAULT_ADDRESS_ZONE,
         assigned_person: Callable[[str], str | None] = lambda drive_id: None,
         assignments: AssignmentService | None = None,
+        pictures: Pictures | None = None,
+        area_pictures: AreaPictures | None = None,
     ) -> None:
         self.paths = paths
         self.repo = repo
@@ -217,6 +231,10 @@ class InboxService:
         self._address_zone = address_zone
         self._assigned_person = assigned_person
         self._assignments = assignments
+        # the page-1 pictures, for rules with picture areas
+        self.pictures = pictures
+        # cuts and keeps the crops of picture areas
+        self._area_pictures = area_pictures
 
     def people_context(self, drive_id: str) -> PeopleContext:
         return PeopleContext(
@@ -455,51 +473,127 @@ class InboxService:
             return None
         return RuleOffer(kind, rule_id, req.drive_id, draft)
 
-    def draft_zone(self, drive_id: str, box: list[float], sender: str | None = None) -> ZoneDraft:
-        """The rule a box drawn on page 1 starts from: ``when.zone`` is the box with the
-        most distinctive word of the lines in it ticked (the draft's usual choice), and
-        ``when.folder_is`` is the inbox. A document that is filed already gives the folder
-        and name it has now as patterns; one in the inbox gives none. ``InvalidRequest``
-        when the box is bad, page 1 is not read yet, or no usable word is in the box."""
+    def draft_zone(
+        self,
+        drive_id: str,
+        boxes: list[list[float]],
+        sender: str | None = None,
+        picture_boxes: Sequence[list[float]] = (),
+    ) -> ZoneDraft:
+        """The rule boxes drawn on page 1 start from: one ``when.zones`` entry per box, each
+        with the most distinctive word of the lines in it ticked (the draft's usual
+        choice), and ``when.folder_is`` is the inbox. ``picture_boxes`` become picture areas
+        after them: each is cut from the document's page-1 picture and kept as
+        ``areas/<rule id>-<n>.png`` (the replay needs the file; a rule that is not saved
+        leaves it as an unused picture), and ``pictures`` in the draft names them. A document
+        that is filed already gives the folder and name it has now as patterns; one in the
+        inbox gives none.
+        ``place_above``: the learned rule that matches the document already, if any (the
+        new rule goes directly above it, so the more specific rule is tried first).
+        ``InvalidRequest`` when a box is bad, page 1 is not read yet, or no usable word is
+        in a box."""
         rec = self._record(drive_id)
+        if not boxes and not picture_boxes:
+            raise InvalidRequest("Draw at least one box.")
         try:
-            area = check_box(box)
+            areas = [check_box(b) for b in boxes]
+            picture_areas = [check_box(b) for b in picture_boxes]
         except ValueError as e:
             raise InvalidRequest(str(e)) from e
+        crops = []
+        if picture_areas:
+            if self._area_pictures is None:
+                raise InvalidRequest("Picture areas are not available.")
+            crops = [self._area_pictures.crop(drive_id, list(b)) for b in picture_areas]
         layout = self.repo.layout_for(drive_id)
+        if layout is None and not areas:
+            layout = Page1Layout([], TEXT_LAYER)  # picture areas do not need the text
         if layout is None:
             if self._want_layouts is not None:
                 self._want_layouts([drive_id])
             raise InvalidRequest("Page 1 of this document has not been read yet.")
-        lines = [ln.text for ln in lines_in_zone(layout.lines, area)]
-        if not lines:
-            raise InvalidRequest("There is no text in that area of page 1.")
         filed = not self._in_inbox(rec)
         folder = _parent(rec.path) if filed else ""
         name = rec.name or ""
         doc_date = parse_doc_date(name) or rec.doc_date
-        draft = draft_rule(
-            text="\n".join(lines),
-            original_name="",
-            filed_name=name if filed and name else None,
-            filed_folder=folder or None,
-            doc_date=doc_date,
-            tags=self.tags.for_file(drive_id) if filed else [],
-            tray=None,
-            payee=None,
-            doc_frequency=make_doc_frequency(*self._frequency_counter()),
-            taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
-            person=person_for(self.people_context(drive_id), layout).name,
-        )
-        if draft is None:
-            raise InvalidRequest("There is no usable word in that area of page 1.")
+        frequency = make_doc_frequency(*self._frequency_counter())
+        taken = {r.id for r in self._rules()} | RESERVED_IDS
+        person = person_for(self.people_context(drive_id), layout).name
+        first: RuleDraft | None = None
+        zones: list[ZoneDraftArea] = []
+        for n, area in enumerate(areas, start=1):
+            which = f" (box {n})" if len(areas) > 1 else ""
+            lines = [ln.text for ln in lines_in_zone(layout.lines, area)]
+            if not lines:
+                raise InvalidRequest(f"There is no text in that area of page 1{which}.")
+            draft = draft_rule(
+                text="\n".join(lines),
+                original_name="",
+                filed_name=name if filed and name else None,
+                filed_folder=folder or None,
+                doc_date=doc_date,
+                tags=self.tags.for_file(drive_id) if filed else [],
+                tray=None,
+                payee=None,
+                doc_frequency=frequency,
+                taken_ids=taken,
+                person=person,
+            )
+            if draft is None:
+                raise InvalidRequest(f"There is no usable word in that area of page 1{which}.")
+            first = first or draft
+            zones.append(ZoneDraftArea(area, draft.words, lines))
+        if first is None:
+            first = picture_draft(
+                sender=sender,
+                filed_name=name if filed and name else None,
+                filed_folder=folder or None,
+                doc_date=doc_date,
+                tags=self.tags.for_file(drive_id) if filed else [],
+                taken_ids=taken,
+                person=person,
+            )
+        pictures: list[ZoneDraftPicture] = []
+        for area, crop in zip(picture_areas, crops, strict=True):
+            assert self._area_pictures is not None
+            image = self._area_pictures.save(first.id, crop)
+            shown = self._area_pictures.preview(crop)
+            pictures.append(
+                ZoneDraftPicture(area, image, shown["width"], shown["height"], shown["png"])
+            )
+        fields = {f: getattr(first, f) for f in first.__dataclass_fields__}
+        fields["words"] = []
         return ZoneDraft(
-            **{f: getattr(draft, f) for f in draft.__dataclass_fields__},
-            box=area,
+            **fields,
+            zones=zones,
+            pictures=pictures,
             folder_is=self.special.inbox,
-            lines=lines,
             sender=sender,
+            place_above=self._place_above(rec, layout),
         )
+
+    def _place_above(self, rec: FileRecord, layout) -> str | None:
+        """The first learned rule that matches the document as it is now: a new rule drawn
+        from the same document goes above it. Rules in other files are never moved
+        around, so only ``learned.yaml`` counts."""
+        if self._rules_dir is None:
+            return None
+        learned = learned_ids(self._rules_dir())
+        if not learned:
+            return None
+        in_inbox = is_under(rec.path, self.special.inbox)
+        alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
+        folded = fold(self.repo.text_for(rec.drive_id))
+        people = self.people_context(rec.drive_id)
+        for rule in self._rules():
+            if rule.id not in learned:
+                continue
+            # learned rules carry folder_is: <inbox>, which no filed document satisfies;
+            # for a filed document the rest of the rule is what counts (as in the replay)
+            probe = rule if (in_inbox or alias is not None) else without_folder(rule)
+            if check(probe, rec, folded, alias, layout, people, self.pictures).matched:
+                return rule.id
+        return None
 
     def _frequency_counter(self) -> tuple[Callable[[str], int], Callable[[], int]]:
         """(documents matching a word, documents in all): filed documents with text,
@@ -646,6 +740,7 @@ class InboxService:
             inbox_alias=alias,
             layout=layout,
             people=self.people_context(rec.drive_id),
+            pictures=self.pictures,
         )
         if found.waiting_for_page1:
             why = self._layout_blocked(rec.drive_id) if self._layout_blocked else None

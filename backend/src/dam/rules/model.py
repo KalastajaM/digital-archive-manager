@@ -21,7 +21,10 @@ from pydantic import (
     PrivateAttr,
     ValidationError,
     field_validator,
+    model_validator,
 )
+
+from dam.rules.picture import DEFAULT_MIN_SCORE, check_image_path
 
 
 def fold(s: str) -> str:
@@ -31,14 +34,20 @@ def fold(s: str) -> str:
 
 
 class Zone(BaseModel):
-    """Text in an area of page 1: ``box`` is ``(x0, y0, x1, y1)`` as fractions of the
-    page, origin top left; a line of page 1 lies in it when at least half of the line is
-    inside the box grown by a small margin (``dam.extract.layout.ZONE_MARGIN``)."""
+    """An area of page 1 that must hold something: ``box`` is ``(x0, y0, x1, y1)`` as
+    fractions of the page, origin top left. Exactly one of ``text_contains`` (words: a line
+    of page 1 in the box has one of them; a line lies in the box when at least half of it is
+    inside the box grown by a small margin, ``dam.extract.layout.ZONE_MARGIN``) or ``image``
+    (a picture area: ``areas/<name>.png``, a grayscale crop of the area kept in the rules'
+    ``areas`` folder, ``dam.rules.picture``; it matches when its best score on page 1 is at
+    least ``min_score``, ``DEFAULT_MIN_SCORE`` when that is not given)."""
 
     model_config = ConfigDict(extra="forbid")
 
     box: tuple[float, float, float, float]
-    text_contains: list[str] = Field(min_length=1)
+    text_contains: list[str] | None = None
+    image: str | None = None
+    min_score: float | None = None
 
     @field_validator("box")
     @classmethod
@@ -50,12 +59,31 @@ class Zone(BaseModel):
             raise ValueError("box must have x0 < x1 and y0 < y1")
         return box
 
-    @field_validator("text_contains")
-    @classmethod
-    def _no_blank_terms(cls, terms: list[str]) -> list[str]:
-        if any(not t.strip() for t in terms):
+    @model_validator(mode="after")
+    def _words_or_picture(self) -> "Zone":
+        if self.image is not None:
+            if self.text_contains is not None:
+                raise ValueError("an area has words (text_contains) or a picture (image), not both")
+            check_image_path(self.image)
+            if self.min_score is not None and not 0 < self.min_score <= 1:
+                raise ValueError("min_score must be above 0 and at most 1")
+            return self
+        if self.min_score is not None:
+            raise ValueError("min_score is for a picture area (image)")
+        if not self.text_contains:
+            raise ValueError("an area needs at least one word in text_contains")
+        if any(not t.strip() for t in self.text_contains):
             raise ValueError("text_contains entries must not be blank")
-        return terms
+        return self
+
+    @property
+    def is_picture(self) -> bool:
+        return self.image is not None
+
+    @property
+    def threshold(self) -> float:
+        """The score a picture area needs."""
+        return self.min_score if self.min_score is not None else DEFAULT_MIN_SCORE
 
 
 class When(BaseModel):
@@ -64,7 +92,8 @@ class When(BaseModel):
     text_contains: list[str] = Field(default_factory=list)
     filename_matches: str | None = None
     folder_is: str | None = None
-    zone: Zone | None = None
+    # areas of page 1: every one must match (within an area, any one of its words)
+    zones: list[Zone] = Field(default_factory=list)
     # the document is for this person (the owner's assignment, else the one found in the
     # address area of page 1), compared like rule words
     person: str | None = None
@@ -125,7 +154,8 @@ class Rule(BaseModel):
     sender: str | None = None
 
     _folded_terms: list[str] = PrivateAttr(default_factory=list)
-    _folded_zone_terms: list[str] = PrivateAttr(default_factory=list)
+    # the folded words of each zone, in order ([] for a zone without words)
+    _folded_zones: list[list[str]] = PrivateAttr(default_factory=list)
     _regex: "regex.Pattern[str] | None" = PrivateAttr(default=None)
 
     @field_validator("sender")
@@ -151,8 +181,7 @@ class Rule(BaseModel):
 
     def model_post_init(self, __context) -> None:
         self._folded_terms = [fold(t) for t in self.when.text_contains]
-        zone = self.when.zone
-        self._folded_zone_terms = [fold(t) for t in zone.text_contains] if zone else []
+        self._folded_zones = [[fold(t) for t in z.text_contains or []] for z in self.when.zones]
         pattern = self.when.filename_matches
         self._regex = regex.compile(pattern) if pattern is not None else None
 
@@ -171,7 +200,7 @@ def _format_validation(e: ValidationError) -> str:
 
 LEARNED_FILE = "learned.yaml"  # rules made in the app; read before every other file
 # rule ids the API cannot take: they are fixed routes under ``/api/rules``
-RESERVED_IDS = frozenset({"state", "replay", "explain", "draft-zone"})
+RESERVED_IDS = frozenset({"state", "replay", "explain", "draft-zone", "area-picture", "areas"})
 
 MAX_CONFIG_BYTES = 256 * 1024
 TOO_DEEP_MESSAGE = "file skipped: too deeply nested or too large to load"

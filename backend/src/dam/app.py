@@ -32,8 +32,10 @@ from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
 from dam.rules.learned import rule_file, write_rules_file
 from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
+from dam.rules.picture import Pictures
 from dam.search import SearchHit, search
 from dam.services.activity import ActivityService
+from dam.services.area_pictures import AreaPictures
 from dam.services.assignments import AssignmentService
 from dam.services.browse import BrowseService
 from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotConfigured, NotFound
@@ -77,6 +79,8 @@ class App:
     convert: OngoingConverter = field(init=False)
     convert_important: ImportantConverter = field(init=False)
     inbox: InboxService = field(init=False)
+    pictures: Pictures = field(init=False)
+    area_pictures: AreaPictures = field(init=False)
     browse: BrowseService = field(init=False)
     activity: ActivityService = field(init=False)
     today: TodayService = field(init=False)
@@ -133,6 +137,14 @@ class App:
             self.engine, lambda drive_id: self.inbox.detected_fields(drive_id)
         )
         self.rule_record = RuleRecord(self.engine)
+        # page-1 pictures (cache) and the crops of picture areas (the rules' folder)
+        self.pictures = Pictures(lambda: self.rules_dir, self.app_paths.cache_dir)
+        self.area_pictures = AreaPictures(
+            self.repo,
+            self.app_paths.cache_dir,
+            lambda: self.rules_dir,
+            want_layouts=lambda ids: self.content.want_layouts(ids),
+        )
         self.assignments = AssignmentService(self.engine, self.repo, lambda: self.settings.people)
         self.inbox = InboxService(
             self.paths,
@@ -155,6 +167,8 @@ class App:
             address_zone=lambda: self.settings.address_zone,
             assigned_person=self.assignments.person_of,
             assignments=self.assignments,
+            pictures=self.pictures,
+            area_pictures=self.area_pictures,
         )
         self.layout = LayoutService(
             self.paths,
@@ -264,6 +278,7 @@ class App:
                     registry,
                     settings.indexer_reads_per_minute,
                     ocr_languages=settings.ocr_languages,
+                    cache_dir=app_paths.cache_dir,
                 ),
             )
         except BaseException:
@@ -322,8 +337,12 @@ class App:
             raise InvalidRequest(f"the rule could not be saved: {e}") from e
         self.reload_rules()
 
-    def save_rule(self, rule: Rule, replaces: str | None = None) -> None:
-        """Save ``rule``. A new rule goes at the end of ``learned.yaml``; with
+    def save_rule(
+        self, rule: Rule, replaces: str | None = None, place_above: str | None = None
+    ) -> None:
+        """Save ``rule``. A new rule goes at the end of ``learned.yaml``, or directly above
+        the rule ``place_above`` when that is in ``learned.yaml`` (hand-written files are
+        never reordered); with
         ``replaces`` (an id) that rule is rewritten in place, in whichever file holds it,
         and the file's other rules are kept as they are. A repeated id raises
         ``InvalidRequest``; ``NotFound`` if ``replaces`` is unknown."""
@@ -331,7 +350,10 @@ class App:
             raise InvalidRequest(f"a rule with the id {rule.id!r} exists already")
         if replaces is None:
             path = self.rules_dir / LEARNED_FILE
-            self._write_rule_file(path, [*self._rule_file_rules(path), rule])
+            current = self._rule_file_rules(path)
+            at = next((i for i, r in enumerate(current) if r.id == place_above), len(current))
+            current.insert(at, rule)
+            self._write_rule_file(path, current)
             return
         path = rule_file(self.rules_dir, replaces)
         if path is None:

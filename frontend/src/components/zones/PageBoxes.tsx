@@ -4,9 +4,10 @@
  * the current suggestion are drawn faintly on the page, so it shows why the rule fired.
  *
  * Boxes are fractions of the rendered image (origin top left), so the zoom never matters. */
-import { SquareDashed } from "lucide-react";
+import { Layers, SquareDashed } from "lucide-react";
 import { type PointerEvent, type ReactNode, useState } from "react";
 import {
+  type Area,
   type FileSuggestions,
   type PageBox,
   usePage1,
@@ -17,11 +18,16 @@ import {
 import { isShortcut, useKeydown } from "../../keyboard";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
-import { BoxPanel } from "./BoxPanel";
+import { AreaChange } from "./AreaChange";
+import { AreaLayer, percent } from "./AreaLayer";
+import { BoxPanel, type KeptBox } from "./BoxPanel";
 
 /** Turns the tool on for a preview. ``suggestion``: what the file's current suggestion
  * came from, when the owner already has it (the Inbox card); otherwise it is asked for. */
-export type BoxTool = { suggestion?: Pick<FileSuggestions, "name_source" | "folder_source"> };
+export type BoxTool = {
+  suggestion?: Pick<FileSuggestions, "name_source" | "folder_source"> &
+    Partial<Pick<FileSuggestions, "areas" | "person_line">> & { person?: string | null };
+};
 
 type Drag = { x0: number; y0: number; x1: number; y1: number };
 
@@ -34,13 +40,6 @@ export function ruleIdOf(s: Pick<FileSuggestions, "name_source" | "folder_source
   const source = [s.folder_source, s.name_source].find((x) => x?.startsWith("rule:"));
   return source ? source.slice("rule:".length) : null;
 }
-
-const percent = (box: PageBox) => ({
-  left: `${box[0] * 100}%`,
-  top: `${box[1] * 100}%`,
-  width: `${(box[2] - box[0]) * 100}%`,
-  height: `${(box[3] - box[1]) * 100}%`,
-});
 
 /** What the tool gives a preview: its toolbar button, the layer around the page image and
  * the panel with what was found. */
@@ -85,6 +84,8 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const [on, setOn] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [box, setBox] = useState<PageBox | null>(null);
+  // boxes kept with "Add another box": the rule being made needs all of them
+  const [kept, setKept] = useState<KeptBox[]>([]);
   const page = usePage1(driveId, active && on);
   const lines = usePage1Lines();
   const own = useFileSuggestions(driveId, active && tool.suggestion === undefined);
@@ -92,31 +93,53 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const ruleId = suggestion ? ruleIdOf(suggestion) : null;
   const rules = useRules(active && ruleId !== null);
   const rule = ruleId ? (rules.data?.rules.find((r) => r.id === ruleId) ?? null) : null;
+  // the areas behind the suggestion: shown unless the owner turned them off
+  const areas = suggestion?.areas ?? [];
+  const personLine = suggestion?.person_line ?? null;
+  const [areasOn, setAreasOn] = useState<boolean | null>(null);
+  const showAreas = areasOn ?? areas.length > 0;
+  // an area the owner moved or resized: the rule sheet (or the address area) opens for it
+  const [changed, setChanged] = useState<{ area: Area; box: PageBox } | null>(null);
 
   const unavailable = page.data?.unavailable ?? null;
   const ready = on && page.data?.read === true;
-  const close = () => {
+  const dropBox = () => {
     setBox(null);
     setDrag(null);
     lines.reset();
+  };
+  const close = () => {
+    dropBox();
+    setKept([]);
+  };
+  const addAnother = () => {
+    if (!box) return;
+    setKept((all) => [...all, { box, lines: (lines.data?.lines ?? []).map((l) => l.text) }]);
+    dropBox();
+  };
+  const keepPicture = (png: string) => {
+    if (!box) return;
+    setKept((all) => [...all, { box, lines: [], picture: png }]);
+    dropBox();
   };
   const toggle = () => {
     close();
     setOn(!on);
   };
 
-  // Esc: first the box being drawn, then the panel, then the tool.
+  // Esc: first the box being drawn, then the box just drawn, then the kept boxes, then the tool.
   useKeydown((e) => {
     if (!active || !on || e.key !== "Escape" || !isShortcut(e)) return;
     e.preventDefault();
     if (drag) setDrag(null);
-    else if (box) close();
+    else if (box) dropBox();
+    else if (kept.length > 0) close();
     else setOn(false);
   });
 
   const start = (e: PointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
-    close();
+    dropBox();
     const at = point(e);
     if (!at) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -143,27 +166,39 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
 
   if (!active) return NONE;
 
-  const zones: { box: PageBox; kind: "area" | "address"; why: string }[] = [];
-  if (rule?.when.zone) zones.push({ box: rule.when.zone.box, kind: "area", why: `Rule ${rule.id} looks here` });
-  if (rule?.person_zone) zones.push({ box: rule.person_zone, kind: "address", why: `Rule ${rule.id} looks for the address here` });
-
   const button = (
-    <IconButton
-      icon={<SquareDashed />}
-      label="Draw a box"
-      tip="Draw a box on page 1 to make a rule or set the address area"
-      pressed={on}
-      disabled={unavailable !== null}
-      disabledReason={unavailable ?? undefined}
-      onClick={toggle}
-    />
+    <>
+      {(areas.length > 0 || personLine !== null) && (
+        <IconButton
+          icon={<Layers />}
+          label="Show areas"
+          tip="Show the areas of page 1 behind the suggestion"
+          pressed={showAreas}
+          onClick={() => setAreasOn(!showAreas)}
+        />
+      )}
+      <IconButton
+        icon={<SquareDashed />}
+        label="Draw a box"
+        tip="Draw a box on page 1 to make a rule or set the address area"
+        pressed={on}
+        disabled={unavailable !== null}
+        disabledReason={unavailable ?? undefined}
+        onClick={toggle}
+      />
+    </>
   );
   const around = (image: ReactNode) => (
     <span className="page-layer">
       {image}
-      {zones.map((z) => (
-        <span key={z.kind} className={`page-zone page-zone-${z.kind}`} style={percent(z.box)} title={visible(z.why)} data-zone={z.kind} />
-      ))}
+      {showAreas && (
+        <AreaLayer
+          areas={areas}
+          person={suggestion?.person ?? null}
+          personLine={personLine}
+          onChange={on ? undefined : (area, box) => setChanged({ area, box })}
+        />
+      )}
       {ready && (
         <span
           className="page-surface"
@@ -175,6 +210,11 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
           onPointerCancel={() => setDrag(null)}
         />
       )}
+      {kept.map((k, i) => (
+        <span key={`${i}-${k.box.join(",")}`} className="page-box page-box-kept" data-testid="kept-box" style={percent(k.box)}>
+          <span className="page-box-number">{i + 1}</span>
+        </span>
+      ))}
       {(drag ?? box) && (
         <span
           className="page-box"
@@ -186,7 +226,18 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
       )}
     </span>
   );
-  const panel = on ? (
+  const panel = (
+    <>
+      {changed && (
+        <AreaChange
+          key={`${changed.area.kind}:${changed.area.rule_id}:${changed.area.index}:${changed.box.join(",")}`}
+          driveId={driveId}
+          area={changed.area}
+          box={changed.box}
+          onClose={() => setChanged(null)}
+        />
+      )}
+      {on && (
     <>
       {unavailable !== null ? (
         <p className="hint box-note">{visible(unavailable)}</p>
@@ -195,12 +246,16 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
           {page.isError ? "Could not read page 1." : "Reading page 1…"}
         </p>
       ) : (
-        !box && <p className="hint box-note">Drag over page 1 to draw a box. Esc cancels.</p>
+        !box && <p className="hint box-note">{kept.length > 0 ? "Drag over page 1 to draw the next box. Esc cancels." : "Drag over page 1 to draw a box. Esc cancels."}</p>
       )}
-      {box && (
+      {(box || kept.length > 0) && (
         <BoxPanel
           driveId={driveId}
           box={box}
+          kept={kept}
+          onAddAnother={addAnother}
+          onKeepPicture={keepPicture}
+          onRemoveKept={(i) => setKept((all) => all.filter((_, at) => at !== i))}
           found={lines.data}
           pending={lines.isPending}
           error={lines.isError ? lines.error : null}
@@ -209,7 +264,9 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
         />
       )}
     </>
-  ) : null;
+      )}
+    </>
+  );
   return { button, around, panel };
 }
 

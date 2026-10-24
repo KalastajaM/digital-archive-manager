@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from dam.codes.configfile import write_config_file
-from dam.rules.model import Rule, _load_file, rule_files
+from dam.rules.model import LEARNED_FILE, Rule, _load_file, rule_files
 
 
 def rules_text(rules: list[Rule]) -> str:
@@ -36,3 +36,14 @@ def rule_file(rules_dir: Path, rule_id: str) -> Path | None:
         except (ValueError, RecursionError, MemoryError):
             continue  # a bad file loads nothing
     return None
+
+
+def learned_ids(rules_dir: Path) -> set[str]:
+    """The ids of the rules in ``learned.yaml`` (none when it is missing or does not load)."""
+    path = Path(rules_dir) / LEARNED_FILE
+    if not path.is_file():
+        return set()
+    try:
+        return {r.id for r in _load_file(path)}
+    except (ValueError, RecursionError, MemoryError):
+        return set()

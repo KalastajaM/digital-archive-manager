@@ -12,6 +12,7 @@ import {
   type RuleDraft,
   useDeleteRule,
   useExplain,
+  useFileSuggestions,
   useInbox,
   useMoveRule,
   useRules,
@@ -21,6 +22,7 @@ import { plural } from "../../format";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
 import { Sheet } from "../ui/Sheet";
+import { SamplePage } from "../zones/SamplePage";
 import { PeopleSettings } from "./PeopleSettings";
 import { RuleSheet, rewriteNote } from "./RuleSheet";
 
@@ -54,8 +56,13 @@ function RuleLine({
   onMove: (delta: number) => void;
   onDelete: () => void;
 }) {
-  const zone = r.when.zone;
-  const words = [...r.when.text_contains, ...(zone?.text_contains ?? [])].join(", ");
+  const zones = r.when.zones;
+  const pictures = zones.filter((z) => z.image).length;
+  const words = [
+    ...r.when.text_contains,
+    ...zones.flatMap((z) => z.text_contains ?? []),
+    ...(pictures > 0 ? [pictures === 1 ? "a picture" : `${pictures} pictures`] : []),
+  ].join(", ");
   const target = r.then.folder ? `→ ${r.then.folder}` : "";
   return (
     <li className="rule-line">
@@ -63,7 +70,9 @@ function RuleLine({
         <code className="code-line-code">{visible(r.id)}</code>
         <span className="code-line-label">
           {visible(words)}
-          {zone && <span className="code-line-zone"> · area on page 1</span>}
+          {zones.length > 0 && (
+            <span className="code-line-zone"> · {zones.length === 1 ? "area" : `${zones.length} areas`} on page 1</span>
+          )}
         </span>
         <span className="code-line-summary">
           {[target, record(r.stats), r.learned ? "" : r.file].filter(Boolean).map(visible).join(" · ")}
@@ -95,6 +104,13 @@ function TestDocument() {
   const explain = useExplain();
   const [picked, setPicked] = useState("");
   const entries = inbox.data ?? [];
+  const sample = entries.find((e) => e.record.drive_id === picked)?.record;
+  // the address area and the person's line come with the document's suggestion
+  const suggestion = useFileSuggestions(picked, picked !== "");
+  const areas = [
+    ...(explain.data ?? []).flatMap((x) => x.areas ?? []),
+    ...(suggestion.data?.areas ?? []).filter((a) => a.kind === "address"),
+  ];
   return (
     <div className="rules-test">
       <div className="field">
@@ -126,15 +142,26 @@ function TestDocument() {
             <li key={x.rule_id}>
               <code>{visible(x.rule_id)}</code> {x.matched ? "matches" : "no match"}: {visible(x.why)}
               {x.wins.length > 0 && <> ({gives(x.wins)})</>}
-              {(x.zone_lines ?? []).length > 0 && (
-                <>
-                  {" "}
-                  Page 1 in the area: {x.zone_lines.map((l) => `“${visible(l)}”`).join(", ")}
-                </>
+              {(x.zone_lines ?? []).map((lines, i) =>
+                lines.length > 0 ? (
+                  <span key={i}>
+                    {" "}
+                    Page 1 in {x.zone_lines.length === 1 ? "the area" : `area ${i + 1}`}: {lines.map((l) => `“${visible(l)}”`).join(", ")}
+                  </span>
+                ) : null,
               )}
             </li>
           ))}
         </ul>
+      )}
+      {picked && explain.data && sample && areas.length > 0 && (
+        <SamplePage
+          driveId={sample.drive_id}
+          ext={sample.ext}
+          areas={areas}
+          person={suggestion.data?.person ?? null}
+          personLine={suggestion.data?.person_line ?? null}
+        />
       )}
     </div>
   );
@@ -234,6 +261,11 @@ export function FilingRules() {
           ))}
         </ul>
       )}
+      {(rules.data.unused_pictures ?? []).length > 0 && (
+        <p className="hint rules-unused-pictures">
+          {plural((rules.data.unused_pictures ?? []).length, "picture file")} in config/rules/areas ({(rules.data.unused_pictures ?? []).map(visible).join(", ")}) {(rules.data.unused_pictures ?? []).length === 1 ? "is" : "are"} not used by any rule. Deleting a rule leaves them; you can remove them yourself.
+        </p>
+      )}
       <TestDocument />
       <div className="rules-offer">
         <label className="check">
@@ -256,6 +288,7 @@ export function FilingRules() {
           key={editing.id}
           initial={editing}
           replaces={"learned" in editing ? editing.id : undefined}
+          samplePage
           onClose={() => setEditing(null)}
         />
       )}
