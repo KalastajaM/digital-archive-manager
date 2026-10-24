@@ -7,6 +7,7 @@
 import { Layers, SquareDashed } from "lucide-react";
 import { type PointerEvent, type ReactNode, useState } from "react";
 import {
+  type Area,
   type FileSuggestions,
   type PageBox,
   usePage1,
@@ -17,6 +18,7 @@ import {
 import { isShortcut, useKeydown } from "../../keyboard";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
+import { AreaChange } from "./AreaChange";
 import { AreaLayer, percent } from "./AreaLayer";
 import { BoxPanel, type KeptBox } from "./BoxPanel";
 
@@ -96,6 +98,8 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const personLine = suggestion?.person_line ?? null;
   const [areasOn, setAreasOn] = useState<boolean | null>(null);
   const showAreas = areasOn ?? areas.length > 0;
+  // an area the owner moved or resized: the rule sheet (or the address area) opens for it
+  const [changed, setChanged] = useState<{ area: Area; box: PageBox } | null>(null);
 
   const unavailable = page.data?.unavailable ?? null;
   const ready = on && page.data?.read === true;
@@ -182,7 +186,14 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const around = (image: ReactNode) => (
     <span className="page-layer">
       {image}
-      {showAreas && <AreaLayer areas={areas} person={suggestion?.person ?? null} personLine={personLine} />}
+      {showAreas && (
+        <AreaLayer
+          areas={areas}
+          person={suggestion?.person ?? null}
+          personLine={personLine}
+          onChange={on ? undefined : (area, box) => setChanged({ area, box })}
+        />
+      )}
       {ready && (
         <span
           className="page-surface"
@@ -210,7 +221,10 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
       )}
     </span>
   );
-  const panel = on ? (
+  const panel = (
+    <>
+      {changed && <AreaChange area={changed.area} box={changed.box} onClose={() => setChanged(null)} />}
+      {on && (
     <>
       {unavailable !== null ? (
         <p className="hint box-note">{visible(unavailable)}</p>
@@ -236,7 +250,9 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
         />
       )}
     </>
-  ) : null;
+      )}
+    </>
+  );
   return { button, around, panel };
 }
 

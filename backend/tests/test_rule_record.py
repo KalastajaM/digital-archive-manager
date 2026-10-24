@@ -1,5 +1,6 @@
 """The track record of what each learned rule suggested and what the user kept."""
 
+from dam.rules.model import Rule
 from dam.services.rule_record import RuleRecord
 from test_api import BANKS, INBOX, make_client, post, req
 
@@ -50,3 +51,27 @@ def test_undo_removes_the_batch_outcomes(app, fake_archive):
         assert "r1" in app.rule_record.stats()
         assert post(client, f"/api/activity/{batch['batch_id']}/undo").status_code == 200
     assert app.rule_record.stats() == {}
+
+
+def test_last_documents_gives_the_newest_document_still_in_the_archive(app, fake_archive):
+    fake_archive.add("Insurance/old.pdf", drive_id="d-old")
+    fake_archive.add("Insurance/new.pdf", drive_id="d-new")
+    fake_archive.add("Insurance/gone.pdf", drive_id="d-gone")
+    app.scan()
+    rr = app.rule_record
+    rr.record("b1", "d-old", [("r1", "folder", True)])
+    rr.record("b2", "d-new", [("r1", "folder", True)])
+    rr.record("b3", "d-gone", [("r1", "folder", True)])
+    rr.record("b4", "d-nowhere", [("r2", "folder", True)])  # not in the index at all
+    (fake_archive.root / "Insurance" / "gone.pdf").unlink()
+    app.scan()
+    last = rr.last_documents()
+    assert set(last) == {"r1"}
+    assert (last["r1"].drive_id, last["r1"].name, last["r1"].ext) == ("d-new", "new.pdf", "pdf")
+    # the rule list carries it for the editor; a rule never used has none
+    app.save_rule(Rule.model_validate({"id": "r1", "when": {"text_contains": ["x"]}}))
+    app.save_rule(Rule.model_validate({"id": "never", "when": {"text_contains": ["y"]}}))
+    with make_client(app) as client:
+        by_id = {r["id"]: r for r in client.get("/api/rules").json()["rules"]}
+    assert by_id["r1"]["sample"] == {"drive_id": "d-new", "name": "new.pdf", "ext": "pdf"}
+    assert by_id["never"]["sample"] is None

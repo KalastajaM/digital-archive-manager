@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from sqlalchemy import Engine, delete, insert, select
 
 from dam.db.engine import write_tx
-from dam.db.tables import rule_outcomes
+from dam.db.tables import files, rule_outcomes
 
 RECENT_FILINGS = 5  # a rule is flagged by its last few filings
 FLAG_AFTER = 2  # changed folder or name in this many of them
@@ -24,6 +24,15 @@ class RuleStats:
     changed: int  # of those, filings where the user changed anything
     last_used: float | None
     flagged: bool  # folder or name changed in 2 or more of the last 5 filings
+
+
+@dataclass
+class SampleDocument:
+    """A document a rule was last used on, for showing the rule's areas on a real page."""
+
+    drive_id: str
+    name: str | None
+    ext: str | None
 
 
 class RuleRecord:
@@ -55,6 +64,30 @@ class RuleRecord:
             return conn.execute(
                 delete(rule_outcomes).where(rule_outcomes.c.batch_id == batch_id)
             ).rowcount
+
+    def last_documents(self) -> dict[str, SampleDocument]:
+        """Per rule id, the document the rule last made a suggestion for that is still in the
+        archive (not gone, parked or a folder). Rules never recorded are absent."""
+        query = (
+            select(
+                rule_outcomes.c.rule_id,
+                rule_outcomes.c.drive_id,
+                files.c.name,
+                files.c.ext,
+            )
+            .select_from(rule_outcomes.join(files, files.c.drive_id == rule_outcomes.c.drive_id))
+            .where(
+                files.c.missing.is_not(True),
+                files.c.parked_at.is_(None),
+                files.c.is_dir.is_not(True),
+            )
+            .order_by(rule_outcomes.c.created, rule_outcomes.c.id)
+        )
+        with self.engine.connect() as conn:
+            rows = conn.execute(query).all()
+        return {
+            rule_id: SampleDocument(drive_id, name, ext) for rule_id, drive_id, name, ext in rows
+        }
 
     def stats(self) -> dict[str, RuleStats]:
         """Per rule id, how often it was suggested and kept; rules never recorded are absent."""

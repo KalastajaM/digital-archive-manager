@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { type Call, deferred, mockFetch, renderWithProviders } from "../../test-utils";
@@ -28,7 +28,7 @@ const REPLAY = {
 };
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 
-function setup(replay: object = REPLAY, props: Partial<Parameters<typeof RuleSheet>[0]> = {}) {
+function setup(replay: object = REPLAY, props: Partial<Parameters<typeof RuleSheet>[0]> = {}, extra: Record<string, unknown> = {}) {
   const onClose = vi.fn();
   const calls = mockFetch({
     "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
@@ -36,6 +36,7 @@ function setup(replay: object = REPLAY, props: Partial<Parameters<typeof RuleShe
     "GET /api/tags": { body: [] },
     "POST /api/rules/replay": { body: replay },
     "PUT /api/rules/kotihoito": { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } },
+    ...extra,
   } as never);
   renderWithProviders(
     <RuleSheet initial={DRAFT} filed={{ folder: "20. Health/2026", name: "a.pdf" }} onClose={onClose} {...props} />,
@@ -300,6 +301,78 @@ describe("RuleSheet", () => {
       await user.click(within(screen.getByRole("group", { name: "Area" })).getByRole("button", { name: "Remove area" }));
       expect(screen.getByText("A rule needs a word or an area")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    });
+
+    describe("a sample page", () => {
+      const WITH_SAMPLE = { ...TWO_AREAS, sample: { drive_id: "s1", name: "policy.pdf", ext: "pdf" } };
+      const INBOX = [{ record: { drive_id: "i1", path: "##. Organize/new.jpg", name: "new.jpg", ext: "jpg" } }];
+      const props = { initial: WITH_SAMPLE, filed: undefined, samplePage: true };
+      const area = (id: string) => document.querySelector(`[data-area="${id}"]`) as HTMLElement;
+      /** Selects area ``id`` and drags it 20 px right and 40 px down on a 200 x 400 page. */
+      function drag(id: string) {
+        const layer = document.querySelector(".page-layer") as HTMLElement;
+        layer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 400, right: 200, bottom: 400, x: 0, y: 0 }) as DOMRect;
+        fireEvent.pointerDown(area(id), { clientX: 20, clientY: 20, button: 0 });
+        fireEvent.pointerDown(area(id), { clientX: 20, clientY: 20, button: 0 });
+        fireEvent.pointerMove(area(id), { clientX: 40, clientY: 60 });
+        fireEvent.pointerUp(area(id), { clientX: 40, clientY: 60 });
+      }
+
+      it("shows the rule's areas on the page of the document it matched last", async () => {
+        setup(REPLAY, props, { "GET /api/inbox": { body: INBOX } });
+        const page = await screen.findByAltText("Page 1");
+        expect(page).toHaveAttribute("src", "/api/files/s1/page/1.png?w=900");
+        expect(screen.getByRole("combobox", { name: "Areas on a sample page" })).toHaveValue("s1");
+        expect(area("pohjola:0")).toBeInTheDocument();
+        expect(area("pohjola:1")).toBeInTheDocument();
+        expect(screen.getByRole("option", { name: "Last document it matched: policy.pdf" })).toBeInTheDocument();
+      });
+
+      it("lets the owner pick a document from the Inbox when the rule has no last document", async () => {
+        const { user } = setup(REPLAY, { ...props, initial: { ...WITH_SAMPLE, sample: null } }, { "GET /api/inbox": { body: INBOX } });
+        expect(await screen.findByText("Pick a document to see the areas on its first page.")).toBeInTheDocument();
+        expect(screen.queryByAltText("Page 1")).toBeNull();
+        await screen.findByRole("option", { name: "new.jpg" });
+        await user.selectOptions(screen.getByRole("combobox", { name: "Areas on a sample page" }), "i1");
+        expect(await screen.findByAltText("Page 1")).toHaveAttribute("src", "/api/files/i1/raw");
+      });
+
+      it("is not shown unless asked for", async () => {
+        setup(REPLAY, { initial: WITH_SAMPLE, filed: undefined });
+        await screen.findByRole("group", { name: "Area 1" });
+        expect(screen.queryByRole("combobox", { name: "Areas on a sample page" })).toBeNull();
+      });
+
+      it("dragging an area changes the rule and the test follows", async () => {
+        const { calls } = setup(REPLAY, props, { "GET /api/inbox": { body: INBOX } });
+        await screen.findByAltText("Page 1");
+        await screen.findByText(/Matches 4/);
+        const before = posts(calls, "/api/rules/replay").length;
+        drag("pohjola:0"); // selects it, then moves it
+        await waitFor(() => expect(posts(calls, "/api/rules/replay").length).toBeGreaterThan(before));
+        const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { box: number[] }[] } } };
+        expect(sent.rule.when.zones.map((z) => z.box.map((v) => Math.round(v * 1000) / 1000))).toEqual([
+          [0.15, 0.12, 0.55, 0.24],
+          [0.55, 0.05, 0.95, 0.12],
+        ]);
+      });
+
+      it("changes the rule's own address area too", async () => {
+        const { calls } = setup(REPLAY, { ...props, initial: { ...WITH_SAMPLE, person_zone: [0.1, 0.2, 0.6, 0.4] } }, { "GET /api/inbox": { body: INBOX } });
+        await screen.findByAltText("Page 1");
+        await screen.findByText(/Matches 4/);
+        const address = document.querySelector('[data-kind="address"]') as HTMLElement;
+        const layer = document.querySelector(".page-layer") as HTMLElement;
+        layer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 400, right: 200, bottom: 400, x: 0, y: 0 }) as DOMRect;
+        fireEvent.pointerDown(address, { clientX: 60, clientY: 120, button: 0 });
+        fireEvent.pointerDown(address, { clientX: 60, clientY: 120, button: 0 });
+        fireEvent.pointerMove(address, { clientX: 80, clientY: 160 });
+        fireEvent.pointerUp(address, { clientX: 80, clientY: 160 });
+        await waitFor(() => {
+          const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { person_zone: number[] } };
+          expect(sent.rule.person_zone.map((v) => Math.round(v * 1000) / 1000)).toEqual([0.2, 0.3, 0.7, 0.5]);
+        });
+      });
     });
 
     it("says what is not checked, and lists it", async () => {

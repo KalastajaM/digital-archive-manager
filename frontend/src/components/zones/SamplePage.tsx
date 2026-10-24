@@ -14,12 +14,15 @@ export function SamplePage({
   areas,
   person = null,
   personLine = null,
+  onChange,
 }: {
   driveId: string;
   ext: string | null | undefined;
   areas: readonly Area[];
   person?: string | null;
   personLine?: { box: PageBox } | null;
+  /** Makes the areas changeable (see ``AreaLayer``). */
+  onChange?: (area: Area, box: PageBox) => void;
 }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <p className="hint">There is no picture of page 1 to show.</p>;
@@ -27,7 +30,7 @@ export function SamplePage({
     <div className="sample-page">
       <span className="page-layer">
         <img src={sampleUrl(driveId, ext)} alt="Page 1" draggable={false} onError={() => setFailed(true)} />
-        <AreaLayer areas={areas} person={person} personLine={personLine} />
+        <AreaLayer areas={areas} person={person} personLine={personLine} onChange={onChange} />
       </span>
     </div>
   );

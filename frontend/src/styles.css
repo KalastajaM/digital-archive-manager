@@ -1996,6 +1996,17 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .area-off { border-style: dashed; opacity: 0.45; }
 .area-address { border-color: var(--orange-text); background: var(--orange-bg); }
 .area-label { position: absolute; left: 0; bottom: 100%; max-width: 100%; padding: 0 4px; font-size: var(--fs-sm); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel); color: var(--text); border-radius: 2px; }
+.area-editable { pointer-events: auto; cursor: pointer; touch-action: none; }
+.area-selected { cursor: move; opacity: 0.9; }
+.area-handle { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--accent-fill); border: 1px solid var(--panel); border-radius: 2px; touch-action: none; }
+.area-handle-nw { left: 0; top: 0; cursor: nwse-resize; }
+.area-handle-n { left: 50%; top: 0; cursor: ns-resize; }
+.area-handle-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.area-handle-e { left: 100%; top: 50%; cursor: ew-resize; }
+.area-handle-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.area-handle-s { left: 50%; top: 100%; cursor: ns-resize; }
+.area-handle-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.area-handle-w { left: 0; top: 50%; cursor: ew-resize; }
 .area-line { position: absolute; pointer-events: none; background: var(--accent-soft); outline: 1px solid var(--accent); border-radius: 1px; }
 .area-person { background: var(--orange-bg); outline-color: var(--orange-text); }
 .sample-page { margin: var(--sp-2) 0; max-width: 28rem; }

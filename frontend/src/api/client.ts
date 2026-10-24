@@ -1490,7 +1490,12 @@ export const useSaveRule = () => {
       return put<RulesData>(`/api/rules/${enc(rule.id)}${query}`, rule);
     },
     onSuccess: (saved) => client.setQueryData(keys.rules, saved),
-    onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.rules });
+      // the areas behind a suggestion follow the rule
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: keys.file, predicate: (q) => q.queryKey.at(-1) === "suggestions" });
+    },
   });
 };
 

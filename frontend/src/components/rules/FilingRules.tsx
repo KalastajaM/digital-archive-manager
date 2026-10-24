@@ -278,6 +278,7 @@ export function FilingRules() {
           key={editing.id}
           initial={editing}
           replaces={"learned" in editing ? editing.id : undefined}
+          samplePage
           onClose={() => setEditing(null)}
         />
       )}

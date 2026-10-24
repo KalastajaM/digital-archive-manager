@@ -4,6 +4,7 @@
  * document somewhere else. */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  type Area,
   errorText,
   type PageBox,
   type Replay,
@@ -11,6 +12,7 @@ import {
   type RuleDraft,
   type RuleIn,
   type RuleOffer,
+  useInbox,
   useReplay,
   useRules,
   useSaveRule,
@@ -22,6 +24,7 @@ import { visible } from "../../text";
 import { useInboxFolder } from "../MoveTo";
 import { TagInput } from "../TagInput";
 import { useToast } from "../Toasts";
+import { SamplePage } from "../zones/SamplePage";
 import { Sheet } from "../ui/Sheet";
 import { ReplayResult } from "./ReplayResult";
 
@@ -33,7 +36,7 @@ const READING_POLLS = 15;
 
 type Word = { word: string; ticked: boolean };
 /** An area of page 1 with the words of which any one is enough. */
-type Area = { box: PageBox; words: Word[] };
+type RuleArea = { box: PageBox; words: Word[] };
 /** A field of the "then" part: ``off`` leaves it out of the rule. */
 type Text = { off: boolean; value: string };
 
@@ -84,6 +87,8 @@ export function RuleSheet({
   initial,
   replaces,
   filed,
+  before,
+  samplePage = false,
   onClose,
 }: {
   initial: RuleDraft | ZoneDraft | Rule;
@@ -91,6 +96,11 @@ export function RuleSheet({
   replaces?: string;
   /** Offer mode: what was just filed (its folder and name, shown under the words). */
   filed?: { folder: string; name: string };
+  /** The rule as it was before the change in ``initial``: the proof also says how it did,
+   * so the effect of the change can be seen ("finds 16 of 16, was 14"). */
+  before?: Rule;
+  /** Settings: show the rule's areas on a sample page, where they can be changed. */
+  samplePage?: boolean;
   onClose: () => void;
 }) {
   const draft = isDraft(initial);
@@ -99,7 +109,7 @@ export function RuleSheet({
   const sender = zoneDraft ? zoneDraft.sender : draft ? null : initial.sender;
   // a new rule drawn from boxes goes directly above the learned rule that matches the document
   const placeAbove = zoneDraft?.place_above ?? null;
-  const personZone = draft ? null : initial.person_zone;
+  const [personZone, setPersonZone] = useState<PageBox | null>(() => (draft ? null : initial.person_zone));
   const replacing = replaces ?? (draft ? undefined : initial.id);
   const inbox = useInboxFolder();
   const trays = useTrays().data?.trays ?? [];
@@ -116,7 +126,7 @@ export function RuleSheet({
         ? initial.words.map((w) => ({ ...w }))
         : initial.when.text_contains.map((word) => ({ word, ticked: true })),
   );
-  const [areas, setAreas] = useState<Area[]>(() =>
+  const [areas, setAreas] = useState<RuleArea[]>(() =>
     zoneDraft
       ? zoneDraft.zones.map((z) => ({ box: z.box, words: z.words.map((w) => ({ ...w })) }))
       : draft
@@ -169,7 +179,7 @@ export function RuleSheet({
       ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.id, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i]])), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
+    [initial.id, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i]])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
   );
   const ruleKey = JSON.stringify(rule);
 
@@ -213,6 +223,37 @@ export function RuleSheet({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ruleKey, replacing, runReplay]);
+
+  // How the rule did before the change (a replay of the old rule, asked once).
+  const [baseline, setBaseline] = useState<Replay | null>(null);
+  const baselineReplay = useReplay();
+  const { mutate: runBaseline } = baselineReplay;
+  const baselineAgain = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    if (!before) return;
+    let live = true;
+    let polls = 0;
+    const ask = () =>
+      runBaseline(
+        { rule: ruleInOf(before), replaces: before.id },
+        {
+          onSuccess: (result) => {
+            if (!live) return;
+            setBaseline(result);
+            if (waiting(result) && polls < READING_POLLS) {
+              polls += 1;
+              baselineAgain.current = setTimeout(ask, READING_POLL_MS);
+            }
+          },
+        },
+      );
+    ask();
+    return () => {
+      live = false;
+      clearTimeout(baselineAgain.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [before?.id, runBaseline]);
 
   const withWord = (all: Word[], w: string): Word[] =>
     all.some((x) => x.word === w) ? all.map((x) => (x.word === w ? { ...x, ticked: true } : x)) : [...all, { word: w, ticked: true }];
@@ -345,6 +386,16 @@ export function RuleSheet({
           />
         ))}
         {areas.length > 1 && <p className="hint">The document needs a word in every area.</p>}
+        {samplePage && (areas.length > 0 || personZone) && (
+          <SampleAreas
+            ruleId={initial.id}
+            sample={draft ? null : initial.sample}
+            areas={areas.map((a) => a.box)}
+            personZone={personZone}
+            onArea={(i, box) => setAreas((all) => all.map((a, at) => (at === i ? { ...a, box } : a)))}
+            onPersonZone={setPersonZone}
+          />
+        )}
         {sender && <p className="hint">Sender: {visible(sender)}</p>}
         {filed && (
           <p className="hint rule-filed">
@@ -402,6 +453,7 @@ export function RuleSheet({
         {hasCondition && (
           <ReplayResult
             replay={proof?.replay}
+            before={before ? baseline : null}
             sender={sender}
             pending={tested === null && !failed}
             error={failed ? errorText(replay.error) : null}
@@ -491,4 +543,82 @@ function AreaWords({
       />
     </div>
   );
+}
+
+/** A rule's areas on a sample page (the document it matched last, or one from the Inbox), to
+ * see them and to change them by dragging. */
+function SampleAreas({
+  ruleId,
+  sample,
+  areas,
+  personZone,
+  onArea,
+  onPersonZone,
+}: {
+  ruleId: string;
+  sample: Rule["sample"] | null | undefined;
+  areas: PageBox[];
+  personZone: PageBox | null;
+  onArea: (index: number, box: PageBox) => void;
+  onPersonZone: (box: PageBox) => void;
+}) {
+  const id = useId();
+  const inbox = useInbox();
+  const [picked, setPicked] = useState(sample?.drive_id ?? "");
+  const choices = [
+    ...(sample ? [{ drive_id: sample.drive_id, name: sample.name, ext: sample.ext, label: `Last document it matched: ${sample.name ?? sample.drive_id}` }] : []),
+    ...(inbox.data ?? [])
+      .filter((e) => e.record.drive_id !== sample?.drive_id)
+      .map((e) => ({ drive_id: e.record.drive_id, name: e.record.name, ext: e.record.ext, label: e.record.name ?? e.record.path })),
+  ];
+  const chosen = choices.find((c) => c.drive_id === picked);
+  const shown: Area[] = [
+    ...areas.map((box, index) => ({ rule_id: ruleId, index, box, kind: "text" as const, lines: [], score: null, matched: true, reason: null, wins: true })),
+    ...(personZone
+      ? [{ rule_id: ruleId, index: 0, box: personZone, kind: "address" as const, lines: [], score: null, matched: true, reason: null, wins: true }]
+      : []),
+  ];
+  return (
+    <div className="field rule-sample">
+      <label htmlFor={`${id}-sample`}>Areas on a sample page</label>
+      <select id={`${id}-sample`} value={picked} onChange={(e) => setPicked(e.target.value)}>
+        <option value="">Pick a document</option>
+        {choices.map((c) => (
+          <option key={c.drive_id} value={c.drive_id}>
+            {visible(c.label)}
+          </option>
+        ))}
+      </select>
+      {chosen ? (
+        <>
+          <SamplePage
+            driveId={chosen.drive_id}
+            ext={chosen.ext}
+            areas={shown}
+            onChange={(area, box) => (area.kind === "address" ? onPersonZone(box) : onArea(area.index, box))}
+          />
+          <p className="hint">Click an area to select it, then drag it to move it or its handles to resize it. The test below follows.</p>
+        </>
+      ) : (
+        <p className="hint">Pick a document to see the areas on its first page.</p>
+      )}
+    </div>
+  );
+}
+
+/** The rule as the save and replay calls take it. */
+export function ruleInOf(r: Rule): RuleIn {
+  return {
+    id: r.id,
+    when: {
+      text_contains: r.when.text_contains,
+      filename_matches: r.when.filename_matches,
+      folder_is: r.when.folder_is,
+      zones: r.when.zones.map((z) => ({ box: z.box, text_contains: z.text_contains })),
+      person: r.when.person,
+    },
+    then: r.then,
+    person_zone: r.person_zone,
+    sender: r.sender,
+  };
 }

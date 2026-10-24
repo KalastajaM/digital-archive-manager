@@ -373,6 +373,109 @@ describe("Draw a box", () => {
     });
   });
 
+  describe("Changing areas", () => {
+    const AREA = {
+      rule_id: "pohjola", index: 0, box: [0.05, 0.02, 0.45, 0.14], kind: "text", lines: [], score: null, matched: true, reason: null, wins: true,
+    };
+    const ADDRESS = (rule_id: string) => ({
+      ...AREA, rule_id, box: [0.1, 0.2, 0.6, 0.4], kind: "address", wins: false,
+    });
+    const tool = (areas: object[]) => ({
+      suggestion: { name_source: "scan", folder_source: "rule:pohjola", areas, person: null, person_line: null },
+    });
+    const SAVED = { body: { rules: [RULE], errors: [], state: { offer: true, declined: 0 } } };
+    /** The page is 200 x 400; (10, 8) is the top left corner of the area and (90, 56) its bottom right. */
+    function layerSize() {
+      const layer = document.querySelector(".page-layer") as HTMLElement;
+      layer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 400, right: 200, bottom: 400, x: 0, y: 0 }) as DOMRect;
+    }
+    const area = (id: string) => document.querySelector(`[data-area="${id}"]`) as HTMLElement;
+    /** Selects the area, then drags it 20 px to the right and 40 px down: 10 % and 10 % of the page. */
+    function drag(id: string) {
+      layerSize();
+      fireEvent.pointerDown(area(id), { clientX: 50, clientY: 20, button: 0 });
+      fireEvent.pointerDown(area(id), { clientX: 50, clientY: 20, button: 0 });
+      fireEvent.pointerMove(area(id), { clientX: 70, clientY: 60 });
+      fireEvent.pointerUp(area(id), { clientX: 70, clientY: 60 });
+    }
+    const rounded = (box: number[]) => box.map((v) => Math.round(v * 1000) / 1000);
+
+    it("opens the rule with the moved area and tests it against how the rule did before", async () => {
+      const { calls, user } = setup(
+        {
+          "POST /api/rules/replay": (call) => {
+            const zones = (call.body as { rule: { when: { zones: { box: number[] }[] } } }).rule.when.zones;
+            return { body: { ...REPLAY, matched: zones[0].box[0] === 0.05 ? 14 : 16, same: 14, marked: null } };
+          },
+          "PUT /api/rules/pohjola": SAVED,
+        },
+        pdf,
+        tool([AREA]),
+      );
+      await screen.findByTitle("pohjola");
+      drag("pohjola:0");
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+      await within(sheet).findByText(/Matches 16 documents/);
+      expect(await within(sheet).findByText(/Before the change it matched 14 documents/)).toBeInTheDocument();
+      const sent = posts(calls, "/api/rules/replay").map((c) => (c.body as { rule: { when: { zones: { box: number[] }[] } }; replaces: string }));
+      const moved = sent.find((b) => b.rule.when.zones[0].box[0] !== 0.05);
+      expect(rounded(moved?.rule.when.zones[0].box ?? [])).toEqual([0.15, 0.12, 0.55, 0.24]);
+      expect(moved?.replaces).toBe("pohjola");
+      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+      const put = calls.find((c) => c.method === "PUT") as Call;
+      expect(put.url).toBe("/api/rules/pohjola?replaces=pohjola");
+      expect(rounded((put.body as { when: { zones: { box: number[] }[] } }).when.zones[0].box)).toEqual([0.15, 0.12, 0.55, 0.24]);
+    });
+
+    it("keeps the rule as it was when the sheet is cancelled", async () => {
+      const { calls, user } = setup({ "POST /api/rules/replay": { body: REPLAY } }, pdf, tool([AREA]));
+      await screen.findByTitle("pohjola");
+      drag("pohjola:0");
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+      await user.click(within(sheet).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+      expect(area("pohjola:0")).toHaveStyle({ left: "5%", top: "2%" }); // drawn where the rule has it
+    });
+
+    it("changes a rule's own address area (person_zone) the same way", async () => {
+      const { calls, user } = setup({ "POST /api/rules/replay": { body: REPLAY }, "PUT /api/rules/pohjola": SAVED }, pdf, tool([ADDRESS("pohjola")]));
+      await screen.findByTitle("Address area of pohjola");
+      drag("pohjola:0");
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+      await within(sheet).findByText(/Matches 2 documents/);
+      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+      const body = calls.find((c) => c.method === "PUT")?.body as { person_zone: number[]; when: { zones: { box: number[] }[] } };
+      expect(rounded(body.person_zone)).toEqual([0.2, 0.3, 0.7, 0.5]);
+      expect(body.when.zones[0].box).toEqual(RULE.when.zones[0].box); // the rule's words area is untouched
+    });
+
+    it("saves the archive-wide address area to the settings after asking", async () => {
+      const { calls, user } = setup({ "PUT /api/settings/people": { body: PEOPLE } }, pdf, tool([ADDRESS("")]));
+      await screen.findByTitle("Address area");
+      drag(":0");
+      const sheet = await screen.findByRole("dialog", { name: "Change the address area" });
+      expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+      await waitFor(() => expect(within(sheet).getByRole("button", { name: "Save" })).toBeEnabled());
+      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+      const body = calls.find((c) => c.method === "PUT")?.body as { people: unknown; address_zone: number[] };
+      expect(body.people).toEqual(PEOPLE.people);
+      expect(rounded(body.address_zone)).toEqual([0.2, 0.3, 0.7, 0.5]);
+      expect(await screen.findByText("Address area saved for all letters.")).toBeInTheDocument();
+    });
+
+    it("cannot change areas while the Draw a box tool is on", async () => {
+      const { user } = setup({}, pdf, tool([AREA]));
+      await screen.findByTitle("pohjola");
+      await user.click(screen.getByRole("button", { name: "Draw a box" }));
+      await screen.findByTestId("box-surface");
+      expect(area("pohjola:0")).not.toHaveClass("area-editable");
+    });
+  });
+
   it("asks for the suggestion itself when the preview was not given one", async () => {
     const { calls } = setup(
       {

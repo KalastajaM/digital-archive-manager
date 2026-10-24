@@ -8,6 +8,19 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- A rule can need several areas of page 1, such as "Pohjola in the letterhead" and
+  "vakuutuskirja in the title", so each kind of letter from a sender files to its own
+  place. In Draw a box, **Add another box** keeps a box and lets you draw the next; the
+  rule sheet shows each area as its own group of words, and a rule made from boxes is
+  saved directly above the learned rule that matches the document already.
+- You can see why a document matched: **Show areas** in the preview draws the areas of
+  every rule that matched, the lines that matched in them, the address area and the line
+  where the person was found. Test a document draws the areas of rules that did not
+  match as dashed outlines with the reason.
+- You can change an area after it is saved: select it on page 1, drag it or its handles,
+  and the rule sheet opens with the test showing how the rule did before and after. The
+  address area works the same way, and Settings → Filing rules shows a rule's areas on a
+  sample page where they can be dragged too.
 - Rules that match by where text sits on page 1: draw a box on page 1 of a document in
   the preview (Draw a box) and make a rule from it, such as "Pohjola in the letterhead
   means a letter from Pohjola". A word only counts when it is inside the area, so a

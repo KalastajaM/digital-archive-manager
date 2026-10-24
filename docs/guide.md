@@ -474,7 +474,7 @@ In the preview of an Inbox document (or in Browse), turn on **Draw a box** and d
 rectangle over page 1. dam lists the text it found in the box and offers:
 
 - **Sender…**: give the sender a name if you like, and a rule sheet opens with the
-  words in the box as chips, noted "Matches only in the area you drew on page 1". The
+  words in the box as chips under "In the area you drew on page 1". The
   proof works as above. Documents whose page 1 has not been read yet are read first
   ("Reading page 1 of N documents…"); any that cannot be read are listed as not checked,
   never counted as a miss. With a sender, the proof also says how many of the documents
@@ -483,8 +483,52 @@ rectangle over page 1. dam lists the text it found in the box and offers:
   somewhere unusual; shown when a rule made the current suggestion.
 - **Address area for all letters**: where dam looks for who a letter is for.
 
-The areas of the rule behind a suggestion are shown faintly on page 1, so you can see
-why it matched. A box allows for a few millimetres of shift between scans.
+A box allows for a few millimetres of shift between scans.
+
+#### Several areas for one rule
+
+A sender writes many kinds of letters, and the kind is usually printed in a fixed place
+too, such as the title under the letterhead. A rule can need more than one area: every
+area must have one of its words, so "Pohjola in the letterhead" and "vakuutuskirja in the
+title" together file a policy and leave a Pohjola bill alone.
+
+Draw the first box and choose **Add another box**. The box stays on the page, numbered,
+and is listed in the panel with its lines; remove it with its x. Draw the next one the
+same way. **Sender…** then **Make a rule…** uses all the kept boxes, with one word
+ticked in each. The rule sheet shows each area as its own group of word chips with a
+**Remove** button; a rule needs at least one word or area. Within an area any ticked
+word is enough.
+
+For folder and name the first matching rule wins, so a rule with more areas has to come
+before a plainer rule for the same sender. When you make a rule from boxes drawn on a
+document that a learned rule matches already, dam saves the new rule directly above that
+rule. Rules you wrote in your own files are never reordered; the proof still says "For N
+of them rule X comes first" if the order is wrong.
+
+#### Seeing the areas
+
+On page 1 of a preview, **Show areas** (on by default when there are areas) draws the
+areas of every rule that matched the document, labelled with the rule's id. The rule that
+gave the folder or name is drawn stronger. The lines that matched inside each area are
+highlighted. The address area that was used (the archive's or the rule's own) is drawn
+too, with the line where the person was found: "For: Tiina, found here".
+
+In Settings → Filing rules, **Test a document** draws the areas of all rules on page 1.
+The areas of rules that did not match are dashed and say why ("no word found in area 2").
+
+#### Changing an area
+
+Click an area on page 1 to select it. Drag it to move it, or drag one of its handles to
+resize it. When you let go, the rule sheet opens with the changed area and the test runs
+again, with a line saying how the rule did before ("Before the change it matched 14
+documents"), so you see the effect on the documents you filed before you save. Cancel
+leaves the rule as it was. The address area works the same way: a rule's own address area
+changes that rule; the area for all letters asks once and is saved to the settings.
+Areas cannot be moved while **Draw a box** is on.
+
+In Settings → Filing rules, open a rule that has areas and the sheet shows them on a
+sample page: the last document the rule was used on, or any file in the Inbox you pick.
+Drag them there in the same way; the test below follows.
 
 ### Who a letter is for
 
