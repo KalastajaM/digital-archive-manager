@@ -22,8 +22,14 @@ All notable changes are listed here. The format follows
   things show up: the counts are the same as in any other order. On a test archive of
   11 000 files, the first five matches of a rule with a word area and a picture came after
   205 documents instead of 8 243. "Test the rest" goes on in the same order.
-- **Test the rest**: when the test stops at its time limit, it continues from where it
-  stopped and adds to the result instead of starting over.
+- The test of a rule runs in the background and fills in as it goes, instead of one
+  request that gives up after five seconds. The sheet says "Checked 1 240 of 10 875
+  documents…" with a **Stop** button, shows the matches found so far, and goes on until
+  every document is looked at. It ends when you stop it, change the rule or close the
+  sheet. When all documents are looked at and some still wait for page 1 to be read, it
+  says so and looks at them again as they are read. The test only reads the index and the
+  cache; it changes nothing. (The old **Test the rest** button is gone: the test no longer
+  needs it.)
 - The Index sheet shows how far reading page 1 has come, how many documents wait because
   page 1 cannot be read now and why, the switch for reading older documents in the
   background, and an estimate of the time left. The status line at the foot of the sidebar

@@ -22,6 +22,8 @@ export type RuleIn = Schemas["RuleIn"];
 export type RuleDraft = Schemas["RuleDraftOut"];
 export type RuleOffer = Schemas["RuleOfferOut"];
 export type Replay = Schemas["ReplayOut"];
+/** A rule test running in the background: its state, how far it is and the result so far. */
+export type ReplayJob = Schemas["ReplayJobOut"];
 export type RulesData = Schemas["RulesOut"];
 export type RuleExplain = Schemas["RuleExplainOut"];
 export type RulesState = Schemas["RulesStateOut"];
@@ -1512,34 +1514,32 @@ export const useSaveFilingCodes = () => {
 export const useRules = (enabled = true) =>
   useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules"), enabled });
 
-/** What a rule would do to the documents filed so far (nothing changes). ``replaces``:
- * the rule it would take the place of; ``placeAbove``: for a new rule, the learned rule it
- * goes directly above. */
-export const useReplay = () =>
-  useMutation({
-    mutationFn: ({
-      rule,
-      replaces,
-      placeAbove,
-      after,
-      nearDriveId,
-    }: {
-      rule: RuleIn;
-      replaces?: string | null;
-      placeAbove?: string | null;
-      /** go on from this cursor (the ``next_after`` of a replay that stopped at its time budget) */
-      after?: string | null;
-      /** the document the areas were drawn on: the documents in its folder are tested early */
-      nearDriveId?: string | null;
-    }) =>
-      post<Replay>("/api/rules/replay", {
-        rule,
-        replaces: replaces ?? null,
-        place_above: placeAbove ?? null,
-        after: after ?? null,
-        near_drive_id: nearDriveId ?? null,
-      }),
+/** Test a rule in the background (one test per ``sheet``: an earlier one for it is ended). */
+export const startReplayJob = (body: {
+  rule: RuleIn;
+  sheet: string;
+  replaces?: string | null;
+  placeAbove?: string | null;
+  nearDriveId?: string | null;
+}) =>
+  post<ReplayJob>("/api/rules/replay/jobs", {
+    rule: body.rule,
+    sheet: body.sheet,
+    replaces: body.replaces ?? null,
+    place_above: body.placeAbove ?? null,
+    near_drive_id: body.nearDriveId ?? null,
   });
+
+/** The state of a background test and its result so far; with ``since`` (the version
+ * already held) the result is null while nothing is new. */
+export const getReplayJob = (id: string, since?: number) =>
+  get<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}${since !== undefined ? `?since=${since}` : ""}`);
+
+/** End a background test where it is; what it found so far stays. */
+export const stopReplayJob = (id: string) => post<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}/stop`);
+
+/** End a background test and forget it (the sheet that asked for it closed). */
+export const dropReplayJob = (id: string) => del<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}`);
 
 /** The areas of the rule being tested on one document (matched lines, the best place and
  * score of a picture area, why one did not match), to draw them on its page 1. */

@@ -168,7 +168,7 @@ class PageThumbs:
             self._thumbs = {}
             if self.path is not None and self.path.is_file():
                 try:
-                    with np.load(self.path, allow_pickle=False) as z:
+                    with np.load(io.BytesIO(self.path.read_bytes()), allow_pickle=False) as z:
                         names, data = z["names"], z["data"]
                         if data.ndim == 2 and data.shape == (len(names), THUMB_W * THUMB_H):
                             self._thumbs = {str(n): data[i].tobytes() for i, n in enumerate(names)}

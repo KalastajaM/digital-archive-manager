@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
+import { type Call, mockFetch, renderWithProviders, replayJob } from "../../test-utils";
 import { FilePreview } from "../FilePreview";
 
 const pdf = { drive_id: "d1", path: "##. Organize/a.pdf", ext: "pdf" };
@@ -197,7 +197,7 @@ describe("Draw a box", () => {
   it("Make a rule… drafts a rule from the box, with From filled in from the draft, and opens the rule sheet", async () => {
     const { calls, user } = setup({
       "POST /api/rules/draft-zone": { body: DRAFT },
-      "POST /api/rules/replay": { body: REPLAY },
+      ...replayJob(REPLAY),
       "PUT /api/rules/pohjola": { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } },
     });
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
@@ -213,7 +213,7 @@ describe("Draw a box", () => {
     expect(within(sheet).getByRole("group", { name: "Area" })).toBeInTheDocument();
     expect(within(sheet).getByLabelText("From (sender)")).toHaveValue("Pohjola");
     await within(sheet).findByText(/Matches 2 documents/);
-    const sent = posts(calls, "/api/rules/replay")[0].body as { rule: { when: unknown; sender: string } };
+    const sent = posts(calls, "/api/rules/replay/jobs")[0].body as { rule: { when: unknown; sender: string } };
     expect(sent.rule.when).toEqual({
       text_contains: [],
       filename_matches: null,
@@ -283,7 +283,7 @@ describe("Draw a box", () => {
     it("Make a rule… sends every box, and the sheet has a group per area", async () => {
       const { calls, user } = setup({
         "POST /api/rules/draft-zone": { body: TWO },
-        "POST /api/rules/replay": { body: REPLAY },
+        ...replayJob(REPLAY),
         "PUT /api/rules/pohjola": { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } },
       });
       await user.click(screen.getByRole("button", { name: "Draw a box" }));
@@ -305,7 +305,7 @@ describe("Draw a box", () => {
       expect(within(sheet).getByRole("group", { name: "Area 1" })).toBeInTheDocument();
       expect(within(sheet).getByRole("group", { name: "Area 2" })).toBeInTheDocument();
       await within(sheet).findByText(/Matches 2 documents/);
-      const sent = posts(calls, "/api/rules/replay")[0].body as { rule: { when: { zones: unknown } }; place_above: string };
+      const sent = posts(calls, "/api/rules/replay/jobs")[0].body as { rule: { when: { zones: unknown } }; place_above: string };
       expect(sent.rule.when.zones).toEqual([
         { box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] },
         { box: [0.1, 0.4, 0.5, 0.5], text_contains: ["vakuutuskirja"] },
@@ -478,10 +478,10 @@ describe("Draw a box", () => {
     it("opens the rule with the moved area and tests it against how the rule did before", async () => {
       const { calls, user } = setup(
         {
-          "POST /api/rules/replay": (call) => {
+          ...replayJob((call: Call) => {
             const zones = (call.body as { rule: { when: { zones: { box: number[] }[] } } }).rule.when.zones;
-            return { body: { ...REPLAY, matched: zones[0].box[0] === 0.05 ? 14 : 16, same: 14, marked: null } };
-          },
+            return { ...REPLAY, matched: zones[0].box[0] === 0.05 ? 14 : 16, same: 14, marked: null };
+          }),
           "PUT /api/rules/pohjola": SAVED,
         },
         pdf,
@@ -492,7 +492,7 @@ describe("Draw a box", () => {
       const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
       await within(sheet).findByText(/Matches 16 documents/);
       expect(await within(sheet).findByText(/Before the change it matched 14 documents/)).toBeInTheDocument();
-      const sent = posts(calls, "/api/rules/replay").map((c) => (c.body as { rule: { when: { zones: { box: number[] }[] } }; replaces: string }));
+      const sent = posts(calls, "/api/rules/replay/jobs").map((c) => (c.body as { rule: { when: { zones: { box: number[] }[] } }; replaces: string }));
       const moved = sent.find((b) => b.rule.when.zones[0].box[0] !== 0.05);
       expect(rounded(moved?.rule.when.zones[0].box ?? [])).toEqual([0.15, 0.12, 0.55, 0.24]);
       expect(moved?.replaces).toBe("pohjola");
@@ -504,7 +504,7 @@ describe("Draw a box", () => {
     });
 
     it("keeps the rule as it was when the sheet is cancelled", async () => {
-      const { calls, user } = setup({ "POST /api/rules/replay": { body: REPLAY } }, pdf, tool([AREA]));
+      const { calls, user } = setup({ ...replayJob(REPLAY) }, pdf, tool([AREA]));
       await screen.findByTitle("pohjola");
       drag("pohjola:0");
       const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
@@ -515,7 +515,7 @@ describe("Draw a box", () => {
     });
 
     it("changes a rule's own address area (person_zone) the same way", async () => {
-      const { calls, user } = setup({ "POST /api/rules/replay": { body: REPLAY }, "PUT /api/rules/pohjola": SAVED }, pdf, tool([ADDRESS("pohjola")]));
+      const { calls, user } = setup({ ...replayJob(REPLAY), "PUT /api/rules/pohjola": SAVED }, pdf, tool([ADDRESS("pohjola")]));
       await screen.findByTitle("Address area of pohjola");
       drag("pohjola:0");
       const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
@@ -551,7 +551,7 @@ describe("Draw a box", () => {
         {
           "GET /api/rules": { body: { rules: [PICTURE_RULE], errors: [], state: { offer: true, declined: 0 }, unused_pictures: [], default_min_score: 0.85 } },
           "POST /api/rules/area-picture": { body: { width: 3, height: 1, png: "iVBORw0KGgo=", image: "areas/pohjola-2.png" } },
-          "POST /api/rules/replay": { body: REPLAY },
+          ...replayJob(REPLAY),
           "PUT /api/rules/pohjola": SAVED,
         },
         pdf,
@@ -605,7 +605,7 @@ describe("Draw a box", () => {
                 waiting.push({ box: body.box, rule: body.rule_id, answer: (image) => resolve({ body: { width: 3, height: 1, png: "iVBORw0KGgo=", image } }) }),
               );
             },
-            "POST /api/rules/replay": { body: REPLAY },
+            ...replayJob(REPLAY),
             "PUT /api/rules/pohjola": SAVED,
             "PUT /api/rules/plain": SAVED,
           },
@@ -741,7 +741,7 @@ describe("Picture areas", () => {
     const { calls, user } = setup({
       "POST /api/rules/area-picture": { body: CROP },
       "POST /api/rules/draft-zone": { body: { ...PICTURE_DRAFT, zones: DRAFT.zones } },
-      "POST /api/rules/replay": { body: REPLAY },
+      ...replayJob(REPLAY),
     });
     const panel = await drawAndOpen(user);
     await within(panel).findByText("Pohjola Vakuutus Oy");
@@ -770,7 +770,7 @@ describe("Picture areas", () => {
       "POST /api/files/d1/page1/lines": { body: READ },
       "POST /api/rules/area-picture": { body: CROP },
       "POST /api/rules/draft-zone": { body: PICTURE_DRAFT },
-      "POST /api/rules/replay": { body: { ...REPLAY, scores } },
+      ...replayJob({ ...REPLAY, scores }),
       "PUT /api/rules/pohjola": SAVED,
     });
     const panel = await drawAndOpen(user);
@@ -794,13 +794,13 @@ describe("Picture areas", () => {
     expect(within(result).getByText(/0\.85 is needed/)).toBeInTheDocument();
     expect(within(within(result).getByRole("list", { name: "Matched documents" })).getByText("0.93")).toBeInTheDocument();
     expect(within(within(result).getByRole("list", { name: "Documents close to matching" })).getByText("0.78")).toBeInTheDocument();
-    expect((posts(calls, "/api/rules/replay")[0].body as { rule: { when: { zones: unknown } } }).rule.when.zones).toEqual([
+    expect((posts(calls, "/api/rules/replay/jobs")[0].body as { rule: { when: { zones: unknown } } }).rule.when.zones).toEqual([
       { box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png" },
     ]);
     // moving the slider sets min_score and tests again
     fireEvent.change(slider, { target: { value: "0.9" } });
-    await waitFor(() => expect(posts(calls, "/api/rules/replay")).toHaveLength(2));
-    expect((posts(calls, "/api/rules/replay")[1].body as { rule: { when: { zones: unknown } } }).rule.when.zones).toEqual([
+    await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(2));
+    expect((posts(calls, "/api/rules/replay/jobs")[1].body as { rule: { when: { zones: unknown } } }).rule.when.zones).toEqual([
       { box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png", min_score: 0.9 },
     ]);
     await within(sheet).findByText(/0\.90 is needed/);

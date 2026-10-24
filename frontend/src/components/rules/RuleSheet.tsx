@@ -8,14 +8,12 @@ import {
   areaPictureUrl,
   errorText,
   type PageBox,
-  type Replay,
   type Rule,
   type RuleDraft,
   type RuleIn,
   type RuleOffer,
   useAreaPicture,
   useInbox,
-  useReplay,
   useRules,
   useSaveRule,
   useSenders,
@@ -29,13 +27,8 @@ import { TagInput } from "../TagInput";
 import { useToast } from "../Toasts";
 import { SamplePage } from "../zones/SamplePage";
 import { Sheet } from "../ui/Sheet";
-import { mergeReplay, ReplayResult } from "./ReplayResult";
-
-const REPLAY_DELAY_MS = 400;
-/** While page 1 of some documents is being read, the replay is asked for again after this
- * long, a few times. */
-const READING_POLL_MS = 2000;
-const READING_POLLS = 15;
+import { ReplayResult } from "./ReplayResult";
+import { useReplayJob } from "./useReplayJob";
 
 type Word = { word: string; ticked: boolean };
 /** An area of page 1: the words of which any one is enough, or (``image``) a picture that
@@ -70,10 +63,6 @@ const FROM_TIP =
 
 const isDraft = (r: RuleDraft | Rule): r is RuleDraft => "words" in r;
 const isZoneDraft = (r: RuleDraft | ZoneDraft | Rule): r is ZoneDraft => "zones" in r && "words" in r;
-
-/** The replay is still waiting for pages to be read. */
-const waiting = (r: Replay) =>
-  (r.reading ?? 0) > 0 || (r.not_checked ?? []).some((n) => n.reason === "page 1 not read yet");
 
 /** What saving or deleting a rule kept in a file written by hand does to that file. */
 export const rewriteNote = (doing: "Saving" | "Deleting", file: string) =>
@@ -147,7 +136,6 @@ export function RuleSheet({
   const inbox = useInboxFolder();
   const trays = useTrays().data?.trays ?? [];
   const toast = useToast();
-  const replay = useReplay();
   const save = useSaveRule();
   const ids = useId();
 
@@ -236,77 +224,24 @@ export function RuleSheet({
   );
   const ruleKey = JSON.stringify(rule);
 
-  // The last successful replay with the rule it was made for: Save needs one for exactly
-  // the rule on screen, so the proof is never skipped.
-  const [proof, setProof] = useState<{ key: string; replay: Replay } | null>(null);
-  const latestKey = useRef(ruleKey);
-  latestKey.current = ruleKey;
-  const { mutate: runReplay } = replay;
-  // Documents whose page 1 is being read are not counted yet: ask again, a few times.
-  const again = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const polls = useRef(0);
-  // Which run of the effect below a replay belongs to: its cleanup (a new rule, or the
-  // sheet closing) ends it, and a reply that arrives later schedules nothing.
-  const epoch = useRef(0);
-  const run = (mine: number) => {
-    const key = ruleKey;
-    runReplay(
-      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, nearDriveId },
-      {
-        onSuccess: (result) => {
-          if (mine !== epoch.current || key !== latestKey.current) return;
-          setProof({ key, replay: result });
-          if (waiting(result) && polls.current < READING_POLLS) {
-            polls.current += 1;
-            again.current = setTimeout(() => run(mine), READING_POLL_MS);
-          }
-        },
-      },
-    );
-  };
-  useEffect(() => {
-    if (!hasCondition) return;
-    polls.current = 0;
-    const mine = ++epoch.current;
-    const timer = setTimeout(() => run(mine), REPLAY_DELAY_MS);
-    return () => {
-      epoch.current += 1;
-      clearTimeout(timer);
-      clearTimeout(again.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ruleKey, replacing, runReplay]);
+  // The test runs on the server in the background and fills the result in as it goes. Save
+  // needs a result for exactly the rule on screen, so the proof is never skipped (a test
+  // that is not finished counts: its result so far is what Save asks about).
+  const testKey = `${ruleKey}|${replacing ?? ""}`;
+  const test = useReplayJob({
+    enabled: hasCondition,
+    jobKey: testKey,
+    request: { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, nearDriveId },
+  });
 
-  // How the rule did before the change (a replay of the old rule, asked once).
-  const [baseline, setBaseline] = useState<Replay | null>(null);
-  const baselineReplay = useReplay();
-  const { mutate: runBaseline } = baselineReplay;
-  const baselineAgain = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => {
-    if (!before) return;
-    let live = true;
-    let polls = 0;
-    const ask = () =>
-      runBaseline(
-        { rule: ruleInOf(before), replaces: before.id, nearDriveId },
-        {
-          onSuccess: (result) => {
-            if (!live) return;
-            setBaseline(result);
-            if (waiting(result) && polls < READING_POLLS) {
-              polls += 1;
-              baselineAgain.current = setTimeout(ask, READING_POLL_MS);
-            }
-          },
-        },
-      );
-    ask();
-    return () => {
-      live = false;
-      clearTimeout(baselineAgain.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [before?.id, runBaseline]);
+  // How the rule did before the change (a test of the old rule, asked once).
+  const baselineTest = useReplayJob({
+    enabled: before !== undefined,
+    jobKey: before?.id ?? "",
+    request: { rule: before ? ruleInOf(before) : rule, replaces: before?.id, nearDriveId },
+    delayMs: 0,
+  });
+  const baseline = baselineTest.replay ?? null;
 
   const withWord = (all: Word[], w: string): Word[] =>
     all.some((x) => x.word === w) ? all.map((x) => (x.word === w ? { ...x, ticked: true } : x)) : [...all, { word: w, ticked: true }];
@@ -348,25 +283,8 @@ export function RuleSheet({
     ? Math.min(...areas.filter((a) => a.image).map((a) => a.minScore ?? defaultMin))
     : null;
 
-  // "Test the rest": go on after where the test stopped at its time budget and join the result
-  const rest = useReplay();
-  const testRest = () => {
-    const key = ruleKey;
-    const first = proof?.replay;
-    if (!first || first.next_after == null) return;
-    rest.mutate(
-      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, after: first.next_after, nearDriveId },
-      {
-        onSuccess: (more) => {
-          if (key !== latestKey.current) return;
-          setProof((old) => (old && old.key === key && old.replay === first ? { key, replay: mergeReplay(first, more) } : old));
-        },
-      },
-    );
-  };
-
-  const tested = proof !== null && proof.key === ruleKey ? proof.replay : null;
-  const failed = replay.isError && tested === null;
+  const tested = test.replay !== undefined && test.resultKey === testKey ? test.replay : null;
+  const failed = test.error !== null && tested === null;
   const different = tested?.different.length ?? 0;
   const doSave = async () => {
     setAsking(false);
@@ -598,19 +516,19 @@ export function RuleSheet({
         )}
         {hasCondition && (
           <ReplayResult
-            replay={proof?.replay}
+            replay={test.replay}
             before={before ? baseline : null}
             sender={sender}
             needed={needed}
             pending={tested === null && !failed}
-            error={failed ? errorText(replay.error) : null}
-            onRetry={() => run(epoch.current)}
+            error={failed ? (test.error ?? "") : null}
+            onRetry={test.restart}
             rule={rule}
-            onTestRest={testRest}
-            restPending={rest.isPending}
+            progress={{ state: test.state, looked: test.looked, total: test.total, waiting: test.waiting }}
+            onStop={test.stop}
+            onTestAgain={test.restart}
           />
         )}
-        {rest.isError && <p className="error" role="alert">{visible(errorText(rest.error))}</p>}
         {!draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}
         {error && <p className="error" role="alert">{visible(error)}</p>}
       </Sheet>
