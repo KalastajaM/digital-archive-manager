@@ -291,18 +291,26 @@ export function RuleSheet({
   // a picture area whose box changes is cut again from the document it was changed on
   const recut = useAreaPicture();
   const [recutError, setRecutError] = useState<string | null>(null);
+  // each re-cut is tagged; a reply is applied only if no later move of the same area, and no
+  // removal of an area (which shifts the others), has happened since it was asked for
+  const recutTag = useRef({ moves: new Map<number, number>(), removed: 0, next: 0 });
   const moveArea = async (at: number, box: PageBox, driveId: string) => {
     const area = areas[at];
+    const tags = recutTag.current;
+    const tag = ++tags.next;
+    tags.moves.set(at, tag);
     if (!area?.image) {
       setAreas((all) => all.map((a, i) => (i === at ? { ...a, box } : a)));
       return;
     }
+    const removed = tags.removed;
     setRecutError(null);
     try {
       const cut = await recut.mutateAsync({ driveId, box, save: true, ruleId: initial.id });
+      if (tags.moves.get(at) !== tag || tags.removed !== removed) return; // out of date
       setAreas((all) => all.map((a, i) => (i === at ? { ...a, box, image: cut.image ?? a.image } : a)));
     } catch (e) {
-      setRecutError(errorText(e));
+      if (tags.moves.get(at) === tag && tags.removed === removed) setRecutError(errorText(e));
     }
   };
   const defaultMin = useRules(areas.some((a) => a.image)).data?.default_min_score ?? DEFAULT_MIN_SCORE;
@@ -430,7 +438,10 @@ export function RuleSheet({
               minScore={area.minScore ?? null}
               defaultScore={defaultMin}
               onScore={(minScore) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, minScore } : a)))}
-              onRemove={() => setAreas((all) => all.filter((_, i) => i !== at))}
+              onRemove={() => {
+                recutTag.current.removed++;
+                setAreas((all) => all.filter((_, i) => i !== at));
+              }}
             />
           ) : (
             <AreaWords
@@ -440,7 +451,10 @@ export function RuleSheet({
               words={area.words}
               onToggle={(word) => changeArea(at, (all) => all.map((x) => (x.word === word ? { ...x, ticked: !x.ticked } : x)))}
               onAdd={(word) => changeArea(at, (all) => withWord(all, word))}
-              onRemove={() => setAreas((all) => all.filter((_, i) => i !== at))}
+              onRemove={() => {
+                recutTag.current.removed++;
+                setAreas((all) => all.filter((_, i) => i !== at));
+              }}
             />
           ),
         )}

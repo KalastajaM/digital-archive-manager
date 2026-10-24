@@ -357,6 +357,40 @@ describe("RuleSheet", () => {
         ]);
       });
 
+      it("drops a picture re-cut that comes back after a newer move of the same area", async () => {
+        const PICTURE = {
+          ...WITH_SAMPLE,
+          when: {
+            ...WITH_SAMPLE.when,
+            zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: null, image: "areas/pohjola-1.png" }, WITH_SAMPLE.when.zones[1]],
+          },
+        };
+        const waiting: ((image: string) => void)[] = [];
+        const { calls } = setup(REPLAY, { ...props, initial: PICTURE }, {
+          "GET /api/inbox": { body: INBOX },
+          "POST /api/rules/area-picture": () =>
+            new Promise((resolve) => waiting.push((image) => resolve({ body: { width: 3, height: 1, png: "iVBORw0KGgo=", image } }))),
+        });
+        await screen.findByAltText("Page 1");
+        await screen.findByText(/Matches 4/);
+        drag("pohjola:0"); // the first move: box A
+        await waitFor(() => expect(waiting).toHaveLength(1));
+        fireEvent.pointerDown(area("pohjola:0"), { clientX: 20, clientY: 20, button: 0 });
+        fireEvent.pointerMove(area("pohjola:0"), { clientX: 60, clientY: 100 }); // box B
+        fireEvent.pointerUp(area("pohjola:0"), { clientX: 60, clientY: 100 });
+        await waitFor(() => expect(waiting).toHaveLength(2));
+        waiting[1]("areas/pohjola-3.png"); // the newer cut comes back first
+        await waitFor(() => expect(screen.getAllByRole("img", { name: /Picture of area/ })[0]).toHaveAttribute("src", "/api/rules/areas/pohjola-3.png"));
+        waiting[0]("areas/pohjola-2.png"); // the older one last: must not win
+        await new Promise((r) => setTimeout(r, 20));
+        expect(screen.getAllByRole("img", { name: /Picture of area/ })[0]).toHaveAttribute("src", "/api/rules/areas/pohjola-3.png");
+        await waitFor(() => {
+          const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { zones: { box: number[]; image: string }[] } } };
+          expect(sent.rule.when.zones[0].image).toBe("areas/pohjola-3.png");
+          expect(sent.rule.when.zones[0].box.map((v) => Math.round(v * 1000) / 1000)).toEqual([0.25, 0.22, 0.65, 0.34]);
+        });
+      });
+
       it("changes the rule's own address area too", async () => {
         const { calls } = setup(REPLAY, { ...props, initial: { ...WITH_SAMPLE, person_zone: [0.1, 0.2, 0.6, 0.4] } }, { "GET /api/inbox": { body: INBOX } });
         await screen.findByAltText("Page 1");
