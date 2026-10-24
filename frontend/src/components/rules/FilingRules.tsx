@@ -4,10 +4,11 @@
  * loaded, and the switch for the offer to make a rule after a hand filing. Editing and
  * making a rule use the rule sheet, which asks for a replay before it saves. */
 import { ChevronDown, ChevronRight, ChevronUp, Plus, Trash2, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   errorText,
+  type ResolvedOp,
   type Rule,
   type RuleDraft,
   useDeleteRule,
@@ -15,11 +16,15 @@ import {
   useFileSuggestions,
   useInbox,
   useMoveRule,
+  useQuarantineUnusedPictures,
   useRules,
   useRulesState,
 } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
+import { ConfirmPlan, snapshotKey } from "../PlanPreview";
+import { undoAction, useToast } from "../Toasts";
+import { useUndoConfirm } from "../UndoConfirm";
 import { IconButton } from "../ui/IconButton";
 import { Sheet } from "../ui/Sheet";
 import { SamplePage } from "../zones/SamplePage";
@@ -96,6 +101,85 @@ function RuleLine({
         <IconButton icon={<Trash2 />} label={`Delete rule ${r.id}`} onClick={onDelete} />
       </span>
     </li>
+  );
+}
+
+/** The picture files no rule uses, and "Move N unused pictures to To Delete": a dry run
+ * first (the usual plan in a confirm), then the move, then a toast with Undo. Nothing is
+ * deleted; the files wait in To Delete as ``dam rule picture <name>``. */
+function UnusedPictures({ names }: { names: string[] }) {
+  const move = useQuarantineUnusedPictures();
+  const toast = useToast();
+  const undo = useUndoConfirm();
+  const [plan, setPlan] = useState<{ names: string[]; ops: ResolvedOp[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false); // synchronous: a second click sees it at once
+
+  const guarded = async (work: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setError(null);
+    try {
+      await work();
+    } catch (e) {
+      setPlan(null);
+      setError(errorText(e));
+    } finally {
+      inFlight.current = false;
+    }
+  };
+  const preview = () =>
+    guarded(async () => {
+      const dry = await move.mutateAsync({ names, dry_run: true });
+      if (dry.error || dry.failed) throw new Error(dry.error ?? "an operation failed");
+      setPlan({ names, ops: dry.done });
+    });
+  const apply = (previewed: { names: string[]; ops: ResolvedOp[] }) =>
+    guarded(async () => {
+      setPlan(null);
+      const result = await move.mutateAsync({ names: previewed.names, dry_run: false });
+      const moved = result.done.filter((o) => o.kind === "picture_to_quarantine").length;
+      if (result.error || result.failed) {
+        setError(`Stopped after ${moved} of ${previewed.names.length}: ${result.error ?? "an operation failed"}`);
+      }
+      if (moved > 0) {
+        toast({
+          kind: "info",
+          text: `Moved ${plural(moved, "unused picture")} to To Delete`,
+          action: undoAction(() => {
+            if (undo.undoing.current) return;
+            undo.open({ batchId: result.batch_id });
+          }),
+        });
+      }
+    });
+
+  return (
+    <>
+      <p className="hint rules-unused-pictures">
+        {plural(names.length, "picture file")} in config/rules/areas ({names.map(visible).join(", ")}) {names.length === 1 ? "is" : "are"} not used by any rule. Deleting a rule leaves them.{" "}
+        <button type="button" onClick={() => void preview()} disabled={move.isPending}>
+          Move {plural(names.length, "unused picture")} to To Delete
+        </button>
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {visible(error)}
+        </p>
+      )}
+      {plan && (
+        <ConfirmPlan
+          planKey={snapshotKey(plan.names)}
+          title="Move unused pictures to To Delete?"
+          intro={<p>They wait in To Delete until you empty it, and Undo puts them back.</p>}
+          confirmLabel={`Move ${plan.names.length}`}
+          ops={plan.ops}
+          busy={move.isPending}
+          onConfirm={() => void apply(plan)}
+          onCancel={() => setPlan(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -261,11 +345,7 @@ export function FilingRules() {
           ))}
         </ul>
       )}
-      {(rules.data.unused_pictures ?? []).length > 0 && (
-        <p className="hint rules-unused-pictures">
-          {plural((rules.data.unused_pictures ?? []).length, "picture file")} in config/rules/areas ({(rules.data.unused_pictures ?? []).map(visible).join(", ")}) {(rules.data.unused_pictures ?? []).length === 1 ? "is" : "are"} not used by any rule. Deleting a rule leaves them; you can remove them yourself.
-        </p>
-      )}
+      {(rules.data.unused_pictures ?? []).length > 0 && <UnusedPictures names={rules.data.unused_pictures ?? []} />}
       <TestDocument />
       <div className="rules-offer">
         <label className="check">

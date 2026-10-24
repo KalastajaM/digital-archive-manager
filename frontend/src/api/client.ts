@@ -92,6 +92,7 @@ export type SearchHit = Schemas["SearchHitOut"];
 export type JournalEntry = Schemas["JournalEntryOut"];
 export type BatchSummary = Schemas["BatchSummaryOut"];
 export type QuarantineBody = Schemas["QuarantineBody"];
+export type UnusedPicturesBody = Schemas["UnusedPicturesIn"];
 export type MoveBody = Schemas["MoveBody"];
 export type MoveResult = Schemas["MoveResultOut"];
 export type RenameBody = Schemas["RenameBody"];
@@ -1531,6 +1532,22 @@ export const useSaveRule = () => {
       // the areas behind a suggestion follow the rule
       void client.invalidateQueries({ queryKey: keys.inbox });
       void client.invalidateQueries({ queryKey: keys.file, predicate: (q) => q.queryKey.at(-1) === "suggestions" });
+    },
+  });
+};
+
+/** Move the rule pictures no rule uses (names in ``config/rules/areas``) into ``##. To Delete``
+ * as ``dam rule picture <name>``; a dry run only resolves the plan. A real move is journaled
+ * (so Activity and the toast can undo it) and drops the pictures from the unused list. */
+export const useQuarantineUnusedPictures = () => {
+  const client = useQueryClient();
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: UnusedPicturesBody) => post<BatchResult>("/api/rules/unused-pictures/quarantine", body),
+    onSettled: (_data, _error, body) => {
+      if (body.dry_run) return;
+      refresh();
+      void client.invalidateQueries({ queryKey: keys.rules });
     },
   });
 };

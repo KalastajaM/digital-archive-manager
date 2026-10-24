@@ -18,7 +18,7 @@ export function summarizeOps(ops: Ops): string {
         case "symlink": n.added++; break;
         case "unlink_symlink": n.removed++; break;
         case "rename": n.renamed++; break;
-        case "move": case "quarantine": n.moved++; break;
+        case "move": case "quarantine": case "picture_to_quarantine": case "picture_back": n.moved++; break;
         case "mkdir": n.made++; break;
         case "remove_empty_dir": n.gone++; break;
       }

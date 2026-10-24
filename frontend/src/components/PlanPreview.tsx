@@ -13,6 +13,8 @@ export const KIND_LABEL: Record<ResolvedOp["kind"], string> = {
   unlink_symlink: "Remove link",
   quarantine: "Move to To Delete",
   remove_empty_dir: "Remove empty folder",
+  picture_to_quarantine: "Move to To Delete",
+  picture_back: "Put back",
 };
 
 /** Ops on one path (a folder made or removed, a link removed): shown with that path
@@ -24,6 +26,12 @@ export const SINGLE_PATH = new Set<ResolvedOp["kind"]>(["mkdir", "remove_empty_d
 export function copySource(src: string): string {
   const path = src.replace(/^abs:/, "");
   return path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+}
+
+/** The place outside the archive a "put back" op names (``abs:<path>/<file>``): the rules'
+ * picture folder, by its file (the full path of this computer is not an archive path). */
+export function outsideDestination(dst: string): string {
+  return `rules/areas/${copySource(dst)}`;
 }
 
 /** A path that wraps only after ``/``, ``_`` or a space (never mid-word). */
@@ -139,7 +147,7 @@ export function PlanList({ ops, tags, followUps }: ListProps) {
           <PathCode path={op.dst || op.src || ""} />
         ) : (
           <>
-            {op.src && op.kind === "copy" ? (
+            {op.src && op.src.startsWith("abs:") ? (
               <>
                 <code>
                   <Breakable text={copySource(op.src)} />
@@ -154,7 +162,11 @@ export function PlanList({ ops, tags, followUps }: ListProps) {
                 </>
               )
             )}
-            <PathCode path={op.dst} shared={op.src ? sharedFolder(op.src, op.dst) : ""} />
+            {op.dst.startsWith("abs:") ? (
+              <PathCode path={outsideDestination(op.dst)} />
+            ) : (
+              <PathCode path={op.dst} shared={op.src && !op.src.startsWith("abs:") ? sharedFolder(op.src, op.dst) : ""} />
+            )}
           </>
         )}
         {op.note && <span className={routine ? "plan-note plan-note-routine" : "plan-note"}> ({op.note})</span>}

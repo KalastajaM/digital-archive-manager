@@ -313,4 +313,83 @@ describe("FilingRules", () => {
     expect(await screen.findByRole("button", { name: /^acme/ })).toHaveTextContent("a picture");
     expect(screen.getByText(/2 picture files in config\/rules\/areas \(old-1.png, old-2.png\) are not used by any rule/)).toBeInTheDocument();
   });
+
+  describe("moving the unused pictures to To Delete", () => {
+    const NAMES = ["old-1.png", "old-2.png"];
+    const OPS = NAMES.map((n) => ({
+      kind: "picture_to_quarantine",
+      src: `abs:/home/me/config/rules/areas/${n}`,
+      dst: `##. To Delete/dam rule picture ${n}`,
+      drive_id: null,
+      note: null,
+    }));
+    const batch = (dry_run: boolean, over: Record<string, unknown> = {}) => ({
+      batch_id: "b1",
+      dry_run,
+      done: OPS,
+      failed: null,
+      error: null,
+      index_error: null,
+      ...over,
+    });
+    const quarantine = (calls: Call[]) => calls.filter((c) => c.url === "/api/rules/unused-pictures/quarantine");
+
+    it("previews the plan, moves on confirm and offers Undo, which asks first", async () => {
+      const { calls, user } = setup(DATA({ unused_pictures: NAMES }), {
+        "POST /api/rules/unused-pictures/quarantine": (call: Call) => ({
+          body: batch((call.body as { dry_run: boolean }).dry_run),
+        }),
+        "POST /api/activity/b1/undo/preview": {
+          body: [
+            { kind: "picture_back", src: OPS[0].dst, dst: "abs:/home/me/config/rules/areas/old-1.png", drive_id: null, note: null },
+          ],
+        },
+      });
+      await user.click(await screen.findByRole("button", { name: "Move 2 unused pictures to To Delete" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(quarantine(calls).map((c) => c.body)).toEqual([{ names: NAMES, dry_run: true }]);
+      expect(dialog).toHaveTextContent("##. To Delete/dam rule picture old-1.png");
+      expect(within(dialog).getAllByText("Move to To Delete")).toHaveLength(2);
+      expect(dialog).toHaveTextContent("old-2.png → ##. To Delete/dam rule picture old-2.png"); // source by file name, no computer path
+      expect(dialog).not.toHaveTextContent("/home/me");
+      await user.click(within(dialog).getByRole("button", { name: /^Move 2/ }));
+      expect(await screen.findByText("Moved 2 unused pictures to To Delete")).toBeInTheDocument();
+      expect(quarantine(calls).map((c) => c.body)).toEqual([
+        { names: NAMES, dry_run: true },
+        { names: NAMES, dry_run: false },
+      ]);
+      await user.click(screen.getByRole("button", { name: "Undo" }));
+      const undo = await screen.findByRole("dialog", { name: "Undo these changes?" });
+      expect(await within(undo).findByText("Put back")).toBeInTheDocument();
+      expect(within(undo).getByText("rules/areas/old-1.png")).toBeInTheDocument();
+    });
+
+    it("moves nothing when the plan is cancelled", async () => {
+      const { calls, user } = setup(DATA({ unused_pictures: NAMES }), {
+        "POST /api/rules/unused-pictures/quarantine": { body: batch(true) },
+      });
+      await user.click(await screen.findByRole("button", { name: "Move 2 unused pictures to To Delete" }));
+      await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(quarantine(calls)).toHaveLength(1); // only the dry run
+    });
+
+    it("shows the server's refusal and offers no confirm", async () => {
+      const { user } = setup(DATA({ unused_pictures: ["old-1.png"] }), {
+        "POST /api/rules/unused-pictures/quarantine": {
+          status: 400,
+          body: { error: "The picture old-1.png is used by a rule or is not in the rules' picture folder, so it is not moved." },
+        },
+      });
+      await user.click(await screen.findByRole("button", { name: "Move 1 unused picture to To Delete" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("old-1.png is used by a rule");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("has no button when every picture is used", async () => {
+      setup(DATA({ unused_pictures: [] }));
+      await screen.findByRole("button", { name: /^fortum/ });
+      expect(screen.queryByRole("button", { name: /to To Delete/ })).not.toBeInTheDocument();
+    });
+  });
 });
