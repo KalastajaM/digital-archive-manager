@@ -25,6 +25,17 @@ export type Replay = Schemas["ReplayOut"];
 export type RulesData = Schemas["RulesOut"];
 export type RuleExplain = Schemas["RuleExplainOut"];
 export type RulesState = Schemas["RulesStateOut"];
+/** A box drawn on page 1: [x0, y0, x1, y1] as fractions of the page, origin top left. */
+export type PageBox = number[];
+/** Page 1's text lines with their boxes (``read`` false: not read yet, or ``unavailable`` says why). */
+export type Page1 = Schemas["Page1Out"];
+/** The draft a box drawn on page 1 starts from: a rule draft plus the box. */
+export type ZoneDraft = Schemas["ZoneDraftOut"];
+export type People = Schemas["PeopleOut"];
+export type Person = Schemas["PersonIO"];
+/** Who a document is from (``sender``) and for (``person``), as the owner said or a filing recorded. */
+export type Assignment = Schemas["AssignmentOut"];
+export type Sender = Schemas["SenderOut"];
 export type BatchResult = Schemas["BatchResultOut"];
 export type FilingCode = Schemas["FilingCodeIn"];
 export type FilingCodes = Schemas["FilingCodesOut"];
@@ -294,6 +305,8 @@ const keys = {
   fileFields: ["file-fields"],
   filingCodes: ["filing-codes"],
   rules: ["rules"],
+  people: ["people"],
+  senders: ["senders"],
   // under the inbox's key: whatever reloads the inbox reloads the marked batch too
   markedBatch: ["inbox", "marked"],
 } as const;
@@ -701,11 +714,104 @@ export const useFileDetail = (driveId: string, enabled = true) =>
   });
 
 /** What the rules and the scan suggest for a file anywhere in the archive. */
-export const useFileSuggestions = (driveId: string) =>
+export const useFileSuggestions = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId, "suggestions"],
     queryFn: () => get<FileSuggestions>(`/api/files/${enc(driveId)}/suggestions`),
+    enabled,
   });
+
+// -- page 1: boxes, people, From and For ---------------------------------------
+
+/** How often page 1 is asked for again while it is being read, and for how long. */
+export const PAGE1_POLL_MS = 2000;
+const PAGE1_POLLS = 15;
+
+/** Page 1's lines of a file. Asked again every 2 s (up to 30 s) while a read is queued
+ * (``read`` false and no ``unavailable``). */
+export const usePage1 = (driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...keys.file, driveId, "page1"],
+    queryFn: () => get<Page1>(`/api/files/${enc(driveId)}/page1`),
+    enabled: enabled && driveId !== "",
+    refetchInterval: (query) => {
+      const page = query.state.data;
+      return page && !page.read && !page.unavailable && query.state.dataUpdateCount < PAGE1_POLLS ? PAGE1_POLL_MS : false;
+    },
+  });
+
+/** A suggestion that waits for page 1 (``waiting_for_page1``) asks for it until it is read,
+ * then reloads what the inbox and the file show. */
+export function useWaitForPage1(driveId: string, waiting: boolean) {
+  const client = useQueryClient();
+  const page = usePage1(driveId, waiting);
+  const read = page.data?.read === true;
+  useEffect(() => {
+    if (!waiting || !read) return;
+    void client.invalidateQueries({ queryKey: keys.inbox });
+    void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, read]);
+}
+
+/** The lines of page 1 inside a box. */
+export const usePage1Lines = () =>
+  useMutation({
+    mutationFn: ({ driveId, box }: { driveId: string; box: PageBox }) =>
+      post<Page1>(`/api/files/${enc(driveId)}/page1/lines`, { box }),
+  });
+
+/** The rule a box drawn on page 1 starts from (a 400 says why not). */
+export const useDraftZone = () =>
+  useMutation({
+    mutationFn: (body: { drive_id: string; box: PageBox; sender?: string | null }) =>
+      post<ZoneDraft>("/api/rules/draft-zone", body),
+  });
+
+/** The senders in use, with the number of documents each has. */
+export const useSenders = (enabled = true) =>
+  useQuery({ queryKey: keys.senders, queryFn: () => get<Sender[]>("/api/senders"), enabled });
+
+/** Set From and/or For on documents: a field left out stays, ``null`` clears it. */
+export const usePutAssignments = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { drive_ids: string[]; sender?: string | null; person?: string | null }) =>
+      put<Assignment[]>("/api/assignments", body),
+    onSettled: () => {
+      // the suggestion's {person} and the chips change with it
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: keys.file });
+      void client.invalidateQueries({ queryKey: keys.senders });
+    },
+  });
+};
+
+/** The people list and the address area. */
+export const usePeople = () => useQuery({ queryKey: keys.people, queryFn: () => get<People>("/api/settings/people") });
+
+/** Save the people list (and the address area when given); a 400 says why not. */
+export const useSavePeople = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { people: Person[]; address_zone?: PageBox }) => put<People>("/api/settings/people", body),
+    onSuccess: (saved) => client.setQueryData(keys.people, saved),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.people });
+      void client.invalidateQueries({ queryKey: keys.inbox }); // who a letter is for follows the list
+      void client.invalidateQueries({ queryKey: keys.file });
+    },
+  });
+};
+
+/** Switch the background reading of page 1 of older documents. */
+export const usePage1Backfill = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => put<{ enabled: boolean }>("/api/settings/page1-backfill", { enabled }),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.status }),
+  });
+};
 
 /** The tags in use that start with ``prefix`` (most used first), for the tag field's
  * suggestions; the previous list stays while the next one loads. */
@@ -1360,7 +1466,8 @@ export const useSaveFilingCodes = () => {
 // -- learned filing rules -----------------------------------------------------
 
 /** The rules in order, the files that were skipped (``errors``) and the offer state. */
-export const useRules = () => useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules") });
+export const useRules = (enabled = true) =>
+  useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules"), enabled });
 
 /** What a rule would do to the documents filed so far (nothing changes). ``replaces``:
  * the rule it would take the place of. */

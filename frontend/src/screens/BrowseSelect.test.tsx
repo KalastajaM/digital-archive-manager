@@ -1,5 +1,5 @@
 /** Browse: the select-all checkbox, ⌘A, the "N selected" count and the batch ★ / !. */
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -122,5 +122,48 @@ describe("Star and Important for the checked files", () => {
     await screen.findByText("a.pdf");
     expect(screen.getByRole("button", { name: "Star" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Mark Important" })).toBeDisabled();
+  });
+});
+
+describe("From and For for the checked files", () => {
+  const PEOPLE = { people: [{ name: "Tiina", match: ["Tiina Visser"] }], address_zone: [0, 0, 1, 1], default_address_zone: [0, 0, 1, 1] };
+
+  it("From… sets the sender of every checked file in one request", async () => {
+    const { calls, user } = setup(FILES, {
+      "GET /api/senders": { body: [] },
+      "PUT /api/assignments": { body: [] },
+    });
+    await screen.findByText("a.pdf");
+    expect(screen.getByRole("button", { name: "From…" })).toBeDisabled();
+    await user.click(allBox());
+    await user.click(screen.getByRole("button", { name: "From…" }));
+    const sheet = await screen.findByRole("dialog", { name: "From (2 documents)" });
+    await user.type(within(sheet).getByLabelText("Sender"), "Pohjola");
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+    expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ drive_ids: ["f1", "f2"], sender: "Pohjola" });
+  });
+
+  it("For… sets the person of the checked file", async () => {
+    const { calls, user } = setup(FILES, {
+      "GET /api/settings/people": { body: PEOPLE },
+      "PUT /api/assignments": { body: [] },
+    });
+    await screen.findByText("a.pdf");
+    await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
+    await user.click(screen.getByRole("button", { name: "For…" }));
+    const sheet = await screen.findByRole("dialog", { name: "For" });
+    await user.click(await within(sheet).findByRole("button", { name: "Tiina" }));
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+    expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ drive_ids: ["f2"], person: "Tiina" });
+  });
+});
+
+describe("Draw a box in the Browse preview", () => {
+  it("is offered on the previewed PDF", async () => {
+    const { user } = setup([{ ...entry("a.pdf", "f1") }]);
+    await user.click(await screen.findByText("a.pdf"));
+    expect(await screen.findByRole("button", { name: "Draw a box" })).toBeInTheDocument();
   });
 });

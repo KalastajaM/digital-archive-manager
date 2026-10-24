@@ -15,6 +15,7 @@ import { FolderPicker } from "../components/FolderPicker";
 import { PlanPreview } from "../components/PlanPreview";
 import { TagInput } from "../components/TagInput";
 import { TrayPicker } from "../components/TrayPicker";
+import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { Toolbar } from "../components/ui/Toolbar";
 import { ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
 import { IconButton } from "../components/ui/IconButton";
@@ -92,6 +93,7 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
   const [collectionText, setCollectionText] = useState("");
   const folderRef = useRef<HTMLInputElement>(null);
   const adding = useAddToCollections();
+  const [assigning, setAssigning] = useState<AssignKind | null>(null);
   // Set on the first Preview / File: from then on a missing field is shown live.
   const [tried, setTried] = useState(false);
 
@@ -290,6 +292,17 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
             />
             <FieldChips field="tag" offers={tagChips} disabled={filing.busy || adding.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
           </div>
+          <div className="field from-for-batch" role="group" aria-label="Who">
+            <span className="field-label">Who</span>
+            <div className="actions">
+              <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("sender")}>
+                From…
+              </button>
+              <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("person")}>
+                For…
+              </button>
+            </div>
+          </div>
           <hr />
           <TrayPicker
             trays={trays.list}
@@ -336,6 +349,7 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
               {visible(adding.error)}
             </p>
           )}
+          {assigning && <AssignSheet kind={assigning} driveIds={cardIds} onClose={() => setAssigning(null)} />}
           {plan && (
             <div className="inbox-plan">
               <PlanPreview

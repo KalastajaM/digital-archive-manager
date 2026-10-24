@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus, User } from "lucide-react";
 import {
   type DragEvent,
   Fragment,
@@ -64,6 +64,7 @@ import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
+import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { useSearch } from "./useSearch";
 
@@ -802,6 +803,8 @@ export default function Browse() {
   }, []);
   const move = useMoveFlow();
   const [moveTo, setMoveTo] = useState<{ ids: string[]; names: string[]; initial: string } | null>(null);
+  // From… / For… on the same rows as Move to…
+  const [assigning, setAssigning] = useState<{ kind: AssignKind; ids: string[] } | null>(null);
   const locked = marking.busy || move.busy;
   /** At event time, before React re-rendered: a call has started. */
   const running = () => marking.running() || move.inFlight.current || anyMoveRunning();
@@ -1371,6 +1374,20 @@ export default function Browse() {
               onClick={openMoveTo}
             />
             <IconButton
+              icon={<Building2 />}
+              label="From…"
+              tip="Say who sent these documents"
+              disabled={moveTargets.length === 0 || locked}
+              onClick={() => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) })}
+            />
+            <IconButton
+              icon={<User />}
+              label="For…"
+              tip="Say who these documents are for"
+              disabled={moveTargets.length === 0 || locked}
+              onClick={() => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) })}
+            />
+            <IconButton
               icon={<StarGlyph size={16} filled={starAll} />}
               label={starAll ? "Remove the star" : "Star"}
               pressed={starAll}
@@ -1426,6 +1443,7 @@ export default function Browse() {
                   }}
                   preview={previewOf(previewed)}
                   disabled={locked}
+                  boxTool
                   backToInbox={{
                     refusal: inboxRefusal([previewed.path], inbox) ?? (locked ? MOVE_BUSY : null),
                     run: () => {
@@ -1463,6 +1481,7 @@ export default function Browse() {
           }}
         />
       )}
+      {assigning && <AssignSheet kind={assigning.kind} driveIds={assigning.ids} onClose={() => setAssigning(null)} />}
       {marking.view}
       {newFolder.view}
       {setupFolders.view}

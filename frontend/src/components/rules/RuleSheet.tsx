@@ -14,6 +14,7 @@ import {
   useRules,
   useSaveRule,
   useTrays,
+  type ZoneDraft,
 } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
@@ -24,12 +25,21 @@ import { Sheet } from "../ui/Sheet";
 import { ReplayResult } from "./ReplayResult";
 
 const REPLAY_DELAY_MS = 400;
+/** While page 1 of some documents is being read, the replay is asked for again after this
+ * long, a few times. */
+const READING_POLL_MS = 2000;
+const READING_POLLS = 15;
 
 type Word = { word: string; ticked: boolean };
 /** A field of the "then" part: ``off`` leaves it out of the rule. */
 type Text = { off: boolean; value: string };
 
 const isDraft = (r: RuleDraft | Rule): r is RuleDraft => "words" in r;
+const isZoneDraft = (r: RuleDraft | ZoneDraft | Rule): r is ZoneDraft => "box" in r && "words" in r;
+
+/** The replay is still waiting for pages to be read. */
+const waiting = (r: Replay) =>
+  (r.reading ?? 0) > 0 || (r.not_checked ?? []).some((n) => n.reason === "page 1 not read yet");
 
 /** What saving or deleting a rule kept in a file written by hand does to that file. */
 export const rewriteNote = (doing: "Saving" | "Deleting", file: string) =>
@@ -73,7 +83,7 @@ export function RuleSheet({
   filed,
   onClose,
 }: {
-  initial: RuleDraft | Rule;
+  initial: RuleDraft | ZoneDraft | Rule;
   /** The id of the rule this one takes the place of (an update, or an edit). */
   replaces?: string;
   /** Offer mode: what was just filed (its folder and name, shown under the words). */
@@ -81,6 +91,14 @@ export function RuleSheet({
   onClose: () => void;
 }) {
   const draft = isDraft(initial);
+  const zoneDraft = isZoneDraft(initial) ? initial : null;
+  // A rule can need its words in an area of page 1. Then the chips are that area's words
+  // (a rule that has plain words as well keeps its area as it is).
+  const zone = zoneDraft ? { box: zoneDraft.box, text_contains: [] as string[] } : draft ? null : initial.when.zone;
+  const zoneWords = zone !== null && (zoneDraft !== null || (!draft && initial.when.text_contains.length === 0));
+  const person = draft ? null : initial.when.person;
+  const sender = zoneDraft ? zoneDraft.sender : draft ? null : initial.sender;
+  const personZone = draft ? null : initial.person_zone;
   const replacing = replaces ?? (draft ? undefined : initial.id);
   const inbox = useInboxFolder();
   const trays = useTrays().data?.trays ?? [];
@@ -90,7 +108,9 @@ export function RuleSheet({
   const ids = useId();
 
   const [words, setWords] = useState<Word[]>(() =>
-    draft ? initial.words.map((w) => ({ ...w })) : initial.when.text_contains.map((word) => ({ word, ticked: true })),
+    draft
+      ? initial.words.map((w) => ({ ...w }))
+      : (zoneWords && zone ? zone.text_contains : initial.when.text_contains).map((word) => ({ word, ticked: true })),
   );
   const [adding, setAdding] = useState("");
   const start = draft ? initial : initial.then; // a draft's actions sit on the draft itself
@@ -100,12 +120,14 @@ export function RuleSheet({
   const [tray, setTray] = useState(() => text(start.tray));
   const [tags, setTags] = useState<string[]>(() => start.tags);
   const [tagsOff, setTagsOff] = useState(() => tags.length === 0);
-  const [more, setMore] = useState(() => !draft && !!(initial.when.filename_matches || initial.when.folder_is));
+  const [more, setMore] = useState(
+    () => (!draft && !!(initial.when.filename_matches || initial.when.folder_is)) || !!zoneDraft?.folder_is,
+  );
   const [filename, setFilename] = useState(() => (draft ? "" : (initial.when.filename_matches ?? "")));
   // A draft has no folder condition: a new rule applies to what is in the inbox. Until
   // the user types, an edited rule keeps its own.
   const [folderIsEdited, setFolderIs] = useState<string | null>(null);
-  const folderIs = folderIsEdited ?? (draft ? inbox : initial.when.folder_is) ?? "";
+  const folderIs = folderIsEdited ?? (zoneDraft ? zoneDraft.folder_is : draft ? inbox : initial.when.folder_is) ?? "";
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,9 +136,11 @@ export function RuleSheet({
     () => ({
       id: initial.id,
       when: {
-        text_contains: ticked,
+        text_contains: zoneWords ? [] : ticked,
         filename_matches: filename.trim() || null,
         folder_is: folderIs.trim() || null,
+        ...(zone ? { zone: { box: zone.box, text_contains: zoneWords ? ticked : zone.text_contains } } : {}),
+        ...(person ? { person } : {}),
       },
       then: {
         folder: folder.off ? null : folder.value,
@@ -125,6 +149,8 @@ export function RuleSheet({
         tray: tray.off || !tray.value ? null : tray.value,
         payee: payee.off ? null : payee.value,
       },
+      ...(personZone ? { person_zone: personZone } : {}),
+      ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [initial.id, JSON.stringify(ticked), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
@@ -137,17 +163,33 @@ export function RuleSheet({
   const latestKey = useRef(ruleKey);
   latestKey.current = ruleKey;
   const { mutate: runReplay } = replay;
+  // Documents whose page 1 is being read are not counted yet: ask again, a few times.
+  const again = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const polls = useRef(0);
   const run = () => {
     const key = ruleKey;
     runReplay(
       { rule, replaces: replacing },
-      { onSuccess: (result) => key === latestKey.current && setProof({ key, replay: result }) },
+      {
+        onSuccess: (result) => {
+          if (key !== latestKey.current) return;
+          setProof({ key, replay: result });
+          if (waiting(result) && polls.current < READING_POLLS) {
+            polls.current += 1;
+            again.current = setTimeout(run, READING_POLL_MS);
+          }
+        },
+      },
     );
   };
   useEffect(() => {
     if (ticked.length === 0) return;
+    polls.current = 0;
     const timer = setTimeout(run, REPLAY_DELAY_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(again.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ruleKey, replacing, runReplay]);
 
@@ -258,6 +300,8 @@ export function RuleSheet({
             onBlur={addWord}
           />
           <p className="hint">Any ticked word is enough; more words catch more documents.</p>
+          {zone && <p className="hint">Matches only in the area you drew on page 1.</p>}
+          {sender && <p className="hint">Sender: {visible(sender)}</p>}
         </div>
         {filed && (
           <p className="hint rule-filed">
@@ -315,6 +359,7 @@ export function RuleSheet({
         {ticked.length > 0 && (
           <ReplayResult
             replay={proof?.replay}
+            sender={sender}
             pending={tested === null && !failed}
             error={failed ? errorText(replay.error) : null}
             onRetry={run}

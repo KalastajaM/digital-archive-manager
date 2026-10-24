@@ -46,7 +46,7 @@ const ENTRY: InboxEntry = {
     collections: [],
     collection_sources: {},
     codes: [],
-    conflict: false, star: null, important: null, marks_unclear: false,
+    conflict: false, star: null, important: null, marks_unclear: false, waiting_for_page1: false, people_found: [],
   },
   text_excerpt: "Northpower Oy lasku",
   prefill: { due_date: "2026-10-01" },

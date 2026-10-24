@@ -26,6 +26,7 @@ import { editText } from "../components/FieldInput";
 import { FolderPicker } from "../components/FolderPicker";
 import { NoteEditor } from "../components/NoteEditor";
 import { TagInput } from "../components/TagInput";
+import { FromFor } from "../components/zones/FromFor";
 import { PlanPreview } from "../components/PlanPreview";
 import {
   blankValues,
@@ -464,7 +465,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
       />
       <div className={showPreview ? "review-body show-preview" : "review-body"}>
         <div className="preview-pane preview-fill">
-          <FilePreview file={entry.record} />
+          <FilePreview file={entry.record} boxTool={{ suggestion: entry.suggestion }} />
         </div>
         <div className="proposal inspector">
           <FilingMessage filing={filing} ids={[entry.record.drive_id]} problem={tried && !fieldProblem ? otherProblem : null} />
@@ -476,6 +477,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
           <AIHint what="for filing suggestions" />
           {ai.sheet}
           <LinkBadges driveId={entry.record.drive_id} />
+          <FromFor entry={entry} />
           <UseAll count={chipCount} disabled={filing.busy} onUse={useAll} />
           <div className="field">
             <label htmlFor={`${ids}-name`}>Name</label>

@@ -1986,3 +1986,44 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
   .rule-line > .code-line { grid-template-columns: minmax(0, 1fr) auto auto; }
   .rule-line > .code-line .code-line-label { display: none; }
 }
+
+/* ---- Page 1: the Draw a box tool, From and For, People ----------------------------- */
+/* the page image with what lies over it; the layer is exactly the image's size */
+.page-layer { position: relative; display: table; margin: 0 auto; }
+.page-zone { position: absolute; pointer-events: none; border: 1.5px dashed var(--accent); background: var(--accent-soft); opacity: 0.45; border-radius: 2px; }
+.page-zone-address { border-color: var(--orange-text); background: var(--orange-bg); }
+.page-surface { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.page-box { position: absolute; pointer-events: none; border: 2px solid var(--accent); background: var(--accent-soft); opacity: 0.8; border-radius: 2px; }
+.box-note { margin: 0 0 var(--sp-2); }
+.box-panel { margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
+.box-panel p { margin: 0 0 var(--sp-2); }
+.box-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-1); }
+.box-lines { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); max-height: 8rem; overflow-y: auto; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.box-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.box-actions button { min-height: 22px; font-size: var(--fs-sm); }
+.box-sender .field { margin-bottom: var(--sp-2); }
+.assign-choices { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: var(--sp-2) 0 0; padding: 0; }
+.assign-choice { border-radius: var(--r-pill); padding: 0 10px; min-height: 22px; font-size: var(--fs-sm); background: var(--grey-bg); }
+.assign-choice[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.assign-count { color: var(--muted); }
+.from-for { margin: 0 0 var(--sp-3); }
+.from-for-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.from-for-chip { border-radius: var(--r-pill); padding: 0 10px; min-height: 22px; font-size: var(--fs-sm); background: var(--grey-bg); }
+.from-for-word { color: var(--muted); }
+.from-for-source { color: var(--muted); }
+.from-for-whom { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-top: var(--sp-1); }
+.from-for .hint, .from-for .error { margin: var(--sp-1) 0 0; }
+.code-line-zone { color: var(--muted); }
+.replay-not-checked { margin: var(--sp-1) 0; font-size: var(--fs-sm); }
+.people-settings, .page1-progress { margin-bottom: var(--sp-3); }
+.people-list { list-style: none; margin: 0 0 var(--sp-2); padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.people-row { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr) auto; gap: var(--sp-3); align-items: start; }
+.people-row .field { margin: 0; }
+.address-zone { margin-top: var(--sp-3); }
+.address-zone-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: end; }
+.address-zone-row label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
+.address-zone-row input { width: 5rem; }
+@media (max-width: 700px) {
+  .people-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .people-row .field:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+}
