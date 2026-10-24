@@ -1,6 +1,7 @@
 /** The areas of page 1 that took part in a suggestion, drawn over the page: a rule's areas
  * (the rule that gave the folder or name stronger, a rule that did not match dashed with the
- * reason), the lines that matched in them, the address area used and the line where the
+ * reason), the lines that matched in them (for a picture area the place where the picture
+ * fits best, with its score in the label), the address area used and the line where the
  * person was found. Boxes are fractions of the page image, so the zoom never matters.
  *
  * With ``onChange`` the areas can be changed: a click selects an area, a drag of a selected
@@ -23,6 +24,8 @@ export function areaLabel(a: Area, areas: readonly Area[]): string {
   if (a.kind === "address") return a.rule_id ? `Address area of ${a.rule_id}` : "Address area";
   const several = areas.filter((x) => x.rule_id === a.rule_id && x.kind !== "address").length > 1;
   const name = several ? `${a.rule_id} (area ${a.index + 1})` : a.rule_id;
+  // a picture says how well it matched: the reason already does when it did not
+  if (a.kind === "image" && a.score != null && !a.reason) return `${name}: picture ${a.score.toFixed(2)}`;
   return a.reason ? `${name}: ${a.reason}` : name;
 }
 
@@ -163,7 +166,12 @@ export function AreaLayer({
             </span>
             {a.kind !== "address" &&
               a.lines.map((line, i) => (
-                <span key={i} className="area-line" style={percent(line)} data-testid="area-line" />
+                <span
+                  key={i}
+                  className={`area-line${a.kind === "image" ? " area-match" : ""}`}
+                  style={percent(line)}
+                  data-testid="area-line"
+                />
               ))}
           </span>
         );

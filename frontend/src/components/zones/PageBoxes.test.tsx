@@ -467,6 +467,37 @@ describe("Draw a box", () => {
       expect(await screen.findByText("Address area saved for all letters.")).toBeInTheDocument();
     });
 
+    it("cuts a picture area again from this document when it is moved, and tests the rule with the new crop", async () => {
+      const PICTURE_RULE = {
+        ...RULE,
+        when: { ...RULE.when, zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: null, image: "areas/pohjola-1.png", min_score: 0.9 }] },
+      };
+      const { calls, user } = setup(
+        {
+          "GET /api/rules": { body: { rules: [PICTURE_RULE], errors: [], state: { offer: true, declined: 0 }, unused_pictures: [], default_min_score: 0.85 } },
+          "POST /api/rules/area-picture": { body: { width: 3, height: 1, png: "iVBORw0KGgo=", image: "areas/pohjola-2.png" } },
+          "POST /api/rules/replay": { body: REPLAY },
+          "PUT /api/rules/pohjola": SAVED,
+        },
+        pdf,
+        tool([{ ...AREA, kind: "image", score: 0.93, lines: [[0.06, 0.03, 0.4, 0.1]] }]),
+      );
+      await screen.findByTitle("pohjola: picture 0.93");
+      expect(screen.getByTestId("area-line")).toHaveClass("area-match");
+      drag("pohjola:0");
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+      const cut = posts(calls, "/api/rules/area-picture")[0].body as { drive_id: string; box: number[]; save: boolean; rule_id: string };
+      expect(cut).toMatchObject({ drive_id: "d1", save: true, rule_id: "pohjola" });
+      expect(rounded(cut.box)).toEqual([0.15, 0.12, 0.55, 0.24]);
+      await within(sheet).findByText(/Matches 2 documents/);
+      expect(within(sheet).getByRole("img", { name: "Picture of area" })).toHaveAttribute("src", "/api/rules/areas/pohjola-2.png");
+      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+      const body = calls.find((c) => c.method === "PUT")?.body as { when: { zones: { box: number[]; image: string; min_score: number }[] } };
+      expect(body.when.zones[0]).toMatchObject({ image: "areas/pohjola-2.png", min_score: 0.9 });
+      expect(rounded(body.when.zones[0].box)).toEqual([0.15, 0.12, 0.55, 0.24]);
+    });
+
     it("cannot change areas while the Draw a box tool is on", async () => {
       const { user } = setup({}, pdf, tool([AREA]));
       await screen.findByTitle("pohjola");
@@ -493,5 +524,150 @@ describe("Draw a box", () => {
     );
     await screen.findByTitle("pohjola");
     expect(calls.filter((c) => c.url === "/api/files/d1/suggestions")).toHaveLength(1);
+  });
+});
+
+describe("Picture areas", () => {
+  const CROP = { width: 3, height: 1, png: "iVBORw0KGgo=", image: null };
+  const PICTURE_DRAFT = {
+    ...DRAFT,
+    words: [],
+    zones: [],
+    pictures: [{ box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png", width: 3, height: 1, png: "iVBORw0KGgo=" }],
+  };
+  const SAVED = { body: { rules: [], errors: [], state: { offer: true, declined: 0 } } };
+
+  async function drawAndOpen(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Draw a box" }));
+    await draw();
+    return screen.findByRole("region", { name: "The box" });
+  }
+
+  it("is offered for a box without text and keeps the box with its crop", async () => {
+    const { calls, user } = setup({
+      "POST /api/files/d1/page1/lines": { body: READ },
+      "POST /api/rules/area-picture": { body: CROP },
+    });
+    const panel = await drawAndOpen(user);
+    expect(await within(panel).findByText("No text found in this box.")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Add another box" })).toBeDisabled();
+    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
+    expect(posts(calls, "/api/rules/area-picture")[0].body).toEqual({
+      drive_id: "d1",
+      box: [0.1, 0.1, 0.5, 0.3],
+      save: false,
+      rule_id: null,
+    });
+    const kept = await within(panel).findByRole("list", { name: "Kept boxes" });
+    expect(within(kept).getByRole("img", { name: "Picture of box 1" })).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
+    expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
+    expect(screen.queryByTestId("drawn-box")).toBeNull();
+    expect(within(panel).getByText(/Add a text box to make this faster and surer/)).toBeInTheDocument();
+  });
+
+  it("is a choice for a box with text as well, and the address choices never take a picture", async () => {
+    const { user } = setup({ "POST /api/rules/area-picture": { body: CROP } });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByText("Pohjola Vakuutus Oy");
+    expect(within(panel).getByRole("button", { name: "Match the picture in this area" })).toBeEnabled();
+    expect(within(panel).getByRole("button", { name: "Address area for all letters" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: /address.*picture|picture.*address/i })).toBeNull();
+  });
+
+  it("a text box next to a picture box needs no hint, and both are sent to the draft", async () => {
+    const { calls, user } = setup({
+      "POST /api/rules/area-picture": { body: CROP },
+      "POST /api/rules/draft-zone": { body: { ...PICTURE_DRAFT, zones: DRAFT.zones } },
+      "POST /api/rules/replay": { body: REPLAY },
+    });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByText("Pohjola Vakuutus Oy");
+    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
+    await draw(); // the next box, with text
+    await within(panel).findByText("Pohjola Vakuutus Oy");
+    expect(within(panel).queryByText(/Add a text box to make this faster and surer/)).toBeNull();
+    await user.click(within(panel).getByRole("button", { name: "Sender…" }));
+    await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
+    expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({
+      drive_id: "d1",
+      boxes: [[0.1, 0.1, 0.5, 0.3]],
+      picture_boxes: [[0.1, 0.1, 0.5, 0.3]],
+      sender: null,
+    });
+    const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
+    expect(within(sheet).getAllByRole("group")).toHaveLength(2);
+    expect(within(sheet).queryByText(/Add a text box to make this faster and surer/)).toBeNull();
+  });
+
+  it("Make a rule… from a picture alone shows the crop and the score, and tests and saves the picture zone", async () => {
+    const scores = [
+      { path: "Insurance/a.pdf", score: 0.93, matched: true },
+      { path: "10. Bank/b.pdf", score: 0.71, matched: false },
+    ];
+    const { calls, user } = setup({
+      "POST /api/files/d1/page1/lines": { body: READ },
+      "POST /api/rules/area-picture": { body: CROP },
+      "POST /api/rules/draft-zone": { body: PICTURE_DRAFT },
+      "POST /api/rules/replay": { body: { ...REPLAY, scores } },
+      "PUT /api/rules/pohjola": SAVED,
+    });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByText("No text found in this box.");
+    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
+    await user.click(await within(panel).findByRole("button", { name: "Sender…" }));
+    await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
+    expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({
+      drive_id: "d1",
+      boxes: [],
+      picture_boxes: [[0.1, 0.1, 0.5, 0.3]],
+      sender: null,
+    });
+    const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
+    const group = within(sheet).getByRole("group", { name: "Area" });
+    expect(within(group).getByRole("img", { name: "Picture of area" })).toHaveAttribute("src", "/api/rules/areas/pohjola-1.png");
+    const slider = within(group).getByRole("slider", { name: "Match needed for area" });
+    expect(slider).toHaveValue("0.85");
+    expect(within(sheet).getByText(/Add a text box to make this faster and surer/)).toBeInTheDocument();
+    // the replay shows how far apart matches and non-matches are
+    const result = await within(sheet).findByRole("region", { name: "Picture scores" });
+    expect(within(result).getByText(/0\.85 is needed/)).toBeInTheDocument();
+    expect(within(within(result).getByRole("list", { name: "Matched documents" })).getByText("0.93")).toBeInTheDocument();
+    expect(within(within(result).getByRole("list", { name: "Documents not matched" })).getByText("0.71")).toBeInTheDocument();
+    expect((posts(calls, "/api/rules/replay")[0].body as { rule: { when: { zones: unknown } } }).rule.when.zones).toEqual([
+      { box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png" },
+    ]);
+    // moving the slider sets min_score and tests again
+    fireEvent.change(slider, { target: { value: "0.9" } });
+    await waitFor(() => expect(posts(calls, "/api/rules/replay")).toHaveLength(2));
+    expect((posts(calls, "/api/rules/replay")[1].body as { rule: { when: { zones: unknown } } }).rule.when.zones).toEqual([
+      { box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png", min_score: 0.9 },
+    ]);
+    await within(sheet).findByText(/0\.90 is needed/);
+    await waitFor(() => expect(within(sheet).getByRole("button", { name: "Save" })).toBeEnabled());
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    // the replay lists no differences, so it saves at once
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+    expect((calls.find((c) => c.method === "PUT")?.body as { when: { zones: unknown } }).when.zones).toEqual([
+      { box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png", min_score: 0.9 },
+    ]);
+  });
+
+  it("shows the server's message when the picture of page 1 is not made yet", async () => {
+    const { user } = setup({
+      "POST /api/rules/area-picture": () => ({ status: 400, body: { error: "The picture of page 1 of this document is not made yet. Try again in a moment." } }),
+    });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByText("Pohjola Vakuutus Oy");
+    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
+    expect(await within(panel).findByText(/not made yet/)).toBeInTheDocument();
+    expect(screen.queryByTestId("kept-box")).toBeNull();
+  });
+
+  it("a box with no text cannot make a rule alone", async () => {
+    const { user } = setup({ "POST /api/files/d1/page1/lines": { body: READ } });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByText("No text found in this box.");
+    await user.click(within(panel).getByRole("button", { name: "Sender…" }));
+    expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeDisabled();
   });
 });

@@ -5,6 +5,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   type Area,
+  areaPictureUrl,
   errorText,
   type PageBox,
   type Replay,
@@ -12,6 +13,7 @@ import {
   type RuleDraft,
   type RuleIn,
   type RuleOffer,
+  useAreaPicture,
   useInbox,
   useReplay,
   useRules,
@@ -35,8 +37,13 @@ const READING_POLL_MS = 2000;
 const READING_POLLS = 15;
 
 type Word = { word: string; ticked: boolean };
-/** An area of page 1 with the words of which any one is enough. */
-type RuleArea = { box: PageBox; words: Word[] };
+/** An area of page 1: the words of which any one is enough, or (``image``) a picture that
+ * has to appear in it with at least ``minScore`` (null: the default). */
+type RuleArea = { box: PageBox; words: Word[]; image?: string; minScore?: number | null };
+
+/** The score a picture area needs when the rule names none (the API says; this is the
+ * value until it has answered). */
+const DEFAULT_MIN_SCORE = 0.85;
 /** A field of the "then" part: ``off`` leaves it out of the rule. */
 type Text = { off: boolean; value: string };
 
@@ -128,10 +135,17 @@ export function RuleSheet({
   );
   const [areas, setAreas] = useState<RuleArea[]>(() =>
     zoneDraft
-      ? zoneDraft.zones.map((z) => ({ box: z.box, words: z.words.map((w) => ({ ...w })) }))
+      ? [
+          ...zoneDraft.zones.map((z) => ({ box: z.box, words: z.words.map((w) => ({ ...w })) })),
+          ...(zoneDraft.pictures ?? []).map((p) => ({ box: p.box, words: [], image: p.image, minScore: null })),
+        ]
       : draft
         ? []
-        : initial.when.zones.map((z) => ({ box: z.box, words: (z.text_contains ?? []).map((word) => ({ word, ticked: true })) })),
+        : initial.when.zones.map((z) =>
+            z.image
+              ? { box: z.box, words: [], image: z.image, minScore: z.min_score ?? null }
+              : { box: z.box, words: (z.text_contains ?? []).map((word) => ({ word, ticked: true })) },
+          ),
   );
   const [adding, setAdding] = useState("");
   const start = draft ? initial : initial.then; // a draft's actions sit on the draft itself
@@ -155,8 +169,10 @@ export function RuleSheet({
   const [hadAreas] = useState(() => areas.length > 0);
   const ticked = words.filter((w) => w.ticked).map((w) => w.word);
   const areaWords = areas.map((a) => a.words.filter((w) => w.ticked).map((w) => w.word));
-  // a rule needs a condition: a ticked word anywhere, or at least one area with a ticked word in each
-  const emptyArea = areaWords.findIndex((w) => w.length === 0);
+  // a rule needs a condition: a ticked word anywhere, or at least one area with a ticked word
+  // (or a picture) in each
+  const emptyArea = areas.findIndex((a, i) => !a.image && areaWords[i].length === 0);
+  const pictureOnly = areas.some((a) => a.image) && ticked.length === 0 && areas.every((a) => a.image);
   const hasCondition = (ticked.length > 0 || areas.length > 0) && emptyArea < 0;
   const rule: RuleIn = useMemo(
     () => ({
@@ -165,7 +181,15 @@ export function RuleSheet({
         text_contains: ticked,
         filename_matches: filename.trim() || null,
         folder_is: folderIs.trim() || null,
-        ...(areas.length > 0 ? { zones: areas.map((a, i) => ({ box: a.box, text_contains: areaWords[i] })) } : {}),
+        ...(areas.length > 0
+          ? {
+              zones: areas.map((a, i) =>
+                a.image
+                  ? { box: a.box, image: a.image, ...(a.minScore != null ? { min_score: a.minScore } : {}) }
+                  : { box: a.box, text_contains: areaWords[i] },
+              ),
+            }
+          : {}),
         ...(person ? { person } : {}),
       },
       then: {
@@ -179,7 +203,7 @@ export function RuleSheet({
       ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.id, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i]])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
+    [initial.id, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
   );
   const ruleKey = JSON.stringify(rule);
 
@@ -264,6 +288,28 @@ export function RuleSheet({
   };
   const changeArea = (at: number, change: (words: Word[]) => Word[]) =>
     setAreas((all) => all.map((a, i) => (i === at ? { ...a, words: change(a.words) } : a)));
+  // a picture area whose box changes is cut again from the document it was changed on
+  const recut = useAreaPicture();
+  const [recutError, setRecutError] = useState<string | null>(null);
+  const moveArea = async (at: number, box: PageBox, driveId: string) => {
+    const area = areas[at];
+    if (!area?.image) {
+      setAreas((all) => all.map((a, i) => (i === at ? { ...a, box } : a)));
+      return;
+    }
+    setRecutError(null);
+    try {
+      const cut = await recut.mutateAsync({ driveId, box, save: true, ruleId: initial.id });
+      setAreas((all) => all.map((a, i) => (i === at ? { ...a, box, image: cut.image ?? a.image } : a)));
+    } catch (e) {
+      setRecutError(errorText(e));
+    }
+  };
+  const defaultMin = useRules(areas.some((a) => a.image)).data?.default_min_score ?? DEFAULT_MIN_SCORE;
+  // the lowest score a picture area needs: what the replay's scores are compared with
+  const needed = areas.some((a) => a.image)
+    ? Math.min(...areas.filter((a) => a.image).map((a) => a.minScore ?? defaultMin))
+    : null;
 
   const tested = proof !== null && proof.key === ruleKey ? proof.replay : null;
   const failed = replay.isError && tested === null;
@@ -374,25 +420,46 @@ export function RuleSheet({
             <p className="hint">Any ticked word is enough; more words catch more documents.</p>
           </div>
         )}
-        {areas.map((area, at) => (
-          <AreaWords
-            key={at}
-            n={at + 1}
-            several={areas.length > 1}
-            words={area.words}
-            onToggle={(word) => changeArea(at, (all) => all.map((x) => (x.word === word ? { ...x, ticked: !x.ticked } : x)))}
-            onAdd={(word) => changeArea(at, (all) => withWord(all, word))}
-            onRemove={() => setAreas((all) => all.filter((_, i) => i !== at))}
-          />
-        ))}
-        {areas.length > 1 && <p className="hint">The document needs a word in every area.</p>}
+        {areas.map((area, at) =>
+          area.image ? (
+            <AreaPictureView
+              key={at}
+              n={at + 1}
+              several={areas.length > 1}
+              image={area.image}
+              minScore={area.minScore ?? null}
+              defaultScore={defaultMin}
+              onScore={(minScore) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, minScore } : a)))}
+              onRemove={() => setAreas((all) => all.filter((_, i) => i !== at))}
+            />
+          ) : (
+            <AreaWords
+              key={at}
+              n={at + 1}
+              several={areas.length > 1}
+              words={area.words}
+              onToggle={(word) => changeArea(at, (all) => all.map((x) => (x.word === word ? { ...x, ticked: !x.ticked } : x)))}
+              onAdd={(word) => changeArea(at, (all) => withWord(all, word))}
+              onRemove={() => setAreas((all) => all.filter((_, i) => i !== at))}
+            />
+          ),
+        )}
+        {areas.length > 1 && <p className="hint">The document needs a word or the picture in every area.</p>}
+        {pictureOnly && (
+          <p className="hint">Add a text box to make this faster and surer: a picture alone takes longer to test and is less sure.</p>
+        )}
+        {recutError && (
+          <p className="error" role="alert">
+            {visible(recutError)}
+          </p>
+        )}
         {samplePage && (areas.length > 0 || personZone) && (
           <SampleAreas
             ruleId={initial.id}
             sample={draft ? null : initial.sample}
-            areas={areas.map((a) => a.box)}
+            areas={areas.map((a) => ({ box: a.box, picture: !!a.image }))}
             personZone={personZone}
-            onArea={(i, box) => setAreas((all) => all.map((a, at) => (at === i ? { ...a, box } : a)))}
+            onArea={(i, box, driveId) => void moveArea(i, box, driveId)}
             onPersonZone={setPersonZone}
           />
         )}
@@ -455,6 +522,7 @@ export function RuleSheet({
             replay={proof?.replay}
             before={before ? baseline : null}
             sender={sender}
+            needed={needed}
             pending={tested === null && !failed}
             error={failed ? errorText(replay.error) : null}
             onRetry={() => run(epoch.current)}
@@ -545,6 +613,62 @@ function AreaWords({
   );
 }
 
+/** A picture area: its crop, the score it needs (the default until it is moved) and a way to
+ * remove it. */
+function AreaPictureView({
+  n,
+  several,
+  image,
+  minScore,
+  defaultScore,
+  onScore,
+  onRemove,
+}: {
+  n: number;
+  several: boolean;
+  image: string;
+  minScore: number | null;
+  defaultScore: number;
+  onScore: (score: number | null) => void;
+  onRemove: () => void;
+}) {
+  const id = useId();
+  const label = several ? `Area ${n}` : "Area";
+  const shown = minScore ?? defaultScore;
+  return (
+    <div className="field rule-area" role="group" aria-label={label}>
+      <div className="rule-area-head">
+        <span className="field-label" id={`${id}-label`}>
+          {several ? `Picture in area ${n} of page 1` : "Picture in the area you drew on page 1"}
+        </span>
+        <button type="button" className="link-button" aria-label={`Remove ${label.toLowerCase()}`} onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+      <img className="rule-picture" src={areaPictureUrl(image)} alt={`Picture of ${label.toLowerCase()}`} />
+      <div className="rule-score">
+        <label htmlFor={`${id}-score`}>Match needed</label>
+        <input
+          id={`${id}-score`}
+          type="range"
+          min={0.5}
+          max={0.99}
+          step={0.01}
+          value={shown}
+          aria-label={`Match needed for ${label.toLowerCase()}`}
+          onChange={(e) => onScore(Number(e.target.value))}
+        />
+        <output htmlFor={`${id}-score`}>{shown.toFixed(2)}</output>
+        {minScore !== null && (
+          <button type="button" className="link-button" onClick={() => onScore(null)}>
+            Use the usual {defaultScore.toFixed(2)}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** A rule's areas on a sample page (the document it matched last, or one from the Inbox), to
  * see them and to change them by dragging. */
 function SampleAreas({
@@ -557,9 +681,10 @@ function SampleAreas({
 }: {
   ruleId: string;
   sample: Rule["sample"] | null | undefined;
-  areas: PageBox[];
+  areas: { box: PageBox; picture: boolean }[];
   personZone: PageBox | null;
-  onArea: (index: number, box: PageBox) => void;
+  /** An area was moved on the document ``driveId`` (a picture area is cut again from it). */
+  onArea: (index: number, box: PageBox, driveId: string) => void;
   onPersonZone: (box: PageBox) => void;
 }) {
   const id = useId();
@@ -573,7 +698,17 @@ function SampleAreas({
   ];
   const chosen = choices.find((c) => c.drive_id === picked);
   const shown: Area[] = [
-    ...areas.map((box, index) => ({ rule_id: ruleId, index, box, kind: "text" as const, lines: [], score: null, matched: true, reason: null, wins: true })),
+    ...areas.map(({ box, picture }, index) => ({
+      rule_id: ruleId,
+      index,
+      box,
+      kind: picture ? ("image" as const) : ("text" as const),
+      lines: [],
+      score: null,
+      matched: true,
+      reason: null,
+      wins: true,
+    })),
     ...(personZone
       ? [{ rule_id: ruleId, index: 0, box: personZone, kind: "address" as const, lines: [], score: null, matched: true, reason: null, wins: true }]
       : []),
@@ -595,7 +730,7 @@ function SampleAreas({
             driveId={chosen.drive_id}
             ext={chosen.ext}
             areas={shown}
-            onChange={(area, box) => (area.kind === "address" ? onPersonZone(box) : onArea(area.index, box))}
+            onChange={(area, box) => (area.kind === "address" ? onPersonZone(box) : onArea(area.index, box, chosen.drive_id))}
           />
           <p className="hint">Click an area to select it, then drag it to move it or its handles to resize it. The test below follows.</p>
         </>
@@ -614,7 +749,11 @@ export function ruleInOf(r: Rule): RuleIn {
       text_contains: r.when.text_contains,
       filename_matches: r.when.filename_matches,
       folder_is: r.when.folder_is,
-      zones: r.when.zones.map((z) => ({ box: z.box, text_contains: z.text_contains })),
+      zones: r.when.zones.map((z) =>
+        z.image
+          ? { box: z.box, image: z.image, ...(z.min_score != null ? { min_score: z.min_score } : {}) }
+          : { box: z.box, text_contains: z.text_contains },
+      ),
       person: r.when.person,
     },
     then: r.then,

@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type InboxEntry, useInbox } from "../../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
 import { AssignSheet, FromFor } from "./FromFor";
@@ -153,6 +153,21 @@ describe("From and For chips", () => {
     expect(screen.getByText("Reading page 1…")).toBeInTheDocument();
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/files/d1/page1")).toHaveLength(1));
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/inbox").length).toBeGreaterThan(1));
+  });
+
+  it("keep reloading while the suggestion still waits after page 1 is read (a picture is made later)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { calls } = setup(<FromFor entry={entry({ waiting_for_page1: true })} />, {
+        "GET /api/files/d1/page1": { body: { read: true, lines: [], unavailable: null } },
+      });
+      await waitFor(() => expect(calls.filter((c) => c.url === "/api/inbox").length).toBeGreaterThan(1));
+      const before = calls.filter((c) => c.url === "/api/inbox").length;
+      await vi.advanceTimersByTimeAsync(4500);
+      await waitFor(() => expect(calls.filter((c) => c.url === "/api/inbox").length).toBeGreaterThan(before));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("say why page 1 cannot be read instead of Reading page 1…, and do not ask for it", () => {

@@ -434,4 +434,80 @@ describe("RuleSheet", () => {
       expect(screen.getByText("Insurance/y.pdf")).toBeInTheDocument();
     });
   });
+
+  describe("picture areas", () => {
+    const PICTURE_RULE = {
+      id: "acme",
+      file: "learned.yaml",
+      learned: true,
+      when: {
+        text_contains: [],
+        filename_matches: null,
+        folder_is: "##. Organize",
+        zones: [
+          { box: [0.05, 0.03, 0.35, 0.1], text_contains: null, image: "areas/acme-1.png", min_score: 0.9 },
+          { box: [0.5, 0.05, 0.9, 0.1], text_contains: ["lasku"], image: null, min_score: null },
+        ],
+        person: null,
+      },
+      then: { folder: "Insurance/Acme", name: null, tags: [], tray: null, payee: null },
+      person_zone: null,
+      sender: null,
+      stats: { suggested: 2, changed: 0, last_used: null, flagged: false },
+    };
+    const RULES = { rules: [PICTURE_RULE], errors: [], state: { offer: true, declined: 0 }, unused_pictures: [], default_min_score: 0.8 };
+    const sheetFor = (replay: object = REPLAY) => setup(replay, { initial: PICTURE_RULE, filed: undefined }, { "GET /api/rules": { body: RULES } });
+
+    it("shows the crop of a picture area next to the words of a text area, with its own score", async () => {
+      sheetFor();
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      const picture = within(sheet).getByRole("group", { name: "Area 1" });
+      expect(within(picture).getByRole("img", { name: "Picture of area 1" })).toHaveAttribute("src", "/api/rules/areas/acme-1.png");
+      expect(within(picture).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("0.9");
+      expect(within(sheet).getByRole("group", { name: "Area 2" })).toHaveTextContent("lasku");
+      // a text area is there: no hint to add one
+      expect(within(sheet).queryByText(/Add a text box to make this faster/)).toBeNull();
+    });
+
+    it("tests and saves both kinds of area as they are, and a score back at the usual one is left out", async () => {
+      const { calls, user } = sheetFor({ ...REPLAY, different: [] });
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      await within(sheet).findByText(/Matches 4 documents/);
+      const zones = (c: Call) => (c.body as { rule: { when: { zones: unknown[] } } }).rule.when.zones;
+      expect(zones(posts(calls, "/api/rules/replay")[0])).toEqual([
+        { box: [0.05, 0.03, 0.35, 0.1], image: "areas/acme-1.png", min_score: 0.9 },
+        { box: [0.5, 0.05, 0.9, 0.1], text_contains: ["lasku"] },
+      ]);
+      await user.click(within(sheet).getByRole("button", { name: "Use the usual 0.80" }));
+      await waitFor(() => expect(posts(calls, "/api/rules/replay")).toHaveLength(2));
+      expect(zones(posts(calls, "/api/rules/replay")[1])[0]).toEqual({ box: [0.05, 0.03, 0.35, 0.1], image: "areas/acme-1.png" });
+      expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("0.8");
+    });
+
+    it("removing the picture area leaves the words, and a picture alone is told to add a text box", async () => {
+      const { user } = sheetFor();
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      await user.click(within(sheet).getByRole("button", { name: "Remove area 2" }));
+      expect(await within(sheet).findByText(/Add a text box to make this faster and surer/)).toBeInTheDocument();
+      await user.click(within(sheet).getByRole("button", { name: "Remove area" }));
+      expect(within(sheet).getByText("A rule needs a word or an area")).toBeInTheDocument();
+      expect(within(sheet).getByRole("button", { name: "Save" })).toBeDisabled();
+    });
+
+    it("lists the scores of the matches and of the best non-matches under the proof", async () => {
+      sheetFor({
+        ...REPLAY,
+        scores: [
+          { path: "Insurance/a.pdf", score: 0.91, matched: true },
+          { path: "Insurance/b.pdf", score: 0.96, matched: true },
+          { path: "10. Bank/c.pdf", score: 0.62, matched: false },
+        ],
+      });
+      const list = await screen.findByRole("region", { name: "Picture scores" });
+      expect(within(list).getByText(/0\.90 is needed/)).toBeInTheDocument();
+      const matched = within(list).getByRole("list", { name: "Matched documents" });
+      expect(within(matched).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["0.91Insurance/a.pdf", "0.96Insurance/b.pdf"]);
+      expect(within(within(list).getByRole("list", { name: "Documents not matched" })).getByText("10. Bank/c.pdf", { exact: false })).toBeInTheDocument();
+    });
+  });
 });
