@@ -195,6 +195,21 @@ def test_inbox_api_has_waiting_for_page1(app, fake_archive):
     assert entry["suggestion"]["waiting_for_page1"] is True
 
 
+def test_a_blocked_page_1_is_unavailable_not_waiting(app, fake_archive, monkeypatch):
+    app.save_rule(zone_rule())
+    add(app, fake_archive, f"{INBOX}/b.pdf", "b", "pohjola vakuutus")
+    monkeypatch.setattr(
+        app.content, "layout_blocked", lambda drive_id: "no OCR engine" if drive_id == "b" else None
+    )
+    entry = app.inbox.list()[0]
+    assert not entry.suggestion.waiting_for_page1
+    assert entry.suggestion.page1_unavailable == "no OCR engine"
+    assert "b" not in app.content._wanted  # no read is asked for
+    with make_client(app) as c:
+        data = c.get("/api/inbox").json()[0]["suggestion"]
+    assert data["waiting_for_page1"] is False and data["page1_unavailable"] == "no OCR engine"
+
+
 # --- the lines endpoints ---------------------------------------------------------------
 
 

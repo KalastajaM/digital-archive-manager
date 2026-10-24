@@ -187,6 +187,7 @@ class InboxService:
         rules_dir: Callable[[], Path] | None = None,
         data_dir: Path | None = None,
         want_layouts: Callable[[Collection[str]], None] | None = None,
+        layout_blocked: Callable[[str], str | None] | None = None,
         people: Callable[[], Sequence[Person]] = list,
         address_zone: Callable[[], Sequence[float]] = lambda: DEFAULT_ADDRESS_ZONE,
         assigned_person: Callable[[str], str | None] = lambda drive_id: None,
@@ -208,6 +209,8 @@ class InboxService:
         self._data_dir = data_dir
         # asks the layout pass to read page 1 of these files next (a rule needs it)
         self._want_layouts = want_layouts
+        # why page 1 of a file cannot be read right now (None: it can, or will be)
+        self._layout_blocked = layout_blocked
         # who documents are for: the people list, the address zone of page 1, and the
         # person the owner assigned to a document
         self._people = people
@@ -644,8 +647,13 @@ class InboxService:
             layout=layout,
             people=self.people_context(rec.drive_id),
         )
-        if found.waiting_for_page1 and self._want_layouts is not None:
-            self._want_layouts([rec.drive_id])
+        if found.waiting_for_page1:
+            why = self._layout_blocked(rec.drive_id) if self._layout_blocked else None
+            if why:  # no read will come: say so instead of "Reading page 1..."
+                found.waiting_for_page1 = False
+                found.page1_unavailable = why
+            elif self._want_layouts is not None:
+                self._want_layouts([rec.drive_id])
         if found.folder is None and self._in_inbox(rec):
             folder = similar_folder(self.repo.engine, rec.drive_id, rec.name or "", text, rec.ext)
             if folder is not None:

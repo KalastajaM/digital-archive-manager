@@ -12,16 +12,20 @@ export type AssignKind = "sender" | "person";
 const WORD: Record<AssignKind, string> = { sender: "From", person: "For" };
 
 /** The sheet that sets From or For on these documents. ``current``: what one document has
- * now (the choice starts there). Clear takes it away from all of them. */
+ * would be preselected (a person found in the address area counts); ``assigned``: this
+ * one document has an assignment in this field, so there is something to clear. For many
+ * documents Clear is always offered and takes the field away from all of them. */
 export function AssignSheet({
   kind,
   driveIds,
   current = null,
+  assigned = false,
   onClose,
 }: {
   kind: AssignKind;
   driveIds: string[];
   current?: string | null;
+  assigned?: boolean;
   onClose: () => void;
 }) {
   const ids = useId();
@@ -56,7 +60,7 @@ export function AssignSheet({
       footer={
         <>
           <button type="button" onClick={onClose}>Cancel</button>
-          {(driveIds.length > 1 || current) && (
+          {(driveIds.length > 1 || assigned) && (
             <button type="button" disabled={put.isPending} onClick={() => void save(null)}>
               Clear
             </button>
@@ -121,7 +125,7 @@ function personSource(entry: InboxEntry): string | null {
  * the suggestion cannot say, and the card says so quietly. */
 export function FromFor({ entry }: { entry: InboxEntry }) {
   const id = entry.record.drive_id;
-  const { person, people_found: found, waiting_for_page1: reading } = entry.suggestion;
+  const { person, people_found: found, waiting_for_page1: reading, page1_unavailable: unavailable } = entry.suggestion;
   const sender = entry.assignment?.sender ?? null;
   const [picking, setPicking] = useState<AssignKind | null>(null);
   const put = usePutAssignments();
@@ -168,12 +172,18 @@ export function FromFor({ entry }: { entry: InboxEntry }) {
           Reading page 1…
         </p>
       )}
+      {unavailable && (
+        <p className="hint" role="status">
+          Page 1 could not be read: {visible(unavailable)}.
+        </p>
+      )}
       {error && <p className="error" role="alert">{visible(error)}</p>}
       {picking && (
         <AssignSheet
           kind={picking}
           driveIds={[id]}
           current={picking === "sender" ? sender : (person ?? null)}
+          assigned={picking === "sender" ? sender !== null : (entry.assignment?.person ?? null) !== null}
           onClose={() => setPicking(null)}
         />
       )}

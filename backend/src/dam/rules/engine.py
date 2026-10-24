@@ -73,6 +73,9 @@ class Suggestion:
     # a rule with a page-1 area could not be checked because page 1 has not been read yet
     # (its other conditions matched): the Inbox says "Reading page 1..."
     waiting_for_page1: bool = False
+    # why page 1 cannot be read now (no OCR engine, missing, took too long): set by the
+    # inbox service instead of ``waiting_for_page1``, which is then false
+    page1_unavailable: str | None = None
     # who the document is for: the owner's assignment, else the one person found in the
     # address area of page 1 (or in the person_zone of the rule that gave the folder or
     # name). ``person_source``: "assigned", "address area" or "rule:<id>"; ``people_found``

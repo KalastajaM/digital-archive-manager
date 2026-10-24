@@ -5173,6 +5173,8 @@ export interface components {
              * @default false
              */
             waiting_for_page1: boolean;
+            /** Page1 Unavailable */
+            page1_unavailable?: string | null;
             /** Person */
             person?: string | null;
             /** Person Source */

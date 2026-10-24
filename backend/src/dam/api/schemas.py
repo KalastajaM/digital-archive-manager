@@ -397,6 +397,8 @@ class SuggestionOut(BaseModel):
     # a rule with a page-1 area could not be checked: page 1 is being read ("Reading
     # page 1...")
     waiting_for_page1: bool = False
+    # page 1 cannot be read now (the reason), so "Reading page 1..." would never end
+    page1_unavailable: str | None = None
     # who the document is for: "assigned" (the owner said so), "address area" (page 1) or
     # "rule:<id>" (that rule's own address area); people_found: everyone the address area
     # names (two or more: no person, ask)

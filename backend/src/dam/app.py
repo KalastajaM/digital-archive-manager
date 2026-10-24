@@ -150,6 +150,7 @@ class App:
             rules_dir=lambda: self.rules_dir,
             data_dir=self.app_paths.data_dir,
             want_layouts=lambda ids: self.content.want_layouts(ids),
+            layout_blocked=lambda drive_id: self.content.layout_blocked(drive_id),
             people=lambda: self.settings.people,
             address_zone=lambda: self.settings.address_zone,
             assigned_person=self.assignments.person_of,

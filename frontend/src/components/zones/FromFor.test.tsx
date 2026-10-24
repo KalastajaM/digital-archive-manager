@@ -121,6 +121,14 @@ describe("From and For chips", () => {
     expect(puts(calls)[0].body).toEqual({ drive_ids: ["d1"], person: null });
   });
 
+  it("offer no Clear for a person that was only found in the address area", async () => {
+    const { user } = setup(<FromFor entry={entry({ person: "Tiina", person_source: "address area" })} />);
+    await user.click(screen.getByRole("button", { name: /^For: Tiina/ }));
+    const sheet = await screen.findByRole("dialog", { name: "For" });
+    expect(within(sheet).queryByRole("button", { name: "Clear" })).toBeNull();
+    expect(within(sheet).getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
   it("show the server's message when saving fails", async () => {
     const { user } = setup(<FromFor entry={entry()} />, { "PUT /api/assignments": { status: 400, body: { error: "Unknown person" } } });
     await user.click(screen.getByRole("button", { name: "For: not set" }));
@@ -145,6 +153,13 @@ describe("From and For chips", () => {
     expect(screen.getByText("Reading page 1…")).toBeInTheDocument();
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/files/d1/page1")).toHaveLength(1));
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/inbox").length).toBeGreaterThan(1));
+  });
+
+  it("say why page 1 cannot be read instead of Reading page 1…, and do not ask for it", () => {
+    const { calls } = setup(<FromFor entry={entry({ page1_unavailable: "no OCR engine" })} />);
+    expect(screen.getByText("Page 1 could not be read: no OCR engine.")).toBeInTheDocument();
+    expect(screen.queryByText("Reading page 1…")).toBeNull();
+    expect(calls.filter((c) => c.url.includes("page1"))).toHaveLength(0);
   });
 
   it("do not ask for page 1 when nothing waits", () => {
