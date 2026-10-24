@@ -45,7 +45,12 @@ def status(app: AppDep, archives: ArchivesDep) -> dict:
 
 def _page1(app: App) -> dict:
     read, total = app.repo.layout_progress()
+    text, scans = app.repo.layout_unread()
     return {
+        "text_left": text,
+        "scans_left": scans,
+        "text_per_min": app.settings.page1_text_reads_per_minute,
+        "scans_per_min": app.settings.indexer_reads_per_minute,
         "read": read,
         "total": total,
         "backfill": app.settings.page1_backfill,

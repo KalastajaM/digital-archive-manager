@@ -2759,6 +2759,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/page1-speed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Page1 Speed
+         * @description Set how many PDFs with a text layer have page 1 read per minute (scans, photos and
+         *     slow downloads keep the indexer's pace). 400 for a rate outside 1 to 6000, or when
+         *     settings.yaml could not be written (it is left as it was).
+         */
+        put: operations["put_page1_speed_api_settings_page1_speed_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/people": {
         parameters: {
             query?: never;
@@ -4693,6 +4715,39 @@ export interface components {
             blocked: components["schemas"]["Page1BlockedOut"][];
             /** Rate Per Min */
             rate_per_min?: number | null;
+            /**
+             * Text Left
+             * @default 0
+             */
+            text_left: number;
+            /**
+             * Scans Left
+             * @default 0
+             */
+            scans_left: number;
+            /**
+             * Text Per Min
+             * @default 0
+             */
+            text_per_min: number;
+            /**
+             * Scans Per Min
+             * @default 0
+             */
+            scans_per_min: number;
+        };
+        /**
+         * Page1SpeedIn
+         * @description How many PDFs with a text layer have page 1 read per minute (1 to 6000).
+         */
+        Page1SpeedIn: {
+            /** Reads Per Minute */
+            reads_per_minute: number;
+        };
+        /** Page1SpeedOut */
+        Page1SpeedOut: {
+            /** Reads Per Minute */
+            reads_per_minute: number;
         };
         /**
          * ParentBody
@@ -20534,6 +20589,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page1BackfillOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_page1_speed_api_settings_page1_speed_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Page1SpeedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page1SpeedOut"];
                 };
             };
             /** @description Bad Request */

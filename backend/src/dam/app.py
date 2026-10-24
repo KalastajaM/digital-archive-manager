@@ -217,6 +217,7 @@ class App:
         self.content.barcode_trays = self.barcode_trays
         self.content.thumbs = self.pictures.thumbs
         self.content.page1_backfill = lambda: self.settings.page1_backfill
+        self.content.page1_fast_per_minute = lambda: self.settings.page1_text_reads_per_minute
         # DAM_AI_FAKE=1 (demos, tests): a deterministic provider that counts as a key
         provider = None
         if os.environ.get("DAM_AI_FAKE") == "1":
@@ -404,6 +405,24 @@ class App:
         self.settings.page1_backfill = enabled
         if enabled:
             self.wake_indexer()
+
+    def set_page1_speed(self, reads_per_minute: int) -> None:
+        """Set how many PDFs with a text layer have page 1 read per minute
+        (``page1_text_reads_per_minute`` in settings.yaml) and use it from now on.
+        ``InvalidRequest`` for a rate outside 1 to 6000 or when the file could not be
+        written."""
+        if not 1 <= reads_per_minute <= 6000:
+            raise InvalidRequest("Page 1 reading speed is between 1 and 6000 a minute.")
+        try:
+            write_keys(
+                self.app_paths,
+                {"page1_text_reads_per_minute": reads_per_minute},
+                lambda s: s.page1_text_reads_per_minute == reads_per_minute,
+            )
+        except OSError as e:
+            raise InvalidRequest(f"the setting could not be saved: {e}") from e
+        self.settings.page1_text_reads_per_minute = reads_per_minute
+        self.wake_indexer()
 
     def set_people(
         self, people: list[Person], address_zone: tuple[float, float, float, float] | None

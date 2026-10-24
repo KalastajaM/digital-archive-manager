@@ -37,6 +37,7 @@ LAYOUT_MISSING = "missing"
 LAYOUT_TIMEOUT = "page 1 took too long to read"
 PICTURE_PAGE_ROWS = 200  # files whose picture is checked per idle pass (backfill)
 LAYOUT_NO_PICTURE = "no picture of page 1 can be made"
+CLOUD_SLOW_S = 3.0  # a page-1 read that took this long counts as slow (a download, a big scan)
 MAX_REASON = 500  # characters of an error reason kept in the index
 
 
@@ -115,6 +116,11 @@ class ContentIndexer:
         # positions were kept): whether it also reads files outside the inbox (the
         # inbox and the wanted files are always read), and the OCR languages of scans
         self.page1_backfill = page1_backfill
+        # reads per minute for page 1 of a PDF with a text layer (no OCR); the scans, photos
+        # and slow reads keep ``reads_per_minute``. None: the same rate for all.
+        self.page1_fast_per_minute: Callable[[], int] | None = None
+        self._layout_fast = True  # whether the last page-1 read was a quick, local one
+        self._last_slow = True  # whether the step before was a slow kind of work
         self.ocr_languages = ocr_languages or ["en-US"]
         self.layout_timeout_s = layout_timeout_s
         self.layout_retry_s = layout_retry_s
@@ -487,6 +493,7 @@ class ContentIndexer:
         with self._lock:
             if self._layout_busy:
                 return 0
+        self._layout_fast = True
         now = time.monotonic()
         with self._lock:
             self._layout_retry = {d: t for d, t in self._layout_retry.items() if t > now}
@@ -535,6 +542,8 @@ class ContentIndexer:
             # this read needs OCR: do not read the whole file just to find that out
             self._retry_layout_later(rec.drive_id, LAYOUT_NO_OCR)
             return True
+        needs_ocr = layout and (ext in IMAGE_EXTS or (ext == "pdf" and bool(ocr_used)))
+        started = time.monotonic()
         out: dict = {}
         finished = threading.Event()
 
@@ -572,8 +581,13 @@ class ContentIndexer:
         if not finished.wait(self.layout_timeout_s):
             log.warning("page-1 reading timed out for %s; retrying later", rec.path)
             self._retry_layout_later(rec.drive_id, LAYOUT_TIMEOUT)
+            self._layout_fast = False
             return False
         error = out.get("error")
+        # a scan (OCR) and a read that took long (a cloud file that had to be downloaded, a
+        # big file) keep the indexer's slow pace; a quick local text-layer read does not
+        if needs_ocr or isinstance(error, OSError) or time.monotonic() - started > CLOUD_SLOW_S:
+            self._layout_fast = False
         if not layout:
             return self._finish_picture(rec, out)
         if isinstance(error, UnsupportedContent) and str(error) == ocr.NO_OCR:
@@ -628,12 +642,29 @@ class ContentIndexer:
     def step(self, now: float | None = None) -> int:
         """One unit of background work: a pending file's content, else a barcode read,
         else a page-1 layout read, else the thumbnails of page-1 pictures."""
-        return (
-            self.run_once(limit=1, now=now)
-            or self.run_barcodes_once(limit=1)
-            or self.run_layouts_once(limit=1)
-            or self.run_thumbs_once()
-        )
+        done = self.run_once(limit=1, now=now) or self.run_barcodes_once(limit=1)
+        if done:
+            self._last_slow = True
+            return done
+        done = self.run_layouts_once(limit=1)
+        if done:
+            self._last_slow = not self._layout_fast
+            return done
+        self._last_slow = False
+        return self.run_thumbs_once()
+
+    def pause_s(self) -> float:
+        """How long to wait after the last step: the indexer's pace (``reads_per_minute``)
+        after content, barcode and slow page-1 reads (a scan, a slow download), the faster
+        page-1 pace after a quick text-layer read. Never slower than the indexer's pace."""
+        slow = 60 / self.reads_per_minute
+        if self._last_slow or self.page1_fast_per_minute is None:
+            return slow
+        try:
+            fast = 60 / max(1, int(self.page1_fast_per_minute()))
+        except Exception:
+            return slow
+        return min(fast, slow)
 
     def _cloud_pending(self, rec: FileRecord, now: float, exc: BaseException, expect) -> None:
         attempts = rec.attempts + 1
@@ -650,7 +681,6 @@ class ContentIndexer:
         ends the idle wait early. ``wake`` never shortens the rate-limit pause. Whoever
         sets ``stop`` should also set ``wake`` so an idle loop notices at once.
         """
-        pause = 60 / self.reads_per_minute
         while not stop.is_set():
             if wake is not None:
                 wake.clear()  # before the pass: a wake set during it ends the next wait
@@ -660,7 +690,7 @@ class ContentIndexer:
                 log.exception("content indexer pass failed")
                 count = 0
             if count:
-                stop.wait(pause)
+                stop.wait(self.pause_s())
             elif wake is None:
                 stop.wait(IDLE_WAIT_S)
             else:

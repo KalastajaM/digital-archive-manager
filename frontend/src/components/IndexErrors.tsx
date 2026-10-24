@@ -19,6 +19,7 @@ import {
 import { groupDigits, plural } from "../format";
 import { visible } from "../text";
 import { DialogStatus, InlineResults, LaunchButtons, useDialogStatus, useFileLaunch } from "./FileLaunch";
+import { Page1Speed } from "./Page1Speed";
 import { IconButton } from "./ui/IconButton";
 import { Sheet } from "./ui/Sheet";
 import { Tag } from "./ui/Tag";
@@ -84,20 +85,35 @@ const STATE_NOTES: [key: "searchable" | "waiting" | "not_readable" | "errors" | 
   ["missing", "Missing", "Gone from the archive folder since the last scan."],
 ];
 
+const minutesText = (minutes: number) =>
+  minutes < 60 ? `${minutes} min` : minutes < 60 * 48 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes / 1440)} days`;
+
 /** "about 3 h left at 30 files a minute" (nothing when the rate is not known yet). */
 export function timeLeft(remaining: number, perMinute: number | null | undefined): string | null {
   if (!perMinute || perMinute <= 0 || remaining <= 0) return null;
-  const minutes = Math.ceil(remaining / perMinute);
-  const left =
-    minutes < 60 ? `${minutes} min` : minutes < 60 * 48 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes / 1440)} days`;
+  const left = minutesText(Math.ceil(remaining / perMinute));
   return `about ${left} left at ${perMinute < 10 ? perMinute.toFixed(1) : Math.round(perMinute)} files a minute`;
+}
+
+/** The time left for the page-1 pass from what is left of each kind and how fast each is read:
+ * "about 40 min left (5 735 PDFs with text at 300 a minute, 12 scans at 30 a minute)". Null
+ * when nothing is left or the speeds are not known. */
+export function page1TimeLeft(page1: IndexSummary["page1"]): string | null {
+  const { text_left: text = 0, scans_left: scans = 0, text_per_min: fast = 0, scans_per_min: slow = 0 } = page1;
+  if ((text > 0 && fast <= 0) || (scans > 0 && slow <= 0) || text + scans <= 0) return null;
+  const minutes = Math.ceil(text / (fast || 1) + scans / (slow || 1));
+  const parts = [
+    ...(text > 0 ? [`${groupDigits(text)} PDFs with text at ${groupDigits(fast)} a minute`] : []),
+    ...(scans > 0 ? [`${groupDigits(scans)} scans and photos at ${groupDigits(slow)} a minute`] : []),
+  ];
+  return `about ${minutesText(minutes)} left (${parts.join(", ")})`;
 }
 
 /** The page-1 pass: how far it has come, what waits and why, the switch for reading older
  * documents in the background, and an estimate of the time left. */
 function Page1Block({ page1 }: { page1: IndexSummary["page1"] }) {
   const backfill = usePage1Backfill();
-  const left = timeLeft(page1.total - page1.read, page1.rate_per_min);
+  const left = page1TimeLeft(page1) ?? timeLeft(page1.total - page1.read, page1.rate_per_min);
   const blocked = page1.blocked ?? [];
   return (
     <section className="index-page1" aria-label="Page 1">
@@ -128,6 +144,7 @@ function Page1Block({ page1 }: { page1: IndexSummary["page1"] }) {
           {visible(errorText(backfill.error))}
         </p>
       )}
+      {page1.text_per_min ? <Page1Speed textPerMin={page1.text_per_min} scansPerMin={page1.scans_per_min ?? 30} /> : null}
     </section>
   );
 }

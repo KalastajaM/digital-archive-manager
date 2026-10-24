@@ -661,6 +661,19 @@ class FileRepo:
             ).one()
         return int(row[1]), int(row[0])
 
+    def layout_unread(self) -> tuple[int, int]:
+        """``(text, scans)``: of the files the layout pass has not read yet, how many are PDFs
+        whose text came from their text layer (read quickly, no OCR) and how many need OCR
+        (scans, photos): the two are read at different speeds."""
+        quick = and_(files.c.ext == "pdf", file_text.c.ocr_used.is_not(True))
+        with self._conn() as conn:
+            row = conn.execute(
+                select(func.count(), func.coalesce(func.sum(case((quick, 1), else_=0)), 0))
+                .select_from(files.outerjoin(file_text, file_text.c.drive_id == files.c.drive_id))
+                .where(*self._layout_population(), not_(self._has_layout()))
+            ).one()
+        return int(row[1]), int(row[0]) - int(row[1])
+
     def _in_inbox(self):
         return or_(
             files.c.path_nfc == self.inbox,
