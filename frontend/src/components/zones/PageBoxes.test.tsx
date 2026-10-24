@@ -76,6 +76,18 @@ async function draw() {
 }
 
 describe("Draw a box", () => {
+  it("puts the notes and the panel after the page, so the page never moves while drawing", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Draw a box" }));
+    await draw();
+    const panel = await screen.findByRole("region", { name: "The boxes" });
+    const page = screen.getByAltText("Page 1");
+    // nothing that grows with the boxes sits before the page in the preview
+    expect(page.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const note = screen.getByText(/Drag over page 1 to add the next box/);
+    expect(page.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("is off until it is asked for and asks for nothing before that", () => {
     const { calls } = setup();
     expect(screen.getByRole("button", { name: "Draw a box" })).toHaveAttribute("aria-pressed", "false");
