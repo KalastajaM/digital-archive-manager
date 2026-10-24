@@ -8,6 +8,15 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Rules can recognise a picture, such as a logo that has no text. In Draw a box, choose
+  **Match the picture in this area**; the rule sheet shows the picture and a **Match
+  needed** slider, and the test lists how well the documents it matched and the ones it
+  did not matched the picture, so you can see how far apart they are. It finds the logo
+  on a rescan that is shifted, a little bigger or smaller, lighter or darker, noisy or
+  slightly crooked. Page 1 pictures are kept as small grayscale files in the cache
+  folder, never in the archive; the picture of an area is kept with your rules, in
+  `config/rules/areas`. Moving a picture area cuts it again from the document you moved
+  it on. Settings lists picture files that no rule uses any more.
 - A rule can need several areas of page 1, such as "Pohjola in the letterhead" and
   "vakuutuskirja in the title", so each kind of letter from a sender files to its own
   place. In Draw a box, **Add another box** keeps a box and lets you draw the next; the

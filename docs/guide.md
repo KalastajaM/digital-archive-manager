@@ -505,12 +505,45 @@ document that a learned rule matches already, dam saves the new rule directly ab
 rule. Rules you wrote in your own files are never reordered; the proof still says "For N
 of them rule X comes first" if the order is wrong.
 
+#### Picture areas
+
+Some letterheads are only a picture: a logo, and the box holds no text. Then dam can
+recognise the picture itself. Draw the box and choose **Match the picture in this area**
+(it is offered for any box, not only an empty one). The box stays on the page, numbered,
+and the panel shows the picture that was cut out of it. **Sender…** and **Make a rule…**
+then make a rule with that area; the rule sheet shows the picture and a slider, **Match
+needed**.
+
+How it works: dam keeps a small grayscale picture of page 1 of each PDF and image (about
+25 KB, in the cache folder, never in the archive). It looks for the cut-out picture in
+the area you drew, allowing a shift of 5 % of the page in any direction, sizes from 90 %
+to 110 %, a lighter or darker scan, scan noise and a skew of a degree or two. The score
+runs from 0 to 1; the rule needs at least **Match needed**, usually 0.85. Another logo in
+the same place scores clearly lower (about 0.7 and under in dam's own tests), and plain
+text in the same font scores about 0.8, which is why the limit is not lower.
+
+The test under the rule sheet lists the scores: the lowest of the documents the rule
+matched and the highest of the documents it did not. If the two groups are far apart,
+the rule is safe. If they touch, move the slider, or add a text box so the picture only
+has to decide between a few documents. A picture alone also takes longer to test, because
+every filed PDF and image is looked at (the test does not open the files in the archive, only
+the small pictures). Pictures not made yet are made first, inbox before the rest; a
+document without one is listed as not checked, never as a miss.
+
+A picture area is only for something that tells who a letter is from or what kind it is.
+The address area never takes a picture: a person is found from text only. The picture of
+an area is a few KB and is kept with the rules, in `config/rules/areas`. Deleting a rule
+leaves its pictures there; Settings → Filing rules lists the ones no rule uses, and you
+can remove them yourself. Moving or resizing a picture area cuts the picture again from
+the document you changed it on.
+
 #### Seeing the areas
 
 On page 1 of a preview, **Show areas** (on by default when there are areas) draws the
 areas of every rule that matched the document, labelled with the rule's id. The rule that
 gave the folder or name is drawn stronger. The lines that matched inside each area are
-highlighted. The address area that was used (the archive's or the rule's own) is drawn
+highlighted; a picture area shows where the picture fits best, with its score ("acme:
+picture 0.93"). The address area that was used (the archive's or the rule's own) is drawn
 too, with the line where the person was found: "For: Tiina, found here".
 
 In Settings → Filing rules, **Test a document** draws the areas of all rules on page 1.
@@ -552,8 +585,10 @@ records the person. These are kept in dam's index, not in the files.
 ### Reading page 1
 
 To match by area, dam keeps the position of the text on page 1 of each PDF and image
-when it reads it; this costs no extra reading for new documents. Documents read before
-this feature get it in the background, inbox first, when dam has nothing else to do.
+when it reads it, and for picture areas a small grayscale picture of the page; this
+costs no extra reading for new scans. Documents read before this feature, and PDFs that
+have a text layer, get theirs in the background, inbox first, when dam has nothing else
+to do.
 Settings → Filing rules shows "Page 1 read for R of T documents", and the switch "Read
 page 1 of older documents in the background" pauses it. Scans need an OCR engine, as for
 their text.

@@ -104,7 +104,8 @@ EXIF orientation, as the positions do.
 **Matching.** Normalised cross-correlation (numpy) of the crop over a search window, the
 box grown by 5 % of the page on every side, at scales 0.9, 0.95, 1.0, 1.05 and 1.1; the
 score is the best value (0 to 1). A zone matches when the score is at least its
-`min_score` (default 0.7, builder's call after testing on the demo archive). Both images
+`min_score` (default 0.85: the builder's call after testing, see the build notes
+below). Both images
 get a light blur first, which makes the score tolerant of scan noise. numpy is added to the
 core dependencies (BSD licence).
 
@@ -165,3 +166,20 @@ there too.
   visible and editable areas: the owner (2026-10-24).
 - "Designer's call" above: the designer, to be checked by the owner.
 - Exact thresholds, sizes, blur, the hash pre-filter: the builder.
+
+## Build notes (step 4, picture areas)
+
+- Default `min_score` is 0.85, not 0.7. On synthetic letters (a logo, text-like bars) a
+  rescan with shift, a size change of 10 %, a darker copy, noise or a 2 degree skew scored
+  0.94 to 0.998; 60 other random logos in the same place scored at most 0.71. On the
+  demo archive's PDFs (one line of text each, so a hard case) the same line of text in the
+  same font with other words scored up to 0.80, and the title cropped from a document found
+  again on its rescan scored 0.95 to 0.99. 0.7 would have matched most of those other lines.
+- A document takes about 6 ms on an M-series Mac, 3 to load its picture (JPEG decoded at
+  half size) and 3 to match (FFT correlation at half the stored resolution); no hash pre-filter was added because the replay did not need one.
+- The crop file is written when the area is made (the draft, or a moved area), because
+  the replay needs the file; if the rule is not saved it stays and Settings lists it as
+  unused.
+- Stale page-1 pictures (changed sha) are left in the cache: the AST guard allows no
+  remover there and it was not changed.
+
