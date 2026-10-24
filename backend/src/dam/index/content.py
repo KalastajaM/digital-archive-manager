@@ -14,7 +14,7 @@ from dam.core.paths import ArchivePaths
 from dam.extract import ocr
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
 from dam.extract.layout import Page1Layout
-from dam.extract.picture import have_pictures, picture_name, write_picture
+from dam.extract.picture import picture_path, write_picture
 from dam.index.barcodes import read_page1
 from dam.index.layouts import IMAGE_EXTS, read_layout, render_picture
 from dam.index.repo import FileRecord, FileRepo
@@ -27,6 +27,7 @@ MAX_BYTES = 256 * 1024 * 1024
 LAYOUT_NO_OCR = "no OCR engine"  # why a file's page 1 cannot be read now
 LAYOUT_MISSING = "missing"
 LAYOUT_TIMEOUT = "page 1 took too long to read"
+PICTURE_PAGE_ROWS = 200  # files whose picture is checked per idle pass (backfill)
 LAYOUT_NO_PICTURE = "no picture of page 1 can be made"
 MAX_REASON = 500  # characters of an error reason kept in the index
 
@@ -115,6 +116,7 @@ class ContentIndexer:
         self.cache_dir = cache_dir
         # files whose picture cannot be made (until the content changes or dam restarts)
         self._no_picture: dict[str, str] = {}  # drive_id -> sha256
+        self._picture_cursor = 0  # where the next backfill page of picture checks starts
         self._wanted: set[str] = set()  # asked for by a replay, read next
         self._layout_busy = False
         # the barcode pass runs one read at a time; a hung read pauses it until it
@@ -348,9 +350,14 @@ class ContentIndexer:
         """Why page 1 of this file cannot be read right now (``LAYOUT_NO_OCR``,
         ``LAYOUT_MISSING`` or ``LAYOUT_TIMEOUT``), else None."""
         with self._lock:
-            if drive_id in self._no_picture and drive_id not in self._layout_why:
+            failed = self._no_picture.get(drive_id)
+            why = self._layout_why.get(drive_id)
+        if failed is not None and why is None:
+            # the failure is of one content: a file that has changed since is not blocked
+            rec = self.repo.get(drive_id)
+            if rec is not None and rec.sha256 == failed:
                 return LAYOUT_NO_PICTURE
-            return self._layout_why.get(drive_id)
+        return why
 
     def _keep_picture(self, drive_id: str, sha256: str | None, picture) -> bool:
         """Keep ``picture`` as the page-1 picture of this content in the cache; never
@@ -367,22 +374,43 @@ class ContentIndexer:
     def _next_for_pictures(
         self, limit: int, wanted: set[str], waiting: set[str], backfill: bool
     ) -> list[FileRecord]:
-        """Files whose layout is read but whose page-1 picture is not in the cache."""
+        """Files whose layout is read but whose page-1 picture is not in the cache. The
+        inbox and the wanted files are looked at every time; the rest (backfill) a page of
+        ``PICTURE_PAGE_ROWS`` rows per pass, round and round, so an archive with nothing to
+        do costs a few file checks per pass, not a listing of the whole cache."""
         if self.cache_dir is None or limit <= 0:
             return []
-        have = have_pictures(self.cache_dir)
         with self._lock:
             failed = dict(self._no_picture)
-        out: list[FileRecord] = []
-        for drive_id, sha in self.repo.next_for_pictures(wanted, waiting, backfill):
-            if picture_name(drive_id, sha) in have or failed.get(drive_id) == sha:
-                continue
-            rec = self.repo.get(drive_id)
-            if rec is not None:
-                out.append(rec)
-            if len(out) >= limit:
-                break
-        return out
+
+        def missing(rows: list[tuple[str, str]]) -> tuple[list[FileRecord], int]:
+            out: list[FileRecord] = []
+            for i, (drive_id, sha) in enumerate(rows):
+                if (
+                    failed.get(drive_id) == sha
+                    or picture_path(self.cache_dir, drive_id, sha).is_file()
+                ):
+                    continue
+                rec = self.repo.get(drive_id)
+                if rec is not None:
+                    out.append(rec)
+                if len(out) >= limit:
+                    return out, i + 1
+            return out, len(rows)
+
+        found, _ = missing(self.repo.next_for_pictures(wanted, waiting, everything=False))
+        if found or not backfill:
+            return found
+        start = self._picture_cursor
+        page = self.repo.next_for_pictures(
+            wanted, waiting, everything=True, limit=PICTURE_PAGE_ROWS, offset=start
+        )
+        found, used = missing(page)
+        # the next pass goes on after the rows looked at; at the end of the list, from the top
+        self._picture_cursor = (
+            0 if len(page) < PICTURE_PAGE_ROWS and used == len(page) else start + used
+        )
+        return found
 
     def run_layouts_once(self, limit: int = 1, backfill: bool | None = None) -> int:
         """Read page 1 of up to ``limit`` indexed PDFs and images that have no layout
@@ -445,11 +473,7 @@ class ContentIndexer:
         path = self.paths.abs(rec.path)
         ocr_used = self.repo.text_was_ocrd(rec.drive_id)
         ext = rec.ext.lower().lstrip(".")
-        if (
-            layout
-            and (ext in IMAGE_EXTS or (ext == "pdf" and ocr_used))
-            and ocr.engine() is None
-        ):
+        if layout and (ext in IMAGE_EXTS or (ext == "pdf" and ocr_used)) and ocr.engine() is None:
             # this read needs OCR: do not read the whole file just to find that out
             self._retry_layout_later(rec.drive_id, LAYOUT_NO_OCR)
             return True
