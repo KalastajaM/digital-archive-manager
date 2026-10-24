@@ -82,6 +82,13 @@ const renderViewer = (url = "/viewer/d1") =>
 const title = () => screen.getByRole("banner").querySelector("h2")?.textContent;
 
 describe("viewer window", () => {
+  it("has the Draw a box tool on the document", async () => {
+    api();
+    renderViewer();
+    await waitFor(() => expect(title()).toBe("Kotihoito.pdf"));
+    expect(await screen.findByRole("button", { name: "Draw a box" })).toBeInTheDocument();
+  });
+
   it("shows the document without the sidebar: preview, details and the follow toggle", async () => {
     const calls = api();
     renderViewer();

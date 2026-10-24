@@ -5,11 +5,13 @@
  *
  * Boxes are fractions of the rendered image (origin top left), so the zoom never matters. */
 import { Layers, SquareDashed } from "lucide-react";
-import { type PointerEvent, type ReactNode, useState } from "react";
+import { type PointerEvent, type ReactNode, useRef, useState } from "react";
 import {
   type Area,
+  errorText,
   type FileSuggestions,
   type PageBox,
+  useAreaPicture,
   usePage1,
   usePage1Lines,
   useFileSuggestions,
@@ -83,11 +85,12 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const active = pageOne;
   const [on, setOn] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [box, setBox] = useState<PageBox | null>(null);
-  // boxes kept with "Add another box": the rule being made needs all of them
-  const [kept, setKept] = useState<KeptBox[]>([]);
+  // every box drawn is kept (numbered) until it is removed or the panel is closed
+  const [boxes, setBoxes] = useState<KeptBox[]>([]);
+  const nextId = useRef(1);
   const page = usePage1(driveId, active && on);
-  const lines = usePage1Lines();
+  const readLines = usePage1Lines();
+  const cut = useAreaPicture();
   const own = useFileSuggestions(driveId, active && tool.suggestion === undefined);
   const suggestion = tool.suggestion ?? own.data;
   const ruleId = suggestion ? ruleIdOf(suggestion) : null;
@@ -103,43 +106,48 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
 
   const unavailable = page.data?.unavailable ?? null;
   const ready = on && page.data?.read === true;
-  const dropBox = () => {
-    setBox(null);
-    setDrag(null);
-    lines.reset();
-  };
+  const change = (id: number, over: Partial<KeptBox>) =>
+    setBoxes((all) => all.map((k) => (k.id === id ? { ...k, ...over } : k)));
   const close = () => {
-    dropBox();
-    setKept([]);
-  };
-  const addAnother = () => {
-    if (!box) return;
-    setKept((all) => [...all, { box, lines: (lines.data?.lines ?? []).map((l) => l.text) }]);
-    dropBox();
-  };
-  const keepPicture = (png: string) => {
-    if (!box) return;
-    setKept((all) => [...all, { box, lines: [], picture: png }]);
-    dropBox();
+    setBoxes([]);
+    setDrag(null);
   };
   const toggle = () => {
     close();
     setOn(!on);
   };
+  const addBox = (drawn: PageBox) => {
+    const id = nextId.current++;
+    setBoxes((all) => [...all, { id, box: drawn, lines: null, mode: "words" }]);
+    // mutateAsync: several boxes can be read at once, and each reply belongs to its box
+    readLines.mutateAsync({ driveId, box: drawn }).then(
+      (found) => change(id, { lines: found.lines.map((l) => l.text) }),
+      (e) => change(id, { lines: [], problem: errorText(e) }),
+    );
+  };
+  const setMode = (index: number, mode: "words" | "picture") => {
+    const k = boxes[index];
+    if (!k) return;
+    change(k.id, { mode, problem: undefined });
+    if (mode === "picture" && !k.picture) {
+      cut.mutateAsync({ driveId, box: k.box }).then(
+        (got) => change(k.id, { picture: got.png }),
+        (e) => change(k.id, { mode: "words", problem: errorText(e) }),
+      );
+    }
+  };
 
-  // Esc: first the box being drawn, then the box just drawn, then the kept boxes, then the tool.
+  // Esc: first the box being drawn, then the last box, then the tool.
   useKeydown((e) => {
     if (!active || !on || e.key !== "Escape" || !isShortcut(e)) return;
     e.preventDefault();
     if (drag) setDrag(null);
-    else if (box) dropBox();
-    else if (kept.length > 0) close();
+    else if (boxes.length > 0) setBoxes((all) => all.slice(0, -1));
     else setOn(false);
   });
 
   const start = (e: PointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
-    dropBox();
     const at = point(e);
     if (!at) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -160,8 +168,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
     ];
     setDrag(null);
     if (drawn[2] - drawn[0] < MIN_SIDE || drawn[3] - drawn[1] < MIN_SIDE) return;
-    setBox(drawn);
-    lines.mutate({ driveId, box: drawn });
+    addBox(drawn);
   };
 
   if (!active) return NONE;
@@ -210,18 +217,16 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
           onPointerCancel={() => setDrag(null)}
         />
       )}
-      {kept.map((k, i) => (
-        <span key={`${i}-${k.box.join(",")}`} className="page-box page-box-kept" data-testid="kept-box" style={percent(k.box)}>
+      {boxes.map((k, i) => (
+        <span key={k.id} className="page-box page-box-kept" data-testid="kept-box" style={percent(k.box)}>
           <span className="page-box-number">{i + 1}</span>
         </span>
       ))}
-      {(drag ?? box) && (
+      {drag && (
         <span
           className="page-box"
           data-testid="drawn-box"
-          style={percent(
-            drag ? [Math.min(drag.x0, drag.x1), Math.min(drag.y0, drag.y1), Math.max(drag.x0, drag.x1), Math.max(drag.y0, drag.y1)] : (box as PageBox),
-          )}
+          style={percent([Math.min(drag.x0, drag.x1), Math.min(drag.y0, drag.y1), Math.max(drag.x0, drag.x1), Math.max(drag.y0, drag.y1)])}
         />
       )}
     </span>
@@ -246,20 +251,19 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
           {page.isError ? "Could not read page 1." : "Reading page 1…"}
         </p>
       ) : (
-        !box && <p className="hint box-note">{kept.length > 0 ? "Drag over page 1 to draw the next box. Esc cancels." : "Drag over page 1 to draw a box. Esc cancels."}</p>
+        <p className="hint box-note">
+          {boxes.length > 0
+            ? "Drag over page 1 to add the next box. Esc drops the last box."
+            : "Drag over page 1 to draw a box. Esc cancels."}
+        </p>
       )}
-      {(box || kept.length > 0) && (
+      {boxes.length > 0 && (
         <BoxPanel
           driveId={driveId}
-          box={box}
-          kept={kept}
-          onAddAnother={addAnother}
-          onKeepPicture={keepPicture}
-          onRemoveKept={(i) => setKept((all) => all.filter((_, at) => at !== i))}
-          found={lines.data}
-          pending={lines.isPending}
-          error={lines.isError ? lines.error : null}
+          boxes={boxes}
           rule={rule}
+          onMode={setMode}
+          onRemove={(i) => setBoxes((all) => all.filter((_, at) => at !== i))}
           onClose={close}
         />
       )}

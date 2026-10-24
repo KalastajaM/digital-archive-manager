@@ -2020,6 +2020,8 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .box-kept { list-style: none; margin: 0 0 var(--sp-2); padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
 .box-kept li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .box-kept-text { min-width: 0; overflow-wrap: anywhere; }
+.box-mode { display: inline-flex; gap: var(--sp-2); font-size: var(--fs-sm); }
+.box-mode [aria-pressed="true"] { font-weight: 600; text-decoration: none; }
 .box-panel { margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
 .box-panel p { margin: 0 0 var(--sp-2); }
 .box-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-1); }

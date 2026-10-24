@@ -163,10 +163,10 @@ images, so a drag rectangle over page 1 is plain frontend work), on the Inbox ca
 Browse. On release, the server returns the lines inside the box (a new endpoint, read
 only). The owner picks what the box means:
 
-- **Sender**: opens the learned-rules draft sheet with `when.zone` filled in (the box and
+- **Make a rule…** (first called "Sender"; who it is from is an optional field in the sheet): opens the learned-rules draft sheet with `when.zone` filled in (the box and
   its most distinctive word ticked, as the draft does today), the folder and name from
   the owner's filing when there is one, and the replay below.
-- **Address area for this sender**: for the few senders whose letters break the usual
+- **Address area for this rule's letters** (first called "for this sender"): for the few senders whose letters break the usual
   layout. Stored on the sender's rule as `person_zone: [x0, y0, x1, y1]`; when that rule
   matches, people are looked for there instead of in the global address zone.
 

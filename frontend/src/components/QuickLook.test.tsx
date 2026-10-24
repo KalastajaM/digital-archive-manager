@@ -112,6 +112,13 @@ describe("Quick Look in the inbox", () => {
     expect(screen.getByLabelText("Name")).toHaveValue("2026-10-03 Vesilasku.pdf");
   });
 
+  it("has the Draw a box tool on the previewed page", async () => {
+    const { user } = await setup();
+    await user.keyboard(" ");
+    const ql = screen.getByRole("dialog", { name: "Quick Look: scan001.pdf" });
+    expect(await within(ql).findByRole("button", { name: "Draw a box" })).toBeInTheDocument();
+  });
+
   it("a refused Open shows its reason inside Quick Look, not as a toast under it", async () => {
     const REFUSED = "Won't open apps or scripts from the archive — use Show in Finder";
     const { user } = await setup({ "POST /api/files/d1/open": { status: 409, body: { error: REFUSED } } });

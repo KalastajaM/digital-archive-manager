@@ -103,7 +103,7 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
       <div className="quicklook-body">
         <div className="quicklook-preview preview-fill">
           <InlineResults.Provider value={status.report}>
-            <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} />
+            <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} boxTool={{}} />
           </InlineResults.Provider>
         </div>
         <aside className="quicklook-details">

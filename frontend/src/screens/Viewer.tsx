@@ -76,7 +76,7 @@ export default function Viewer() {
     body = (
       <div className="viewer-body">
         <div className="viewer-preview preview-fill">
-          <FilePreview file={file} windowButton={false} goToTarget={false} />
+          <FilePreview file={file} windowButton={false} goToTarget={false} boxTool={{}} />
         </div>
         <aside className="viewer-details">
           <FileDetails file={file} scanned={entry ? scannedFields(entry) : []} links={false} />

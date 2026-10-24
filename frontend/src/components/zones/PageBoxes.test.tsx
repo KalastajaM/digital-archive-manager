@@ -87,10 +87,47 @@ describe("Draw a box", () => {
     const { calls, user } = setup();
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
-    const panel = await screen.findByRole("region", { name: "The box" });
+    const panel = await screen.findByRole("region", { name: "The boxes" });
+    expect(within(panel).getByText("Boxes on page 1")).toBeInTheDocument();
     expect(await within(panel).findByText("Pohjola Vakuutus Oy")).toBeInTheDocument();
     expect(posts(calls, "/api/files/d1/page1/lines")[0].body).toEqual({ box: [0.1, 0.1, 0.5, 0.3] });
-    expect(screen.getByTestId("drawn-box")).toHaveStyle({ left: "10%", top: "10%", width: "40%", height: "20%" });
+    // the box stays on the page, numbered, as soon as it is drawn
+    expect(screen.getByTestId("kept-box")).toHaveStyle({ left: "10%", top: "10%", width: "40%", height: "20%" });
+    expect(screen.queryByTestId("drawn-box")).toBeNull();
+  });
+
+  it("leaves OCR noise out of what a box lists, and says no text when only noise is left", async () => {
+    const { user } = setup({
+      "POST /api/files/d1/page1/lines": { body: { read: true, lines: [{ text: "•ö Pohjola Vakuutus", box: [0.1, 0.1, 0.5, 0.2] }], unavailable: null } },
+    });
+    await user.click(screen.getByRole("button", { name: "Draw a box" }));
+    await draw();
+    const list = await screen.findByRole("list", { name: "Boxes" });
+    expect(await within(list).findByText("Pohjola Vakuutus")).toBeInTheDocument();
+    expect(within(list).queryByText(/•ö/)).toBeNull();
+  });
+
+  it("a box that holds only noise has no text", async () => {
+    const { user } = setup({
+      "POST /api/files/d1/page1/lines": { body: { read: true, lines: [{ text: "•ö |", box: [0.1, 0.1, 0.5, 0.2] }], unavailable: null } },
+    });
+    await user.click(screen.getByRole("button", { name: "Draw a box" }));
+    await draw();
+    expect(await screen.findByText("No text found")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make a rule…" })).toBeDisabled();
+  });
+
+  it("the panel's close control says what it does and drops every box", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Draw a box" }));
+    await draw();
+    await screen.findByText("Pohjola Vakuutus Oy");
+    const close = screen.getByRole("button", { name: "Close and drop the boxes" });
+    expect(close).toHaveAttribute("title", expect.stringMatching(/drop all the boxes/));
+    await user.click(close);
+    expect(screen.queryByRole("region", { name: "The boxes" })).toBeNull();
+    expect(screen.queryByTestId("kept-box")).toBeNull();
+    expect(screen.getByTestId("box-surface")).toBeInTheDocument(); // the tool stays on for the next box
   });
 
   it("works on an image too", async () => {
@@ -114,7 +151,7 @@ describe("Draw a box", () => {
     fireEvent.pointerUp(surface, { clientX: 100, clientY: 120 });
     fireEvent.pointerDown(surface, { clientX: 50, clientY: 50, button: 0 });
     fireEvent.pointerUp(surface, { clientX: 50, clientY: 50 });
-    expect(screen.queryByRole("region", { name: "The box" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "The boxes" })).toBeNull();
     expect(posts(calls, "/api/files/d1/page1/lines")).toHaveLength(0);
     fireEvent.keyDown(document.body, { key: "Escape" }); // a second Esc leaves the tool
     expect(screen.queryByTestId("box-surface")).toBeNull();
@@ -142,10 +179,10 @@ describe("Draw a box", () => {
     const { user } = setup({ "POST /api/files/d1/page1/lines": { body: READ } });
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
-    expect(await screen.findByText("No text found in this box.")).toBeInTheDocument();
+    expect(await screen.findByText("No text found")).toBeInTheDocument();
   });
 
-  it("Sender… drafts a rule from the box and opens the rule sheet with the area", async () => {
+  it("Make a rule… drafts a rule from the box, with From filled in from the draft, and opens the rule sheet", async () => {
     const { calls, user } = setup({
       "POST /api/rules/draft-zone": { body: DRAFT },
       "POST /api/rules/replay": { body: REPLAY },
@@ -153,14 +190,16 @@ describe("Draw a box", () => {
     });
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
-    const panel = await screen.findByRole("region", { name: "The box" });
-    await user.click(within(panel).getByRole("button", { name: "Sender…" }));
-    await user.click(await within(panel).findByRole("button", { name: "Pohjola" })); // a sender in use
+    const panel = await screen.findByRole("region", { name: "The boxes" });
+    expect(within(panel).queryByRole("button", { name: "Sender…" })).toBeNull();
+    expect(within(panel).queryByRole("button", { name: "Add another box" })).toBeNull();
+    await within(panel).findByText("Pohjola Vakuutus Oy");
     await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
-    expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({ drive_id: "d1", boxes: [[0.1, 0.1, 0.5, 0.3]], sender: "Pohjola" });
+    expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({ drive_id: "d1", boxes: [[0.1, 0.1, 0.5, 0.3]] });
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
     expect(within(sheet).getByRole("button", { name: "pohjola" })).toHaveAttribute("aria-pressed", "true");
     expect(within(sheet).getByRole("group", { name: "Area" })).toBeInTheDocument();
+    expect(within(sheet).getByLabelText("From (sender)")).toHaveValue("Pohjola");
     await within(sheet).findByText(/Matches 2 documents/);
     const sent = posts(calls, "/api/rules/replay")[0].body as { rule: { when: unknown; sender: string } };
     expect(sent.rule.when).toEqual({
@@ -196,24 +235,40 @@ describe("Draw a box", () => {
       place_above: "pohjola-old",
     };
 
-    it("Add another box keeps the box, lists it with its lines, and lets it be removed", async () => {
+    it("keeps every drawn box, numbered, with its words and its own remove button", async () => {
       const { user } = setup();
       await user.click(screen.getByRole("button", { name: "Draw a box" }));
       await draw();
-      const panel = await screen.findByRole("region", { name: "The box" });
+      const panel = await screen.findByRole("region", { name: "The boxes" });
       await within(panel).findByText("Pohjola Vakuutus Oy");
-      await user.click(within(panel).getByRole("button", { name: "Add another box" }));
-      const kept = within(panel).getByRole("list", { name: "Kept boxes" });
-      expect(within(kept).getByText("Pohjola Vakuutus Oy")).toBeInTheDocument();
-      expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
-      expect(screen.queryByTestId("drawn-box")).toBeNull();
+      await drawSecond();
+      const list = within(panel).getByRole("list", { name: "Boxes" });
+      await waitFor(() => expect(within(list).getAllByText("Pohjola Vakuutus Oy")).toHaveLength(2));
+      expect(within(list).getByText("Box 1")).toBeInTheDocument();
+      expect(within(list).getByText("Box 2")).toBeInTheDocument();
+      expect(screen.getAllByTestId("kept-box")).toHaveLength(2);
       // the address choices are for a single box
       expect(within(panel).queryByRole("button", { name: "Address area for all letters" })).toBeNull();
       await user.click(within(panel).getByRole("button", { name: "Remove box 1" }));
-      expect(screen.queryByTestId("kept-box")).toBeNull();
+      expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
+      expect(within(list).queryByText("Box 2")).toBeNull();
+      expect(within(panel).getByRole("button", { name: "Address area for all letters" })).toBeInTheDocument();
     });
 
-    it("Make a rule… sends every kept box and the one just drawn, and the sheet has a group per area", async () => {
+    it("reads each box on its own when two are drawn quickly", async () => {
+      let n = 0;
+      const { user } = setup({
+        "POST /api/files/d1/page1/lines": () => ({ body: { read: true, lines: [{ text: n++ === 0 ? "Eka" : "Toka", box: [0.1, 0.1, 0.5, 0.2] }], unavailable: null } }),
+      });
+      await user.click(screen.getByRole("button", { name: "Draw a box" }));
+      await draw();
+      await drawSecond();
+      const list = await screen.findByRole("list", { name: "Boxes" });
+      expect(await within(list).findByText("Eka")).toBeInTheDocument();
+      expect(await within(list).findByText("Toka")).toBeInTheDocument();
+    });
+
+    it("Make a rule… sends every box, and the sheet has a group per area", async () => {
       const { calls, user } = setup({
         "POST /api/rules/draft-zone": { body: TWO },
         "POST /api/rules/replay": { body: REPLAY },
@@ -221,11 +276,11 @@ describe("Draw a box", () => {
       });
       await user.click(screen.getByRole("button", { name: "Draw a box" }));
       await draw();
-      const panel = await screen.findByRole("region", { name: "The box" });
+      const panel = await screen.findByRole("region", { name: "The boxes" });
       await within(panel).findByText("Pohjola Vakuutus Oy");
-      await user.click(within(panel).getByRole("button", { name: "Add another box" }));
       await drawSecond();
-      await user.click(within(panel).getByRole("button", { name: "Sender…" }));
+      const list = within(panel).getByRole("list", { name: "Boxes" });
+      await waitFor(() => expect(within(list).getAllByText("Pohjola Vakuutus Oy")).toHaveLength(2));
       await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
       expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({
         drive_id: "d1",
@@ -233,7 +288,6 @@ describe("Draw a box", () => {
           [0.1, 0.1, 0.5, 0.3],
           [0.1, 0.4, 0.5, 0.5],
         ],
-        sender: null,
       });
       const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
       expect(within(sheet).getByRole("group", { name: "Area 1" })).toBeInTheDocument();
@@ -250,16 +304,25 @@ describe("Draw a box", () => {
       expect(calls.find((c) => c.method === "PUT")?.url).toBe("/api/rules/pohjola?place_above=pohjola-old");
     });
 
-    it("Esc drops the box just drawn, then the kept boxes, then the tool", async () => {
+    it("Esc drops the box being drawn, then the last box, then closes the tool", async () => {
       const { user } = setup();
       await user.click(screen.getByRole("button", { name: "Draw a box" }));
       await draw();
-      const panel = await screen.findByRole("region", { name: "The box" });
+      const panel = await screen.findByRole("region", { name: "The boxes" });
       await within(panel).findByText("Pohjola Vakuutus Oy");
-      await user.click(within(panel).getByRole("button", { name: "Add another box" }));
       await drawSecond();
+      expect(screen.getAllByTestId("kept-box")).toHaveLength(2);
+      // a third box, still being dragged
+      const surface = screen.getByTestId("box-surface");
+      fireEvent.pointerDown(surface, { clientX: 20, clientY: 250, button: 0 });
+      fireEvent.pointerMove(surface, { clientX: 100, clientY: 300 });
+      expect(screen.getByTestId("drawn-box")).toBeInTheDocument();
       fireEvent.keyDown(document.body, { key: "Escape" });
       expect(screen.queryByTestId("drawn-box")).toBeNull();
+      expect(screen.getAllByTestId("kept-box")).toHaveLength(2);
+      fireEvent.pointerUp(surface, { clientX: 100, clientY: 300 }); // the cancelled drag draws nothing
+      expect(screen.getAllByTestId("kept-box")).toHaveLength(2);
+      fireEvent.keyDown(document.body, { key: "Escape" });
       expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
       fireEvent.keyDown(document.body, { key: "Escape" });
       expect(screen.queryByTestId("kept-box")).toBeNull();
@@ -273,8 +336,8 @@ describe("Draw a box", () => {
     const { user } = setup({ "POST /api/rules/draft-zone": { status: 400, body: { error: "The box holds no usable word." } } });
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
-    const panel = await screen.findByRole("region", { name: "The box" });
-    await user.click(within(panel).getByRole("button", { name: "Sender…" }));
+    const panel = await screen.findByRole("region", { name: "The boxes" });
+    await within(panel).findByText("Pohjola Vakuutus Oy");
     await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
     expect(await within(panel).findByText("The box holds no usable word.")).toBeInTheDocument();
   });
@@ -283,8 +346,8 @@ describe("Draw a box", () => {
     const { calls, user } = setup({ "PUT /api/settings/people": { body: PEOPLE } });
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
-    const panel = await screen.findByRole("region", { name: "The box" });
-    expect(within(panel).queryByRole("button", { name: "Address area for this sender" })).toBeNull();
+    const panel = await screen.findByRole("region", { name: "The boxes" });
+    expect(within(panel).queryByRole("button", { name: "Address area for this rule's letters" })).toBeNull();
     await waitFor(() => expect(within(panel).getByRole("button", { name: "Address area for all letters" })).toBeEnabled());
     await user.click(within(panel).getByRole("button", { name: "Address area for all letters" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
@@ -292,7 +355,7 @@ describe("Draw a box", () => {
     expect(await screen.findByText("Address area saved for all letters.")).toBeInTheDocument();
   });
 
-  it("Address area for this sender sets person_zone on the rule behind the suggestion", async () => {
+  it("Address area for this rule's letters sets person_zone on the rule behind the suggestion", async () => {
     const { calls, user } = setup(
       { "PUT /api/rules/pohjola": { body: { rules: [RULE], errors: [], state: { offer: true, declined: 0 } } } },
       pdf,
@@ -300,8 +363,8 @@ describe("Draw a box", () => {
     );
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
-    const panel = await screen.findByRole("region", { name: "The box" });
-    await user.click(await within(panel).findByRole("button", { name: "Address area for this sender" }));
+    const panel = await screen.findByRole("region", { name: "The boxes" });
+    await user.click(await within(panel).findByRole("button", { name: "Address area for this rule's letters" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
     const put = calls.find((c) => c.method === "PUT") as Call;
     expect(put.url).toBe("/api/rules/pohjola?replaces=pohjola");
@@ -620,38 +683,46 @@ describe("Picture areas", () => {
   async function drawAndOpen(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
-    return screen.findByRole("region", { name: "The box" });
+    return screen.findByRole("region", { name: "The boxes" });
   }
 
-  it("is offered for a box without text and keeps the box with its crop", async () => {
+  const row = (panel: HTMLElement, n: number) => within(within(panel).getByRole("list", { name: "Boxes" })).getByText(`Box ${n}`).closest("li") as HTMLElement;
+
+  it("a box without text can be matched by its picture, with the crop shown in its row", async () => {
     const { calls, user } = setup({
       "POST /api/files/d1/page1/lines": { body: READ },
       "POST /api/rules/area-picture": { body: CROP },
     });
     const panel = await drawAndOpen(user);
-    expect(await within(panel).findByText("No text found in this box.")).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Add another box" })).toBeDisabled();
-    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
+    expect(await within(panel).findByText("No text found")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeDisabled();
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
     expect(posts(calls, "/api/rules/area-picture")[0].body).toEqual({
       drive_id: "d1",
       box: [0.1, 0.1, 0.5, 0.3],
       save: false,
       rule_id: null,
     });
-    const kept = await within(panel).findByRole("list", { name: "Kept boxes" });
-    expect(within(kept).getByRole("img", { name: "Picture of box 1" })).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
+    const kept = within(panel).getByRole("list", { name: "Boxes" });
+    expect(await within(kept).findByRole("img", { name: "Picture of box 1" })).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
+    expect(within(row(panel, 1)).getByRole("button", { name: "Picture" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
-    expect(screen.queryByTestId("drawn-box")).toBeNull();
     expect(within(panel).getByText(/Add a text box to make this faster and surer/)).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeEnabled();
+    // back to its words: no second cut is asked for later
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Words" }));
+    expect(within(panel).getByText("No text found")).toBeInTheDocument();
   });
 
-  it("is a choice for a box with text as well, and the address choices never take a picture", async () => {
+  it("every box has the choice, and the address choices never take a picture", async () => {
     const { user } = setup({ "POST /api/rules/area-picture": { body: CROP } });
     const panel = await drawAndOpen(user);
     await within(panel).findByText("Pohjola Vakuutus Oy");
-    expect(within(panel).getByRole("button", { name: "Match the picture in this area" })).toBeEnabled();
+    expect(within(row(panel, 1)).getByRole("button", { name: "Words" })).toHaveAttribute("aria-pressed", "true");
     expect(within(panel).getByRole("button", { name: "Address area for all letters" })).toBeInTheDocument();
-    expect(within(panel).queryByRole("button", { name: /address.*picture|picture.*address/i })).toBeNull();
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
+    await within(panel).findByRole("img", { name: "Picture of box 1" });
+    expect(within(panel).queryByRole("button", { name: /^Address area/ })).toBeNull();
   });
 
   it("a text box next to a picture box needs no hint, and both are sent to the draft", async () => {
@@ -662,20 +733,19 @@ describe("Picture areas", () => {
     });
     const panel = await drawAndOpen(user);
     await within(panel).findByText("Pohjola Vakuutus Oy");
-    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
+    await within(panel).findByRole("img", { name: "Picture of box 1" });
     await draw(); // the next box, with text
-    await within(panel).findByText("Pohjola Vakuutus Oy");
+    await waitFor(() => expect(within(row(panel, 2)).getByText("Pohjola Vakuutus Oy")).toBeInTheDocument());
     expect(within(panel).queryByText(/Add a text box to make this faster and surer/)).toBeNull();
-    await user.click(within(panel).getByRole("button", { name: "Sender…" }));
     await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
     expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({
       drive_id: "d1",
       boxes: [[0.1, 0.1, 0.5, 0.3]],
       picture_boxes: [[0.1, 0.1, 0.5, 0.3]],
-      sender: null,
     });
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
-    expect(within(sheet).getAllByRole("group")).toHaveLength(2);
+    expect(within(sheet).getAllByRole("group", { name: /^Area/ })).toHaveLength(2);
     expect(within(sheet).queryByText(/Add a text box to make this faster and surer/)).toBeNull();
   });
 
@@ -692,15 +762,14 @@ describe("Picture areas", () => {
       "PUT /api/rules/pohjola": SAVED,
     });
     const panel = await drawAndOpen(user);
-    await within(panel).findByText("No text found in this box.");
-    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
-    await user.click(await within(panel).findByRole("button", { name: "Sender…" }));
+    await within(panel).findByText("No text found");
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
+    await within(panel).findByRole("img", { name: "Picture of box 1" });
     await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
     expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({
       drive_id: "d1",
       boxes: [],
       picture_boxes: [[0.1, 0.1, 0.5, 0.3]],
-      sender: null,
     });
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
     const group = within(sheet).getByRole("group", { name: "Area" });
@@ -732,22 +801,14 @@ describe("Picture areas", () => {
     ]);
   });
 
-  it("shows the server's message when the picture of page 1 is not made yet", async () => {
+  it("shows the server's message in the box row when the picture of page 1 is not made yet, and goes back to words", async () => {
     const { user } = setup({
       "POST /api/rules/area-picture": () => ({ status: 400, body: { error: "The picture of page 1 of this document is not made yet. Try again in a moment." } }),
     });
     const panel = await drawAndOpen(user);
     await within(panel).findByText("Pohjola Vakuutus Oy");
-    await user.click(within(panel).getByRole("button", { name: "Match the picture in this area" }));
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
     expect(await within(panel).findByText(/not made yet/)).toBeInTheDocument();
-    expect(screen.queryByTestId("kept-box")).toBeNull();
-  });
-
-  it("a box with no text cannot make a rule alone", async () => {
-    const { user } = setup({ "POST /api/files/d1/page1/lines": { body: READ } });
-    const panel = await drawAndOpen(user);
-    await within(panel).findByText("No text found in this box.");
-    await user.click(within(panel).getByRole("button", { name: "Sender…" }));
-    expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeDisabled();
+    expect(within(row(panel, 1)).getByRole("button", { name: "Words" })).toHaveAttribute("aria-pressed", "true");
   });
 });
