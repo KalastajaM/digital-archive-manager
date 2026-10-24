@@ -65,7 +65,11 @@ def crop_file(rules_dir: Path, image: str) -> Path:
         check_image_path(image)
     except ValueError as e:
         raise PictureError(str(e)) from e
-    folder = (Path(rules_dir) / AREAS_DIR).resolve()
+    base = Path(rules_dir).resolve()
+    folder = (base / AREAS_DIR).resolve()
+    # a symbolic link for the areas folder itself must not lead out of the config tree
+    if folder.parent != base:
+        raise PictureError("the rules' areas folder must lie inside the rules folder")
     path = (folder / PurePosixPath(image).name).resolve()
     if path.parent != folder:
         raise PictureError("a picture must lie in the rules' areas folder")

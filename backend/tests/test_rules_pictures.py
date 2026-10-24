@@ -96,6 +96,23 @@ def test_a_symlink_in_areas_cannot_reach_outside(tmp_path):
         crop_file(tmp_path / "rules", "areas/a-1.png")
 
 
+@pytest.mark.skipif(not hasattr(__import__("os"), "symlink"), reason="needs symlinks")
+def test_a_symlinked_areas_folder_cannot_lead_outside_the_rules_folder(tmp_path):
+    elsewhere = tmp_path / "archive-ish"
+    elsewhere.mkdir()
+    (elsewhere / "a-1.png").write_bytes(b"x")
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    try:
+        (rules / "areas").symlink_to(elsewhere, target_is_directory=True)
+    except OSError:
+        pytest.skip("no symlink privilege")
+    with pytest.raises(PictureError):
+        crop_file(rules, "areas/a-1.png")
+    with pytest.raises(PictureError):
+        crop_file(rules, "areas/new.png")
+
+
 def test_a_picture_zone_has_a_picture_or_words_and_a_valid_min_score():
     rule = Rule.model_validate({"id": "x", "when": {"zones": [picture_zone()]}})
     zone = rule.when.zones[0]
