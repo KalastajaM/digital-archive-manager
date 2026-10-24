@@ -17,7 +17,7 @@ import {
 import { isShortcut, useKeydown } from "../../keyboard";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
-import { BoxPanel } from "./BoxPanel";
+import { BoxPanel, type KeptBox } from "./BoxPanel";
 
 /** Turns the tool on for a preview. ``suggestion``: what the file's current suggestion
  * came from, when the owner already has it (the Inbox card); otherwise it is asked for. */
@@ -85,6 +85,8 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   const [on, setOn] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [box, setBox] = useState<PageBox | null>(null);
+  // boxes kept with "Add another box": the rule being made needs all of them
+  const [kept, setKept] = useState<KeptBox[]>([]);
   const page = usePage1(driveId, active && on);
   const lines = usePage1Lines();
   const own = useFileSuggestions(driveId, active && tool.suggestion === undefined);
@@ -95,28 +97,38 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
 
   const unavailable = page.data?.unavailable ?? null;
   const ready = on && page.data?.read === true;
-  const close = () => {
+  const dropBox = () => {
     setBox(null);
     setDrag(null);
     lines.reset();
+  };
+  const close = () => {
+    dropBox();
+    setKept([]);
+  };
+  const addAnother = () => {
+    if (!box) return;
+    setKept((all) => [...all, { box, lines: (lines.data?.lines ?? []).map((l) => l.text) }]);
+    dropBox();
   };
   const toggle = () => {
     close();
     setOn(!on);
   };
 
-  // Esc: first the box being drawn, then the panel, then the tool.
+  // Esc: first the box being drawn, then the box just drawn, then the kept boxes, then the tool.
   useKeydown((e) => {
     if (!active || !on || e.key !== "Escape" || !isShortcut(e)) return;
     e.preventDefault();
     if (drag) setDrag(null);
-    else if (box) close();
+    else if (box) dropBox();
+    else if (kept.length > 0) close();
     else setOn(false);
   });
 
   const start = (e: PointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
-    close();
+    dropBox();
     const at = point(e);
     if (!at) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -144,7 +156,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
   if (!active) return NONE;
 
   const zones: { box: PageBox; kind: "area" | "address"; why: string }[] = [];
-  if (rule?.when.zone) zones.push({ box: rule.when.zone.box, kind: "area", why: `Rule ${rule.id} looks here` });
+  rule?.when.zones.forEach((z, i) => zones.push({ box: z.box, kind: "area", why: `Rule ${rule.id} looks here${rule.when.zones.length > 1 ? ` (area ${i + 1})` : ""}` }));
   if (rule?.person_zone) zones.push({ box: rule.person_zone, kind: "address", why: `Rule ${rule.id} looks for the address here` });
 
   const button = (
@@ -162,7 +174,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
     <span className="page-layer">
       {image}
       {zones.map((z) => (
-        <span key={z.kind} className={`page-zone page-zone-${z.kind}`} style={percent(z.box)} title={visible(z.why)} data-zone={z.kind} />
+        <span key={`${z.kind}-${z.box.join(",")}`} className={`page-zone page-zone-${z.kind}`} style={percent(z.box)} title={visible(z.why)} data-zone={z.kind} />
       ))}
       {ready && (
         <span
@@ -175,6 +187,11 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
           onPointerCancel={() => setDrag(null)}
         />
       )}
+      {kept.map((k, i) => (
+        <span key={`${i}-${k.box.join(",")}`} className="page-box page-box-kept" data-testid="kept-box" style={percent(k.box)}>
+          <span className="page-box-number">{i + 1}</span>
+        </span>
+      ))}
       {(drag ?? box) && (
         <span
           className="page-box"
@@ -195,12 +212,15 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
           {page.isError ? "Could not read page 1." : "Reading page 1…"}
         </p>
       ) : (
-        !box && <p className="hint box-note">Drag over page 1 to draw a box. Esc cancels.</p>
+        !box && <p className="hint box-note">{kept.length > 0 ? "Drag over page 1 to draw the next box. Esc cancels." : "Drag over page 1 to draw a box. Esc cancels."}</p>
       )}
-      {box && (
+      {(box || kept.length > 0) && (
         <BoxPanel
           driveId={driveId}
           box={box}
+          kept={kept}
+          onAddAnother={addAnother}
+          onRemoveKept={(i) => setKept((all) => all.filter((_, at) => at !== i))}
           found={lines.data}
           pending={lines.isPending}
           error={lines.isError ? lines.error : null}

@@ -54,8 +54,8 @@ function RuleLine({
   onMove: (delta: number) => void;
   onDelete: () => void;
 }) {
-  const zone = r.when.zone;
-  const words = [...r.when.text_contains, ...(zone?.text_contains ?? [])].join(", ");
+  const zones = r.when.zones;
+  const words = [...r.when.text_contains, ...zones.flatMap((z) => z.text_contains ?? [])].join(", ");
   const target = r.then.folder ? `→ ${r.then.folder}` : "";
   return (
     <li className="rule-line">
@@ -63,7 +63,9 @@ function RuleLine({
         <code className="code-line-code">{visible(r.id)}</code>
         <span className="code-line-label">
           {visible(words)}
-          {zone && <span className="code-line-zone"> · area on page 1</span>}
+          {zones.length > 0 && (
+            <span className="code-line-zone"> · {zones.length === 1 ? "area" : `${zones.length} areas`} on page 1</span>
+          )}
         </span>
         <span className="code-line-summary">
           {[target, record(r.stats), r.learned ? "" : r.file].filter(Boolean).map(visible).join(" · ")}
@@ -126,11 +128,13 @@ function TestDocument() {
             <li key={x.rule_id}>
               <code>{visible(x.rule_id)}</code> {x.matched ? "matches" : "no match"}: {visible(x.why)}
               {x.wins.length > 0 && <> ({gives(x.wins)})</>}
-              {(x.zone_lines ?? []).length > 0 && (
-                <>
-                  {" "}
-                  Page 1 in the area: {x.zone_lines.map((l) => `“${visible(l)}”`).join(", ")}
-                </>
+              {(x.zone_lines ?? []).map((lines, i) =>
+                lines.length > 0 ? (
+                  <span key={i}>
+                    {" "}
+                    Page 1 in {x.zone_lines.length === 1 ? "the area" : `area ${i + 1}`}: {lines.map((l) => `“${visible(l)}”`).join(", ")}
+                  </span>
+                ) : null,
               )}
             </li>
           ))}

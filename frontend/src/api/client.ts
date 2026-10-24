@@ -761,10 +761,10 @@ export const usePage1Lines = () =>
       post<Page1>(`/api/files/${enc(driveId)}/page1/lines`, { box }),
   });
 
-/** The rule a box drawn on page 1 starts from (a 400 says why not). */
+/** The rule the boxes drawn on page 1 start from, one area per box (a 400 says why not). */
 export const useDraftZone = () =>
   useMutation({
-    mutationFn: (body: { drive_id: string; box: PageBox; sender?: string | null }) =>
+    mutationFn: (body: { drive_id: string; boxes: PageBox[]; sender?: string | null }) =>
       post<ZoneDraft>("/api/rules/draft-zone", body),
   });
 
@@ -1470,19 +1470,23 @@ export const useRules = (enabled = true) =>
   useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules"), enabled });
 
 /** What a rule would do to the documents filed so far (nothing changes). ``replaces``:
- * the rule it would take the place of. */
+ * the rule it would take the place of; ``placeAbove``: for a new rule, the learned rule it
+ * goes directly above. */
 export const useReplay = () =>
   useMutation({
-    mutationFn: ({ rule, replaces }: { rule: RuleIn; replaces?: string | null }) =>
-      post<Replay>("/api/rules/replay", { rule, replaces: replaces ?? null }),
+    mutationFn: ({ rule, replaces, placeAbove }: { rule: RuleIn; replaces?: string | null; placeAbove?: string | null }) =>
+      post<Replay>("/api/rules/replay", { rule, replaces: replaces ?? null, place_above: placeAbove ?? null }),
   });
 
-/** Save a rule (``replaces``: the id of the rule this one takes the place of); a 400 says why not. */
+/** Save a rule (``replaces``: the id of the rule this one takes the place of;
+ * ``placeAbove``: for a new rule, the learned rule it goes directly above); a 400 says why not. */
 export const useSaveRule = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ rule, replaces }: { rule: RuleIn; replaces?: string | null }) =>
-      put<RulesData>(`/api/rules/${enc(rule.id)}${replaces ? `?replaces=${enc(replaces)}` : ""}`, rule),
+    mutationFn: ({ rule, replaces, placeAbove }: { rule: RuleIn; replaces?: string | null; placeAbove?: string | null }) => {
+      const query = replaces ? `?replaces=${enc(replaces)}` : placeAbove ? `?place_above=${enc(placeAbove)}` : "";
+      return put<RulesData>(`/api/rules/${enc(rule.id)}${query}`, rule);
+    },
     onSuccess: (saved) => client.setQueryData(keys.rules, saved),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
   });

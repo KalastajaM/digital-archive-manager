@@ -24,7 +24,7 @@ from dam.api.schemas import (
 from dam.app import App
 from dam.codes.model import format_validation
 from dam.rules import state as rules_state
-from dam.rules.learned import rule_file
+from dam.rules.learned import learned_ids, rule_file
 from dam.rules.model import LEARNED_FILE, RESERVED_IDS, Rule
 from dam.rules.replay import explain, replay
 from dam.services.errors import InvalidRequest, NotFound
@@ -91,12 +91,13 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
             raise NotFound(body.replaces)
         order[at] = rule
     else:
-        last = -1
-        for i, r in enumerate(order):
-            path = rule_file(app.rules_dir, r.id)
-            if path is not None and path.name == LEARNED_FILE:
-                last = i
-        order.insert(last + 1, rule)
+        learned = learned_ids(app.rules_dir)
+        above = next((i for i, r in enumerate(order) if r.id == body.place_above), None)
+        if above is not None and body.place_above in learned:
+            order.insert(above, rule)
+        else:
+            last = max((i for i, r in enumerate(order) if r.id in learned), default=-1)
+            order.insert(last + 1, rule)
     result = replay(
         app.engine,
         rule,
@@ -120,10 +121,10 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
 
 @router.post("/draft-zone", response_model=ZoneDraftOut)
 def draft_zone(app: AppDep, body: ZoneDraftIn) -> dict:
-    """The rule a box drawn on page 1 starts from (see ``ZoneDraftOut``). 400 when page 1
-    is not read yet, the box is empty or holds no usable word; 404 for an unknown
+    """The rule the boxes drawn on page 1 start from (see ``ZoneDraftOut``). 400 when
+    page 1 is not read yet, a box is empty or holds no usable word; 404 for an unknown
     document. Changes nothing."""
-    return asdict(app.inbox.draft_zone(body.drive_id, body.box, body.sender))
+    return asdict(app.inbox.draft_zone(body.drive_id, body.boxes, body.sender))
 
 
 @router.post("/explain", response_model=list[RuleExplainOut])
@@ -161,16 +162,23 @@ def decline(app: AppDep, body: RulesDeclineIn) -> dict:
 
 
 @router.put("/{rule_id}", response_model=RulesOut)
-def save_rule(app: AppDep, rule_id: str, body: RuleIn, replaces: str | None = None) -> dict:
-    """Save a rule: new ones go at the end of ``learned.yaml``; with ``replaces`` that
-    rule is rewritten in place. ``rule_id`` is the rule's (new) id and must equal the
-    body's; ``replaces`` is the id being replaced (the old one, for a rename). 400 for an
-    invalid, repeated or reserved one."""
+def save_rule(
+    app: AppDep,
+    rule_id: str,
+    body: RuleIn,
+    replaces: str | None = None,
+    place_above: str | None = None,
+) -> dict:
+    """Save a rule: new ones go at the end of ``learned.yaml``, or directly above the
+    learned rule ``place_above`` (ignored when it is not in ``learned.yaml``); with
+    ``replaces`` that rule is rewritten in place. ``rule_id`` is the rule's (new) id and
+    must equal the body's; ``replaces`` is the id being replaced (the old one, for a
+    rename). 400 for an invalid, repeated or reserved one."""
     if rule_id != body.id:
         raise InvalidRequest("the rule id in the address and in the body differ")
     if rule_id in RESERVED_IDS:
         raise InvalidRequest(f"\u2018{rule_id}\u2019 is a reserved name")
-    app.save_rule(_rule(body), replaces)
+    app.save_rule(_rule(body), replaces, place_above)
     return _out(app)
 
 

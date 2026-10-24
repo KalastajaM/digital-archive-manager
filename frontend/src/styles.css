@@ -1966,6 +1966,7 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .rule-words { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0 0 var(--sp-2); padding: 0; }
 .rule-word { border-radius: var(--r-pill); padding: 0 10px; font-size: var(--fs-sm); background: var(--grey-bg); color: var(--muted); text-decoration: line-through; }
 .rule-word[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); text-decoration: none; }
+.rule-area-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .rule-field-row { display: flex; gap: var(--sp-3); align-items: center; }
 .rule-field-row > :first-child { flex: 1 1 auto; min-width: 0; }
 .rule-field .rule-off, .field .rule-off { display: inline-flex; align-items: center; gap: 4px; margin: 0; flex: none; font-size: var(--fs-sm); color: var(--muted); }
@@ -1994,7 +1995,12 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .page-zone-address { border-color: var(--orange-text); background: var(--orange-bg); }
 .page-surface { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
 .page-box { position: absolute; pointer-events: none; border: 2px solid var(--accent); background: var(--accent-soft); opacity: 0.8; border-radius: 2px; }
+.page-box-kept { border-style: dashed; opacity: 0.6; }
+.page-box-number { position: absolute; top: 0; left: 0; padding: 0 4px; font-size: var(--fs-sm); font-weight: 600; background: var(--accent-fill); color: var(--on-accent); }
 .box-note { margin: 0 0 var(--sp-2); }
+.box-kept { list-style: none; margin: 0 0 var(--sp-2); padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
+.box-kept li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.box-kept-text { min-width: 0; overflow-wrap: anywhere; }
 .box-panel { margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
 .box-panel p { margin: 0 0 var(--sp-2); }
 .box-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-1); }

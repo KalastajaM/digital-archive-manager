@@ -38,15 +38,27 @@ class RuleDraft:
 
 
 @dataclass
-class ZoneDraft(RuleDraft):
-    """A draft made from a box on page 1: the rule's ``when`` is ``folder_is`` (the inbox)
-    and a ``zone`` of ``box`` with one ticked word; ``lines`` are the page-1 lines that lie
-    in the box, ``sender`` the sender the rule identifies."""
+class ZoneDraftArea:
+    """One box of a zone draft: the page-1 ``lines`` in it and its candidate ``words``
+    (one ticked)."""
 
-    box: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+    box: tuple[float, float, float, float]
+    words: list[DraftWord]
+    lines: list[str]
+
+
+@dataclass
+class ZoneDraft(RuleDraft):
+    """A draft made from boxes on page 1: the rule's ``when`` is ``folder_is`` (the inbox)
+    and one ``zone`` per box, each with its one ticked word. ``sender`` is the sender the
+    rule identifies; ``place_above`` the learned rule the new one goes directly above when
+    it is saved (a learned rule that matches the document already), else None. The
+    draft's own ``words`` are empty: the words are per area."""
+
+    zones: list[ZoneDraftArea] = field(default_factory=list)
     folder_is: str | None = None
-    lines: list[str] = field(default_factory=list)
     sender: str | None = None
+    place_above: str | None = None
 
 
 def _literal(s: str) -> str:

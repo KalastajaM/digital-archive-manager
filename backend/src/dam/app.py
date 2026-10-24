@@ -322,8 +322,12 @@ class App:
             raise InvalidRequest(f"the rule could not be saved: {e}") from e
         self.reload_rules()
 
-    def save_rule(self, rule: Rule, replaces: str | None = None) -> None:
-        """Save ``rule``. A new rule goes at the end of ``learned.yaml``; with
+    def save_rule(
+        self, rule: Rule, replaces: str | None = None, place_above: str | None = None
+    ) -> None:
+        """Save ``rule``. A new rule goes at the end of ``learned.yaml``, or directly above
+        the rule ``place_above`` when that is in ``learned.yaml`` (hand-written files are
+        never reordered); with
         ``replaces`` (an id) that rule is rewritten in place, in whichever file holds it,
         and the file's other rules are kept as they are. A repeated id raises
         ``InvalidRequest``; ``NotFound`` if ``replaces`` is unknown."""
@@ -331,7 +335,10 @@ class App:
             raise InvalidRequest(f"a rule with the id {rule.id!r} exists already")
         if replaces is None:
             path = self.rules_dir / LEARNED_FILE
-            self._write_rule_file(path, [*self._rule_file_rules(path), rule])
+            current = self._rule_file_rules(path)
+            at = next((i for i, r in enumerate(current) if r.id == place_above), len(current))
+            current.insert(at, rule)
+            self._write_rule_file(path, current)
             return
         path = rule_file(self.rules_dir, replaces)
         if path is None:

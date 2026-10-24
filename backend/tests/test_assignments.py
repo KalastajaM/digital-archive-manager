@@ -277,7 +277,7 @@ def sender_rule(word="pohjola"):
         {
             "id": "pohjola",
             "sender": "Pohjola",
-            "when": {"zone": {"box": list(HEADER), "text_contains": [word]}, "folder_is": INBOX},
+            "when": {"zones": [{"box": list(HEADER), "text_contains": [word]}], "folder_is": INBOX},
             "then": {"folder": "Insurance/Pohjola"},
         }
     )
@@ -338,7 +338,7 @@ def test_replay_api_has_marked_and_the_rule_keeps_its_sender(app, fake_archive):
     body = {
         "id": "pohjola",
         "sender": "Pohjola",
-        "when": {"zone": {"box": list(HEADER), "text_contains": ["pohjola"]}},
+        "when": {"zones": [{"box": list(HEADER), "text_contains": ["pohjola"]}]},
         "then": {"folder": "Insurance/Pohjola"},
     }
     with make_client(app) as c:

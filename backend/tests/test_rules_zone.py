@@ -22,7 +22,7 @@ def zone_rule(word="pohjola", box=HEADER, **extra):
     return Rule.model_validate(
         {
             "id": "pohjola",
-            "when": {"zone": {"box": list(box), "text_contains": [word]}, "folder_is": INBOX},
+            "when": {"zones": [{"box": list(box), "text_contains": [word]}], "folder_is": INBOX},
             "then": {"folder": "Insurance/Pohjola", "name": "{doc_date:%Y%m%d}_Pohjola"},
             **extra,
         }
@@ -70,7 +70,7 @@ def rec(path=f"{INBOX}/a.pdf", ext="pdf"):
 )
 def test_a_bad_zone_is_refused(zone):
     with pytest.raises(ValueError):
-        Rule.model_validate({"id": "x", "when": {"zone": zone}})
+        Rule.model_validate({"id": "x", "when": {"zones": [zone]}})
 
 
 def test_old_rule_files_load_unchanged_and_a_zone_round_trips(tmp_path):
@@ -79,15 +79,14 @@ def test_old_rule_files_load_unchanged_and_a_zone_round_trips(tmp_path):
         encoding="utf-8",
     )
     rules, errors = load_rules(tmp_path)
-    assert errors == [] and rules[0].when.zone is None
+    assert errors == [] and rules[0].when.zones == []
     path = tmp_path / "learned.yaml"
     write_rules_file(path, [zone_rule()])
-    assert yaml.safe_load(path.read_text(encoding="utf-8"))[0]["when"]["zone"] == {
-        "box": list(HEADER),
-        "text_contains": ["pohjola"],
-    }
+    assert yaml.safe_load(path.read_text(encoding="utf-8"))[0]["when"]["zones"] == [
+        {"box": list(HEADER), "text_contains": ["pohjola"]}
+    ]
     again, errors = load_rules(tmp_path)
-    assert errors == [] and again[0].when.zone == zone_rule().when.zone
+    assert errors == [] and again[0].when.zones == zone_rule().when.zones
 
 
 # --- matching -------------------------------------------------------------------------
@@ -136,7 +135,7 @@ def test_waiting_only_when_the_other_conditions_hold():
             "id": "both",
             "when": {
                 "text_contains": ["fortum"],
-                "zone": {"box": list(HEADER), "text_contains": ["a"]},
+                "zones": [{"box": list(HEADER), "text_contains": ["a"]}],
             },
         }
     )
@@ -150,7 +149,7 @@ def test_all_conditions_still_have_to_match():
             "id": "both",
             "when": {
                 "text_contains": ["fortum"],
-                "zone": {"box": list(HEADER), "text_contains": ["pohjola"]},
+                "zones": [{"box": list(HEADER), "text_contains": ["pohjola"]}],
             },
             "then": {"tags": ["t"]},
         }
@@ -165,7 +164,7 @@ def test_all_conditions_still_have_to_match():
 def test_explain_says_what_is_in_the_zone(app):
     out = explain(rec(), "pohjola", [zone_rule()], app.settings.special_folders, None, LETTER)
     assert out[0].matched and "in the area" in out[0].why
-    assert out[0].zone_lines == ["Pohjola Vakuutus"]
+    assert out[0].zone_lines == [["Pohjola Vakuutus"]]
     miss = explain(
         rec(), "pohjola", [zone_rule("fortum")], app.settings.special_folders, None, LETTER
     )
@@ -255,14 +254,17 @@ def test_draft_zone_for_an_inbox_document(app, fake_archive):
     add(app, fake_archive, f"{INBOX}/a.pdf", "a", "pohjola vakuutus oy", LETTER)
     with make_client(app) as c:
         r = post(
-            c, "/api/rules/draft-zone", {"drive_id": "a", "box": list(HEADER), "sender": "Pohjola"}
+            c,
+            "/api/rules/draft-zone",
+            {"drive_id": "a", "boxes": [list(HEADER)], "sender": "Pohjola"},
         )
     assert r.status_code == 200, r.text
     d = r.json()
-    assert d["box"] == list(HEADER) and d["folder_is"] == INBOX and d["sender"] == "Pohjola"
-    assert d["lines"] == ["Pohjola Vakuutus"]
-    assert [w["word"] for w in d["words"]] == ["pohjola", "vakuutus"]
-    assert [w["ticked"] for w in d["words"]].count(True) == 1
+    assert d["folder_is"] == INBOX and d["sender"] == "Pohjola" and d["place_above"] is None
+    [area] = d["zones"]
+    assert area["box"] == list(HEADER) and area["lines"] == ["Pohjola Vakuutus"]
+    assert [w["word"] for w in area["words"]] == ["pohjola", "vakuutus"]
+    assert [w["ticked"] for w in area["words"]].count(True) == 1 and d["words"] == []
     assert d["folder"] is None and d["name"] is None and d["id"] == "pohjola"
 
 
@@ -271,7 +273,7 @@ def test_draft_zone_for_a_filed_document_gives_its_folder_and_name(app, fake_arc
     add(app, fake_archive, "11. Bills/2026/20260210_Pohjola.pdf", "a", "pohjola x", LETTER)
     app.tags.add("a", ["insurance"])
     with make_client(app) as c:
-        d = post(c, "/api/rules/draft-zone", {"drive_id": "a", "box": list(HEADER)}).json()
+        d = post(c, "/api/rules/draft-zone", {"drive_id": "a", "boxes": [list(HEADER)]}).json()
     assert d["folder"] == "11. Bills/{year}"
     assert d["name"] == "{doc_date:%Y%m%d}_Pohjola"
     assert d["tags"] == ["insurance"] and d["folder_is"] == INBOX
@@ -281,17 +283,19 @@ def test_draft_zone_refusals(app, fake_archive):
     add(app, fake_archive, f"{INBOX}/a.pdf", "a", "x", LETTER)
     add(app, fake_archive, f"{INBOX}/b.pdf", "b", "x")
     with make_client(app) as c:
-        unread = post(c, "/api/rules/draft-zone", {"drive_id": "b", "box": list(HEADER)})
+        unread = post(c, "/api/rules/draft-zone", {"drive_id": "b", "boxes": [list(HEADER)]})
         assert unread.status_code == 400 and "not been read" in unread.json()["error"]
-        empty = post(c, "/api/rules/draft-zone", {"drive_id": "a", "box": [0.6, 0.8, 0.9, 0.9]})
+        empty = post(c, "/api/rules/draft-zone", {"drive_id": "a", "boxes": [[0.6, 0.8, 0.9, 0.9]]})
         assert empty.status_code == 400 and "no text" in empty.json()["error"]
         assert (
-            post(c, "/api/rules/draft-zone", {"drive_id": "nope", "box": list(HEADER)}).status_code
+            post(
+                c, "/api/rules/draft-zone", {"drive_id": "nope", "boxes": [list(HEADER)]}
+            ).status_code
             == 404
         )
         assert (
             post(
-                c, "/api/rules/draft-zone", {"drive_id": "a", "box": [0.5, 0.5, 0.1, 0.1]}
+                c, "/api/rules/draft-zone", {"drive_id": "a", "boxes": [[0.5, 0.5, 0.1, 0.1]]}
             ).status_code
             == 400
         )
@@ -353,7 +357,7 @@ def test_replay_api_shape_queues_reads_and_wakes_the_indexer(app, fake_archive):
     body = {
         "rule": {
             "id": "pohjola",
-            "when": {"zone": {"box": list(HEADER), "text_contains": ["pohjola"]}},
+            "when": {"zones": [{"box": list(HEADER), "text_contains": ["pohjola"]}]},
             "then": {"folder": "Insurance/Pohjola"},
         }
     }

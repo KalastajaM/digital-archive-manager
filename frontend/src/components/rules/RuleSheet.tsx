@@ -5,6 +5,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   errorText,
+  type PageBox,
   type Replay,
   type Rule,
   type RuleDraft,
@@ -31,11 +32,13 @@ const READING_POLL_MS = 2000;
 const READING_POLLS = 15;
 
 type Word = { word: string; ticked: boolean };
+/** An area of page 1 with the words of which any one is enough. */
+type Area = { box: PageBox; words: Word[] };
 /** A field of the "then" part: ``off`` leaves it out of the rule. */
 type Text = { off: boolean; value: string };
 
 const isDraft = (r: RuleDraft | Rule): r is RuleDraft => "words" in r;
-const isZoneDraft = (r: RuleDraft | ZoneDraft | Rule): r is ZoneDraft => "box" in r && "words" in r;
+const isZoneDraft = (r: RuleDraft | ZoneDraft | Rule): r is ZoneDraft => "zones" in r && "words" in r;
 
 /** The replay is still waiting for pages to be read. */
 const waiting = (r: Replay) =>
@@ -92,12 +95,10 @@ export function RuleSheet({
 }) {
   const draft = isDraft(initial);
   const zoneDraft = isZoneDraft(initial) ? initial : null;
-  // A rule can need its words in an area of page 1. Then the chips are that area's words
-  // (a rule that has plain words as well keeps its area as it is).
-  const zone = zoneDraft ? { box: zoneDraft.box, text_contains: [] as string[] } : draft ? null : initial.when.zone;
-  const zoneWords = zone !== null && (zoneDraft !== null || (!draft && initial.when.text_contains.length === 0));
   const person = draft ? null : initial.when.person;
   const sender = zoneDraft ? zoneDraft.sender : draft ? null : initial.sender;
+  // a new rule drawn from boxes goes directly above the learned rule that matches the document
+  const placeAbove = zoneDraft?.place_above ?? null;
   const personZone = draft ? null : initial.person_zone;
   const replacing = replaces ?? (draft ? undefined : initial.id);
   const inbox = useInboxFolder();
@@ -107,10 +108,20 @@ export function RuleSheet({
   const save = useSaveRule();
   const ids = useId();
 
+  // plain words (anywhere in the text) and, apart from them, one group of words per area
   const [words, setWords] = useState<Word[]>(() =>
-    draft
-      ? initial.words.map((w) => ({ ...w }))
-      : (zoneWords && zone ? zone.text_contains : initial.when.text_contains).map((word) => ({ word, ticked: true })),
+    zoneDraft
+      ? []
+      : draft
+        ? initial.words.map((w) => ({ ...w }))
+        : initial.when.text_contains.map((word) => ({ word, ticked: true })),
+  );
+  const [areas, setAreas] = useState<Area[]>(() =>
+    zoneDraft
+      ? zoneDraft.zones.map((z) => ({ box: z.box, words: z.words.map((w) => ({ ...w })) }))
+      : draft
+        ? []
+        : initial.when.zones.map((z) => ({ box: z.box, words: (z.text_contains ?? []).map((word) => ({ word, ticked: true })) })),
   );
   const [adding, setAdding] = useState("");
   const start = draft ? initial : initial.then; // a draft's actions sit on the draft itself
@@ -131,15 +142,20 @@ export function RuleSheet({
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [hadAreas] = useState(() => areas.length > 0);
   const ticked = words.filter((w) => w.ticked).map((w) => w.word);
+  const areaWords = areas.map((a) => a.words.filter((w) => w.ticked).map((w) => w.word));
+  // a rule needs a condition: a ticked word anywhere, or at least one area with a ticked word in each
+  const emptyArea = areaWords.findIndex((w) => w.length === 0);
+  const hasCondition = (ticked.length > 0 || areas.length > 0) && emptyArea < 0;
   const rule: RuleIn = useMemo(
     () => ({
       id: initial.id,
       when: {
-        text_contains: zoneWords ? [] : ticked,
+        text_contains: ticked,
         filename_matches: filename.trim() || null,
         folder_is: folderIs.trim() || null,
-        ...(zone ? { zone: { box: zone.box, text_contains: zoneWords ? ticked : zone.text_contains } } : {}),
+        ...(areas.length > 0 ? { zones: areas.map((a, i) => ({ box: a.box, text_contains: areaWords[i] })) } : {}),
         ...(person ? { person } : {}),
       },
       then: {
@@ -153,7 +169,7 @@ export function RuleSheet({
       ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.id, JSON.stringify(ticked), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
+    [initial.id, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i]])), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
   );
   const ruleKey = JSON.stringify(rule);
 
@@ -172,7 +188,7 @@ export function RuleSheet({
   const run = (mine: number) => {
     const key = ruleKey;
     runReplay(
-      { rule, replaces: replacing },
+      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove },
       {
         onSuccess: (result) => {
           if (mine !== epoch.current || key !== latestKey.current) return;
@@ -186,7 +202,7 @@ export function RuleSheet({
     );
   };
   useEffect(() => {
-    if (ticked.length === 0) return;
+    if (!hasCondition) return;
     polls.current = 0;
     const mine = ++epoch.current;
     const timer = setTimeout(() => run(mine), REPLAY_DELAY_MS);
@@ -198,14 +214,15 @@ export function RuleSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ruleKey, replacing, runReplay]);
 
+  const withWord = (all: Word[], w: string): Word[] =>
+    all.some((x) => x.word === w) ? all.map((x) => (x.word === w ? { ...x, ticked: true } : x)) : [...all, { word: w, ticked: true }];
   const addWord = () => {
     const w = adding.trim().toLowerCase();
     setAdding("");
-    if (!w) return;
-    setWords((all) =>
-      all.some((x) => x.word === w) ? all.map((x) => (x.word === w ? { ...x, ticked: true } : x)) : [...all, { word: w, ticked: true }],
-    );
+    if (w) setWords((all) => withWord(all, w));
   };
+  const changeArea = (at: number, change: (words: Word[]) => Word[]) =>
+    setAreas((all) => all.map((a, i) => (i === at ? { ...a, words: change(a.words) } : a)));
 
   const tested = proof !== null && proof.key === ruleKey ? proof.replay : null;
   const failed = replay.isError && tested === null;
@@ -214,14 +231,14 @@ export function RuleSheet({
     setAsking(false);
     setError(null);
     try {
-      await save.mutateAsync({ rule, replaces: replacing });
+      await save.mutateAsync({ rule, replaces: replacing, placeAbove: replacing ? null : placeAbove });
       toast({ kind: "info", text: `Rule ${rule.id} saved.` });
       onClose();
     } catch (e) {
       setError(errorText(e));
     }
   };
-  const canSave = ticked.length > 0 && tested !== null && !save.isPending;
+  const canSave = hasCondition && tested !== null && !save.isPending;
   // an existing rule opened from a filing is an update of it
   const title = draft
     ? replaces
@@ -262,7 +279,15 @@ export function RuleSheet({
         className="rule-sheet"
         footer={
           <>
-            {ticked.length === 0 && <span className="hint footer-start">Tick at least one word</span>}
+            {!hasCondition && (
+              <span className="hint footer-start">
+                {emptyArea >= 0
+                  ? `Tick a word in area ${emptyArea + 1}`
+                  : hadAreas
+                    ? "A rule needs a word or an area"
+                    : "Tick at least one word"}
+              </span>
+            )}
             <button type="button" onClick={onClose}>Cancel</button>
             <button
               type="button"
@@ -270,44 +295,57 @@ export function RuleSheet({
               disabled={!canSave}
               onClick={() => (different > 0 ? setAsking(true) : void doSave())}
             >
-              {ticked.length > 0 && tested === null && !failed ? "Testing…" : "Save"}
+              {hasCondition && tested === null && !failed ? "Testing…" : "Save"}
             </button>
           </>
         }
       >
-        <div className="field">
-          <span className="field-label" id={`${ids}-words`}>When the text contains</span>
-          <ul className="rule-words" aria-labelledby={`${ids}-words`}>
-            {words.map((w) => (
-              <li key={w.word}>
-                <button
-                  type="button"
-                  className="rule-word"
-                  aria-pressed={w.ticked}
-                  onClick={() => setWords((all) => all.map((x) => (x.word === w.word ? { ...x, ticked: !x.ticked } : x)))}
-                >
-                  {visible(w.word)}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <input
-            aria-label="Add a word"
-            placeholder="Add a word"
-            value={adding}
-            onChange={(e) => setAdding(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addWord();
-              }
-            }}
-            onBlur={addWord}
+        {(areas.length === 0 || words.length > 0) && (
+          <div className="field">
+            <span className="field-label" id={`${ids}-words`}>When the text contains</span>
+            <ul className="rule-words" aria-labelledby={`${ids}-words`}>
+              {words.map((w) => (
+                <li key={w.word}>
+                  <button
+                    type="button"
+                    className="rule-word"
+                    aria-pressed={w.ticked}
+                    onClick={() => setWords((all) => all.map((x) => (x.word === w.word ? { ...x, ticked: !x.ticked } : x)))}
+                  >
+                    {visible(w.word)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <input
+              aria-label="Add a word"
+              placeholder="Add a word"
+              value={adding}
+              onChange={(e) => setAdding(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addWord();
+                }
+              }}
+              onBlur={addWord}
+            />
+            <p className="hint">Any ticked word is enough; more words catch more documents.</p>
+          </div>
+        )}
+        {areas.map((area, at) => (
+          <AreaWords
+            key={at}
+            n={at + 1}
+            several={areas.length > 1}
+            words={area.words}
+            onToggle={(word) => changeArea(at, (all) => all.map((x) => (x.word === word ? { ...x, ticked: !x.ticked } : x)))}
+            onAdd={(word) => changeArea(at, (all) => withWord(all, word))}
+            onRemove={() => setAreas((all) => all.filter((_, i) => i !== at))}
           />
-          <p className="hint">Any ticked word is enough; more words catch more documents.</p>
-          {zone && <p className="hint">Matches only in the area you drew on page 1.</p>}
-          {sender && <p className="hint">Sender: {visible(sender)}</p>}
-        </div>
+        ))}
+        {areas.length > 1 && <p className="hint">The document needs a word in every area.</p>}
+        {sender && <p className="hint">Sender: {visible(sender)}</p>}
         {filed && (
           <p className="hint rule-filed">
             Filed as: {visible(`${filed.folder}/${filed.name}`)}
@@ -361,7 +399,7 @@ export function RuleSheet({
             </div>
           </>
         )}
-        {ticked.length > 0 && (
+        {hasCondition && (
           <ReplayResult
             replay={proof?.replay}
             sender={sender}
@@ -391,5 +429,66 @@ export function RuleSheet({
         </Sheet>
       )}
     </>
+  );
+}
+
+/** One area of page 1: its words as chips (any ticked one is enough), a word to add and a
+ * way to remove the area. */
+function AreaWords({
+  n,
+  several,
+  words,
+  onToggle,
+  onAdd,
+  onRemove,
+}: {
+  n: number;
+  several: boolean;
+  words: Word[];
+  onToggle: (word: string) => void;
+  onAdd: (word: string) => void;
+  onRemove: () => void;
+}) {
+  const id = useId();
+  const [adding, setAdding] = useState("");
+  const add = () => {
+    const w = adding.trim().toLowerCase();
+    setAdding("");
+    if (w) onAdd(w);
+  };
+  const label = several ? `Area ${n}` : "Area";
+  return (
+    <div className="field rule-area" role="group" aria-label={label}>
+      <div className="rule-area-head">
+        <span className="field-label" id={`${id}-label`}>
+          {several ? `In area ${n} of page 1` : "In the area you drew on page 1"}
+        </span>
+        <button type="button" className="link-button" aria-label={`Remove ${label.toLowerCase()}`} onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+      <ul className="rule-words" aria-labelledby={`${id}-label`}>
+        {words.map((w) => (
+          <li key={w.word}>
+            <button type="button" className="rule-word" aria-pressed={w.ticked} onClick={() => onToggle(w.word)}>
+              {visible(w.word)}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <input
+        aria-label={`Add a word to ${label.toLowerCase()}`}
+        placeholder="Add a word"
+        value={adding}
+        onChange={(e) => setAdding(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+        }}
+        onBlur={add}
+      />
+    </div>
   );
 }
