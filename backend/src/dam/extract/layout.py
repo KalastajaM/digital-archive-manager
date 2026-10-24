@@ -55,6 +55,17 @@ def clamp_box(box: Sequence[float]) -> Box:
     return (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
 
 
+def check_box(box: Sequence[float]) -> Box:
+    """``box`` as ``(x0, y0, x1, y1)`` with 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1;
+    ``ValueError`` otherwise."""
+    if len(box) != 4 or not all(isinstance(v, int | float) and 0 <= v <= 1 for v in box):
+        raise ValueError("a box is four numbers between 0 and 1: x0, y0, x1, y1")
+    x0, y0, x1, y1 = (float(v) for v in box)
+    if not (x0 < x1 and y0 < y1):
+        raise ValueError("a box needs x0 < x1 and y0 < y1")
+    return (x0, y0, x1, y1)
+
+
 def share_inside(line: Box, area: Box) -> float:
     """How much of ``line``'s area lies inside ``area`` (0..1). A line without area
     (a zero-height box) counts by its length, or as inside when it is a point there."""

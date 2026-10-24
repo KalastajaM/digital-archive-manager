@@ -382,6 +382,9 @@ class SuggestionOut(BaseModel):
     important: bool | None
     # a tick box could not be read (the batch row is flagged "unclear")
     marks_unclear: bool
+    # a rule with a page-1 area could not be checked: page 1 is being read ("Reading
+    # page 1...")
+    waiting_for_page1: bool = False
 
 
 class FileSuggestionsOut(BaseModel):
@@ -1407,10 +1410,19 @@ class BatchRowOut(BaseModel):
 # -- rules --------------------------------------------------------------------
 
 
+class ZoneIn(_In):
+    """Words that must be in an area of page 1: ``box`` is [x0, y0, x1, y1] as fractions
+    of the page, origin top left."""
+
+    box: list[float] = Field(min_length=4, max_length=4)
+    text_contains: list[str]
+
+
 class RuleWhenIn(_In):
     text_contains: list[str] = Field(default_factory=list)
     filename_matches: str | None = None
     folder_is: str | None = None
+    zone: ZoneIn | None = None
 
 
 class RuleThenIn(_In):
@@ -1449,10 +1461,16 @@ class RulesDeclineIn(_In):
     words: list[str]
 
 
+class ZoneOut(BaseModel):
+    box: list[float]
+    text_contains: list[str]
+
+
 class RuleWhenOut(BaseModel):
     text_contains: list[str]
     filename_matches: str | None
     folder_is: str | None
+    zone: ZoneOut | None
 
 
 class RuleThenOut(BaseModel):
@@ -1506,6 +1524,14 @@ class ShadowOut(BaseModel):
     rule_id: str  # the earlier rule that wins
 
 
+class NotCheckedOut(BaseModel):
+    """A document the rule could match by its words but whose page 1 could not be looked
+    at; ``reason``: "page 1 not read yet", "no OCR engine" or "missing"."""
+
+    path: str
+    reason: str
+
+
 class ReplayOut(BaseModel):
     matched: int
     same: int
@@ -1515,6 +1541,44 @@ class ReplayOut(BaseModel):
     checked: int
     total: int
     truncated: bool
+    not_checked: list[NotCheckedOut]
+    # how many page-1 reads are queued by this replay (post it again to see them)
+    reading: int
+
+
+class Page1LineOut(BaseModel):
+    text: str
+    box: list[float]  # x0, y0, x1, y1 as fractions of page 1, origin top left
+
+
+class Page1Out(BaseModel):
+    """Page 1's lines. ``read`` false: not read yet (a read is queued), or it cannot be
+    (``unavailable`` says why: "no OCR engine"; None while it is just waiting)."""
+
+    read: bool
+    lines: list[Page1LineOut]
+    unavailable: str | None = None
+
+
+class Page1BoxIn(_In):
+    box: list[float] = Field(min_length=4, max_length=4)
+
+
+class ZoneDraftIn(_In):
+    drive_id: str
+    box: list[float] = Field(min_length=4, max_length=4)
+    sender: str | None = None
+
+
+class ZoneDraftOut(RuleDraftOut):
+    """The draft a box drawn on page 1 starts from. The rule's ``when`` is
+    ``{folder_is, zone: {box, text_contains: [the ticked word]}}``; ``words`` are the
+    candidate words from the lines in the box, ``lines`` those lines."""
+
+    box: list[float]
+    folder_is: str | None
+    lines: list[str]
+    sender: str | None
 
 
 class RuleExplainOut(BaseModel):
@@ -1522,6 +1586,7 @@ class RuleExplainOut(BaseModel):
     matched: bool
     why: str
     wins: list[str]
+    zone_lines: list[str] = []  # page-1 lines in the rule's zone
 
 
 # -- settings written to settings.yaml ---------------------------------------------

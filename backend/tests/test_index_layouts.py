@@ -90,7 +90,7 @@ def test_without_an_ocr_engine_a_scan_waits_and_says_why(fake_archive, engine, m
     _indexed(fake_archive, repo, f"{INBOX}/s.pdf", "d1", ocr_used=True, scan=True)
     assert indexer.run_layouts_once() == 1
     assert repo.layout_for("d1") is None  # not "read, no text"
-    assert indexer.layout_blocked("d1") == "no OCR engine installed"
+    assert indexer.layout_blocked("d1") == "no OCR engine"
     assert indexer.run_layouts_once() == 0  # waits for the retry time
 
 

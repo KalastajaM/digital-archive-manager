@@ -40,7 +40,12 @@ def test_list_has_stats_file_and_state(app, api):
     assert ids(data) == ["a"]
     r = data["rules"][0]
     assert (r["file"], r["learned"]) == (LEARNED_FILE, True)
-    assert r["when"] == {"text_contains": ["fortum"], "filename_matches": None, "folder_is": None}
+    assert r["when"] == {
+        "text_contains": ["fortum"],
+        "filename_matches": None,
+        "folder_is": None,
+        "zone": None,
+    }
     assert r["then"]["tags"] == ["bill"]
     assert r["stats"] == {"suggested": 0, "changed": 0, "last_used": None, "flagged": False}
     assert data["errors"] == []

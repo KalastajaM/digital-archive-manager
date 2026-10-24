@@ -5,18 +5,20 @@ compares the path it would give with the path the file has. ``explain`` says, fo
 document, which rules match and which of them wins each field.
 """
 
+import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, select, text
 
 from dam.config import SpecialFolders
 from dam.core.naming import _DATE_PREFIX, parse_doc_date
 from dam.core.paths import nfc
 from dam.db.tables import file_text, files
-from dam.index.repo import FileRecord
+from dam.extract.layout import ZONE_MARGIN, Page1Layout, lines_in_zone
+from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.ops.guards import is_under
 from dam.rules.engine import (
     TemplateError,
@@ -24,6 +26,7 @@ from dam.rules.engine import (
     _parent,
     _render_folder,
     _render_name,
+    check,
     stem_and_ext,
     suggest,
 )
@@ -37,6 +40,19 @@ class ReplayHit:
     path_rule: str  # "" when the rule's template cannot be rendered for this file
 
 
+NOT_READ = "page 1 not read yet"
+
+
+@dataclass
+class NotChecked:
+    """A document the rule could match by its words but whose page 1 could not be looked
+    at: never counted as a non-match. ``reason``: ``NOT_READ``, "no OCR engine" or
+    "missing"."""
+
+    path: str
+    reason: str
+
+
 @dataclass
 class ReplayResult:
     matched: int
@@ -47,6 +63,34 @@ class ReplayResult:
     checked: int
     total: int
     truncated: bool
+    not_checked: list[NotChecked] = field(default_factory=list)
+    reading: int = 0  # of the not checked, how many page 1 reads are queued now
+
+
+MAX_CANDIDATES = 20000  # more words hits than this: no narrowing, every file is looked at
+
+
+def zone_candidates(engine: Engine, rule: Rule) -> set[str] | None:
+    """The drive ids whose indexed text can contain one of the zone's words: one FTS
+    query over the text column. A line in a zone is part of page 1's text, which is part of
+    the indexed text, so no other document can match. None: not narrowed (a word without
+    letters or digits cannot be searched, or there are too many hits)."""
+    zone = rule.when.zone
+    assert zone is not None
+    phrases = []
+    for term in zone.text_contains:
+        tokens = re.findall(r"\w+", term)
+        if not tokens:
+            return None
+        phrases.append('"' + " ".join(t.replace('"', '""') for t in tokens) + '"*')
+    match = "text : (" + " OR ".join(phrases) + ")"
+    with engine.connect() as conn:
+        found = conn.execute(
+            text("SELECT drive_id FROM file_fts WHERE file_fts MATCH :q LIMIT :n"),
+            {"q": match, "n": MAX_CANDIDATES + 1},
+        ).scalars()
+        ids = set(found)
+    return None if len(ids) > MAX_CANDIDATES else ids
 
 
 @dataclass
@@ -55,6 +99,7 @@ class RuleExplain:
     matched: bool
     why: str
     wins: list[str] = field(default_factory=list)
+    zone_lines: list[str] = field(default_factory=list)  # page-1 lines in the rule's zone
 
 
 def _without_folder(rule: Rule) -> Rule:
@@ -97,12 +142,22 @@ def replay(
     special: SpecialFolders,
     budget_s: float = 5.0,
     inbox_code_of: Callable[[str], str | None] | None = None,
+    *,
+    layouts_for: Callable[[Collection[str]], dict[str, Page1Layout]] | None = None,
+    want_layouts: Callable[[Collection[str]], None] | None = None,
+    layout_blocked: Callable[[str], str | None] | None = None,
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
     have filed. Inbox files are only counted (``inbox``), when the rule as written, with
     its ``folder_is``, matches them as live filing would; ``inbox_code_of`` tells which
-    files sit in a filing code's inbox folder (they count as in the inbox)."""
+    files sit in a filing code's inbox folder (they count as in the inbox).
+
+    A rule with a ``zone`` is looked at in the documents whose text has one of its words
+    (``zone_candidates``, one FTS query). Those among them without a page-1 layout are
+    handed to ``want_layouts`` and listed in ``not_checked`` with the reason
+    (``layout_blocked`` says why a read cannot happen now); they are never counted as
+    non-matches."""
     started = time.monotonic()
     free = _without_folder(rule)
     earlier: list[Rule] = []
@@ -119,8 +174,26 @@ def replay(
         files.c.missing.is_not(True),
         files.c.parked_at.is_(None),
     )
-    cols = [files.c.drive_id, files.c.path, files.c.name, files.c.ext, files.c.doc_date]
+    cols = [
+        files.c.drive_id,
+        files.c.path,
+        files.c.name,
+        files.c.ext,
+        files.c.doc_date,
+    ]
     result = ReplayResult(0, 0, [], 0, [], 0, 0, False)
+    candidates = zone_candidates(engine, rule) if rule.when.zone is not None else None
+    layouts: dict[str, Page1Layout] = {}
+    needs_layouts = rule.when.zone is not None or any(r.when.zone is not None for r in earlier)
+    if candidates is not None and layouts_for is not None:
+        layouts = layouts_for(candidates)
+    unread: list[str] = []  # candidates (filed or in the inbox) to hand to the layout pass
+    evaluated = 0
+
+    def layout_of(drive_id: str) -> Page1Layout | None:
+        if drive_id not in layouts and layouts_for is not None and needs_layouts:
+            layouts.update(layouts_for([drive_id]))
+        return layouts.get(drive_id)
 
     def skipped(path: str) -> bool:
         return any(is_under(path, base) for base in others)
@@ -131,15 +204,17 @@ def replay(
         for (path,) in conn.execute(select(files.c.path).select_from(joined).where(*where)):
             if not skipped(path) and not is_under(path, special.inbox):
                 result.total += 1
-        rows = conn.execute(
-            select(*cols, file_text.c.text).select_from(joined).where(*where).order_by(files.c.path)
-        )
+        query = select(*cols, file_text.c.text).select_from(joined).where(*where)
+        if candidates is not None:
+            query = query.where(files.c.drive_id.in_(candidates))
+        rows = conn.execute(query.order_by(files.c.path))
         for row in rows:
             if skipped(row.path):
                 continue
             if time.monotonic() - started >= budget_s:
                 result.truncated = True
                 break
+            evaluated += 1
             folded = fold(row.text or "")
             rec = FileRecord(
                 drive_id=row.drive_id,
@@ -148,14 +223,26 @@ def replay(
                 ext=row.ext,
                 doc_date=row.doc_date,
             )
+            layout = layout_of(row.drive_id) if needs_layouts else None
             if is_under(row.path, special.inbox):
                 code = inbox_code_of(row.path) if inbox_code_of is not None else None
                 alias = special.inbox if code is not None else None
-                if _matches(rule, rec, folded, alias)[0]:
+                c = check(rule, rec, folded, alias, layout)
+                if c.matched:
                     result.inbox += 1
+                elif c.waiting:
+                    unread.append(row.drive_id)
+                continue
+            c = check(free, rec, folded, None, layout)
+            if c.waiting:
+                # every other condition holds: only page 1 is missing. Not a non-match.
+                reason = (layout_blocked(row.drive_id) if layout_blocked else None) or NOT_READ
+                result.not_checked.append(NotChecked(row.path, reason))
+                if reason == NOT_READ:
+                    unread.append(row.drive_id)
                 continue
             result.checked += 1
-            if not _matches(free, rec, folded)[0]:
+            if not c.matched:
                 continue
             result.matched += 1
             try:
@@ -167,16 +254,30 @@ def replay(
             else:
                 result.different.append(ReplayHit(row.drive_id, row.path, path_rule))
             for r in earlier:
-                if _matches(r, rec, folded)[0]:
+                if _matches(r, rec, folded, None, layout)[0]:
                     result.shadowed.append((row.drive_id, r.id))
                     break
+    if candidates is not None:
+        # a document without one of the zone's words in its text cannot match: checked
+        left = max(0, len(candidates) - evaluated) if result.truncated else 0
+        result.checked = max(0, result.total - left - len(result.not_checked))
+    result.reading = len(unread)
+    if unread and want_layouts is not None:
+        want_layouts(unread)
     return result
 
 
-def _why(rule: Rule, rec: FileRecord, folded_text: str, inbox_alias: str | None, special) -> str:
+def _why(
+    rule: Rule,
+    rec: FileRecord,
+    folded_text: str,
+    inbox_alias: str | None,
+    special,
+    layout: Page1Layout | None = None,
+) -> str:
     when = rule.when
-    ok, timed_out = _matches(rule, rec, folded_text, inbox_alias)
-    if ok:
+    c = check(rule, rec, folded_text, inbox_alias, layout)
+    if c.matched:
         parts = [
             f"word ‘{raw}’"
             for raw, term in zip(when.text_contains, rule._folded_terms, strict=True)
@@ -184,11 +285,28 @@ def _why(rule: Rule, rec: FileRecord, folded_text: str, inbox_alias: str | None,
         ][:1]
         if when.filename_matches is not None:
             parts.append(f"file name matches {when.filename_matches}")
+        if when.zone is not None and layout is not None:
+            hit = next(
+                (
+                    raw
+                    for raw, term in zip(
+                        when.zone.text_contains, rule._folded_zone_terms, strict=True
+                    )
+                    if any(
+                        term in fold(ln.text)
+                        for ln in lines_in_zone(layout.lines, when.zone.box, ZONE_MARGIN)
+                    )
+                ),
+                None,
+            )
+            parts.append(f"word ‘{hit}’ in the area")
         if not parts and when.folder_is is not None:
             parts.append(f"in the folder ‘{when.folder_is}’")
         return ", ".join(parts) or "no condition: matches every file"
-    if timed_out:
+    if c.timed_out:
         return "file name check took too long"
+    if c.waiting:
+        return "page 1 has not been read yet"
     if when.folder_is is not None:
         # the folder test is first in _matches: failing it, nothing else was looked at
         here = {nfc(_parent(rec.path)).casefold()}
@@ -201,6 +319,16 @@ def _why(rule: Rule, rec: FileRecord, folded_text: str, inbox_alias: str | None,
             return f"not in the folder ‘{when.folder_is}’"
     if rule._folded_terms and not any(t in folded_text for t in rule._folded_terms):
         return "no word found"
+    if when.zone is not None and (rec.ext or "").lower() not in BARCODE_EXTS:
+        return "no page 1 to look at in this kind of file"
+    if (
+        when.filename_matches is not None
+        and rule._regex is not None
+        and not rule._regex.search(nfc(rec.name or ""))
+    ):
+        return "file name does not match"
+    if when.zone is not None:
+        return "no word found in the area"
     return "file name does not match"
 
 
@@ -210,14 +338,17 @@ def explain(
     rules: list[Rule],
     special: SpecialFolders,
     inbox_alias: str | None,
+    layout: Page1Layout | None = None,
 ) -> list[RuleExplain]:
-    """For each rule: does it match this document, why (not), and which fields it wins."""
+    """For each rule: does it match this document, why (not), and which fields it wins.
+    For a rule with a zone, the page-1 lines in the zone (so a missed match can be
+    explained)."""
     folded = fold(text)
-    s = suggest(rec, text, rules, special, inbox_alias)
+    s = suggest(rec, text, rules, special, inbox_alias, layout=layout)
     out: list[RuleExplain] = []
     for rule in rules:
         mine = f"rule:{rule.id}"
-        matched = _matches(rule, rec, folded, inbox_alias)[0]
+        matched = _matches(rule, rec, folded, inbox_alias, layout)[0]
         wins = [
             label
             for label, source in (
@@ -229,7 +360,19 @@ def explain(
         ]
         if matched and any(src == mine for src in s.tag_sources.values()):
             wins.append("tags")
+        zone = rule.when.zone
+        zone_lines = (
+            [ln.text for ln in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN)]
+            if zone is not None and layout is not None
+            else []
+        )
         out.append(
-            RuleExplain(rule.id, matched, _why(rule, rec, folded, inbox_alias, special), wins)
+            RuleExplain(
+                rule.id,
+                matched,
+                _why(rule, rec, folded, inbox_alias, special, layout),
+                wins,
+                zone_lines,
+            )
         )
     return out

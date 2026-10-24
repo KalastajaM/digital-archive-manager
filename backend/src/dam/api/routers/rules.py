@@ -18,6 +18,8 @@ from dam.api.schemas import (
     RulesOut,
     RulesStateIn,
     RulesStateOut,
+    ZoneDraftIn,
+    ZoneDraftOut,
 )
 from dam.app import App
 from dam.codes.model import format_validation
@@ -99,17 +101,34 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
         order,
         app.settings.special_folders,
         inbox_code_of=app.repo.inbox_code_of,
+        layouts_for=app.repo.layouts_for,
+        want_layouts=app.content.want_layouts,
+        layout_blocked=app.content.layout_blocked,
     )
+    if result.reading:
+        app.wake_indexer()  # the layout pass reads what the rule needs next
     out = asdict(result)
     out["shadowed"] = [{"drive_id": d, "rule_id": r} for d, r in result.shadowed]
     return out
+
+
+@router.post("/draft-zone", response_model=ZoneDraftOut)
+def draft_zone(app: AppDep, body: ZoneDraftIn) -> dict:
+    """The rule a box drawn on page 1 starts from (see ``ZoneDraftOut``). 400 when page 1
+    is not read yet, the box is empty or holds no usable word; 404 for an unknown
+    document. Changes nothing."""
+    return asdict(app.inbox.draft_zone(body.drive_id, body.box, body.sender))
 
 
 @router.post("/explain", response_model=list[RuleExplainOut])
 def explain_document(app: AppDep, body: RuleExplainIn) -> list:
     """For one document: which rules match, why (not), and what each one wins."""
     rec, text, alias = app.inbox.rule_context(body.drive_id)
-    return [asdict(x) for x in explain(rec, text, app.rules, app.settings.special_folders, alias)]
+    layout = app.repo.layout_for(rec.drive_id)
+    return [
+        asdict(x)
+        for x in explain(rec, text, app.rules, app.settings.special_folders, alias, layout)
+    ]
 
 
 @router.put("/state", response_model=RulesStateOut)

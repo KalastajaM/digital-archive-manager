@@ -146,6 +146,7 @@ class App:
             rule_record=self.rule_record,
             rules_dir=lambda: self.rules_dir,
             data_dir=self.app_paths.data_dir,
+            want_layouts=lambda ids: self.content.want_layouts(ids),
         )
         self.layout = LayoutService(
             self.paths,

@@ -23,6 +23,8 @@ log = logging.getLogger(__name__)
 IDLE_WAIT_S = 30.0
 MAX_READERS = 3
 MAX_BYTES = 256 * 1024 * 1024
+LAYOUT_NO_OCR = "no OCR engine"  # why a file's page 1 cannot be read now
+LAYOUT_MISSING = "missing"
 MAX_REASON = 500  # characters of an error reason kept in the index
 
 
@@ -330,8 +332,8 @@ class ContentIndexer:
             self._wanted.update(drive_ids)
 
     def layout_blocked(self, drive_id: str) -> str | None:
-        """Why page 1 of this file cannot be read right now ("no OCR engine installed"),
-        else None."""
+        """Why page 1 of this file cannot be read right now (``LAYOUT_NO_OCR`` or
+        ``LAYOUT_MISSING``), else None."""
         with self._lock:
             return self._layout_why.get(drive_id)
 
@@ -414,7 +416,10 @@ class ContentIndexer:
             return False
         error = out.get("error")
         if isinstance(error, UnsupportedContent) and str(error) == ocr.NO_OCR:
-            self._retry_layout_later(rec.drive_id, ocr.NO_OCR)  # not "read": try again later
+            self._retry_layout_later(rec.drive_id, LAYOUT_NO_OCR)  # not "read": try later
+            return True
+        if isinstance(error, OSError):  # gone, or a cloud file that cannot be fetched now
+            self._retry_layout_later(rec.drive_id, LAYOUT_MISSING)
             return True
         if error is not None:
             log.warning("page-1 reading failed for %s: %r", rec.path, error)

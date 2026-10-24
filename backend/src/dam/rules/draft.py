@@ -7,7 +7,7 @@ rarest remaining word is ticked, and the folder and name are turned into pattern
 import re
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import PurePosixPath
 
@@ -34,6 +34,18 @@ class RuleDraft:
     tags: list[str]
     tray: str | None
     payee: str | None
+
+
+@dataclass
+class ZoneDraft(RuleDraft):
+    """A draft made from a box on page 1: the rule's ``when`` is ``folder_is`` (the inbox)
+    and a ``zone`` of ``box`` with one ticked word; ``lines`` are the page-1 lines that lie
+    in the box, ``sender`` the sender the rule identifies."""
+
+    box: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+    folder_is: str | None = None
+    lines: list[str] = field(default_factory=list)
+    sender: str | None = None
 
 
 def _literal(s: str) -> str:
@@ -76,8 +88,8 @@ def draft_rule(
     *,
     text: str,
     original_name: str,
-    filed_name: str,
-    filed_folder: str,
+    filed_name: str | None,
+    filed_folder: str | None,
     doc_date: date | None,
     tags: list[str],
     tray: str | None,
@@ -85,15 +97,22 @@ def draft_rule(
     doc_frequency: Callable[[str], float],
     taken_ids: set[str],
 ) -> RuleDraft | None:
-    """The rule a click on "make a rule" starts from, or None when no usable word is left."""
+    """The rule a click on "make a rule" starts from, or None when no usable word is left.
+    Without ``filed_folder`` / ``filed_name`` (a document still in the inbox) the draft has
+    no folder / name."""
     words = [w for w in _tokens("", text) if doc_frequency(w) <= MAX_FREQUENCY][:MAX_WORDS]
     if not words:
         return None
     pick = min(range(len(words)), key=lambda i: (doc_frequency(words[i]), i))
-    folder = folder_pattern(filed_folder, doc_date)
-    name = name_pattern(PurePosixPath(filed_name).stem, PurePosixPath(original_name).stem, doc_date)
-    check_template(folder)
-    check_template(name)
+    folder = folder_pattern(filed_folder, doc_date) if filed_folder else None
+    name = (
+        name_pattern(PurePosixPath(filed_name).stem, PurePosixPath(original_name).stem, doc_date)
+        if filed_name
+        else None
+    )
+    for template in (folder, name):
+        if template is not None:
+            check_template(template)
     return RuleDraft(
         id=_unique(_slug(words[pick]), taken_ids),
         words=[DraftWord(w, i == pick) for i, w in enumerate(words)],

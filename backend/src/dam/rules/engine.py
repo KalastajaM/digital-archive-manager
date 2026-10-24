@@ -11,7 +11,8 @@ from typing import Literal
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
 from dam.core.paths import nfc
-from dam.index.repo import FileRecord
+from dam.extract.layout import ZONE_MARGIN, Page1Layout, lines_in_zone
+from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.rules.fields import DetectedFields, detect_fields
 from dam.rules.model import Rule, fold
 
@@ -68,6 +69,9 @@ class Suggestion:
     star: bool | None = None
     important: bool | None = None
     marks_unclear: bool = False
+    # a rule with a page-1 area could not be checked because page 1 has not been read yet
+    # (its other conditions matched): the Inbox says "Reading page 1..."
+    waiting_for_page1: bool = False
 
 
 class TemplateError(ValueError):
@@ -100,11 +104,37 @@ def _parent(rel: str) -> str:
     return "" if parent == "." else parent
 
 
-def _matches(
-    rule: Rule, rec: FileRecord, folded_text: str, inbox_alias: str | None = None
-) -> tuple[bool, bool]:
-    """Return ``(matched, regex_timed_out)``. ``folder_is`` matches the file's real
-    folder, or ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder)."""
+@dataclass
+class Check:
+    matched: bool = False
+    timed_out: bool = False
+    # every other condition matched but the rule's page-1 area could not be checked,
+    # because page 1 of this file has not been read yet
+    waiting: bool = False
+
+
+def zone_matches(rule: Rule, layout: Page1Layout) -> bool:
+    """Any of the zone's words is in a line of page 1 that lies in the zone's box."""
+    zone = rule.when.zone
+    assert zone is not None
+    for line in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN):
+        folded = fold(line.text)
+        if any(t in folded for t in rule._folded_zone_terms):
+            return True
+    return False
+
+
+def check(
+    rule: Rule,
+    rec: FileRecord,
+    folded_text: str,
+    inbox_alias: str | None = None,
+    layout: Page1Layout | None = None,
+) -> Check:
+    """Does ``rule`` match? ``folder_is`` matches the file's real folder, or
+    ``inbox_alias`` (the inbox, for a file in a filing code's inbox folder). A rule with a
+    ``zone`` needs ``layout`` (page 1's lines); without one it does not match, and
+    ``waiting`` says whether reading page 1 could change that."""
     when = rule.when
     if when.folder_is is not None:
         want = nfc(when.folder_is).strip("/").casefold()
@@ -112,16 +142,33 @@ def _matches(
         if inbox_alias is not None:
             here.add(nfc(inbox_alias).strip("/").casefold())
         if want not in here:
-            return False, False
+            return Check()
     if rule._folded_terms and not any(t in folded_text for t in rule._folded_terms):
-        return False, False
+        return Check()
     if rule._regex is not None:
         try:
             if not rule._regex.search(nfc(rec.name or ""), timeout=_REGEX_TIMEOUT):
-                return False, False
+                return Check()
         except TimeoutError:
-            return False, True
-    return True, False
+            return Check(timed_out=True)
+    if when.zone is not None:
+        if layout is None:
+            return Check(waiting=(rec.ext or "").lower() in BARCODE_EXTS)
+        if not zone_matches(rule, layout):
+            return Check()
+    return Check(matched=True)
+
+
+def _matches(
+    rule: Rule,
+    rec: FileRecord,
+    folded_text: str,
+    inbox_alias: str | None = None,
+    layout: Page1Layout | None = None,
+) -> tuple[bool, bool]:
+    """Return ``(matched, regex_timed_out)`` (see ``check``)."""
+    c = check(rule, rec, folded_text, inbox_alias, layout)
+    return c.matched, c.timed_out
 
 
 def check_template(template: str, allowed: frozenset[str] = _ALLOWED_KEYS) -> None:
@@ -200,10 +247,12 @@ def suggest(
     rules: list[Rule],
     special: SpecialFolders | None = None,
     inbox_alias: str | None = None,
+    layout: Page1Layout | None = None,
 ) -> Suggestion:
     """``inbox_alias``: for a file directly in a filing code's inbox folder, the inbox,
     so a rule whose ``folder_is`` is the inbox matches it as well (a rule naming the
-    code's folder itself still matches only that folder)."""
+    code's folder itself still matches only that folder). ``layout``: page 1's lines,
+    for rules with a ``zone``."""
     special = special or SpecialFolders()
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
@@ -229,12 +278,15 @@ def suggest(
 
     folded_text = fold(text)
     matching: list[Rule] = []
+    waiting = False
     for r in rules:
-        ok, timed_out = _matches(r, rec, folded_text, inbox_alias)
-        if timed_out:
+        c = check(r, rec, folded_text, inbox_alias, layout)
+        if c.timed_out:
             sources.append(f"rule:{r.id} (regex timeout)")
-        elif ok:
+        elif c.matched:
             matching.append(r)
+        elif c.waiting:
+            waiting = True
 
     conventional = matches_convention(name)
     new_name: str | None = None
@@ -293,4 +345,5 @@ def suggest(
         folder_source=f"rule:{folder_rule.id}" if folder_rule is not None else None,
         tag_sources=tag_sources,
         tray_source=f"rule:{tray_rule.id}" if tray_rule and tray_rule.then.tray else None,
+        waiting_for_page1=waiting,
     )

@@ -2,7 +2,7 @@
 put them in a tray, in collections and give them a note."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -15,14 +15,16 @@ from dam.codes.apply import apply_codes, apply_ticks, codes_for, known_reads
 from dam.codes.model import FilingCode
 from dam.collections.service import CollectionService, check_collection_name
 from dam.config import SpecialFolders
+from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchivePaths
+from dam.extract.layout import check_box, lines_in_zone
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.notes import NotesService, check_note
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
-from dam.rules.draft import draft_rule
-from dam.rules.engine import Suggestion, stem_and_ext, suggest
+from dam.rules.draft import ZoneDraft, draft_rule
+from dam.rules.engine import Suggestion, _parent, stem_and_ext, suggest
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
 from dam.rules.model import RESERVED_IDS, Rule
@@ -166,6 +168,7 @@ class InboxService:
         rule_record: RuleRecord | None = None,
         rules_dir: Callable[[], Path] | None = None,
         data_dir: Path | None = None,
+        want_layouts: Callable[[Collection[str]], None] | None = None,
     ) -> None:
         self.paths = paths
         self.repo = repo
@@ -181,6 +184,8 @@ class InboxService:
         self._rule_record = rule_record
         self._rules_dir = rules_dir
         self._data_dir = data_dir
+        # asks the layout pass to read page 1 of these files next (a rule needs it)
+        self._want_layouts = want_layouts
 
     def list(self) -> list[InboxEntry]:
         """Files directly in the inbox or in a filing code's inbox folder (no folders,
@@ -394,6 +399,51 @@ class InboxService:
             return None
         return RuleOffer(kind, rule_id, req.drive_id, draft)
 
+    def draft_zone(self, drive_id: str, box: list[float], sender: str | None = None) -> ZoneDraft:
+        """The rule a box drawn on page 1 starts from: ``when.zone`` is the box with the
+        most distinctive word of the lines in it ticked (the draft's usual choice), and
+        ``when.folder_is`` is the inbox. A document that is filed already gives the folder
+        and name it has now as patterns; one in the inbox gives none. ``InvalidRequest``
+        when the box is bad, page 1 is not read yet, or no usable word is in the box."""
+        rec = self._record(drive_id)
+        try:
+            area = check_box(box)
+        except ValueError as e:
+            raise InvalidRequest(str(e)) from e
+        layout = self.repo.layout_for(drive_id)
+        if layout is None:
+            if self._want_layouts is not None:
+                self._want_layouts([drive_id])
+            raise InvalidRequest("Page 1 of this document has not been read yet.")
+        lines = [ln.text for ln in lines_in_zone(layout.lines, area)]
+        if not lines:
+            raise InvalidRequest("There is no text in that area of page 1.")
+        filed = not self._in_inbox(rec)
+        folder = _parent(rec.path) if filed else ""
+        name = rec.name or ""
+        doc_date = parse_doc_date(name) or rec.doc_date
+        draft = draft_rule(
+            text="\n".join(lines),
+            original_name="",
+            filed_name=name if filed and name else None,
+            filed_folder=folder or None,
+            doc_date=doc_date,
+            tags=self.tags.for_file(drive_id) if filed else [],
+            tray=None,
+            payee=None,
+            doc_frequency=make_doc_frequency(*self._frequency_counter()),
+            taken_ids={r.id for r in self._rules()} | RESERVED_IDS,
+        )
+        if draft is None:
+            raise InvalidRequest("There is no usable word in that area of page 1.")
+        return ZoneDraft(
+            **{f: getattr(draft, f) for f in draft.__dataclass_fields__},
+            box=area,
+            folder_is=self.special.inbox,
+            lines=lines,
+            sender=sender,
+        )
+
     def _frequency_counter(self) -> tuple[Callable[[str], int], Callable[[], int]]:
         """(documents matching a word, documents in all): filed documents with text,
         outside the configured special folders. Counted in SQL, lazily."""
@@ -530,7 +580,10 @@ class InboxService:
     def _suggest(self, rec: FileRecord, text: str) -> Suggestion:
         # a file in a code's inbox folder counts as in the inbox for ``folder_is``
         alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
-        found = suggest(rec, text, self._rules(), self.special, inbox_alias=alias)
+        layout = self.repo.layout_for(rec.drive_id)
+        found = suggest(rec, text, self._rules(), self.special, inbox_alias=alias, layout=layout)
+        if found.waiting_for_page1 and self._want_layouts is not None:
+            self._want_layouts([rec.drive_id])
         if found.folder is None and self._in_inbox(rec):
             folder = similar_folder(self.repo.engine, rec.drive_id, rec.name or "", text, rec.ext)
             if folder is not None:
