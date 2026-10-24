@@ -79,9 +79,12 @@ Where a word sits on page 1 says far more than whether it is in the text at all.
 
 **What is kept.** For page 1: each line of text with its box, as fractions of the page
 width and height (origin top left, after the page's own rotation), plus the page size.
-Lines rather than words, because both OCR engines give lines directly and a page has
-tens of them, not hundreds (builder's call, also the storage format: a JSON list per
-file is enough).
+Lines first, with a box per word inside each line (added after the first release: a box
+drawn tightly around one word must not return its whole line). The storage format is a
+JSON list per file; a line's `words` (`text`, `box`) is optional, and a row without it
+(read earlier) is matched by line. Word boxes come from the text layer's character boxes,
+Tesseract's `image_to_data` and, for Apple Vision (line boxes only through ocrmac), an
+estimate that shares the line's width in proportion to the characters.
 
 **Where it comes from.**
 
@@ -144,10 +147,11 @@ A rule can require text in an area of page 1:
     name: "{doc_date:%Y%m%d}_Pohjola"
 ```
 
-- `zone.text_contains`: any of these words in a line of page 1 that lies in the box, by
-  the same folding as today (`fold` in `rules/model.py`). All other conditions in `when`
+- `zone.text_contains`: any of these words in the text of the box (the words of page 1
+  that are at least half inside the box, joined per line; a line without word boxes
+  counts whole), by the same folding as today (`fold` in `rules/model.py`). All other conditions in `when`
   still have to match too.
-- **Tolerance**: a line lies in the box when at least half of its area is inside the box
+- **Tolerance**: a word (or a line without word boxes) lies in the box when at least half of its area is inside the box
   grown by a margin on every side (builder's call: about 3 % of the page). Scans shift a
   few millimetres between letters; a small margin is what makes a box usable.
 - A file without a current layout row does not match a zone condition. In the Inbox

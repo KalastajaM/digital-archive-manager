@@ -343,3 +343,106 @@ def test_exif_orientation_is_applied_before_ocr(tmp_path: Path, monkeypatch):
     ImageOcrExtractor(LANGS).extract(jpg)
     read_layout(jpg, "jpg", jpg.read_bytes(), ocr_used=True, languages=LANGS)
     assert seen == [(20, 40), (20, 40)]
+
+
+# --- word positions -----------------------------------------------------------------
+
+
+def test_words_are_kept_in_json_and_old_rows_without_them_still_load():
+    from dam.extract.layout import Word
+
+    line = Line(
+        "Asiakastiedote 1.11.2019",
+        (0.1, 0.1, 0.6, 0.13),
+        [Word("Asiakastiedote", (0.1, 0.1, 0.35, 0.13)), Word("1.11.2019", (0.4, 0.1, 0.6, 0.13))],
+    )
+    back = Page1Layout.from_json(Page1Layout([line], "text-layer").lines_json(), "text-layer")
+    assert back.lines == [line]
+    old = '[{"text": "Pohjola", "box": [0.1, 0.1, 0.3, 0.13]}]'
+    assert Page1Layout.from_json(old, "vision").lines == [Line("Pohjola", (0.1, 0.1, 0.3, 0.13))]
+    assert Page1Layout.from_json(old, "vision").lines[0].words == []
+
+
+def test_in_a_box_only_the_words_inside_count_and_old_lines_count_whole():
+    from dam.extract.layout import Word
+
+    line = Line(
+        "Asiakastiedote 1.11.2019",
+        (0.1, 0.1, 0.6, 0.13),
+        [Word("Asiakastiedote", (0.1, 0.1, 0.35, 0.13)), Word("1.11.2019", (0.4, 0.1, 0.6, 0.13))],
+    )
+    box = (0.08, 0.09, 0.37, 0.14)
+    (found,) = lines_in_zone([line], box)
+    assert found.text == "Asiakastiedote" and found.box == (0.1, 0.1, 0.35, 0.13)
+    # all words inside: the line as it is; no word inside: nothing
+    assert lines_in_zone([line], (0, 0, 1, 1)) == [line]
+    assert lines_in_zone([line], (0.7, 0.5, 0.9, 0.6)) == []
+    # a line without word positions is matched whole, as before
+    old = Line(line.text, line.box)
+    assert [ln.text for ln in lines_in_zone([old], box)] == ["Asiakastiedote 1.11.2019"]
+
+
+def test_a_box_around_one_word_of_a_text_layer_line_gives_only_that_word(tmp_path: Path):
+    pdf = make_words_pdf(
+        tmp_path / "w.pdf", [(50, 700, "Asiakastiedote"), (138, 700, "1.11.2019")]
+    )
+    doc = pypdfium2.PdfDocument(str(pdf))
+    try:
+        page = doc[0]
+        lines = text_layer_lines(page)
+        page.close()
+    finally:
+        doc.close()
+    (line,) = lines
+    assert line.text == "Asiakastiedote 1.11.2019"
+    assert [w.text for w in line.words] == ["Asiakastiedote", "1.11.2019"]
+    first = line.words[0].box
+    assert first[2] < line.words[1].box[0]
+    around = (first[0] - 0.005, first[1] - 0.005, first[2] + 0.005, first[3] + 0.005)
+    assert [ln.text for ln in lines_in_zone(lines, around, margin=0.0)] == ["Asiakastiedote"]
+
+
+def test_text_layer_words_split_on_real_spaces_too(tmp_path: Path):
+    pdf = make_layout_pdf(tmp_path / "p.pdf", [(50, 550, "Pohjola Vakuutus Oy")])
+    doc = pypdfium2.PdfDocument(str(pdf))
+    try:
+        page = doc[0]
+        (line,) = text_layer_lines(page)
+        page.close()
+    finally:
+        doc.close()
+    assert [w.text for w in line.words] == ["Pohjola", "Vakuutus", "Oy"]
+    assert line.words[0].box[0] == pytest.approx(line.box[0])
+    assert line.words[-1].box[2] == pytest.approx(line.box[2])
+
+
+def test_tesseract_keeps_word_boxes(monkeypatch):
+    import pytesseract
+
+    data = {
+        "text": ["Pohjola", "Vakuutus"],
+        "block_num": [1, 1],
+        "par_num": [1, 1],
+        "line_num": [1, 1],
+        "left": [100, 300],
+        "top": [50, 52],
+        "width": [150, 200],
+        "height": [40, 38],
+    }
+    monkeypatch.setattr(pytesseract, "image_to_data", lambda *a, **k: data)
+    monkeypatch.setattr(ocr, "engine", lambda: ocr.TESSERACT)
+    page = ocr.ocr_page(Image.new("RGB", (1000, 2000)), LANGS)
+    (line,) = page.lines
+    assert [w.text for w in line.words] == ["Pohjola", "Vakuutus"]
+    assert line.words[0].box == pytest.approx((0.1, 0.025, 0.25, 0.045))
+    assert line.words[1].box == pytest.approx((0.3, 0.026, 0.5, 0.045))
+
+
+def test_vision_word_boxes_are_estimated_by_character_count(monkeypatch):
+    _fake_vision(monkeypatch, [("ab cdef", 0.9, [0.0, 0.9, 0.7, 0.05])])
+    page = ocr.ocr_page(Image.new("RGB", (10, 10)), LANGS)
+    (line,) = page.lines
+    # 7 characters in all: "ab" takes 2/7 of the width, "cdef" the last 4/7
+    assert [w.text for w in line.words] == ["ab", "cdef"]
+    assert line.words[0].box == pytest.approx((0.0, 0.05, 0.2, 0.1))
+    assert line.words[1].box == pytest.approx((0.3, 0.05, 0.7, 0.1))

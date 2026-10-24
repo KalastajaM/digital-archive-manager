@@ -15,7 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from dam.extract.base import ExtractedText, UnsupportedContent
-from dam.extract.layout import Line, Page1Layout, clamp_box
+from dam.extract.layout import Line, Page1Layout, Word, clamp_box, estimate_words
 from dam.extract.picture import page_picture
 
 log = logging.getLogger(__name__)
@@ -106,7 +106,9 @@ def _vision_lines(image: Image.Image, languages: list[str]) -> list[Line]:
     lines = []
     for text, _confidence, (x, y, w, h) in results:
         # Vision boxes are fractions of the image with the origin at the bottom left
-        lines.append(Line(text, clamp_box((x, 1 - (y + h), x + w, 1 - y))))
+        box = clamp_box((x, 1 - (y + h), x + w, 1 - y))
+        # ocrmac gives line boxes only: the word boxes are an estimate (estimate_words)
+        lines.append(Line(text, box, estimate_words(text, box)))
     return lines
 
 
@@ -136,6 +138,15 @@ def _tesseract_lines(image: Image.Image, languages: list[str]) -> list[Line]:
         )
     lines = []
     for words in grouped.values():
+        word_boxes = [
+            Word(
+                w[0],
+                clamp_box(
+                    (w[1] / width, w[2] / height, (w[1] + w[3]) / width, (w[2] + w[4]) / height)
+                ),
+            )
+            for w in words
+        ]
         box = clamp_box(
             (
                 min(w[1] for w in words) / width,
@@ -144,7 +155,7 @@ def _tesseract_lines(image: Image.Image, languages: list[str]) -> list[Line]:
                 max(w[2] + w[4] for w in words) / height,
             )
         )
-        lines.append(Line(" ".join(w[0] for w in words), box))
+        lines.append(Line(" ".join(w[0] for w in words), box, word_boxes))
     return lines
 
 
