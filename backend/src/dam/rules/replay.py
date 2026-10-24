@@ -133,7 +133,7 @@ class RuleExplain:
     areas: list[Area] = field(default_factory=list)
 
 
-def _without_folder(rule: Rule) -> Rule:
+def without_folder(rule: Rule) -> Rule:
     """``rule`` as if it had no ``folder_is`` (private compiled parts carry over)."""
     if rule.when.folder_is is None:
         return rule
@@ -281,13 +281,13 @@ def replay(
     like one without a layout. The time budget applies as ever. ``scores`` then holds the
     scores of the rule's matches (the lowest) and of its best non-matches."""
     started = time.monotonic()
-    free = _without_folder(rule)
+    free = without_folder(rule)
     earlier: list[Rule] = []
     for r in rules:
         if r is rule:
             break
         earlier.append(r)
-    earlier = [_without_folder(r) for r in earlier if r.then.folder or r.then.name]
+    earlier = [without_folder(r) for r in earlier if r.then.folder or r.then.name]
     others = [special.ongoing, special.important, special.quarantine]
     where = (
         files.c.index_state == "indexed",
