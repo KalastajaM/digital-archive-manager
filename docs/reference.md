@@ -292,8 +292,14 @@ All in the data folder under `config/`:
   `text_contains`, one matching term is enough. `{doc_date}` and `{year}` need a
   detected date; without one, the rule's template is not applied.
   `zones` is a list of areas of page 1, and every one must match. A zone matches when one
-  of its words is in a line of page 1 that lies at least half inside its box (grown by
-  3 % of the page on every side). A zone has `box` and either `text_contains` or, for a
+  of its words is in the text of the box: the words of page 1 that lie at least half
+  inside the box (grown by 3 % of the page on every side), joined per line, so a term of
+  several words matches across consecutive words of one line. Page 1 keeps a box for each
+  word (the text layer; Tesseract's word boxes; for Apple Vision, whose engine gives line
+  boxes only, an estimate that shares the line's width in proportion to the characters).
+  A page-1 layout read before word boxes were kept has none: such a line counts as a whole
+  when half of it is inside the box, until the file's content changes and page 1 is read
+  again (existing rows are not re-read). A zone has `box` and either `text_contains` or, for a
   picture area, `image` (see "Picture areas" below). A rule with more zones has to come
   before a plainer rule for the same sender. `{person}` needs a person
   (set by you, or found in the address area); without one the template is not applied.

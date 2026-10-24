@@ -491,8 +491,13 @@ class InboxService:
         ``place_above``: the learned rule that matches the document already, if any (the
         new rule goes directly above it, so the more specific rule is tried first).
         ``InvalidRequest`` when a box is bad, page 1 is not read yet, or no usable word is
-        in a box."""
+        in a box.
+        ``sender`` is who the letter is from: left out, the document's own From assignment
+        (if it has one) is used, so the rule sheet can start from it."""
         rec = self._record(drive_id)
+        if sender is None and self._assignments is not None:
+            assigned = self._assignments.get([drive_id]).get(drive_id)
+            sender = assigned.sender if assigned is not None else None
         if not boxes and not picture_boxes:
             raise InvalidRequest("Draw at least one box.")
         try:
