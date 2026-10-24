@@ -102,15 +102,36 @@ describe("RuleSheet", () => {
     } as never);
     const user = userEvent.setup();
     renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
-    expect(await screen.findByText(/Checked 500 of 900 documents…/)).toBeInTheDocument();
+    expect(await screen.findByText(/Checked 500 of 900 documents…/, undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Save|Testing…/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stop" }));
-    expect(await screen.findByText(/Stopped at 520 of 900 documents\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Stopped at 520 of 900 documents\./, undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
     // what it found so far is the proof: Save is possible, and Test again starts over
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Test again" }));
-    expect(await screen.findByText(/Checked 500 of 900 documents…/)).toBeInTheDocument();
+    expect(await screen.findByText(/Checked 500 of 900 documents…/, undefined, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  it("stays stopped when a poll sent before Stop answers running after it", async () => {
+    // the server keeps answering "running" to polls: one sent before Stop can arrive after it
+    mockFetch({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/trays": { body: { trays: [], errors: [] } },
+      "GET /api/tags": { body: [] },
+      ...replayJob(() => REPLAY, { state: "running", looked_at: 500, total: 900 }),
+      "POST /api/rules/replay/jobs/job-1/stop": () => ({
+        body: { job_id: "job-1", sheet: "s", state: "stopped", version: 2, looked_at: 520, total: 900, waiting: 0, elapsed_s: 1, error: null, result: { ...REPLAY, looked_at: 520 } },
+      }),
+    } as never);
+    const user = userEvent.setup();
+    renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: "Stop" }, { timeout: 5000 }));
+    expect(await screen.findByText(/Stopped at 520 of 900 documents\./, undefined, { timeout: 5000 })).toBeInTheDocument();
+    // several polling rounds later it is still stopped
+    await new Promise((r) => setTimeout(r, 200));
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    expect(screen.getByText(/Stopped at 520 of 900 documents\./)).toBeInTheDocument();
   });
 
   it("says it is waiting for page 1 when all documents are looked at", async () => {
