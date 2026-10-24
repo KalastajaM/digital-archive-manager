@@ -13,6 +13,15 @@ All notable changes are listed here. The format follows
   and its score. In any preview with the box tool, picture rules that did not match are
   drawn dashed with the score they got on that document, or the reason there is none, so you
   can find out why a rule found nothing.
+- The test of a rule looks at the likely documents first, so real matches show up early
+  instead of in folder order: the documents you set as from the rule's sender, then the
+  documents in the same folder as the one you drew the areas on, then (for a picture
+  area) the rest by how much their first page looks like the picture, using tiny
+  grayscale thumbnails of the page 1 pictures that dam keeps in one file in the cache
+  folder (`page1-thumbs.npz`; it can be rebuilt any time). The order only changes when
+  things show up: the counts are the same as in any other order. On a test archive of
+  11 000 files, the first five matches of a rule with a word area and a picture came after
+  205 documents instead of 8 243. "Test the rest" goes on in the same order.
 - **Test the rest**: when the test stops at its time limit, it continues from where it
   stopped and adds to the result instead of starting over.
 - The Index sheet shows how far reading page 1 has come, how many documents wait because

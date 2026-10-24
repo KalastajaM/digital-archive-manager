@@ -105,6 +105,12 @@ describe("RuleSheet", () => {
     expect(sent.rule.then).toEqual({ folder: "20. Health/{year}", name: "{doc_date}_{stem}", tags: ["invoice"], tray: null, payee: null });
   });
 
+  it("tells the test which document the areas were drawn on, so its folder is tested early", async () => {
+    const { calls } = setup(REPLAY, { nearDriveId: "doc-9" });
+    await screen.findByText(/Matches 4/);
+    expect((posts(calls, "/api/rules/replay")[0].body as { near_drive_id: string }).near_drive_id).toBe("doc-9");
+  });
+
   it("Save with differences asks first, then saves", async () => {
     const { calls, user, onClose } = setup();
     await screen.findByText(/Matches 4/);

@@ -116,6 +116,7 @@ export function RuleSheet({
   filed,
   before,
   samplePage = false,
+  nearDriveId,
   onClose,
 }: {
   initial: RuleDraft | ZoneDraft | Rule;
@@ -128,6 +129,8 @@ export function RuleSheet({
   before?: Rule;
   /** Settings: show the rule's areas on a sample page, where they can be changed. */
   samplePage?: boolean;
+  /** The document the areas were drawn on: the test looks at the documents in its folder early. */
+  nearDriveId?: string;
   onClose: () => void;
 }) {
   const draft = isDraft(initial);
@@ -248,7 +251,7 @@ export function RuleSheet({
   const run = (mine: number) => {
     const key = ruleKey;
     runReplay(
-      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove },
+      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, nearDriveId },
       {
         onSuccess: (result) => {
           if (mine !== epoch.current || key !== latestKey.current) return;
@@ -285,7 +288,7 @@ export function RuleSheet({
     let polls = 0;
     const ask = () =>
       runBaseline(
-        { rule: ruleInOf(before), replaces: before.id },
+        { rule: ruleInOf(before), replaces: before.id, nearDriveId },
         {
           onSuccess: (result) => {
             if (!live) return;
@@ -352,7 +355,7 @@ export function RuleSheet({
     const first = proof?.replay;
     if (!first || first.next_after == null) return;
     rest.mutate(
-      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, after: first.next_after },
+      { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, after: first.next_after, nearDriveId },
       {
         onSuccess: (more) => {
           if (key !== latestKey.current) return;

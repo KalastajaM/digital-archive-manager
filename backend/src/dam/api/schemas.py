@@ -1526,9 +1526,12 @@ class RuleReplayIn(_In):
     replaces: str | None = None
     # for a new rule: the learned rule it goes directly above (see ``ZoneDraftOut``)
     place_above: str | None = None
-    # continue a replay that stopped at its time budget: the ``next_after`` it gave. Only
-    # the files whose path comes after it are looked at; the counts are for that part.
+    # continue a replay that stopped at its time budget: the ``next_after`` it gave (an
+    # opaque cursor, good for a little while). Only the documents it had not reached are
+    # looked at; the counts are for that part.
     after: str | None = None
+    # the document the areas were drawn on: the documents in its folder are looked at early
+    near_drive_id: str | None = None
 
 
 class AreasForIn(_In):
@@ -1696,8 +1699,11 @@ class ReplayOut(BaseModel):
     not_checked: list[NotCheckedOut]
     # how many page-1 reads are queued by this replay (post it again to see them)
     reading: int
-    # when ``truncated``: send it as ``after`` to test the rest, from where this stopped
+    # when ``truncated``: send it as ``after`` to test the rest, from where this stopped (an
+    # opaque cursor: the order of the test is remembered for a little while)
     next_after: str | None = None
+    # the filed documents gone through, those that could not be checked included
+    looked_at: int = 0
     marked: MarkedOut | None = None  # only for a rule with a sender (first call only)
     # only for a rule with picture areas: the lowest scores of its matches and the highest
     # of its near misses (documents where only a picture area failed, within 0.15 of the

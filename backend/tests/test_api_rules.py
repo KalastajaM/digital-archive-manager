@@ -168,6 +168,23 @@ def test_replay_with_replaces_uses_the_old_position(app, api, fake_archive):
     assert unknown.status_code == 404
 
 
+def test_replay_takes_the_document_the_areas_were_drawn_on_and_an_opaque_cursor(
+    app, api, fake_archive
+):
+    for i in range(3):
+        add_filed(app, fake_archive, f"11. Bills/2026/2026020{i + 1}_Fortum.pdf", f"a{i}", "Fortum")
+    add_filed(app, fake_archive, "20. Home/20260301_Fortum.pdf", "z", "Fortum")
+    body = {"rule": rule_body("fortum"), "near_drive_id": "z"}
+    first = post(api, "/api/rules/replay", body)
+    assert first.status_code == 200, first.text
+    assert (first.json()["matched"], first.json()["looked_at"]) == (4, 4)
+    # an unknown document is not a reason to refuse the test
+    assert post(api, "/api/rules/replay", {**body, "near_drive_id": "nope"}).status_code == 200
+    # a cursor from a test the server no longer has
+    stale = post(api, "/api/rules/replay", {**body, "after": "r1.deadbeef.2"})
+    assert stale.status_code == 400 and "run it again" in stale.json()["error"]
+
+
 def test_replay_invalid_rule_is_400(api):
     r = post(api, "/api/rules/replay", {"rule": {"id": "x", "when": {"filename_matches": "("}}})
     assert r.status_code == 400 and "invalid regex" in r.json()["error"]
