@@ -182,7 +182,7 @@ API and does not open the browser.
 | `dam archives forget NAME [--switch-to OTHER]` | Remove an archive from the list; nothing is deleted, the paths are printed |
 | `dam archives where NAME` | Print an archive's data folder and archive folder |
 | `dam scan` | Sync the file index with the archive |
-| `dam index [--limit N]` | Extract text / OCR for files not yet indexed |
+| `dam index [--limit N]` | Extract text / OCR for files not yet indexed, and read page 1 of inbox files (older documents get theirs in the background) |
 | `dam errors [--all] [--retry]` | List the files whose text could not be indexed, with the reason (`--all`: also unsupported files); `--retry` queues every listed file for indexing again |
 | `dam inbox` | List inbox files with suggested name, folder and sources |
 | `dam add FILE... [--yes]` | Copy files into the inbox (the originals stay) |
