@@ -857,6 +857,20 @@ export const usePage1Backfill = () => {
   });
 };
 
+/** How many PDFs with a text layer have page 1 read per minute (scans and slow downloads keep
+ * the indexer's pace). */
+export const usePage1Speed = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (readsPerMinute: number) =>
+      put<{ reads_per_minute: number }>("/api/settings/page1-speed", { reads_per_minute: readsPerMinute }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.status });
+      void client.invalidateQueries({ queryKey: keys.indexErrors });
+    },
+  });
+};
+
 /** The tags in use that start with ``prefix`` (most used first), for the tag field's
  * suggestions; the previous list stays while the next one loads. */
 export const useTagSuggestions = (prefix: string, limit: number, enabled = true) =>

@@ -13,6 +13,13 @@ All notable changes are listed here. The format follows
   and its score. In any preview with the box tool, picture rules that did not match are
   drawn dashed with the score they got on that document, or the reason there is none, so you
   can find out why a rule found nothing.
+- Page 1 of PDFs that have a text layer is read much faster than the indexer's 30 files a
+  minute (300 a minute unless you choose another speed in Settings → Indexing or on the
+  Index sheet, **Page 1 reading speed**): it needs no OCR. Scans, photos and any read that
+  is slow, such as a Google Drive file that has to be downloaded first, keep the indexer's
+  pace. The Index sheet's estimate of the time left now adds the two ("about 18 min left
+  (5 000 PDFs with text at 300 a minute, 30 scans and photos at 30 a minute)"). Settings has
+  a new section, Indexing, with this speed and the switch for reading older documents.
 - The test of a rule looks at the likely documents first, so real matches show up early
   instead of in folder order: the documents you set as from the rule's sender, then the
   documents in the same folder as the one you drew the areas on, then (for a picture

@@ -690,8 +690,15 @@ class Page1ProgressOut(BaseModel):
     backfill: bool
     # of those not read, the ones waiting because they cannot be read now, and why
     blocked: list[Page1BlockedOut] = []
-    # reads finished per minute lately (None: too few to say), to estimate the time left
+    # reads finished per minute lately (None: too few to say)
     rate_per_min: float | None = None
+    # what is left to read, by kind, and how fast each kind is read (a minute's worth of
+    # reads): PDFs with a text layer are read quickly, scans and photos (OCR) and slow
+    # downloads at the indexer's pace. The time left follows from these.
+    text_left: int = 0
+    scans_left: int = 0
+    text_per_min: int = 0
+    scans_per_min: int = 0
 
 
 class StatusOut(BaseModel):
@@ -1849,6 +1856,16 @@ class Page1BackfillIn(_In):
 
 class Page1BackfillOut(BaseModel):
     enabled: bool
+
+
+class Page1SpeedIn(_In):
+    """How many PDFs with a text layer have page 1 read per minute (1 to 6000)."""
+
+    reads_per_minute: int
+
+
+class Page1SpeedOut(BaseModel):
+    reads_per_minute: int
 
 
 class PersonIO(_In):
