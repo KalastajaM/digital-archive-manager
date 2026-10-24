@@ -539,9 +539,13 @@ moves them into `##. To Delete` as `dam rule picture <name>.png`. You empty that
 yourself, like for any file you mark for deletion. The result has an **Undo** (also in
 Activity), which puts the pictures back into `config/rules/areas`; it refuses if a picture
 with the same name has been saved there since. Only pictures no rule uses can be moved. If
-your rules folder and your archive are on different disks, the move is refused with a
-message, because dam only renames files and never copies and deletes: move them by hand
-then. Moving or resizing a picture area cuts the picture again from
+your rules folder and your archive are on different disks (for example the archive is in
+Google Drive), dam copies each picture into `##. To Delete`, checks the copy against the
+original, and only then removes its own copy from the rules folder; the plan says
+"copied, then removed from dam's settings folder". These pictures are dam's own files, not
+documents from your archive. If anything fails, the copy stays in `##. To Delete` and the
+original stays too, and the message says so. Undo across disks copies the picture back and
+leaves the one in `##. To Delete` for you to empty. Moving or resizing a picture area cuts the picture again from
 the document you changed it on.
 
 #### Seeing the areas

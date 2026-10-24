@@ -4,7 +4,9 @@ The two exceptions to "no delete" are ``unlink_symlink``, which removes only a
 symbolic link that lives inside the given publish root (``##. Ongoing`` or
 ``##. Important``; never its target), and ``remove_empty_dir``, which removes only an
 empty folder strictly inside that root (at any depth, never the root itself) after
-deleting its genuine Finder ``.DS_Store`` file. Each call names one root; the
+deleting its genuine Finder ``.DS_Store`` file. A third, ``remove_moved_picture``, removes
+dam's own copy of a rule picture in its settings folder (never an archive file) after the
+picture was copied to the archive and the copy was verified. Each call names one root; the
 executor passes the root the path lies in (``ArchivePaths.in_publish_root``), and
 nothing else is ever passed.
 """
@@ -12,6 +14,7 @@ nothing else is ever passed.
 import ctypes
 import ctypes.util
 import errno
+import hashlib
 import os
 import shutil
 import stat
@@ -93,14 +96,16 @@ def rename_case_only(src: Path, dst: Path) -> None:
 
 DIFFERENT_DISKS = (
     "The rules' picture folder and the archive are on different disks, so the file cannot be "
-    "moved between them. dam never copies and deletes: move it yourself."
+    "renamed into place; it is copied instead."
 )
+PICTURE_RENAME = "rename"
+PICTURE_COPY = "copy"
 
 
 def move_between_folders(src: Path, dst: Path) -> None:
     """Move the file ``src`` to the new name ``dst`` without overwriting (``rename_excl``).
-    Only a rename: on different disks that cannot work, and the file is left where it is
-    (``OpFailed`` says so) because the app never deletes."""
+    Only a rename: on different disks that cannot work (``OpFailed`` says so and the file
+    is left where it is); a rule picture crossing disks takes ``copy_picture`` instead."""
     try:
         rename_excl(src, dst)
     except FileExistsError:
@@ -109,6 +114,55 @@ def move_between_folders(src: Path, dst: Path) -> None:
         if e.errno == errno.EXDEV or getattr(e, "winerror", None) == 17:
             raise OpFailed(DIFFERENT_DISKS) from None
         raise
+
+
+def file_sha256(path: Path) -> str:
+    """The sha256 of the regular file ``path`` (a link is refused, not followed)."""
+    if not stat.S_ISREG(os.lstat(path).st_mode):
+        raise OpFailed(f"{path.name} is not a plain file.")
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(_COPY_CHUNK):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def copy_picture(src: Path, dst: Path, sha256: str) -> None:
+    """Copy the rule picture ``src`` to the new file ``dst`` (exclusive create, fsync,
+    ``copy_file``), then check that ``dst`` has the size and sha256 of ``src`` and that
+    both are ``sha256`` (the hash journaled before). ``src`` is only read. On any
+    failure nothing is removed: ``dst`` may remain, ``src`` stays."""
+    if file_sha256(src) != sha256:
+        raise OpFailed(f"{src.name} changed since it was planned, so it is not copied.")
+    size = copy_file(src, dst)
+    if os.lstat(dst).st_size != size or file_sha256(dst) != sha256:
+        raise OpFailed(
+            f"The copy {dst.name} does not match {src.name}. Both files stay where they are;"
+            " dam never deletes: remove the copy yourself."
+        )
+
+
+def remove_moved_picture(source: Path, areas_dir: Path, copy: Path, sha256: str) -> None:
+    """Remove the rule picture ``source`` after it was copied to ``copy`` and the copy was
+    verified. This is dam's own app-made file, never an archive file. It is removed only
+    if ``source`` is a regular file (not a link) directly inside ``areas_dir`` (a real
+    folder, not a link), ``copy`` is a different regular file, and both have the content
+    hash ``sha256``. Anything else is refused and both files stay."""
+    if _fold_parts(resolve(source.parent, strict=True)) != _fold_parts(
+        resolve(areas_dir, strict=True)
+    ) or stat.S_ISLNK(os.lstat(areas_dir).st_mode):
+        raise GuardError(f"{source.name} is not directly inside the rules' picture folder")
+    st, st_copy = os.lstat(source), os.lstat(copy)
+    if not stat.S_ISREG(st.st_mode) or not stat.S_ISREG(st_copy.st_mode):
+        raise GuardError(f"{source.name} and its copy must both be plain files")
+    if os.path.samestat(st, st_copy):
+        raise GuardError(f"{source.name} and its copy are the same file")
+    if file_sha256(source) != sha256 or file_sha256(copy) != sha256:
+        raise GuardError(f"{source.name} and its copy are not the same content; both stay")
+    # CHECK-THEN-ACT WINDOW: the file could be swapped between the hash and unlink(); the
+    # worst case is dam's own crop in its own settings folder, which unlink() of a
+    # folder or link cannot reach (a link is removed itself, never its target).
+    source.unlink()
 
 
 def same_disk(a: Path, b: Path) -> bool:

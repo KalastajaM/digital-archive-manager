@@ -1,21 +1,22 @@
 """Unused rule pictures moved from config/rules/areas into the quarantine folder through the
 operation layer: planned, previewed, journaled and undone; never a delete."""
 
+import hashlib
 import sys
 
 import pytest
 from sqlalchemy import select, update
 
 from dam.db.tables import operations
-from dam.ops import planner as planner_mod
-from dam.ops.model import GuardError, Op, OpKind, Plan
-from dam.ops.primitives import DIFFERENT_DISKS
+from dam.ops import primitives
+from dam.ops.model import GuardError, Op, OpFailed, OpKind, Plan
 from dam.rules.model import Rule
 from dam.services.errors import InvalidRequest
 from test_api import LOCAL_ORIGIN, make_client, post
 
 QUARANTINE = "##. To Delete"
 PNG = b"\x89PNG\r\n\x1a\n-test-bytes"
+HASH = hashlib.sha256(PNG).hexdigest()
 
 
 @pytest.fixture
@@ -208,14 +209,6 @@ def test_putting_a_picture_back_is_for_undo_only(app, areas, fake_archive):
     assert (fake_archive.root / QUARANTINE / "dam rule picture a.png").exists()
 
 
-def test_different_disks_are_refused_at_preview(app, areas, fake_archive, monkeypatch):
-    put(areas, "old-1.png")
-    monkeypatch.setattr(planner_mod, "same_disk", lambda a, b: False)
-    with pytest.raises(GuardError, match=DIFFERENT_DISKS[:30]):
-        move(app, ["old-1.png"], dry_run=True)
-    assert (areas / "old-1.png").exists()
-
-
 def test_a_rename_across_disks_that_fails_at_act_time_leaves_the_file(
     app, areas, fake_archive, monkeypatch
 ):
@@ -233,6 +226,173 @@ def test_a_rename_across_disks_that_fails_at_act_time_leaves_the_file(
     assert result.failed is not None and "different disks" in result.error
     assert (areas / "old-1.png").read_bytes() == PNG
     assert [r["state"] for r in rows(app) if r["kind"] == "picture_to_quarantine"] == ["failed"]
+
+
+def test_the_journal_records_a_rename_and_the_content_hash(app, areas, fake_archive):
+    put(areas, "old-1.png")
+    move(app, ["old-1.png"])
+    (row,) = [r for r in rows(app) if r["kind"] == "picture_to_quarantine"]
+    assert (row["method"], row["content_hash"]) == ("rename", HASH)
+
+
+# --- across disks (simulated: the same-disk check says no) ---------------------------------
+
+
+@pytest.fixture
+def two_disks(monkeypatch):
+    monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
+
+
+def copied(archive, name="old-1.png"):
+    return archive.root / QUARANTINE / f"dam rule picture {name}"
+
+
+def test_across_disks_the_preview_says_copied_then_removed_and_changes_nothing(
+    app, areas, fake_archive, two_disks
+):
+    put(areas, "old-1.png")
+    result = move(app, ["old-1.png"], dry_run=True)
+    assert result.error is None
+    assert [op.note for op in result.done] == ["copied, then removed from dam's settings folder"]
+    assert (areas / "old-1.png").exists() and not list(quarantine(fake_archive).iterdir())
+    assert rows(app) == []
+
+
+def test_across_disks_the_picture_is_copied_verified_and_then_removed(
+    app, areas, fake_archive, two_disks
+):
+    put(areas, "old-1.png")
+    result = move(app, ["old-1.png"])
+    assert result.error is None and result.failed is None
+    assert copied(fake_archive).read_bytes() == PNG
+    assert not (areas / "old-1.png").exists()
+    (row,) = [r for r in rows(app) if r["kind"] == "picture_to_quarantine"]
+    assert (row["state"], row["method"], row["content_hash"]) == ("done", "copy", HASH)
+
+
+def test_across_disks_a_taken_name_gets_a_suffix_and_nothing_is_overwritten(
+    app, areas, fake_archive, two_disks
+):
+    existing = fake_archive.add(f"{QUARANTINE}/dam rule picture old-1.png", b"keep me")
+    put(areas, "old-1.png")
+    assert move(app, ["old-1.png"]).error is None
+    assert existing.read_bytes() == b"keep me"
+    assert copied(fake_archive, "old-1_2.png").read_bytes() == PNG
+
+
+def test_a_copy_that_does_not_verify_leaves_both_files(
+    app, areas, fake_archive, two_disks, monkeypatch
+):
+    real = primitives.copy_file
+
+    def bad_copy(src, dst, *a, **kw):
+        real(src, dst, *a, **kw)
+        dst.write_bytes(b"corrupted on the way")  # test-only: a bad copy
+        return len(PNG)
+
+    monkeypatch.setattr(primitives, "copy_file", bad_copy)
+    put(areas, "old-1.png")
+    result = move(app, ["old-1.png"])
+    assert result.failed is not None and "does not match" in result.error
+    assert "remove the copy yourself" in result.error
+    assert (areas / "old-1.png").read_bytes() == PNG
+    assert copied(fake_archive).read_bytes() == b"corrupted on the way"
+    assert [r["state"] for r in rows(app) if r["kind"] == "picture_to_quarantine"] == ["failed"]
+
+
+def test_a_copy_that_stops_part_way_leaves_both_files(
+    app, areas, fake_archive, two_disks, monkeypatch
+):
+    def broken(src, dst, *a, **kw):
+        dst.write_bytes(b"\x89PNG")  # test-only: a cut-short copy
+        raise OpFailed("The copy stopped part way")
+
+    monkeypatch.setattr(primitives, "copy_file", broken)
+    put(areas, "old-1.png")
+    result = move(app, ["old-1.png"])
+    assert "part way" in result.error and "original stays" in result.error
+    assert (areas / "old-1.png").read_bytes() == PNG and copied(fake_archive).exists()
+
+
+def test_a_source_that_changed_since_the_plan_is_not_copied(
+    app, areas, fake_archive, two_disks, monkeypatch
+):
+    put(areas, "old-1.png")
+    real = primitives.file_sha256
+    calls = []
+
+    def changing(path):
+        calls.append(path)
+        if len(calls) == 2:  # after the journal snapshot, before the copy
+            path.write_bytes(b"edited meanwhile")
+        return real(path)
+
+    monkeypatch.setattr(primitives, "file_sha256", changing)
+    result = move(app, ["old-1.png"])
+    assert result.failed is not None and "changed since" in result.error
+    assert (areas / "old-1.png").read_bytes() == b"edited meanwhile"
+    assert not copied(fake_archive).exists()
+
+
+def test_a_failed_removal_after_a_verified_copy_keeps_both_and_says_so(
+    app, areas, fake_archive, two_disks, monkeypatch
+):
+    def refuse(*a, **kw):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(primitives, "remove_moved_picture", refuse)
+    put(areas, "old-1.png")
+    result = move(app, ["old-1.png"])
+    assert "Both files exist" in result.error and "was not removed" in result.error
+    assert (areas / "old-1.png").read_bytes() == PNG and copied(fake_archive).read_bytes() == PNG
+    assert [r["state"] for r in rows(app) if r["kind"] == "picture_to_quarantine"] == ["failed"]
+
+
+def test_the_removal_refuses_a_hash_mismatch_and_anything_but_a_plain_file_in_the_folder(
+    app, areas, fake_archive, tmp_path
+):
+    source = put(areas, "old-1.png")
+    copy = tmp_path / "copy.png"
+    copy.write_bytes(PNG)
+    with pytest.raises(GuardError, match="not the same content"):
+        primitives.remove_moved_picture(source, areas, copy, "0" * 64)  # wrong hash
+    copy.write_bytes(b"different")
+    with pytest.raises(GuardError, match="not the same content"):
+        primitives.remove_moved_picture(source, areas, copy, HASH)  # the copy differs
+    copy.write_bytes(PNG)
+    outside = tmp_path / "stray.png"
+    outside.write_bytes(PNG)
+    with pytest.raises(GuardError, match="not directly inside"):
+        primitives.remove_moved_picture(outside, areas, copy, HASH)
+    sub = areas / "sub"
+    sub.mkdir()
+    (sub / "deep.png").write_bytes(PNG)
+    with pytest.raises(GuardError, match="not directly inside"):
+        primitives.remove_moved_picture(sub / "deep.png", areas, copy, HASH)
+    with pytest.raises(GuardError, match="same file"):
+        primitives.remove_moved_picture(source, areas, source, HASH)
+    assert source.exists() and outside.exists() and (sub / "deep.png").exists() and copy.exists()
+    primitives.remove_moved_picture(source, areas, copy, HASH)
+    assert not source.exists() and copy.exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs symbolic links")
+def test_the_removal_refuses_a_link_and_a_linked_folder(app, areas, tmp_path):
+    copy = tmp_path / "copy.png"
+    copy.write_bytes(PNG)
+    target = tmp_path / "target.png"
+    target.write_bytes(PNG)
+    (areas / "link.png").symlink_to(target)
+    with pytest.raises(GuardError, match="plain files"):
+        primitives.remove_moved_picture(areas / "link.png", areas, copy, HASH)
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "a.png").write_bytes(PNG)
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    with pytest.raises(GuardError):
+        primitives.remove_moved_picture(linked / "a.png", linked, copy, HASH)
+    assert target.exists() and (real / "a.png").exists()
 
 
 # --- undo ---------------------------------------------------------------------------------
@@ -360,3 +520,117 @@ def test_recovery_sees_a_move_that_never_happened(app, areas, fake_archive):
     assert [(e.state, e.error) for e in result.entries if e.batch_id == batch] == [
         ("failed", "interrupted before execution")
     ]
+
+
+# --- across disks: undo and recovery ------------------------------------------------------
+
+
+def test_undo_across_disks_copies_back_and_leaves_the_copy_in_to_delete(
+    app, areas, fake_archive, two_disks
+):
+    put(areas, "old-1.png")
+    batch = move(app, ["old-1.png"]).batch_id
+    preview = app.activity.preview_undo(batch)
+    assert [op.note for op in preview] == ["copied back; the copy in To Delete stays"]
+    outcome = app.activity.undo(batch)
+    assert outcome.batch.error is None and outcome.batch.failed is None
+    assert [op.note for op in outcome.batch.done] == ["copied back; the copy in To Delete stays"]
+    assert (areas / "old-1.png").read_bytes() == PNG
+    assert copied(fake_archive).read_bytes() == PNG  # an undo never removes an archive file
+    by_kind = {r["kind"]: r for r in rows(app)}
+    assert by_kind["picture_to_quarantine"]["state"] == "undone"
+    assert (by_kind["picture_back"]["method"], by_kind["picture_back"]["content_hash"]) == (
+        "copy",
+        HASH,
+    )
+    assert app.area_pictures.unused(app.rules) == ["old-1.png"]
+
+
+def test_undo_across_disks_refuses_a_taken_name_and_an_edited_copy(
+    app, areas, fake_archive, two_disks
+):
+    put(areas, "old-1.png")
+    batch = move(app, ["old-1.png"]).batch_id
+    put(areas, "old-1.png", b"a newer picture")
+    with pytest.raises(GuardError, match="already in the rules' areas folder"):
+        app.activity.undo(batch)
+    assert (areas / "old-1.png").read_bytes() == b"a newer picture"
+    (areas / "old-1.png").rename(areas / "other.png")  # test-only: free the name again
+    copied(fake_archive).write_bytes(PNG[:-1] + b"!")  # same size, different content
+    with pytest.raises(OpFailed, match="changed since"):
+        app.activity.undo(batch)
+    assert not (areas / "old-1.png").exists()
+
+
+def _after_a_move(app, areas, fake_archive):
+    put(areas, "old-1.png")
+    batch = move(app, ["old-1.png"]).batch_id
+    return batch
+
+
+def test_recovery_finishes_a_copy_by_removing_the_source_when_the_copy_verifies(
+    app, areas, fake_archive, two_disks
+):
+    batch = _after_a_move(app, areas, fake_archive)
+    put(areas, "old-1.png")  # as if the process stopped before the source was removed
+    _planned(app, batch)
+    result = app.executor.recover()
+    assert [(e.state, e.error) for e in result.entries] == [("done", None)]
+    assert not (areas / "old-1.png").exists()
+    assert copied(fake_archive).read_bytes() == PNG
+
+
+def test_recovery_leaves_both_when_the_copy_is_partial_or_the_source_differs(
+    app, areas, fake_archive, two_disks
+):
+    batch = _after_a_move(app, areas, fake_archive)
+    copied(fake_archive).write_bytes(PNG[:6])  # test-only: a cut-short copy
+    put(areas, "old-1.png")
+    _planned(app, batch)
+    result = app.executor.recover()
+    assert [e.state for e in result.entries] == ["failed"]
+    assert (areas / "old-1.png").read_bytes() == PNG
+    assert copied(fake_archive).read_bytes() == PNG[:6]
+
+
+def test_recovery_does_not_remove_a_source_that_differs_from_the_verified_copy(
+    app, areas, fake_archive, two_disks
+):
+    batch = _after_a_move(app, areas, fake_archive)
+    put(areas, "old-1.png", b"a newer picture of the same name")
+    _planned(app, batch)
+    result = app.executor.recover()
+    assert [e.state for e in result.entries] == ["failed"]
+    assert (areas / "old-1.png").read_bytes() == b"a newer picture of the same name"
+    assert copied(fake_archive).read_bytes() == PNG
+
+
+def test_recovery_sees_a_copy_that_never_started_and_one_that_is_complete(
+    app, areas, fake_archive, two_disks
+):
+    batch = _after_a_move(app, areas, fake_archive)
+    _planned(app, batch)  # copy verified and source gone: the move did happen
+    assert [e.state for e in app.executor.recover().entries] == ["done"]
+
+    put(areas, "old-2.png")
+    batch = move(app, ["old-2.png"]).batch_id
+    copied(fake_archive, "old-2.png").unlink()  # test-only: the copy never happened
+    put(areas, "old-2.png")
+    _planned(app, batch)
+    entries = [e for e in app.executor.recover().entries if e.batch_id == batch]
+    assert [(e.state, e.error) for e in entries] == [("failed", "interrupted before execution")]
+    assert (areas / "old-2.png").exists()
+
+
+def test_recovery_of_a_copy_back_never_removes_the_archive_file(
+    app, areas, fake_archive, two_disks
+):
+    batch = _after_a_move(app, areas, fake_archive)
+    app.activity.undo(batch)
+    with app.engine.begin() as conn:
+        conn.execute(
+            update(operations).where(operations.c.kind == "picture_back").values(state="planned")
+        )
+    entries = [e for e in app.executor.recover().entries if e.kind == "picture_back"]
+    assert [e.state for e in entries] == ["done"]
+    assert copied(fake_archive).exists() and (areas / "old-1.png").exists()

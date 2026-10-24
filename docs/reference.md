@@ -375,12 +375,17 @@ lists `unused_pictures` (files in `areas` no loaded rule uses) and `default_min_
 the quarantine folder as `dam rule picture <name>` (a taken name gets `_2`, ...) and
 answers like `POST /api/quarantine` (a batch with `done`, `failed`, `error`, `batch_id`);
 with `dry_run: true` it only resolves the plan. Every name must be in `unused_pictures` at
-that moment (400 otherwise, nothing planned); a link, or folders on different disks, is also
-a 400. It runs as two operation kinds: `picture_to_quarantine` (`src` is the `abs:` path of a
+that moment (400 otherwise, nothing planned); a link is also a 400. On two disks the plan notes say so. It runs as two operation kinds: `picture_to_quarantine` (`src` is the `abs:` path of a
 regular file directly inside `config/rules/areas`, never a link; `dst` the quarantine folder)
 and its undo-only inverse `picture_back` (refused when the name is taken in `areas`, or the
-file in `##. To Delete` was changed or moved). Both are plain renames that never overwrite.
-The journal keeps the file name only, not the path on this computer. Undo goes through
+file in `##. To Delete` was changed or moved). Both never overwrite. On one disk they are
+renames. On two disks `picture_to_quarantine` copies the file (exclusive create, fsync, size
+and sha256 of the copy checked) and only then removes the original with `remove_moved_picture`,
+and `picture_back` copies it back and leaves the file in `##. To Delete`. The journal records
+the `method` (`rename` or `copy`) and the `content_hash` (sha256), which undo and crash
+recovery use: after a crash, a verified copy with the original still there is finished by
+removing the original only if its hash matches, and a partial or unverified copy leaves both
+files and is reported. The journal keeps the file name only, not the path on this computer. Undo goes through
 `POST /api/activity/{batch_id}/undo`, as for every batch.
 A suggestion's `areas` has `kind: "image"` with `score` and, in `lines`, where the picture
 fits best.
@@ -671,13 +676,19 @@ The user guide's "What dam never does" gives the short version. The details:
   only a genuine Finder cache file (regular, a single link, Finder's magic bytes, no
   Drive id), only inside that folder, never anywhere else. Outside the archive the app
   removes only its own export cache (`prune_exports`), the stale files of its own page-1
-  picture cache (`prune_page1_pictures`, see "Picture areas") and its reminder LaunchAgent
-  plist (`--uninstall`). An AST test pins these few calls, and only the operation layer writes
+  picture cache (`prune_page1_pictures`, see "Picture areas"), its reminder LaunchAgent
+  plist (`--uninstall`) and, when the rules folder and the archive are on different disks,
+  its own copy of a rule picture in `config/rules/areas` after the picture was copied to
+  `##. To Delete` and the copy was verified by size and content hash
+  (`remove_moved_picture`: only a regular file, not a link, directly inside the real
+  `areas` folder, with the same hash as the copy; the owner's rule is that "no delete" is
+  for archive files, not for dam's own temporary or cached files). An AST test pins these few calls, and only the operation layer writes
   to the archive. One more thing is removed, by undo and only when it is certain it is the
   app's own: an empty folder that a New folder / layout batch made (identity-checked,
   never one with anything in it). Undo of "Choose files…"/`dam add` *moves* the copy to
   `##. To Delete`. Rule pictures no rule uses (`config/rules/areas`) are moved to
-  `##. To Delete` the same way, as `dam rule picture <name>`, previewed and undoable; the
+  `##. To Delete` the same way (renamed on one disk, copied and then removed across disks),
+  as `dam rule picture <name>`, previewed and undoable; the
   one file source outside the archive other than `dam add` is exactly that folder.
 - **"Is this still the folder/link the app made?" is answered by file identity.** The
   app records, right after it creates a folder or link, its device number, inode number

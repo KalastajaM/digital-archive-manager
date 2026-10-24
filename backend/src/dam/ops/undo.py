@@ -24,7 +24,7 @@ from dam.db.engine import write_tx
 from dam.db.tables import made_folders, ongoing_entries, operations
 from dam.index.driveid import read_drive_id
 from dam.index.locks import INDEX_LOCK
-from dam.ops import identity
+from dam.ops import identity, primitives
 from dam.ops.guards import fold_parts, is_under, join, parent, rebase
 from dam.ops.model import (
     UNDO_ORIGIN,
@@ -76,6 +76,8 @@ class JournalEntry:
     created: float
     finished: float | None
     label: str | None = None
+    method: str | None = None  # rule pictures: "rename" or "copy"
+    content_hash: str | None = None  # rule pictures: sha256 of the file
 
 
 @dataclass
@@ -327,6 +329,8 @@ def _check_unchanged(ex: Executor, row: JournalEntry, now_at: str) -> None:
             raise OpFailed(f"{now_at} is missing, so this cannot be undone.") from None
         if not stat.S_ISREG(st.st_mode) or (row.size is not None and st.st_size != row.size):
             raise OpFailed(f"{now_at} has changed since, so this cannot be undone.")
+        if row.content_hash is not None and primitives.file_sha256(p) != row.content_hash:
+            raise OpFailed(f"{now_at} has changed since, so this cannot be undone.")
     elif kind is OpKind.MKDIR:  # only folders that replaced a vacated entry (_replaces)
         p = ex.paths.abs(now_at)
         if (
@@ -534,6 +538,8 @@ def _happened(ex: Executor, e: JournalEntry) -> bool | None:
                 here, there = ex.paths.abs(e.dst), Path(ex.areas_dir) / e.src
             else:  # back: the file was in the archive (src) and goes to the areas folder
                 here, there = Path(ex.areas_dir) / e.dst, ex.paths.abs(e.src)
+            if e.method == primitives.PICTURE_COPY:
+                return _picture_copy_happened(ex, e, here, there)
             if os.path.lexists(there) and not os.path.lexists(here):
                 return False  # still where it was
             if os.path.lexists(here) and not os.path.lexists(there):
@@ -567,6 +573,35 @@ def _happened(ex: Executor, e: JournalEntry) -> bool | None:
     if src_here and not dst_here:
         return False
     return None
+
+
+def _picture_copy_happened(ex: Executor, e: JournalEntry, here: Path, there: Path) -> bool | None:
+    """A rule picture that crosses disks is copied (``here``, the new file) and the original
+    (``there``) is removed afterwards. Both files present with the journaled hash: the
+    copy is complete, so a move out of the areas folder is finished by removing the
+    original (only if its hash matches too). A copy that is partial or does not match,
+    or anything else unclear: both files are left alone and the row is reported. A copy
+    back never removes anything: it is done when the new file has the journaled hash."""
+    if e.content_hash is None:
+        return None
+    here_ok = (
+        os.path.lexists(here)
+        and stat.S_ISREG(os.lstat(here).st_mode)
+        and primitives.file_sha256(here) == e.content_hash
+    )
+    if not os.path.lexists(there):
+        return True if here_ok else None
+    if not os.path.lexists(here):
+        return False  # nothing was copied
+    if not here_ok:
+        return None  # a partial or different copy: leave both
+    if OpKind(e.kind) is OpKind.PICTURE_BACK:
+        return True  # the archive file stays, always
+    try:
+        primitives.remove_moved_picture(there, Path(ex.areas_dir), here, e.content_hash)
+    except (OSError, OpFailed, GuardError):
+        return None
+    return True
 
 
 def _same_entry(dst: Path, e: JournalEntry) -> bool:

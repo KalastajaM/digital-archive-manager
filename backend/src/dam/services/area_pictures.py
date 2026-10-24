@@ -131,7 +131,7 @@ class AreaPictures:
 
     def unused(self, rules: list[Rule]) -> list[str]:
         """The picture files in ``areas`` that no loaded rule uses (a deleted rule leaves
-        its pictures: nothing outside the archive code's allowed list is ever removed)."""
+        its pictures until they are moved to To Delete)."""
         used = {z.image for r in rules for z in r.when.zones if z.image}
         folder = Path(self.rules_dir()) / AREAS_DIR
         try:
@@ -149,7 +149,8 @@ class AreaPictures:
     ) -> BatchResult:
         """Move the unused pictures ``names`` (files in ``areas``) into the quarantine
         folder as ``dam rule picture <name>``, through the operation layer: previewed with
-        ``dry_run``, journaled, undoable. Never a delete. ``InvalidRequest`` (nothing
+        ``dry_run``, journaled, undoable. Renamed on one disk; across disks copied and verified
+        before dam's own copy is removed (never an archive file). ``InvalidRequest`` (nothing
         planned) when ``names`` is empty or names a picture that a loaded rule uses, or
         that is not there. The list of unused pictures is read under the save lock, so
         no picture is being saved in between."""

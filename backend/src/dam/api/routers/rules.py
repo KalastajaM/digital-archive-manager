@@ -136,7 +136,8 @@ def quarantine_unused_pictures(app: AppDep, body: UnusedPicturesIn):
     """Move picture files no loaded rule uses from ``config/rules/areas`` into the
     quarantine folder (``dam rule picture <name>``): ``dry_run`` shows the plan, otherwise
     the move is journaled and the batch can be undone. 400 when a name is used by a rule,
-    is not there, is a link, or the folders are on different disks; 409 when it fails."""
+    is not there, or is a link; 409 when it fails. On two disks the picture is copied and
+    verified before dam's own copy is removed."""
     return app.area_pictures.quarantine_unused(
         body.names, lambda: app.rules, origin=UI_ORIGIN, dry_run=body.dry_run
     )
