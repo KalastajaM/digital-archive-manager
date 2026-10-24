@@ -1991,8 +1991,16 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 /* ---- Page 1: the Draw a box tool, From and For, People ----------------------------- */
 /* the page image with what lies over it; the layer is exactly the image's size */
 .page-layer { position: relative; display: table; margin: 0 auto; }
-.page-zone { position: absolute; pointer-events: none; border: 1.5px dashed var(--accent); background: var(--accent-soft); opacity: 0.45; border-radius: 2px; }
-.page-zone-address { border-color: var(--orange-text); background: var(--orange-bg); }
+.area { position: absolute; pointer-events: none; border: 1.5px solid var(--accent); background: var(--accent-soft); opacity: 0.5; border-radius: 2px; }
+.area-wins { border-width: 2.5px; opacity: 0.85; }
+.area-off { border-style: dashed; opacity: 0.45; }
+.area-address { border-color: var(--orange-text); background: var(--orange-bg); }
+.area-label { position: absolute; left: 0; bottom: 100%; max-width: 100%; padding: 0 4px; font-size: var(--fs-sm); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel); color: var(--text); border-radius: 2px; }
+.area-line { position: absolute; pointer-events: none; background: var(--accent-soft); outline: 1px solid var(--accent); border-radius: 1px; }
+.area-person { background: var(--orange-bg); outline-color: var(--orange-text); }
+.sample-page { margin: var(--sp-2) 0; max-width: 28rem; }
+.sample-page .page-layer { display: block; }
+.sample-page img { display: block; width: 100%; height: auto; }
 .page-surface { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
 .page-box { position: absolute; pointer-events: none; border: 2px solid var(--accent); background: var(--accent-soft); opacity: 0.8; border-radius: 2px; }
 .page-box-kept { border-style: dashed; opacity: 0.6; }

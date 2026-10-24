@@ -25,6 +25,8 @@ export type Replay = Schemas["ReplayOut"];
 export type RulesData = Schemas["RulesOut"];
 export type RuleExplain = Schemas["RuleExplainOut"];
 export type RulesState = Schemas["RulesStateOut"];
+/** An area of page 1 behind a suggestion or a rule's explanation (see ``AreaOut``). */
+export type Area = Schemas["AreaOut"];
 /** A box drawn on page 1: [x0, y0, x1, y1] as fractions of the page, origin top left. */
 export type PageBox = number[];
 /** Page 1's text lines with their boxes (``read`` false: not read yet, or ``unavailable`` says why). */

@@ -58,7 +58,7 @@ function entry(id: string, name: string, suggested: string, folder: string | nul
       collections: [],
       collection_sources: {},
       codes: [],
-      conflict: false, star: null, important: null, marks_unclear: false, waiting_for_page1: false, people_found: [],
+      conflict: false, star: null, important: null, marks_unclear: false, waiting_for_page1: false, people_found: [], areas: [], person_line: null,
     },
     text_excerpt: "Kotihoito lasku",
     prefill: {},

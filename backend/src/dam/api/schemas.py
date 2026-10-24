@@ -369,6 +369,31 @@ class CodeHitOut(BaseModel):
     unclear: bool
 
 
+class AreaOut(BaseModel):
+    """An area of page 1 behind a suggestion or in a rule's explanation, for drawing it:
+    ``box`` is [x0, y0, x1, y1] as fractions of page 1, origin top left. ``kind``: "text" (a
+    rule's words), "image" (a rule's picture) or "address" (where people are looked for;
+    ``rule_id`` "" is the archive's own area). ``index`` is the area's place in its rule's
+    ``zones``. ``lines`` are the boxes of the lines that matched in it (for an address area,
+    the line where the person was found). ``matched`` is whether the rule matched the
+    document, ``reason`` why this area or the rule did not, ``wins`` whether the rule gave
+    the folder or name, and ``score`` how well a picture matched (0 to 1)."""
+
+    rule_id: str
+    index: int
+    box: list[float]
+    kind: Literal["text", "image", "address"]
+    lines: list[list[float]]
+    score: float | None = None
+    matched: bool = True
+    reason: str | None = None
+    wins: bool = False
+
+
+class PersonLineOut(BaseModel):
+    box: list[float]
+
+
 class SuggestionOut(BaseModel):
     name: str
     folder: str | None
@@ -405,6 +430,10 @@ class SuggestionOut(BaseModel):
     person: str | None = None
     person_source: str | None = None
     people_found: list[str] = []
+    # the areas of page 1 behind the suggestion (every matching rule's, and the address
+    # area used) and the line where the person was found
+    areas: list[AreaOut] = []
+    person_line: PersonLineOut | None = None
 
 
 class FileSuggestionsOut(BaseModel):
@@ -418,6 +447,11 @@ class FileSuggestionsOut(BaseModel):
     tags: list[str]
     tag_sources: dict[str, str]
     sources: list[str]
+    # who the document is for, the areas of page 1 behind the suggestion and the line where
+    # the person was found
+    person: str | None = None
+    areas: list[AreaOut] = []
+    person_line: PersonLineOut | None = None
 
 
 class FileTagsIn(_In):
@@ -1651,6 +1685,7 @@ class RuleExplainOut(BaseModel):
     why: str
     wins: list[str]
     zone_lines: list[list[str]] = []  # page-1 lines in each of the rule's zones
+    areas: list[AreaOut] = []  # the rule's areas for drawing, matched or not
 
 
 # -- settings written to settings.yaml ---------------------------------------------

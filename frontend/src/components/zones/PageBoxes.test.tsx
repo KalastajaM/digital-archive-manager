@@ -314,20 +314,81 @@ describe("Draw a box", () => {
     });
   });
 
-  it("shows the zones of the rule behind the suggestion faintly on page 1", async () => {
-    setup({}, pdf, { suggestion: { name_source: "scan", folder_source: "rule:pohjola" } });
-    const area = await screen.findByTitle("Rule pohjola looks here");
-    expect(area).toHaveStyle({ left: "5%", top: "2%", width: "40%" });
-    expect(screen.getByTitle("Rule pohjola looks for the address here")).toHaveStyle({ left: "10%", top: "20%" });
+  describe("Show areas", () => {
+    const AREA = {
+      rule_id: "pohjola", index: 0, box: [0.05, 0.02, 0.45, 0.14], kind: "text", lines: [[0.08, 0.04, 0.3, 0.07]],
+      score: null, matched: true, reason: null, wins: true,
+    };
+    const OTHER = { ...AREA, rule_id: "plain", index: 0, box: [0.5, 0.5, 0.9, 0.6], lines: [], wins: false };
+    const TITLE = { ...AREA, rule_id: "pohjola", index: 1, box: [0.55, 0.05, 0.95, 0.12], lines: [[0.6, 0.07, 0.9, 0.1]] };
+    const ADDRESS = { ...AREA, rule_id: "", index: 0, box: [0.06, 0.1, 0.52, 0.3], kind: "address", lines: [[0.08, 0.15, 0.3, 0.17]], wins: false };
+    const withAreas = (areas: object[], extra: object = {}) => ({
+      suggestion: { name_source: "scan", folder_source: "rule:pohjola", areas, person: "Tiina", person_line: null, ...extra },
+    });
+
+    it("draws the areas of every matching rule, the winning one stronger, with the lines that matched", () => {
+      setup({}, pdf, withAreas([AREA, OTHER, TITLE]));
+      const win = document.querySelector('[data-area="pohjola:0"]') as HTMLElement;
+      expect(win).toHaveStyle({ left: "5%", top: "2%", width: "40%" });
+      expect(win).toHaveClass("area-wins");
+      expect(document.querySelector('[data-area="plain:0"]')).not.toHaveClass("area-wins");
+      // a rule with several areas numbers them
+      expect(screen.getByTitle("pohjola (area 2)")).toBeInTheDocument();
+      expect(screen.getByTitle("plain")).toBeInTheDocument();
+      expect(screen.getAllByTestId("area-line")).toHaveLength(2);
+      expect(screen.getAllByTestId("area-line")[0]).toHaveStyle({ left: "8%", top: "4%" });
+    });
+
+    it("draws the address area and the line where the person was found", () => {
+      setup({}, pdf, withAreas([ADDRESS], { person_line: { box: [0.08, 0.15, 0.3, 0.17] } }));
+      expect(screen.getByTitle("Address area")).toHaveStyle({ left: "6%", top: "10%" });
+      const line = screen.getByTestId("person-line");
+      expect(line).toHaveStyle({ left: "8%", top: "15%" });
+      expect(line).toHaveTextContent("For: Tiina, found here");
+      // the address area's own lines are the person's line: drawn once
+      expect(screen.queryAllByTestId("area-line")).toHaveLength(0);
+    });
+
+    it("names a rule's own address area", () => {
+      setup({}, pdf, withAreas([{ ...ADDRESS, rule_id: "mail" }]));
+      expect(screen.getByTitle("Address area of mail")).toBeInTheDocument();
+    });
+
+    it("is on by default when there are areas, and the toggle hides and shows them", async () => {
+      const { user } = setup({}, pdf, withAreas([AREA]));
+      const toggle = screen.getByRole("button", { name: "Show areas" });
+      expect(toggle).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTitle("pohjola")).toBeInTheDocument();
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+      expect(screen.queryByTitle("pohjola")).toBeNull();
+      await user.click(toggle);
+      expect(screen.getByTitle("pohjola")).toBeInTheDocument();
+    });
+
+    it("has no toggle when the document has no areas", () => {
+      setup({}, pdf, withAreas([]));
+      expect(screen.queryByRole("button", { name: "Show areas" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Draw a box" })).toBeInTheDocument();
+    });
   });
 
   it("asks for the suggestion itself when the preview was not given one", async () => {
     const { calls } = setup(
-      { "GET /api/files/d1/suggestions": { body: { name_source: "scan", folder_source: "rule:pohjola" } } },
+      {
+        "GET /api/files/d1/suggestions": {
+          body: {
+            name_source: "scan",
+            folder_source: "rule:pohjola",
+            areas: [{ rule_id: "pohjola", index: 0, box: [0.05, 0.02, 0.45, 0.14], kind: "text", lines: [], score: null, matched: true, reason: null, wins: true }],
+            person_line: null,
+          },
+        },
+      },
       pdf,
       {},
     );
-    await screen.findByTitle("Rule pohjola looks here");
+    await screen.findByTitle("pohjola");
     expect(calls.filter((c) => c.url === "/api/files/d1/suggestions")).toHaveLength(1);
   });
 });

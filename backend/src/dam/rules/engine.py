@@ -11,11 +11,11 @@ from typing import Literal
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
 from dam.core.paths import nfc
-from dam.extract.layout import ZONE_MARGIN, Line, Page1Layout, lines_in_zone
+from dam.extract.layout import ZONE_MARGIN, Box, Line, Page1Layout, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.rules.fields import DetectedFields, detect_fields
 from dam.rules.model import Rule, fold
-from dam.rules.people import PeopleContext, detect_people, pick_person
+from dam.rules.people import PeopleContext, detect_people, person_line, pick_person
 
 _COPY_MARKER = re.compile(r"(?:\s*\(\d{1,3}\))+\s*$")
 _ALLOWED_KEYS = frozenset({"doc_date", "year", "stem", "person"})
@@ -35,6 +35,34 @@ class CodeHit:
     via: Literal["folder", "pen", "qr"]
     raw: str | None = None
     unclear: bool = False
+
+
+@dataclass
+class Area:
+    """An area of page 1 that took part in a rule or in finding the person, for drawing on
+    the page. ``kind``: "text" (a rule's words), "image" (a rule's picture, later) or
+    "address" (where people are looked for: ``rule_id`` is "" for the archive's own area).
+    ``lines``: boxes of the lines that matched (the person's line for an address area).
+    ``matched``: the rule matched the document; ``reason``: why this area or its rule did
+    not (a short phrase); ``wins``: the rule gave the document its folder or name;
+    ``score``: for a picture, how well it matched (0 to 1)."""
+
+    rule_id: str
+    index: int
+    box: Box
+    kind: Literal["text", "image", "address"]
+    lines: list[Box] = field(default_factory=list)
+    score: float | None = None
+    matched: bool = True
+    reason: str | None = None
+    wins: bool = False
+
+
+@dataclass
+class PersonLine:
+    """The line of page 1 where the document's person was found."""
+
+    box: Box
 
 
 @dataclass
@@ -83,6 +111,10 @@ class Suggestion:
     person: str | None = None
     person_source: str | None = None
     people_found: list[str] = field(default_factory=list)
+    # the areas of page 1 behind this suggestion: the areas of every rule that matched and
+    # the address area used; ``person_line``: the box of the line where the person was found
+    areas: list[Area] = field(default_factory=list)
+    person_line: PersonLine | None = None
 
 
 class TemplateError(ValueError):
@@ -98,6 +130,8 @@ class PersonResult:
     name: str | None = None
     source: str | None = None
     found: list[str] = field(default_factory=list)
+    zone: Box | None = None  # where people were looked for
+    line: Box | None = None  # where the person was found in it
 
 
 def person_for(
@@ -111,11 +145,23 @@ def person_for(
     zone = rule.person_zone if own_zone else ctx.address_zone
     found = detect_people(layout, zone, ctx.people)
     if ctx.assigned:
-        return PersonResult(ctx.assigned, "assigned", found)
+        return PersonResult(
+            ctx.assigned,
+            "assigned",
+            found,
+            tuple(zone),
+            person_line(layout, zone, ctx.people, ctx.assigned) if ctx.assigned in found else None,
+        )
     one = pick_person(found)
     if one is None:
-        return PersonResult(None, None, found)
-    return PersonResult(one, f"rule:{rule.id}" if own_zone else "address area", found)
+        return PersonResult(None, None, found, tuple(zone))
+    return PersonResult(
+        one,
+        f"rule:{rule.id}" if own_zone else "address area",
+        found,
+        tuple(zone),
+        person_line(layout, zone, ctx.people, one),
+    )
 
 
 def template_uses_person(template: str | None) -> bool:
@@ -199,6 +245,46 @@ def zones_in_text(rule: Rule, folded_text: str) -> bool:
 def zones_match(rule: Rule, layout: Page1Layout) -> bool:
     """Every zone matches page 1."""
     return all(zone_matches(rule, i, layout) for i in range(len(rule.when.zones)))
+
+
+def rule_areas(
+    rule: Rule,
+    layout: Page1Layout | None,
+    *,
+    matched: bool = True,
+    wins: bool = False,
+    why: str | None = None,
+) -> list[Area]:
+    """The areas of ``rule`` for drawing: the matched lines of each text zone. For a rule
+    that did not match, ``why`` is the reason shown for every area that matched itself;
+    an area that did not match says so itself."""
+    out: list[Area] = []
+    many = len(rule.when.zones) > 1
+    for i, zone in enumerate(rule.when.zones):
+        reason = None
+        lines: list[Box] = []
+        if layout is None:
+            reason = "page 1 has not been read yet"
+        else:
+            hits = zone_hits(rule, i, layout)
+            lines = [line.box for line in hits]
+            if not hits:
+                reason = f"no word found in {'area ' + str(i + 1) if many else 'the area'}"
+        if reason is None and not matched:
+            reason = why
+        out.append(
+            Area(
+                rule.id,
+                i,
+                zone.box,
+                "text",
+                lines,
+                matched=matched,
+                reason=reason,
+                wins=wins,
+            )
+        )
+    return out
 
 
 def check(
@@ -436,6 +522,19 @@ def suggest(
 
     who = person_for(people, layout, person_rule)
 
+    winners = {r.id for r in (folder_rule, name_rule) if r is not None}
+    areas = [a for r in matching for a in rule_areas(r, layout, wins=r.id in winners)]
+    if layout is not None and people is not None and people.people and who.zone is not None:
+        areas.append(
+            Area(
+                person_rule.id if person_rule is not None else "",
+                0,
+                who.zone,
+                "address",
+                [who.line] if who.line is not None else [],
+            )
+        )
+
     if conventional:
         final = name[: -len(suffix)] + suffix if suffix and name.lower().endswith(suffix) else name
     elif new_name is not None:
@@ -470,4 +569,6 @@ def suggest(
         person=who.name,
         person_source=who.source,
         people_found=who.found,
+        areas=areas,
+        person_line=PersonLine(who.line) if who.line is not None else None,
     )

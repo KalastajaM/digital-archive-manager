@@ -29,7 +29,7 @@ const PEOPLE = {
   address_zone: [0.06, 0.1, 0.52, 0.3],
   default_address_zone: [0.05, 0.12, 0.5, 0.28],
 };
-const ENTRY = (id: string, name: string) => ({ record: { drive_id: id, path: `##. Organize/${name}`, name } });
+const ENTRY = (id: string, name: string) => ({ record: { drive_id: id, path: `##. Organize/${name}`, name, ext: "pdf" } });
 
 function setup(data: object = DATA(), extra: Record<string, unknown> = {}) {
   const calls = mockFetch({
@@ -192,6 +192,37 @@ describe("FilingRules", () => {
     await user.selectOptions(screen.getByLabelText("Test a document"), "d2");
     const list = await screen.findByRole("list", { name: "Rules for this document" });
     expect(list).toHaveTextContent("Page 1 in the area: “Pohjola Oy”, “PL 1”");
+  });
+
+  it("draws the areas of every rule on page 1 when testing a document, dashed with the reason for the ones that did not match", async () => {
+    const area = (rule_id: string, index: number, box: number[], matched: boolean, reason: string | null) => ({
+      rule_id, index, box, kind: "text", lines: matched ? [[0.1, 0.05, 0.3, 0.08]] : [], score: null, matched, reason, wins: matched,
+    });
+    const { user } = setup(DATA(), {
+      "POST /api/rules/explain": {
+        body: [
+          { rule_id: "pohjola", matched: true, why: "word", wins: ["folder"], zone_lines: [["Pohjola Oy"]], areas: [area("pohjola", 0, [0.05, 0.02, 0.45, 0.14], true, null)] },
+          { rule_id: "fortum", matched: false, why: "x", wins: [], zone_lines: [[]], areas: [area("fortum", 0, [0.5, 0.5, 0.9, 0.6], false, "no word found in the area")] },
+        ],
+      },
+      "GET /api/files/d2/suggestions": {
+        body: {
+          person: "Tiina",
+          areas: [{ rule_id: "", index: 0, box: [0.06, 0.1, 0.52, 0.3], kind: "address", lines: [[0.08, 0.15, 0.3, 0.17]], score: null, matched: true, reason: null, wins: false }],
+          person_line: { box: [0.08, 0.15, 0.3, 0.17] },
+        },
+      },
+    });
+    await screen.findByRole("option", { name: "bill.pdf" });
+    await user.selectOptions(screen.getByLabelText("Test a document"), "d2");
+    const page = await screen.findByAltText("Page 1");
+    expect(page).toHaveAttribute("src", "/api/files/d2/page/1.png?w=900");
+    expect(document.querySelector('[data-area="pohjola:0"]')).toHaveAttribute("data-matched", "true");
+    const off = document.querySelector('[data-area="fortum:0"]') as HTMLElement;
+    expect(off).toHaveClass("area-off");
+    expect(off).toHaveAttribute("title", "fortum: no word found in the area");
+    expect(await screen.findByTestId("person-line")).toHaveTextContent("For: Tiina, found here");
+    expect(document.querySelector('[data-kind="address"]')).toBeInTheDocument();
   });
 
   describe("People and page 1", () => {
