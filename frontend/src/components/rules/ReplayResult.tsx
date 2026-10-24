@@ -79,7 +79,7 @@ export function ReplayResult({
       {marked && marked.total > 0 && (
         <>
           <p>
-            Finds {marked.found} of the {marked.total} documents you marked as from {visible(sender ?? "this sender")}.
+            Finds {marked.found} of the {marked.total} documents you set as from {visible(sender ?? "this sender")}.
           </p>
           {marked.missed.length > 0 && (
             <>

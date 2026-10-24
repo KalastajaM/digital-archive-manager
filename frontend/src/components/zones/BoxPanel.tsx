@@ -168,7 +168,7 @@ export function BoxPanel({
                 ))}
               </ul>
             )}
-            <p className="hint">With a sender, the test also says how many of the letters you marked as from it the box finds.</p>
+            <p className="hint">With a sender, the test also says how many of the letters you set as from it the box finds.</p>
           </div>
           <div className="actions">
             <button type="button" onClick={() => setNaming(false)}>Back</button>

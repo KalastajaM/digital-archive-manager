@@ -120,8 +120,9 @@ second).
 
 1. Inbox files, so a zone rule can fire on every new document.
 2. Files a replay asked for (the **wanted** list, kept in memory, see 4).
-3. Everything else by path, at most `layout_reads_per_minute` (a new setting, default
-   the same as `indexer_reads_per_minute`).
+3. Everything else by path, when `page1_backfill` is on (a new setting, default on).
+   The pass shares the indexer's loop and so its rate (`indexer_reads_per_minute`); a
+   separate rate setting was left out as unneeded.
 
 `step()` tries content indexing first, then barcodes, then layouts, so the backfill only
 ever uses idle time. Settings shows the progress ("Page 1 read for 1 240 of 2 015
@@ -172,7 +173,11 @@ The replay of `2026-10-23-learned-filing-rules-design.md` gains one step and one
 - **Exact candidates.** A line in a zone is part of page 1's text, and page 1's text is
   part of `file_text` (1, "When"). So every document a zone rule can match already
   contains one of its words in its indexed text. One FTS query over `file_fts` with the
-  zone's words gives every possible match; documents outside it cannot match.
+  zone's words gives every possible match; documents outside it cannot match. As
+  built, the query is a prefix search per word (FTS tokens), while live matching is a
+  substring test: a zone word inside a longer word ("vakuutus" in "henkivakuutus")
+  matches live but is not a replay candidate. The replay can undercount for such words,
+  never overstate.
 - **Reading what is missing.** Candidates without a current layout row are put on the
   wanted list and read first by the layout pass (2). The replay sheet shows "Reading
   page 1 of 23 documents…" and updates as they come in; this is usually tens of
@@ -206,8 +211,9 @@ the owner redraw it.
 **Detection.** For a document with a layout row, the person is the one whose `match`
 is found in the address zone (or in the matching rule's `person_zone`). Two people found
 (a letter to both): no person, and the Inbox shows both as a choice. None found: no
-person. Detection is stored with the layout (per content), never guessed from the rest of
-the text.
+person. Detection is computed from the stored layout when it is needed, not stored, so
+a change to the people list or the address zone applies at once; it never looks at the
+rest of the text.
 
 **In rules.** `{person}` is allowed in `then.folder` and `then.name`. A rule whose
 template needs `{person}` gives no folder or name for a document without a person (the

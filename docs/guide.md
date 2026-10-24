@@ -464,6 +464,56 @@ they are in. Click a rule to edit it (the proof is shown there too). You can:
 
 Files with rules that could not be loaded are listed at the top, with the reason.
 
+### Rules by where text sits on page 1
+
+Most post comes from the same senders, with the letterhead in the same place each time.
+A rule can require its words in an area of page 1, so a bill that only mentions
+"Pohjola" somewhere is not taken for a letter from Pohjola.
+
+In the preview of an Inbox document (or in Browse), turn on **Draw a box** and drag a
+rectangle over page 1. dam lists the text it found in the box and offers:
+
+- **Sender…**: give the sender a name if you like, and a rule sheet opens with the
+  words in the box as chips, noted "Matches only in the area you drew on page 1". The
+  proof works as above. Documents whose page 1 has not been read yet are read first
+  ("Reading page 1 of N documents…"); any that cannot be read are listed as not checked,
+  never counted as a miss. With a sender, the proof also says how many of the documents
+  you set as from that sender the rule finds, and which it misses.
+- **Address area for this sender**: for a sender whose letters put the address
+  somewhere unusual; shown when a rule made the current suggestion.
+- **Address area for all letters**: where dam looks for who a letter is for.
+
+The areas of the rule behind a suggestion are shown faintly on page 1, so you can see
+why it matched. A box allows for a few millimetres of shift between scans.
+
+### Who a letter is for
+
+List the people in your household under **People** in Settings → Filing rules: a name
+(what `{person}` becomes in a folder or name) and the ways it is written on letters
+("Michiel Visser", "M. Visser"). dam looks for them in the address area of page 1 only,
+never in the rest of the text, and allows one misread letter in a name of eight or more
+letters. Use `{person}` in a rule's folder or name to file per person, such as
+`Insurance/Pohjola/{person}`. When nobody is found the rule gives no folder; a letter to
+two people asks **For whom?**. The address area starts at the usual place of the address
+on a Finnish business letter; change it there or with Draw a box.
+
+### From and For
+
+The Inbox card shows **From** and **For** with where each came from (address area, a
+rule, you). Click one to change it. To set them for many documents at once, use
+**From…** and **For…** in an Inbox batch or on a selection in Browse. What you set always
+wins over what dam detects. Filing a document into a folder made with `{person}` also
+records the person. These are kept in dam's index, not in the files.
+
+### Reading page 1
+
+To match by area, dam keeps the position of the text on page 1 of each PDF and image
+when it reads it; this costs no extra reading for new documents. Documents read before
+this feature get it in the background, inbox first, when dam has nothing else to do.
+Settings → Filing rules shows "Page 1 read for R of T documents", and the switch "Read
+page 1 of older documents in the background" pauses it. Scans need an OCR engine, as for
+their text.
+
 ## Trays
 
 A tray is a to-do list of documents: once a scanned paper is filed into a tray, the paper

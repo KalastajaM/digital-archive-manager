@@ -281,7 +281,7 @@ describe("RuleSheet", () => {
         { ...REPLAY, marked: { total: 16, found: 14, missed: ["Insurance/x.pdf", "Insurance/y.pdf"], not_checked: [] } },
         { initial: ZONE_RULE, filed: undefined },
       );
-      expect(await screen.findByText("Finds 14 of the 16 documents you marked as from Pohjola.")).toBeInTheDocument();
+      expect(await screen.findByText("Finds 14 of the 16 documents you set as from Pohjola.")).toBeInTheDocument();
       expect(screen.getByText("Insurance/x.pdf")).toBeInTheDocument();
       expect(screen.getByText("Insurance/y.pdf")).toBeInTheDocument();
     });
