@@ -18,11 +18,12 @@ import {
   useReplay,
   useRules,
   useSaveRule,
+  useSenders,
   useTrays,
   type ZoneDraft,
 } from "../../api/client";
 import { plural } from "../../format";
-import { visible } from "../../text";
+import { isWordToken, visible } from "../../text";
 import { useInboxFolder } from "../MoveTo";
 import { TagInput } from "../TagInput";
 import { useToast } from "../Toasts";
@@ -113,7 +114,10 @@ export function RuleSheet({
   const draft = isDraft(initial);
   const zoneDraft = isZoneDraft(initial) ? initial : null;
   const person = draft ? null : initial.when.person;
-  const sender = zoneDraft ? zoneDraft.sender : draft ? null : initial.sender;
+  // who the letter is from (optional): a drawn rule starts from the document's From
+  const [fromText, setFromText] = useState(() => (zoneDraft ? zoneDraft.sender : draft ? null : initial.sender) ?? "");
+  const sender = fromText.trim() || null;
+  const senders = useSenders();
   // a new rule drawn from boxes goes directly above the learned rule that matches the document
   const placeAbove = zoneDraft?.place_above ?? null;
   const [personZone, setPersonZone] = useState<PageBox | null>(() => (draft ? null : initial.person_zone));
@@ -136,7 +140,11 @@ export function RuleSheet({
   const [areas, setAreas] = useState<RuleArea[]>(() =>
     zoneDraft
       ? [
-          ...zoneDraft.zones.map((z) => ({ box: z.box, words: z.words.map((w) => ({ ...w })) })),
+          ...zoneDraft.zones.map((z) => ({
+            box: z.box,
+            // OCR noise ("•ö") is not offered as a word
+            words: z.words.filter((w) => isWordToken(w.word)).map((w) => ({ ...w })),
+          })),
           ...(zoneDraft.pictures ?? []).map((p) => ({ box: p.box, words: [], image: p.image, minScore: null })),
         ]
       : draft
@@ -203,7 +211,7 @@ export function RuleSheet({
       ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.id, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
+    [initial.id, sender, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tagsOff, tray, payee],
   );
   const ruleKey = JSON.stringify(rule);
 
@@ -477,7 +485,32 @@ export function RuleSheet({
             onPersonZone={setPersonZone}
           />
         )}
-        {sender && <p className="hint">Sender: {visible(sender)}</p>}
+        <div className="field">
+          <label htmlFor={`${ids}-from`}>From (sender)</label>
+          <input
+            id={`${ids}-from`}
+            value={fromText}
+            placeholder="Optional, such as Pohjola"
+            onChange={(e) => setFromText(e.target.value)}
+          />
+          {(senders.data?.length ?? 0) > 0 && (
+            <ul className="assign-choices" aria-label="Senders you have used">
+              {senders.data?.map((s) => (
+                <li key={s.sender}>
+                  <button
+                    type="button"
+                    className="assign-choice"
+                    aria-pressed={sender === s.sender}
+                    onClick={() => setFromText(s.sender)}
+                  >
+                    {visible(s.sender)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="hint">With a sender, the test also says how many of the letters you set as from it the rule finds.</p>
+        </div>
         {filed && (
           <p className="hint rule-filed">
             Filed as: {visible(`${filed.folder}/${filed.name}`)}

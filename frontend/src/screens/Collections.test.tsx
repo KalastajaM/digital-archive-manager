@@ -233,6 +233,12 @@ describe("Collection detail", () => {
     expect(inspector.querySelector(".file-meta-title")!.querySelector("[aria-label='Ask AI']")).toBeNull();
   });
 
+  it("the file panel of a member has the Draw a box tool, as in Browse", async () => {
+    renderCollections("/collections/7");
+    const inspector = await within(panel()).findByRole("complementary", { name: "Selected file" });
+    expect(await within(inspector).findByRole("button", { name: "Draw a box" })).toBeInTheDocument();
+  });
+
   it("a collection with files but no groups hints at New group, which does what the toolbar icon does", async () => {
     const created: Group = { id: 9, collection_id: 7, parent_id: null, name: "New group", position: 0, summary: "" };
     let now = SAUNA;

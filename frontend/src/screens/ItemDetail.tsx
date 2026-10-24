@@ -818,7 +818,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
                 )}
                 {kind === "dated" && checklist}
                 {meta.header}
-                <FilePreview file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }} extraTools={meta.marks} />
+                <FilePreview file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }} extraTools={meta.marks} boxTool={{}} />
                 {meta.tags}
               </>
             )}

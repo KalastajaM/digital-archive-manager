@@ -458,6 +458,31 @@ describe("RuleSheet", () => {
       }
     });
 
+    it("has an optional From (sender) field, prefilled from the rule, that sets the rule's sender", async () => {
+      const { calls, user } = setup(
+        REPLAY,
+        { initial: ZONE_RULE, filed: undefined },
+        { "GET /api/senders": { body: [{ sender: "Pohjola", count: 14 }, { sender: "Fortum", count: 3 }] } },
+      );
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
+      const from = within(sheet).getByLabelText("From (sender)");
+      expect(from).toHaveValue("Pohjola");
+      await within(sheet).findByText(/Matches 4/);
+      // a sender used before is one click away
+      await user.click(await within(sheet).findByRole("button", { name: "Fortum" }));
+      expect(from).toHaveValue("Fortum");
+      await waitFor(() => expect((posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { sender: string } }).rule.sender).toBe("Fortum"));
+      // empty: the rule is not about a sender
+      await user.clear(from);
+      await waitFor(() => expect((posts(calls, "/api/rules/replay").at(-1)?.body as { rule: Record<string, unknown> }).rule).not.toHaveProperty("sender"));
+    });
+
+    it("starts the From field empty for a rule that has no sender", async () => {
+      setup();
+      const sheet = await screen.findByRole("dialog");
+      expect(within(sheet).getByLabelText("From (sender)")).toHaveValue("");
+    });
+
     it("compares a sender rule with the documents marked as from that sender", async () => {
       setup(
         { ...REPLAY, marked: { total: 16, found: 14, missed: ["Insurance/x.pdf", "Insurance/y.pdf"], not_checked: [] } },

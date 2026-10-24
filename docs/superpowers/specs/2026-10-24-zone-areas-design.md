@@ -73,16 +73,21 @@ on a document that another learned rule already matches, the new rule is placed 
 above that rule (designer's call). The replay keeps saying "For N of them rule X comes
 first" when the order is still wrong.
 
-**Drawing several boxes.** In the box panel, **Add another box** keeps the box and lets
-the owner draw the next one; each kept box is listed with its lines and can be removed.
-**Sender…** / **Make a rule…** then drafts a rule with all kept boxes (one ticked word per
-text box, chosen as today). The rule sheet shows each area as its own group of word chips
+**Drawing several boxes.** Every box drawn in the preview is kept at once and numbered
+(Box 1, Box 2, ...); the panel "Boxes on page 1" lists each with the words found in it
+and its own remove button, and its close control reads "Close and drop the boxes". Esc
+drops the box being dragged, then the last box, then closes the tool. **Make a rule…**
+(the former "Sender…") drafts a rule with all boxes (one ticked word per text box, chosen
+as today); who the letter is from is an optional **From (sender)** field in the rule
+sheet, prefilled from the document's From assignment, because a box can identify the
+kind of letter as well as the sender. The address-area choices ("Address area for this
+rule's letters", "Address area for all letters") are shown when exactly one box is drawn. The rule sheet shows each area as its own group of word chips
 with a Remove action; a rule needs at least one condition.
 
 ### 2. Picture areas
 
-**When it is offered.** When a box holds no text (or the owner prefers the picture), the
-panel offers **Match the picture in this area**, with the crop shown.
+**When it is offered.** Every box row has a choice **Words** / **Picture**; Picture shows
+the crop. The address-area choices are never offered for a picture box.
 
 **What is stored.** Page 1 is rendered at a fixed width (`PICTURE_PAGE_WIDTH = 1000` px,
 about 120 DPI on A4), converted to 8-bit grayscale, and the box is cut out, its long side
