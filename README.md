@@ -34,17 +34,21 @@ without ever deleting a file.
   documents; change the list under Activity → AI).
 - **Fast filing.** New documents land in an inbox. dam reads them, proposes a name, a
   folder (from your rules, or from where similar files went) and tags, and files them with
-  one key.
+  one key. Rules are drafted from how you file and proven against the documents you filed
+  before you save them. A rule can match words or a picture, such as a logo, in an area of
+  page 1, and can file per person, since the address area tells who a letter is for.
 - **Bills that pay themselves (almost).** Due dates, amounts, IBANs and references are
   picked up from the scan. The To pay tray shows what is due, with a copy button on every
   field, and for Finnish bills a bank barcode to scan with your banking app.
 - **Collections for things in progress.** Group the documents of a house sale, a
   renovation or a court case, with notes and a checklist, without moving them. Add a whole
   folder and everything in it belongs, including what you put in it later.
+- **Tags and search.** Search by tag from the Search card on Today or in Browse. A Tags
+  screen lets you rename, merge and group tags, each change with Undo.
 
 <table>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png"><img alt="Today: what is due, what is waiting in the inbox" src="docs/images/today-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png"><img alt="Today: what is due, what is waiting in the inbox, a search box and the reminders" src="docs/images/today-light.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/paymode-dark.png"><img alt="Pay mode: payee, IBAN, reference, amount and a bank barcode in large type" src="docs/images/paymode-light.png"></picture></td>
   </tr>
   <tr>
@@ -52,28 +56,44 @@ without ever deleting a file.
     <td align="center"><b>Pay mode</b>: check the details, scan, done</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/browse-dark.png"><img alt="Browse: folders, search and a preview of the selected file" src="docs/images/browse-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/browse-dark.png"><img alt="Browse: folders on the left, and for the selected file its tags, collections, summary, tray, a locked padlock, a preview and notes" src="docs/images/browse-light.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/activity-dark.png"><img alt="Activity: every change in plain words, each with its own Undo" src="docs/images/activity-light.png"></picture></td>
   </tr>
   <tr>
-    <td align="center"><b>Browse</b>: folders, full-text search, Quick Look</td>
+    <td align="center"><b>Browse</b>: folders, tags, summaries, Quick Look</td>
     <td align="center"><b>Activity</b>: every change, each with Undo</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/collection-dark.png"><img alt="A collection: its groups, what needs attention, and the selected file with its preview, group and actions" src="docs/images/collection-light.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/ai-settings-dark.png"><img alt="Activity, AI: this month's spend, the AI switch and the folders that are never sent" src="docs/images/ai-settings-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/collection-dark.png"><img alt="A collection: its summary, its groups, what needs attention, and the selected file with its tags, group and actions" src="docs/images/collection-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/tags-dark.png"><img alt="Tags: every tag with its file count, in groups, with pinned tags marked" src="docs/images/tags-light.png"></picture></td>
   </tr>
   <tr>
     <td align="center"><b>Collections</b>: a house sale in one place, nothing moved</td>
-    <td align="center"><b>AI settings</b>: spend, the switch and the folders never sent</td>
+    <td align="center"><b>Tags</b>: rename, merge, group and pin, each with Undo</td>
   </tr>
   <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/boxes-dark.png"><img alt="The Inbox with Draw a box on: two boxes drawn on page 1 of a water bill, with the Boxes on page 1 panel below" src="docs/images/boxes-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/rule-sheet-dark.png"><img alt="Make a rule: the words in the area, the folder and tags to file with, and the test against the documents filed before" src="docs/images/rule-sheet-light.png"></picture></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Boxes on page 1</b>: draw over a letterhead to start a rule</td>
+    <td align="center"><b>Rule sheet</b>: proven against your filed documents first</td>
+  </tr>
+  <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/rules-dark.png"><img alt="Settings, Filing rules: the rules made from areas on page 1 above the example rules, and the people list" src="docs/images/rules-light.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/filing-codes-dark.png"><img alt="File N marked: each coded inbox file with its codes, folder, tray and tags; the ones that need a look start unticked" src="docs/images/filing-codes-light.png"></picture></td>
-    <td><picture><img alt="A sheet of QR stickers for the filing codes P, A and R, each with star and Important tick boxes" src="docs/images/sticker-sheet.png"></picture></td>
   </tr>
   <tr>
+    <td align="center"><b>Filing rules</b>: yours first, and the people they file for</td>
     <td align="center"><b>File N marked</b>: a whole batch, checked and filed at once</td>
+  </tr>
+  <tr>
+    <td><picture><img alt="A sheet of QR stickers for the filing codes P, A and R, each with star and Important tick boxes" src="docs/images/sticker-sheet.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/ai-settings-dark.png"><img alt="Activity, AI: this month's spend, the AI switch and the folders that are never sent" src="docs/images/ai-settings-light.png"></picture></td>
+  </tr>
+  <tr>
     <td align="center"><b>QR stickers</b>: decide on the paper before you scan</td>
+    <td align="center"><b>AI settings</b>: spend, the switch and the folders never sent</td>
   </tr>
 </table>
 

@@ -5,14 +5,43 @@
 - [What dam is](#what-dam-is)
 - [How dam works](#how-dam-works)
 - [Getting started](#getting-started)
+  - [Starter layouts](#starter-layouts)
+  - [Getting documents in](#getting-documents-in)
+  - [New folders](#new-folders)
+  - [Run it as its own app window](#run-it-as-its-own-app-window)
 - [The window](#the-window)
 - [Today](#today)
 - [Filing from the Inbox](#filing-from-the-inbox)
 - [Filing codes](#filing-codes)
+  - [Inbox folders](#inbox-folders)
+  - [QR stickers](#qr-stickers)
+  - [Several codes on one file](#several-codes-on-one-file)
+  - [File N marked](#file-n-marked)
 - [Filing rules](#filing-rules)
+  - [Making a rule from a filing](#making-a-rule-from-a-filing)
+  - [The proof](#the-proof)
+  - [Rules by where text sits on page 1](#rules-by-where-text-sits-on-page-1)
+  - [Several areas for one rule](#several-areas-for-one-rule)
+  - [Picture areas](#picture-areas)
+  - [Seeing the areas](#seeing-the-areas)
+  - [Changing an area](#changing-an-area)
+  - [People and the address area](#people-and-the-address-area)
+  - [From and For on a document](#from-and-for-on-a-document)
+  - [Where rules are kept, and in what order](#where-rules-are-kept-and-in-what-order)
+  - [The record](#the-record)
+  - [The rules list in Settings](#the-rules-list-in-settings)
+  - [Reading page 1](#reading-page-1)
 - [Trays](#trays)
+  - [Row icons](#row-icons)
+  - [Working on an item](#working-on-an-item)
+  - [Files on an item](#files-on-an-item)
 - [Paying a bill with the bank barcode](#paying-a-bill-with-the-bank-barcode)
 - [Collections](#collections)
+  - [Parent collections](#parent-collections)
+  - [Order of collections](#order-of-collections)
+  - [Groups](#groups)
+  - [Export](#export)
+  - [Converting existing folders](#converting-existing-folders)
 - [Starred and Important](#starred-and-important)
 - [Locking a file](#locking-a-file)
 - [Browse](#browse)
@@ -178,7 +207,7 @@ nothing overdue", or "All clear") and the date, then cards.
   to-dos (open checklist entries, or files still in the inbox), **Starred** files, and
   the result of the last reminder check.
 - **Search** is a box on top of the second column: type and press Enter, and Browse opens
-  with that search (`tag:name` works too, see [Tags](#tags)).
+  with that search (`tag:name` works too, see [Browse](#browse)).
 
 Trays with nothing open are folded into one **Clear** card, so the cards with content get
 the room. Each tray row has a round checkbox that marks the item done at once (a bill is
@@ -219,6 +248,8 @@ More on the form:
   **Reset to detected** brings back what the scan found.
 - **Several documents**: ⌘-click and ⇧-click select several, and a batch form files them
   together. Each gets its own tray item, filled in from its own scan.
+- **From** and **For** show who a letter is from and who it is for, and where each came
+  from; click one to change it (see [From and For on a document](#from-and-for-on-a-document)).
 - **Ask AI** (the sparkle button) asks for suggestions when AI is on; they arrive as
   chips like the others.
 - A name that looks like broken text (`NÃ¤kymÃ¤` for `Näkymä`) is repaired before it is
@@ -400,11 +431,12 @@ Inbox with their code's values filled in.
 
 ## Filing rules
 
-A filing rule fills in the Inbox form for you: when a document contains certain words,
-the rule suggests the folder, the name, the tags, the tray and the payee. dam can draft
-rules from how you file, and it proves each one against the documents you have already
-filed before you save it. Rules only fill in the form. Nothing is filed until you
-confirm, and no AI is involved.
+A filing rule fills in the Inbox form for you: when a document contains certain words
+(or a picture such as a logo), the rule suggests the folder, the name, the tags, the tray
+and the payee. A rule can look for its words or picture in an area of page 1, and can file
+per person. dam drafts rules from how you file, and proves each one against the documents
+you have already filed before you save it. Rules only fill in the form. Nothing is filed
+until you confirm, and no AI is involved.
 
 ### Making a rule from a filing
 
@@ -415,43 +447,52 @@ it). If the value you changed came from a rule made in the app, it offers **Upda
 filing. There is no offer after filing several documents at once, after File N marked,
 or when a filing code did the filing.
 
-**Make a rule…** opens a sheet drafted from what you just did:
-
-- **Match words**, as chips. One is ticked: the most distinctive word near the top of the
-  text, usually the sender. A rule matches when **any** ticked word is in the text, so
-  ticking more words widens the rule. Words that appear in more than 3 in 10 of your
-  filed documents are not offered. When no usable word is left, there is no offer.
-The sheet has two parts, each under its own heading. **When a document matches** holds
-what a document must have: the match words and areas (each area with its Words match
-choice), **From** (the sender), **For** (the person) and **More conditions**. **Then file
-it like this** holds what the rule sets. The test comes after both.
+**Make a rule…** opens a sheet drafted from what you just did. It has two parts, each
+under its own heading: **When a document matches** holds what a document must have, and
+**Then file it like this** holds what the rule sets. The test comes after both.
 
 When a document matches:
 
+- **When the text contains**: the match words, as chips, and a box to add a word of your
+  own. One is ticked: the most distinctive word near the top of the text, usually the
+  sender. A rule matches when **any** ticked word is in the text, so ticking more words
+  widens the rule. Words that appear in more than 3 in 10 of your filed documents are not
+  offered. When no usable word is left, there is no offer.
+- **Areas**: when the rule comes from boxes drawn on page 1, each area is a group of its
+  own under this one (see
+  [Rules by where text sits on page 1](#rules-by-where-text-sits-on-page-1)).
+- **From (sender)**: optional. It is filled in from the document's own From when it has
+  one, and the senders you have used are offered as chips. With a sender, the proof also
+  says how many of the documents you set as from that sender the rule finds, and which it
+  misses.
+- **For**: **Anyone** or **Only for** a person; see
+  [People and the address area](#people-and-the-address-area).
 - **More conditions** (closed to begin with; a line beside it says what is set, such as
   "Only in the inbox"): a file-name pattern (a regular expression searched anywhere in the
   file name, see the tip beside it), and the folder the file must be in.
 
 Then file it like this:
 
-- **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
-  document's year, its date and its original file name, and are filled in for each
-  document the rule files (the tips beside Folder and Name list them).
-- **Folder**: type it, or press the "…" button to pick a folder from the tree; the path
-  you pick goes into the field, and patterns such as `{person}` and `{year}` can still be
-  typed in it.
-- **Add to collection**: the collections the Inbox form starts with in "Also add to
-  collection" when this rule matches, picked the same way (type to find, or the "…"
-  button). It works like tags: the collections of all matching rules are added together,
-  and you can still change them on the card before filing. A name that does not exist yet
-  is created when the document is filed. The test does not compare collections (it only
-  checks where documents would be filed).
-- **Tags, tray and payee**: what the rule sets. An empty field is one the rule does not
-  set; to leave a field out, clear it. **Payee** is only there when the chosen tray has
-  a payee field (To pay does): it is the name filled in as the payee when the rule puts
-  a bill in that tray. A rule that already has a payee keeps showing it.
 - **Filed as**: the folder and name you gave the document just now, which the patterns
   were made from.
+- **Folder**: type it, or press the "…" button to pick a folder from the tree; the path
+  you pick goes into the field.
+- **Name**: the file name to give.
+- **Patterns** in Folder and Name: `{year}`, `{doc_date:%Y%m%d}`, `{stem}` and `{person}`
+  stand for the document's year, its date, its original file name and the person the
+  letter is for, and are filled in for each document the rule files (the tips beside the
+  fields list them).
+- **Tags** and **Tray**: what the rule sets. An empty field is one the rule does not set;
+  to leave a field out, clear it.
+- **Add to collection**: the collections the Inbox form starts with in "Also add to
+  collection" when this rule matches, picked the same way as folders (type to find, or the
+  "…" button). It works like tags: the collections of all matching rules are added
+  together, and you can still change them on the card before filing. A name that does not
+  exist yet is created when the document is filed. The test does not compare collections
+  (it only checks where documents would be filed).
+- **Payee**: only there when the chosen tray has a payee field (To pay does). It is the
+  name filled in as the payee when the rule puts a bill in that tray. A rule that already
+  has a payee keeps showing it.
 
 ### The proof
 
@@ -463,7 +504,8 @@ needs 0.85", "the document is not for Tiina"). It is judged as live filing would
 a document in the inbox by the rule as written, a filed one without the folder condition.
 It updates as you change the rule, so you can edit the rule until it no longer matches
 that document. The document is left out of every count and list below, the ones filed
-before, the inbox count, the scores, not checked and the marked documents. A rule opened
+before, the inbox count, the scores, the documents that could not be judged yet and the
+marked documents. A rule opened
 from Settings has no such line.
 
 Under the sheet, dam replays the rule against the documents you filed before and shows
@@ -480,8 +522,8 @@ says what the reason means and what happens next: "Page 1 not read yet" (dam rea
 in the background and the test picks the documents up when they are read; **Read page 1
 of these N now** does it first), "Person unknown" (the address area does not say who the
 letter is for, so a rule that files by person cannot be judged; set For on those
-documents, or add the people in Settings), "No OCR engine", "Missing", "Took too long" and
-"No picture of page 1". A rule that names no person (Anyone, and no `{person}` in the
+documents, or add the people in Settings), "No OCR engine", "Missing", "Took too long",
+"Not read yet" and "No picture of page 1". A rule that names no person (Anyone, and no `{person}` in the
 Folder or Name) never has documents in "Person unknown". While you edit, the result on
 screen is the one for the rule before your last change, and the sheet says so until the
 test of the rule as it is now answers.
@@ -493,44 +535,12 @@ anyway?".
 **Not for these** closes the offer and remembers the match words of that document, so
 dam does not offer again for documents with the same words. Settings can forget them.
 
-### Where rules are kept, and in what order
-
-Rules made in the app go to `config/rules/learned.yaml`, which dam reads before the other
-rule files. A rule about one sender therefore wins over a broad one such as the shipped
-`generic-invoice`. For the folder and name the first matching rule wins; tags from all
-matching rules are added together. Rules you wrote by hand in other files keep working
-as before. If you edit or delete one of them in the app, dam rewrites that file: the
-comments in it are lost, and a `.bak-<time>` copy of the old file is kept next to it.
-The sheet and the delete question say so.
-
-### The record
-
-Each rule keeps a record: how often it was suggested and how often you changed what it
-suggested. When you corrected a rule in 2 of its last 5 filings it is flagged
-"Corrected recently" in Settings, and its suggestion in the Inbox says "this rule was
-corrected recently". Undoing a filing removes it from the record.
-
-### Settings → Filing rules
-
-Under "This archive", Settings lists every rule in the order dam tries them, with its
-words, where it files, its record and any flag. Rules not made in the app show the file
-they are in. Click a rule to edit it (the proof is shown there too). You can:
-
-- add a **New rule**, or **Delete** one (dam asks first);
-- move rules made in the app **Up** or **Down**; rules in other files are reordered in
-  their files;
-- **Test a document**: pick a file from the inbox and see which rules match it, why
-  (the word or pattern that matched) and which field each rule gives;
-- turn off "Offer to make a rule after I file a document by hand";
-- **Forget N declined senders**, to be offered rules for them again.
-
-Files with rules that could not be loaded are listed at the top, with the reason.
-
 ### Rules by where text sits on page 1
 
 Most post comes from the same senders, with the letterhead in the same place each time.
 A rule can require its words in an area of page 1, so a bill that only mentions
-"Pohjola" somewhere is not taken for a letter from Pohjola.
+"Pohjola" somewhere is not taken for a letter from Pohjola. A rectangle you draw is a
+**box**; once it is part of a rule it is an **area**.
 
 In the preview of a PDF or image (the Inbox card, Browse, a collection, Quick Look, the
 document window or a link's target), turn on **Draw a box** and drag a rectangle over
@@ -547,10 +557,8 @@ all. The panel offers:
   match** choice next to its word box. The rule does not have to be about
   a sender: a box can just as well pick out the kind of letter or any other fixed text.
   The proof works as above. Documents whose page 1 has not been read yet are read first
-  ("Reading page 1 of N documents…"); any that cannot be read are listed as not checked,
-  never counted as a miss. The sheet has an optional **From (sender)** field, filled in
-  from the document's own From when it has one. With a sender, the proof also says how
-  many of the documents you set as from that sender the rule finds, and which it misses.
+  ("Reading page 1 of N documents…"); any that cannot be read are listed under **Could
+  not be judged yet**, never counted as a miss.
 - **Address area for this rule's letters**: for a rule whose letters put the address
   somewhere unusual; shown when one box is drawn and a rule made the current suggestion.
 - **Address area for all letters**: where dam looks for who a letter is for; shown when
@@ -582,18 +590,17 @@ middle can be off by a letter or two. Stray marks that OCR reads as one-letter w
 
 A box allows for a few millimetres of shift between scans.
 
-#### Several areas for one rule
+### Several areas for one rule
 
 A sender writes many kinds of letters, and the kind is usually printed in a fixed place
 too, such as the title under the letterhead. A rule can need more than one area: every
 area must have one of its words, so "Pohjola in the letterhead" and "vakuutuskirja in the
 title" together file a policy and leave a Pohjola bill alone.
 
-Draw the first box; it stays on the page, numbered, and is listed in the panel with its
-words. Draw the next one the same way and remove any with its x. **Make a rule…** uses
-all the boxes, with one word ticked in each. The rule sheet shows each area as its own group of word chips with a
-**Remove** button; a rule needs at least one word or area. Within an area any ticked
-word is enough.
+Draw as many boxes as you need, one after the other (see above). **Make a rule…** uses
+all of them, with one word ticked in each. The rule sheet shows each area as its own group
+of word chips with a **Remove** button; a rule needs at least one word or area. Within an
+area any ticked word is enough.
 
 For folder and name the first matching rule wins, so a rule with more areas has to come
 before a plainer rule for the same sender. When you make a rule from boxes drawn on a
@@ -601,7 +608,7 @@ document that a learned rule matches already, dam saves the new rule directly ab
 rule. Rules you wrote in your own files are never reordered; the proof still says "For N
 of them rule X comes first" if the order is wrong.
 
-#### Picture areas
+### Picture areas
 
 Some letterheads are only a picture: a logo, and the box holds no text. Then dam can
 recognise the picture itself. Draw the box and, in its row, choose **Picture** instead of **Words**
@@ -630,7 +637,7 @@ groups are far apart, the rule is safe. If they touch, move the slider, or add a
 so the picture only has to decide between a few documents. A picture alone also takes
 longer to test, because every filed PDF and image is looked at (the test does not open the
 files in the archive, only the small pictures). Pictures not made yet are made first,
-inbox before the rest; a document without one is listed as not checked, never as a miss.
+inbox before the rest; a document without one is listed under **Could not be judged yet**, never as a miss.
 
 Every path in the test result is a button. It opens the document in the preview with the
 rule you are testing drawn on its first page: its areas, and for a picture area the place
@@ -670,7 +677,7 @@ original stays too, and the message says so. Undo across disks copies the pictur
 leaves the one in `##. To Delete` for you to empty. Moving or resizing a picture area cuts the picture again from
 the document you changed it on.
 
-#### Seeing the areas
+### Seeing the areas
 
 On page 1 of a preview, **Show areas** (on by default when there are areas) draws the
 areas of every rule that matched the document, labelled with the rule's id. The rule that
@@ -682,7 +689,7 @@ too, with the line where the person was found: "For: Tiina, found here".
 In Settings → Filing rules, **Test a document** draws the areas of all rules on page 1.
 The areas of rules that did not match are dashed and say why ("no word found in area 2").
 
-#### Changing an area
+### Changing an area
 
 Click an area on page 1 to select it. Drag it to move it, or drag one of its handles to
 resize it. When you let go, the rule sheet opens with the changed area and the test runs
@@ -696,7 +703,7 @@ In Settings → Filing rules, open a rule that has areas and the sheet shows the
 sample page: the last document the rule was used on, or any file in the Inbox you pick.
 Drag them there in the same way; the test below follows.
 
-### Who a letter is for
+### People and the address area
 
 List the people in your household under **People** in Settings → Filing rules: a name
 (what `{person}` becomes in a folder or name) and the ways it is written on letters
@@ -720,13 +727,48 @@ A line under the buttons shows where this letter would go ("This letter would go
 50. Medical/Tiina/Kela"). For a rule opened from Settings there is no document, so the
 row has the choice but no "found" line.
 
-### From and For
+### From and For on a document
 
-The Inbox card shows **From** and **For** with where each came from (address area, a
-rule, you). Click one to change it. To set them for many documents at once, use
+The Inbox card shows **From** (who sent a document) and **For** (who it is for) with where
+each came from (address area, a rule, you). Click one to change it. To set them for many documents at once, use
 **From…** and **For…** in an Inbox batch or on a selection in Browse. What you set always
 wins over what dam detects. Filing a document into a folder made with `{person}` also
 records the person. These are kept in dam's index, not in the files.
+
+### Where rules are kept, and in what order
+
+Rules made in the app go to `config/rules/learned.yaml`, which dam reads before the other
+rule files. A rule about one sender therefore wins over a broad one such as the shipped
+`generic-invoice`. For the folder and name the first matching rule wins; tags from all
+matching rules are added together. Rules you wrote by hand in other files keep working
+as before. If you edit or delete one of them in the app, dam rewrites that file: the
+comments in it are lost, and a `.bak-<time>` copy of the old file is kept next to it.
+The sheet and the delete question say so.
+
+### The record
+
+Each rule keeps a record: how often it was suggested and how often you changed what it
+suggested. When you corrected a rule in 2 of its last 5 filings it is flagged
+"Corrected recently" in Settings, and its suggestion in the Inbox says "this rule was
+corrected recently". Undoing a filing removes it from the record.
+
+### The rules list in Settings
+
+Under "This archive", Settings lists every rule in the order dam tries them, with its
+words, where it files, its record and any flag. Rules not made in the app show the file
+they are in. Click a rule to edit it (the proof is shown there too). You can:
+
+- add a **New rule**, or **Delete** one (dam asks first);
+- move rules made in the app up or down with the arrows on their row; rules in other
+  files are reordered in their files;
+- **Test a document**: pick a file from the inbox and see which rules match it, why
+  (the word or pattern that matched) and which field each rule gives;
+- turn off "Offer to make a rule after I file a document by hand";
+- **Forget N declined senders**, to be offered rules for them again.
+
+Files with rules that could not be loaded are listed at the top, with the reason. The
+**People** list is further down on the same page (see
+[People and the address area](#people-and-the-address-area)).
 
 ### Reading page 1
 
@@ -735,12 +777,13 @@ when it reads it, and for picture areas a small grayscale picture of the page; t
 costs no extra reading for new scans. Documents read before this feature, and PDFs that
 have a text layer, get theirs in the background, inbox first, when dam has nothing else
 to do.
-The Index sheet (click the status line at the foot of the sidebar) shows the same progress,
-how many documents wait because page 1 cannot be read now and why (for example no OCR engine,
-or it took too long), an estimate of the time left, the switch, and **Page 1 reading speed**.
-While reading is not complete, the status line also says "page 1 read 1 240 of 10 875".
-Settings → Indexing has the switch "Read page 1 of older documents in the background"
-(it pauses the reading) and the speed. PDFs that have a text layer are read quickly (300 a
+The Index sheet (click the status line at the foot of the sidebar) has a **Page 1** row in
+its totals: how many documents are read, an estimate of the time left while reading goes
+on, and how many wait because page 1 cannot be read now and why (for example no OCR
+engine, or it took too long). The row links to Settings → Indexing. While reading is not
+complete, the status line also says "page 1 read 1 240 of 10 875". Settings → Indexing
+has the switch "Read page 1 of older documents in the background" (it pauses the reading)
+and **Page 1 reading speed**. PDFs that have a text layer are read quickly (300 a
 minute unless you choose another speed), because that takes no OCR; scans and photos need an
 OCR engine and are read at the indexer's pace (30 a minute), and so is any file that is slow
 to fetch, such as a Google Drive file that has to be downloaded first. The estimate of the
@@ -760,12 +803,18 @@ can go. Four trays come with dam:
 | **Follow up** | things you wait on from others (a delivery, a reply, a refund), with an optional check-by date | on the check date and once when overdue |
 
 A tray's screen has the list (Open / Done) and the selected item beside it; ↑/↓ move the
-highlight and open the item. At the right end of a row, before the date, small icons say
-what the item has: a pencil for a note, a checklist icon with the number of to-dos still
-open (hover for "2 of 5 to-dos open"; nothing once all are done), and a sparkle for an AI
-summary or a text icon for one you wrote. With several files, a summary you wrote on any
-of them shows as written, otherwise any AI summary. An item has a title, one or more files, the tray's fields, a
+highlight and open the item. An item has a title, one or more files, the tray's fields, a
 note, a checklist and a history.
+
+### Row icons
+
+At the right end of a row, before the date, small icons say what the item has: a pencil
+for a note, a checklist icon with the number of to-dos still open (hover for "2 of 5
+to-dos open"; nothing once all are done), and a sparkle for an AI summary or a text icon
+for one you wrote. With several files, a summary you wrote on any of them shows as
+written, otherwise any AI summary.
+
+### Working on an item
 
 - Click the title to edit it in place: Enter or clicking away
   saves, Esc cancels, an empty title is refused. The file's tags are right under it.
@@ -775,21 +824,24 @@ note, a checklist and a history.
 - Summary, Checklist, Notes and History have an arrow in their heading that folds them to
   one line (for example "2 of 5 done"). Each section stays folded or open the way you left
   it, for all items, collections and documents in this browser.
-
 - **Mark paid** (or **Mark done**) finishes an item; **Reopen** undoes it. It asks in a
   small popover under the button (Enter confirms, Esc or a click outside cancels). While
   one of the item's files is still in the inbox, **Mark paid and file…** marks it done and
   opens that file in the Inbox for filing.
-- **Move to tray ▾** moves an open item to another tray. It stays the same item (title,
-  note, checklist, history and files); fields the other tray also has carry over, and the
-  rest come back if you move it back. A file has at most one open item at a time.
+- **Move to tray** (a menu in the icon row) moves an open item to another tray. It stays
+  the same item (title, note, checklist, history and files); fields the other tray also
+  has carry over, and the rest come back if you move it back. A file has at most one open
+  item at a time.
 - **Remove from tray** (or ⌫) asks first, then deletes the item with its note, checklist
   and history. The files are never touched, so there is no undo for this.
-- **Add another file…** under the title opens a picker: type to search the whole archive
-  (each hit shows its path), or choose **Browse folders…** and walk the folders. Click a
-  file, or use the arrow keys and Enter, to attach it. Files already on the item are
-  marked and cannot be added twice. **Add file** in the list's toolbar searches the
-  archive and makes a new item for the file you pick.
+
+### Files on an item
+
+- **Add another file…** opens a picker: type to search the whole archive (each hit shows
+  its path), or choose **Browse folders…** and walk the folders. Click a file, or use the
+  arrow keys and Enter, to attach it. Files already on the item are marked and cannot be
+  added twice. **Add file** in the list's toolbar searches the archive and makes a new item
+  for the file you pick.
 - With several files, each file tab has a small **×** (on hover or focus, and always
   reachable with the keyboard). It takes that file off the item; the file stays where it is,
   and **Undo** in the toast puts it back in the same place. An item keeps at least one
@@ -937,17 +989,21 @@ A lock is a safety catch against slips, such as a drag and drop in the wrong pla
 locked file can still be viewed and described: tags, notes, checklists, From and For,
 trays, stars, the Important mark, summaries and previews all work. What it refuses is
 anything that changes the file on disk: rename, move (also drag and drop, Move to… and
-Back to inbox), filing from the Inbox, and Move to To Delete. A locked file shows a lock
-icon in lists and in its details, and those controls are off, with the reason as their
-tooltip.
+Back to inbox), filing from the Inbox, and Move to To Delete. A locked file shows a closed padlock in lists and in its details, and those controls are
+off, with the reason as their tooltip.
 
-- **Important files are always locked.** You can unlock one only **for now**.
-- **Any other file can be locked** with **Lock** next to its name, and unlocked again
-  with **Unlock**, which asks **For now** or **For good**. For good removes the lock.
+The padlock beside a file's name is also its button. A closed padlock means locked;
+an open one means not locked.
+
+- **Important files are always locked.** Click the closed padlock (**Unlock**) to unlock
+  one **for now**.
+- **Any other file can be locked** with the open padlock (**Lock**). Click the closed
+  padlock (**Unlock**) to unlock it again; it asks **For now** or **For good**. For good
+  removes the lock.
 - **For now lasts until you leave the file.** The details say "Unlocked until you leave
-  this file", with **Lock again**. Select another file, close the panel, go to another
-  page or reload, and the file is locked again. While it is unlocked you can make as
-  many changes as you like.
+  this file", with an open padlock, **Lock again**. Select another file, close the panel,
+  go to another page or reload, and the file is locked again. While it is unlocked you can
+  make as many changes as you like.
 
 If a change would touch a locked file, dam refuses the whole change before anything moves
 and says "This file is locked. Unlock it to change it." For several files at once it
@@ -969,7 +1025,8 @@ list's width.
 - **Collection** filters a pane to one collection's files; **Folders / Files** switches
   between the folder view and a flat list of every file below the current folder, with
   sortable Name, Folder, Date and Size columns (up to 500 rows).
-- **Search** looks at file names, paths and text. Type `tag:medical` (or
+- **Search** looks at file names, paths and text (the Search card on Today opens Browse
+  with the same search). Type `tag:medical` (or
   `tag:"tax return"`) and a space, or pick a tag from the suggestions, and the tag becomes a
   chip that filters the results to files with that tag; several chips need all of them,
   and words work beside them ("Kela" with the tag medical). Click × on a chip to drop it.
@@ -993,7 +1050,11 @@ menu, and every change shows a toast with **Undo**:
   eight places go to the tags you put on files most lately.
 - **Groups**, one level: **New group** makes a heading such as Health; move a tag into
   it from its menu or by dragging it onto the group. A tag is in at most one group.
-  Groups only arrange this screen. Deleting a group keeps its tags, ungrouped.
+  Groups only arrange this screen. A group has its own menu to rename or delete it;
+  deleting a group keeps its tags, ungrouped.
+
+**Searching by tag.** Type `tag:medical` in a search, or click a tag here or in the sidebar,
+and Browse shows the files with that tag (see [Browse](#browse)).
 
 Tags are kept in dam's own database, not in the archive, so changing them moves no file.
 
@@ -1040,7 +1101,8 @@ each area, grouped by what it applies to; one section shows at a time.
     [QR stickers](#qr-stickers).
   - **Filing rules**: every rule in the order it applies, with its record; edit, test,
     delete or add rules, test a document from the inbox, and switch the offer to make a
-    rule on or off. See [Filing rules](#filing-rules).
+    rule on or off. The **People** list and the address area are here too. See
+    [Filing rules](#filing-rules).
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
     [Reading page 1](#reading-page-1).

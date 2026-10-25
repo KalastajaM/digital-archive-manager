@@ -365,7 +365,7 @@ search window, the box grown by 5 % of the page on every side, at the scales 0.9
 1, 1.05 and 1.1, after a light blur of both; about 6 ms a document, 3 for loading the picture and 3 for the
 match. A picture zone has no
 text pre-filter, so it is checked last, after every other condition of the rule. A
-document without a page-1 picture yet is not checked (the same as a missing page-1 layout).
+document without a page-1 picture yet cannot be judged yet (the same as a missing page-1 layout); the test lists it under "could not be judged yet".
 The matching works at the stored width, 1000 px, with a blur of 0.8 px (it used 500 px and
 1.2 px: at that size a block of small text with other words in the same layout scored 0.89,
 above the default). In tests, other dark logos on white score 0.63 or less and a block of
