@@ -18,7 +18,7 @@ import {
   Tag as TagIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   archiveKey,
   type CollectionRow,
