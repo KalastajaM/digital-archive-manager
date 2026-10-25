@@ -63,6 +63,7 @@ import {
 } from "../useCollectionOrder";
 import { useUndoConfirm } from "../UndoConfirm";
 import { useQuickPut } from "../useQuickPut";
+import { positiveTags, readQuery, tagFilter } from "../../searchFilters";
 
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
@@ -417,9 +418,8 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
   const tags = useSidebarTags();
   const location = useLocation();
   const shown = tags.data ?? [];
-  // the tag whose filter Browse shows now (the only one)
-  const current =
-    location.pathname === "/browse" ? new URLSearchParams(location.search).getAll("tag") : [];
+  // the tags Browse filters by now: `tag:` filters in the search, or an older `?tag=` link
+  const current = location.pathname === "/browse" ? browseTags(location.search) : [];
   return (
     <Section
       title="Tags"
@@ -434,9 +434,9 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
         return (
           <li key={t.name}>
             {/* a plain Link: a NavLink would mark every tag current on /browse, since they
-                all share that path and differ only in ?tag= */}
+                all share that path and differ only in the query */}
             <Link
-              to={`/browse?${new URLSearchParams({ tag: t.name, q: "" })}`}
+              to={`/browse?${new URLSearchParams({ q: tagFilter(t.name) })}`}
               className={isCurrent ? "sidebar-row active" : "sidebar-row"}
               aria-label={`${name} (${t.files})`}
               aria-current={isCurrent ? "page" : undefined}
@@ -451,6 +451,16 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
       })}
     </Section>
   );
+}
+
+/** The tags a Browse address filters by, when it filters by tags alone (no words or
+ * other filters), so a sidebar tag shows as current only for its own plain tag search. */
+function browseTags(search: string): string[] {
+  const params = new URLSearchParams(search);
+  const { words, filters } = readQuery(params.get("q"));
+  const tags = positiveTags(filters);
+  if (words.trim() || tags.length !== filters.length) return [];
+  return [...params.getAll("tag"), ...tags.map((f) => f.value)];
 }
 
 export function trayIcon(tray: TrayDef): LucideIcon {

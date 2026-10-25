@@ -25,7 +25,6 @@ import {
   useCollectionsWithMarked,
   useCreateFolder,
   useStatus,
-  useTagSuggestions,
 } from "../api/client";
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
@@ -69,9 +68,11 @@ import { visible } from "../text";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
-import { useSearch } from "./useSearch";
-import { splitTagQuery } from "../searchTags";
-import { TagBar, TagSuggestions, type TagMode } from "../components/TagSearch";
+import { SEARCH_DEBOUNCE_MS, useSearch } from "./useSearch";
+import { filterToken, positiveTags, readQuery, sameFilter, type SearchFilter, serializeQuery, splitSearch, withFilter } from "../searchFilters";
+import { FilterBar, SearchSuggestions, type TagMode } from "../components/TagSearch";
+import { type Completion, useSearchCompletions } from "../components/useSearchCompletions";
+import { SearchHelp } from "../components/SearchHelp";
 
 /** One row of the folder listing or of the search results. */
 const KEYS: KeyHint[] = [
@@ -625,36 +626,44 @@ export default function Browse() {
     return out;
   };
 
-  // The words come from ?q= (a link from Today's Search card) and the tag filters from
-  // ?tag= (repeated); typing `tag:name ` turns into a filter in the address too.
-  const [query, setQuery] = useState(() => params.get("q") ?? "");
-  const location = useLocation();
+  // The whole query is in ?q= (the words and the filters, as typed: `kela tag:medical
+  // -in:"90. Other People"`), so a link or Back brings the same search. The box holds only
+  // the words; a finished filter typed in it moves to the address and shows as a chip.
+  // Old links with ?tag= (repeated) still work: those tags join the filters.
   const urlQ = params.get("q");
+  const fromUrl = readQuery(urlQ);
+  const [query, setQuery] = useState(() => fromUrl.words);
+  const location = useLocation();
+  const wrote = useRef<string | null>(null); // the words this screen last wrote to the address
   useEffect(() => {
-    // a link to this screen with ?q= sets the words (an empty one clears them)
-    if (urlQ !== null) setQuery(urlQ);
+    // a link to this screen with ?q= sets the words (an empty one clears them); the
+    // address change this screen made itself on typing does not
+    if (urlQ !== null && fromUrl.words !== wrote.current) setQuery(fromUrl.words);
     // only when the address was navigated to
   }, [location.key]);
-  const tags = params.getAll("tag");
-  const tagsKey = tags.join("\n");
+  const filters: SearchFilter[] = params
+    .getAll("tag")
+    .map((value) => ({ name: "tag" as const, value, negated: false }))
+    .reduce(withFilter, fromUrl.filters);
+  const filtersKey = filters.map(filterToken).join("\n");
   // several tags: every one (the default) or at least one; the address keeps only "any"
-  const tagMode: TagMode = tags.length > 1 && params.get("tag_mode") === "any" ? "any" : "all";
-  const typed = splitTagQuery(query);
+  const tagMode: TagMode = positiveTags(filters).length > 1 && params.get("tag_mode") === "any" ? "any" : "all";
+  const typed = splitSearch(query);
   const [scope, setScope] = useState<"folder" | "everywhere">("everywhere");
   // The search results' column order; null: best match first (the API's order).
   const [searchSort, setSearchSort] = useState<SortState | null>(null);
   const [searchPane, setSearchPane] = useState<PaneId>("left");
   const [reload, setReload] = useState(0);
   const q = typed.rest.trim();
-  const searching = q !== "" || tags.length > 0;
+  const searching = q !== "" || filters.length > 0;
   const sp: PaneId = split ? searchPane : "left";
   const inFolder = scope === "folder" && !!paths[sp];
   const folder = inFolder ? paths[sp] : "";
-  const search = useSearch(q, folder, reload, tags, tagMode);
+  const search = useSearch(serializeQuery(q, filters), folder, reload, tagMode);
   // Folders: the results under their folders (a folded folder hides its files); Files: flat.
   // Folding is forgotten when the search changes.
   const grouped = searching && panes[sp].view === "folders";
-  const searchKey = `${q}\n${tagsKey}\n${tagMode}\n${folder}`;
+  const searchKey = `${q}\n${filtersKey}\n${tagMode}\n${folder}`;
   const [folded, setFolded] = useState<{ key: string; folders: Set<string> }>({ key: "", folders: new Set() });
   const foldedFolders = folded.key === searchKey ? folded.folders : NONE;
   const searchGroups = useMemo<HitGroup[]>(() => {
@@ -664,7 +673,7 @@ export default function Browse() {
   }, [grouped, search.hits, searchSort]);
 
   const viewOf = (pane: PaneId) => {
-    if (searching && pane === sp) return `search\n${q}\n${tagsKey}\n${tagMode}\n${folder}\n${grouped ? "grouped" : "flat"}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
+    if (searching && pane === sp) return `search\n${q}\n${filtersKey}\n${tagMode}\n${folder}\n${grouped ? "grouped" : "flat"}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
     const { path, collection, view } = panes[pane];
     const sort = view === "files" ? `${sorts[pane].sort} ${sorts[pane].dir}` : "";
     return `browse\n${path}\n${collection ?? ""}\n${view}\n${sort}`;
@@ -699,7 +708,7 @@ export default function Browse() {
       searchGroups,
       foldedFolders,
       q,
-      tagsKey,
+      filtersKey,
       sp,
       split,
     ],
@@ -758,8 +767,8 @@ export default function Browse() {
       extra(next.left, PARAM.one);
     }
     // the search stays while you move through folders
-    if (q) p.set("q", q);
-    for (const tag of tags) p.append("tag", tag);
+    const whole = serializeQuery(q, filters);
+    if (whole) p.set("q", whole);
     if (tagMode === "any") p.set("tag_mode", "any");
     return p;
   };
@@ -774,7 +783,7 @@ export default function Browse() {
     setParams(urlFor(withPath(pane, to), split));
   };
   /** A folder header of the grouped results: open that folder in Browse and leave the
-   * search (the words and tags go; Back brings the folder you were in). */
+   * search (the words and filters go; Back brings the folder you were in). */
   const openFolderFromSearch = (pane: PaneId, to: string) => {
     setHistory((h) => ({ ...h, [pane]: { back: [...h[pane].back, paths[pane]], forward: [] } }));
     const p = urlFor(withPath(pane, to), split);
@@ -1344,12 +1353,12 @@ export default function Browse() {
             />
           </div>
         </div>
-        {isSearch && tags.length > 0 && (
-          <TagBar
-            tags={tags}
+        {isSearch && filters.length > 0 && (
+          <FilterBar
+            filters={filters}
             mode={tagMode}
             onMode={setTagMode}
-            onRemove={(name) => setTags(tags.filter((t) => t !== name))}
+            onRemove={(f) => setFilters(filters.filter((x) => !sameFilter(x, f)))}
             onAdd={(name) => addTags([name])}
           />
         )}
@@ -1479,12 +1488,16 @@ export default function Browse() {
     );
   };
 
-  // Tag filters live in the address (?tag=, repeated); a tag typed as tag:name becomes one.
-  const setTags = (next: string[]) => {
+  // Filters live in the address, in ?q= beside the words; a finished `tag:name` typed in
+  // the box moves there and shows as a chip.
+  const setFilters = (next: SearchFilter[], words = q) => {
     const p = new URLSearchParams(params);
     p.delete("tag");
-    for (const t of next) p.append("tag", t);
-    if (next.length < 2) p.delete("tag_mode");
+    const whole = serializeQuery(words, next);
+    if (whole) p.set("q", whole);
+    else p.delete("q");
+    if (positiveTags(next).length < 2) p.delete("tag_mode");
+    wrote.current = readQuery(whole).words;
     setParams(p);
   };
   const setTagMode = (mode: TagMode) => {
@@ -1493,25 +1506,69 @@ export default function Browse() {
     else p.delete("tag_mode");
     setParams(p);
   };
-  const addTags = (names: string[]) => {
-    const next = [...tags];
-    for (const name of names) if (!next.some((t) => t.toLowerCase() === name.toLowerCase())) next.push(name);
-    if (next.length !== tags.length) setTags(next);
+  const addFilters = (add: SearchFilter[], words = q) => {
+    const next = add.reduce(withFilter, filters);
+    if (next.length !== filters.length) setFilters(next, words);
   };
+  const addTags = (names: string[]) => addFilters(names.map((value) => ({ name: "tag" as const, value, negated: false })));
+  // The words follow into the address as they are typed (replacing the entry, so Back is
+  // not filled with letters), and a ?tag= from an old link is moved into ?q=.
+  useEffect(() => {
+    const want = serializeQuery(q, filters);
+    if (want === (urlQ ?? "") && !params.has("tag")) return;
+    const timer = setTimeout(() => {
+      const p = new URLSearchParams(params);
+      p.delete("tag");
+      if (want) p.set("q", want);
+      else p.delete("q");
+      wrote.current = readQuery(want).words;
+      setParams(p, { replace: true });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // the address and the box are compared as they stand
+  }, [q, filtersKey, urlQ]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [onSuggestion, setOnSuggestion] = useState(-1); // the arrow keys' place in the list
-  // The word being typed: the name after "tag:", else the last word (two letters or more).
-  const word = typed.partial ?? (/\s$/.test(typed.rest) ? "" : (/\S+$/.exec(typed.rest)?.[0] ?? ""));
-  const wantSuggest = suggestOpen && (typed.partial !== null || word.length >= 2);
-  const suggested = useTagSuggestions(word, 8, wantSuggest);
-  const offered = (wantSuggest ? (suggested.data ?? []) : [])
-    .filter((t) => !tags.some((a) => a.toLowerCase() === t.name.toLowerCase()))
-    .slice(0, 6);
-  const pickTag = (name: string) => {
-    addTags([name]);
-    setQuery(typed.partial !== null ? typed.rest : typed.rest.replace(/\S+$/, ""));
+  const offered = useSearchCompletions(typed, filters, suggestOpen);
+  /** A filter typed in the box moves out of it: finished ones at once, the rest with Enter. */
+  const typeInBox = (value: string) => {
+    const t = splitSearch(value);
+    if (t.filters.length > 0) addFilters(t.filters, t.rest.trim());
+    setQuery(t.kept);
+  };
+  const pick = (c: Completion) => {
+    if (c.kind === "name") {
+      // the word becomes the filter's name; its values are offered next
+      setQuery(typed.rest.replace(/\S+$/, "") + c.insert);
+      setOnSuggestion(-1);
+    } else {
+      const base = typed.partial !== null ? typed.rest : typed.rest.replace(/\S+$/, "");
+      addFilters([c.filter], base.trim());
+      setQuery(base);
+      setSuggestOpen(false);
+    }
+    inputRef.current?.focus();
+  };
+  /** Enter on a filter being typed finishes it: the suggestion it names, else the first, else as typed. */
+  const finishTyped = () => {
+    const partial = typed.partial;
+    if (!partial) return false;
+    const values = offered.filter((c) => c.kind === "value");
+    const exact = values.find((c) => c.filter.value.toLowerCase() === partial.value.trim().toLowerCase());
+    const chosen = (exact ?? values[0])?.filter ?? (partial.value.trim() ? { name: partial.name, negated: partial.negated, value: partial.value.trim() } : null);
+    if (!chosen) return false;
+    addFilters([chosen], typed.rest.trim());
+    setQuery(typed.rest);
     setSuggestOpen(false);
+    return true;
+  };
+  /** A click on an example in the ? popup: it goes into the box, ready to be edited. */
+  const putExample = (example: string) => {
+    if (!searching) setSearchPane(act);
+    setQuery((query.trim() ? `${query.trimEnd()} ` : "") + example);
+    setSuggestOpen(true);
+    setOnSuggestion(-1);
     inputRef.current?.focus();
   };
 
@@ -1548,10 +1605,7 @@ export default function Browse() {
           spellCheck={false}
           onChange={(e) => {
             if (!searching && e.target.value.trim()) setSearchPane(act);
-            // a finished tag:name becomes a filter chip and leaves the box
-            const t = splitTagQuery(e.target.value);
-            if (t.tags.length > 0) addTags(t.tags);
-            setQuery(t.kept);
+            typeInBox(e.target.value);
             setSuggestOpen(true);
             setOnSuggestion(-1);
           }}
@@ -1563,17 +1617,20 @@ export default function Browse() {
               setOnSuggestion((n) => Math.max(-1, Math.min(offered.length - 1, n + by)));
             } else if (e.key === "Enter" && onSuggestion >= 0 && offered[onSuggestion]) {
               e.preventDefault();
-              pickTag(offered[onSuggestion].name);
-            } else if (e.key === "Enter" && typed.partial) {
-              // Enter finishes the tag being typed: the suggestion it names, else the first
+              pick(offered[onSuggestion]);
+            } else if (e.key === "Enter" && finishTyped()) {
               e.preventDefault();
-              const exact = offered.find((t) => t.name.toLowerCase() === typed.partial?.toLowerCase());
-              pickTag((exact ?? offered[0])?.name ?? typed.partial.trim());
+            } else if (e.key === "Enter" && typed.filters.length > 0) {
+              // finished filters left in the box (an example from the ? popup)
+              e.preventDefault();
+              addFilters(typed.filters, typed.rest.trim());
+              setQuery(typed.rest);
             }
           }}
         />
-        <TagSuggestions offered={offered} active={onSuggestion} onPick={pickTag} />
+        <SearchSuggestions offered={offered} active={onSuggestion} onPick={pick} />
       </div>
+      <SearchHelp onUse={putExample} />
     </div>
   );
 

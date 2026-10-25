@@ -1,18 +1,25 @@
-/** The tag part of Browse's search: the active tag filters as removable chips (in a row
- * of the results pane), the + Tag control, and the tags that match what is being typed. */
+/** The filter part of Browse's search: the active filters as removable chips (in a row of
+ * the results pane), the + Tag control, All / Any for the tags, and the suggestions for
+ * what is being typed. */
 import { useId, useRef, useState } from "react";
 import { useTagSuggestions } from "../api/client";
+import { filterToken, positiveTags, type SearchFilter } from "../searchFilters";
 import { visible } from "../text";
+import type { Completion } from "./useSearchCompletions";
 import { Segmented } from "./ui/Segmented";
 
-export function TagChips({ tags, onRemove }: { tags: string[]; onRemove: (name: string) => void }) {
-  if (tags.length === 0) return null;
+export function FilterChips({ filters, onRemove }: { filters: SearchFilter[]; onRemove: (filter: SearchFilter) => void }) {
+  if (filters.length === 0) return null;
   return (
-    <ul className="search-tags" aria-label="Tag filters">
-      {tags.map((t) => (
-        <li key={t} className="tag-token">
-          {visible(t)}
-          <button type="button" aria-label={`Remove tag ${visible(t)}`} onClick={() => onRemove(t)}>
+    <ul className="search-tags" aria-label="Search filters">
+      {filters.map((f) => (
+        <li key={filterToken(f)} className={f.negated ? "tag-token filter-not" : "tag-token"}>
+          <span className="filter-name">
+            {f.negated ? "not " : ""}
+            {f.name}:
+          </span>
+          {visible(f.value)}
+          <button type="button" aria-label={`Remove filter ${filterToken(f)}`} onClick={() => onRemove(f)}>
             ×
           </button>
         </li>
@@ -21,7 +28,42 @@ export function TagChips({ tags, onRemove }: { tags: string[]; onRemove: (name: 
   );
 }
 
-/** The tags offered while typing; ``active`` is the one the arrow keys are on. A tag is
+/** What the box offers while typing: a filter name (``collection:``) or a value for the
+ * filter being typed. ``active`` is the one the arrow keys are on. Taken on mouse down so
+ * the box keeps the focus. */
+export function SearchSuggestions({
+  offered,
+  active,
+  onPick,
+}: {
+  offered: Completion[];
+  active: number;
+  onPick: (c: Completion) => void;
+}) {
+  const id = useId();
+  if (offered.length === 0) return null;
+  return (
+    <ul id={id} className="tag-suggest" role="listbox" aria-label="Suggestions">
+      {offered.map((c, i) => (
+        <li
+          key={c.key}
+          role="option"
+          aria-selected={i === active}
+          className={i === active ? "active" : undefined}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onPick(c);
+          }}
+        >
+          {visible(c.label)}
+          {c.hint !== undefined && <span className="tag-suggest-count">{c.hint}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The tags offered in "+ Tag"; ``active`` is the one the arrow keys are on. A tag is
  * taken on mouse down so the box keeps the focus. */
 export function TagSuggestions({
   offered,
@@ -135,25 +177,26 @@ function AddTag({ tags, onAdd }: { tags: string[]; onAdd: (name: string) => void
   );
 }
 
-/** The row under a results pane's toolbar while tags filter: each tag as a removable chip,
- * + Tag, and (with two or more tags) the All / Any switch. */
-export function TagBar({
-  tags,
+/** The row under a results pane's toolbar while anything filters: each filter as a
+ * removable chip, + Tag, and (with two or more tags) the All / Any switch. */
+export function FilterBar({
+  filters,
   mode,
   onMode,
   onRemove,
   onAdd,
 }: {
-  tags: string[];
+  filters: SearchFilter[];
   mode: TagMode;
   onMode: (mode: TagMode) => void;
-  onRemove: (name: string) => void;
+  onRemove: (filter: SearchFilter) => void;
   onAdd: (name: string) => void;
 }) {
+  const tags = positiveTags(filters).map((f) => f.value);
   return (
     <div className="tag-bar">
-      <TagChips tags={tags} onRemove={onRemove} />
-      <AddTag tags={tags} onAdd={onAdd} />
+      <FilterChips filters={filters} onRemove={onRemove} />
+      <AddTag tags={filters.filter((f) => f.name === "tag").map((f) => f.value)} onAdd={onAdd} />
       {tags.length > 1 && (
         <Segmented<TagMode>
           ariaLabel="Match tags"

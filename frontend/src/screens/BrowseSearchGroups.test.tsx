@@ -191,12 +191,12 @@ describe("Search results by folder", () => {
 
 describe("The tags row", () => {
   it("shows the tags as chips under the toolbar, not in the search box", async () => {
-    setup("/browse?q=Kela&tag=medical&tag=tax%20return");
+    setup("/browse?q=Kela+tag%3Amedical+tag%3A%22tax+return%22");
     await screen.findByRole("list", { name: "Search results" });
-    const chips = screen.getByRole("list", { name: "Tag filters" });
+    const chips = screen.getByRole("list", { name: "Search filters" });
     expect(chips.closest(".tag-bar")).not.toBeNull();
     expect(chips.closest(".search")).toBeNull();
-    expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["medical×", "tax return×"]);
+    expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["tag:medical×", "tag:tax return×"]);
     expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("Kela");
     expect(within(screen.getByRole("searchbox", { name: "Search" }).closest(".search") as HTMLElement).queryByText("medical")).toBeNull();
   });
@@ -208,17 +208,17 @@ describe("The tags row", () => {
   });
 
   it("a chip's x removes the tag; the last one removes the row", async () => {
-    const { user } = setup("/browse?tag=medical&tag=tax");
+    const { user } = setup("/browse?q=tag%3Amedical+tag%3Atax");
     await screen.findByRole("list", { name: "Search results" });
-    await user.click(screen.getByRole("button", { name: "Remove tag medical" }));
-    expect(where()).toBe("/browse?tag=tax");
-    await user.click(screen.getByRole("button", { name: "Remove tag tax" }));
+    await user.click(screen.getByRole("button", { name: "Remove filter tag:medical" }));
+    expect(where()).toBe("/browse?q=tag%3Atax");
+    await user.click(screen.getByRole("button", { name: "Remove filter tag:tax" }));
     expect(where()).toBe("/browse");
     expect(document.querySelector(".tag-bar")).toBeNull();
   });
 
   it("+ Tag offers suggestions and adds the picked tag to the address and the search", async () => {
-    const { calls, user } = setup("/browse?tag=medical");
+    const { calls, user } = setup("/browse?q=tag%3Amedical");
     await screen.findByRole("list", { name: "Search results" });
     await user.click(screen.getByRole("button", { name: "+ Tag" }));
     const box = screen.getByRole("textbox", { name: "Tag to add" });
@@ -226,13 +226,13 @@ describe("The tags row", () => {
     const list = await screen.findByRole("listbox", { name: "Matching tags" });
     expect(within(list).getAllByRole("option").map((o) => o.textContent)).toEqual(["tax2"]);
     await user.click(within(list).getByRole("option", { name: /^tax/ }));
-    expect(where()).toBe("/browse?tag=medical&tag=tax");
+    expect(where()).toBe("/browse?q=tag%3Amedical+tag%3Atax");
     expect(screen.queryByRole("textbox", { name: "Tag to add" })).not.toBeInTheDocument();
-    await waitFor(() => expect(queryOf(searches(calls).at(-1) as Call).getAll("tag")).toEqual(["medical", "tax"]));
+    await waitFor(() => expect(queryOf(searches(calls).at(-1) as Call).get("q")).toBe("tag:medical tag:tax"));
   });
 
   it("+ Tag skips the tags already chosen, takes Enter on the first suggestion and Escape closes", async () => {
-    const { user } = setup("/browse?tag=medical");
+    const { user } = setup("/browse?q=tag%3Amedical");
     await screen.findByRole("list", { name: "Search results" });
     await user.click(screen.getByRole("button", { name: "+ Tag" }));
     await user.type(screen.getByRole("textbox", { name: "Tag to add" }), "med");
@@ -244,15 +244,15 @@ describe("The tags row", () => {
     await user.type(screen.getByRole("textbox", { name: "Tag to add" }), "med");
     await screen.findByRole("listbox", { name: "Matching tags" });
     await user.keyboard("{Enter}");
-    expect(where()).toBe("/browse?tag=medical&tag=Medicine");
+    expect(where()).toBe("/browse?q=tag%3Amedical+tag%3AMedicine");
   });
 
   it("tag:name typed in the box lands in the row and leaves the box", async () => {
     const { user } = setup("/browse?q=pdf");
     await screen.findByRole("list", { name: "Search results" });
     await user.type(screen.getByRole("searchbox", { name: "Search" }), " tag:medical ");
-    expect(where()).toBe("/browse?q=pdf&tag=medical");
-    const chips = await screen.findByRole("list", { name: "Tag filters" });
+    expect(where()).toBe("/browse?q=pdf+tag%3Amedical");
+    const chips = await screen.findByRole("list", { name: "Search filters" });
     expect(chips.closest(".tag-bar")).not.toBeNull();
     expect((screen.getByRole("searchbox", { name: "Search" }) as HTMLInputElement).value.trim()).toBe("pdf"); // only the words
   });
@@ -260,7 +260,7 @@ describe("The tags row", () => {
 
 describe("All / Any", () => {
   it("is offered with two or more tags, All by default, and not with one", async () => {
-    const { calls } = setup("/browse?tag=medical&tag=tax");
+    const { calls } = setup("/browse?q=tag%3Amedical+tag%3Atax");
     await screen.findByRole("list", { name: "Search results" });
     const mode = screen.getByRole("group", { name: "Match tags" });
     expect(within(mode).getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
@@ -269,28 +269,28 @@ describe("All / Any", () => {
   });
 
   it("not with a single tag", async () => {
-    setup("/browse?tag=medical");
+    setup("/browse?q=tag%3Amedical");
     await screen.findByRole("list", { name: "Search results" });
     expect(screen.queryByRole("group", { name: "Match tags" })).not.toBeInTheDocument();
   });
 
   it("Any puts tag_mode=any in the address and the search; All takes it out again", async () => {
-    const { calls, user } = setup("/browse?tag=medical&tag=tax");
+    const { calls, user } = setup("/browse?q=tag%3Amedical+tag%3Atax");
     await screen.findByRole("list", { name: "Search results" });
     const mode = screen.getByRole("group", { name: "Match tags" });
     await user.click(within(mode).getByRole("button", { name: "Any" }));
-    expect(where()).toBe("/browse?tag=medical&tag=tax&tag_mode=any");
+    expect(where()).toBe("/browse?q=tag%3Amedical+tag%3Atax&tag_mode=any");
     await waitFor(() => expect(queryOf(searches(calls).at(-1) as Call).get("tag_mode")).toBe("any"));
     await user.click(within(mode).getByRole("button", { name: "All" }));
-    expect(where()).toBe("/browse?tag=medical&tag=tax");
+    expect(where()).toBe("/browse?q=tag%3Amedical+tag%3Atax");
     await waitFor(() => expect(queryOf(searches(calls).at(-1) as Call).has("tag_mode")).toBe(false));
   });
 
   it("the address sets Any; dropping to one tag drops the parameter", async () => {
-    const { user } = setup("/browse?tag=medical&tag=tax&tag_mode=any");
+    const { user } = setup("/browse?q=tag%3Amedical+tag%3Atax&tag_mode=any");
     await screen.findByRole("list", { name: "Search results" });
     expect(within(screen.getByRole("group", { name: "Match tags" })).getByRole("button", { name: "Any" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(screen.getByRole("button", { name: "Remove tag tax" }));
-    expect(where()).toBe("/browse?tag=medical");
+    await user.click(screen.getByRole("button", { name: "Remove filter tag:tax" }));
+    expect(where()).toBe("/browse?q=tag%3Amedical");
   });
 });

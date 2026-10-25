@@ -21,12 +21,13 @@ import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { Sheet } from "../components/ui/Sheet";
 import { Toolbar } from "../components/ui/Toolbar";
 import { plural } from "../format";
+import { tagFilter } from "../searchFilters";
 import { visible } from "../text";
 
 const TAG_DRAG = "application/x-dam-tag";
 const same = (a: string, b: string) => a.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase() === b.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const byName = (a: TagInfo, b: TagInfo) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
-const browseUrl = (name: string) => `/browse?${new URLSearchParams({ tag: name, q: "" })}`;
+const browseUrl = (name: string) => `/browse?${new URLSearchParams({ q: tagFilter(name) })}`;
 
 type Sheetful =
   | { kind: "create" }

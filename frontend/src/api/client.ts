@@ -357,8 +357,8 @@ const enc = encodeURIComponent;
 export const useInbox = () =>
   useQuery({ queryKey: keys.inbox, queryFn: () => get<InboxEntry[]>("/api/inbox") });
 
-export const useFolders = () =>
-  useQuery({ queryKey: keys.folders, queryFn: () => get<string[]>("/api/folders") });
+export const useFolders = (enabled = true) =>
+  useQuery({ queryKey: keys.folders, queryFn: () => get<string[]>("/api/folders"), enabled });
 
 const knowArchive = <T extends { archive?: { id: string } | null }>(status: T): T => {
   if (status.archive) setActiveArchive(status.archive.id);
@@ -588,13 +588,14 @@ export const useBrowseFiles = (
     enabled,
   });
 
-/** Full-text search; ``folder`` limits it to that subtree. Up to the API's 500 hits, so
+/** Full-text search; ``q`` is the words and the ``name:value`` filters (``tag:medical``);
+ * ``folder`` limits it to that subtree; ``tagMode`` "any": at least one of the ``tag:``
+ * filters (else every one). Up to the API's 500 hits, so
  * sorting the results by a column sorts (nearly) every match, not just the best 50. */
-export const searchFiles = (q: string, folder?: string, tags: string[] = [], tagMode: "all" | "any" = "all") => {
+export const searchFiles = (q: string, folder?: string, tagMode: "all" | "any" = "all") => {
   const params = new URLSearchParams({ q, limit: "500" });
   if (folder) params.set("folder", folder);
-  for (const tag of tags) params.append("tag", tag);
-  if (tags.length > 1 && tagMode === "any") params.set("tag_mode", "any");
+  if (tagMode === "any") params.set("tag_mode", "any");
   return get<SearchHit[]>(`/api/search?${params}`);
 };
 
@@ -712,8 +713,8 @@ export function useTodayFollowsInbox(status: Status | undefined) {
 }
 
 /** Tray definitions in order, plus the tray files that were skipped. */
-export const useTrays = () =>
-  useQuery({ queryKey: keys.trays, queryFn: () => get<Trays>("/api/trays") });
+export const useTrays = (enabled = true) =>
+  useQuery({ queryKey: keys.trays, queryFn: () => get<Trays>("/api/trays"), enabled });
 
 export const useItems = (trayId: string, state: ItemState = "open") =>
   useQuery({
@@ -857,7 +858,8 @@ export const usePutAssignments = () => {
 };
 
 /** The people list and the address area. */
-export const usePeople = () => useQuery({ queryKey: keys.people, queryFn: () => get<People>("/api/settings/people") });
+export const usePeople = (enabled = true) =>
+  useQuery({ queryKey: keys.people, queryFn: () => get<People>("/api/settings/people"), enabled });
 
 /** Save the people list (and the address area when given); a 400 says why not. */
 export const useSavePeople = () => {
@@ -1144,10 +1146,11 @@ export const useCreateItem = () => {
 
 // -- collections ----------------------------------------------------------------
 
-export const useCollections = (state: CollectionState = "open") =>
+export const useCollections = (state: CollectionState = "open", enabled = true) =>
   useQuery({
     queryKey: [...keys.collections, "list", state],
     queryFn: () => get<CollectionRow[]>(`/api/collections?state=${state}`),
+    enabled,
   });
 
 /** Every collection, open and closed, with the built-in ★ Ongoing and ! Important (the

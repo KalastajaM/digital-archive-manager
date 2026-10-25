@@ -4,9 +4,10 @@ import { errorText, MARKS_CHANGED, type SearchHit, searchFiles } from "../api/cl
 export const SEARCH_DEBOUNCE_MS = 250;
 
 /** Debounced full-text search; a response for anything but the latest query is dropped.
- * ``tags``: only files with all of them, or with at least one when ``tagMode`` is "any"
- * (words are optional then). */
-export function useSearch(query: string, folder = "", reload = 0, tags: string[] = [], tagMode: "all" | "any" = "all") {
+ * ``query`` is the words and the filters as typed (``kela tag:medical``); ``tagMode`` "any":
+ * a file needs at least one of the ``tag:`` filters, else every one. With filters alone the
+ * words are optional. */
+export function useSearch(query: string, folder = "", reload = 0, tagMode: "all" | "any" = "all") {
   const [results, setResults] = useState<{ key: string; hits: SearchHit[] } | null>(null);
   const [error, setError] = useState<{ key: string; text: string } | null>(null);
   const latest = useRef(0);
@@ -17,25 +18,24 @@ export function useSearch(query: string, folder = "", reload = 0, tags: string[]
     window.addEventListener(MARKS_CHANGED, bump);
     return () => window.removeEventListener(MARKS_CHANGED, bump);
   }, []);
-  const tagsKey = tags.join("\n");
-  const mode = tags.length > 1 ? tagMode : "all";
-  const key = `${query}\n${folder}\n${tagsKey}\n${mode}`;
+  const mode = tagMode;
+  const key = `${query}\n${folder}\n${mode}`;
   useEffect(() => {
-    if (!query && !tagsKey) {
+    if (!query) {
       latest.current++; // whatever is still on its way is now stale
       return;
     }
     const timer = setTimeout(async () => {
       const seq = ++latest.current;
       try {
-        const hits = await searchFiles(query, folder || undefined, tagsKey ? tagsKey.split("\n") : [], mode);
+        const hits = await searchFiles(query, folder || undefined, mode);
         if (seq === latest.current) setResults({ key, hits });
       } catch (e) {
         if (seq === latest.current) setError({ key, text: errorText(e) });
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [query, folder, reload, marked, tagsKey, mode]);
+  }, [query, folder, reload, marked, mode]);
   return {
     hits: results?.key === key ? results.hits : null,
     error: error?.key === key && results?.key !== key ? error.text : null,

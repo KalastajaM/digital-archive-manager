@@ -2172,7 +2172,8 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 
 .collections-top-drop { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--separator); border-radius: var(--r-lg); text-align: center; }
 
-.today-search input { width: 100%; }
+.today-search { display: flex; align-items: center; gap: var(--sp-2); }
+.today-search input { flex: 1; width: auto; min-width: 0; }
 
 /* Tags screen */
 .tags-screen { display: flex; flex-direction: column; gap: var(--sp-3); }
@@ -2207,3 +2208,14 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .group-head .group-name:hover:not(:disabled) { text-decoration: underline; background: transparent; }
 .group-count { margin-left: auto; color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 900px) { .browse-split .browse-pane-grouped { --flat-cols: minmax(0, 1fr) 0 0; } }
+.filter-name { color: var(--muted); margin-right: 2px; }
+.tag-token.filter-not { background: transparent; box-shadow: inset 0 0 0 0.5px var(--hairline); }
+.search-help { flex: none; width: 22px; height: 22px; min-height: 0; padding: 0; border-radius: 999px; border: 0.5px solid var(--hairline); background: transparent; box-shadow: none; color: var(--muted); font-size: var(--fs-sm); line-height: 1; cursor: pointer; }
+.search-help:hover:not(:disabled), .search-help[aria-expanded="true"] { color: var(--text); background: var(--hover); }
+.search-help-pop { width: min(400px, calc(100vw - 32px)); max-height: min(70vh, 540px); overflow-y: auto; font-size: var(--fs-sm); }
+.search-help-pop h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
+.search-help-list, .search-help-tips { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
+.search-help-list li { display: grid; grid-template-columns: 10.5rem 1fr; gap: var(--sp-2); align-items: baseline; padding: 2px 0; }
+.search-help-example { justify-self: start; border: none; background: var(--accent-soft); color: var(--text); font-family: var(--font-mono, monospace); font-size: var(--fs-xs); padding: 1px var(--sp-2); min-height: 0; border-radius: var(--r-sm); box-shadow: none; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.search-help-example:hover { background: var(--hover); }
+.search-help-tips li { color: var(--muted); padding: 1px 0; }
