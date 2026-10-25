@@ -7,8 +7,9 @@ from fastapi import Depends, Request
 from dam.api.setup_ctl import SetupMode
 from dam.app import App
 from dam.index.repo import FileRecord
+from dam.ops.guards import is_under
 from dam.services.archives import ArchiveService, solo
-from dam.services.errors import Conflict, NotFound
+from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 UI_ORIGIN = "ui"  # every change made through the API is journaled as coming from the UI
 
@@ -26,6 +27,22 @@ def live_record(app: App, drive_id: str) -> FileRecord:
     if rec is None or rec.missing or rec.parked_at is not None:
         raise NotFound(drive_id)
     return rec
+
+
+TO_DELETE_READ_ONLY = "Marked for deletion: restore it first"
+
+
+def require_editable(app: App, drive_ids: list[str]) -> None:
+    """Refuse (400) a change to a file that is in the quarantine folder (``##. To
+    Delete``): what is marked for deletion is read-only until it is restored. Its tags,
+    collections, notes and tray items stay as they are, so a restored file comes back
+    with them. Unknown or missing ids are left to the caller's own checks."""
+    for drive_id in dict.fromkeys(drive_ids):
+        rec = app.repo.get(drive_id)
+        if rec is None or rec.missing or rec.parked_at is not None:
+            continue
+        if is_under(rec.path_nfc, app.paths.quarantine):
+            raise InvalidRequest(f"{TO_DELETE_READ_ONLY}: {rec.path}")
 
 
 def check_target(app: App, kind: str, target: str) -> None:

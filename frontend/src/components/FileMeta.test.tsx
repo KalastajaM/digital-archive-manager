@@ -332,7 +332,7 @@ describe("what cannot be edited", () => {
   it.each([
     [{ drive_id: "x", path: "a/l", is_link: true }, "Links cannot be renamed or moved"],
     [{ drive_id: "x", path: "##. Ongoing/l.pdf" }, "Files in ##. Ongoing cannot be moved: the app keeps them"],
-    [{ drive_id: "x", path: "##. To Delete/l.pdf" }, "Files in ##. To Delete cannot be moved: Undo puts them back"],
+    [{ drive_id: "x", path: "##. To Delete/l.pdf" }, "Marked for deletion: restore it first"],
     [{ drive_id: "x", path: "a/b", is_dir: true }, "Folders have no details to edit"],
     [{ drive_id: "x", path: null }, "The file is not in the index"],
   ])("Rename, Move file to…, Ask AI and the tag field are disabled, saying why, for %o", (file, why) => {

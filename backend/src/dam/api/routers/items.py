@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Response
 
-from dam.api.deps import AppDep, live_record
+from dam.api.deps import AppDep, live_record, require_editable
 from dam.api.marks import collections_out
 from dam.api.schemas import (
     DoneBody,
@@ -30,6 +30,7 @@ router = APIRouter(prefix="/api", tags=["items"])
 def create_item(app: AppDep, body: ItemCreateBody):
     for drive_id in body.drive_ids:
         live_record(app, drive_id)
+    require_editable(app, body.drive_ids)
     return app.trays.create(body.tray, body.drive_ids, body.fields, body.title)
 
 
@@ -40,6 +41,7 @@ def quick(app: AppDep, body: QuickBody):
     gets that item moved here. DB only: the files stay where they are."""
     for drive_id in body.drive_ids:
         live_record(app, drive_id)
+    require_editable(app, body.drive_ids)
     result = app.trays.create_quick(body.tray, body.drive_ids, body.fields)
     return {
         "created": result.created,
@@ -139,6 +141,7 @@ def reopen(app: AppDep, item_id: int):
 def add_file(app: AppDep, item_id: int, body: ItemFileAddBody):
     """Attach a file (DB only); ``position`` puts it back where a removed one was."""
     live_record(app, body.drive_id)
+    require_editable(app, [body.drive_id])
     return app.trays.add_file(item_id, body.drive_id, body.position)
 
 

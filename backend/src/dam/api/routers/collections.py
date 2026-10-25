@@ -22,7 +22,7 @@ from typing import Literal
 
 from fastapi import APIRouter
 
-from dam.api.deps import AppDep
+from dam.api.deps import AppDep, require_editable
 from dam.api.marks import collection_out, collections_out
 from dam.api.schemas import (
     CollectionChangeOut,
@@ -190,7 +190,9 @@ def move(app: AppDep, collection_id: int, body: CollectionMoveBody) -> dict:
 @router.post("/{collection_id}/members", response_model=CollectionChangeOut)
 def add_members(app: AppDep, collection_id: int, body: DriveIdsBody) -> dict:
     """No preview: the sync only links the new members in (app-owned links, journaled;
-    removing the member again reverses it). The batch that ran is returned."""
+    removing the member again reverses it). The batch that ran is returned. 400 for a
+    file marked for deletion (restore it first)."""
+    require_editable(app, body.drive_ids)
     what = file_phrase(app, body.drive_ids)
     c = app.collections.add_members(collection_id, body.drive_ids, notify=False)
     return _synced(app, collection_id, f"Added {what} to {c.name}")

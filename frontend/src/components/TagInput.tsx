@@ -28,6 +28,7 @@ export function TagInput({
   id,
   placeholder = "Add a tag",
   disabled = false,
+  disabledReason,
   passCmdEnter = false,
 }: {
   value: string[];
@@ -38,6 +39,8 @@ export function TagInput({
   /** Shown while there are no tags. */
   placeholder?: string;
   disabled?: boolean;
+  /** Why the field is off, shown on hover (the disabled input itself shows no tip). */
+  disabledReason?: string | null;
   /** ⌘↩ adds the text being typed and then reaches the page's shortcut (the Inbox's
    * File it), which sees the tags with it. */
   passCmdEnter?: boolean;
@@ -111,7 +114,7 @@ export function TagInput({
   };
   return (
     <div className="tag-field-wrap">
-      <div className={disabled ? "tag-field disabled" : "tag-field"}>
+      <div className={disabled ? "tag-field disabled" : "tag-field"} title={disabled ? (disabledReason ?? undefined) : undefined}>
         {value.map((t) => (
           <span key={t} className="tag-token">
             {visible(t)}

@@ -94,6 +94,7 @@ export type SearchHit = Schemas["SearchHitOut"];
 export type JournalEntry = Schemas["JournalEntryOut"];
 export type BatchSummary = Schemas["BatchSummaryOut"];
 export type QuarantineBody = Schemas["QuarantineBody"];
+export type RestoreBody = Schemas["RestoreBody"];
 export type UnusedPicturesBody = Schemas["UnusedPicturesIn"];
 export type MoveBody = Schemas["MoveBody"];
 export type MoveResult = Schemas["MoveResultOut"];
@@ -604,6 +605,18 @@ export const useQuarantine = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (body: QuarantineBody) => post<BatchResult>("/api/quarantine", body),
+    onSettled: (_data, _error, body) => {
+      if (!body.dry_run) refresh();
+    },
+  });
+};
+
+/** Takes entries out of ``##. To Delete`` again (``to``: the path they were marked at,
+ * or the inbox); a dry run only resolves the plan. */
+export const useRestore = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: RestoreBody) => post<BatchResult>("/api/restore", body),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },

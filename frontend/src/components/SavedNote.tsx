@@ -24,7 +24,18 @@ export function SaveState({ status }: { status: SaveStatus }) {
 
 /** The note of a file, collection or item: edited in a NoteEditor, saved on blur
  * (``PUT /api/notes/<kind>/<target>``; blank text removes it). */
-export function SavedNote({ kind, target, label }: { kind: NoteKind; target: string; label?: string }) {
+export function SavedNote({
+  kind,
+  target,
+  label,
+  readOnly = null,
+}: {
+  kind: NoteKind;
+  target: string;
+  label?: string;
+  /** Why the note cannot be edited (null: it can). */
+  readOnly?: string | null;
+}) {
   const note = useNote(kind, target);
   const setNote = useSetNote();
   const save = async (text: string) => (await setNote.mutateAsync({ kind, target, text })).text;
@@ -38,8 +49,8 @@ export function SavedNote({ kind, target, label }: { kind: NoteKind; target: str
   }
   return (
     <Collapsible name="notes" title="Notes" className="item-note" hint={firstLine(auto.shown) || "No note yet"}>
-      <div onBlur={() => void auto.commit()}>
-        <NoteEditor value={auto.shown} onChange={auto.change} label={label} />
+      <div onBlur={() => void auto.commit()} data-tip={readOnly ?? undefined}>
+        <NoteEditor value={auto.shown} onChange={auto.change} label={label} disabled={readOnly !== null} />
         <SaveState status={auto.status} />
       </div>
     </Collapsible>

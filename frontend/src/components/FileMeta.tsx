@@ -205,7 +205,7 @@ export function FileMeta({
       onClick={() => ai.ask({ drive_id: id })}
     />
   );
-  const marks = <MarkToggles driveId={id} name={name} marks={file.marks} />;
+  const marks = <MarkToggles driveId={id} name={name} marks={file.marks} path={file.path} />;
   const tags = (
     <TagsField
       driveId={id}
@@ -293,7 +293,7 @@ function TagsField({
   const chips = tagOffers(tags.join(", "), offers);
   return (
     <section className="file-tags" aria-label="Tags" title={reason ?? undefined}>
-      <TagInput value={tags} onChange={(next) => void write(next)} label={`Add a tag to ${visible(name)}`} disabled={off} />
+      <TagInput value={tags} onChange={(next) => void write(next)} label={`Add a tag to ${visible(name)}`} disabled={off} disabledReason={reason} />
       {problem && (
         <p className="error" role="alert">
           {visible(problem)}

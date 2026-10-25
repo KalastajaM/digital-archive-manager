@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Response
 
-from dam.api.deps import AppDep, check_target
+from dam.api.deps import AppDep, check_target, require_editable
 from dam.api.schemas import (
     CheckAddBody,
     ChecklistItemOut,
@@ -15,6 +15,14 @@ from dam.api.schemas import (
 )
 
 router = APIRouter(prefix="/api", tags=["notes"])
+
+
+def check_writable(app, kind: str, target: str) -> None:
+    """``check_target`` for a change: a file marked for deletion is read-only."""
+    check_target(app, kind, target)
+    if kind == "file":
+        require_editable(app, [target])
+
 
 Kind = Literal["file", "collection", "item"]
 _NO_CONTENT = {"status_code": 204, "response_class": Response}
@@ -29,7 +37,7 @@ def get_note(app: AppDep, kind: Kind, target: str) -> dict:
 @router.put("/notes/{kind}/{target}", response_model=NoteOut)
 def set_note(app: AppDep, kind: Kind, target: str, body: NoteBody) -> dict:
     """Store the note (trimmed); blank text removes it."""
-    check_target(app, kind, target)
+    check_writable(app, kind, target)
     app.notes.set(kind, target, body.text)
     return {"text": app.notes.get(kind, target)}
 
@@ -37,7 +45,7 @@ def set_note(app: AppDep, kind: Kind, target: str, body: NoteBody) -> dict:
 @router.post("/notes/{kind}/{target}/append", response_model=NoteOut)
 def append_note(app: AppDep, kind: Kind, target: str, body: NoteBody) -> dict:
     """Add the text below the existing note (atomic: no read-modify-write in the client)."""
-    check_target(app, kind, target)
+    check_writable(app, kind, target)
     return {"text": app.notes.append(kind, target, body.text)}
 
 
@@ -69,5 +77,5 @@ def checklist(app: AppDep, kind: Kind, target: str) -> list:
 
 @router.post("/checklist/{kind}/{target}", response_model=ChecklistItemOut)
 def add_check(app: AppDep, kind: Kind, target: str, body: CheckAddBody):
-    check_target(app, kind, target)
+    check_writable(app, kind, target)
     return app.notes.add_check(kind, target, body.text)

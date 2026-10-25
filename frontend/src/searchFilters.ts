@@ -39,7 +39,7 @@ export const FILTER_HELP: { name: FilterName; example: string; text: string }[] 
   { name: "after", example: "after:2025", text: "Dated on or after the first day of that year, month or day." },
   { name: "before", example: "before:2026-06", text: "Dated before the first day of that year, month or day." },
   { name: "tray", example: "tray:to-pay", text: "Files with an open item in that tray (its id or name)." },
-  { name: "is", example: "is:locked", text: "starred, important, locked, todo (open checklist items), note or summary." },
+  { name: "is", example: "is:locked", text: "starred, important, locked (a lock you set; Important files are found with is:important), todo (open checklist items), note or summary." },
 ];
 
 const isSpace = (c: string | undefined) => c !== undefined && /\s/.test(c);

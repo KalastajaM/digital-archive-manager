@@ -6,7 +6,26 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Restore from To Delete.** Select one or several files in `##. To Delete` and choose
+  **Restore** in the toolbar (or the two buttons in the file's panel): **Restore to where
+  it was** puts them back at the path they were marked at, **Restore to Inbox** puts
+  them in the inbox. A folder marked for deletion can be restored too, from its
+  right-click menu or its panel. It is a normal batch: the preview lists what happens,
+  including a folder that is gone and is made again and a name that is taken (the file
+  gets a number), you confirm, and Activity shows "Restored 3 files from To Delete" with
+  Undo, which puts them back in To Delete.
+
 ### Changed
+
+- Files in `##. To Delete` are read-only. Starring, marking Important, putting in a tray,
+  adding to a collection, tags, From and For, the summary and the notes are all off for
+  them in Browse, with "Marked for deletion: restore it first" as the reason, and the app
+  refuses the same changes if they are asked for another way. Their tags, collections,
+  notes and tray items are kept, so a restored file comes back with them.
+- The search filter `is:locked` now finds only the files you locked yourself. Important
+  files are always locked, but you find them with `is:important`.
 
 - The Browse header now sits over the file list instead of the whole window: the
   **Folder / Archive** switch, the search box with its **?**, the two-panes and **New

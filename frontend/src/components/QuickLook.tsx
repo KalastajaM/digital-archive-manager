@@ -81,7 +81,7 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
         </div>
         <div className="quicklook-nav">
           <InlineResults.Provider value={status.report}>
-            <MarkToggles driveId={file.drive_id} name={qlName(file)} />
+            <MarkToggles driveId={file.drive_id} name={qlName(file)} path={file.path} />
           </InlineResults.Provider>
           {trash && <TrashButton disabled={trash.busy} disabledReason={trash.refusal} onClick={trash.run} />}
           <IconButton

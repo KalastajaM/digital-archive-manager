@@ -12,7 +12,9 @@ import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
 import { Breakable } from "../components/PlanPreview";
+import type { RestoreTo } from "../components/Restore";
 import { SavedNote } from "../components/SavedNote";
+import { inToDelete, toDeleteReason } from "../toDelete";
 import { visible } from "../text";
 import { type BackToInbox, FileActions, FileCollections, FolderActions } from "./FileActions";
 
@@ -26,6 +28,7 @@ export function FilePanel({
   extras,
   backToInbox,
   boxTool = true,
+  restore,
 }: {
   file: MetaFile;
   /** What the preview shows (Browse: a link's target). */
@@ -39,7 +42,11 @@ export function FilePanel({
   backToInbox?: BackToInbox;
   /** The "Draw a box" tool on page 1 (on unless turned off). */
   boxTool?: boolean;
+  /** Restore this file (one in To Delete only): the screen runs the flow. */
+  restore?: (to: RestoreTo) => void;
 }) {
+  // A file in ##. To Delete is read-only until it is restored
+  const readOnly = toDeleteReason(file.path);
   return (
     <FileMeta key={`meta-${file.drive_id}`} file={file} disabled={disabled}>
       {(meta) => (
@@ -52,12 +59,12 @@ export function FilePanel({
             </>
           }
           tags={meta.tags}
-          collections={<FileCollections driveId={file.drive_id} />}
-          summary={<SummaryBox driveId={file.drive_id} />}
+          collections={<FileCollections driveId={file.drive_id} readOnly={readOnly} />}
+          summary={<SummaryBox driveId={file.drive_id} readOnly={readOnly} />}
           own={
             <>
               {extras}
-              <FileActions driveId={file.drive_id} backToInbox={backToInbox} />
+              <FileActions driveId={file.drive_id} backToInbox={backToInbox} readOnly={readOnly} restore={readOnly ? restore : undefined} />
             </>
           }
           preview={
@@ -74,7 +81,7 @@ export function FilePanel({
               }
             />
           }
-          notes={<SavedNote kind="file" target={file.drive_id} label="Note on this file" />}
+          notes={<SavedNote kind="file" target={file.drive_id} label="Note on this file" readOnly={readOnly} />}
         />
       )}
     </FileMeta>
@@ -84,7 +91,16 @@ export function FilePanel({
 /** A selected folder in Browse: its name and path, the collections it is in (× takes
  * it out) and the field that adds it to more. A folder in a collection brings everything in it,
  * including what is added later. ``refusal``: why it cannot be added (the app's areas). */
-export function FolderPanel({ folder, refusal }: { folder: { drive_id: string; name: string; path: string }; refusal: string | null }) {
+export function FolderPanel({
+  folder,
+  refusal,
+  restore,
+}: {
+  folder: { drive_id: string; name: string; path: string };
+  refusal: string | null;
+  /** A folder in To Delete: Restore it to where it was or to the inbox. */
+  restore?: (to: RestoreTo) => void;
+}) {
   return (
     <div className="file-panel folder-panel">
       <header className="file-meta-head">
@@ -100,7 +116,7 @@ export function FolderPanel({ folder, refusal }: { folder: { drive_id: string; n
       <p className="hint">
         Added to a collection, a folder brings everything in it, also what is put in it later. Enter opens it.
       </p>
-      <FolderActions key={folder.drive_id} driveId={folder.drive_id} refusal={refusal} />
+      <FolderActions key={folder.drive_id} driveId={folder.drive_id} refusal={refusal} restore={inToDelete(folder.path) ? restore : undefined} />
     </div>
   );
 }

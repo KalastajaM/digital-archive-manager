@@ -13,11 +13,14 @@ export function NoteEditor({
   onChange,
   label = "Note (optional)",
   placeholder = "Add a note…",
+  disabled = false,
 }: {
   value: string;
   onChange: (text: string) => void;
   label?: string;
   placeholder?: string;
+  /** Read-only (a file in To Delete). */
+  disabled?: boolean;
 }) {
   const id = useId();
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -33,6 +36,7 @@ export function NoteEditor({
         maxLength={NOTE_MAX}
         placeholder={placeholder}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
       {value.length >= COUNT_FROM && (

@@ -10,7 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter
 
-from dam.api.deps import AppDep
+from dam.api.deps import AppDep, require_editable
 from dam.api.marks import collection_out
 from dam.api.routers.collections import _synced, file_phrase
 from dam.api.schemas import CollectionChangeOut, CollectionOut, MarkBody
@@ -34,6 +34,7 @@ def builtin(app: AppDep, kind: Literal["starred", "important"]) -> dict:
 @router.post("/star", response_model=CollectionChangeOut)
 def star(app: AppDep, body: MarkBody) -> dict:
     _no_group(body)
+    require_editable(app, body.drive_ids)
     what = file_phrase(app, body.drive_ids)
     c = app.marks.star(body.drive_ids, notify=False)
     return _synced(app, c.id, f"Starred {what}")
@@ -52,6 +53,7 @@ def important(app: AppDep, body: MarkBody) -> dict:
     """Mark as important, in the group at ``group`` ("Houses/Hillside", created as
     needed; a file already in another group moves there). Without ``group``, new ones
     are ungrouped and marked ones keep their group."""
+    require_editable(app, body.drive_ids)
     what = file_phrase(app, body.drive_ids)
     c = app.marks.mark_important(body.drive_ids, body.group, notify=False)
     return _synced(app, c.id, f"Marked {what} as important")

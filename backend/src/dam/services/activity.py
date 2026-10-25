@@ -124,7 +124,14 @@ class ActivityService:
         is_undo = flag(o.undo_of.is_not(None))
         kind = case(
             (is_undo, "undo"),
-            (or_(flag(o.kind == "quarantine"), label.like("% to To Delete")), "trash"),
+            (
+                or_(
+                    flag(o.kind == "quarantine"),
+                    label.like("% to To Delete"),
+                    label.like("Restored % from To Delete%"),
+                ),
+                "trash",
+            ),
             (
                 or_(
                     label.like("Starred %"),

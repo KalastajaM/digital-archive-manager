@@ -15,6 +15,7 @@ from dam.api.schemas import (
     QuarantineBody,
     RenameBody,
     ResolvedOpOut,
+    RestoreBody,
     SearchHitOut,
 )
 
@@ -68,6 +69,13 @@ def search(
 @router.post("/quarantine", response_model=BatchResultOut)
 def quarantine(app: AppDep, body: QuarantineBody):
     return app.browse.quarantine(body.drive_ids, origin=UI_ORIGIN, dry_run=body.dry_run)
+
+
+@router.post("/restore", response_model=BatchResultOut)
+def restore(app: AppDep, body: RestoreBody):
+    """Take entries out of To Delete again (original place or the inbox); ``dry_run``
+    shows the plan, including a folder made again and a name given ``_N``."""
+    return app.browse.restore(body.drive_ids, body.to, origin=UI_ORIGIN, dry_run=body.dry_run)
 
 
 @router.post("/browse/move/preview", response_model=list[ResolvedOpOut])

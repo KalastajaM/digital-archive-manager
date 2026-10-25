@@ -252,12 +252,8 @@ def _add_is(engine: Engine, w: _Where, value: str, neg: bool) -> None:
     elif value == "important":
         w.add(_member_cond(engine, w, _builtin_id(engine, "important")), neg)
     elif value == "locked":
-        # the owner's locks, and everything marked Important (always locked)
-        w.add(
-            "f.drive_id IN (SELECT drive_id FROM file_locks) OR "
-            + _member_cond(engine, w, _builtin_id(engine, "important")),
-            neg,
-        )
+        # the owner's own locks only; Important files are found with is:important
+        w.add("f.drive_id IN (SELECT drive_id FROM file_locks)", neg)
     elif value == "todo":
         w.add(
             "f.drive_id IN (SELECT target_id FROM checklist_items "

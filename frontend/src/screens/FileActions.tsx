@@ -22,6 +22,7 @@ import {
 import { type CollectionChip, CollectionInput } from "../components/CollectionInput";
 import { changeToast } from "../components/collectionText";
 import { LastChange } from "../components/LastChange";
+import { RESTORE_LABEL, type RestoreTo } from "../components/Restore";
 import { useToast } from "../components/Toasts";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { trayIcon } from "../components/ui/Sidebar";
@@ -69,7 +70,18 @@ const removableMember = (c: Collection, driveId: string) => {
 /** Badges under the file name: its open items (→ the item in its tray) and, unless
  * ``collections`` is off, its collections (→ the collection). A collection the file is
  * itself a member of has a × that takes the file out of it. */
-export function LinkBadges({ driveId, hideItem, collections: withCollections = true }: { driveId: string; hideItem?: number; collections?: boolean }) {
+export function LinkBadges({
+  driveId,
+  hideItem,
+  collections: withCollections = true,
+  readOnly = null,
+}: {
+  driveId: string;
+  hideItem?: number;
+  collections?: boolean;
+  /** Why a collection cannot be left (null: it can). */
+  readOnly?: string | null;
+}) {
   const links = useFileLinks(driveId);
   const removal = useRemoveFromCollection(driveId);
   if (links.isError) {
@@ -103,7 +115,7 @@ export function LinkBadges({ driveId, hideItem, collections: withCollections = t
                 className="badge-remove"
                 aria-label={`Remove from ${visible(c.name)}`}
                 data-tip={`Remove from ${visible(c.name)} (the file stays where it is)`}
-                disabled={removal.pending}
+                disabled={removal.pending || readOnly !== null}
                 onClick={() => void removal.remove(c, member.group_id)}
               >
                 <X size={12} aria-hidden="true" />
@@ -120,7 +132,7 @@ export function LinkBadges({ driveId, hideItem, collections: withCollections = t
  * (an item with the scan's values, as Today's "Put in" does: DB only, with Open and
  * Undo in the toast). A tray the file already has an open item in is checked, and
  * "Remove from <tray>" takes that item back (while nobody changed it since). */
-function PutInTrayMenu({ driveId }: { driveId: string }) {
+function PutInTrayMenu({ driveId, readOnly = null }: { driveId: string; readOnly?: string | null }) {
   const trays = useTrays();
   const links = useFileLinks(driveId);
   const quick = useQuickPut();
@@ -154,6 +166,15 @@ function PutInTrayMenu({ driveId }: { driveId: string }) {
       });
     }
   }
+  if (readOnly) {
+    return (
+      <span className="button-wrap" data-tip={readOnly}>
+        <button type="button" disabled>
+          Put in tray
+        </button>
+      </span>
+    );
+  }
   return <Menu label="Put in tray" text="Put in tray" icon={null} entries={entries} className="file-action-menu" />;
 }
 
@@ -163,6 +184,7 @@ function PutInTrayMenu({ driveId }: { driveId: string }) {
  * adds a link in ##. Ongoing (app-owned, journaled): the batch that ran is shown under
  * the field. ``refusal``: why it cannot be added to (the field is off, saying so). */
 function CollectionsField({ driveId, refusal = null }: { driveId: string; refusal?: string | null }) {
+  // a refusal also turns off the × on the chips (a file in To Delete keeps its collections)
   const links = useFileLinks(driveId);
   const open = useCollections("open");
   const create = useCreateCollection();
@@ -204,6 +226,7 @@ function CollectionsField({ driveId, refusal = null }: { driveId: string; refusa
       value={chips}
       removeLabel={(name) => `Remove from ${name}`}
       disabled={refusal !== null}
+      disabledReason={refusal}
       onAdd={add}
       onRemove={(chip) => {
         const c = all.find((x) => String(x.id) === chip.key);
@@ -229,11 +252,34 @@ function CollectionsField({ driveId, refusal = null }: { driveId: string; refusa
   );
 }
 
+/** Restore a file or folder out of To Delete: to where it was, or to the inbox. */
+function RestoreButtons({ restore }: { restore: (to: RestoreTo) => void }) {
+  return (
+    <>
+      <button type="button" onClick={() => restore("original")}>
+        {RESTORE_LABEL.original}
+      </button>
+      <button type="button" onClick={() => restore("inbox")}>
+        {RESTORE_LABEL.inbox}
+      </button>
+    </>
+  );
+}
+
 /** A selected folder's one action: add it to a collection (everything in it then belongs). */
-export function FolderActions({ driveId, refusal }: { driveId: string; refusal: string | null }) {
+export function FolderActions({
+  driveId,
+  refusal,
+  restore,
+}: {
+  driveId: string;
+  refusal: string | null;
+  restore?: (to: RestoreTo) => void;
+}) {
   return (
     <div className="file-actions">
       <CollectionsField driveId={driveId} refusal={refusal} />
+      {restore && <RestoreButtons restore={restore} />}
     </div>
   );
 }
@@ -241,11 +287,20 @@ export function FolderActions({ driveId, refusal }: { driveId: string; refusal: 
 /** The collections block of the file view (the same in Browse, a collection and a tray):
  * the file's tray items as badges, and its collections as chips with the field that
  * adds more. ``hideItem``: a tray item that is not listed (it is the item being viewed). */
-export function FileCollections({ driveId, hideItem }: { driveId: string; hideItem?: number }) {
+export function FileCollections({
+  driveId,
+  hideItem,
+  readOnly = null,
+}: {
+  driveId: string;
+  hideItem?: number;
+  /** Why the collections cannot be changed (null: they can). */
+  readOnly?: string | null;
+}) {
   return (
     <section className="file-collections" aria-label="Collections of this file">
-      <LinkBadges driveId={driveId} hideItem={hideItem} collections={false} />
-      <CollectionsField driveId={driveId} />
+      <LinkBadges driveId={driveId} hideItem={hideItem} collections={false} readOnly={readOnly} />
+      <CollectionsField driveId={driveId} refusal={readOnly} />
     </section>
   );
 }
@@ -256,11 +311,24 @@ export type BackToInbox = { refusal: string | null; run: () => void };
 
 /** The selected file's own actions in Browse: Put in tray and Back to inbox (the summary,
  * the note and Add to collection are blocks of the shared file view). */
-export function FileActions({ driveId, backToInbox }: { driveId: string; backToInbox?: BackToInbox }) {
+export function FileActions({
+  driveId,
+  backToInbox,
+  readOnly = null,
+  restore,
+}: {
+  driveId: string;
+  backToInbox?: BackToInbox;
+  /** Why the file cannot be changed (null: it can): a file in To Delete. */
+  readOnly?: string | null;
+  /** A file in To Delete: Restore it to where it was or to the inbox. */
+  restore?: (to: RestoreTo) => void;
+}) {
   return (
     <div className="file-actions">
       <div className="actions">
-        <PutInTrayMenu driveId={driveId} />
+        <PutInTrayMenu driveId={driveId} readOnly={readOnly} />
+        {restore && <RestoreButtons restore={restore} />}
         {backToInbox &&
           (backToInbox.refusal ? (
             <span className="button-wrap" data-tip={backToInbox.refusal}>

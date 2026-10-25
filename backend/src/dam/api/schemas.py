@@ -51,6 +51,15 @@ class QuarantineBody(_In):
     dry_run: bool = False
 
 
+class RestoreBody(_In):
+    """Move these files or folders out of ``##. To Delete`` again: ``to`` ``original``
+    (the path they were marked at) or ``inbox``. ``dry_run``: only resolve the plan."""
+
+    drive_ids: list[str]
+    to: Literal["original", "inbox"] = "original"
+    dry_run: bool = False
+
+
 class UnusedPicturesIn(_In):
     """Move these unused rule pictures (names of files in ``config/rules/areas``) into the
     quarantine folder. ``dry_run``: only resolve the plan."""

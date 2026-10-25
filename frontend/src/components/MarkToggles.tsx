@@ -4,6 +4,7 @@
  * offers the opposite action. One change at a time per file (a synchronous guard). */
 import { useContext, useRef, useState } from "react";
 import { errorText, type Mark, type MarkAction, marksAfter, useFileDetail, useMark } from "../api/client";
+import { toDeleteReason } from "../toDelete";
 import { visible } from "../text";
 import { InlineResults } from "./FileLaunch";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
@@ -18,6 +19,8 @@ type Props = {
    * record. */
   marks?: readonly Mark[];
   tipSide?: "below" | "above";
+  /** Where the file is: one in ``##. To Delete`` is read-only (both toggles are off). */
+  path?: string | null;
 };
 
 const TEXT: Record<MarkAction, { done: string; undo: MarkAction; undoLabel: string; failed: string }> = {
@@ -33,7 +36,7 @@ function useMarksOf(driveId: string, given: readonly Mark[] | undefined): readon
   return given ?? detail.data?.record.marks;
 }
 
-export function MarkToggles({ driveId, name, marks: given, tipSide }: Props) {
+export function MarkToggles({ driveId, name, marks: given, tipSide, path }: Props) {
   const fetched = useMarksOf(driveId, given);
   const mark = useMark();
   const toast = useToast();
@@ -83,7 +86,8 @@ export function MarkToggles({ driveId, name, marks: given, tipSide }: Props) {
 
   const starred = marks.includes("starred");
   const important = marks.includes("important");
-  const reason = busy ? "Still saving the last change" : undefined;
+  const readOnly = toDeleteReason(path);
+  const reason = readOnly ?? (busy ? "Still saving the last change" : undefined);
   return (
     <span className="mark-toggles" role="group" aria-label={`Marks of ${shown}`}>
       <IconButton
@@ -92,7 +96,7 @@ export function MarkToggles({ driveId, name, marks: given, tipSide }: Props) {
         pressed={starred}
         tipSide={tipSide}
         className={starred ? "mark-toggle mark-starred" : "mark-toggle"}
-        disabled={busy}
+        disabled={busy || readOnly !== null}
         disabledReason={reason}
         onClick={() => void run(starred ? "unstar" : "star")}
       />
@@ -102,7 +106,7 @@ export function MarkToggles({ driveId, name, marks: given, tipSide }: Props) {
         pressed={important}
         tipSide={tipSide}
         className={important ? "mark-toggle mark-important" : "mark-toggle"}
-        disabled={busy}
+        disabled={busy || readOnly !== null}
         disabledReason={reason}
         onClick={() => void run(important ? "unimportant" : "important")}
       />

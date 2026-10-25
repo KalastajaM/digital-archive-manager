@@ -640,7 +640,7 @@ describe("Back to inbox: dropping on the sidebar Inbox", () => {
     const row = await inboxRow();
     const dt = dragWith(["f1"], ["##. To Delete/x/a.pdf"]);
     fireEvent.dragEnter(row, { dataTransfer: dt });
-    expect(row).toHaveAttribute("data-tip", "Files in ##. To Delete cannot be moved: Undo puts them back");
+    expect(row).toHaveAttribute("data-tip", "Marked for deletion: restore it first");
     fireEvent.drop(row, { dataTransfer: dt });
     await new Promise((r) => setTimeout(r, 10));
     expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
