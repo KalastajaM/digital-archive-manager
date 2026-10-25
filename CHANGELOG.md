@@ -58,6 +58,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Trays and collections:** the list buttons in the header (Add file, Open and Done; the
+  collection's folder and share buttons) sit at the right edge of the list column, over
+  the list they act on, instead of right after the title.
 - **Undo may now remove a shortcut dam made anywhere in the archive**, not only in
   `##. Ongoing` and `##. Important`. It applies to the shortcut a Link drop made, only
   while it is still a shortcut pointing at the same file. It never removes a regular
