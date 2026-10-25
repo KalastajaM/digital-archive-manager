@@ -1,5 +1,6 @@
-/** Starred and Important open a clicked file in Browse (its folder, the file selected and
- * previewed); an ordinary collection keeps its page and has "Show in folder" instead. */
+/** A click on a file in Today's Starred card shows it in Browse (its folder, the file
+ * selected and previewed). A collection page, Starred and Important included, keeps its page
+ * on a click and has "Show in folder" in the file panel. */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -9,6 +10,7 @@ import { mockFetch, renderWithProviders } from "../test-utils";
 import Browse from "./Browse";
 import Collections from "./Collections";
 import Starred from "./Starred";
+import { StarredCard } from "../components/today/StarredCard";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -75,6 +77,7 @@ function setup(start: string, c: Collection, kind: "starred" | null) {
     <MemoryRouter initialEntries={[start]}>
       <Routes>
         <Route path="/starred" element={<Starred today="2026-10-19" />} />
+        <Route path="/today" element={<StarredCard frame={{ fold: { folded: false, onToggle: () => {} }, headerProps: {} }} />} />
         <Route path="/collections/:id?" element={<Collections today="2026-10-19" />} />
         <Route path="/browse" element={<Browse />} />
       </Routes>
@@ -87,27 +90,40 @@ function setup(start: string, c: Collection, kind: "starred" | null) {
 
 const STARRED = collection({ id: 7, name: "Starred", kind: "starred" });
 
-describe("Starred", () => {
-  it("a click on a file shows it in Browse: folder open, file selected, preview shown", async () => {
-    const { user } = setup("/starred", STARRED, "starred");
-    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
-    expect(screen.getByTestId("where")).toHaveTextContent(`/browse?path=${encodeURIComponent(DIR).replace(/%20/g, "+")}&select=f1`);
+describe("Today's Starred card", () => {
+  it("a click on a file name shows it in Browse: folder open, file selected, preview shown", async () => {
+    const { user } = setup("/today", STARRED, "starred");
+    const link = await screen.findByRole("link", { name: /^a\.pdf/ });
+    expect(link).toHaveAttribute("href", `/browse?path=${encodeURIComponent(DIR).replace(/%20/g, "+")}&select=f1`);
+    await user.click(link);
     const preview = await screen.findByRole("region", { name: "Preview" });
     expect(await within(preview).findByText(`${DIR}/a.pdf`)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true");
   });
 
-  it("Enter on the focused file does the same", async () => {
-    const { user } = setup("/starred", STARRED, "starred");
-    (await screen.findByRole("button", { name: /^a\.pdf/ })).focus();
+  it("Enter on the focused name does the same", async () => {
+    const { user } = setup("/today", STARRED, "starred");
+    (await screen.findByRole("link", { name: /^a\.pdf/ })).focus();
     await user.keyboard("{Enter}");
     await waitFor(() => expect(screen.getByTestId("where").textContent).toContain("/browse?path="));
   });
 
-  it("a file that is not in the index stays selected in place", async () => {
-    const { user } = setup("/starred", collection({ ...STARRED, members: [member({ path: null, missing: true })] }), "starred");
-    await user.click(await screen.findByRole("button", { name: /f1/ }));
+  it("a file that is not in the index is no link", async () => {
+    setup("/today", collection({ ...STARRED, members: [member({ path: null, missing: true })] }), "starred");
+    expect(await screen.findByText("missing")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /f1/ })).toBeNull();
+  });
+});
+
+describe("the Starred page", () => {
+  it("keeps its page on a click, like any collection, and has Show in folder", async () => {
+    const { user } = setup("/starred", STARRED, "starred");
+    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     expect(screen.getByTestId("where")).toHaveTextContent("/starred");
+    const panel = screen.getByRole("complementary", { name: "Selected file" });
+    await user.click(await within(panel).findByRole("button", { name: "Show in folder" }));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toContain("/browse?path="));
+    await waitFor(() => expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true"));
   });
 });
 
@@ -118,9 +134,9 @@ describe("an ordinary collection", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/collections/7");
     const panel = screen.getByRole("complementary", { name: "Selected file" });
     await user.click(await within(panel).findByRole("button", { name: "Show in folder" }));
-    expect(screen.getByTestId("where").textContent).toContain("/browse?path=");
-    expect(screen.getByTestId("where").textContent).toContain("select=f1");
-    expect(await screen.findByRole("button", { name: "a.pdf" })).toBeInTheDocument();
+    // Browse drops select= from the address once the file is selected: check the selection
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toContain("/browse?path="));
+    await waitFor(() => expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true"));
   });
 });
 

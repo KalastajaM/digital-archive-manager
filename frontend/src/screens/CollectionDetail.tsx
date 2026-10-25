@@ -606,8 +606,8 @@ function Inspector({
       Remove from collection
     </button>
   );
-  // the file's own folder in Browse, with the file selected (an ordinary collection keeps
-  // its page on a click; Starred and Important go there on a click)
+  // the file's own folder in Browse, with the file selected (a click on a member keeps the
+  // collection's page; Today's Starred card opens Browse on a click)
   const showButton = !member.is_dir && member.path && (
     <button type="button" onClick={() => navigate(browseHref(member.path!, member.drive_id))}>
       Show in folder
@@ -1377,7 +1377,6 @@ export default function CollectionDetail({
           )}
           <div className="collection-members">
           <GroupTree
-            showInBrowse={builtin !== null}
             collection={c}
             attention={attentionBy}
             selected={browsed ? null : (selected?.drive_id ?? null)}

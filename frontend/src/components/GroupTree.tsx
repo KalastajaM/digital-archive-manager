@@ -146,9 +146,6 @@ type Props = {
   /** The file inside a folder member that is selected (its drive id), if any. */
   entry?: string | null;
   onSelectEntry?: (entry: DirEntry) => void;
-  /** Starred and Important: a click on a file shows it in Browse (its folder, the file
-   * selected) instead of selecting it here. */
-  showInBrowse?: boolean;
 };
 
 /** The Browse address of a file: its folder, the file selected and previewed there. */
@@ -566,9 +563,7 @@ export function GroupTree({
   proposals,
   entry = null,
   onSelectEntry = () => {},
-  showInBrowse = false,
 }: Props) {
-  const navigate = useNavigate();
   const tree = treeOf(c);
   const [editingSummary, setEditingSummary] = useState<number | null>(null);
   const groupName = new Map(c.groups.map((g) => [g.id, g.name]));
@@ -597,9 +592,7 @@ export function GroupTree({
         m={m}
         attention={attention.get(m.drive_id)}
         selected={m.drive_id === selected}
-        onSelect={() =>
-          showInBrowse && !m.is_dir && m.path ? navigate(browseHref(m.path, m.drive_id)) : onSelect(m.drive_id)
-        }
+        onSelect={() => onSelect(m.drive_id)}
         entry={entry}
         onSelectEntry={onSelectEntry}
       />
