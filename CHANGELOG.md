@@ -337,6 +337,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- On the Index page, reading page 1 is a row like the other totals ("Page 1, 8 914 of
+  8 914"), with the time left while it runs and what waits. Its switch and speed are no
+  longer repeated there; a link opens them in Settings, Indexing.
 - The lock button next to a file name shows the file's state: a closed padlock while the
   file is locked (click to unlock), an open one while it is not (click to lock).
 - Marking an item done (Mark done, Mark paid, and the "and file" button) now asks in a small

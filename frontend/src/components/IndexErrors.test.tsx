@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { IndexProblem } from "../api/client";
+import { MemoryRouter } from "react-router-dom";
 import { type Call, deferred, mockFetch, renderWithProviders } from "../test-utils";
 import { page1TimeLeft, timeLeft, useIndexErrorsSheet } from "./IndexErrors";
 
@@ -76,7 +77,11 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
     "POST /api/index/retry": (call) => ({ body: { queued: (call.body as { drive_ids: string[] }).drive_ids.length } }),
     ...extra,
   });
-  renderWithProviders(<IndexErrorsButton count={2} />);
+  renderWithProviders(
+    <MemoryRouter>
+      <IndexErrorsButton count={2} />
+    </MemoryRouter>,
+  );
   return { calls, user: userEvent.setup() };
 }
 
@@ -87,44 +92,43 @@ const open = async (user: ReturnType<typeof userEvent.setup>) => {
 const rows = (dialog: HTMLElement) => within(dialog).getAllByRole("listitem");
 
 describe("Index sheet: page 1", () => {
-  it("shows how far page 1 reading has come, what waits and why, and the time left", async () => {
+  it("shows page 1 as a row of the totals: how far, the time left, what waits and why", async () => {
     const { user } = setup();
     const dialog = await open(user);
-    const block = await within(dialog).findByRole("region", { name: "Page 1" });
-    expect(block).toHaveTextContent("Page 1 read for 3 176 of 8 911 documents, about 3 h left at 30 files a minute");
-    expect(within(block).getByText("12 waiting: no OCR engine")).toBeInTheDocument();
-    expect(within(block).getByText("3 waiting: will be tried again")).toBeInTheDocument();
-    expect(within(block).getByRole("checkbox", { name: "Read page 1 of older documents in the background" })).toBeChecked();
+    const row = (await within(dialog).findByText("Page 1")).closest(".index-summary-row") as HTMLElement;
+    expect(row).toHaveTextContent("3 176 of 8 911");
+    expect(row).toHaveTextContent("about 3 h left at 30 files a minute");
+    expect(row).toHaveTextContent("12 waiting: no OCR engine.");
+    expect(row).toHaveTextContent("3 waiting: will be tried again.");
   });
 
-  it("switches the background reading", async () => {
-    const { calls, user } = setup({ "PUT /api/settings/page1-backfill": { body: { enabled: false } } });
+  it("has no switch or speed of its own, but a link to them in Settings", async () => {
+    const { user } = setup();
     const dialog = await open(user);
-    await user.click(await within(dialog).findByRole("checkbox", { name: /Read page 1 of older documents/ }));
-    expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-backfill")?.body).toEqual({ enabled: false });
+    await within(dialog).findByText("Page 1");
+    expect(within(dialog).queryByRole("checkbox", { name: /Read page 1 of older documents/ })).toBeNull();
+    expect(within(dialog).queryByRole("combobox", { name: "Page 1 reading speed" })).toBeNull();
+    const link = within(dialog).getByRole("link", { name: /Settings/ });
+    expect(link).toHaveAttribute("href", "/settings/indexing");
+    await user.click(link);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Index" })).toBeNull());
   });
 
-  it("estimates the time left from what is left of each kind and how fast each is read, and sets the speed", async () => {
+  it("estimates the time left from what is left of each kind and how fast each is read", async () => {
     const kinds = { text_left: 5000, scans_left: 30, text_per_min: 300, scans_per_min: 30 };
-    const { calls, user } = setup({
+    const { user } = setup({
       "GET /api/index/summary": {
         body: {
           searchable: 1, waiting: 0, not_readable: 0, errors: 0, missing: 0, not_readable_by_type: [], rows: [], offset: 0,
           page1: { read: 3176, total: 8911, backfill: true, rate_per_min: 30, blocked: [], ...kinds },
         },
       },
-      "PUT /api/settings/page1-speed": { body: { reads_per_minute: 120 } },
     });
     const dialog = await open(user);
-    const block = await within(dialog).findByRole("region", { name: "Page 1" });
-    expect(block).toHaveTextContent(
+    const row = (await within(dialog).findByText("Page 1")).closest(".index-summary-row") as HTMLElement;
+    expect(row).toHaveTextContent(
       "about 18 min left (5 000 PDFs with text at 300 a minute, 30 scans and photos at 30 a minute)",
     );
-    const speed = within(block).getByRole("combobox", { name: "Page 1 reading speed" });
-    expect(speed).toHaveValue("300");
-    expect(speed).toHaveAccessibleDescription(/scans, photos and files that are slow to fetch/i);
-    await user.selectOptions(speed, "120");
-    expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-speed")?.body).toEqual({ reads_per_minute: 120 });
   });
 
   it("works out the time left per kind", () => {
