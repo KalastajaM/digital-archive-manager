@@ -49,6 +49,20 @@ uv run python -m dam.demo /tmp/dam-demo
 uv run dam --data-dir /tmp/dam-demo/data serve --port 8766
 ```
 
+To use the app for your own documents while you develop it, run it from its own
+checkout of `origin/main` so branch work never changes the running app. On macOS and
+Linux, `scripts/run-latest.sh` does all of it: it fetches, moves the worktree
+`.claude/worktrees/app` (created on first run) to `origin/main`, runs `uv sync`, runs
+`npm ci` when the lockfile changed and rebuilds the frontend when the commit changed,
+then serves. Arguments go to `dam`, and those after `--` to `serve`:
+
+```sh
+scripts/run-latest.sh --data-dir /path/to/your/data-dir
+scripts/run-latest.sh --archive Demo -- --port 8766
+```
+
+Stop it with Ctrl+C and run it again to update.
+
 For UI work run the backend with `DAM_DEV_ORIGIN=http://localhost:5173 uv run dam serve --no-open`
 and `npm run dev` in `frontend/`.
 
