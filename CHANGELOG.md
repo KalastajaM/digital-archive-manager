@@ -304,6 +304,18 @@ All notable changes are listed here. The format follows
   conditions) and **Then file it like this** (Folder, Name, Tags, Tray, Payee). Payee only
   shows when the chosen tray has a payee field, such as To pay, or when the rule already
   has a payee.
+- The item view in the trays is tidier. The title is edited in the header: click it or the
+  pencil beside it, press Enter or click away to save, Esc to cancel (an empty title is
+  refused). The separate Title field is gone. The icon buttons (move to tray, remove from
+  tray, ask AI, take the file off, move to To Delete) now sit at the right end of the same
+  row as the date and **Mark done**, and wrap on a narrow window. **Quick Look** is now in
+  the toolbar of the file preview, next to zoom and the star, and Space still opens it.
+  The file's tags are shown right under the title.
+- Summary, Checklist, Notes and History can be folded to their heading and a one-line hint
+  (such as "2 of 5 done"). dam remembers each choice in this browser. This applies to
+  tray items, collections and documents. The name of a collection is edited the same way
+  in its header.
+
 - The rule sheet is easier to read. The "Leave out" boxes are gone: an empty Folder, Name,
   Tags, Tray or Payee is one the rule does not set, and clearing a field never saves an
   empty pattern. The explanations (the From sender, the Folder and Name patterns, and the

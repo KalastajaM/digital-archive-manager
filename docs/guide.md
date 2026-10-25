@@ -717,8 +717,17 @@ can go. Four trays come with dam:
 | **Follow up** | things you wait on from others (a delivery, a reply, a refund), with an optional check-by date | on the check date and once when overdue |
 
 A tray's screen has the list (Open / Done) and the selected item beside it; ↑/↓ move the
-highlight and open the item. An item has a title (editable), one or more files, the tray's
-fields, a note, a checklist and a history.
+highlight and open the item. An item has a title, one or more files, the tray's fields, a
+note, a checklist and a history.
+
+- Click the title (or the pencil beside it) to edit it in place: Enter or clicking away
+  saves, Esc cancels, an empty title is refused. The file's tags are right under it.
+- The date, **Mark done** and the icon buttons (move to tray, remove from tray, Ask AI,
+  take the file off, move to To Delete) are one row; the icons are at its right end.
+  **Quick Look** is in the toolbar of the file preview, with zoom, the star and open.
+- Summary, Checklist, Notes and History have an arrow in their heading that folds them to
+  one line (for example "2 of 5 done"). Each section stays folded or open the way you left
+  it, for all items, collections and documents in this browser.
 
 - **Mark paid** (or **Mark done**) finishes an item; **Reopen** undoes it. While one of
   the item's files is still in the inbox, **Mark paid and file…** marks it done and opens

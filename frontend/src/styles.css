@@ -246,6 +246,10 @@ main { flex: 1; padding: var(--sp-4) var(--sp-5); min-width: 0; }
 }
 .toolbar-title { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
 .toolbar-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 700; white-space: nowrap; }
+.toolbar-title-editable { cursor: text; }
+.toolbar-title-pencil { align-self: center; opacity: 0; }
+.toolbar-title:hover .toolbar-title-pencil, .toolbar-title:focus-within .toolbar-title-pencil { opacity: 1; }
+@media (hover: none) { .toolbar-title-pencil { opacity: 1; } }
 .toolbar-subtitle { color: var(--muted); font-size: var(--fs-sm); white-space: nowrap; }
 .toolbar-actions { display: flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
 .toolbar-search { margin-left: var(--sp-2); width: 180px; }
@@ -1159,9 +1163,12 @@ dialog.sheet.barcode-sheet { width: fit-content; max-width: 96vw; }
 .barcode-mismatch p { margin: 0 0 var(--sp-2); }
 .barcode-mismatch-title { font-weight: 600; }
 
-.item-done-buttons { margin-left: auto; display: flex; gap: var(--sp-2); margin-top: calc(var(--fs-xs) * 1.5 + 3px); /* level with the inputs, not their labels */ }
-.item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-4) 0; }
-.item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
+.item-done-buttons { display: flex; gap: var(--sp-2); margin-top: calc(var(--fs-xs) * 1.5 + 3px); /* level with the inputs, not their labels */ }
+/* the icon buttons sit at the right end of the fields row, level with the inputs */
+.item-action-slot { margin-left: auto; margin-top: calc(var(--fs-xs) * 1.5 + 3px); display: flex; justify-content: flex-end; min-width: 0; }
+.item-action-slot:empty { display: none; }
+.item-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-1) var(--sp-2); }
+.item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
 button[data-tip] { position: relative; }
 .item-files-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: var(--sp-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
@@ -1172,8 +1179,7 @@ button[data-tip] { position: relative; }
 .item-dated .checklist { margin: 0 0 var(--sp-4); padding: var(--sp-3); background: var(--panel); border-radius: var(--r-lg); box-shadow: var(--shadow-card); }
 .tabs button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 /* title, fields and done buttons on one row; wraps only when the panel is too narrow */
-.item-fields { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 var(--sp-3); margin-top: var(--sp-3); }
-.item-fields .field-title { flex: 1 1 14rem; min-width: min(14rem, 100%); }
+.item-fields { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-3); }
 .item-fields .field-date { flex: none; }
 .item-fields .field-date input[type="date"] { width: 9rem; }
 .item-fields .field-text { flex: 0 1 12rem; min-width: 8rem; }
@@ -1202,6 +1208,27 @@ button.check-text { padding: 0; min-height: 0; border: none; background: transpa
 .history ul { padding-left: var(--sp-4); margin: var(--sp-1) 0; }
 .history li { margin-bottom: 2px; overflow-wrap: anywhere; }
 .checklist, .history, .item-note { margin-top: var(--sp-4); }
+
+/* Sections that fold to their heading and a one-line hint */
+.collapsible-head { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.collapsible-head h3 { margin: 0; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; flex: none; }
+.collapsible-toggle { display: inline-flex; align-items: center; gap: 4px; border: none; background: none; box-shadow: none; padding: 0; min-height: 0; font: inherit; color: inherit; cursor: pointer; }
+.collapsible-toggle:hover:not(:disabled) { background: none; color: var(--text); }
+.collapsible-hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-sm); }
+.collapsible-body { margin-top: var(--sp-1); }
+.collapsible-body[hidden] { display: none; }
+
+/* A heading edited in place: click it or the pencil (shown on hover and focus) */
+.editable-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-1); min-width: 0; }
+.editable-title h2 { cursor: text; min-width: 0; }
+.editable-title .icon-button { opacity: 0; }
+.editable-title:hover .icon-button, .editable-title:focus-within .icon-button { opacity: 1; }
+@media (hover: none) { .editable-title .icon-button { opacity: 1; } }
+.editable-title.editing { display: block; }
+.editable-title-input { width: 100%; font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.01em; }
+.editable-title .save-state { margin-left: var(--sp-1); }
+.item-tags-slot .file-tags { margin-top: var(--sp-2); }
+.item-tags-slot:empty { display: none; }
 
 /* ---- Collections and the Browse integration ---------------------------------------- */
 .member-dir::after { content: "/"; color: var(--muted); }
@@ -1669,12 +1696,10 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 /* Phase 3 Task 5: summaries, Ask, the AI log */
 .summary-box { margin: var(--sp-3) 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
 .item-summary .summary-box { margin: 0; }
-.summary-box-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-1); }
-.summary-box-head h3 { margin: 0; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
 .summary-text { margin: 0 0 var(--sp-1); overflow-wrap: anywhere; white-space: pre-wrap; }
 .summary-facts { margin: 0 0 var(--sp-1); padding-left: var(--sp-4); font-size: var(--fs-sm); color: var(--text-2); }
 .summary-outdated { margin: 0 0 var(--sp-1); color: var(--orange-text); }
-.summary-box > .hint { margin: 0 0 var(--sp-1); }
+.summary-box .collapsible-body > .hint { margin: 0 0 var(--sp-1); }
 .summary-box .actions { margin-top: var(--sp-1); }
 .summary-edit textarea { display: block; width: 100%; resize: vertical; }
 .summary-proposal { margin: var(--sp-2) 0 0; }

@@ -585,7 +585,8 @@ describe("RuleSheet", () => {
     });
 
     it("keeps asking while page 1 is being read, shows the count and picks the pages up as they arrive", async () => {
-      let polls = 0;
+      // "waiting" until the test has seen it, then "done": no race with the polling pace
+      let arrived = false;
       const job = (n: number) => ({
         job_id: "job-1", sheet: "s", version: n, elapsed_s: 1, error: null,
         state: n < 3 ? "waiting" : "done", looked_at: 4, total: 4, waiting: n < 3 ? 23 : 0,
@@ -596,11 +597,12 @@ describe("RuleSheet", () => {
         "GET /api/trays": { body: { trays: [], errors: [] } },
         "GET /api/tags": { body: [] },
         "POST /api/rules/replay/jobs": () => ({ body: { ...job(1), result: null } }),
-        "GET /api/rules/replay/jobs/job-1": () => ({ body: job(++polls + 1) }),
+        "GET /api/rules/replay/jobs/job-1": () => ({ body: job(arrived ? 3 : 2) }),
         "DELETE /api/rules/replay/jobs/job-1": { body: job(3) },
       } as never);
       renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
       expect(await screen.findByText(/Waiting for page 1 of 23…/)).toBeInTheDocument();
+      arrived = true; // the pages are read
       await waitFor(() => expect(screen.queryByText(/Waiting for page 1 of/)).toBeNull());
       expect(screen.queryByText(/not checked yet/)).toBeNull();
     });

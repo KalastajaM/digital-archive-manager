@@ -15,6 +15,7 @@ import {
   usePutFileSummary,
 } from "../../api/client";
 import { visible } from "../../text";
+import { Collapsible, firstLine } from "../Collapsible";
 import { ConfirmPlan } from "../PlanPreview";
 import { Tag } from "../ui/Tag";
 import { euro } from "../../format";
@@ -49,7 +50,6 @@ function Facts({ facts, label }: { facts: string[]; label: string }) {
 type Proposal = { data: DocumentSummary; info: AIResultInfo };
 
 export function SummaryBox({ driveId, heading = "Summary" }: { driveId: string; heading?: string }) {
-  const headingId = useId();
   const editId = useId();
   const query = useFileSummary(driveId);
   const save = usePutFileSummary();
@@ -121,13 +121,14 @@ export function SummaryBox({ driveId, heading = "Summary" }: { driveId: string; 
   const askAI = () => send.ask({ drive_id: driveId });
 
   return (
-    <section className="summary-box" aria-labelledby={headingId}>
-      <header className="summary-box-head">
-        <h3 id={headingId}>{heading}</h3>
-        {shown && (
-          <Tag tone={shown.source === "ai" ? "blue" : "grey"}>{shown.source === "ai" ? "by AI" : "yours"}</Tag>
-        )}
-      </header>
+    <>
+    <Collapsible
+      name="summary"
+      title={heading}
+      className="summary-box"
+      hint={visible(shown ? firstLine(shown.saved.summary) : "No summary yet.")}
+      aside={shown && <Tag tone={shown.source === "ai" ? "blue" : "grey"}>{shown.source === "ai" ? "by AI" : "yours"}</Tag>}
+    >
       {query.isError && (
         <p className="error" role="alert">
           Could not load the summary. {visible(errorText(query.error))}
@@ -227,6 +228,8 @@ export function SummaryBox({ driveId, heading = "Summary" }: { driveId: string; 
         </div>
       )}
       <AIHint what="to summarize" />
+    </Collapsible>
+      {/* dialogs stay outside the folded part: a hidden parent would hide them */}
       {send.sheet}
       {confirming && proposal && (
         <ConfirmPlan
@@ -241,7 +244,7 @@ export function SummaryBox({ driveId, heading = "Summary" }: { driveId: string; 
           <p>{REPLACE_QUESTION}</p>
         </ConfirmPlan>
       )}
-    </section>
+    </>
   );
 }
 

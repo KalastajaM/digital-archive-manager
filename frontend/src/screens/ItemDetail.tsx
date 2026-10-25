@@ -6,6 +6,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, CircleMinus, Eye, Unlink, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   errorText,
@@ -27,8 +28,10 @@ import {
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { Barcode, type PayFact } from "../components/Barcode";
 import { Checklist } from "../components/Checklist";
+import { Collapsible } from "../components/Collapsible";
 import { CopyButton } from "../components/CopyButton";
 import { DoneForm } from "../components/DoneForm";
+import { EditableTitle } from "../components/EditableTitle";
 import { editText, FieldInput } from "../components/FieldInput";
 import { FilePreview } from "../components/FilePreview";
 import { FILE_BADGE } from "../components/ItemBadges";
@@ -53,8 +56,6 @@ import { isTrashKey, TrashButton, useTrash } from "../components/Trash";
 import { MarkIcons } from "../components/MarkIcons";
 import { useKeydown } from "../keyboard";
 
-const TITLE_DEF: FieldDef = { type: "text", required: false, copy: false };
-
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** One field, saved on blur or Enter (a checkbox as soon as it changes). */
@@ -74,8 +75,8 @@ function EditableField({
   hint?: ReactNode;
   /** Beside the input, such as a date's urgency tag. */
   after?: ReactNode;
-  /** The width class on the fields row: the title grows, the rest have a set width. */
-  size?: "title" | "date" | "text" | "money" | "checkbox";
+  /** The width class on the fields row: each kind has its own width. */
+  size?: "date" | "text" | "money" | "checkbox";
 }) {
   const id = useId();
   const auto = useAutoSave(server, save);
@@ -123,30 +124,31 @@ function fieldText(def: FieldDef, item: Item, name: string): string | boolean {
 const fieldSize = (type: string): "date" | "text" | "money" | "checkbox" =>
   type === "date" ? "date" : type === "money" ? "money" : type === "checkbox" ? "checkbox" : "text";
 
-/** The item's editable fields on one row that wraps only when the panel is narrow: the
- * title (grows), then the tray's fields in order (a date with its urgency tag after it),
- * then ``trailing`` (the done buttons) at the end. ``part``: a bill shows only the title
- * in its top row and the other fields further down. */
+/** The item's editable fields on one action row that wraps only when the panel is narrow:
+ * the tray's fields in order (a date with its urgency tag after it), then ``trailing``
+ * (the done buttons), then the ``slot`` at the right end, where the item's and the file's
+ * icon buttons are put (the title is edited in the header). ``part``: a bill shows only the
+ * done buttons and icons in its top row and the fields further down. */
 function Fields({
   item,
   tray,
   tag,
   trailing,
+  slot,
   part = "all",
 }: {
   item: Item;
   tray: TrayDef | undefined;
   tag?: ReactNode;
   trailing?: ReactNode;
-  part?: "all" | "title" | "rest";
+  /** A ref callback for the element the icon buttons are rendered into. */
+  slot?: (el: HTMLElement | null) => void;
+  part?: "all" | "top" | "rest";
 }) {
   const update = useItemUpdate();
-  const saveTitle = async (value: string | boolean) =>
-    (await update.mutateAsync({ id: item.id, title: String(value) })).title;
   return (
     <div className="item-fields">
-      {part !== "rest" && <EditableField label="Title" def={TITLE_DEF} server={item.title} save={saveTitle} size="title" />}
-      {part !== "title" && tray === undefined && Object.keys(item.fields).length > 0 && (
+      {part !== "top" && tray === undefined && Object.keys(item.fields).length > 0 && (
         <p className="hint">
           The tray of this item was removed from the settings: its fields cannot be edited.{" "}
           {Object.entries(item.fields)
@@ -155,7 +157,7 @@ function Fields({
             .join(" · ")}
         </p>
       )}
-      {part !== "title" &&
+      {part !== "top" &&
         Object.entries(tray?.fields ?? {}).map(([name, def]) => {
           const invalid = item.invalid_fields.includes(name);
           // An invalid stored value is shown as text, so it stays readable until replaced.
@@ -183,6 +185,7 @@ function Fields({
           );
         })}
       {trailing && <div className="item-done-buttons">{trailing}</div>}
+      {part !== "rest" && slot && <div className="item-action-slot" ref={slot} />}
     </div>
   );
 }
@@ -345,11 +348,14 @@ function eventText(event: ItemEvent, tray: TrayDef | undefined, names: Map<strin
 function History({ item, tray, today }: { item: Item; tray: TrayDef | undefined; today: string }) {
   const history = useItemHistory(item.id);
   const files = useItemFiles(item.id);
-  const headingId = useId();
   const names = new Map((files.data ?? []).filter((f) => f.path).map((f) => [f.drive_id, baseName(f.path!)]));
   return (
-    <section className="history" aria-labelledby={headingId}>
-      <h3 id={headingId}>History</h3>
+    <Collapsible
+      name="history"
+      title="History"
+      className="history"
+      hint={plural(history.data?.length ?? 0, "entry", "entries")}
+    >
       {history.isError && (
         <p className="error" role="alert">
           Could not load the history. {visible(errorText(history.error))}
@@ -362,7 +368,7 @@ function History({ item, tray, today }: { item: Item; tray: TrayDef | undefined;
           </li>
         ))}
       </ul>
-    </section>
+    </Collapsible>
   );
 }
 
@@ -527,6 +533,12 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const moveItem = useMoveItem();
   const undoMove = useUndoMoveItem();
   const actionsRef = useRef<HTMLDivElement>(null);
+  const update = useItemUpdate();
+  const saveTitle = async (title: string) => (await update.mutateAsync({ id: item.id, title })).title;
+  // Where the action row's icons and the file's tags are shown: in the fields row and under
+  // the title. They belong to the shown file (FileMeta), so they are portaled there.
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
+  const [tagSlot, setTagSlot] = useState<HTMLElement | null>(null);
   const list = files.data ?? [];
   const shown: ItemFile | undefined = list[Math.min(tab, list.length - 1)];
   const nameOf = (f: ItemFile) => visible(f.path ? baseName(f.path) : f.drive_id);
@@ -654,12 +666,14 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       </>
     ) : null;
 
-  /** Quick Look, Move to / Remove from tray, then the shown file's own actions (``ask`` is
-   * its Ask AI): one cluster of icons at the right. */
-  const actionRow = (ask?: ReactNode) => (
+  /** Quick Look is on the file preview's toolbar (it acts on the file); this row has Move
+   * to / Remove from tray, then the shown file's own actions (``ask`` is its Ask AI): one
+   * cluster of icons at the right end of the fields row. */
+  const actionRow = (ask?: ReactNode) =>
+    actionSlot &&
+    createPortal(
     <div className="item-actions" ref={actionsRef}>
       <span className="item-tray-actions" role="group" aria-label="This item">
-        {onQuickLook && firstPath && <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
         {/* also by dragging the item onto a tray in the sidebar; this is the way without a mouse */}
         {open && <Menu label="Move to tray" icon={<ArrowRightLeft />} entries={moveEntries} align="end" />}
         {/* Not a bin: removing from the tray deletes nothing (the bin is To Delete). */}
@@ -690,13 +704,26 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           )}
         </span>
       )}
-    </div>
+    </div>,
+    actionSlot,
+  );
+
+  const quickLookButton = onQuickLook && firstPath && (
+    <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
   );
 
   const tag = open && item.date ? <UrgencyTag date={item.date} today={today} /> : null;
   // a bill's fields below the facts are the rest; its top row is the title and the done buttons
   const fields = (
-    <Fields key={item.id} item={item} tray={tray} tag={tag} trailing={doneButtons} part={kind === "bill" ? "title" : "all"} />
+    <Fields
+      key={item.id}
+      item={item}
+      tray={tray}
+      tag={tag}
+      trailing={doneButtons}
+      slot={setActionSlot}
+      part={kind === "bill" ? "top" : "all"}
+    />
   );
   const moveEntries: MenuEntry[] = [...trays.values()]
     .filter((t) => t.id !== item.tray_id)
@@ -718,7 +745,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       )}
       <header className="item-header">
         <div className="item-heading">
-          <h2 id={headingId}>{visible(item.title)}</h2>
+          <EditableTitle key={item.id} value={item.title} save={saveTitle} headingId={headingId} />
           <p className="item-sub">
             {visible(item.tray_name)}
             {item.tray_removed && " (removed tray)"}
@@ -729,6 +756,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
               </>
             )}
           </p>
+          <div className="item-tags-slot" ref={setTagSlot} />
         </div>
         {kind === "bill" && typeof amountValue === "string" && amountValue !== "" && (
           <div className="bill-amount">
@@ -818,8 +846,17 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
                 )}
                 {kind === "dated" && checklist}
                 {meta.header}
-                <FilePreview file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }} extraTools={meta.marks} boxTool={{}} />
-                {meta.tags}
+                <FilePreview
+                  file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }}
+                  extraTools={
+                    <>
+                      {quickLookButton}
+                      {meta.marks}
+                    </>
+                  }
+                  boxTool={{}}
+                />
+                {tagSlot && createPortal(meta.tags, tagSlot)}
               </>
             )}
           </FileMeta>
