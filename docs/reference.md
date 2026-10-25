@@ -761,6 +761,18 @@ The user guide's "What dam never does" gives the short version. The details:
 
 - **Never deletes your files.** **Move to To Delete** (`dam quarantine` on the command
   line) moves a file to `##. To Delete/<original path>`. You empty that folder yourself.
+  **Restore** (`POST /api/restore {drive_ids, to: "original" | "inbox", dry_run}`, answering
+  like `POST /api/quarantine`) moves entries (files, links or folders) out of it again as
+  ordinary `move` operations in one journaled batch titled "Restored N files from To
+  Delete": `original` is the path with the `##. To Delete` prefix stripped (a missing
+  folder gets a `mkdir` in the plan, a taken name `_N` with its note), `inbox` the inbox
+  folder. An entry inside another selected folder comes along with it; a folder that stood
+  at the top of the archive, or an original place in `##. Ongoing`, is a 400 (use the
+  inbox). Undo is the ordinary undo of a move and puts the entries back in To Delete.
+  While in `##. To Delete`, a file is read-only for the API: setting tags, a summary or a
+  note, a checklist entry, ★ / !, a tray item and adding to a collection answer 400
+  ("Marked for deletion: restore it first"); its existing tags, collection membership,
+  notes and tray items stay, so a restore brings them back.
   The only removals in the archive are inside `##. Ongoing` and `##. Important`
   (`special_folders.important`), under the same rules for both: a symlink (the app's own
   links, or a shortcut of yours that a previewed **Convert** replaces with the app's link

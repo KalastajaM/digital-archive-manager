@@ -1032,6 +1032,18 @@ list's width.
   moving files between them. The active pane has an accent edge.
 - **Move to…** (⇧⌘M) and **Move to To Delete** are in the toolbar. A move always shows its
   preview first.
+- **Restore.** What is in `##. To Delete` is read-only: starring, Important, trays,
+  collections, tags, From and For, the summary and the notes are off (hover a greyed
+  control for "Marked for deletion: restore it first"), and so is moving it. To get a
+  file back, select it, or several with the checkboxes or Select all, and use **Restore**
+  in the toolbar, or the two buttons in the file's panel. **Restore to where it was**
+  puts it back at the path it was marked at; **Restore to Inbox** puts it in the inbox. A
+  folder marked for deletion has the same two choices in its right-click menu and its
+  panel. The preview shows a folder that is gone being made again and a name that is
+  taken getting a number (`_2`). Nothing is deleted; Activity shows "Restored 3 files
+  from To Delete" and Undo puts them back in To Delete. The tags, collections, notes and
+  tray items the files had are still there. A file that stood at the top of the archive,
+  or in `##. Ongoing`, can only be restored to the inbox.
 - **Collection** filters a pane to one collection's files; **Folders / Files** switches
   between the folder view and a flat list of every file below the current folder, with
   sortable Name, Folder, Date and Size columns (up to 500 rows).
@@ -1069,7 +1081,7 @@ the box. A search with only filters lists the matching files by name.
 | `after:` | Dated on or after the first day of that year, month or day. | `after:2025` |
 | `before:` | Dated before the first day of that year, month or day. | `before:2026-06` |
 | `tray:` | Files with an open item in that tray, by its id or name. | `tray:to-pay` |
-| `is:` | `starred`, `important`, `locked` (your locks and everything Important), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary` (the file has a summary). | `is:locked` |
+| `is:` | `starred`, `important`, `locked` (the locks you set yourself; Important files are always locked but are found with `is:important`), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary` (the file has a summary). | `is:locked` |
 
 Tips:
 
@@ -1296,7 +1308,8 @@ folders can be opened and dropped on, not dragged.
 ## What dam never does
 
 - **It never deletes your documents.** **Move to To Delete** (⌘⌫) moves a file into
-  `##. To Delete`, keeping its original path; you empty that folder yourself. The only
+  `##. To Delete`, keeping its original path; you empty that folder yourself, or
+  **Restore** a file from it (previewed, with Undo). The only
   things dam ever removes are its own links and its own empty folders in `##. Ongoing` and
   `##. Important`, and only after checking they are still exactly the ones it made.
 - **It never moves or renames a locked file.** Important files are always locked, and you
