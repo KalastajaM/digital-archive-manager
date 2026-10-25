@@ -49,6 +49,7 @@ import { AIProposal } from "../components/ai/AIProposal";
 import { AIHint, useAISend, useAIState } from "../components/ai/useAI";
 import { Banner } from "../components/Banner";
 import { Checklist } from "../components/Checklist";
+import { Collapsible, firstLine } from "../components/Collapsible";
 import { COLLECTION_NAME_MAX } from "../components/CollectionPicker";
 import { changeToast, CLOSE_CHILDREN_FIRST, NOT_SHOWN } from "../components/collectionText";
 import {
@@ -277,9 +278,9 @@ function Summary({
   const auto = useAutoSave(value, async (summary: string) => (await save({ op: "summary", id, summary })).collection.summary);
   useAutoGrow(ref, auto.shown);
   return (
-    <section className="collection-summary" aria-label="Summary">
+    <Collapsible name="summary" title="Summary" className="collection-summary" hint={firstLine(auto.shown) || "No summary yet"}>
       <div className="collection-summary-head">
-        <label htmlFor={fieldId} className="collection-caption">
+        <label htmlFor={fieldId} className="visually-hidden">
           Summary
         </label>
         {ai && <div className="collection-summary-tools">{ai}</div>}
@@ -298,7 +299,7 @@ function Summary({
       <SaveState status={auto.status} />
       {proposal}
       <AIHint what="to summarize" />
-    </section>
+    </Collapsible>
   );
 }
 
@@ -1256,6 +1257,7 @@ export default function CollectionDetail({
           title={name}
           titleEditor={renaming ? <RenameField name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} /> : undefined}
           subtitle={subtitle}
+          onEditTitle={builtin ? undefined : () => !busy && setRenaming(true)}
           actions={
             <>
               {builtin !== "starred" && (

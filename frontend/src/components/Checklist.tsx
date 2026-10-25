@@ -13,6 +13,7 @@ import {
   useChecklistChange,
 } from "../api/client";
 import { visible } from "../text";
+import { Collapsible } from "./Collapsible";
 import { IconButton } from "./ui/IconButton";
 
 const CHECK_DRAG_TYPE = "application/x-dam-checklist-entry";
@@ -174,7 +175,6 @@ export function Checklist({ kind, target }: { kind: NoteKind; target: string }) 
   const [error, setError] = useState<string | null>(null);
   const [dragged, setDragged] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const headingId = useId();
   const addId = useId();
 
   /** Send one change; true if it was stored (else the error is shown). */
@@ -197,8 +197,12 @@ export function Checklist({ kind, target }: { kind: NoteKind; target: string }) 
 
   const entries = list.data ?? [];
   return (
-    <section className="checklist" aria-labelledby={headingId}>
-      <h3 id={headingId}>Checklist</h3>
+    <Collapsible
+      name="checklist"
+      title="Checklist"
+      className="checklist"
+      hint={entries.length === 0 ? "Nothing yet" : `${entries.filter((e) => e.done).length} of ${entries.length} done`}
+    >
       {list.isError && (
         <p className="error" role="alert">
           Could not load the checklist. {visible(errorText(list.error))}
@@ -244,6 +248,6 @@ export function Checklist({ kind, target }: { kind: NoteKind; target: string }) 
           {visible(error)}
         </p>
       )}
-    </section>
+    </Collapsible>
   );
 }
