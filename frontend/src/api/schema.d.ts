@@ -6352,10 +6352,10 @@ export interface components {
          * @description How to put a tag change back; sent to ``POST /api/tags/undo`` unchanged.
          */
         TagUndoModel: {
-            /** Remove */
-            remove?: string[];
-            /** Unlink */
-            unlink?: components["schemas"]["TagUnlinkModel"][];
+            /** Drop */
+            drop?: string[];
+            /** Detach */
+            detach?: components["schemas"]["TagUnlinkModel"][];
             /** Restore */
             restore?: components["schemas"]["TagSnapshotModel"][];
         };

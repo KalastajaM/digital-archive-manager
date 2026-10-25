@@ -46,8 +46,8 @@ class Unlink:
 
 @dataclass
 class TagUndo:
-    remove: list[str] = field(default_factory=list)
-    unlink: list[Unlink] = field(default_factory=list)
+    drop: list[str] = field(default_factory=list)
+    detach: list[Unlink] = field(default_factory=list)
     restore: list[TagSnapshot] = field(default_factory=list)
 
 
@@ -180,9 +180,9 @@ class TagAdmin:
             if other is not None:
                 raise TagError("exists", f"A tag called '{other}' already exists")
             conn.execute(insert(tags).values(name=name))
-        return TagUndo(remove=[name])
+        return TagUndo(drop=[name])
 
-    def rename(self, old: str, new: str) -> TagUndo:
+    def rename_tag(self, old: str, new: str) -> TagUndo:
         new = _clean(new)
         with write_tx(self.engine) as conn:
             snap = self._snapshot(conn, old)
@@ -195,7 +195,7 @@ class TagAdmin:
             if new == old:
                 return TagUndo()
             conn.execute(update(tags).where(tags.c.id == tag_id).values(name=new))
-        return TagUndo(remove=[new], restore=[snap])
+        return TagUndo(drop=[new], restore=[snap])
 
     def merge(self, sources: list[str], into: str, dry_run: bool = False) -> MergePlan:
         """Put ``into`` on every file that has one of ``sources``; the sources go away."""
@@ -222,7 +222,7 @@ class TagAdmin:
             plan = MergePlan(into, len(gain), sources)
             if dry_run:
                 return plan
-            undo = TagUndo(unlink=[Unlink(into, gain)] if gain else [])
+            undo = TagUndo(detach=[Unlink(into, gain)] if gain else [])
             undo.restore = [self._snapshot(conn, s) for s in sources]
             for d in gain:
                 conn.execute(insert(file_tags).values(drive_id=d, tag_id=target_id))
@@ -341,12 +341,12 @@ class TagAdmin:
         """Put things back as ``undo`` says: first the tags to remove, then the files to
         unlink, then the tags to restore (created again if gone)."""
         with write_tx(self.engine) as conn:
-            for name in undo.remove:
+            for name in undo.drop:
                 row = conn.execute(select(tags.c.id).where(tags.c.name == name)).scalar()
                 if row is not None:
                     conn.execute(delete(file_tags).where(file_tags.c.tag_id == row))
                     conn.execute(delete(tags).where(tags.c.id == row))
-            for u in undo.unlink:
+            for u in undo.detach:
                 row = conn.execute(select(tags.c.id).where(tags.c.name == u.name)).scalar()
                 if row is None:
                     continue

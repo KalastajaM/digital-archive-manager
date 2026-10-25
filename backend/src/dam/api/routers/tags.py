@@ -46,8 +46,8 @@ def _undo_out(undo: TagUndo) -> dict:
 
 def _undo_in(body: TagUndoModel) -> TagUndo:
     return TagUndo(
-        remove=list(body.remove),
-        unlink=[Unlink(u.name, list(u.drive_ids)) for u in body.unlink],
+        drop=list(body.drop),
+        detach=[Unlink(u.name, list(u.drive_ids)) for u in body.detach],
         restore=[
             TagSnapshot(s.name, s.pinned_at, s.group_id, s.last_used_at, list(s.drive_ids))
             for s in body.restore
@@ -86,13 +86,13 @@ def sidebar_tags(app: AppDep) -> list[dict]:
 @router.post("", response_model=TagChangeOut)
 def create_tag(app: AppDep, body: TagNameIn) -> dict:
     undo = _guard(lambda: app.tag_admin.create(body.name))
-    return {"message": f"Created '{undo.remove[0]}'", "undo": _undo_out(undo)}
+    return {"message": f"Created '{undo.drop[0]}'", "undo": _undo_out(undo)}
 
 
 @router.post("/rename", response_model=TagChangeOut)
 def rename_tag(app: AppDep, body: TagRenameIn) -> dict:
     """Rename a tag on every file. A name another tag has is refused (409): merge instead."""
-    undo = _guard(lambda: app.tag_admin.rename(body.name, body.new_name))
+    undo = _guard(lambda: app.tag_admin.rename_tag(body.name, body.new_name))
     return {
         "message": f"Renamed '{body.name}' to '{body.new_name.strip()}'",
         "undo": _undo_out(undo),

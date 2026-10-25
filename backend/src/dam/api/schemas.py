@@ -576,8 +576,8 @@ class TagUnlinkModel(_In):
 class TagUndoModel(_In):
     """How to put a tag change back; sent to ``POST /api/tags/undo`` unchanged."""
 
-    remove: list[str] = Field(default_factory=list)
-    unlink: list[TagUnlinkModel] = Field(default_factory=list)
+    drop: list[str] = Field(default_factory=list)
+    detach: list[TagUnlinkModel] = Field(default_factory=list)
     restore: list[TagSnapshotModel] = Field(default_factory=list)
 
 

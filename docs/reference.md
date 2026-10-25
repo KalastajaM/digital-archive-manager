@@ -948,7 +948,7 @@ the command line: `dam errors [--all] [--retry]`.
     `{gains, removes, message}` and changes nothing), `/delete` `{name}`, `/pin`
     `{names, pinned}`, `/group` `{names, group_id | null}`. Each answers
     `{message, undo}`; `POST /api/tags/undo` takes that `undo` unchanged and puts the
-    change back (`remove`: tags to delete, `unlink`: links to drop, `restore`: tags back
+    change back (`drop`: tags to delete, `detach`: links to drop, `restore`: tags back
     with their files, pin, group and last use).
   - Groups (one level, a tag is in at most one, never written on files):
     `POST /api/tags/groups` `{name}`, `/groups/{id}/rename`, `/groups/{id}/delete` (its tags

@@ -33,7 +33,7 @@ const queryOf = (call: Call) => new URL(call.url, "http://x").searchParams;
 const searches = (calls: Call[]) => calls.filter((c) => c.url.startsWith("/api/search"));
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 
-const UNDO = { remove: [], unlink: [], restore: [] };
+const UNDO = { drop: [], detach: [], restore: [] };
 const TAGS = {
   tags: [
     { name: "medical", files: 3, pinned: false, group_id: null },
@@ -203,7 +203,7 @@ describe("Tags screen", () => {
   });
 
   it("creates a tag; the toast offers Undo", async () => {
-    const created = { message: "Created 'later'", undo: { ...UNDO, remove: ["later"] } };
+    const created = { message: "Created 'later'", undo: { ...UNDO, drop: ["later"] } };
     const { calls, user } = setup({ "POST /api/tags": { body: created } });
     await user.click(await screen.findByRole("button", { name: "New tag" }));
     await user.type(screen.getByRole("textbox", { name: "Name" }), "later");
