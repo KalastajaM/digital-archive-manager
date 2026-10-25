@@ -38,6 +38,7 @@ from dam.db.tables import (
     notes,
     reminders_sent,
 )
+from dam.notes import NOTE_MAX, NotesService
 from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.trays.model import FIELD_TYPES, FieldDef, TrayDef
 
@@ -46,6 +47,7 @@ log = logging.getLogger(__name__)
 REMOVED_TRAY_NAME = "(removed tray)"
 CHANGED_SINCE_CREATED = "item was changed — mark it done instead"
 CHANGED_SINCE_MOVED = "item was changed since it moved"
+CHANGED_SINCE_MERGED = "the item was changed since the merge"
 STATES = ("open", "done")
 _DATE_PREFIX = re.compile(r"^[0-9]{8}_", re.ASCII)
 
@@ -76,7 +78,8 @@ class Item:
 @dataclass
 class ItemEvent:
     """One line of an item's history: ``kind`` is created | edited | done | reopened |
-    file_added | file_removed | moved; ``data`` holds what changed (stored JSON forms)."""
+    file_added | file_removed | moved | merged_in; ``data`` holds what changed (stored JSON
+    forms)."""
 
     id: int
     at: float
@@ -313,7 +316,13 @@ class TrayService:
                 .where(item_events.c.item_id == item_id)
                 .order_by(item_events.c.at, item_events.c.id)
             )
-            return [ItemEvent(r.id, r.at, r.kind, dict(r.data or {})) for r in rows]
+            # a merge keeps the merged item whole in its event, for the undo: not listed
+            return [
+                ItemEvent(
+                    r.id, r.at, r.kind, {k: v for k, v in (r.data or {}).items() if k != "snapshot"}
+                )
+                for r in rows
+            ]
 
     def list(self, tray_id: str | None = None, state: str = "open") -> list[Item]:
         """Open: by date (undated last), then created. Done: most recently done first.
@@ -785,7 +794,9 @@ class TrayService:
             "path": row.path if row else None,
         }
 
-    def add_file(self, item_id: int, drive_id: str) -> Item:
+    def add_file(self, item_id: int, drive_id: str, position: int | None = None) -> Item:
+        """Attach a file at the end, or at ``position`` (0-based, clamped), which is how an
+        Undo puts a taken-off file back where it was. A file already on the item stays."""
         drive_id = _check_drive_id(drive_id)
         with write_tx(self.engine) as conn:
             self._row(conn, item_id)
@@ -796,8 +807,26 @@ class TrayService:
             ).first()
             if not exists:
                 conn.execute(insert(item_files).values(item_id=item_id, drive_id=drive_id))
+                if position is not None:
+                    self._place_file(conn, item_id, drive_id, position)
                 self._event(conn, item_id, "file_added", self._file_data(conn, drive_id))
             return self._get(conn, item_id)
+
+    @staticmethod
+    def _place_file(conn: Connection, item_id: int, drive_id: str, position: int) -> None:
+        """Order is the rows' insertion order, so a file goes to ``position`` by writing
+        the item's links again in the new order."""
+        order = list(
+            conn.execute(
+                select(item_files.c.drive_id)
+                .where(item_files.c.item_id == item_id)
+                .order_by(literal_column("item_files.rowid"))
+            ).scalars()
+        )
+        order.remove(drive_id)
+        order.insert(max(0, min(position, len(order))), drive_id)
+        conn.execute(delete(item_files).where(item_files.c.item_id == item_id))
+        conn.execute(insert(item_files), [{"item_id": item_id, "drive_id": d} for d in order])
 
     def remove_file(self, item_id: int, drive_id: str) -> Item:
         with write_tx(self.engine) as conn:
@@ -813,6 +842,232 @@ class TrayService:
             )
             self._event(conn, item_id, "file_removed", self._file_data(conn, drive_id))
             return self._get(conn, item_id)
+
+    # --- merge ---------------------------------------------------------------------
+
+    def merge(self, target_id: int, source_id: int) -> Item:
+        """Merge the open item ``source_id`` into the open item ``target_id`` (DB only).
+
+        The target keeps its title, tray, dates and fields and gains the source's files
+        (in order, those it has already skipped), its note (appended under a line naming
+        the source) and its checklist (appended). The source is then removed. One
+        transaction; the target's "merged_in" event holds the whole source, so the
+        history shows it, nothing is lost and ``undo_merge`` can bring it back.
+        """
+        if target_id == source_id:
+            raise InvalidRequest("An item cannot be merged into itself")
+        with write_tx(self.engine) as conn:
+            target = self._get(conn, target_id)
+            source_row = self._row(conn, source_id)
+            source = self._get(conn, source_id)
+            if target.state != "open" or source.state != "open":
+                raise InvalidRequest("Only open items can be merged")
+            snapshot = self._snapshot(conn, source_row, source.files)
+            added = [d for d in source.files if d not in target.files]
+            if added:
+                conn.execute(
+                    insert(item_files), [{"item_id": target_id, "drive_id": d} for d in added]
+                )
+            note_before = self._note_of(conn, target_id)
+            note_after = note_before
+            if snapshot["note"]:
+                section = f"--- {source.title} ---\n{snapshot['note']}"
+                note_after = f"{note_before}\n\n{section}" if note_before.strip() else section
+                if len(note_after) > NOTE_MAX:
+                    raise InvalidRequest(
+                        f"The merged note would be over {NOTE_MAX} characters; nothing was merged"
+                    )
+                self._set_note(conn, target_id, note_after)
+            first = len(NotesService._siblings(conn, "item", str(target_id)))
+            check_ids = [
+                conn.execute(
+                    insert(checklist_items).values(
+                        target_kind="item",
+                        target_id=str(target_id),
+                        text=c["text"],
+                        done=c["done"],
+                        position=first + i,
+                    )
+                ).inserted_primary_key[0]
+                for i, c in enumerate(snapshot["checklist"])
+            ]
+            self._delete_items(conn, [source_id])
+            self._event(
+                conn,
+                target_id,
+                "merged_in",
+                {
+                    "item_id": source_id,
+                    "title": source.title,
+                    "tray_name": source.tray_name,
+                    "files": [self._file_data(conn, d) for d in added],
+                    "note": bool(snapshot["note"]),
+                    "checks": len(check_ids),
+                    "snapshot": {
+                        **snapshot,
+                        "note_before": note_before,
+                        "note_after": note_after,
+                        "check_ids": check_ids,
+                        "added": added,
+                    },
+                },
+            )
+            return self._get(conn, target_id)
+
+    def undo_merge(self, target_id: int) -> Item:
+        """Take the last merge into ``target_id`` back: the merged item returns as it was
+        (same id, files, history, note, checklist, reminders) and the target as it was.
+        ``Conflict`` once the target changed since (any new event, its note edited)."""
+        with write_tx(self.engine) as conn:
+            self._row(conn, target_id)
+            last = conn.execute(
+                select(item_events)
+                .where(item_events.c.item_id == target_id)
+                .order_by(item_events.c.id.desc())
+                .limit(1)
+            ).one_or_none()
+            if last is None or last.kind != "merged_in" or "snapshot" not in (last.data or {}):
+                raise Conflict(CHANGED_SINCE_MERGED)
+            snap = last.data["snapshot"]
+            if self._note_of(conn, target_id) != snap["note_after"]:
+                raise Conflict(CHANGED_SINCE_MERGED)
+            if conn.execute(select(items.c.id).where(items.c.id == snap["id"])).first():
+                raise Conflict("the merged item's place has been taken since")
+            for d in snap["added"]:
+                conn.execute(
+                    delete(item_files).where(
+                        item_files.c.item_id == target_id, item_files.c.drive_id == d
+                    )
+                )
+            if snap["note"]:
+                self._set_note(conn, target_id, snap["note_before"])
+            if snap["check_ids"]:
+                conn.execute(
+                    delete(checklist_items).where(checklist_items.c.id.in_(snap["check_ids"]))
+                )
+                NotesService._renumber(
+                    conn,
+                    [r.id for r in NotesService._siblings(conn, "item", str(target_id))],
+                )
+            self._restore(conn, snap)
+            conn.execute(delete(item_events).where(item_events.c.id == last.id))
+            return self._get(conn, target_id)
+
+    @staticmethod
+    def _note_of(conn: Connection, item_id: int) -> str:
+        return (
+            conn.execute(
+                select(notes.c.text).where(
+                    notes.c.target_kind == "item", notes.c.target_id == str(item_id)
+                )
+            ).scalar_one_or_none()
+            or ""
+        )
+
+    @staticmethod
+    def _set_note(conn: Connection, item_id: int, text: str) -> None:
+        """Store an item's note (blank removes it); like any edit by the user, it is not
+        owned by a batch afterwards."""
+        if not text.strip():
+            conn.execute(
+                delete(notes).where(
+                    notes.c.target_kind == "item", notes.c.target_id == str(item_id)
+                )
+            )
+            return
+        NotesService._upsert(conn, "item", str(item_id), text, None)
+
+    @staticmethod
+    def _snapshot(conn: Connection, row, drive_ids: list[str]) -> dict:
+        """Everything of an item that its deletion removes, as plain JSON."""
+        return {
+            "id": row.id,
+            "tray_id": row.tray_id,
+            "title": row.title,
+            "fields": row.fields,
+            "date": row.date.isoformat() if row.date else None,
+            "state": row.state,
+            "created": row.created,
+            "done_at": row.done_at,
+            "done_fields": row.done_fields,
+            "created_by_batch": row.created_by_batch,
+            "files": list(drive_ids),
+            "events": [
+                {"at": e.at, "kind": e.kind, "data": e.data}
+                for e in conn.execute(
+                    select(item_events)
+                    .where(item_events.c.item_id == row.id)
+                    .order_by(item_events.c.at, item_events.c.id)
+                )
+            ],
+            "note": TrayService._note_of(conn, row.id),
+            "checklist": [
+                {"text": c.text, "done": bool(c.done), "position": c.position}
+                for c in NotesService._siblings(conn, "item", str(row.id))
+            ],
+            "reminders": [
+                {
+                    "rule": r.rule,
+                    "occasion": r.occasion.isoformat(),
+                    "fired_at": r.fired_at,
+                    "channels": r.channels,
+                }
+                for r in conn.execute(
+                    select(reminders_sent).where(reminders_sent.c.item_id == row.id)
+                )
+            ],
+        }
+
+    @staticmethod
+    def _restore(conn: Connection, snap: dict) -> None:
+        """Insert an item back from its ``_snapshot`` (under its old id)."""
+        item_id = snap["id"]
+        conn.execute(
+            insert(items).values(
+                id=item_id,
+                tray_id=snap["tray_id"],
+                title=snap["title"],
+                fields=snap["fields"],
+                date=date.fromisoformat(snap["date"]) if snap["date"] else None,
+                state=snap["state"],
+                created=snap["created"],
+                done_at=snap["done_at"],
+                done_fields=snap["done_fields"],
+                created_by_batch=snap["created_by_batch"],
+            )
+        )
+        if snap["files"]:
+            conn.execute(
+                insert(item_files), [{"item_id": item_id, "drive_id": d} for d in snap["files"]]
+            )
+        for e in snap["events"]:
+            conn.execute(
+                insert(item_events).values(
+                    item_id=item_id, at=e["at"], kind=e["kind"], data=e["data"]
+                )
+            )
+        if snap["note"]:
+            NotesService._upsert(conn, "item", str(item_id), snap["note"], None)
+        for c in snap["checklist"]:
+            conn.execute(
+                insert(checklist_items).values(
+                    target_kind="item",
+                    target_id=str(item_id),
+                    text=c["text"],
+                    done=c["done"],
+                    position=c["position"],
+                )
+            )
+        for r in snap["reminders"]:
+            conn.execute(
+                insert(reminders_sent).values(
+                    item_id=item_id,
+                    rule=r["rule"],
+                    occasion=date.fromisoformat(r["occasion"]),
+                    fired_at=r["fired_at"],
+                    channels=r["channels"],
+                )
+            )
 
     def remove_created_by(self, batch_id: str) -> int:
         """Delete (DB only) the items a batch created, with everything hanging off them,

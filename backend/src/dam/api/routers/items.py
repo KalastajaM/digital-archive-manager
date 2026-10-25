@@ -11,7 +11,9 @@ from dam.api.schemas import (
     ItemBarcodeOut,
     ItemCreateBody,
     ItemEventOut,
+    ItemFileAddBody,
     ItemFileOut,
+    ItemMergeBody,
     ItemMoveBody,
     ItemOut,
     ItemPatchBody,
@@ -134,14 +136,30 @@ def reopen(app: AppDep, item_id: int):
 
 
 @router.post("/items/{item_id}/files", response_model=ItemOut)
-def add_file(app: AppDep, item_id: int, body: DriveIdBody):
+def add_file(app: AppDep, item_id: int, body: ItemFileAddBody):
+    """Attach a file (DB only); ``position`` puts it back where a removed one was."""
     live_record(app, body.drive_id)
-    return app.trays.add_file(item_id, body.drive_id)
+    return app.trays.add_file(item_id, body.drive_id, body.position)
 
 
 @router.post("/items/{item_id}/files/remove", response_model=ItemOut)
 def remove_file(app: AppDep, item_id: int, body: DriveIdBody):
     return app.trays.remove_file(item_id, body.drive_id)
+
+
+@router.post("/items/{item_id}/merge", response_model=ItemOut)
+def merge_item(app: AppDep, item_id: int, body: ItemMergeBody):
+    """Merge the open item ``body.item_id`` into this open one (DB only): its files, note
+    and checklist are added here and it is removed. 400 for itself or a done item, 404
+    for an unknown id."""
+    return app.trays.merge(item_id, body.item_id)
+
+
+@router.post("/items/{item_id}/undo-merge", response_model=ItemOut)
+def undo_merge(app: AppDep, item_id: int):
+    """Bring the item last merged into this one back, as both were (409 once this item
+    was changed since)."""
+    return app.trays.undo_merge(item_id)
 
 
 @router.get("/files/{drive_id}/links", response_model=FileLinksOut)

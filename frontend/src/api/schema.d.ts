@@ -1102,7 +1102,10 @@ export interface paths {
          */
         get: operations["item_files_api_items__item_id__files_get"];
         put?: never;
-        /** Add File */
+        /**
+         * Add File
+         * @description Attach a file (DB only); ``position`` puts it back where a removed one was.
+         */
         post: operations["add_file_api_items__item_id__files_post"];
         delete?: never;
         options?: never;
@@ -1176,6 +1179,49 @@ export interface paths {
         put?: never;
         /** Remove File */
         post: operations["remove_file_api_items__item_id__files_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/items/{item_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Item
+         * @description Merge the open item ``body.item_id`` into this open one (DB only): its files, note
+         *     and checklist are added here and it is removed. 400 for itself or a done item, 404
+         *     for an unknown id.
+         */
+        post: operations["merge_item_api_items__item_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/items/{item_id}/undo-merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Merge
+         * @description Bring the item last merged into this one back, as both were (409 once this item
+         *     was changed since).
+         */
+        post: operations["undo_merge_api_items__item_id__undo_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4278,11 +4324,21 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "created" | "edited" | "done" | "reopened" | "file_added" | "file_removed" | "moved";
+            kind: "created" | "edited" | "done" | "reopened" | "file_added" | "file_removed" | "moved" | "merged_in";
             /** Data */
             data: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * ItemFileAddBody
+         * @description Attach a file to an item: at the end, or at ``position`` (an Undo's old place).
+         */
+        ItemFileAddBody: {
+            /** Drive Id */
+            drive_id: string;
+            /** Position */
+            position?: number | null;
         };
         /** ItemFileOut */
         ItemFileOut: {
@@ -4301,6 +4357,14 @@ export interface components {
             in_inbox: boolean;
             /** Marks */
             marks: ("starred" | "important")[];
+        };
+        /**
+         * ItemMergeBody
+         * @description The item to merge into the one in the path.
+         */
+        ItemMergeBody: {
+            /** Item Id */
+            item_id: number;
         };
         /**
          * ItemMoveBody
@@ -11959,7 +12023,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DriveIdBody"];
+                "application/json": components["schemas"]["ItemFileAddBody"];
             };
         };
         responses: {
@@ -12346,6 +12410,198 @@ export interface operations {
                 "application/json": components["schemas"]["DriveIdBody"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    merge_item_api_items__item_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemMergeBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    undo_merge_api_items__item_id__undo_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
