@@ -922,10 +922,10 @@ Two marks for files you need often, without making a collection:
   They show in the sidebar's **Important** row and as links in `##. Important`, where
   they can be arranged in groups (such as `Houses › Hillside`).
 
-Clicking a file in **Starred** or **Important** opens Browse in the folder the file sits
-in, with the file selected and previewed; Back returns to the list. In an ordinary
-collection a click keeps you on the collection's page, and **Show in folder** in the
-file's panel does the same.
+Clicking a file name in the **Starred** card on Today opens Browse in the folder the file
+sits in, with the file selected and previewed; Back returns to Today. On a collection's
+own page, Starred and Important included, a click selects the file there, and **Show in
+folder** in the file's panel opens it in Browse.
 
 Mark or unmark with one click wherever a file is shown. **Marking never moves or renames
 a file.** A file marked Important cannot be moved to To Delete (unmark it first), nor can

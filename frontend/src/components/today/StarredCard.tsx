@@ -1,4 +1,5 @@
-/** Today's Starred card: the ★ Ongoing files, A–Z, each with one-click Open and Quick
+/** Today's Starred card: the ★ Ongoing files, A–Z; a click on a name shows the file in
+ * Browse (its folder, selected and previewed), and each has one-click Open and Quick
  * Look (Space on a focused row too). Its Quick Look has Trash like every Quick Look
  * (spec §8). It folds and moves like every Today card. */
 import { Eye, Star } from "lucide-react";
@@ -8,6 +9,7 @@ import { errorText, type Member, useBuiltin, useMark } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
 import { LaunchButtons, useFileLaunch } from "../FileLaunch";
+import { browseHref } from "../GroupTree";
 import { MarkIcons, StarGlyph } from "../MarkIcons";
 import { deletionRefusal } from "../MoveTo";
 import { useToast } from "../Toasts";
@@ -56,16 +58,31 @@ function StarredRow({ m, onLook }: { m: Member; onLook?: () => void }) {
   const name = visible(nameOf(m));
   return (
     <li>
-      <span
-        className="starred-name"
-        tabIndex={onLook ? 0 : undefined}
-        data-quicklook={onLook ? true : undefined}
-        data-look={m.drive_id}
-        title={m.path ? visible(m.path) : undefined}
-      >
-        {name}
-        <MarkIcons marks={m.marks} omit="starred" />
-      </span>
+      {/* a click opens Browse at the file's folder with the file selected and previewed;
+          Space on it is Quick Look, as before */}
+      {m.path && !m.is_dir && !m.missing ? (
+        <Link
+          className="starred-name"
+          to={browseHref(m.path, m.drive_id)}
+          data-quicklook={onLook ? true : undefined}
+          data-look={m.drive_id}
+          title={`Show ${visible(m.path)} in Browse`}
+        >
+          {name}
+          <MarkIcons marks={m.marks} omit="starred" />
+        </Link>
+      ) : (
+        <span
+          className="starred-name"
+          tabIndex={onLook ? 0 : undefined}
+          data-quicklook={onLook ? true : undefined}
+          data-look={m.drive_id}
+          title={m.path ? visible(m.path) : undefined}
+        >
+          {name}
+          <MarkIcons marks={m.marks} omit="starred" />
+        </span>
+      )}
       {m.missing && <span className="hint">missing</span>}
       {!m.missing && m.quarantined && <span className="hint">in ##. To Delete</span>}
       <span className="starred-actions" role="group" aria-label={`Open ${name}`}>

@@ -49,9 +49,10 @@ All notable changes are listed here. The format follows
   Starred always stay on top. Collections you had keep their A to Z order until you change
   it; new ones go last.
 
-- In Starred and Important, clicking a file opens Browse in the folder the file sits in,
-  with the file selected and previewed. In other collections a click works as before, and
-  Show in folder in the file's panel does the same.
+- Clicking a file name in the Starred card on Today opens Browse in the folder the file
+  sits in, with the file selected and previewed. On a collection's own page, Starred and
+  Important included, a click selects the file there, and Show in folder in the file's
+  panel opens it in Browse.
 
 - A lock on files, a safety catch against slips. A locked file can still be viewed, tagged
   and described, but it cannot be renamed, moved (also by drag and drop, Move to… or Back
