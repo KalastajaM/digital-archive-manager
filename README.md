@@ -34,13 +34,17 @@ without ever deleting a file.
   documents; change the list under Activity → AI).
 - **Fast filing.** New documents land in an inbox. dam reads them, proposes a name, a
   folder (from your rules, or from where similar files went) and tags, and files them with
-  one key.
+  one key. Rules are drafted from how you file and proven against the documents you filed
+  before you save them. A rule can match words or a picture, such as a logo, in an area of
+  page 1, and can file per person, since the address area tells who a letter is for.
 - **Bills that pay themselves (almost).** Due dates, amounts, IBANs and references are
   picked up from the scan. The To pay tray shows what is due, with a copy button on every
   field, and for Finnish bills a bank barcode to scan with your banking app.
 - **Collections for things in progress.** Group the documents of a house sale, a
   renovation or a court case, with notes and a checklist, without moving them. Add a whole
   folder and everything in it belongs, including what you put in it later.
+- **Tags and search.** Search by tag from the Search card on Today or in Browse. A Tags
+  screen lets you rename, merge and group tags, each change with Undo.
 
 <table>
   <tr>
