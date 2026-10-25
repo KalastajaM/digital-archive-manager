@@ -20,6 +20,7 @@ from dam.api.routers import (
     inbox,
     items,
     layout,
+    locks,
     marks,
     notes,
     ongoing,
@@ -33,7 +34,12 @@ from dam.api.routers import (
 )
 from dam.api.routers import archives as archives_router
 from dam.api.schemas import ErrorBody
-from dam.api.security import ArchiveGuardMiddleware, InternalErrorMiddleware, LocalOnlyMiddleware
+from dam.api.security import (
+    ArchiveGuardMiddleware,
+    InternalErrorMiddleware,
+    LocalOnlyMiddleware,
+    UnlockTokenMiddleware,
+)
 from dam.app import App
 from dam.core.paths import OutsideArchiveError
 from dam.ops.model import GuardError, OpFailed
@@ -151,6 +157,7 @@ def create_api(
         inbox,
         layout,
         files,
+        locks,
         browse,
         activity,
         today,
@@ -178,6 +185,7 @@ def create_api(
         _mount_frontend(api, static_dir)
     if archives is not None:
         api.add_middleware(ArchiveGuardMiddleware, archive_id=archives.current_id)
+    api.add_middleware(UnlockTokenMiddleware)
     # Added last = outermost: the host/origin checks run before anything else.
     api.add_middleware(InternalErrorMiddleware, logs_dir=app.app_paths.logs_dir)
     api.add_middleware(LocalOnlyMiddleware)
