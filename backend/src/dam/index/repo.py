@@ -845,6 +845,35 @@ class FileRepo:
         with self._conn(write=True) as conn:
             return conn.execute(update(files).where(and_(*cond)).values(missing=True)).rowcount
 
+    @staticmethod
+    def _subtree_cond(rel: str):
+        sub = nfc(rel)
+        prefix = sub + "/"
+        return or_(
+            files.c.path_nfc == sub,
+            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
+        )
+
+    def count_subtree(self, rel: str, *, live_only: bool = False) -> int:
+        """Rows at or under ``rel`` (``live_only``: not flagged missing)."""
+        cond = [self._subtree_cond(rel)]
+        if live_only:
+            cond.append(files.c.missing.is_not(True))
+        with self._conn() as conn:
+            return conn.execute(
+                select(func.count()).select_from(files).where(and_(*cond))
+            ).scalar_one()
+
+    def forget_subtree(self, rel: str) -> int:
+        """Remove the index rows at or under ``rel`` (tags, text and the rest of each row
+        with them); returns how many. Database only: nothing on disk is touched."""
+        with self._conn(write=True) as conn:
+            ids = list(
+                conn.execute(select(files.c.drive_id).where(self._subtree_cond(rel))).scalars()
+            )
+            self._delete_rows(conn, ids)
+        return len(ids)
+
     def mark_missing_path(self, rel: str) -> None:
         """Flag the row at ``rel`` as missing (a folder just removed from disk)."""
         with self._conn(write=True) as conn:

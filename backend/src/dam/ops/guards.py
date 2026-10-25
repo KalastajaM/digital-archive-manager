@@ -5,7 +5,7 @@ import stat
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
-from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
+from dam.core.paths import ArchivePaths, OutsideArchiveError, _fold, nfc
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind
 from dam.ops.primitives import DS_STORE
 
@@ -240,6 +240,14 @@ def _check_name(name: str) -> None:
         raise GuardError(f"{name!r} is not a valid name.")
 
 
+def check_not_label(paths: ArchivePaths, rel: str) -> None:
+    """A top-level entry of the main folder may not be named like an extra folder's
+    label: the label would hide it (Browse shows the extra folder there)."""
+    parts = PurePosixPath(rel).parts
+    if len(parts) == 1 and _fold(parts[0]) in {_fold(label) for label in paths.extra_labels}:
+        raise GuardError(f"'{parts[0]}' is the name of an archive folder. Choose another name.")
+
+
 def _check_not_top(rel: str, op: Op, paths: ArchivePaths, what: str) -> None:
     if paths.is_root(rel):
         raise GuardError(f"{what} is the archive root")
@@ -344,6 +352,7 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
         case OpKind.RENAME:
             _check_name(op.dst)
             _check_not_ds_store(op.dst)
+            check_not_label(paths, join(parent(src), op.dst))
             canonical(join(parent(src), op.dst), paths)
         case OpKind.MOVE:
             folder = canonical(op.dst, paths)
@@ -354,6 +363,7 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
             final = join(folder, op.name or PurePosixPath(src).name)
             _check_not_ds_store(PurePosixPath(final).name)
             canonical(final, paths)
+            check_not_label(paths, final)
             _check_not_top(final, op, paths, "destination")
             if is_under(folder, src):
                 raise GuardError(f"{src!r} cannot be moved into itself.")
@@ -362,6 +372,7 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
         case OpKind.MKDIR:
             if paths.is_root(canonical(op.dst, paths)):
                 raise GuardError("A folder cannot be made directly as the archive folder.")
+            check_not_label(paths, canonical(op.dst, paths))
         case OpKind.SYMLINK:
             link = canonical(op.dst, paths)
             _check_not_ds_store(PurePosixPath(link).name)
