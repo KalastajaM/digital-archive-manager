@@ -2150,6 +2150,26 @@ class MaintenanceForgetOut(BaseModel):
     forgotten: int
 
 
+IgnoreKindIn = Literal[
+    "duplicates", "versions", "empty_folders", "broken_links", "references", "names"
+]
+
+
+class MaintenanceIgnoreIn(_In):
+    kind: IgnoreKindIn
+    key: str = Field(min_length=1, max_length=2000)
+    label: str = Field(min_length=1, max_length=2000)
+    members: list[str] = Field(default_factory=list, max_length=10000)
+
+
+class MaintenanceIgnoredOut(BaseModel):
+    id: int
+    kind: str
+    key: str
+    label: str
+    created: float
+
+
 class DupFileOut(BaseModel):
     drive_id: str
     path: str

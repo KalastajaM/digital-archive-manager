@@ -26,6 +26,7 @@ import { undoAction, useBlockToastActions, useToast } from "../Toasts";
 import { useUndoConfirm } from "../UndoConfirm";
 import { Card } from "../ui/Card";
 import { Tag } from "../ui/Tag";
+import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
 import { foldedLine, ResetButton } from "./ListChecks";
 import { useMaintenanceJob } from "./useMaintenanceJob";
@@ -176,6 +177,7 @@ function Group({
   onToggle,
   onInclude,
   onAct,
+  onIgnore,
 }: {
   group: DupGroup;
   keep: string;
@@ -186,6 +188,7 @@ function Group({
   onToggle: (id: string) => void;
   onInclude: () => void;
   onAct: (action: Action) => void;
+  onIgnore: () => void;
 }) {
   const removable = removalsOf(group, keep, skipped);
   const choosable = candidatesOf(group, keep).length > 1;
@@ -201,6 +204,7 @@ function Group({
         <span className="hint">
           {plural(group.files.length, "copy", "copies")} of {formatSize(group.size)}
         </span>
+        <IgnoreButton label={name} disabled={busy} onClick={onIgnore} />
       </header>
       <ul className="dup-files">
         {group.files.map((f) => (
@@ -231,6 +235,7 @@ function Group({
 
 export function Duplicates() {
   const check = useMaintenanceJob("duplicates");
+  const ignore = useIgnore(check.reload);
   const estimate = useDuplicateEstimate();
   const resolve = useResolveDuplicates();
   const toast = useToast();
@@ -519,6 +524,14 @@ export function Duplicates() {
                       })
                     }
                     onAct={(action) => begin([g], action)}
+                    onIgnore={() =>
+                      void ignore.ignore({
+                        kind: "duplicates",
+                        key: g.sha256,
+                        label: baseName(g.files[0].path),
+                        members: g.files.map((f) => f.drive_id),
+                      })
+                    }
                   />
                 ))}
               </ul>
@@ -533,7 +546,15 @@ export function Duplicates() {
           ) : (
             <ul className="dup-groups">
               {result.name_groups.map((g) => (
-                <NameGroup key={g.name + g.files[0].drive_id} name={g.name} files={g.files} />
+                <NameGroup
+                  key={g.name + g.files[0].drive_id}
+                  name={g.name}
+                  files={g.files}
+                  busy={ignore.busy}
+                  onIgnore={() =>
+                    void ignore.ignore({ kind: "versions", key: g.name, label: g.name, members: g.files.map((f) => f.drive_id) })
+                  }
+                />
               ))}
               {result.name_groups_total > result.name_groups.length && (
                 <li className="hint">
@@ -544,12 +565,23 @@ export function Duplicates() {
           )}
         </>
       )}
+      {!check.running && <IgnoredList kinds={["duplicates", "versions"]} onChange={check.reload} />}
       {confirmView}
     </Card>
   );
 }
 
-function NameGroup({ name, files }: { name: string; files: DupFile[] }) {
+function NameGroup({
+  name,
+  files,
+  busy,
+  onIgnore,
+}: {
+  name: string;
+  files: DupFile[];
+  busy: boolean;
+  onIgnore: () => void;
+}) {
   const [a, b] = files;
   const sideBySide =
     folderOf(a.path) !== folderOf(b.path)
@@ -566,6 +598,7 @@ function NameGroup({ name, files }: { name: string; files: DupFile[] }) {
             Compare side by side
           </Link>
         )}
+        <IgnoreButton label={name} disabled={busy} onClick={onIgnore} />
       </header>
       <ul className="dup-files">
         {files.map((f) => (

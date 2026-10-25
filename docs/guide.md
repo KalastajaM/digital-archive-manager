@@ -1197,6 +1197,14 @@ that check's result (and ends it if it is running), and **Reset all** in the too
 forgets every result, so the screen is as before any check
 ran. Reset changes nothing in the archive.
 
+**Ignore** on an entry leaves it out of that check's results from then on, for example a
+duplicate you want to keep or a folder that is meant to be empty. dam keeps the ignored
+entries with the archive, so they stay ignored after Reset and after a restart. A card's
+**ignored entries** link lists them, each with **Stop ignoring**. An ignored duplicate group
+shows again when a new copy with the same content turns up, and the same goes for a name
+shared by files with different content. Waiting in To Delete has no Ignore: it is a
+reminder. Ignoring changes nothing in the archive.
+
 ### Duplicates
 
 **Find duplicates** looks for files with exactly the same content.

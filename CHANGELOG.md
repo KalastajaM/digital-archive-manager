@@ -34,6 +34,10 @@ All notable changes are listed here. The format follows
     is a choice.
   - Collections and trays show where a gone file was last seen instead of an internal id,
     say what each entry means, and offer **Take out** for a gone file in a collection.
+  - **Ignore** an entry (a duplicate group, a name used by different files, an empty
+    folder, a broken link, a collection or tray entry, a file name) to leave it out of
+    later results. Each card lists what it ignores, with **Stop ignoring**. An ignored
+    duplicate group comes back when a new copy turns up.
   - Each check's card folds to one line (Collapse all and Expand all in the toolbar,
     remembered in this browser). The reset icon at the top right of each card forgets that
     check's result, and **Reset all** in the toolbar every result, without changing the
