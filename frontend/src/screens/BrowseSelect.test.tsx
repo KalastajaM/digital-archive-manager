@@ -108,20 +108,26 @@ describe("Star and Important for the checked files", () => {
     expect(posts(calls, "/api/marks/star")[0].body).toEqual({ drive_ids: ["f1", "f2"] });
   });
 
-  it("Mark Important marks the checked file", async () => {
+  it("Mark Important marks the checked files", async () => {
     const { calls, user } = setup(FILES, { "POST /api/marks/important": { body: CHANGE } });
     await screen.findByText("a.pdf");
     await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
     await user.click(screen.getByRole("button", { name: "Mark Important" }));
     await waitFor(() => expect(posts(calls, "/api/marks/important")).toHaveLength(1));
-    expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["f1"] });
+    expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["f1", "f2"] });
   });
 
-  it("both are disabled with nothing to act on", async () => {
-    setup(FILES);
+  it("are in the header only for several checked files: one file has them in its preview", async () => {
+    const { user } = setup(FILES);
     await screen.findByText("a.pdf");
-    expect(screen.getByRole("button", { name: "Star" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Mark Important" })).toBeDisabled();
+    const header = () => screen.getByRole("toolbar", { name: "Browse file actions" });
+    expect(within(header()).queryByRole("button", { name: "Star" })).toBeNull();
+    await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
+    expect(within(header()).queryByRole("button", { name: "Star" })).toBeNull();
+    await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
+    expect(within(header()).getByRole("button", { name: "Star" })).toBeEnabled();
+    expect(within(header()).getByRole("button", { name: "Mark Important" })).toBeEnabled();
   });
 });
 

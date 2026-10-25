@@ -14,6 +14,9 @@ type Props = {
   actions?: ReactNode;
   /** A search field, kept at the right edge. */
   search?: ReactNode;
+  /** A second group of actions after the search, at the far right (Browse: what acts on
+   * the selected files, over the file pane). The rest then sits in ``toolbar-lead``. */
+  trailing?: ReactNode;
   /** Two rows: the title with its subtitle on the first, the actions right-aligned on the
    * second (a narrow list column). The title is cut with an ellipsis only as a last resort,
    * and then it is whole in the tooltip. */
@@ -24,9 +27,9 @@ type Props = {
 };
 
 /** The unified toolbar at the top of a screen: title, subtitle, actions, search. */
-export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, stacked, className, style }: Props) {
-  return (
-    <header className={[stacked ? "toolbar toolbar-stacked" : "toolbar", className].filter(Boolean).join(" ")} style={style}>
+export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, trailing, stacked, className, style }: Props) {
+  const lead = (
+    <>
       <div className="toolbar-title">
         {titleEditor ?? (
           <>
@@ -51,6 +54,16 @@ export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, se
         </div>
       )}
       {search && <div className="toolbar-search">{search}</div>}
+    </>
+  );
+  return (
+    <header className={[stacked ? "toolbar toolbar-stacked" : "toolbar", className].filter(Boolean).join(" ")} style={style}>
+      {trailing ? <div className="toolbar-lead">{lead}</div> : lead}
+      {trailing && (
+        <div className="toolbar-actions toolbar-trailing" role="toolbar" aria-label={`${title} file actions`}>
+          {trailing}
+        </div>
+      )}
     </header>
   );
 }

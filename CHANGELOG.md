@@ -59,6 +59,11 @@ All notable changes are listed here. The format follows
   folder** buttons and the other file buttons line up with the list, and the preview
   beside it is left clear. With two panes they sit over the left pane. On a narrow
   list the search wraps under the buttons.
+- The buttons that act on the selected files (**Move to…**, **From…**, **For…**, **Move
+  to To Delete**) now sit at the right of the Browse header, over the file pane; the
+  two-panes and **New folder** buttons and the search stay over the list. **Star** and
+  **Important** show in the header only when several files are checked or with two panes:
+  for one file they are in its preview's toolbar.
 - Collections are now a chip field like tags, everywhere a file's collections are set:
   the file view in Browse, a collection and a tray, the Inbox card and batch ("Also add
   to collection"), the rule sheet and the filing codes. The collections show as chips
