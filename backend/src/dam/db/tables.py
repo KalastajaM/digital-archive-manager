@@ -484,3 +484,18 @@ file_locks = Table(
     Column("drive_id", Text, primary_key=True),
     Column("locked_at", Float, nullable=False),
 )
+
+# Maintenance results the owner chose to ignore (0034): left out of later checks until
+# they are no longer ignored. ``members``: for a group (duplicates, versions), the JSON
+# list of drive ids it had; a group with a file beyond those shows again.
+maintenance_ignored = Table(
+    "maintenance_ignored",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("kind", Text, nullable=False),
+    Column("key", Text, nullable=False),
+    Column("label", Text, nullable=False),
+    Column("members", Text, nullable=True),
+    Column("created", Float, nullable=False),
+    UniqueConstraint("kind", "key", name="uq_maintenance_ignored_kind_key"),
+)

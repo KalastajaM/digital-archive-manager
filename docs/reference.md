@@ -943,6 +943,15 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   `DELETE /api/maintenance/jobs?kind=` (Reset) forgets the jobs of the kind, or of every
   kind without `kind`, ending one still running; answers `{forgotten}`. Nothing in the
   archive changes.
+- Ignoring results: `GET /api/maintenance/ignored` lists them (newest first: `id`, `kind`,
+  `key`, `label`, `created`), `POST /api/maintenance/ignored {kind, key, label, members?}`
+  adds one (again: label and members are replaced), `DELETE /api/maintenance/ignored/{id}`
+  takes one back (404 if unknown). They live in the `maintenance_ignored` table (0034) and
+  are left out of every result read, with the totals lowered. Keys per `kind`:
+  `duplicates` the sha256, `versions` the name (folded), `empty_folders`, `broken_links`
+  and `names` the drive id, `references` `"<collection|tray>-<owner id>-<item id>-<drive
+  id>"`. For `duplicates` and `versions`, `members` (required) are the group's drive ids;
+  the group stays out only while all its files are among them.
 - The `references` check gives a missing file's `path` as last seen: its index row's
   path, else the latest done journal operation for its drive id (null when neither
   knows). A gone collection member is taken out with the existing

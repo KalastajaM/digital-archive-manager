@@ -97,6 +97,7 @@ function setup(extra: Routes = {}, results: Record<string, Partial<MaintenanceJo
     },
     "POST /api/maintenance/duplicates/resolve": resolveRoute,
     "GET /api/status": { body: { special_folders: { quarantine: "##. To Delete" } } },
+    "GET /api/maintenance/ignored": { body: [] },
     ...extra,
   };
   for (const kind of KINDS) {
@@ -532,5 +533,45 @@ describe("Maintenance: folding and Reset", () => {
 
     await user.click(screen.getByRole("button", { name: "Reset all" }));
     await waitFor(() => expect(deletes()).toEqual(["/api/maintenance/jobs?kind=empty_folders", "/api/maintenance/jobs"]));
+  });
+});
+
+describe("Maintenance: ignoring results", () => {
+  it("ignores a duplicate group with its copies, with Undo in the toast", async () => {
+    const { calls, user } = setup(
+      {
+        "POST /api/maintenance/ignored": { body: { id: 9, kind: "duplicates", key: "aaa", label: "20230101_bill.pdf", created: 1 } },
+        "DELETE /api/maintenance/ignored/9": { body: { forgotten: 1 } },
+      },
+      withDuplicates(GROUP),
+    );
+    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await screen.findByRole("button", { name: "Ignore 20230101_bill.pdf" }));
+    expect(posts(calls, "/api/maintenance/ignored")[0].body).toEqual({
+      kind: "duplicates",
+      key: "aaa",
+      label: "20230101_bill.pdf",
+      members: ["k1", "d1", "d2"],
+    });
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/maintenance/ignored/9")).toBe(true));
+  });
+
+  it("lists what a card ignores, and Stop ignoring takes one back", async () => {
+    const { calls, user } = setup({
+      "GET /api/maintenance/ignored": {
+        body: [
+          { id: 4, kind: "empty_folders", key: "f9", label: "20. Home/Keep empty", created: 2 },
+          { id: 3, kind: "names", key: "n1", label: "10. Financial/x.pdf", created: 1 },
+        ],
+      },
+      "DELETE /api/maintenance/ignored/4": { body: { forgotten: 1 } },
+    });
+    const folders = card("Empty folders");
+    await user.click(await within(folders).findByRole("button", { name: "1 ignored entry" }));
+    expect(within(folders).getByText("20. Home/Keep empty")).toBeInTheDocument();
+    expect(within(folders).queryByText("10. Financial/x.pdf")).not.toBeInTheDocument(); // another card's
+    await user.click(within(folders).getByRole("button", { name: "Stop ignoring 20. Home/Keep empty" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/maintenance/ignored/4")).toBe(true));
   });
 });

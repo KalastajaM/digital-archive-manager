@@ -26,6 +26,7 @@ from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.locks import LockService
 from dam.maintenance import checks, duplicates
 from dam.maintenance.duplicates import WHY_LOCKED, LockIndex
+from dam.maintenance.ignored import IgnoreList, fold_name
 from dam.maintenance.jobs import Job, MaintenanceJobs
 from dam.notes import NotesService
 from dam.ops.executor import Executor
@@ -120,6 +121,7 @@ class MaintenanceService:
         self.rescan = rescan
         self.important_lock = important_lock if important_lock is not None else nullcontext()
         self.jobs = MaintenanceJobs()
+        self.ignored = IgnoreList(engine)
 
     def close(self) -> None:
         self.jobs.close()
@@ -159,7 +161,7 @@ class MaintenanceService:
     def result_of(self, job: Job) -> tuple[str, object]:
         """``(kind, result)`` of a job as it stands now: without what has changed since it
         was found (a duplicate that moved, a folder that is no longer empty or was marked
-        for deletion). Reads the index only."""
+        for deletion) and without what the owner ignores. Reads the index only."""
         result = job.view().result
         if result is None:
             return job.kind, None
@@ -169,7 +171,36 @@ class MaintenanceService:
             result = self._still_there(result)
         elif job.kind == "waiting":
             result = self._still_there(result, waiting=True)
-        return job.kind, result
+        return job.kind, self._not_ignored(job.kind, result)
+
+    def _not_ignored(self, kind: str, result):
+        """A copy of ``result`` without the entries the owner ignores, totals lowered."""
+        drop = self.ignored.drop
+        ids = lambda g: [f.drive_id for f in g.files]  # noqa: E731
+        if kind == "duplicates":
+            groups, n = drop("duplicates", result.groups, lambda g: g.sha256, ids)
+            names, m = drop("versions", result.name_groups, lambda g: fold_name(g.name), ids)
+            if not (n or m):
+                return result
+            return dataclasses.replace(
+                result,
+                groups=groups,
+                groups_total=max(0, result.groups_total - n),
+                name_groups=names,
+                name_groups_total=max(0, result.name_groups_total - m),
+            )
+        if kind == "references":
+            key = lambda r: "-".join(  # noqa: E731
+                (r.kind, r.owner_id, "" if r.item_id is None else str(r.item_id), r.drive_id)
+            )
+        elif kind in ("empty_folders", "broken_links", "names"):
+            key = lambda r: r.drive_id  # noqa: E731
+        else:
+            return result
+        items, n = drop(kind, result.items, key)
+        if not n:
+            return result
+        return dataclasses.replace(result, items=items, total=max(0, result.total - n))
 
     def _still_there(self, result, waiting: bool = False):
         """A copy of a list result without the entries whose file is gone from where it
