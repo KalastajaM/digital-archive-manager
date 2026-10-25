@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type FilterName, filterToken, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
+import { FILTER_HELP, type FilterName, filterToken, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
 
 const f = (name: FilterName, value: string, negated = false) => ({ name, value, negated });
 
@@ -58,5 +58,13 @@ describe("tokens and queries", () => {
     expect(sameFilter(f("tag", "kela"), base[0])).toBe(true);
     expect(withFilter(base, f("tag", "kela"))).toBe(base);
     expect(withFilter(base, f("tag", "kela", true))).toHaveLength(2);
+  });
+});
+
+describe("is:locked", () => {
+  it("is still a filter value, and the help says it is only the owner's own locks", () => {
+    expect(splitSearch("is:locked ")).toMatchObject({ filters: [f("is", "locked")] });
+    const help = FILTER_HELP.find((h) => h.name === "is");
+    expect(help?.text).toContain("locked (a lock you set; Important files are found with is:important)");
   });
 });

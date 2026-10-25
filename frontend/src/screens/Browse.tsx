@@ -1,4 +1,4 @@
-import { Building2, ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus, User } from "lucide-react";
+import { ArchiveRestore, Building2, ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus, User } from "lucide-react";
 import {
   type DragEvent,
   Fragment,
@@ -31,6 +31,7 @@ import { FitText } from "../components/FitText";
 import type { PreviewFile } from "../components/FilePreview";
 import { BUILTIN_LABEL, ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
+import { type RestoreTo, restoreEntries, useRestoreFlow } from "../components/Restore";
 import {
   anyMoveRunning,
   backToInbox,
@@ -65,6 +66,7 @@ import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyb
 import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
+import { inToDelete, toDeleteReasonFor } from "../toDelete";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
@@ -539,7 +541,7 @@ export default function Browse() {
   const ids = useId();
   const newFolder = useNewFolder();
   const setupFolders = useSetupFolders();
-  const [menu, setMenu] = useState<{ x: number; y: number; path: string; name: string } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; path: string; name: string; driveId: string } | null>(null);
 
   // Paths: one pane uses ?path= (as before), two use ?left=&right=; each pane's
   // collection filter and view sit beside them (PARAM).
@@ -992,6 +994,19 @@ export default function Browse() {
     markTargets.map((it) => deletionRefusal(it.path, it.marks)).find((r) => r !== null) ??
     (lockedIn(markTargets) ? LOCKED_REASON : null);
   selection.current = markIds; // stale dry runs are dropped against this
+  // Files under ##. To Delete are read-only: every action on them is off until they are
+  // restored. Restore takes the same rows as Mark for deletion (checked folders too).
+  const readOnlyWhy = toDeleteReasonFor([...moveTargets, ...markTargets].map((it) => it.path));
+  const restoring = useRestoreFlow();
+  const restoreWhy =
+    markTargets.length > 0 && !markTargets.every((it) => inToDelete(it.path))
+      ? "Restore works on items in To Delete only: deselect the others"
+      : null;
+  const startRestore = (ids: string[], to: RestoreTo) => {
+    if (restoring.running()) toast({ kind: "info", text: "Already restoring…" });
+    else if (running()) toast({ kind: "info", text: MOVE_BUSY });
+    else restoring.start(ids, to);
+  };
   // The bin is disabled for these; ⌘⌫ says why instead of doing nothing.
   const trashSelection = () => {
     if (markIds.length === 0) return;
@@ -1333,7 +1348,7 @@ export default function Browse() {
             go={(to) => go(pane, to)}
           />
           <div className="pane-tools">
-            {marked && <MarkToggles key={marked.drive_id} driveId={marked.drive_id} name={marked.name} marks={marked.marks} />}
+            {marked && <MarkToggles key={marked.drive_id} driveId={marked.drive_id} name={marked.name} marks={marked.marks} path={marked.path} />}
             <Menu
               label={state.collection === null ? "Collection" : `Collection: ${filterName(state.collection)}`}
               text={state.collection === null ? "Collection" : filterName(state.collection)}
@@ -1451,7 +1466,7 @@ export default function Browse() {
                 if (item.is_dir) {
                   const onContextMenu = (e: MouseEvent) => {
                     e.preventDefault();
-                    setMenu({ x: e.clientX, y: e.clientY, path: item.path, name: item.name });
+                    setMenu({ x: e.clientX, y: e.clientY, path: item.path, name: item.name, driveId: item.drive_id });
                   };
                   return (
                     <FolderRow
@@ -1667,30 +1682,42 @@ export default function Browse() {
               icon={<Building2 />}
               label="From…"
               tip="Say who sent these documents"
-              disabled={moveTargets.length === 0 || locked}
+              disabled={moveTargets.length === 0 || locked || readOnlyWhy !== null}
+              disabledReason={readOnlyWhy ?? undefined}
               onClick={() => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) })}
             />
             <IconButton
               icon={<User />}
               label="For…"
               tip="Say who these documents are for"
-              disabled={moveTargets.length === 0 || locked}
+              disabled={moveTargets.length === 0 || locked || readOnlyWhy !== null}
+              disabledReason={readOnlyWhy ?? undefined}
               onClick={() => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) })}
             />
             <IconButton
               icon={<StarGlyph size={16} filled={starAll} />}
               label={starAll ? "Remove the star" : "Star"}
               pressed={starAll}
-              disabled={moveTargets.length === 0 || marks.busy}
+              disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
+              disabledReason={readOnlyWhy ?? undefined}
               onClick={() => void batchMark("star")}
             />
             <IconButton
               icon={<ImportantGlyph large />}
               label={importantAll ? "Unmark Important" : "Mark Important"}
               pressed={importantAll}
-              disabled={moveTargets.length === 0 || marks.busy}
+              disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
+              disabledReason={readOnlyWhy ?? undefined}
               onClick={() => void batchMark("important")}
             />
+            {markTargets.some((it) => inToDelete(it.path)) && (
+              <Menu
+                label="Restore from To Delete"
+                icon={<ArchiveRestore />}
+                align="end"
+                entries={restoreEntries((to) => startRestore(markIds, to), restoreWhy)}
+              />
+            )}
             <TrashButton
               count={markIds.length}
               disabled={markIds.length === 0 || marking.busy}
@@ -1733,6 +1760,7 @@ export default function Browse() {
                   }}
                   preview={previewOf(previewed)}
                   disabled={locked}
+                  restore={(to) => startRestore([previewed.drive_id], to)}
                   boxTool
                   backToInbox={{
                     refusal:
@@ -1747,7 +1775,11 @@ export default function Browse() {
                   }}
                 />
               ) : folderShown ? (
-                <FolderPanel folder={folderShown} refusal={folderCollectRefusal(folderShown.path, specialFolders)} />
+                <FolderPanel
+                  folder={folderShown}
+                  refusal={folderCollectRefusal(folderShown.path, specialFolders)}
+                  restore={(to) => startRestore([folderShown.drive_id], to)}
+                />
               ) : (
                 <EmptyState
                   icon={<File size={40} strokeWidth={1.25} />}
@@ -1776,6 +1808,7 @@ export default function Browse() {
       )}
       {assigning && <AssignSheet kind={assigning.kind} driveIds={assigning.ids} onClose={() => setAssigning(null)} />}
       {marking.view}
+      {restoring.view}
       {newFolder.view}
       {setupFolders.view}
       {menu && (
@@ -1783,7 +1816,12 @@ export default function Browse() {
           x={menu.x}
           y={menu.y}
           label={`${visible(menu.name)} actions`}
-          entries={[{ label: `New folder inside ${visible(menu.name)}…`, onSelect: () => newFolder.open(menu.path) }]}
+          entries={[
+            { label: `New folder inside ${visible(menu.name)}…`, onSelect: () => newFolder.open(menu.path) },
+            ...(inToDelete(menu.path)
+              ? restoreEntries((to) => startRestore([menu.driveId], to), null)
+              : []),
+          ]}
           onClose={() => setMenu(null)}
         />
       )}

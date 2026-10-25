@@ -665,7 +665,7 @@ function Inspector({
   const actions = (ask?: ReactNode) => (
     <div className="inspector-actions">
       {quickLookButton}
-      <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} />
+      <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} path={member.path} />
       {ask}
       {trashButton}
       {member.is_dir && member.path && !member.missing && (

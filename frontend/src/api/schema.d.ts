@@ -720,6 +720,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore
+         * @description Take entries out of To Delete again (original place or the inbox); ``dry_run``
+         *     shows the plan, including a folder made again and a name given ``_N``.
+         */
+        post: operations["restore_api_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browse/move/preview": {
         parameters: {
             query?: never;
@@ -1462,7 +1483,8 @@ export interface paths {
         /**
          * Add Members
          * @description No preview: the sync only links the new members in (app-owned links, journaled;
-         *     removing the member again reverses it). The batch that ran is returned.
+         *     removing the member again reverses it). The batch that ran is returned. 400 for a
+         *     file marked for deletion (restore it first).
          */
         post: operations["add_members_api_collections__collection_id__members_post"];
         delete?: never;
@@ -5520,6 +5542,26 @@ export interface components {
             drive_id: string | null;
             /** Note */
             note: string | null;
+        };
+        /**
+         * RestoreBody
+         * @description Move these files or folders out of ``##. To Delete`` again: ``to`` ``original``
+         *     (the path they were marked at) or ``inbox``. ``dry_run``: only resolve the plan.
+         */
+        RestoreBody: {
+            /** Drive Ids */
+            drive_ids: string[];
+            /**
+             * To
+             * @default original
+             * @enum {string}
+             */
+            to: "original" | "inbox";
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
         };
         /** RetryIndexIn */
         RetryIndexIn: {
@@ -10392,6 +10434,102 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["QuarantineBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResultOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    restore_api_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreBody"];
             };
         };
         responses: {

@@ -205,7 +205,7 @@ export function FileMeta({
       onClick={() => ai.ask({ drive_id: id })}
     />
   );
-  const marks = <MarkToggles driveId={id} name={name} marks={file.marks} />;
+  const marks = <MarkToggles driveId={id} name={name} marks={file.marks} path={file.path} />;
   const tags = (
     <TagsField
       driveId={id}

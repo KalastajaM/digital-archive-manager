@@ -19,6 +19,7 @@ import {
 import { plural } from "../format";
 import { dialogOpen } from "../keyboard";
 import { unexpectedDestinations } from "../screens/useFiling";
+import { TO_DELETE_REASON } from "../toDelete";
 import { visible } from "../text";
 import { FolderPicker } from "./FolderPicker";
 import { ConfirmPlan, snapshotKey } from "./PlanPreview";
@@ -36,7 +37,7 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 /** Why files in ``path``'s area may not be moved at all (null: they may). */
 export function sourceRefusal(path: string): string | null {
   const top = path.split("/")[0].normalize("NFC").toLowerCase();
-  if (top === "##. to delete") return "Files in ##. To Delete cannot be moved: Undo puts them back";
+  if (top === "##. to delete") return TO_DELETE_REASON;
   if (top === "##. ongoing") return "Files in ##. Ongoing cannot be moved: the app keeps them";
   return null;
 }

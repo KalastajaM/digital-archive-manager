@@ -1353,7 +1353,7 @@ describe("Task 11 review fixes", () => {
   });
 
   it.each([
-    ["##. To Delete/10. Financial", "Files in ##. To Delete cannot be moved: Undo puts them back"],
+    ["##. To Delete/10. Financial", "Marked for deletion: restore it first"],
     ["##. Ongoing/Sauna", "Files in ##. Ongoing cannot be moved: the app keeps them"],
   ])("files under %s are not draggable and Move to… says why", async (folder, reason) => {
     const { user } = setup(folder, {

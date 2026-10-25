@@ -4,7 +4,7 @@
  * proposal until "Use this summary" saves it. A current summary the user wrote is never
  * replaced without the confirm sheet. Edit saves the user's own text. */
 import { Sparkles } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import {
   ApiError,
   type DocumentSummary,
@@ -47,9 +47,29 @@ function Facts({ facts, label }: { facts: string[]; label: string }) {
   );
 }
 
+/** A disabled control's reason as its tooltip (a disabled button shows none of its own). */
+function Why({ reason, children }: { reason: string | null; children: ReactNode }) {
+  return reason ? (
+    <span className="button-wrap" data-tip={reason}>
+      {children}
+    </span>
+  ) : (
+    <>{children}</>
+  );
+}
+
 type Proposal = { data: DocumentSummary; info: AIResultInfo };
 
-export function SummaryBox({ driveId, heading = "Summary" }: { driveId: string; heading?: string }) {
+export function SummaryBox({
+  driveId,
+  heading = "Summary",
+  readOnly = null,
+}: {
+  driveId: string;
+  heading?: string;
+  /** Why the summary cannot be written or replaced (null: it can). */
+  readOnly?: string | null;
+}) {
   const editId = useId();
   const query = useFileSummary(driveId);
   const save = usePutFileSummary();
@@ -212,18 +232,23 @@ export function SummaryBox({ driveId, heading = "Summary" }: { driveId: string; 
       {editing === null && (
         <div className="actions summary-actions">
           {ai.on && !proposal && (
-            <button type="button" className="ai-action" disabled={send.busy} onClick={askAI}>
-              <Sparkles size={14} aria-hidden="true" />
-              {shown?.saved.outdated ? "Summarize again…" : "Summarize with AI…"}
-            </button>
+            <Why reason={readOnly}>
+              <button type="button" className="ai-action" disabled={send.busy || readOnly !== null} onClick={askAI}>
+                <Sparkles size={14} aria-hidden="true" />
+                {shown?.saved.outdated ? "Summarize again…" : "Summarize with AI…"}
+              </button>
+            </Why>
           )}
           {query.data && (
-            <button
-              type="button"
-              onClick={() => setEditing(shown?.saved.summary ?? "")}
-            >
-              {shown ? "Edit" : "Write a summary"}
-            </button>
+            <Why reason={readOnly}>
+              <button
+                type="button"
+                disabled={readOnly !== null}
+                onClick={() => setEditing(shown?.saved.summary ?? "")}
+              >
+                {shown ? "Edit" : "Write a summary"}
+              </button>
+            </Why>
           )}
         </div>
       )}
