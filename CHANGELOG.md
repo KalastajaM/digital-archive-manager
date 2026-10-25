@@ -320,6 +320,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- In the sidebar's Tags section, only the tag Browse is filtering by is highlighted.
+  Before, every tag looked selected while Browse was open.
 - While you edit a rule, the test result still on screen was the one for the rule before
   your last change, with nothing to tell you, so it could show things like "person
   unknown" for a rule that no longer files by person. The sheet now says that the result

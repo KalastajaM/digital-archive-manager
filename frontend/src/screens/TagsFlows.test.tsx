@@ -327,7 +327,7 @@ describe("Tags screen", () => {
 });
 
 describe("Sidebar Tags section", () => {
-  function setup(sidebar: unknown[] = []) {
+  function setup(sidebar: unknown[] = [], start = "/") {
     mockFetch({
       "GET /api/status": { body: { inbox_count: 0 } },
       "GET /api/today": { body: { attention: [], overview: { inbox: 0, trays: [], collections: [] } } },
@@ -337,7 +337,7 @@ describe("Sidebar Tags section", () => {
     });
     const user = userEvent.setup();
     const view = renderWithProviders(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={[start]}>
         <Sidebar />
         <Where />
       </MemoryRouter>,
@@ -360,6 +360,26 @@ describe("Sidebar Tags section", () => {
     expect(within(nav).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/tags");
     await user.click(within(nav).getByRole("link", { name: "Kela (2)" }));
     expect(where()).toBe("/browse?tag=Kela&q=");
+  });
+
+  it("marks only the tag Browse filters by as current, none on Browse without a tag", async () => {
+    setup(SIDEBAR, "/browse?tag=Kela&q=");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const kela = await within(nav).findByRole("link", { name: "Kela (2)" });
+    const health = within(nav).getByRole("link", { name: "health (1)" });
+    expect(kela).toHaveAttribute("aria-current", "page");
+    expect(kela).toHaveClass("active");
+    expect(health).not.toHaveAttribute("aria-current");
+    expect(health).not.toHaveClass("active");
+  });
+
+  it("marks no tag current on Browse without a tag filter", async () => {
+    setup(SIDEBAR, "/browse?path=10.+Financial");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    await within(nav).findByRole("link", { name: "Kela (2)" });
+    for (const name of ["Kela (2)", "health (1)"]) {
+      expect(within(nav).getByRole("link", { name })).not.toHaveAttribute("aria-current");
+    }
   });
 
   it("folds like the other sections and remembers it", async () => {

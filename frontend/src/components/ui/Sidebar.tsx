@@ -18,7 +18,7 @@ import {
   Tag as TagIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   archiveKey,
   type CollectionRow,
@@ -430,19 +430,22 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
       {shown.map((t) => {
         const name = visible(t.name);
         const Icon = t.pinned ? Pin : TagIcon;
+        const isCurrent = current.length === 1 && current[0] === t.name;
         return (
           <li key={t.name}>
-            <NavLink
+            {/* a plain Link: a NavLink would mark every tag current on /browse, since they
+                all share that path and differ only in ?tag= */}
+            <Link
               to={`/browse?${new URLSearchParams({ tag: t.name, q: "" })}`}
-              className="sidebar-row"
+              className={isCurrent ? "sidebar-row active" : "sidebar-row"}
               aria-label={`${name} (${t.files})`}
-              aria-current={current.length === 1 && current[0] === t.name ? "page" : undefined}
+              aria-current={isCurrent ? "page" : undefined}
               title={t.pinned ? `${name} (pinned)` : name}
             >
               <Icon className="sidebar-icon" {...ICON} />
               <span className="sidebar-label">{name}</span>
               {t.files > 0 && <span className="sidebar-count">{t.files}</span>}
-            </NavLink>
+            </Link>
           </li>
         );
       })}
