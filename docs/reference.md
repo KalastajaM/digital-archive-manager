@@ -936,9 +936,13 @@ the command line: `dam errors [--all] [--retry]`.
 - **Tags** (all in `dam.sqlite`, nothing journaled; the `tags` table also holds each tag's
   pin time, group and last use, `tag_groups` the groups, and `file_tags` has an index on
   the tag so "files with this tag" is a lookup, not a scan):
-  - `GET /api/search?q=&tag=a&tag=b&folder=&limit=` searches words and/or tags; a file
-    needs every `tag` (case and accents ignored); with no words the tagged files are
-    listed by name; an unknown tag finds nothing.
+  - `GET /api/search?q=&tag=a&tag=b&tag_mode=all|any&folder=&limit=` searches words
+    and/or tags (case and accents ignored); with `tag_mode=all` (the default) a file needs
+    every `tag`, with `any` at least one (one lookup over the union of the tags in the
+    `file_tags` index); with no words the tagged files are listed by name. An unknown tag
+    finds nothing with `all`; with `any` it is ignored (no known tag: nothing). Another
+    `tag_mode` value is a 422. Browse keeps `?tag=` (repeated) and, only for Any,
+    `?tag_mode=any` in its address.
   - `GET /api/tags/all?query=` lists every tag, also those no file has yet:
     `{"tags": [{"name", "files", "pinned", "group_id"}], "groups": [{"id", "name"}]}`;
     `GET /api/tags/sidebar` the sidebar's tags (pinned first, then most recently put on a

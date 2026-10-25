@@ -1,7 +1,9 @@
-/** The tag part of Browse's search box: the active tag filters as removable chips, and
- * the tags that match what is being typed. */
-import { useId } from "react";
+/** The tag part of Browse's search: the active tag filters as removable chips (in a row
+ * of the results pane), the + Tag control, and the tags that match what is being typed. */
+import { useId, useRef, useState } from "react";
+import { useTagSuggestions } from "../api/client";
 import { visible } from "../text";
+import { Segmented } from "./ui/Segmented";
 
 export function TagChips({ tags, onRemove }: { tags: string[]; onRemove: (name: string) => void }) {
   if (tags.length === 0) return null;
@@ -50,5 +52,120 @@ export function TagSuggestions({
         </li>
       ))}
     </ul>
+  );
+}
+
+export type TagMode = "all" | "any";
+
+/** "+ Tag": a small field with suggestions that adds one more tag filter. */
+function AddTag({ tags, onAdd }: { tags: string[]; onAdd: (name: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [on, setOn] = useState(-1); // the arrow keys' place in the list
+  const inputRef = useRef<HTMLInputElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const suggested = useTagSuggestions(value.trim(), 8, open);
+  const offered = (open ? (suggested.data ?? []) : [])
+    .filter((t) => !tags.some((a) => a.toLowerCase() === t.name.toLowerCase()))
+    .slice(0, 6);
+  const close = () => {
+    setOpen(false);
+    setValue("");
+    setOn(-1);
+  };
+  const pick = (name: string) => {
+    onAdd(name);
+    close();
+    buttonRef.current?.focus();
+  };
+  if (!open) {
+    return (
+      <button
+        ref={buttonRef}
+        type="button"
+        className="tag-add"
+        onClick={() => {
+          setOpen(true);
+          setTimeout(() => inputRef.current?.focus(), 0);
+        }}
+      >
+        + Tag
+      </button>
+    );
+  }
+  return (
+    <div
+      className="tag-add-field"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) close();
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        aria-label="Tag to add"
+        placeholder="Tag name"
+        value={value}
+        spellCheck={false}
+        autoFocus
+        onChange={(e) => {
+          setValue(e.target.value);
+          setOn(-1);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            close();
+            buttonRef.current?.focus();
+          } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && offered.length > 0) {
+            e.preventDefault();
+            const by = e.key === "ArrowDown" ? 1 : -1;
+            setOn((n) => Math.max(-1, Math.min(offered.length - 1, n + by)));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            const typed = value.trim().toLowerCase();
+            const exact = offered.find((t) => t.name.toLowerCase() === typed);
+            const chosen = offered[on] ?? exact ?? offered[0];
+            if (chosen) pick(chosen.name);
+          }
+        }}
+      />
+      <TagSuggestions offered={offered} active={on} onPick={pick} />
+    </div>
+  );
+}
+
+/** The row under a results pane's toolbar while tags filter: each tag as a removable chip,
+ * + Tag, and (with two or more tags) the All / Any switch. */
+export function TagBar({
+  tags,
+  mode,
+  onMode,
+  onRemove,
+  onAdd,
+}: {
+  tags: string[];
+  mode: TagMode;
+  onMode: (mode: TagMode) => void;
+  onRemove: (name: string) => void;
+  onAdd: (name: string) => void;
+}) {
+  return (
+    <div className="tag-bar">
+      <TagChips tags={tags} onRemove={onRemove} />
+      <AddTag tags={tags} onAdd={onAdd} />
+      {tags.length > 1 && (
+        <Segmented<TagMode>
+          ariaLabel="Match tags"
+          className="tag-mode"
+          value={mode}
+          onChange={onMode}
+          options={[
+            { value: "all", label: "All", title: "A file needs every one of the tags" },
+            { value: "any", label: "Any", title: "A file needs at least one of the tags" },
+          ]}
+        />
+      )}
+    </div>
   );
 }
