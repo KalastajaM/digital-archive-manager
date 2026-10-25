@@ -35,7 +35,7 @@ from dam.rules.jobs import ReplayJobs
 from dam.rules.learned import rule_file, write_rules_file
 from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
 from dam.rules.picture import AREAS_DIR, Pictures
-from dam.search import SearchHit, search
+from dam.search import SearchContext, SearchHit, search
 from dam.services.activity import ActivityService
 from dam.services.area_pictures import AreaPictures
 from dam.services.assignments import AssignmentService
@@ -572,10 +572,18 @@ class App:
         tags: list[str] | None = None,
         tag_mode: str = "all",
     ) -> list[SearchHit]:
-        """Full-text search over names and extracted text; ``folder`` limits to a subtree,
-        ``tags`` to files that have all of them (``tag_mode`` "any": at least one)."""
+        """Full-text search over names and extracted text, with ``name:value`` filters in
+        ``query`` (``dam.query``); ``folder`` limits to a subtree, ``tags`` to files that have
+        all of them (``tag_mode`` "any": at least one)."""
+        ctx = SearchContext(trays=lambda: [(t.id, t.name) for t in self.trays.defs()])
         return search(
-            self.engine, query, limit=limit, folder=folder, tag_names=tags, tag_mode=tag_mode
+            self.engine,
+            query,
+            limit=limit,
+            folder=folder,
+            tag_names=tags,
+            tag_mode=tag_mode,
+            ctx=ctx,
         )
 
     def close(self) -> None:
