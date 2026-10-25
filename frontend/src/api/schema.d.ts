@@ -5053,6 +5053,7 @@ export interface components {
              * @default []
              */
             scores: components["schemas"]["PictureScoreOut"][];
+            source?: components["schemas"]["SourceDocOut"] | null;
         };
         /** ResolvedOpOut */
         ResolvedOpOut: {
@@ -5186,6 +5187,8 @@ export interface components {
             after?: string | null;
             /** Near Drive Id */
             near_drive_id?: string | null;
+            /** Source Drive Id */
+            source_drive_id?: string | null;
         };
         /**
          * RuleReplayJobIn
@@ -5203,6 +5206,8 @@ export interface components {
             place_above?: string | null;
             /** Near Drive Id */
             near_drive_id?: string | null;
+            /** Source Drive Id */
+            source_drive_id?: string | null;
         };
         /**
          * RuleSampleOut
@@ -5552,6 +5557,28 @@ export interface components {
             gap_y_mm: number;
             /** Cut Lines */
             cut_lines: boolean;
+        };
+        /**
+         * SourceDocOut
+         * @description The document the rule is being made from, judged as live filing would (a document in
+         *     the inbox by the rule as written, a filed one without its folder condition, as the test
+         *     does) and left out of every count and list of the test. ``matched`` is null while page 1
+         *     (or its picture) is not read yet, so it cannot be told; ``reason`` says why not, in the
+         *     words of the explanation of a document ("no word found in the area", "the picture in the
+         *     area scores 0.71, needs 0.85").
+         */
+        SourceDocOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+            /** Matched */
+            matched: boolean | null;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
         };
         /** SpecialFoldersOut */
         SpecialFoldersOut: {

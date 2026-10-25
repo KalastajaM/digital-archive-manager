@@ -168,6 +168,79 @@ describe("RuleSheet", () => {
     expect((posts(calls, "/api/rules/replay/jobs")[0].body as { near_drive_id: string }).near_drive_id).toBe("doc-9");
   });
 
+  it("sends the source document and shows it on its own line, outside the lists", async () => {
+    const source = { drive_id: "src", path: "20. Health/2026/a.pdf", matched: true, reason: "" };
+    const { calls } = setup({ ...REPLAY, source }, { sourceDriveId: "src", nearDriveId: "src" });
+    const line = await screen.findByText(/This rule matches this document:/);
+    expect(line).toHaveTextContent("20. Health/2026/a.pdf");
+    expect(line).toHaveAttribute("data-state", "matched");
+    expect((posts(calls, "/api/rules/replay/jobs")[0].body as { source_drive_id: string }).source_drive_id).toBe("src");
+    // the line is above the counts, and the document is in none of the lists
+    const result = screen.getByRole("region", { name: "Test against your filed documents" });
+    expect(line.compareDocumentPosition(within(result).getByText(/Matches 4 documents/)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(result).queryByRole("listitem", { name: /a\.pdf/ })).toBeNull();
+    expect(result.querySelectorAll("li")).toHaveLength(1);
+  });
+
+  it("says why the source document is not matched, and when it cannot be told yet", async () => {
+    const miss = { drive_id: "src", path: "a.pdf", matched: false, reason: "the picture in the area scores 0.71, needs 0.85" };
+    setup({ ...REPLAY, source: miss }, { sourceDriveId: "src" });
+    const line = await screen.findByText(/This rule does not match this document:/);
+    expect(line).toHaveTextContent("(the picture in the area scores 0.71, needs 0.85)");
+    expect(line).toHaveAttribute("data-state", "not-matched");
+  });
+
+  it("cannot tell yet for a source whose page 1 is not read", async () => {
+    const wait = { drive_id: "src", path: "a.pdf", matched: null, reason: "page 1 has not been read yet" };
+    setup({ ...REPLAY, source: wait }, { sourceDriveId: "src" });
+    expect(await screen.findByText(/Cannot tell yet if this rule matches this document:/)).toHaveTextContent("page 1 has not been read yet");
+  });
+
+  it("shows no source line without a document", async () => {
+    const { calls } = setup();
+    await screen.findByText(/Matches 4/);
+    expect(screen.queryByText(/this document:/)).toBeNull();
+    expect((posts(calls, "/api/rules/replay/jobs")[0].body as { source_drive_id: unknown }).source_drive_id).toBeNull();
+  });
+
+  it("separates what the document matches from what is done with it", async () => {
+    setup();
+    await screen.findByText(/Matches 4/);
+    const when = screen.getByRole("region", { name: "When a document matches" });
+    const then = screen.getByRole("region", { name: "Then file it like this" });
+    expect(screen.getByRole("heading", { name: "When a document matches" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Then file it like this" })).toBeInTheDocument();
+    for (const label of ["From (sender)"]) expect(within(when).getByLabelText(label)).toBeInTheDocument();
+    expect(within(when).getByRole("button", { name: "More conditions" })).toBeInTheDocument();
+    for (const label of ["Folder", "Name", "Tags", "Tray"]) expect(within(then).getByLabelText(label)).toBeInTheDocument();
+    expect(within(then).queryByLabelText("From (sender)")).toBeNull();
+    // the test comes after both
+    const result = screen.getByRole("region", { name: "Test against your filed documents" });
+    expect(then.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows Payee only for a tray with a payee field, or a rule that has one", async () => {
+    const trays = {
+      trays: [
+        { id: "to-pay", name: "To pay", order: 1, item_title: "{name}", fields: { payee: { type: "text", prefill: "payee" } } },
+        { id: "read", name: "To read", order: 2, item_title: "{name}", fields: {} },
+      ],
+      errors: [],
+    };
+    const { user } = setup(REPLAY, {}, { "GET /api/trays": { body: trays } });
+    await screen.findByText(/Matches 4/);
+    expect(screen.queryByLabelText("Payee")).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Tray"), "to-pay");
+    expect(screen.getByLabelText("Payee")).toHaveAccessibleDescription(/payee when this rule puts a bill in To pay/);
+    await user.selectOptions(screen.getByLabelText("Tray"), "read");
+    expect(screen.queryByLabelText("Payee")).toBeNull();
+  });
+
+  it("keeps a payee the rule already has visible", async () => {
+    setup(REPLAY, { initial: { ...DRAFT, payee: "Fortum" } });
+    expect(await screen.findByLabelText("Payee")).toHaveValue("Fortum");
+  });
+
   it("Save with differences asks first, then saves", async () => {
     const { calls, user, onClose } = setup();
     await screen.findByText(/Matches 4/);

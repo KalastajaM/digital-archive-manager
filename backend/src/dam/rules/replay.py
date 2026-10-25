@@ -131,6 +131,20 @@ def pick_scores(found: list[PictureScore]) -> list[PictureScore]:
 
 
 @dataclass
+class SourceDoc:
+    """The document the rule is being made from, judged as live filing would: a document in
+    the inbox by the rule as written (with its ``folder_is``), a filed one without it, as the
+    replay does. It is left out of every count and list of the test. ``matched`` is None
+    while page 1 (or its picture) is not read yet, so it cannot be told; ``reason`` says why
+    it does not match (or why it cannot be told yet), in the words of ``explain``."""
+
+    drive_id: str
+    path: str
+    matched: bool | None
+    reason: str = ""
+
+
+@dataclass
 class ReplayResult:
     matched: int
     same: int
@@ -150,6 +164,8 @@ class ReplayResult:
     # the filed documents gone through so far, the ones that could not be checked included
     # (``checked`` leaves those out)
     looked_at: int = 0
+    # the document the rule is made from (``source_drive_id``), left out of all the above
+    source: SourceDoc | None = None
 
 
 @dataclass
@@ -358,6 +374,7 @@ class ReplayRun:
         pictures: Pictures | None = None,
         after: str | None = None,
         near_folder: str | None = None,
+        source_drive_id: str | None = None,
         register: bool = False,
         with_marked: bool = True,
     ) -> None:
@@ -395,6 +412,8 @@ class ReplayRun:
         self.with_marked = with_marked and bool(rule.sender) and sender_ids is not None
         self.near_folder = None if near_folder is None else nfc(near_folder)
         self.register = register
+        self.source_drive_id = source_drive_id
+        self.source: SourceDoc | None = None
         # ``after`` is a cursor (``next_after`` of an earlier part of this test) or, from
         # callers older than the cursor, the path to go on after (the path order)
         self.after = after
@@ -449,6 +468,8 @@ class ReplayRun:
             ).all()
         self.timings.sql += perf_counter() - started
         rows = [PlanRow(*r) for r in found if not self._skipped(r.path)]
+        if self.source_drive_id is not None:
+            rows = [r for r in rows if r.drive_id != self.source_drive_id]
         self.total = sum(1 for r in rows if not is_under(r.path, self.special.inbox))
         self.paths = {r.drive_id: r.path for r in rows}
         cursor = _CURSOR.fullmatch(self.after) if self.after is not None else None
@@ -569,6 +590,62 @@ class ReplayRun:
         self._first_done = True
         if self.with_marked and self.after is None:
             self.refresh_marked()
+        self._judge_source()
+
+    def _judge_source(self) -> None:
+        """Judge the source document (again, while page 1 or its picture is not there)."""
+        if self.source_drive_id is None or (self.source and self.source.matched is not None):
+            return
+        started = perf_counter()
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                select(
+                    files.c.drive_id,
+                    files.c.path,
+                    files.c.name,
+                    files.c.ext,
+                    files.c.doc_date,
+                    files.c.sha256,
+                    files.c.index_state,
+                    file_text.c.text,
+                )
+                .select_from(files.outerjoin(file_text, file_text.c.drive_id == files.c.drive_id))
+                .where(files.c.drive_id == self.source_drive_id, files.c.missing.is_not(True))
+            ).first()
+        self.timings.sql += perf_counter() - started
+        if row is None:
+            self.source = None
+            return
+        rec = FileRecord(
+            drive_id=row.drive_id,
+            path=row.path,
+            name=row.name,
+            ext=row.ext,
+            doc_date=row.doc_date,
+            sha256=row.sha256,
+        )
+        if row.index_state != "indexed":
+            self.source = SourceDoc(row.drive_id, row.path, None, "the document is not read yet")
+            return
+        folded = fold(row.text or "")
+        layouts = self.layouts_for([row.drive_id]) if self.layouts_for is not None else {}
+        layout = layouts.get(row.drive_id)
+        ctx = self._context(row.drive_id)
+        in_inbox = is_under(row.path, self.special.inbox)
+        if in_inbox:
+            code = self.inbox_code_of(row.path) if self.inbox_code_of is not None else None
+            alias = self.special.inbox if code is not None else None
+            rule = self.rule
+        else:
+            alias, rule = None, self.free
+        c = check(rule, rec, folded, alias, layout, ctx, self.pictures)
+        if c.matched:
+            self.source = SourceDoc(row.drive_id, row.path, True)
+            return
+        why = _why(rule, rec, folded, alias, self.special, layout, ctx, self.pictures)
+        if c.waiting:
+            self._want([row.drive_id])
+        self.source = SourceDoc(row.drive_id, row.path, None if c.waiting else False, why)
 
     def refresh_marked(self) -> None:
         assert self.sender_ids is not None and self.rule.sender
@@ -576,7 +653,7 @@ class ReplayRun:
         self.marked, self._marked_unread = _marked(
             self.engine,
             self.free,
-            list(self.sender_ids(self.rule.sender)),
+            [d for d in self.sender_ids(self.rule.sender) if d != self.source_drive_id],
             self.layouts_for,
             self.layout_blocked,
             self._context,
@@ -726,14 +803,19 @@ class ReplayRun:
 
     def waiting_ids(self) -> list[str]:
         """The documents that wait for page 1 to be read (or its picture to be made)."""
-        return list(self._unread)
+        ids = list(self._unread)
+        if self.source is not None and self.source.matched is None:
+            ids.append(self.source.drive_id)
+        return ids
 
     def recheck(self) -> int:
         """Look again at the documents that were waiting for page 1, now that some of
         them may be read (or blocked for good); returns how many were settled or changed."""
+        waited = self.source is not None and self.source.matched is None
+        self._judge_source()
         rows = list(self._unread.values())
         if not rows:
-            return 0
+            return int(waited and self.source is not None and self.source.matched is not None)
         before = len(self._unread)
         ready = []
         have_layout = self.layouts_for(self._ids_with_layout(rows)) if self.layouts_for else {}
@@ -784,6 +866,7 @@ class ReplayRun:
             marked=marked,
             scores=pick_scores(self.scores),
             looked_at=self.looked_at,
+            source=self.source,
         )
 
     def _cursor(self) -> str | None:
@@ -815,6 +898,7 @@ def replay(
     pictures: Pictures | None = None,
     after: str | None = None,
     near_folder: str | None = None,
+    source_drive_id: str | None = None,
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
@@ -852,6 +936,9 @@ def replay(
     (``StaleCursor`` after that). The marked documents of the rule's sender are compared on
     the first call only (without ``after``).
 
+    ``source_drive_id`` is the document the rule is made from: it is left out of every
+    count and list and judged on its own (``result.source``).
+
     The time of each step is written to the log (``Timings``)."""
     started = time.monotonic()
     run = ReplayRun(
@@ -870,6 +957,7 @@ def replay(
         pictures=pictures,
         after=after,
         near_folder=near_folder,
+        source_drive_id=source_drive_id,
         register=True,
     )
     finished = run.advance(max(0.0, budget_s - (time.monotonic() - started)))

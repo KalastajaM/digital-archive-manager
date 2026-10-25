@@ -406,18 +406,41 @@ or when a filing code did the filing.
   text, usually the sender. A rule matches when **any** ticked word is in the text, so
   ticking more words widens the rule. Words that appear in more than 3 in 10 of your
   filed documents are not offered. When no usable word is left, there is no offer.
+The sheet has two parts, each under its own heading. **When a document matches** holds
+what a document must have: the match words and areas (each area with its Words match
+choice), **From** (the sender), **For** (the person) and **More conditions**. **Then file
+it like this** holds what the rule sets. The test comes after both.
+
+When a document matches:
+
+- **More conditions** (closed to begin with; a line beside it says what is set, such as
+  "Only in the inbox"): a file-name pattern (a regular expression searched anywhere in the
+  file name, see the tip beside it), and the folder the file must be in.
+
+Then file it like this:
+
 - **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
   document's year, its date and its original file name, and are filled in for each
   document the rule files (the tips beside Folder and Name list them).
 - **Tags, tray and payee**: what the rule sets. An empty field is one the rule does not
-  set; to leave a field out, clear it.
-- **More conditions** (closed to begin with; a line beside it says what is set, such as
-  "Only in the inbox"): a file-name pattern (a regular expression searched anywhere in the
-  file name, see the tip beside it), and the folder the file must be in.
+  set; to leave a field out, clear it. **Payee** is only there when the chosen tray has
+  a payee field (To pay does): it is the name filled in as the payee when the rule puts
+  a bill in that tray. A rule that already has a payee keeps showing it.
 - **Filed as**: the folder and name you gave the document just now, which the patterns
   were made from.
 
 ### The proof
+
+When the sheet is open for a document (the one you just filed, or the one you drew boxes
+on), the test starts with one line about that document: "This rule matches this
+document", or "This rule does not match this document" with the reason, in the words of
+**Test a document** ("no word found in the area", "the picture in the area scores 0.71,
+needs 0.85", "the document is not for Tiina"). It is judged as live filing would judge it:
+a document in the inbox by the rule as written, a filed one without the folder condition.
+It updates as you change the rule, so you can edit the rule until it no longer matches
+that document. The document is left out of every count and list below, the ones filed
+before, the inbox count, the scores, not checked and the marked documents. A rule opened
+from Settings has no such line.
 
 Under the sheet, dam replays the rule against the documents you filed before and shows
 the result again after each edit: "Matches 14 documents you filed before: 12 would land

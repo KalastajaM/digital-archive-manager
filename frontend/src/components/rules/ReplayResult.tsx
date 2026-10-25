@@ -31,6 +31,31 @@ const qlFile = (d: { drive_id: string; path: string }): QLFile => {
   return { drive_id: d.drive_id, name, path: d.path, ext: name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null };
 };
 
+/** The document the rule is made from, judged on its own: matches, does not (and why), or
+ * cannot be told yet. It is not part of any count below it. */
+function SourceLine({ source }: { source: NonNullable<Replay["source"]> }) {
+  const doc = <DocButton driveId={source.drive_id} path={source.path} />;
+  if (source.matched === true)
+    return (
+      <p className="replay-source" data-state="matched">
+        This rule matches this document: {doc}
+      </p>
+    );
+  if (source.matched === false)
+    return (
+      <p className="replay-source replay-source-off" data-state="not-matched">
+        This rule does not match this document: {doc}
+        <span className="replay-reason">{visible(` (${source.reason})`)}</span>
+      </p>
+    );
+  return (
+    <p className="replay-source replay-source-unknown" data-state="unknown">
+      Cannot tell yet if this rule matches this document: {doc}
+      <span className="replay-reason">{visible(` (${source.reason})`)}</span>
+    </p>
+  );
+}
+
 /** A list of documents (paths) that were not looked at, with the reason for each; closed
  * until asked for. */
 function NotChecked({ items }: { items: Replay["not_checked"] }) {
@@ -225,6 +250,7 @@ export function ReplayResult({
     <OpenDocument.Provider value={(d) => setOpened(qlFile(d))}>
     <section className="replay-result" aria-labelledby={`${id}-title`} aria-busy={pending}>
       <h4 id={`${id}-title`}>Test against your filed documents</h4>
+      {replay.source && <SourceLine source={replay.source} />}
       {replay.matched === 0 ? (
         <p className="hint">
           {notChecked.length > 0 || reading > 0

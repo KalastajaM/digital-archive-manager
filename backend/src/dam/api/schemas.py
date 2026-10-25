@@ -1542,6 +1542,9 @@ class RuleReplayIn(_In):
     after: str | None = None
     # the document the areas were drawn on: the documents in its folder are looked at early
     near_drive_id: str | None = None
+    # the document the rule is being made from: left out of every count and list, and
+    # judged on its own in ``source`` of the result
+    source_drive_id: str | None = None
 
 
 class RuleReplayJobIn(_In):
@@ -1554,6 +1557,7 @@ class RuleReplayJobIn(_In):
     replaces: str | None = None
     place_above: str | None = None
     near_drive_id: str | None = None
+    source_drive_id: str | None = None
 
 
 class AreasForIn(_In):
@@ -1710,6 +1714,20 @@ class MarkedOut(BaseModel):
     not_checked: list[NotCheckedOut]
 
 
+class SourceDocOut(BaseModel):
+    """The document the rule is being made from, judged as live filing would (a document in
+    the inbox by the rule as written, a filed one without its folder condition, as the test
+    does) and left out of every count and list of the test. ``matched`` is null while page 1
+    (or its picture) is not read yet, so it cannot be told; ``reason`` says why not, in the
+    words of the explanation of a document ("no word found in the area", "the picture in the
+    area scores 0.71, needs 0.85")."""
+
+    drive_id: str
+    path: str
+    matched: bool | None
+    reason: str = ""
+
+
 class ReplayOut(BaseModel):
     matched: int
     same: int
@@ -1732,6 +1750,8 @@ class ReplayOut(BaseModel):
     # of its near misses (documents where only a picture area failed, within 0.15 of the
     # score it needed), to see how well they are told apart
     scores: list[PictureScoreOut] = []
+    # only when the request named a ``source_drive_id`` that is in the index
+    source: SourceDocOut | None = None
 
 
 class ReplayJobOut(BaseModel):

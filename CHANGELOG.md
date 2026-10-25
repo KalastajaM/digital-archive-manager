@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- The rule test now says on its own line whether the rule matches the document it is made
+  from ("This rule matches this document", or "does not match" with the reason, such as
+  "no word found in the area" or "the picture in the area scores 0.71, needs 0.85"). The
+  document is no longer counted among the documents you filed before or the inbox
+  documents, and is left out of the lists and scores. The line updates as you edit the
+  rule. Rules opened from Settings have no such line.
+
 - Each area of a rule now says how its words match: **Starts a word**, **Whole word** or
   **Anywhere**. New areas start on Starts a word, so "kela" finds Kela, Kelan and Kelalta
   and "vakuutus" finds Vakuutuskirja, but neither finds a word that only contains it, such
@@ -293,6 +300,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- The rule sheet is split into **When a document matches** (the areas, From, For and More
+  conditions) and **Then file it like this** (Folder, Name, Tags, Tray, Payee). Payee only
+  shows when the chosen tray has a payee field, such as To pay, or when the rule already
+  has a payee.
 - The rule sheet is easier to read. The "Leave out" boxes are gone: an empty Folder, Name,
   Tags, Tray or Payee is one the rule does not set, and clearing a field never saves an
   empty pattern. The explanations (the From sender, the Folder and Name patterns, and the

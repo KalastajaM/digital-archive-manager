@@ -1978,6 +1978,13 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .field-label-row > label { margin: 0; }
 .info-tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--grey-bg); color: var(--muted); font-size: var(--fs-xs); cursor: help; }
 .info-tip[data-tip]::after { left: 0; transform: none; white-space: normal; width: max-content; max-width: 18rem; }
+.rule-section { display: flex; flex-direction: column; gap: var(--sp-3); }
+.rule-section + .rule-section { margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+.rule-section-title { margin: 0; font-size: var(--fs-md); color: var(--text); }
+.replay-source { margin: 0 0 var(--sp-3); font-weight: 600; }
+.replay-source-off { color: var(--red-text); }
+.replay-source-unknown { color: var(--muted); }
+.replay-source .replay-reason { font-weight: 400; }
 .rule-more { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
 .rule-more .hint { margin: 0; }
 .replay-result h4 { margin: 0 0 var(--sp-2); }
