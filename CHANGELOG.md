@@ -73,6 +73,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Previews list a new folder structure as one step.** When a change needs several
+  missing folders, one inside the other (such as the same folder path in To Delete), the
+  preview shows one "New folders" line with the deepest folder and how many are made,
+  instead of a step per folder.
 - **Trays and collections:** the list buttons in the header (Add file, Open and Done; the
   collection's folder and share buttons) sit at the right edge of the list column, over
   the list they act on, instead of right after the title.
