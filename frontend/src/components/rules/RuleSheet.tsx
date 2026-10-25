@@ -14,6 +14,7 @@ import {
   type RuleOffer,
   useAreaPicture,
   useInbox,
+  usePeople,
   useRules,
   useSaveRule,
   useSenders,
@@ -33,7 +34,38 @@ import { useReplayJob } from "./useReplayJob";
 type Word = { word: string; ticked: boolean };
 /** An area of page 1: the words of which any one is enough, or (``image``) a picture that
  * has to appear in it with at least ``minScore`` (null: the default). */
-type RuleArea = { box: PageBox; words: Word[]; image?: string; minScore?: number | null };
+type RuleArea = { box: PageBox; words: Word[]; image?: string; minScore?: number | null; match?: Match };
+
+/** How an area's words match a line: at the start of a word (any ending), as a whole word, or anywhere. */
+type Match = "word_start" | "whole_word" | "anywhere";
+const MATCH_CHOICES: { value: Match; label: string }[] = [
+  { value: "word_start", label: "Starts a word" },
+  { value: "whole_word", label: "Whole word" },
+  { value: "anywhere", label: "Anywhere" },
+];
+const MATCH_TIP =
+  "Starts a word: the word must begin a word but may have an ending, so Kela finds Kela, Kelan and Kelalta, but vakuutus does not find Henkivakuutus. Whole word: only the word itself, so Kela finds Kela but not Kelan. Anywhere: the letters anywhere in a word, so vakuutus also finds Henkivakuutus.";
+/** An area's choice as the API takes it: left out for "anywhere", which is what a rule without it means. */
+const matchField = (m: Match | undefined) => (m && m !== "anywhere" ? { match: m } : {});
+
+/** The folder with ``{person}`` where the person's name is a part of it already, else on the
+ * end. A folder that has ``{person}`` is left as it is. */
+export function folderWithPerson(folder: string, name: string | null): string {
+  const f = folder.trim();
+  if (f.includes("{person}")) return f;
+  const parts = f.split("/").filter((p) => p !== "");
+  const who = name?.normalize("NFC").toLowerCase();
+  const at = who ? parts.findIndex((p) => p.normalize("NFC").toLowerCase() === who) : -1;
+  if (at >= 0) return parts.map((p, i) => (i === at ? "{person}" : p)).join("/");
+  return [...parts, "{person}"].join("/");
+}
+
+/** Who the address area found, in words. */
+function foundText(found: string[], person: string | null): string {
+  if (found.length === 0) return person ? `${person}, set on the document` : "Nobody found in the address area";
+  const names = found.length === 1 ? found[0] : `${found.slice(0, -1).join(", ")} and ${found[found.length - 1]}`;
+  return `${names}${found.length === 1 ? ", found" : " found"} in the address area`;
+}
 
 /** The score a picture area needs when the rule names none (the API says; this is the
  * value until it has answered). */
@@ -58,6 +90,8 @@ const FOLDER_TIP =
   "Leave it empty and the rule does not set the folder. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
 const NAME_TIP =
   "Leave it empty and the rule does not set the name. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
+const FOR_TIP =
+  "Optional. Only for: the rule applies to letters for that person, as set on the document or found in its address area. {person} in the Folder or Name is filled in with the person of each letter.";
 const FROM_TIP =
   "Optional. Who these letters are from. If you have set From on documents, the test below also shows how many of them this rule finds.";
 
@@ -124,7 +158,12 @@ export function RuleSheet({
 }) {
   const draft = isDraft(initial);
   const zoneDraft = isZoneDraft(initial) ? initial : null;
-  const person = draft ? null : initial.when.person;
+  // who the rule is for (null: anyone): chosen in the For row
+  const [person, setPerson] = useState<string | null>(() => (draft ? null : initial.when.person));
+  const people = usePeople().data?.people;
+  // the person the document the rule is made from is for, and everyone found in its address area
+  const foundPerson = zoneDraft?.person ?? null;
+  const peopleFound = zoneDraft?.people_found ?? [];
   // who the letter is from (optional): a drawn rule starts from the document's From
   const [fromText, setFromText] = useState(() => (zoneDraft ? zoneDraft.sender : draft ? null : initial.sender) ?? "");
   const sender = fromText.trim() || null;
@@ -154,6 +193,7 @@ export function RuleSheet({
             box: z.box,
             // OCR noise ("•ö") is not offered as a word
             words: z.words.filter((w) => isWordToken(w.word)).map((w) => ({ ...w })),
+            match: "word_start" as Match,
           })),
           ...(zoneDraft.pictures ?? []).map((p) => ({ box: p.box, words: [], image: p.image, minScore: null })),
         ]
@@ -162,7 +202,7 @@ export function RuleSheet({
         : initial.when.zones.map((z) =>
             z.image
               ? { box: z.box, words: [], image: z.image, minScore: z.min_score ?? null }
-              : { box: z.box, words: (z.text_contains ?? []).map((word) => ({ word, ticked: true })) },
+              : { box: z.box, words: (z.text_contains ?? []).map((word) => ({ word, ticked: true })), match: z.match ?? "anywhere" },
           ),
   );
   const [adding, setAdding] = useState("");
@@ -203,7 +243,7 @@ export function RuleSheet({
               zones: areas.map((a, i) =>
                 a.image
                   ? { box: a.box, image: a.image, ...(a.minScore != null ? { min_score: a.minScore } : {}) }
-                  : { box: a.box, text_contains: areaWords[i] },
+                  : { box: a.box, text_contains: areaWords[i], ...matchField(a.match) },
               ),
             }
           : {}),
@@ -220,7 +260,7 @@ export function RuleSheet({
       ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.id, sender, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore])), JSON.stringify(personZone), filename, folderIs, folder, name, tags, tray, payee],
+    [initial.id, sender, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore, a.match])), person, JSON.stringify(personZone), filename, folderIs, folder, name, tags, tray, payee],
   );
   const ruleKey = JSON.stringify(rule);
 
@@ -410,6 +450,8 @@ export function RuleSheet({
               n={at + 1}
               several={areas.length > 1}
               words={area.words}
+              match={area.match ?? "anywhere"}
+              onMatch={(match) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, match } : a)))}
               onToggle={(word) => changeArea(at, (all) => all.map((x) => (x.word === word ? { ...x, ticked: !x.ticked } : x)))}
               onAdd={(word) => changeArea(at, (all) => withWord(all, word))}
               onRemove={() => {
@@ -466,6 +508,59 @@ export function RuleSheet({
               ))}
             </ul>
           )}
+        </div>
+        <div className="field rule-for" role="group" aria-label="For">
+          <div className="field-label-row">
+            <span className="field-label">For</span>
+            <InfoTip id={`${ids}-for-tip`} tip={FOR_TIP} />
+          </div>
+          {people !== undefined && people.length === 0 ? (
+            <p className="hint">No people listed yet: add them in Settings → Filing rules → People.</p>
+          ) : (
+            zoneDraft && people !== undefined && <p className="hint rule-found">{visible(foundText(peopleFound, foundPerson))}</p>
+          )}
+          <div className="rule-for-choice">
+            <span className="segmented" role="group" aria-label="Who the rule is for">
+              <button type="button" className="segmented-option" aria-pressed={person === null} onClick={() => setPerson(null)}>
+                Anyone
+              </button>
+              <button
+                type="button"
+                className="segmented-option"
+                aria-pressed={person !== null}
+                onClick={() => setPerson(person ?? foundPerson ?? people?.[0]?.name ?? "")}
+              >
+                Only for
+              </button>
+            </span>
+            {person !== null && (
+              <select aria-label="Person" value={person} onChange={(e) => setPerson(e.target.value)}>
+                {person === "" && <option value="">Pick a person</option>}
+                {person !== "" && !(people ?? []).some((p) => p.name === person) && <option value={person}>{visible(person)}</option>}
+                {(people ?? []).map((p) => (
+                  <option key={p.name} value={p.name}>{visible(p.name)}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="rule-for-folder">
+            <button
+              type="button"
+              disabled={folder.includes("{person}")}
+              onClick={() => setFolder(folderWithPerson(folder, foundPerson ?? person))}
+            >
+              Use the person in the folder
+            </button>
+            {folder.includes("{person}") && (
+              <span className="hint rule-preview">
+                {visible(
+                  foundPerson ?? person
+                    ? `This letter would go to ${folder.trim().replaceAll("{person}", (foundPerson ?? person) as string)}`
+                    : "No person is known for this letter, so {person} cannot be filled in here.",
+                )}
+              </span>
+            )}
+          </div>
         </div>
         {filed && (
           <p className="hint rule-filed">
@@ -561,6 +656,8 @@ function AreaWords({
   n,
   several,
   words,
+  match,
+  onMatch,
   onToggle,
   onAdd,
   onRemove,
@@ -568,6 +665,8 @@ function AreaWords({
   n: number;
   several: boolean;
   words: Word[];
+  match: Match;
+  onMatch: (match: Match) => void;
   onToggle: (word: string) => void;
   onAdd: (word: string) => void;
   onRemove: () => void;
@@ -612,6 +711,21 @@ function AreaWords({
         }}
         onBlur={add}
       />
+      <div className="rule-match">
+        <label htmlFor={`${id}-match`}>Words match</label>
+        <select
+          id={`${id}-match`}
+          value={match}
+          aria-label={`How the words match in ${label.toLowerCase()}`}
+          aria-describedby={`${id}-match-tip`}
+          onChange={(e) => onMatch(e.target.value as Match)}
+        >
+          {MATCH_CHOICES.map((c) => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+        <InfoTip id={`${id}-match-tip`} tip={MATCH_TIP} />
+      </div>
     </div>
   );
 }
@@ -757,7 +871,7 @@ export function ruleInOf(r: Rule): RuleIn {
       zones: r.when.zones.map((z) =>
         z.image
           ? { box: z.box, image: z.image, ...(z.min_score != null ? { min_score: z.min_score } : {}) }
-          : { box: z.box, text_contains: z.text_contains },
+          : { box: z.box, text_contains: z.text_contains, ...matchField(z.match) },
       ),
       person: r.when.person,
     },

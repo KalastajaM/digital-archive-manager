@@ -72,6 +72,10 @@ class ZoneDraft(RuleDraft):
     folder_is: str | None = None
     sender: str | None = None
     place_above: str | None = None
+    # who the document is for (the owner's assignment, else the one person found in the
+    # address area of page 1) and everyone found there, for the sheet's For row
+    person: str | None = None
+    people_found: list[str] = field(default_factory=list)
 
 
 def _literal(s: str) -> str:

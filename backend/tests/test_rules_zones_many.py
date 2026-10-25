@@ -330,3 +330,37 @@ def test_place_above_is_found_for_boxes_drawn_on_a_filed_letter(app, fake_archiv
         below = post(c, "/api/rules/replay", {"rule": rule})
     assert above.json()["shadowed"] == []
     assert below.json()["shadowed"] == [{"drive_id": "a", "rule_id": "pohjola"}]
+
+
+# --- who the document is for -------------------------------------------------------------
+
+
+def test_draft_zone_says_who_the_document_is_for(app, fake_archive):
+    seed_frequency(app, fake_archive)
+    page = layout(
+        ("Pohjola Vakuutus", (0.08, 0.04, 0.30, 0.07)),
+        ("Tiina Visser", (0.10, 0.15, 0.30, 0.17)),
+    )
+    add(app, fake_archive, f"{INBOX}/a.pdf", "a", "pohjola vakuutus tiina visser", page)
+    add(app, fake_archive, f"{INBOX}/b.pdf", "b", "pohjola vakuutus", layout(("Pohjola", HEADER)))
+    body = {"boxes": [list(HEADER)]}
+    with make_client(app) as c:
+        # nobody listed yet: nobody found
+        none = post(c, "/api/rules/draft-zone", {"drive_id": "a", **body}).json()
+        assert none["person"] is None and none["people_found"] == []
+        people = [
+            {"name": "Tiina", "match": ["Tiina Visser"]},
+            {"name": "Michiel", "match": ["Michiel Visser"]},
+        ]
+        assert c.put(
+            "/api/settings/people", json={"people": people}, headers=LOCAL_ORIGIN
+        ).is_success
+        got = post(c, "/api/rules/draft-zone", {"drive_id": "a", **body}).json()
+        assert got["person"] == "Tiina" and got["people_found"] == ["Tiina"]
+        # a letter that names nobody in the address area
+        empty = post(c, "/api/rules/draft-zone", {"drive_id": "b", **body}).json()
+        assert empty["person"] is None and empty["people_found"] == []
+        # the owner's assignment is the person; the address area is still reported
+        app.assignments.set(["a"], person="Michiel")
+        mine = post(c, "/api/rules/draft-zone", {"drive_id": "a", **body}).json()
+        assert mine["person"] == "Michiel" and mine["people_found"] == ["Tiina"]

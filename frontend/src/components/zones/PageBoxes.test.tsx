@@ -218,7 +218,7 @@ describe("Draw a box", () => {
       text_contains: [],
       filename_matches: null,
       folder_is: "##. Organize",
-      zones: [{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] }],
+      zones: [{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"], match: "word_start" }],
     });
     expect(sent.rule.sender).toBe("Pohjola");
     await user.click(within(sheet).getByRole("button", { name: "Save" }));
@@ -307,8 +307,8 @@ describe("Draw a box", () => {
       await within(sheet).findByText(/Matches 2 documents/);
       const sent = posts(calls, "/api/rules/replay/jobs")[0].body as { rule: { when: { zones: unknown } }; place_above: string };
       expect(sent.rule.when.zones).toEqual([
-        { box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"] },
-        { box: [0.1, 0.4, 0.5, 0.5], text_contains: ["vakuutuskirja"] },
+        { box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"], match: "word_start" },
+        { box: [0.1, 0.4, 0.5, 0.5], text_contains: ["vakuutuskirja"], match: "word_start" },
       ]);
       expect(sent.place_above).toBe("pohjola-old");
       await user.click(within(sheet).getByRole("button", { name: "Save" }));

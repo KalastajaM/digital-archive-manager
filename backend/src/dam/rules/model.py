@@ -10,8 +10,9 @@ A rules file is a YAML *list of rules*::
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import regex
 import yaml
@@ -59,6 +60,36 @@ def fold(s: str) -> str:
     return d.casefold()
 
 
+MatchMode = Literal["word_start", "whole_word", "anywhere"]
+
+
+@dataclass(frozen=True)
+class TermTest:
+    """A test for a folded ``term`` against folded text, by ``mode``; call it with the
+    text. A word boundary is the start or end of the text or any character that is not a
+    letter or a digit (Unicode-aware; hyphen, slash, dot and space are boundaries, digits
+    are not). ``anywhere``: the term is somewhere in the text. ``word_start``: it begins
+    at a boundary and may continue (Finnish endings: kela, Kelan; vakuutus,
+    vakuutuskirja; not Henkivakuutus). ``whole_word``: it is bounded on both sides. A
+    boundary is only required at an end of the term that is a letter or digit itself.
+    (A dataclass, not a closure, so that two equal rules compare equal.)"""
+
+    term: str
+    mode: MatchMode
+    _pattern: "re.Pattern[str] | None" = field(default=None, compare=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.mode != "anywhere":
+            before = r"(?<![^\W_])" if self.term[:1].isalnum() else ""
+            after = r"(?![^\W_])" if self.mode == "whole_word" and self.term[-1:].isalnum() else ""
+            object.__setattr__(self, "_pattern", re.compile(before + re.escape(self.term) + after))
+
+    def __call__(self, text: str) -> bool:
+        if self._pattern is None:
+            return self.term in text
+        return self._pattern.search(text) is not None
+
+
 class Zone(BaseModel):
     """An area of page 1 that must hold something: ``box`` is ``(x0, y0, x1, y1)`` as
     fractions of the page, origin top left. Exactly one of ``text_contains`` (words: a line
@@ -75,6 +106,18 @@ class Zone(BaseModel):
     text_contains: list[str] | None = None
     image: str | None = None
     min_score: float | None = None
+    # How the words match the text of a line: "word_start" (the word begins a word, any
+    # ending: Kela, Kelan; not Henkivakuutus for vakuutus), "whole_word" or "anywhere".
+    # The default for a key that is ABSENT is "anywhere" on purpose: rule files written
+    # before this key existed matched anywhere in the line and must keep doing so. The
+    # app's draft and the rule sheet set "word_start" explicitly for new areas. YAML
+    # leaves out "anywhere", so word_start and whole_word are what gets written.
+    match: MatchMode = "anywhere"
+
+    @field_validator("match", mode="before")
+    @classmethod
+    def _null_match_is_the_default(cls, value):
+        return "anywhere" if value is None else value
 
     @field_validator("box")
     @classmethod
@@ -92,6 +135,8 @@ class Zone(BaseModel):
             if self.text_contains is not None:
                 raise ValueError("an area has words (text_contains) or a picture (image), not both")
             check_image_path(self.image)
+            if self.match != "anywhere":
+                raise ValueError("match is for an area with words (text_contains)")
             if self.min_score is not None and not 0 < self.min_score <= 1:
                 raise ValueError("min_score must be above 0 and at most 1")
             return self
@@ -183,6 +228,8 @@ class Rule(BaseModel):
     _folded_terms: list[str] = PrivateAttr(default_factory=list)
     # the folded words of each zone, in order ([] for a zone without words)
     _folded_zones: list[list[str]] = PrivateAttr(default_factory=list)
+    # one test per word of each zone, by the zone's match mode (same order as the words)
+    _zone_tests: list[list[TermTest]] = PrivateAttr(default_factory=list)
     _regex: "regex.Pattern[str] | None" = PrivateAttr(default=None)
 
     @field_validator("sender")
@@ -209,6 +256,9 @@ class Rule(BaseModel):
     def model_post_init(self, __context) -> None:
         self._folded_terms = [fold(t) for t in self.when.text_contains]
         self._folded_zones = [[fold(t) for t in z.text_contains or []] for z in self.when.zones]
+        self._zone_tests = [
+            [TermTest(fold(t), z.match) for t in z.text_contains or []] for z in self.when.zones
+        ]
         pattern = self.when.filename_matches
         self._regex = regex.compile(pattern) if pattern is not None else None
 

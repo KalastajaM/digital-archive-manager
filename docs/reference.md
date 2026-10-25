@@ -301,7 +301,16 @@ All in the data folder under `config/`:
   boxes only, an estimate that shares the line's width in proportion to the characters).
   A page-1 layout read before word boxes were kept has none: such a line counts as a whole
   when half of it is inside the box, until the file's content changes and page 1 is read
-  again (existing rows are not re-read). A zone has `box` and either `text_contains` or, for a
+  again (existing rows are not re-read). `match` says how a word matches the text:
+  `word_start` (it must begin a word, any ending: `kela` finds Kela, Kelan, Kelalta and
+  `vakuutus` finds Vakuutuskirja but not Henkivakuutus), `whole_word` (bounded on both
+  sides) or `anywhere` (a substring). A word boundary is the edge of the text or any
+  character that is not a letter or digit (Unicode-aware; hyphen, slash, dot, space and
+  underscore are boundaries, digits are word characters). **Without `match` the default is
+  `anywhere`**, so rule files written before the key existed behave as they always did;
+  the rule sheet sets `word_start` on new areas, and the rule is written with `match` only
+  for `word_start` and `whole_word`. It applies to the whole-text check, the test and the
+  suggestions alike. A picture area takes no `match`. A zone has `box` and either `text_contains` or, for a
   picture area, `image` (see "Picture areas" below). A rule with more zones has to come
   before a plainer rule for the same sender. `{person}` needs a person
   (set by you, or found in the address area); without one the template is not applied.
@@ -324,6 +333,7 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
     # zones:                             # optional: areas of page 1, all must match
     #   - box: [0.05, 0.02, 0.45, 0.14]  # x0, y0, x1, y1 as fractions, origin top left
     #     text_contains: ["acme benefits"]   # any one of these words in the area
+    #     match: word_start              # optional: word_start, whole_word or anywhere
     #   - box: [0.55, 0.05, 0.95, 0.12]  # a second area, such as the title
     #     text_contains: ["policy"]
     #   - box: [0.05, 0.02, 0.35, 0.10]  # a picture area, such as a logo

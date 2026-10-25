@@ -1495,12 +1495,15 @@ class ZoneIn(_In):
     """An area of page 1: ``box`` is [x0, y0, x1, y1] as fractions of the page, origin top
     left. It has words (``text_contains``) or a picture (``image``, ``areas/<name>.png``
     from ``POST /api/rules/area-picture``): exactly one. ``min_score`` (a picture's, 0 to 1)
-    is the score the picture needs; left out, the default (0.85)."""
+    is the score the picture needs; left out, the default (0.85). ``match`` (for words):
+    how a word matches, ``word_start`` (begins a word, any ending), ``whole_word`` or
+    ``anywhere``. Left out it is ``anywhere`` (how rules written before it matched)."""
 
     box: list[float] = Field(min_length=4, max_length=4)
     text_contains: list[str] | None = None
     image: str | None = None
     min_score: float | None = None
+    match: Literal["word_start", "whole_word", "anywhere"] | None = None
 
 
 class RuleWhenIn(_In):
@@ -1590,6 +1593,7 @@ class ZoneOut(BaseModel):
     text_contains: list[str] | None
     image: str | None
     min_score: float | None = None
+    match: Literal["word_start", "whole_word", "anywhere"] = "anywhere"
 
 
 class RuleWhenOut(BaseModel):
@@ -1842,6 +1846,10 @@ class ZoneDraftOut(RuleDraftOut):
     folder_is: str | None
     sender: str | None
     place_above: str | None
+    # who the document is for (the assignment, else the one person found in the address
+    # area) and everyone found in the address area, for the rule sheet's For row
+    person: str | None = None
+    people_found: list[str] = []
 
 
 class RuleExplainOut(BaseModel):

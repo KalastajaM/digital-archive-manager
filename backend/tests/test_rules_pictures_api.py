@@ -137,7 +137,7 @@ def test_a_rule_with_a_picture_area_saves_and_lists_with_its_picture(app, doc):
         listed = c.get("/api/rules").json()
     (rule,) = [x for x in listed["rules"] if x["id"] == "acme"]
     assert rule["when"]["zones"] == [
-        {"box": BOX, "text_contains": None, "image": image, "min_score": 0.9}
+        {"box": BOX, "text_contains": None, "image": image, "min_score": 0.9, "match": "anywhere"}
     ]
     assert listed["unused_pictures"] == [] and listed["default_min_score"] == 0.85
 
