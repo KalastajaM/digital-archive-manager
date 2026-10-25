@@ -26,7 +26,12 @@ All notable changes are listed here. The format follows
   - **Empty folders**, **broken links**, **collection members and tray files that are gone
     or in To Delete**, **file names without the `YYYYMMDD_` prefix** (with a suggested name
     and the normal previewed rename) and **files waiting in To Delete** longer than a number
-    of days you choose. dam still never empties To Delete.
+    of days you choose. dam still never empties To Delete. The empty-folder check leaves
+    out the folders the archive is set up with, such as the filing code folders in
+    `##. Organize`.
+  - Each check's card folds to one line (Collapse all and Expand all in the toolbar,
+    remembered in this browser), and **Reset** forgets a check's result (**Reset all** every
+    result) without changing the archive.
 - **Move, Link or Copy when you drop files on a folder in Browse.** The confirm that
   appears after a drop now has the three ways side by side: **Move** (still the default),
   **Link** (a shortcut in that folder that opens the file, which stays where it is) and

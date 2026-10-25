@@ -183,6 +183,19 @@ class MaintenanceJobs:
         with self._lock:
             return self._jobs.get(self._latest.get(kind, ""))
 
+    def forget(self, kind: str | None = None) -> int:
+        """Forget the jobs of ``kind`` (every kind when None), ending one still running,
+        so the screen starts again as if no check had run. How many were forgotten."""
+        with self._lock:
+            gone = [j for j in self._jobs.values() if kind is None or j.kind == kind]
+            for job in gone:
+                del self._jobs[job.job_id]
+            for k in [k for k in self._latest if kind is None or k == kind]:
+                del self._latest[k]
+        for job in gone:
+            job.stop()
+        return len(gone)
+
     def running(self) -> bool:
         with self._lock:
             return any(j.state == RUNNING for j in self._jobs.values())
