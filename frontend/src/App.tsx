@@ -19,6 +19,7 @@ import ConvertOngoing from "./screens/ConvertOngoing";
 import Important from "./screens/Important";
 import Starred from "./screens/Starred";
 import Inbox from "./screens/Inbox";
+import Maintenance from "./screens/Maintenance";
 import Today from "./screens/Today";
 import Viewer from "./screens/Viewer";
 import Tags from "./screens/Tags";
@@ -143,6 +144,7 @@ function Shell() {
             <Route path="/tags" element={<Tags />} />
             <Route path="/ask" element={<Ask />} />
             <Route path="/activity" element={<Activity />} />
+            <Route path="/maintenance" element={<Maintenance />} />
             <Route path="/settings/:section?" element={<SettingsScreen />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />

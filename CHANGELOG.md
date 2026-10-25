@@ -8,6 +8,25 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Maintenance screen** (sidebar, Archive, next to Activity) with checks you start
+  yourself; nothing runs by itself or in the background, each shows its progress, can be
+  stopped, and ends in a list you act on through the usual preview and Undo.
+  - **Duplicates:** finds files with the same content. It says first how many files it will
+    read and how big they are (with a warning that files kept online-only in Google Drive
+    are downloaded), reads only files that share a size with another, and does not read a
+    file again once it has been read. In each group you pick the copy to keep (the
+    suggestion is a numbered folder before the Inbox, then the oldest) and then **Move the
+    others to To Delete** or **Replace them with a link** to the kept copy, per group or for
+    several groups at once. One preview, one Undo (which removes the links and brings the
+    copies back). Tags, collections, star, notes, checklist entries, tray items and From and
+    For of the removed copies can be added to the kept one (ticked by default, listed in
+    the preview, nothing overwritten). A copy marked Important or locked is never removed.
+    Files with the same name but different content are listed as probably versions, for
+    review only, with Show in Browse and a side-by-side compare.
+  - **Empty folders**, **broken links**, **collection members and tray files that are gone
+    or in To Delete**, **file names without the `YYYYMMDD_` prefix** (with a suggested name
+    and the normal previewed rename) and **files waiting in To Delete** longer than a number
+    of days you choose. dam still never empties To Delete.
 - **Move, Link or Copy when you drop files on a folder in Browse.** The confirm that
   appears after a drop now has the three ways side by side: **Move** (still the default),
   **Link** (a shortcut in that folder that opens the file, which stays where it is) and

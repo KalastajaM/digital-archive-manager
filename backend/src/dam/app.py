@@ -27,6 +27,7 @@ from dam.index.content import ContentIndexer
 from dam.index.repo import FileRepo, TagRepo
 from dam.index.scanner import ScanReport, listable, scan
 from dam.locks import LockService
+from dam.maintenance.service import MaintenanceService
 from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.reminders.engine import clear_unsent
@@ -88,6 +89,7 @@ class App:
     replay_jobs: ReplayJobs = field(init=False)
     area_pictures: AreaPictures = field(init=False)
     browse: BrowseService = field(init=False)
+    maintenance: MaintenanceService = field(init=False)
     activity: ActivityService = field(init=False)
     today: TodayService = field(init=False)
     launch: LaunchService = field(init=False)
@@ -200,6 +202,21 @@ class App:
             important_lock=self.collections.important_lock,
             rescan=self.scan,
         )
+        self.maintenance = MaintenanceService(
+            self.paths,
+            self.repo,
+            self.engine,
+            self.executor,
+            self.locks,
+            self.collections,
+            self.tags,
+            self.notes,
+            self.trays,
+            self.assignments,
+            tray_name=self._tray_name,
+            rescan=self.scan,
+            important_lock=self.collections.important_lock,
+        )
         self.activity = ActivityService(
             self.executor,
             self.trays,
@@ -236,6 +253,9 @@ class App:
         self.ai = AIService(self, provider)
         self.summaries = SummaryService(self.engine, self.repo)
         self.reload_rules()
+
+    def _tray_name(self, tray_id: str) -> str:
+        return next((t.name for t in self.tray_defs if t.id == tray_id), tray_id)
 
     def barcode_trays(self) -> list[str]:
         """The trays whose open items' files get the barcode pass: those with an IBAN."""
@@ -589,5 +609,6 @@ class App:
 
     def close(self) -> None:
         self.replay_jobs.close()
+        self.maintenance.close()
         self.content.close()
         self.engine.dispose()

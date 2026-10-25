@@ -49,6 +49,9 @@
 - [Tags](#tags)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
+- [Maintenance](#maintenance)
+  - [Duplicates](#duplicates)
+  - [The other checks](#the-other-checks)
 - [Settings](#settings)
 - [Notes and checklists](#notes-and-checklists)
 - [Reminders](#reminders)
@@ -180,8 +183,8 @@ setting. The sidebar, from the top:
   list of all collections, with New collection and the closed ones;
 - **Tags**: the caption opens the [Tags](#tags) screen; below it your pinned tags, then
   the tags you used most lately, eight at most, each opening its files in Browse;
-- **Archive**: **Ask** (AI questions about the archive), **Activity**, **Settings** and
-  **Help** (this guide).
+- **Archive**: **Ask** (AI questions about the archive), **Activity**, **Maintenance**
+  (checks you start yourself), **Settings** and **Help** (this guide).
 
 Trays, Collections, Tags and Archive fold: hold the pointer on the caption and click the chevron
 at its right. A folded Trays shows its open total next to the caption. dam remembers in
@@ -1155,6 +1158,65 @@ says why if it cannot (for example when the file was changed or moved again sinc
 
 The **AI** view in Activity lists every AI call with its cost, the month's total and the
 on/off switch.
+
+## Maintenance
+
+**Maintenance** (sidebar, Archive) holds checks for tidying the archive. Nothing on it runs
+by itself or in the background: a check starts when you click its button, shows how far
+it has come, and has a **Stop** button. Leaving the screen stops a check that is running.
+A check ends in a list, and what you do with the list is the usual previewed batch: you
+see every operation first, confirm, and the toast offers **Undo**. Nothing is ever deleted.
+
+### Duplicates
+
+**Find duplicates** looks for files with exactly the same content.
+
+- Before you start, the card says how many files will be read and how big they are. Only
+  files that share a size with another file are read at all, and a file read before (its
+  fingerprint is stored in the index) is not read again. Empty files, links, and the app's
+  own folders (`##. Ongoing`, `##. Important`, `##. To Delete`) are left out.
+- **Google Drive for desktop:** reading a file that is kept online-only downloads it. The
+  card warns about this when there is something to read. **Stop** ends the check at any
+  moment; the fingerprints already made are kept, so the next run goes on from there.
+- **Identical copies** come in groups. In each group you pick the copy to **Keep**. The
+  suggestion is a copy in a numbered folder rather than in the Inbox, then the oldest; a
+  copy marked Important or locked is suggested first, because it cannot be removed. Untick
+  **Remove** on a copy you want to leave where it is. A copy marked Important or locked is
+  never chosen for removal, and the row says why.
+- For the other copies, per group or for all ticked groups at once, choose **Move to To
+  Delete**, or **Replace with a link**: each copy goes to To Delete and a link to the kept
+  copy is put at its old path, so anything that points there still opens the file. The
+  preview lists every operation. It is one batch and one Undo: Undo removes the links and
+  brings the copies back. (On Windows, links need Developer Mode.)
+- **Also add what the removed copies had** (ticked by default) adds their tags,
+  collections, star, note, checklist entries, tray items and From and For to the kept copy.
+  The preview lists exactly what will be added. It only adds: a note is appended below the
+  kept copy's note, and a From or For the kept copy already has is not replaced. Undo takes
+  back the collection memberships and a note that the batch created; tags, appended text
+  and the other additions stay, and you can remove them by hand.
+- **Same name, different content** lists files whose names are the same (ignoring case)
+  but whose content differs. These are probably versions of a document, not copies, so
+  they are for review only: open them in Browse, or compare two side by side.
+
+### The other checks
+
+- **Empty folders** (not the top level, not the app's own folders): tick the ones to
+  **Mark for deletion**; the folder moves to To Delete like a file.
+- **Broken links**: links whose target is gone. A broken link in `##. Ongoing` or
+  `##. Important` can be removed (the app may remove links there). Everywhere else a link is
+  moved to To Delete, which you can Undo. Undo of removing a link in Ongoing or Important
+  cannot make a link to a file that is gone, so that one stays removed.
+- **Collections and trays**: collection members and files of open tray items that are gone
+  or in To Delete. Each entry links to its collection or tray, where you take it out.
+- **File names**: files in the numbered folders whose name does not start with
+  `YYYYMMDD_`, with a suggested name from the date the name already starts with, else the
+  document date, else the day the file was last changed. **Rename** is the normal previewed
+  rename.
+- **Waiting in To Delete**: files that have been in To Delete longer than a number of days
+  (30 to begin with; change the number). It shows how many and how big. dam never empties
+  To Delete: when you are sure, empty it yourself in Finder (or File Explorer). How long a
+  file has waited comes from the Activity journal; for a file put there some other way it
+  is the time the file last changed place, marked "about".
 
 ## Settings
 

@@ -7,6 +7,7 @@ import {
   Hourglass,
   FolderTree,
   History,
+  Wrench,
   Inbox,
   Layers,
   MessageCircleQuestion,
@@ -534,6 +535,7 @@ export function Sidebar({ footer }: Props) {
           <Section title="Archive" folded={sections.folded.has("archive")} onFold={() => sections.toggle("archive")}>
             <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
             <Row to="/activity" icon={History} label="Activity" />
+            <Row to="/maintenance" icon={Wrench} label="Maintenance" />
             <Row to="/settings" icon={Settings} label="Settings" />
             <Row to="/help" icon={CircleHelp} label="Help" />
           </Section>

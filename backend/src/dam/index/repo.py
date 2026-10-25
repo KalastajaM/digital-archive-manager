@@ -255,6 +255,40 @@ class FileRepo:
         with self._conn() as conn:
             return list(conn.execute(select(files.c.path).where(cond)).scalars())
 
+    # -- maintenance: duplicate candidates and stored hashes ---------------------------
+
+    def regular_files(self, exclude: Sequence[str] = ()) -> list[FileRecord]:
+        """Every live regular file (no folder, link, missing or parked row) outside the
+        folders in ``exclude`` (archive-relative, with everything below them), by path."""
+        cond = [
+            files.c.is_dir.is_not(True),
+            files.c.is_link.is_not(True),
+            files.c.missing.is_not(True),
+            files.c.parked_at.is_(None),
+        ]
+        for folder in exclude:
+            f = nfc(folder).rstrip("/")
+            cond.append(not_(or_(files.c.path_nfc == f, _below(f))))
+        with self._conn() as conn:
+            rows = conn.execute(select(files).where(*cond).order_by(files.c.path)).all()
+        return [_record(r) for r in rows]
+
+    def save_hash(
+        self, drive_id: str, sha256: str, expect: tuple[int | None, float | None]
+    ) -> bool:
+        """Store a hash computed outside the content pass (the duplicate check), as the
+        content pass stores it: only for the file as it was when it was picked
+        (``expect`` = size, mtime, so a file the scanner has changed since keeps no hash).
+        The row's index state is left alone. Returns whether it was stored."""
+        with self._conn(write=True) as conn:
+            row = conn.execute(
+                select(files.c.size, files.c.mtime).where(files.c.drive_id == drive_id)
+            ).first()
+            if row is None or (row.size, row.mtime) != expect:
+                return False
+            conn.execute(update(files).where(files.c.drive_id == drive_id).values(sha256=sha256))
+        return True
+
     # -- flat listing (Browse "Files" view) -------------------------------------
 
     def _files_below_query(
@@ -1051,6 +1085,30 @@ class FileRepo:
             if row is not None:
                 self._write_fts_name(conn, drive_id, row.name, row.path)
 
+    @staticmethod
+    def _park_occupants(conn: Connection, rel: str, keep_id: str, now: float) -> None:
+        """Set aside the rows flagged missing that still hold ``rel`` (as ``park`` does)
+        before a row is moved there: such a row describes something that left that path
+        (a link an undo just took away), so it is stale, and it would keep the path
+        from the entry that is there now. A row that is not flagged missing is left
+        alone: that conflict is reported, not hidden. The next full scan drops parked
+        rows."""
+        stale = conn.execute(
+            select(files.c.drive_id).where(
+                files.c.drive_id != keep_id,
+                files.c.missing.is_(True),
+                or_(files.c.path == rel, files.c.path_nfc == nfc(rel)),
+            )
+        ).scalars()
+        for other in list(stale):
+            tomb = f"{PARKED}{other}"
+            conn.execute(
+                update(files)
+                .where(files.c.drive_id == other)
+                .values(path=tomb, path_nfc=tomb, missing=True, parked_at=now)
+            )
+            conn.execute(text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": other})
+
     def update_path(self, old_rel: str, new_rel: str) -> None:
         """Move the record at ``old_rel`` (and, for folders, its descendants) to ``new_rel``.
 
@@ -1075,6 +1133,7 @@ class FileRepo:
                 rest = PurePosixPath(path).parts[depth:]
                 new_path = PurePosixPath(new_rel, *rest).as_posix()
                 name = PurePosixPath(new_path).name
+                self._park_occupants(conn, new_path, drive_id, now)
                 conn.execute(
                     update(files)
                     .where(files.c.drive_id == drive_id)

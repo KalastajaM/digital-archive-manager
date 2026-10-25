@@ -19,6 +19,7 @@ the app's sidebar).
 - [Reminders setup](#reminders-setup)
 - [AI setup](#ai-setup)
 - [Safety model in detail](#safety-model-in-detail)
+- [Maintenance](#maintenance)
 - [Index errors](#index-errors)
 - [Open, reveal and previews](#open-reveal-and-previews)
 - [Logs](#logs)
@@ -917,6 +918,60 @@ The user guide's "What dam never does" gives the short version. The details:
   locks and tags live in `dam.sqlite` in the data folder. Nothing about them is written into the
   archive; the only archive writes for them are links and folders in `##. Ongoing` /
   `##. Important` and the moves of the conversion screens, always previewed and journaled.
+
+## Maintenance
+
+The Maintenance screen (`/maintenance`) runs checks the owner starts. Nothing is scheduled
+and nothing runs in the background: each check is a job started by a request, polled, and
+stopped by a request. A job also ends by itself when nobody has asked about it for 60
+seconds, and the screen stops its running job when it is left. Jobs live in memory only.
+
+- `GET /api/maintenance/duplicates/estimate` answers `{files, candidates, known,
+  to_read_files, to_read_bytes}` from the index alone: `candidates` are the regular files
+  that share a size with another (empty files, links and the app's own folders are left
+  out), `known` those with a stored sha256, `to_read_*` what the check would open. Reading a
+  file kept online-only in Google Drive for desktop downloads it.
+- `POST /api/maintenance/jobs {kind, days?}` starts a check (`duplicates`, `empty_folders`,
+  `broken_links`, `references`, `names` or `waiting`; `days` only for `waiting`, default
+  30) and ends an earlier job of that kind. `GET /api/maintenance/jobs/{job_id}` answers
+  the progress (`state` running, done, stopped or error; `done`/`total`, `bytes_done`/
+  `bytes_total`, `current`) and, once it is not running, `result` as the field named after
+  its kind (`duplicates`, `empty_folders`, ...). Entries that moved or were marked for
+  deletion since are left out of a result on every read. `GET
+  /api/maintenance/jobs/latest/{kind}` answers the latest job of the kind (null for none).
+  `POST /api/maintenance/jobs/{job_id}/stop` ends it where it is; what it found stays.
+- The duplicate check hashes only the candidates, reads each file in chunks and checks for
+  a stop between chunks, and stores the sha256 in `files.sha256` for the file as the scan
+  recorded it (size and modified time must still match; the scanner clears a hash when a
+  file changes). The index state is left alone, so the content pass still indexes the file.
+  Exact groups are files with equal size and hash; `keep` is suggested by: not removable
+  (Important or locked) first, then a numbered folder before the inbox or elsewhere, then
+  the oldest, then the path. The same-name list compares names NFC-normalised and
+  case-folded, and lists a name when two of its files differ in size or in a known hash.
+- `POST /api/maintenance/duplicates/resolve {groups: [{keep, others}], action:
+  "quarantine" | "link", carry_over?, dry_run?}` is one batch for all groups: a
+  `quarantine` of each file in `others` and, for `link`, a `symlink` at its old path to
+  the kept file (an exact path: the quarantine has just freed it). Undo is the ordinary
+  undo: it removes the link (a link the app made, still pointing at that file) and moves
+  the copy back, so no new kind of removal exists. 400 when a copy is Important or locked
+  (also unlocked "for now"), when the files are not known to have the same content (both
+  need a stored hash), when a file changed on disk since the scan, when a file is in the
+  app's own folders, or for a link without the symlink privilege. The answer is a batch
+  result plus `carry_over` (per kept file: `tags`, `collections`, `notes`, `checklist`,
+  `items`, `sender`, `person` that are or were added) and `carry_errors`. The carry-over is
+  computed on a dry run and applied after the batch for the copies that were moved: tags
+  are added, collection memberships are added with the batch id (Undo removes them),
+  the removed copy's note is appended (or stored with the batch id when the kept copy has
+  none), checklist entries the kept copy lacks are added, the kept copy is added to the
+  tray items of the removed one, and From or For is filled only where the kept copy has
+  none. A copy cannot be Important, so that mark is never carried.
+- `POST /api/maintenance/links/remove {drive_ids, dry_run?}` removes broken links inside
+  `##. Ongoing` or `##. Important` with the existing `unlink_symlink` operation (400 for a
+  link anywhere else, or one that leads somewhere). Its undo needs the link's target to
+  exist, so it is refused for these.
+- Empty folders and broken links elsewhere are marked for deletion with `POST
+  /api/quarantine`, a name is fixed with `POST /api/browse/rename`: the existing previewed
+  endpoints.
 
 ## Index errors
 

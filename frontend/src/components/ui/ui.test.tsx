@@ -97,6 +97,7 @@ describe("Sidebar", () => {
       ["Tags", "/tags"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
+      ["Maintenance", "/maintenance"],
       ["Settings", "/settings"],
       ["Help", "/help"],
     ]);
