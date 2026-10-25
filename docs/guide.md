@@ -1299,11 +1299,21 @@ selection drags all of it. A valid target highlights; an invalid one shows why n
 | A collection in the sidebar | Adds the files to the collection, ungrouped. |
 | A collection onto another collection (or the **Collections** caption) | Moves the collection inside the other one (or to the top level), with everything under it. |
 | A group inside a collection | Adds the files to that group, or moves them there if they are already members. |
-| A folder in Browse (a folder row, or the other pane) | **A move, always behind a preview and confirm**, with **Undo**. Not allowed for `##. To Delete` (use Move to To Delete), `##. Ongoing` and the top of the archive. |
+| A folder in Browse (a folder row, or the other pane) | **Move, Link or Copy, always behind a preview and confirm**, with **Undo**. The confirm has the three ways side by side: **Move** (the default), **Link** (a shortcut in that folder that opens the file; the file stays where it is; Undo removes the shortcut) and **Copy** (marked "not recommended: makes a duplicate"; Undo moves the copy to To Delete). Hold **Option** (Alt) while dropping to start with Copy. A taken name gets `_2`. |
+| The file's own folder | Move and Link are refused with "Already in this folder". Copy works if you hold Option while dropping (the copy gets a number). |
+| A row of `##. Ongoing` onto a folder | Move moves the **real file** (the link's target), not the link. The confirm names the folder it is in now and where it goes; it stays in its collections and the link in Ongoing follows. Link and Copy use the original. |
+| A row of `##. Important` onto a folder | Link and Copy use the original. Move is refused: "This file is marked Important; unmark it first". |
+| A row of `##. To Delete` onto a folder | A **restore** into that folder, with a preview and Undo (which puts it back in To Delete). No Link or Copy. |
+| A collection's folder in `##. Ongoing` | **Adds the files to that collection** (with Undo); the link appears when Ongoing is updated. Nothing is moved. |
+| `##. Ongoing` itself, `##. Important`, `##. To Delete`, the top of the archive, search results | Refused. While you drag, the reason shows on the folder or pane itself, and dropping there anyway shows it as a message. To send a file to To Delete use **Mark for deletion**. |
 
 Every drop has a keyboard or menu equivalent: the Inbox form, **Put in tray…** and **Add
 to collection…** on a file, the group menu, and **Move to…** in Browse. Only files move;
-folders can be opened and dropped on, not dragged.
+folders can be opened and dropped on. A folder can be dragged to a collection in the
+sidebar; dropped on a folder in Browse it is refused, with the reason.
+
+Link needs permission to make links. On Windows that means Developer Mode; without it Link
+is off in the confirm, with the reason, and Copy still works.
 
 ## What dam never does
 
@@ -1311,7 +1321,10 @@ folders can be opened and dropped on, not dragged.
   `##. To Delete`, keeping its original path; you empty that folder yourself, or
   **Restore** a file from it (previewed, with Undo). The only
   things dam ever removes are its own links and its own empty folders in `##. Ongoing` and
-  `##. Important`, and only after checking they are still exactly the ones it made.
+  `##. Important`, and only after checking they are still exactly the ones it made. The one
+  exception: **Undo** of a **Link** (a drop that made a shortcut anywhere in the archive)
+  removes that shortcut, and only while it is still a shortcut pointing at the same file; a
+  regular file, a folder or a shortcut you made yourself is never touched.
 - **It never moves or renames a locked file.** Important files are always locked, and you
   can lock any file; you unlock it on purpose, and for Important files only until you
   leave the file.

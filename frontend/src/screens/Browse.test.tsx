@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CollectionChange, CollectionRow, DirEntry, FileLinks, Item, ResolvedOp, SearchHit, TrayDef } from "../api/client";
 import { type Call, dataTransfer, deferred, IMPORTANT_REFUSED, mockFetch, quarantineRoute, renderWithProviders, undoButton } from "../test-utils";
 import { FILES_MOVED_EVENT } from "../components/MoveTo";
+import { ONGOING_ROOT_REASON } from "../dropModes";
 import Browse, { folderCollectRefusal } from "./Browse";
 
 function dir(path: string, drive_id = `id-${path}`): DirEntry {
@@ -1056,11 +1057,12 @@ describe("Drag and drop in Browse", () => {
     const trash = rowOf(listing(), "##. To Delete");
     fireEvent.dragEnter(trash, { dataTransfer: dt });
     expect(trash).toHaveAttribute("data-drop", "refused");
-    expect(trash).toHaveAttribute("data-tip", "Not allowed: use Move to To Delete");
+    expect(trash).toHaveAttribute("data-tip", "Not allowed: use Mark for deletion to send files to To Delete");
     expect(fireEvent.drop(trash, { dataTransfer: dt })).toBe(false);
+    expect(await screen.findByText("Not allowed: use Mark for deletion to send files to To Delete", { selector: ".toast *" })).toBeInTheDocument();
     const ongoing = rowOf(listing(), "##. Ongoing");
     fireEvent.dragEnter(ongoing, { dataTransfer: dt });
-    expect(ongoing).toHaveAttribute("data-tip", "Not allowed: ##. Ongoing is kept by the app");
+    expect(ongoing).toHaveAttribute("data-tip", ONGOING_ROOT_REASON);
     fireEvent.drop(ongoing, { dataTransfer: dt });
     await new Promise((r) => setTimeout(r, 10));
     expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
@@ -1210,9 +1212,10 @@ describe("Two panes", () => {
     await user.click(within(left).getByRole("checkbox", { name: "Select a.pdf" }));
     await user.click(within(left).getByRole("checkbox", { name: "Select b.pdf" }));
     const dt = dragFrom(rowOf(left, "a.pdf"));
-    // its own pane is where the files already are: not a target
+    // its own pane is where the files already are: refused, and the pane says so
     fireEvent.dragEnter(within(left).getByRole("list", { name: "Folder contents" }), { dataTransfer: dt });
-    expect(within(left).getByTestId("pane-drop")).not.toHaveAttribute("data-drop");
+    expect(within(left).getByTestId("pane-drop")).toHaveAttribute("data-drop", "refused");
+    expect(within(left).getByRole("status")).toHaveTextContent(/^Already in this folder/);
     const target = within(pane("Right pane")).getByTestId("pane-drop");
     const empty = within(pane("Right pane")).getByText("This folder is empty.");
     fireEvent.dragEnter(empty, { dataTransfer: dt });
@@ -1355,14 +1358,14 @@ describe("Task 11 review fixes", () => {
   it.each([
     ["##. To Delete/10. Financial", "Marked for deletion: restore it first"],
     ["##. Ongoing/Sauna", "Files in ##. Ongoing cannot be moved: the app keeps them"],
-  ])("files under %s are not draggable and Move to… says why", async (folder, reason) => {
+  ])("files under %s drag, and Move to… says why it is off", async (folder, reason) => {
     const { user } = setup(folder, {
       "GET /api/browse": { body: [file(`${folder}/x.pdf`, "fx"), dir(`${folder}/Sub`)] },
       "GET /api/files/fx/links": { body: NO_LINKS },
       "GET /api/notes/file/fx": { body: { text: "" } },
     });
     await user.click(await screen.findByRole("button", { name: "x.pdf" }));
-    expect(rowOf(listing(), "x.pdf")).not.toHaveAttribute("draggable", "true");
+    expect(rowOf(listing(), "x.pdf")).toHaveAttribute("draggable", "true"); // drops decide (see BrowseDropModes)
     const moveTo = screen.getByRole("button", { name: "Move to…" });
     expect(moveTo).toBeDisabled();
     expect(moveTo.closest(".icon-button-wrap")).toHaveAttribute("data-tip", reason);
