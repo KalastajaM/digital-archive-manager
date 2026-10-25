@@ -9,9 +9,10 @@
  * reason as their tooltip. */
 import { FolderInput, Pencil, Sparkles } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { errorText, type FilingSuggestion, type Mark, useFileDetail, usePutFileTags } from "../api/client";
+import { errorText, type FilingSuggestion, LOCKED_REASON, type Mark, useFileDetail, useFileLock, usePutFileTags } from "../api/client";
 import { visible } from "../text";
 import { useAISend, useAIState } from "./ai/useAI";
+import { LockControl } from "./LockControl";
 import { MarkToggles } from "./MarkToggles";
 import { MoveToSheet, sourceRefusal, useMoveFlow } from "./MoveTo";
 import { Breakable } from "./PlanPreview";
@@ -76,6 +77,9 @@ export function FileMeta({
   const path = file.path ?? "";
   const name = file.name ?? baseName(path);
   const refusal = fileEditRefusal(file);
+  // A locked file's name and folder cannot change (its tags, marks and notes still can)
+  const lock = useFileLock(id, file.marks, file.path);
+  const changeRefusal = refusal ?? (lock.blocked ? LOCKED_REASON : null);
   const [editing, setEditing] = useState(false);
   const [picking, setPicking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -99,7 +103,7 @@ export function FileMeta({
   const [draft, setDraft] = useState("");
   const [ext, setExt] = useState("");
   const startRename = (suggested?: string) => {
-    if (refusal || busy) return;
+    if (changeRefusal || busy) return;
     const [stem, e] = splitName(name);
     // the extension stays: a suggestion that carries it is taken without it
     setDraft(suggested === undefined ? stem : suggested.endsWith(e) ? suggested.slice(0, suggested.length - e.length) : suggested);
@@ -152,12 +156,13 @@ export function FileMeta({
             <IconButton
               icon={<Pencil />}
               label="Rename"
-              disabled={refusal !== null || busy}
-              disabledReason={refusal ?? undefined}
+              disabled={changeRefusal !== null || busy}
+              disabledReason={changeRefusal ?? undefined}
               onClick={() => startRename()}
             />
           </>
         )}
+        {refusal === null && <LockControl driveId={id} marks={file.marks} path={file.path} />}
       </div>
       <p className="current-path">
         <code>
@@ -166,8 +171,8 @@ export function FileMeta({
         <IconButton
           icon={<FolderInput />}
           label="Move file to…"
-          disabled={refusal !== null || busy}
-          disabledReason={refusal ?? undefined}
+          disabled={changeRefusal !== null || busy}
+          disabledReason={changeRefusal ?? undefined}
           onClick={() => setPicking(true)}
         />
       </p>
@@ -176,11 +181,11 @@ export function FileMeta({
           {visible(problem)}
         </p>
       )}
-      <FieldChips field="Name" offers={nameOffers} disabled={refusal !== null || busy} onUse={(o) => startRename(o.value)} />
+      <FieldChips field="Name" offers={nameOffers} disabled={changeRefusal !== null || busy} onUse={(o) => startRename(o.value)} />
       <FieldChips
         field="Folder"
         offers={folderOffers}
-        disabled={refusal !== null || busy}
+        disabled={changeRefusal !== null || busy}
         onUse={(o) => {
           setProblem(null);
           move.start({ ids: [id], folder: o.value });

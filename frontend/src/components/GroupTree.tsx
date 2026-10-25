@@ -401,7 +401,7 @@ function EntryRow({ e, level, entry, onSelectEntry }: EntryProps & { e: DirEntry
           <span className="member-text">
             <span className={e.is_dir ? "entry-name member-dir" : "entry-name"}>
               {name}
-              <MarkIcons marks={e.marks} />
+              <MarkIcons marks={e.marks} driveId={e.is_dir ? undefined : e.drive_id} path={e.path} />
             </span>
           </span>
         </button>
@@ -462,7 +462,7 @@ function MemberRow({
           <span className="member-text">
             <span className={m.is_dir ? "entry-name member-dir" : "entry-name"}>
               {name}
-              <MarkIcons marks={m.marks} />
+              <MarkIcons marks={m.marks} driveId={m.is_dir ? undefined : m.drive_id} path={m.path} />
             </span>
             {m.path && <FitText mode="path" className="member-folder" text={visible(folderOf(m.path) || "(top)")} />}
           </span>

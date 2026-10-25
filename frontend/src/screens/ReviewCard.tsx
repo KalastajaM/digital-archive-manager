@@ -10,8 +10,10 @@ import {
   type FileRequest,
   type FilingSuggestion,
   type InboxEntry,
+  LOCKED_REASON,
   type TrayDef,
   useFileLinks,
+  useFileLock,
   useFilingCodes,
   useRules,
   useTrays,
@@ -41,6 +43,7 @@ import { dialogOpen, isCmdEnter, isShortcut, OWN_ENTER, useKeydown } from "../ke
 import { visible } from "../text";
 import { LinkBadges } from "./FileActions";
 import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFiling";
+import { LockControl } from "../components/LockControl";
 import { MarkToggles } from "../components/MarkToggles";
 import { TrashButton } from "../components/Trash";
 import {
@@ -397,7 +400,10 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   filing.form.current = current; // stale previews are dropped against this
   const plan = filing.planFor(current);
 
+  // a locked file is not filed until it is unlocked (the server refuses it too)
+  const lock = useFileLock(entry.record.drive_id, entry.record.marks, entry.record.path);
   const requests = (): FileRequest[] | null => {
+    if (lock.blocked) return null;
     setTried(true);
     if (current === null) {
       filing.dismissMessage(); // the live problem says what is wrong
@@ -432,6 +438,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               onClick={() => setShowPreview((v) => !v)}
             />
             <MarkToggles driveId={entry.record.drive_id} name={fileName} marks={entry.record.marks} />
+            <LockControl driveId={entry.record.drive_id} marks={entry.record.marks} path={entry.record.path} />
             {aiState.on && (
               <IconButton
                 icon={<Sparkles />}
@@ -441,13 +448,19 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
                 onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
               />
             )}
-            {trash && <TrashButton disabled={filing.busy || trash.busy} onClick={trash.run} />}
+            {trash && (
+              <TrashButton
+                disabled={filing.busy || trash.busy}
+                disabledReason={lock.blocked ? LOCKED_REASON : null}
+                onClick={trash.run}
+              />
+            )}
             <TipButton
               className="tip-end"
               tip="Show exactly what will move, before anything changes ↩"
               onClick={preview}
-              disabled={filing.busy}
-              disabledReason={FILING_BUSY}
+              disabled={filing.busy || lock.blocked}
+              disabledReason={lock.blocked ? LOCKED_REASON : FILING_BUSY}
             >
               Preview
             </TipButton>
@@ -455,8 +468,8 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               className="primary tip-end"
               tip="Move it to the folder with the new name ⌘↩"
               onClick={fileIt}
-              disabled={filing.busy}
-              disabledReason={FILING_BUSY}
+              disabled={filing.busy || lock.blocked}
+              disabledReason={lock.blocked ? LOCKED_REASON : FILING_BUSY}
             >
               File it
             </TipButton>
