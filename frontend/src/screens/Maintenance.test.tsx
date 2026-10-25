@@ -212,11 +212,18 @@ describe("Maintenance screen", () => {
     expect(rows[0]).toHaveTextContent(/^Keep10\. Financial\/Banks2,0 KB/);
     expect(rows[1]).toHaveTextContent("##. Organizenamed scan.pdf");
     expect(screen.getByText("Important")).toBeInTheDocument();
-    const stays = screen.getByRole("checkbox", { name: "Remove 20. Home/bill copy.pdf" });
-    expect(stays).toBeDisabled();
-    expect(stays.closest("label")).toHaveAttribute("title", "It is marked Important, so it stays");
-    expect(screen.getByText("Stays")).toBeInTheDocument();
+    // only one copy can go (the other is Important), so there is nothing to untick
+    expect(screen.queryByRole("checkbox", { name: /^Remove/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Stays")).toHaveAttribute("title", "It is marked Important, so it stays");
     expect(screen.getByText("Inbox")).toBeInTheDocument();
+  });
+
+  it("a group of two copies has no Remove to untick: the other copy is the one that goes", async () => {
+    const { user } = setup({}, withDuplicates(GROUP2));
+    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await screen.findAllByRole("radio");
+    expect(screen.queryByRole("checkbox", { name: /^Remove/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Move the other to To Delete/ })).toBeEnabled();
   });
 
   it("previews a replace-with-links batch, shows what is carried over, applies it and offers Undo", async () => {

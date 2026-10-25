@@ -1210,10 +1210,12 @@ ran. Reset changes nothing in the archive.
   moment; the fingerprints already made are kept, so the next run goes on from there.
 - **Identical copies** come in groups. In each group you pick the copy to **Keep**. The
   suggestion is a copy in a numbered folder rather than in the Inbox, then the oldest; a
-  copy marked Important or locked is suggested first, because it cannot be removed. Untick
-  **Remove** on a copy you want to leave where it is. A copy marked Important or locked is
+  copy marked Important or locked is suggested first, because it cannot be removed. In a
+  group of three or more copies, untick **Remove** on a copy you want to leave where it
+  is; with two, the other copy is simply the one that goes. A copy marked Important or locked is
   never chosen for removal, and the row says why.
-- Each copy shows its folder; its name too only where it differs from the group's name.
+- Each copy shows its folder, and under it its size and date, and its name too where it
+  differs from the group's name.
 - For the other copies, per group or for all ticked groups at once, choose **Move to To
   Delete**, or **Replace with a link**: each copy goes to To Delete and a link to the kept
   copy is put at its old path, so anything that points there still opens the file. The
