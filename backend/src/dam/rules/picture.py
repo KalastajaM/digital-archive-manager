@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import re
 import threading
+import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -25,7 +26,16 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 from dam.extract.layout import Box, clamp_box
-from dam.extract.picture import PICTURE_PAGE_WIDTH, picture_path
+from dam.extract.picture import (
+    PICTURE_PAGE_WIDTH,
+    THUMB_H,
+    THUMB_W,
+    PageThumbs,
+    have_pictures,
+    picture_name,
+    picture_path,
+)
+from dam.rules.timings import Timings
 
 DEFAULT_MIN_SCORE = 0.85
 SEARCH_GROW = 0.05  # the search window: the box grown by this share of the page on each side
@@ -193,17 +203,60 @@ class Template:
         return self._fft[key]
 
 
+def _window_bounds(box: Box, page_w: int, page_h: int) -> tuple[int, int, int, int]:
+    """The search window, in pixels: the template's box grown by ``SEARCH_GROW``."""
+    x0, y0, x1, y1 = box
+    gx0, gy0, gx1, gy1 = clamp_box(
+        (x0 - SEARCH_GROW, y0 - SEARCH_GROW, x1 + SEARCH_GROW, y1 + SEARCH_GROW)
+    )
+    return (
+        int(gx0 * page_w),
+        int(gy0 * page_h),
+        min(page_w, round(gx1 * page_w)),
+        min(page_h, round(gy1 * page_h)),
+    )
+
+
 def match(template: Template, page: np.ndarray) -> Match:
     """The best score of ``template`` on the page (``load_page``), searching the template's
     box grown by ``SEARCH_GROW`` at each of ``SCALES``."""
     page_h, page_w = page.shape
-    x0, y0, x1, y1 = template.box
-    gx0, gy0, gx1, gy1 = clamp_box(
-        (x0 - SEARCH_GROW, y0 - SEARCH_GROW, x1 + SEARCH_GROW, y1 + SEARCH_GROW)
-    )
-    wx0, wy0 = int(gx0 * page_w), int(gy0 * page_h)
-    wx1, wy1 = min(page_w, round(gx1 * page_w)), min(page_h, round(gy1 * page_h))
-    window = page[wy0:wy1, wx0:wx1]
+    wx0, wy0, wx1, wy1 = _window_bounds(template.box, page_w, page_h)
+    return _match_window(template, page[wy0:wy1, wx0:wx1], wx0, wy0, page_w, page_h)
+
+
+def load_gray(path: Path) -> np.ndarray:
+    """The page-1 picture at ``MATCH_WIDTH`` across as it is stored (8-bit, not blurred)."""
+    with Image.open(path) as img:
+        img.draft("L", (MATCH_WIDTH, 1))
+        img.load()
+        gray = img.convert("L")
+    if gray.width != MATCH_WIDTH:
+        height = max(1, round(gray.height * MATCH_WIDTH / gray.width))
+        gray = gray.resize((MATCH_WIDTH, height), Image.Resampling.LANCZOS)
+    return np.asarray(gray, dtype=np.uint8)
+
+
+BLUR_MARGIN = 8  # pixels around the window blurred too, so its edge is as if the page was
+
+
+def match_gray(template: Template, gray: np.ndarray) -> Match:
+    """``match`` on a page from ``load_gray``: the same score as ``match(template,
+    blurred page)``, but only the search window (a small part of the page) is blurred."""
+    page_h, page_w = gray.shape
+    wx0, wy0, wx1, wy1 = _window_bounds(template.box, page_w, page_h)
+    if wy1 - wy0 < 4 or wx1 - wx0 < 4:
+        return Match(0.0)
+    cx0, cy0 = max(0, wx0 - BLUR_MARGIN), max(0, wy0 - BLUR_MARGIN)
+    cx1, cy1 = min(page_w, wx1 + BLUR_MARGIN), min(page_h, wy1 + BLUR_MARGIN)
+    blurred = Image.fromarray(gray[cy0:cy1, cx0:cx1]).filter(ImageFilter.GaussianBlur(BLUR))
+    window = _gray(blurred)[wy0 - cy0 : wy1 - cy0, wx0 - cx0 : wx1 - cx0]
+    return _match_window(template, window, wx0, wy0, page_w, page_h)
+
+
+def _match_window(
+    template: Template, window: np.ndarray, wx0: int, wy0: int, page_w: int, page_h: int
+) -> Match:
     win_h, win_w = window.shape
     best, where = 0.0, None
     if win_h < 4 or win_w < 4:
@@ -248,6 +301,46 @@ def match(template: Template, page: np.ndarray) -> Match:
     return Match(round(score, 4), found)
 
 
+# -- a coarse ranking from the thumbnails ----------------------------------------------------
+
+
+def coarse_scores(template: Template, thumbs: np.ndarray, present: np.ndarray) -> np.ndarray:
+    """A rough score (0 to 1) of every page for the template, from the thumbnails
+    (``PageThumbs.get_many``) in one numpy operation: the best normalised correlation of
+    the crop, reduced to the size of its box in a thumbnail, over the same search window as
+    the precise match. A page without a thumbnail scores -1. It only orders the documents:
+    the precise match still decides."""
+    n = len(thumbs)
+    out = np.full(n, -1.0, dtype=np.float32)
+    x0, y0, x1, y1 = template.box
+    tw = max(2, round((x1 - x0) * THUMB_W))
+    th = max(2, round((y1 - y0) * THUMB_H))
+    wx0, wy0, wx1, wy1 = _window_bounds(template.box, THUMB_W, THUMB_H)
+    wx1, wy1 = max(wx1, wx0 + tw), max(wy1, wy0 + th)
+    wx1, wy1 = min(wx1, THUMB_W), min(wy1, THUMB_H)
+    if wx1 - wx0 < tw or wy1 - wy0 < th or n == 0 or template.flat:
+        return np.where(present, 0.0, -1.0).astype(np.float32)
+    t = np.asarray(template.crop.resize((tw, th), Image.Resampling.BOX), dtype=np.float32)
+    t = t - t.mean()
+    t_norm = float(np.sqrt((t * t).sum()))
+    if t_norm < 1e-3:
+        return np.where(present, 0.0, -1.0).astype(np.float32)
+    count = tw * th
+    for start in range(0, n, 1000):
+        stop = min(n, start + 1000)
+        window = thumbs[start:stop, wy0:wy1, wx0:wx1].astype(np.float32)
+        patches = np.lib.stride_tricks.sliding_window_view(window, (th, tw), axis=(1, 2))
+        corr = np.einsum("nijhw,hw->nij", patches, t, optimize=True)
+        total = patches.sum(axis=(3, 4))
+        total_sq = np.einsum("nijhw,nijhw->nij", patches, patches, optimize=True)
+        var = total_sq - total * total / count
+        ok = var > 1e-3 * count
+        ncc = np.zeros_like(corr)
+        np.divide(corr, np.sqrt(np.where(ok, var, 1.0)) * t_norm, out=ncc, where=ok)
+        out[start:stop] = ncc.reshape(stop - start, -1).max(axis=1)
+    return np.where(present, np.clip(out, 0.0, 1.0), -1.0).astype(np.float32)
+
+
 # -- what a check uses -------------------------------------------------------------------
 
 
@@ -286,6 +379,10 @@ class Pictures:
     _pages: _Lru = field(default_factory=lambda: _Lru(6), repr=False)
     _templates: _Lru = field(default_factory=lambda: _Lru(64), repr=False)
     _scores: _Lru = field(default_factory=lambda: _Lru(20000), repr=False)
+    thumbs: PageThumbs = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.thumbs = PageThumbs(self.cache_dir)
 
     def has_page(self, drive_id: str, sha256: str | None) -> bool:
         return bool(sha256) and picture_path(self.cache_dir, drive_id, sha256 or "").is_file()
@@ -307,7 +404,45 @@ class Pictures:
         except (OSError, PictureError, ValueError, Image.DecompressionBombError):
             return None, None
 
-    def match(self, image: str, box: Box, drive_id: str, sha256: str | None) -> Match | None:
+    def rank(
+        self, rule, items: list[tuple[str, str | None]], budget_s: float = 2.0
+    ) -> dict[str, float]:
+        """A rough score of each document (``items``: drive id and sha256) for the picture
+        areas of ``rule`` (the lowest of them), from the thumbnails of its page-1 picture.
+        Thumbnails that are missing are made from the pictures in the cache first, for at
+        most ``budget_s`` seconds. A document with no picture or no thumbnail scores -1.
+        It orders the documents; it never decides a match."""
+        zones = [z for z in rule.when.zones if z.is_picture and z.image is not None]
+        have = have_pictures(self.cache_dir)
+        names = {
+            d: picture_name(d, sha) for d, sha in items if sha and picture_name(d, sha) in have
+        }
+        self.thumbs.ensure(
+            {n: picture_path(self.cache_dir, d, sha) for d, sha in items if (n := names.get(d))},
+            budget_s,
+        )
+        ids = list(names)
+        thumbs, present = self.thumbs.get_many([names[d] for d in ids])
+        best: np.ndarray | None = None
+        for zone in zones:
+            template, _ = self._template(zone.image, zone.box)
+            if template is None:
+                continue
+            got = coarse_scores(template, thumbs, present)
+            best = got if best is None else np.minimum(best, got)
+        out = {d: -1.0 for d, _ in items}
+        if best is not None:
+            out.update({d: float(best[i]) for i, d in enumerate(ids)})
+        return out
+
+    def match(
+        self,
+        image: str,
+        box: Box,
+        drive_id: str,
+        sha256: str | None,
+        timings: Timings | None = None,
+    ) -> Match | None:
         """How well the crop ``image`` (the zone's picture, for ``box``) appears on page 1
         of the document. None when the document has no page-1 picture yet. A crop that
         cannot be read scores 0."""
@@ -323,12 +458,20 @@ class Pictures:
             return found
         page = self._pages.get(str(path))
         if page is None:
+            started = time.perf_counter()
             try:
-                page = load_page(path)
+                page = load_gray(path)
             except (OSError, ValueError, Image.DecompressionBombError):
                 return None  # not there, or not all written yet: as if not made
             self._pages.put(str(path), page)
-        result = match(template, page)
+            if timings is not None:
+                timings.picture_load += time.perf_counter() - started
+                timings.pictures_loaded += 1
+        started = time.perf_counter()
+        result = match_gray(template, page)
+        if timings is not None:
+            timings.ncc += time.perf_counter() - started
+            timings.pictures_matched += 1
         self._scores.put(key, result)
         return result
 
@@ -345,7 +488,10 @@ __all__ = [
     "check_image_path",
     "crop_file",
     "cut_crop",
+    "load_gray",
     "load_page",
     "match",
+    "coarse_scores",
+    "match_gray",
     "png_bytes",
 ]

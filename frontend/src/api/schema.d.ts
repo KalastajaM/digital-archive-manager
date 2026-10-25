@@ -2265,6 +2265,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rules/replay/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Replay Job
+         * @description Test a rule against the filed documents in the background: the answer comes at once
+         *     and the test goes on, looking at the likely documents first. Poll it with
+         *     ``GET /api/rules/replay/jobs/{job_id}`` for the result so far, stop it, or drop it when
+         *     the sheet closes. One test per ``sheet`` (an earlier one for it is ended). Read-only.
+         *     404 for an unknown ``replaces``, 400 for an invalid rule.
+         */
+        post: operations["start_replay_job_api_rules_replay_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/replay/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Replay Job
+         * @description The state of a background test and what it has found so far. Pass the ``version`` you
+         *     already have as ``since`` and ``result`` is null while nothing is new. 404 for a job
+         *     that is gone (dropped, or pushed out by newer ones).
+         */
+        get: operations["get_replay_job_api_rules_replay_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Drop Replay Job
+         * @description End a background test and forget it (its sheet was closed). 404 if it is gone.
+         */
+        delete: operations["drop_replay_job_api_rules_replay_jobs__job_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/replay/jobs/{job_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Replay Job
+         * @description End a background test where it is; what it has found so far stays. Idempotent.
+         */
+        post: operations["stop_replay_job_api_rules_replay_jobs__job_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/replay/jobs/{job_id}/read-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Replay Job Now
+         * @description Queue page 1 of the documents this test is waiting for to be read at once (still
+         *     one at a time, with the usual time limit), ahead of everything else; the test picks
+         *     them up as they arrive.
+         */
+        post: operations["read_replay_job_now_api_rules_replay_jobs__job_id__read_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rules/unused-pictures/quarantine": {
         parameters: {
             query?: never;
@@ -2682,6 +2774,28 @@ export interface paths {
          *     400 when settings.yaml could not be written (it is left as it was).
          */
         put: operations["put_page1_backfill_api_settings_page1_backfill_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/page1-speed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Page1 Speed
+         * @description Set how many PDFs with a text layer have page 1 read per minute (scans, photos and
+         *     slow downloads keep the indexer's pace). 400 for a rate outside 1 to 6000, or when
+         *     settings.yaml could not be written (it is left as it was).
+         */
+        put: operations["put_page1_speed_api_settings_page1_speed_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4623,6 +4737,39 @@ export interface components {
             blocked: components["schemas"]["Page1BlockedOut"][];
             /** Rate Per Min */
             rate_per_min?: number | null;
+            /**
+             * Text Left
+             * @default 0
+             */
+            text_left: number;
+            /**
+             * Scans Left
+             * @default 0
+             */
+            scans_left: number;
+            /**
+             * Text Per Min
+             * @default 0
+             */
+            text_per_min: number;
+            /**
+             * Scans Per Min
+             * @default 0
+             */
+            scans_per_min: number;
+        };
+        /**
+         * Page1SpeedIn
+         * @description How many PDFs with a text layer have page 1 read per minute (1 to 6000).
+         */
+        Page1SpeedIn: {
+            /** Reads Per Minute */
+            reads_per_minute: number;
+        };
+        /** Page1SpeedOut */
+        Page1SpeedOut: {
+            /** Reads Per Minute */
+            reads_per_minute: number;
         };
         /**
          * ParentBody
@@ -4777,6 +4924,14 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * ReadNowOut
+         * @description How many of a test's documents were queued to have page 1 read now.
+         */
+        ReadNowOut: {
+            /** Queued */
+            queued: number;
+        };
         /** RecoveryResultOut */
         RecoveryResultOut: {
             /** Entries */
@@ -4830,6 +4985,39 @@ export interface components {
             /** Path Rule */
             path_rule: string;
         };
+        /**
+         * ReplayJobOut
+         * @description A test running in the background. ``state``: "running" (going through the
+         *     documents), "waiting" (all looked at; ``waiting`` of them wait for page 1 to be read and
+         *     are looked at again as it is), "done", "stopped" (by the user, or the sheet was not
+         *     heard from) or "error". ``looked_at`` of ``total`` filed documents are gone through.
+         *     ``result`` is what has been found so far, as a finished test gives it; it is left out
+         *     (null) when nothing changed since the ``version`` the poll said it had.
+         */
+        ReplayJobOut: {
+            /** Job Id */
+            job_id: string;
+            /** Sheet */
+            sheet: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "waiting" | "done" | "stopped" | "error";
+            /** Version */
+            version: number;
+            /** Looked At */
+            looked_at: number;
+            /** Total */
+            total: number;
+            /** Waiting */
+            waiting: number;
+            /** Elapsed S */
+            elapsed_s: number;
+            /** Error */
+            error?: string | null;
+            result?: components["schemas"]["ReplayOut"] | null;
+        };
         /** ReplayOut */
         ReplayOut: {
             /** Matched */
@@ -4854,6 +5042,11 @@ export interface components {
             reading: number;
             /** Next After */
             next_after?: string | null;
+            /**
+             * Looked At
+             * @default 0
+             */
+            looked_at: number;
             marked?: components["schemas"]["MarkedOut"] | null;
             /**
              * Scores
@@ -4991,6 +5184,25 @@ export interface components {
             place_above?: string | null;
             /** After */
             after?: string | null;
+            /** Near Drive Id */
+            near_drive_id?: string | null;
+        };
+        /**
+         * RuleReplayJobIn
+         * @description Start a test of a rule in the background (same placement fields as ``RuleReplayIn``).
+         *     ``sheet`` names the open sheet it is for: starting another test for the same sheet ends
+         *     the first.
+         */
+        RuleReplayJobIn: {
+            rule: components["schemas"]["RuleIn"];
+            /** Sheet */
+            sheet: string;
+            /** Replaces */
+            replaces?: string | null;
+            /** Place Above */
+            place_above?: string | null;
+            /** Near Drive Id */
+            near_drive_id?: string | null;
         };
         /**
          * RuleSampleOut
@@ -17996,6 +18208,480 @@ export interface operations {
             };
         };
     };
+    start_replay_job_api_rules_replay_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleReplayJobIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_replay_job_api_rules_replay_jobs__job_id__get: {
+        parameters: {
+            query?: {
+                since?: number | null;
+            };
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    drop_replay_job_api_rules_replay_jobs__job_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    stop_replay_job_api_rules_replay_jobs__job_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_replay_job_now_api_rules_replay_jobs__job_id__read_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadNowOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     quarantine_unused_pictures_api_rules_unused_pictures_quarantine_post: {
         parameters: {
             query?: never;
@@ -20027,6 +20713,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page1BackfillOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_page1_speed_api_settings_page1_speed_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Page1SpeedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page1SpeedOut"];
                 };
             };
             /** @description Bad Request */

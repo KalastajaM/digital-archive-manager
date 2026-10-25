@@ -12,6 +12,7 @@ import {
   mockFetch,
   quarantineRoute,
   renderWithProviders,
+  replayJob,
   undoButton,
 } from "../test-utils";
 import Inbox from "./Inbox";
@@ -2125,14 +2126,14 @@ describe("Filing says where it came from and offers a rule", () => {
       "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
       "POST /api/inbox/preview": { body: SIMPLE_MOVE },
       "POST /api/inbox/file": { body: fileResult({ offer: OFFER }) },
-      "POST /api/rules/replay": { body: REPLAY },
+      ...replayJob(REPLAY),
     });
     await user.click(screen.getByRole("button", { name: "File it" }));
     await user.click(await screen.findByRole("button", { name: "Make a rule…" }));
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
     expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf");
-    await waitFor(() => expect(posts(calls, "/api/rules/replay").length).toBeGreaterThan(0));
-    const sent = posts(calls, "/api/rules/replay").at(-1)?.body as { rule: { when: { folder_is: string; text_contains: string[] } } };
+    await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs").length).toBeGreaterThan(0));
+    const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { folder_is: string; text_contains: string[] } } };
     expect(sent.rule.when.text_contains).toEqual(["kotihoito"]);
     expect(sent.rule.when.folder_is).toBe("##. Organize");
   });
@@ -2153,7 +2154,7 @@ describe("Filing says where it came from and offers a rule", () => {
       "GET /api/rules": { body: { rules: [existing], errors: [], state: { offer: true, declined: 0 } } },
       "POST /api/inbox/preview": { body: SIMPLE_MOVE },
       "POST /api/inbox/file": { body: fileResult({ offer: { ...OFFER, kind: "update", rule_id: "kotihoito", draft } }) },
-      "POST /api/rules/replay": { body: REPLAY },
+      ...replayJob(REPLAY),
       "PUT /api/rules/kotihoito": { body: { rules: [existing], errors: [], state: { offer: true, declined: 0 } } },
     });
     await user.click(screen.getByRole("button", { name: "File it" }));

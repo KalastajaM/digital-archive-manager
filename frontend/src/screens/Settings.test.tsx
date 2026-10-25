@@ -39,7 +39,38 @@ describe("Settings", () => {
     expect(await within(nav).findByRole("heading", { name: "This archive · Home" })).toBeInTheDocument();
     expect(within(nav).getByRole("heading", { name: "This browser" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Filing codes" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/settings/filing-codes", "/settings/filing-rules", "/settings/appearance"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual([
+      "/settings/filing-codes",
+      "/settings/filing-rules",
+      "/settings/indexing",
+      "/settings/appearance",
+    ]);
+  });
+
+  it("Indexing sets how fast page 1 of PDFs with a text layer is read, and the background reading", async () => {
+    const calls = mockFetch({
+      "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true } },
+      "GET /api/status": {
+        body: { files: 1, page1: { read: 1, total: 2, backfill: true, blocked: [], text_per_min: 300, scans_per_min: 30, text_left: 1, scans_left: 0 } },
+      },
+      "PUT /api/settings/page1-speed": { body: { reads_per_minute: 600 } },
+      "PUT /api/settings/page1-backfill": { body: { enabled: false } },
+    });
+    renderWithProviders(
+      <MemoryRouter initialEntries={["/settings/indexing"]}>
+        <Routes>
+          <Route path="/settings/:section?" element={<Settings />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    const section = await screen.findByRole("region", { name: "Indexing" });
+    const speed = await within(section).findByRole("combobox", { name: "Page 1 reading speed" });
+    expect(speed).toHaveValue("300");
+    await user.selectOptions(speed, "600");
+    expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-speed")?.body).toEqual({ reads_per_minute: 600 });
+    await user.click(within(section).getByRole("checkbox", { name: /Read page 1 of older documents/ }));
+    expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-backfill")?.body).toEqual({ enabled: false });
   });
 
   it("an unknown section opens the first", async () => {

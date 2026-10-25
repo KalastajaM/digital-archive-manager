@@ -527,12 +527,13 @@ def test_an_earlier_text_rule_does_not_make_the_replay_match_pictures_outside_it
         budget_s=0.0, layouts_for=app.repo.layouts_for, pictures=setup.pictures,
     )  # fmt: skip
     assert wide.truncated and calls == []
-    # with time, the matching happens once per document (ten rows), in the main loop
+    # with time, the matching happens once per document that can have a page 1 (nine of the
+    # ten rows: the .docx is settled without a look), in the main loop
     full = replay(
         app.engine, rule, [earlier, rule], app.settings.special_folders,
         layouts_for=app.repo.layouts_for, pictures=setup.pictures,
     )  # fmt: skip
-    assert full.matched == 4 and len(calls) == 10
+    assert full.matched == 4 and len(calls) == 9
 
 
 # --- not mistaking one dark logo or one block of small text for another -----------------

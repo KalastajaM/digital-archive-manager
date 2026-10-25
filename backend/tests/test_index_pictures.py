@@ -233,3 +233,32 @@ def test_an_idle_picture_pass_lists_nothing_and_checks_a_bounded_page(
     picture_path(cache, "d0", repo.get("d0").sha256).unlink()
     done = sum(indexer.run_layouts_once(limit=10, backfill=True) for _ in range(3))
     assert done == 1 and picture_path(cache, "d0", repo.get("d0").sha256).is_file()
+
+
+# --- thumbnails of the pictures (a rough ranking for a rule test) ----------------------
+
+
+def test_a_picture_made_by_the_layout_pass_gets_its_thumbnail_and_old_ones_are_backfilled(
+    fake_archive, engine, tmp_path, monkeypatch
+):
+    from dam.extract.picture import PageThumbs, write_picture
+
+    monkeypatch.setattr(ocr, "engine", lambda: None)
+    cache = tmp_path / "cache"
+    repo, indexer = _indexer(fake_archive, engine, cache_dir=cache)
+    indexer.thumbs = PageThumbs(cache)
+    _indexed(fake_archive, repo, f"{INBOX}/a.pdf", "d1")
+    sha = repo.get("d1").sha256
+    assert indexer.run_layouts_once() == 1
+    assert indexer.thumbs.has(picture_name("d1", sha))  # made along with the picture
+    # a picture from before thumbnails existed, and a stale thumbnail of a picture that is gone
+    write_picture(cache, "old", "c" * 64, Image.new("L", (300, 400), 200))
+    indexer.thumbs.add_bytes("gone-0000000000000000.jpg", bytes(48 * 68))
+    assert indexer.run_thumbs_once() == 1
+    assert indexer.thumbs.has(picture_name("old", "c" * 64))
+    assert not indexer.thumbs.has("gone-0000000000000000.jpg")
+    assert (cache / "page1-thumbs.npz").is_file()
+    assert PageThumbs(cache).has(picture_name("d1", sha))  # kept for the next start
+    assert indexer.run_thumbs_once() == 0  # nothing left to make: step() goes idle
+    # the cache pictures themselves are untouched
+    assert len(have_pictures(cache)) == 2

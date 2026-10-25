@@ -1,37 +1,11 @@
 /** The proof under a rule: what it would have done to the documents filed so far. */
 import { createContext, useContext, useId, useState } from "react";
 import type { Replay, RuleIn } from "../../api/client";
-import { plural } from "../../format";
+import { groupDigits, plural } from "../../format";
 import { visible } from "../../text";
 import { QuickLook, type QLFile } from "../QuickLook";
 
 export const FAILS = "would fail: the pattern cannot be filled for it";
-
-/** How many of the matches (lowest first) and of the near misses (highest first) the test
- * lists, as the backend picks them. */
-const KEEP_MATCHED = 20;
-const KEEP_NEAR = 10;
-
-/** ``first`` and ``rest`` (a replay that went on after ``first.next_after``) as one: the
- * counts add up and the lists join, so the test never starts over. The documents marked
- * as from the sender are compared on the first call only. */
-export function mergeReplay(first: Replay, rest: Replay): Replay {
-  const scores = [...(first.scores ?? []), ...(rest.scores ?? [])];
-  const matched = scores.filter((x) => x.matched).sort((a, b) => a.score - b.score || a.path.localeCompare(b.path));
-  const near = scores.filter((x) => !x.matched).sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
-  return {
-    ...rest,
-    matched: first.matched + rest.matched,
-    same: first.same + rest.same,
-    inbox: first.inbox + rest.inbox,
-    checked: first.checked + rest.checked,
-    different: [...first.different, ...rest.different],
-    shadowed: [...first.shadowed, ...rest.shadowed],
-    not_checked: [...(first.not_checked ?? []), ...(rest.not_checked ?? [])],
-    marked: first.marked ?? rest.marked,
-    scores: [...matched.slice(0, KEEP_MATCHED), ...near.slice(0, KEEP_NEAR)],
-  };
-}
 
 /** Opens a document of the test result in the preview, with the tested rule drawn on it. */
 const OpenDocument = createContext<(doc: { drive_id: string; path: string }) => void>(() => {});
@@ -114,6 +88,87 @@ function Scores({ scores, needed }: { scores: Replay["scores"]; needed: number |
   );
 }
 
+/** The state of the test the server runs in the background (``state`` is null before it has
+ * answered): documents gone through of how many, and how many wait for page 1. */
+export type Progress = {
+  state: "running" | "waiting" | "done" | "stopped" | "error" | null;
+  looked: number;
+  total: number;
+  waiting: number;
+};
+
+/** "Checked 1 240 of 10 875 documents…" with a Stop button while it runs; what it waits for
+ * when all are looked at; where it stopped. Nothing once it is finished. */
+function TestProgress({
+  progress,
+  onStop,
+  onTestAgain,
+  onReadNow,
+  readingNow,
+}: {
+  progress: Progress;
+  onStop?: () => void;
+  onTestAgain?: () => void;
+  onReadNow?: () => void;
+  readingNow?: boolean;
+}) {
+  const { state, looked, total, waiting } = progress;
+  const readNow =
+    onReadNow && waiting > 0 && (state === "running" || state === "waiting") ? (
+      <p className="replay-read-now">
+        {readingNow ? (
+          <span className="busy" role="status">
+            Reading page 1 of these {groupDigits(waiting)} now, one at a time…
+          </span>
+        ) : (
+          <button type="button" onClick={onReadNow}>
+            Read page 1 of these {groupDigits(waiting)} now
+          </button>
+        )}
+      </p>
+    ) : null;
+  if (state === "running")
+    return (
+      <>
+        <p className="busy replay-progress" role="status">
+          {total > 0 ? `Checked ${groupDigits(looked)} of ${groupDigits(total)} documents…` : "Getting ready to test…"}{" "}
+          {onStop && (
+            <button type="button" onClick={onStop}>
+              Stop
+            </button>
+          )}
+        </p>
+        {readNow}
+      </>
+    );
+  if (state === "waiting")
+    return (
+      <>
+        <p className="busy replay-progress" role="status">
+          Checked all {groupDigits(total)} documents. Waiting for page 1 of {groupDigits(waiting)}…{" "}
+          {onStop && (
+            <button type="button" onClick={onStop}>
+              Stop
+            </button>
+          )}
+        </p>
+        {readNow}
+      </>
+    );
+  if (state === "stopped")
+    return (
+      <p className="hint replay-progress">
+        Stopped at {groupDigits(looked)} of {groupDigits(total)} documents.{" "}
+        {onTestAgain && (
+          <button type="button" onClick={onTestAgain}>
+            Test again
+          </button>
+        )}
+      </p>
+    );
+  return null;
+}
+
 export function ReplayResult({
   replay,
   before = null,
@@ -123,8 +178,11 @@ export function ReplayResult({
   error = null,
   onRetry,
   rule,
-  onTestRest,
-  restPending = false,
+  progress,
+  onStop,
+  onTestAgain,
+  onReadNow,
+  readingNow,
 }: {
   replay: Replay | undefined;
   /** The same rule before the change being made: how it did, to compare with. */
@@ -138,9 +196,15 @@ export function ReplayResult({
   onRetry?: () => void;
   /** The rule being tested: documents of the result open with its areas drawn on them. */
   rule?: RuleIn;
-  /** Continue a test that stopped at its time budget, from where it stopped. */
-  onTestRest?: () => void;
-  restPending?: boolean;
+  /** How far the background test has come. */
+  progress?: Progress;
+  /** End the test where it is (what it found so far stays). */
+  onStop?: () => void;
+  /** Test again from the start (after a stop). */
+  onTestAgain?: () => void;
+  /** Have page 1 of the documents the test waits for read now. */
+  onReadNow?: () => void;
+  readingNow?: boolean;
 }) {
   const id = useId();
   const [opened, setOpened] = useState<QLFile | null>(null);
@@ -174,7 +238,7 @@ export function ReplayResult({
           {notChecked.length > 0 && ` (${notChecked.length} not checked yet)`}
         </p>
       )}
-      {reading > 0 && (
+      {reading > 0 && !progress && (
         <p className="busy" role="status">
           Reading page 1 of {plural(reading, "document")}…
         </p>
@@ -223,18 +287,14 @@ export function ReplayResult({
         </p>
       ))}
       {replay.inbox > 0 && <p>It also catches {plural(replay.inbox, "document")} in the inbox now.</p>}
-      {replay.truncated && (
-        <p className="hint">
-          Checked {replay.checked} of {replay.total} documents
-          {onTestRest && replay.next_after != null && (
-            <>
-              {" "}
-              <button type="button" disabled={restPending} onClick={onTestRest}>
-                {restPending ? "Testing the rest…" : "Test the rest"}
-              </button>
-            </>
-          )}
-        </p>
+      {progress && (
+        <TestProgress
+          progress={progress}
+          onStop={onStop}
+          onTestAgain={onTestAgain}
+          onReadNow={onReadNow}
+          readingNow={readingNow}
+        />
       )}
     </section>
     {opened && (

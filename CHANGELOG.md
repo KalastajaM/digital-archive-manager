@@ -13,8 +13,33 @@ All notable changes are listed here. The format follows
   and its score. In any preview with the box tool, picture rules that did not match are
   drawn dashed with the score they got on that document, or the reason there is none, so you
   can find out why a rule found nothing.
-- **Test the rest**: when the test stops at its time limit, it continues from where it
-  stopped and adds to the result instead of starting over.
+- When a test has documents whose page 1 is not read yet, **Read page 1 of these N now**
+  reads exactly those first, at full speed (still one at a time, and each read still has its
+  time limit). The test picks them up as they are read.
+- Page 1 of PDFs that have a text layer is read much faster than the indexer's 30 files a
+  minute (300 a minute unless you choose another speed in Settings → Indexing or on the
+  Index sheet, **Page 1 reading speed**): it needs no OCR. Scans, photos and any read that
+  is slow, such as a Google Drive file that has to be downloaded first, keep the indexer's
+  pace. The Index sheet's estimate of the time left now adds the two ("about 18 min left
+  (5 000 PDFs with text at 300 a minute, 30 scans and photos at 30 a minute)"). Settings has
+  a new section, Indexing, with this speed and the switch for reading older documents.
+- The test of a rule looks at the likely documents first, so real matches show up early
+  instead of in folder order: the documents you set as from the rule's sender, then the
+  documents in the same folder as the one you drew the areas on, then (for a picture
+  area) the rest by how much their first page looks like the picture, using tiny
+  grayscale thumbnails of the page 1 pictures that dam keeps in one file in the cache
+  folder (`page1-thumbs.npz`; it can be rebuilt any time). The order only changes when
+  things show up: the counts are the same as in any other order. On a test archive of
+  11 000 files, the first five matches of a rule with a word area and a picture came after
+  205 documents instead of 8 243. "Test the rest" goes on in the same order.
+- The test of a rule runs in the background and fills in as it goes, instead of one
+  request that gives up after five seconds. The sheet says "Checked 1 240 of 10 875
+  documents…" with a **Stop** button, shows the matches found so far, and goes on until
+  every document is looked at. It ends when you stop it, change the rule or close the
+  sheet. When all documents are looked at and some still wait for page 1 to be read, it
+  says so and looks at them again as they are read. The test only reads the index and the
+  cache; it changes nothing. (The old **Test the rest** button is gone: the test no longer
+  needs it.)
 - The Index sheet shows how far reading page 1 has come, how many documents wait because
   page 1 cannot be read now and why, the switch for reading older documents in the
   background, and an estimate of the time left. The status line at the foot of the sidebar
@@ -208,6 +233,15 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- Testing a rule with a word area is much faster. It folded the whole text of every
+  document twice (once to pick the documents that need page 1, once to test them), one
+  character at a time, so a long text cost milliseconds, and a rule that only looks at a
+  picture folded it as well. The text is now folded once, only for a rule that has words,
+  with a much faster fold that gives exactly the same result; a file that cannot have a
+  page 1 is settled without its text; and a picture is blurred only where it is searched.
+  On a test archive of 11 000 files (120 MB of text) a rule with a word area went from
+  13.5 s to 1.2 s, a plain word rule from 7.5 s to 1.5 s, and a picture rule from 55 s to
+  18 s. The log (`dam.log`) now has one line per test with the seconds each step took.
 - The test of a picture rule no longer shows documents that did not match as if they were
   results. Documents are listed under **Matched**, and the ones that missed are listed
   under **Close, but not matched** only when the picture was the one thing that failed and

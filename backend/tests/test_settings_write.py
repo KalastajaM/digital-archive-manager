@@ -81,6 +81,10 @@ def test_status_carries_the_page1_progress(app, fake_archive):
             "backfill": True,
             "blocked": [],
             "rate_per_min": None,
+            "text_left": 1,
+            "scans_left": 0,
+            "text_per_min": 300,
+            "scans_per_min": 30,
         }
         # the index summary (Settings) carries the same, and why some cannot be read now
         app.content._layout_done.extend(time.monotonic() - s for s in (50, 40, 30, 20, 10))

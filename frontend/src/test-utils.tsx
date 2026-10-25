@@ -18,6 +18,49 @@ export type Call = {
 type Reply = { status?: number; body?: unknown; html?: string };
 type Handler = Reply | ((call: Call) => Reply | Promise<Reply>);
 
+/** The jobs a rule test starts on the server (``POST /api/rules/replay/jobs``) and their
+ * answers to polling: ``result`` is what a finished test found (or a function of the
+ * request that started the job, to answer differently for each rule). Spread it into
+ * ``mockFetch``: ``...replayJob(result)``. Each start gets the next job id (job-1,
+ * job-2, ...). ``job`` sets the state and counts the server reports. */
+export function replayJob(
+  result: unknown | ((start: Call) => unknown),
+  job: { state?: string; looked_at?: number; total?: number; waiting?: number; error?: string | null } = {},
+): Record<string, Handler> {
+  const starts: Call[] = [];
+  const body = (n: number, withResult: boolean) => {
+    const start = starts[n - 1];
+    const found = typeof result === "function" ? (result as (c: Call) => unknown)(start) : result;
+    const counts = found as { total?: number } | null;
+    return {
+      job_id: `job-${n}`,
+      sheet: "sheet",
+      state: "done",
+      version: 1,
+      looked_at: counts?.total ?? 0,
+      total: counts?.total ?? 0,
+      waiting: 0,
+      elapsed_s: 0.1,
+      error: null,
+      ...job,
+      result: withResult ? found : null,
+    };
+  };
+  const routes: Record<string, Handler> = {
+    "POST /api/rules/replay/jobs": (call) => {
+      starts.push(call);
+      return { body: body(starts.length, false) };
+    },
+  };
+  for (let n = 1; n <= 12; n++) {
+    const url = `/api/rules/replay/jobs/job-${n}`;
+    routes[`GET ${url}`] = (call) => ({ body: body(n, !call.url.includes("since=1")) });
+    routes[`POST ${url}/stop`] = () => ({ body: body(n, true) });
+    routes[`DELETE ${url}`] = () => ({ body: body(n, false) });
+  }
+  return routes;
+}
+
 /** Replace global fetch with a router over "METHOD /path" keys; returns the recorded calls. */
 export function mockFetch(routes: Record<string, Handler>): Call[] {
   const calls: Call[] = [];

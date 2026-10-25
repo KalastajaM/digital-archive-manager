@@ -167,6 +167,10 @@ class Settings(BaseModel):
     # read where the text sits on page 1 of the documents indexed before positions were
     # kept (inbox files are always read); off pauses that backfill
     page1_backfill: bool = True
+    # how fast page 1 is read for PDFs that have a text layer (no OCR, no download): a
+    # separate, higher rate than ``indexer_reads_per_minute``, which stays the rate for
+    # scans (OCR), photos and anything slow to read
+    page1_text_reads_per_minute: int = Field(default=300, ge=1, le=6000)
     ops_throttle_ms: int = 250
     server_port: int = 8765
     ocr_languages: list[str] = Field(default_factory=lambda: ["en-US"])

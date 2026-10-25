@@ -15,7 +15,14 @@ from dam.core.paths import ArchivePaths
 from dam.extract import ocr
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
 from dam.extract.layout import Page1Layout
-from dam.extract.picture import picture_path, write_picture
+from dam.extract.picture import (
+    PICTURE_DIR,
+    PageThumbs,
+    have_pictures,
+    picture_name,
+    picture_path,
+    write_picture,
+)
 from dam.index.barcodes import read_page1
 from dam.index.layouts import IMAGE_EXTS, read_layout, render_picture
 from dam.index.repo import FileRecord, FileRepo
@@ -30,6 +37,9 @@ LAYOUT_MISSING = "missing"
 LAYOUT_TIMEOUT = "page 1 took too long to read"
 PICTURE_PAGE_ROWS = 200  # files whose picture is checked per idle pass (backfill)
 LAYOUT_NO_PICTURE = "no picture of page 1 can be made"
+BURST_S = 1800.0  # "read now" gives up after this long
+BURST_PAUSE_S = 0.05  # the pause between reads while documents are read now
+CLOUD_SLOW_S = 3.0  # a page-1 read that took this long counts as slow (a download, a big scan)
 MAX_REASON = 500  # characters of an error reason kept in the index
 
 
@@ -108,6 +118,11 @@ class ContentIndexer:
         # positions were kept): whether it also reads files outside the inbox (the
         # inbox and the wanted files are always read), and the OCR languages of scans
         self.page1_backfill = page1_backfill
+        # reads per minute for page 1 of a PDF with a text layer (no OCR); the scans, photos
+        # and slow reads keep ``reads_per_minute``. None: the same rate for all.
+        self.page1_fast_per_minute: Callable[[], int] | None = None
+        self._layout_fast = True  # whether the last page-1 read was a quick, local one
+        self._last_slow = True  # whether the step before was a slow kind of work
         self.ocr_languages = ocr_languages or ["en-US"]
         self.layout_timeout_s = layout_timeout_s
         self.layout_retry_s = layout_retry_s
@@ -116,10 +131,16 @@ class ContentIndexer:
         self._layout_why: dict[str, str] = {}  # drive_id -> why it waits (no OCR engine)
         # the page-1 pictures (picture areas) are kept in this cache folder; None: not kept
         self.cache_dir = cache_dir
+        # tiny thumbnails of the pictures (a rough ranking for a rule test): set by the App
+        self.thumbs: PageThumbs | None = None
         # files whose picture cannot be made (until the content changes or dam restarts)
         self._no_picture: dict[str, str] = {}  # drive_id -> sha256
         self._picture_cursor = 0  # where the next backfill page of picture checks starts
         self._wanted: set[str] = set()  # asked for by a replay, read next
+        # asked for by the user to be read now: read at full speed (one at a time, with
+        # the usual time limit) until none is left, or for at most ``BURST_S``
+        self._burst: set[str] = set()
+        self._burst_until = 0.0
         self._layout_busy = False
         # the barcode pass runs one read at a time; a hung read pauses it until it
         # returns on its own
@@ -134,6 +155,8 @@ class ContentIndexer:
     def close(self) -> None:
         """Stop accepting work. Abandoned daemon threads never block interpreter exit."""
         self._closed = True
+        if self.thumbs is not None:
+            self.thumbs.flush(force=True)
 
     def run_once(self, limit: int = 20, now: float | None = None) -> int:
         now = time.time() if now is None else now
@@ -348,6 +371,30 @@ class ContentIndexer:
         with self._lock:
             self._wanted.update(drive_ids)
 
+    def read_now(self, drive_ids: Collection[str]) -> int:
+        """Read page 1 of these files next, one at a time and without the pause between
+        reads (each read still has its time limit), until they are all read or cannot be
+        read now. Returns how many were queued. Cheap and safe to call from any thread."""
+        ids = set(drive_ids)
+        with self._lock:
+            self._wanted.update(ids)
+            self._burst.update(ids)
+            self._burst_until = time.monotonic() + BURST_S
+        return len(ids)
+
+    def reading_now(self) -> int:
+        """How many files asked for with ``read_now`` are still waiting to be read."""
+        with self._lock:
+            return len(self._burst_pending())
+
+    def _burst_pending(self) -> set[str]:
+        """The ``read_now`` files not read yet and not put off (call with the lock held)."""
+        if time.monotonic() > self._burst_until:
+            self._burst.clear()
+        self._burst &= self._wanted
+        self._burst -= set(self._layout_retry) | set(self._no_picture)
+        return self._burst
+
     def layout_blocked(self, drive_id: str) -> str | None:
         """Why page 1 of this file cannot be read right now (``LAYOUT_NO_OCR``,
         ``LAYOUT_MISSING`` or ``LAYOUT_TIMEOUT``), else None."""
@@ -394,7 +441,29 @@ class ContentIndexer:
         except Exception:
             log.warning("could not keep the page-1 picture of %s", drive_id, exc_info=True)
             return False
+        if self.thumbs is not None:
+            try:
+                self.thumbs.add(picture_name(drive_id, sha256), picture)
+            except Exception:
+                log.warning("could not make the thumbnail of %s", drive_id, exc_info=True)
         return True
+
+    def run_thumbs_once(self, limit: int = 300) -> int:
+        """Make the thumbnails of up to ``limit`` page-1 pictures in the cache that have
+        none (pictures made before thumbnails were kept), drop those of pictures that are
+        gone, and write the file when it changed. It reads only the cache, never the
+        archive. Returns how many thumbnails were made."""
+        if self._closed or self.thumbs is None or self.cache_dir is None:
+            return 0
+        have = have_pictures(self.cache_dir)
+        self.thumbs.forget_missing(have)
+        folder = Path(self.cache_dir) / PICTURE_DIR
+        todo = {n: folder / n for n in sorted(have) if not self.thumbs.has(n)}
+        wanted = dict(list(todo.items())[:limit])
+        if wanted:
+            self.thumbs.ensure(wanted, budget_s=5.0)
+        self.thumbs.flush()
+        return len(wanted)
 
     def _next_for_pictures(
         self, limit: int, wanted: set[str], waiting: set[str], backfill: bool
@@ -454,6 +523,7 @@ class ContentIndexer:
         with self._lock:
             if self._layout_busy:
                 return 0
+        self._layout_fast = True
         now = time.monotonic()
         with self._lock:
             self._layout_retry = {d: t for d, t in self._layout_retry.items() if t > now}
@@ -502,6 +572,8 @@ class ContentIndexer:
             # this read needs OCR: do not read the whole file just to find that out
             self._retry_layout_later(rec.drive_id, LAYOUT_NO_OCR)
             return True
+        needs_ocr = layout and (ext in IMAGE_EXTS or (ext == "pdf" and bool(ocr_used)))
+        started = time.monotonic()
         out: dict = {}
         finished = threading.Event()
 
@@ -539,8 +611,13 @@ class ContentIndexer:
         if not finished.wait(self.layout_timeout_s):
             log.warning("page-1 reading timed out for %s; retrying later", rec.path)
             self._retry_layout_later(rec.drive_id, LAYOUT_TIMEOUT)
+            self._layout_fast = False
             return False
         error = out.get("error")
+        # a scan (OCR) and a read that took long (a cloud file that had to be downloaded, a
+        # big file) keep the indexer's slow pace; a quick local text-layer read does not
+        if needs_ocr or isinstance(error, OSError) or time.monotonic() - started > CLOUD_SLOW_S:
+            self._layout_fast = False
         if not layout:
             return self._finish_picture(rec, out)
         if isinstance(error, UnsupportedContent) and str(error) == ocr.NO_OCR:
@@ -594,12 +671,33 @@ class ContentIndexer:
 
     def step(self, now: float | None = None) -> int:
         """One unit of background work: a pending file's content, else a barcode read,
-        else a page-1 layout read."""
-        return (
-            self.run_once(limit=1, now=now)
-            or self.run_barcodes_once(limit=1)
-            or self.run_layouts_once(limit=1)
-        )
+        else a page-1 layout read, else the thumbnails of page-1 pictures."""
+        done = self.run_once(limit=1, now=now) or self.run_barcodes_once(limit=1)
+        if done:
+            self._last_slow = True
+            return done
+        done = self.run_layouts_once(limit=1)
+        if done:
+            self._last_slow = not self._layout_fast
+            return done
+        self._last_slow = False
+        return self.run_thumbs_once()
+
+    def pause_s(self) -> float:
+        """How long to wait after the last step: the indexer's pace (``reads_per_minute``)
+        after content, barcode and slow page-1 reads (a scan, a slow download), the faster
+        page-1 pace after a quick text-layer read. Never slower than the indexer's pace."""
+        slow = 60 / self.reads_per_minute
+        with self._lock:
+            if self._burst_pending():
+                return min(slow, BURST_PAUSE_S)
+        if self._last_slow or self.page1_fast_per_minute is None:
+            return slow
+        try:
+            fast = 60 / max(1, int(self.page1_fast_per_minute()))
+        except Exception:
+            return slow
+        return min(fast, slow)
 
     def _cloud_pending(self, rec: FileRecord, now: float, exc: BaseException, expect) -> None:
         attempts = rec.attempts + 1
@@ -616,7 +714,6 @@ class ContentIndexer:
         ends the idle wait early. ``wake`` never shortens the rate-limit pause. Whoever
         sets ``stop`` should also set ``wake`` so an idle loop notices at once.
         """
-        pause = 60 / self.reads_per_minute
         while not stop.is_set():
             if wake is not None:
                 wake.clear()  # before the pass: a wake set during it ends the next wait
@@ -626,7 +723,7 @@ class ContentIndexer:
                 log.exception("content indexer pass failed")
                 count = 0
             if count:
-                stop.wait(pause)
+                stop.wait(self.pause_s())
             elif wake is None:
                 stop.wait(IDLE_WAIT_S)
             else:
