@@ -77,6 +77,7 @@ const SCREEN_SECTIONS: Record<string, string> = {
   "/important": "starred-and-important",
   "/important/convert": "converting-existing-folders",
   "/browse": "browse",
+  "/tags": "tags",
   "/ask": "ai-optional",
   "/activity": "activity-and-undo",
   "/settings/:section?": "settings",
@@ -98,7 +99,7 @@ describe("the guide stays in step with the app", () => {
 
   it("every sidebar row is named in the guide's description of the window", () => {
     const sidebar = helpMarkdown(guide).split("## The window")[1].split("\n## ")[0];
-    for (const row of ["Today", "Inbox", "Trays", "Collections", "Important", "Starred", "Browse", "Ask", "Activity", "Settings", "Help"]) {
+    for (const row of ["Today", "Inbox", "Trays", "Collections", "Important", "Starred", "Browse", "Tags", "Ask", "Activity", "Settings", "Help"]) {
       expect(sidebar).toContain(`**${row}**`);
     }
   });

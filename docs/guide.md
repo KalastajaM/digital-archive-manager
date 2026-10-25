@@ -16,6 +16,7 @@
 - [Starred and Important](#starred-and-important)
 - [Locking a file](#locking-a-file)
 - [Browse](#browse)
+- [Tags](#tags)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
 - [Settings](#settings)
@@ -147,10 +148,12 @@ setting. The sidebar, from the top:
 - **Collections**: **Important** and **Starred** first, then the open collections as a
   tree (a parent's children nest under it; the chevron folds it). The caption opens the
   list of all collections, with New collection and the closed ones;
+- **Tags**: the caption opens the [Tags](#tags) screen; below it your pinned tags, then
+  the tags you used most lately, eight at most, each opening its files in Browse;
 - **Archive**: **Ask** (AI questions about the archive), **Activity**, **Settings** and
   **Help** (this guide).
 
-Trays, Collections and Archive fold: hold the pointer on the caption and click the chevron
+Trays, Collections, Tags and Archive fold: hold the pointer on the caption and click the chevron
 at its right. A folded Trays shows its open total next to the caption. dam remembers in
 this browser which sections you folded.
 
@@ -174,6 +177,8 @@ nothing overdue", or "All clear") and the date, then cards.
 - **To action**, **To read** and your other trays, the open collections that still have
   to-dos (open checklist entries, or files still in the inbox), **Starred** files, and
   the result of the last reminder check.
+- **Search** is a box on top of the second column: type and press Enter, and Browse opens
+  with that search (`tag:name` works too, see [Tags](#tags)).
 
 Trays with nothing open are folded into one **Clear** card, so the cards with content get
 the room. Each tray row has a round checkbox that marks the item done at once (a bill is
@@ -955,8 +960,33 @@ list's width.
 - **Collection** filters a pane to one collection's files; **Folders / Files** switches
   between the folder view and a flat list of every file below the current folder, with
   sortable Name, Folder, Date and Size columns (up to 500 rows).
+- **Search** looks at file names, paths and text. Type `tag:medical` (or
+  `tag:"tax return"`) and a space, or pick a tag from the suggestions, and the tag becomes a
+  chip that filters the results to files with that tag; several chips need all of them,
+  and words work beside them ("Kela" with the tag medical). Click × on a chip to drop it.
 - **Links.** A link to a file inside the archive previews and opens as that file, with
   **Go to target**. A link to something outside the archive only has Show in Finder.
+
+## Tags
+
+The **Tags** screen (sidebar, under Collections) lists every tag with the number of files
+that have it, with a filter box. Click a tag to see its files in Browse. Each tag has a
+menu, and every change shows a toast with **Undo**:
+
+- **New tag** makes a tag with no files; it stays until you use or delete it.
+- **Rename** changes it on every file. If the new name is another tag's, dam offers to
+  merge instead.
+- **Merge into** (or tick tags and use **Merge selected**) puts the tag you keep on all
+  their files and removes the others. The sheet first says what happens, such as "3 files
+  get 'medical'; 'health' is removed".
+- **Delete** removes the tag from all its files after a confirm that names how many.
+- **Pin to the sidebar** puts a tag first in the sidebar's Tags section; the rest of its
+  eight places go to the tags you put on files most lately.
+- **Groups**, one level: **New group** makes a heading such as Health; move a tag into
+  it from its menu or by dragging it onto the group. A tag is in at most one group.
+  Groups only arrange this screen. Deleting a group keeps its tags, ungrouped.
+
+Tags are kept in dam's own database, not in the archive, so changing them moves no file.
 
 ## Quick Look and the viewer window
 

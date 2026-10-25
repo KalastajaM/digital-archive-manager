@@ -4,9 +4,11 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, select, text
 
 from dam.core.paths import nfc
+from dam.db.tables import tags
+from dam.rules.model import fold
 
 
 @dataclass
@@ -44,26 +46,63 @@ def _like_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _tag_ids(engine: Engine, names: list[str]) -> list[list[int]] | None:
+    """For each wanted tag the ids of the tags with that name (case and accents ignored);
+    None when one of them does not exist, so nothing can match."""
+    with engine.connect() as conn:
+        known = [(r.id, fold(r.name)) for r in conn.execute(select(tags.c.id, tags.c.name))]
+    found: list[list[int]] = []
+    for name in dict.fromkeys(n.strip() for n in names if n.strip()):
+        ids = [i for i, folded in known if folded == fold(name)]
+        if not ids:
+            return None
+        found.append(ids)
+    return found
+
+
 def search(
-    engine: Engine, query: str, limit: int = 50, folder: str | None = None
+    engine: Engine,
+    query: str,
+    limit: int = 50,
+    folder: str | None = None,
+    tag_names: list[str] | None = None,
 ) -> list[SearchHit]:
-    """Best matches first. Skips missing and parked files; ``folder`` limits to a subtree."""
+    """Best matches first. Skips missing and parked files; ``folder`` limits to a subtree.
+
+    ``tag_names``: only files that have every one of these tags (looked up in the
+    ``file_tags`` index, so the number of files does not matter); with no words the
+    tagged files are listed by name."""
     match = _fts_query(query)
-    if not match:
+    wanted = _tag_ids(engine, tag_names) if tag_names else []
+    if wanted is None or (not match and not wanted):
         return []
-    sql = (
-        "SELECT f.drive_id, f.path, f.name, f.size, f.mtime, "
-        "snippet(file_fts, 3, :open, :close, '…', 12) AS snip, bm25(file_fts) AS rank "
-        "FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "
-        "WHERE file_fts MATCH :q AND f.missing IS NOT 1 AND f.parked_at IS NULL"
-    )
-    params: dict = {"q": match, "limit": limit, "open": _OPEN, "close": _CLOSE}
+    params: dict = {"limit": limit, "open": _OPEN, "close": _CLOSE}
+    if match:
+        sql = (
+            "SELECT f.drive_id, f.path, f.name, f.size, f.mtime, "
+            "snippet(file_fts, 3, :open, :close, '…', 12) AS snip, bm25(file_fts) AS rank "
+            "FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "
+            "WHERE file_fts MATCH :q AND f.missing IS NOT 1 AND f.parked_at IS NULL"
+        )
+        params["q"] = match
+        order = " ORDER BY rank, f.path LIMIT :limit"
+    else:
+        sql = (
+            "SELECT f.drive_id, f.path, f.name, f.size, f.mtime, NULL AS snip, 0.0 AS rank "
+            "FROM files f WHERE f.missing IS NOT 1 AND f.parked_at IS NULL "
+            "AND f.is_dir IS NOT 1 AND f.is_link IS NOT 1"
+        )
+        order = " ORDER BY f.name COLLATE NOCASE, f.path LIMIT :limit"
+    for i, ids in enumerate(wanted):
+        marks = ", ".join(f":t{i}_{j}" for j in range(len(ids)))
+        sql += f" AND f.drive_id IN (SELECT drive_id FROM file_tags WHERE tag_id IN ({marks}))"
+        params.update({f"t{i}_{j}": tag_id for j, tag_id in enumerate(ids)})
     base = nfc(folder).strip("/") if folder else ""
     if base:
         sql += " AND (f.path_nfc = :folder OR f.path_nfc LIKE :pattern ESCAPE '\\')"
         params["folder"] = base
         params["pattern"] = _like_escape(base) + "/%"
-    sql += " ORDER BY rank, f.path LIMIT :limit"
+    sql += order
     with engine.connect() as conn:
         rows = conn.execute(text(sql), params).all()
     return [

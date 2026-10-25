@@ -21,6 +21,7 @@ import Starred from "./screens/Starred";
 import Inbox from "./screens/Inbox";
 import Today from "./screens/Today";
 import Viewer from "./screens/Viewer";
+import Tags from "./screens/Tags";
 import Trays from "./screens/Trays";
 import { groupDigits, plural } from "./format";
 import { visible } from "./text";
@@ -139,6 +140,7 @@ function Shell() {
             <Route path="/important" element={<Important />} />
             <Route path="/important/convert" element={<ConvertImportant />} />
             <Route path="/browse" element={<Browse />} />
+            <Route path="/tags" element={<Tags />} />
             <Route path="/ask" element={<Ask />} />
             <Route path="/activity" element={<Activity />} />
             <Route path="/settings/:section?" element={<SettingsScreen />} />

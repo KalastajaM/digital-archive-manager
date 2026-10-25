@@ -11,6 +11,7 @@ import type { CardFrame } from "../components/today/frame";
 import { balanceColumns } from "../components/today/balance";
 import { ClearCard } from "../components/today/ClearCard";
 import { FOUND_SHOWN, InboxCard } from "../components/today/InboxCard";
+import { SearchCard } from "../components/today/SearchCard";
 import { StarredCard } from "../components/today/StarredCard";
 import { Banner } from "../components/Banner";
 import { ImportantBanner } from "../components/ImportantBanner";
@@ -288,8 +289,9 @@ export default function Today({ today: fixed }: { today?: string }) {
   ];
   const hidden = new Set(hiddenCards);
   const stats = data.data;
-  const layout = useCardLayout(
-    balanceColumns([
+  // The other cards are dealt out by their heights; Search tops the second column, so it
+  // sits by the Inbox without moving any of them.
+  const dealt = balanceColumns([
       { id: "inbox", weight: 4 + Math.min(stats?.found.length ?? 0, FOUND_SHOWN) * 1.2 },
       ...busyTrays.map((c) => ({ id: trayId(c), weight: stats ? weigh(c, stats) : 2 })),
       { id: "starred", weight: 3 },
@@ -297,7 +299,10 @@ export default function Today({ today: fixed }: { today?: string }) {
       { id: "clear", weight: hidden.has("clear") ? 0 : 1.5 },
       { id: "reminders", weight: 1.5 },
       ...clearTrays.map((c) => ({ id: trayId(c), weight: 0 })),
-    ]),
+    ]);
+  dealt[1].unshift("search");
+  const layout = useCardLayout(
+    dealt,
     { inbox: (data.data?.found.length ?? 0) > FOUND_SHOWN },
     hiddenCards,
   );
@@ -342,6 +347,7 @@ export default function Today({ today: fixed }: { today?: string }) {
   });
   const render = (id: string) => {
     if (id === "inbox") return <InboxCard data={data.data} frame={frame(id, "Inbox")} />;
+    if (id === "search") return <SearchCard frame={frame(id, "Search")} />;
     if (id === "starred") return <StarredCard frame={frame(id, "Starred")} />;
     if (id === "collections") return <CollectionsCard data={data.data} frame={frame(id, "Collections to do")} />;
     if (id === "reminders") return <RemindersCard data={data.data} today={today} frame={frame(id, "Reminders")} />;

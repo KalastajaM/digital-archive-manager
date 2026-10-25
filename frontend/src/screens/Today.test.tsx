@@ -803,8 +803,8 @@ describe("Today card layout", () => {
     [...document.querySelectorAll<HTMLElement>(".today-col > .today-slot")].map(
       (slot) => slot.querySelector("h3")!.textContent,
     );
-  // dealt out between the columns by the cards' rough heights (the first five, then the rest)
-  const DEFAULT_ORDER = ["Inbox", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "To pay", "Starred"];
+  // dealt out between the columns by the cards' rough heights (the first five, then the rest; Search tops the second column)
+  const DEFAULT_ORDER = ["Inbox", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Starred"];
   const header = (name: string) => card(name).querySelector("header")!;
   const foundN = (n: number) =>
     Array.from({ length: n }, (_, i) => ({ ...FOUND, drive_id: `d${i}`, name: `scan ${i}.pdf` }));
@@ -881,19 +881,19 @@ describe("Today card layout", () => {
     await altKey(user, "ArrowUp"); // already first: nothing moves
     expect(order()).toEqual(DEFAULT_ORDER);
     await altKey(user, "ArrowDown");
-    expect(order()).toEqual(["To action", "Inbox", "To⟨U+200B⟩read", "Collections to do", "Reminders", "To pay", "Starred"]);
+    expect(order()).toEqual(["To action", "Inbox", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Starred"]);
     expect(document.body).toHaveTextContent("Inbox moved down");
     // the focus stays with the moved card's header, so the keys can move it again
     expect(document.activeElement).toBe(foldButton("Inbox"));
 
     foldButton("Collections to do").focus();
     await altKey(user, "ArrowUp");
-    expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "To pay", "Starred"]);
+    expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "Search", "To pay", "Starred"]);
 
     view.unmount();
     renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "To pay", "Starred"]);
+    expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "Search", "To pay", "Starred"]);
 
     await user.click(screen.getByRole("button", { name: "Reset layout" }));
     expect(order()).toEqual(DEFAULT_ORDER);
@@ -913,14 +913,14 @@ describe("Today card layout", () => {
     dt.protectedMode = false;
     fireEvent.drop(card("Inbox"), { dataTransfer: dt });
     fireEvent.dragEnd(header("Starred"), { dataTransfer: dt });
-    expect(order()).toEqual(["Starred", "Inbox", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "To pay"]);
+    expect(order()).toEqual(["Starred", "Inbox", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay"]);
 
     const again = dataTransfer();
     fireEvent.dragStart(header("Inbox"), { dataTransfer: again });
     const columns = document.querySelectorAll<HTMLElement>(".today-col");
     fireEvent.dragOver(columns[1], { dataTransfer: again });
     fireEvent.drop(columns[1], { dataTransfer: again });
-    expect(order()).toEqual(["Starred", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "To pay", "Inbox"]);
+    expect(order()).toEqual(["Starred", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Inbox"]);
     expect(JSON.parse(localStorage.getItem(LAYOUT_KEY)!).order).toEqual([
       "starred",
       "tray:to-action",
@@ -929,6 +929,7 @@ describe("Today card layout", () => {
       "clear", // hidden here (no tray is clear) but it keeps its place
       "reminders",
       "|",
+      "search",
       "tray:to-pay",
       "inbox",
     ]);
@@ -975,10 +976,10 @@ describe("Today card layout", () => {
     };
     const dt = dataTransfer();
     fireEvent.dragStart(header("Inbox"), { dataTransfer: dt });
-    at("dragOver", 105, dt); // between To pay (0–100) and Starred (110–210)
+    at("dragOver", 215, dt); // between To pay (110–210) and Starred (220–320)
     expect(card("Starred").closest(".today-slot")).toHaveAttribute("data-drop", "before");
-    at("drop", 105, dt);
-    expect(order()).toEqual(["To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "To pay", "Inbox", "Starred"]);
+    at("drop", 215, dt);
+    expect(order()).toEqual(["To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Inbox", "Starred"]);
 
     const below = dataTransfer();
     fireEvent.dragStart(header("To action"), { dataTransfer: below });
@@ -1005,7 +1006,7 @@ describe("Today card layout", () => {
     );
     renderToday();
     await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(order()).toEqual(["To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Inbox", "To pay", "Starred"]);
+    expect(order()).toEqual(["To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Inbox", "Search", "To pay", "Starred"]);
   });
 
   describe("one figure per tray card, and collections only when they need attention", () => {

@@ -54,6 +54,15 @@ All notable changes are listed here. The format follows
   A change that includes a locked file is refused as a whole, naming the file. dam itself
   enforces the lock, so no screen or script can get around it, and no unlock survives a
   restart.
+- Search by tag. In Browse, type `tag:medical` (or `tag:"tax return"`) and a space, or pick
+  a tag from the suggestions, and it becomes a chip you can remove. Files must have every
+  chip, and words work beside them. Today has a new **Search** card that opens Browse with
+  what you typed.
+- A **Tags** screen with every tag and its file count, a filter box, and menus to create,
+  rename, merge, delete and pin tags and to move them into groups (one level, for
+  arranging only). Merging and deleting say what happens first, and every change has Undo.
+- A **Tags** section in the sidebar with your pinned tags first, then the tags used most
+  lately, eight at most; it folds like the other sections.
 
 - The rule test now says on its own line whether the rule matches the document it is made
   from ("This rule matches this document", or "does not match" with the reason, such as

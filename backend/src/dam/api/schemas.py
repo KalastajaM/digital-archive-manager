@@ -535,6 +535,112 @@ class TagCountOut(BaseModel):
     files: int
 
 
+class TagInfoOut(BaseModel):
+    """A tag for the Tags screen: also tags no file has yet."""
+
+    name: str
+    files: int
+    pinned: bool
+    group_id: int | None
+
+
+class TagGroupOut(BaseModel):
+    id: int
+    name: str
+
+
+class TagListOut(BaseModel):
+    tags: list[TagInfoOut]
+    groups: list[TagGroupOut]
+
+
+class SidebarTagOut(BaseModel):
+    name: str
+    files: int
+    pinned: bool
+
+
+class TagSnapshotModel(_In):
+    name: str
+    pinned_at: float | None = None
+    group_id: int | None = None
+    last_used_at: float | None = None
+    drive_ids: list[str] = Field(default_factory=list)
+
+
+class TagUnlinkModel(_In):
+    name: str
+    drive_ids: list[str]
+
+
+class TagUndoModel(_In):
+    """How to put a tag change back; sent to ``POST /api/tags/undo`` unchanged."""
+
+    drop: list[str] = Field(default_factory=list)
+    detach: list[TagUnlinkModel] = Field(default_factory=list)
+    restore: list[TagSnapshotModel] = Field(default_factory=list)
+
+
+class TagChangeOut(BaseModel):
+    """The result of a tag change and how to undo it."""
+
+    message: str
+    undo: TagUndoModel
+
+
+class TagNameIn(_In):
+    name: str = Field(max_length=200)
+
+
+class TagRenameIn(_In):
+    name: str = Field(max_length=200)
+    new_name: str = Field(max_length=200)
+
+
+class TagMergeIn(_In):
+    sources: list[str] = Field(max_length=200)
+    into: str = Field(max_length=200)
+    dry_run: bool = False
+
+
+class TagMergePlanOut(BaseModel):
+    into: str
+    gains: int
+    removes: list[str]
+    message: str
+    undo: TagUndoModel | None
+
+
+class TagPinIn(_In):
+    names: list[str] = Field(max_length=200)
+    pinned: bool
+
+
+class TagGroupSetIn(_In):
+    names: list[str] = Field(max_length=200)
+    group_id: int | None
+
+
+class TagGroupNameIn(_In):
+    name: str = Field(max_length=200)
+
+
+class TagGroupCreatedOut(BaseModel):
+    id: int
+    name: str
+
+
+class TagGroupDeletedOut(BaseModel):
+    name: str
+    members: list[str]
+    message: str
+
+
+class TagGroupRestoreIn(_In):
+    name: str = Field(max_length=200)
+    members: list[str] = Field(max_length=2000)
+
+
 class ScanFieldOut(BaseModel):
     kind: Literal[
         "doc_date", "due_date", "date", "total", "amount", "iban", "reference", "payee", "custom"

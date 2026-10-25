@@ -760,6 +760,10 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 /* Search: the scope (this folder and below, or the whole archive) beside the box */
 .browse .search { display: flex; align-items: center; gap: var(--sp-2); }
 .browse .search input { width: 200px; }
+.browse .search { flex-wrap: wrap; }
+.search-field { position: relative; }
+.search-field .tag-suggest { right: auto; min-width: 14rem; }
+.search-tags { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0; padding: 0; }
 .browse-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding: var(--sp-1) var(--sp-5); border-bottom: 0.5px solid var(--hairline); font-size: var(--fs-sm); color: var(--muted); }
 .browse-filters .error, .browse-filters .notice { margin: 0; }
 .browse-filters label { display: inline-flex; align-items: center; gap: 6px; }
@@ -2157,3 +2161,18 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 [data-reorder="after"]::before { bottom: -2px; }
 
 .collections-top-drop { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--separator); border-radius: var(--r-lg); text-align: center; }
+
+.today-search input { width: 100%; }
+
+/* Tags screen */
+.tags-screen { display: flex; flex-direction: column; gap: var(--sp-3); }
+.tags-groups { display: flex; flex-direction: column; gap: var(--sp-3); padding: 0 var(--sp-3); }
+.tag-group { border: 0.5px solid var(--hairline); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
+.tag-group[data-drop] { background: var(--selected); }
+.tag-group-head { display: flex; align-items: center; justify-content: space-between; }
+.tag-group-head h3 { margin: 0; font-size: var(--fs-sm); color: var(--muted); text-transform: none; }
+.tag-list { list-style: none; margin: 0; padding: 0; }
+.tag-row { display: flex; align-items: center; gap: var(--sp-2); padding: 3px 0; }
+.tag-row-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tag-row-pin { color: var(--muted); flex: none; }
+.tag-row-count { color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }

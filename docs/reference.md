@@ -933,6 +933,26 @@ the command line: `dam errors [--all] [--retry]`.
   each (`[{"name", "files"}]`), those starting with `prefix` (case and accents ignored),
   most used first then by name, at most `limit` (default 8, up to 50): the tag field's
   suggestions.
+- **Tags** (all in `dam.sqlite`, nothing journaled; the `tags` table also holds each tag's
+  pin time, group and last use, `tag_groups` the groups, and `file_tags` has an index on
+  the tag so "files with this tag" is a lookup, not a scan):
+  - `GET /api/search?q=&tag=a&tag=b&folder=&limit=` searches words and/or tags; a file
+    needs every `tag` (case and accents ignored); with no words the tagged files are
+    listed by name; an unknown tag finds nothing.
+  - `GET /api/tags/all?query=` lists every tag, also those no file has yet:
+    `{"tags": [{"name", "files", "pinned", "group_id"}], "groups": [{"id", "name"}]}`;
+    `GET /api/tags/sidebar` the sidebar's tags (pinned first, then most recently put on a
+    file, eight at most): `[{"name", "files", "pinned"}]`.
+  - `POST /api/tags` `{name}` creates, `/rename` `{name, new_name}` (409 when another tag has
+    that name: merge instead), `/merge` `{sources, into, dry_run}` (the dry run answers
+    `{gains, removes, message}` and changes nothing), `/delete` `{name}`, `/pin`
+    `{names, pinned}`, `/group` `{names, group_id | null}`. Each answers
+    `{message, undo}`; `POST /api/tags/undo` takes that `undo` unchanged and puts the
+    change back (`drop`: tags to delete, `detach`: links to drop, `restore`: tags back
+    with their files, pin, group and last use).
+  - Groups (one level, a tag is in at most one, never written on files):
+    `POST /api/tags/groups` `{name}`, `/groups/{id}/rename`, `/groups/{id}/delete` (its tags
+    are ungrouped; the answer lists them) and `/groups/restore` `{name, members}` for Undo.
 - `GET /api/files/{drive_id}/thumb.png?width=300..2000` (default 1200) is a Quick Look
   thumbnail of any file type, rendered at the step at or above the width (600, 1200 or
   2000 px): `qlmanage -t -s <step> -o <dir> <file>` with a 20 s timeout, at most two at

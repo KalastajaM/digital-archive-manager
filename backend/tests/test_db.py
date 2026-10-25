@@ -79,6 +79,7 @@ EXPECTED_INDEXES = {
     "ix_files_index_state_retry_at": ("files", ["index_state", "retry_at"]),
     "ix_files_parked_at": ("files", ["parked_at"]),
     "ix_operations_batch_id": ("operations", ["batch_id"]),
+    "ix_file_tags_tag_id": ("file_tags", ["tag_id"]),  # 0033: files of a tag, by tag
 }
 
 
