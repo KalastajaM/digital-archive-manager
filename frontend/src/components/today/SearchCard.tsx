@@ -1,24 +1,28 @@
 /** Today's Search card: type, press Enter, and Browse opens with that search (words and
- * `tag:name` filters, as in Browse's own box). It folds and moves like every Today card. */
+ * filters such as `tag:name`, as in Browse's own box; the ? lists them). It folds and
+ * moves like every Today card. */
 import { Search } from "lucide-react";
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { splitTagQuery } from "../../searchTags";
+import { readQuery, serializeQuery } from "../../searchFilters";
+import { SearchHelp } from "../SearchHelp";
 import { Card } from "../ui/Card";
 import type { CardFrame } from "./frame";
 
-/** The Browse address for what was typed (a trailing tag:name counts as finished). */
+/** The Browse address for what was typed: the whole query in ?q= (a trailing filter
+ * counts as finished). */
 export function browseSearchUrl(text: string): string {
-  const typed = splitTagQuery(`${text} `);
+  const { words, filters } = readQuery(text);
   const p = new URLSearchParams();
-  if (typed.rest.trim()) p.set("q", typed.rest.trim());
-  for (const tag of typed.tags) p.append("tag", tag);
+  const whole = serializeQuery(words, filters);
+  if (whole) p.set("q", whole);
   return `/browse?${p}`;
 }
 
 export function SearchCard({ frame }: { frame: CardFrame }) {
   const id = useId();
   const [text, setText] = useState("");
+  const input = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -39,11 +43,18 @@ export function SearchCard({ frame }: { frame: CardFrame }) {
           </label>
           <input
             id={id}
+            ref={input}
             type="search"
             value={text}
             placeholder="Search files, or tag:name"
             spellCheck={false}
             onChange={(e) => setText(e.target.value)}
+          />
+          <SearchHelp
+            onUse={(example) => {
+              setText((t) => (t.trim() ? `${t.trimEnd()} ` : "") + example);
+              input.current?.focus();
+            }}
           />
         </form>
       )}

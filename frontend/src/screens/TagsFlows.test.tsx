@@ -44,7 +44,7 @@ const TAGS = {
 };
 
 describe("Today's Search card", () => {
-  it("Enter opens Browse with the words and the finished tag:name as a filter", async () => {
+  async function openCard() {
     mockFetch({
       "GET /api/today": {
         body: {
@@ -72,9 +72,29 @@ describe("Today's Search card", () => {
         <Where />
       </MemoryRouter>,
     );
-    const card = await screen.findByRole("region", { name: "Search" });
+    return { user, card: await screen.findByRole("region", { name: "Search" }) };
+  }
+
+  it("Enter opens Browse with the words and the finished tag:name as a filter", async () => {
+    const { user, card } = await openCard();
     await user.type(within(card).getByRole("searchbox", { name: "Search the archive" }), "Kela tag:medical{Enter}");
-    expect(where()).toBe("/browse?q=Kela&tag=medical");
+    expect(where()).toBe("/browse?q=Kela+tag%3Amedical");
+  });
+
+  it("any filter goes into ?q= whole, quoted and negated as typed", async () => {
+    const { user, card } = await openCard();
+    await user.type(within(card).getByRole("searchbox", { name: "Search the archive" }), 'type:pdf -in:"90. Other People" after:2025{Enter}');
+    expect(where()).toBe("/browse?q=type%3Apdf+-in%3A%2290.+Other+People%22+after%3A2025");
+  });
+
+  it("the ? lists the filters; an example goes into the box", async () => {
+    const { user, card } = await openCard();
+    await user.click(within(card).getByRole("button", { name: "Search help" }));
+    const pop = screen.getByRole("dialog", { name: "Search filters" });
+    await user.click(within(pop).getByRole("button", { name: "type:pdf" }));
+    expect(within(card).getByRole("searchbox", { name: "Search the archive" })).toHaveValue("type:pdf");
+    await user.keyboard("{Enter}");
+    expect(where()).toBe("/browse?q=type%3Apdf");
   });
 });
 
@@ -114,42 +134,48 @@ describe("Browse with tags", () => {
   }
 
   it("the address sets the words and the tag chips, and the search sends them all", async () => {
-    const { calls } = setup("/browse?q=Kela&tag=medical&tag=tax%20return");
+    const { calls } = setup("/browse?q=Kela+tag%3Amedical+tag%3A%22tax+return%22");
     expect(await screen.findByText("one.pdf")).toBeInTheDocument();
-    const chips = screen.getByRole("list", { name: "Tag filters" });
-    expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["medical×", "tax return×"]);
+    const chips = screen.getByRole("list", { name: "Search filters" });
+    expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["tag:medical×", "tag:tax return×"]);
     expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("Kela");
-    const q = queryOf(searches(calls)[0]);
-    expect(q.get("q")).toBe("Kela");
-    expect(q.getAll("tag")).toEqual(["medical", "tax return"]);
+    // the whole query goes to the API as it is in the address
+    expect(queryOf(searches(calls)[0]).get("q")).toBe('Kela tag:medical tag:"tax return"');
+  });
+
+  it("an old link with ?tag= still works and moves into ?q=", async () => {
+    const { calls } = setup("/browse?q=Kela&tag=medical&tag=tax");
+    expect(await screen.findByText("one.pdf")).toBeInTheDocument();
+    expect(queryOf(searches(calls)[0]).get("q")).toBe("Kela tag:medical tag:tax");
+    await waitFor(() => expect(where()).toBe("/browse?q=Kela+tag%3Amedical+tag%3Atax"));
   });
 
   it("tags alone search with no words, and a chip's x removes the filter", async () => {
-    const { calls, user } = setup("/browse?tag=medical");
+    const { calls, user } = setup("/browse?q=tag%3Amedical");
     await screen.findByText("one.pdf");
-    expect(queryOf(searches(calls)[0]).get("q")).toBe("");
-    await user.click(screen.getByRole("button", { name: "Remove tag medical" }));
+    expect(queryOf(searches(calls)[0]).get("q")).toBe("tag:medical");
+    await user.click(screen.getByRole("button", { name: "Remove filter tag:medical" }));
     expect(where()).toBe("/browse");
-    expect(screen.queryByRole("list", { name: "Tag filters" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Search filters" })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("one.pdf")).not.toBeInTheDocument());
   });
 
   it("typing tag:name and a space makes a chip; the words stay in the box", async () => {
     const { calls, user } = setup("/browse");
     await user.type(screen.getByRole("searchbox", { name: "Search" }), "Kela tag:medical ");
-    expect(where()).toBe("/browse?tag=medical");
+    expect(where()).toBe("/browse?q=Kela+tag%3Amedical");
     expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("Kela ");
-    await waitFor(() => expect(searches(calls).some((c) => queryOf(c).get("q") === "Kela" && queryOf(c).getAll("tag")[0] === "medical")).toBe(true));
+    await waitFor(() => expect(searches(calls).some((c) => queryOf(c).get("q") === "Kela tag:medical")).toBe(true));
   });
 
   it("suggests matching tags while typing; picking one makes a chip and removes the word", async () => {
     const { user } = setup("/browse");
     const box = screen.getByRole("searchbox", { name: "Search" });
     await user.type(box, "Kela med");
-    const list = await screen.findByRole("listbox", { name: "Matching tags" });
+    const list = await screen.findByRole("listbox", { name: "Suggestions" });
     expect(within(list).getAllByRole("option").map((o) => o.textContent)).toEqual(["medical3", "Medicine1"]);
     await user.click(within(list).getByRole("option", { name: /^medical/ }));
-    expect(where()).toBe("/browse?tag=medical");
+    expect(where()).toBe("/browse?q=Kela+tag%3Amedical");
     expect(box).toHaveValue("Kela ");
   });
 
@@ -157,9 +183,9 @@ describe("Browse with tags", () => {
     const { user } = setup("/browse");
     const box = screen.getByRole("searchbox", { name: "Search" });
     await user.type(box, "tag:medi");
-    await screen.findByRole("listbox", { name: "Matching tags" });
+    await screen.findByRole("listbox", { name: "Suggestions" });
     await user.type(box, "{Enter}");
-    expect(where()).toBe("/browse?tag=medical");
+    expect(where()).toBe("/browse?q=tag%3Amedical");
     expect(box).toHaveValue("");
   });
 });
@@ -188,7 +214,7 @@ describe("Tags screen", () => {
   it("lists every tag with its count under its group, each linking to its files", async () => {
     setup();
     const care = await screen.findByRole("region", { name: "Group Care" });
-    expect(within(care).getByRole("link", { name: "health" })).toHaveAttribute("href", "/browse?tag=health&q=");
+    expect(within(care).getByRole("link", { name: "health" })).toHaveAttribute("href", "/browse?q=tag%3Ahealth");
     expect(within(care).getByText("1 file")).toBeInTheDocument();
     const rest = screen.getByRole("region", { name: "Tags in no group" });
     expect(within(rest).getAllByRole("link").map((a) => a.textContent)).toEqual(["Kela", "medical"]);
@@ -353,17 +379,17 @@ describe("Sidebar Tags section", () => {
     const { user } = setup(SIDEBAR);
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = await within(nav).findByRole("link", { name: "health (1)" });
-    expect(links).toHaveAttribute("href", "/browse?tag=health&q=");
-    expect(within(nav).getByRole("link", { name: "Kela (2)" })).toHaveAttribute("href", "/browse?tag=Kela&q=");
+    expect(links).toHaveAttribute("href", "/browse?q=tag%3Ahealth");
+    expect(within(nav).getByRole("link", { name: "Kela (2)" })).toHaveAttribute("href", "/browse?q=tag%3AKela");
     const all = within(nav).getAllByRole("link").map((a) => a.getAttribute("aria-label") ?? a.textContent);
     expect(all.indexOf("health (1)")).toBeLessThan(all.indexOf("Kela (2)"));
     expect(within(nav).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/tags");
     await user.click(within(nav).getByRole("link", { name: "Kela (2)" }));
-    expect(where()).toBe("/browse?tag=Kela&q=");
+    expect(where()).toBe("/browse?q=tag%3AKela");
   });
 
   it("marks only the tag Browse filters by as current, none on Browse without a tag", async () => {
-    setup(SIDEBAR, "/browse?tag=Kela&q=");
+    setup(SIDEBAR, "/browse?q=tag%3AKela");
     const nav = screen.getByRole("navigation", { name: "Main" });
     const kela = await within(nav).findByRole("link", { name: "Kela (2)" });
     const health = within(nav).getByRole("link", { name: "health (1)" });
@@ -371,6 +397,13 @@ describe("Sidebar Tags section", () => {
     expect(kela).toHaveClass("active");
     expect(health).not.toHaveAttribute("aria-current");
     expect(health).not.toHaveClass("active");
+  });
+
+  it("marks no tag current when the search has more than that tag", async () => {
+    setup(SIDEBAR, "/browse?q=invoice+tag%3AKela");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    await within(nav).findByRole("link", { name: "Kela (2)" });
+    expect(within(nav).getByRole("link", { name: "Kela (2)" })).not.toHaveAttribute("aria-current");
   });
 
   it("marks no tag current on Browse without a tag filter", async () => {

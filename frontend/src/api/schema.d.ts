@@ -688,8 +688,11 @@ export interface paths {
         };
         /**
          * Search
-         * @description Words in ``q`` and/or ``tag`` (repeat it). ``tag_mode`` ``all``: a file needs every
-         *     tag; ``any``: at least one.
+         * @description ``q`` is plain words (full text) and ``name:value`` filters (``name``, ``in``, ``tag``,
+         *     ``collection``, ``from``, ``for``, ``type``, ``date``, ``before``, ``after``, ``tray``,
+         *     ``is``; ``-`` in front excludes; quotes for values with spaces). Every filter must hold.
+         *     ``tag`` (repeat it) adds tag filters. ``tag_mode`` ``all``: a file needs every tag;
+         *     ``any``: at least one. 400 for a filter value that cannot be right (a bad date).
          */
         get: operations["search_api_search_get"];
         put?: never;

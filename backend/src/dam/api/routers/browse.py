@@ -55,8 +55,11 @@ def search(
     tag: Annotated[list[str] | None, Query(max_length=20)] = None,
     tag_mode: Literal["all", "any"] = "all",
 ) -> list:
-    """Words in ``q`` and/or ``tag`` (repeat it). ``tag_mode`` ``all``: a file needs every
-    tag; ``any``: at least one."""
+    """``q`` is plain words (full text) and ``name:value`` filters (``name``, ``in``, ``tag``,
+    ``collection``, ``from``, ``for``, ``type``, ``date``, ``before``, ``after``, ``tray``,
+    ``is``; ``-`` in front excludes; quotes for values with spaces). Every filter must hold.
+    ``tag`` (repeat it) adds tag filters. ``tag_mode`` ``all``: a file needs every tag;
+    ``any``: at least one. 400 for a filter value that cannot be right (a bad date)."""
     return with_marks(
         app, app.search(q, folder=folder or None, limit=limit, tags=tag, tag_mode=tag_mode)
     )

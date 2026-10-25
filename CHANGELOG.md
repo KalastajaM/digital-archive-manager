@@ -27,6 +27,17 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Search filters. Beside words, the search box in Browse (and Today's Search card) takes
+  `name:` (file names only, with `*` and `?`), `in:` (a folder and below), `tag:`,
+  `collection:` (with the collections inside it), `from:` and `for:`, `type:` (an
+  extension or a group such as `image`, `doc`, `sheet`), `date:`, `before:` and `after:`
+  (a year, month or day), `tray:` and `is:` (`starred`, `important`, `locked`, `todo`,
+  `note`, `summary`). A `-` in front leaves out what matches (`-tag:paid`), values with
+  spaces go in quotes, and filters combine with each other and with words. Typing the
+  start of a name offers it (`col` gives `collection:`) and then its values; each finished
+  filter becomes a chip in the row under the toolbar. A **?** next to the box lists every
+  filter with an example you can click, and the new Searching section of the guide
+  explains them. A search with only filters lists the matching files.
 - Search results in Browse follow the **Folders / Files** switch. Folders groups the
   results under their folders (a header with the path and the number of matches, in the
   order of the folder tree, each foldable; clicking the folder name opens it and ends the
@@ -34,7 +45,9 @@ All notable changes are listed here. The format follows
 - Tag filters now sit in their own row under the pane's toolbar instead of inside the
   search box, with **+ Tag** to add another tag from suggestions. With two or more tags an
   **All / Any** switch chooses between files that have every tag (the default) and files
-  that have at least one. The address keeps `tag_mode=any` for the second case.
+  that have at least one. The address keeps `tag_mode=any` for the second case. The whole
+  search, words and filters, is in the address as `?q=`, so Back and a copied link bring
+  it back (old links with `?tag=` still work).
 - A tray item shows the collections its file is in as badges (the x takes the file out)
   and has **Add to collection...**, as Browse does.
 - Tray list rows show what an item has as small icons before the date: a larger pencil

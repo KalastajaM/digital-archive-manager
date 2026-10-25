@@ -936,13 +936,31 @@ the command line: `dam errors [--all] [--retry]`.
 - **Tags** (all in `dam.sqlite`, nothing journaled; the `tags` table also holds each tag's
   pin time, group and last use, `tag_groups` the groups, and `file_tags` has an index on
   the tag so "files with this tag" is a lookup, not a scan):
-  - `GET /api/search?q=&tag=a&tag=b&tag_mode=all|any&folder=&limit=` searches words
-    and/or tags (case and accents ignored); with `tag_mode=all` (the default) a file needs
-    every `tag`, with `any` at least one (one lookup over the union of the tags in the
-    `file_tags` index); with no words the tagged files are listed by name. An unknown tag
-    finds nothing with `all`; with `any` it is ignored (no known tag: nothing). Another
-    `tag_mode` value is a 422. Browse keeps `?tag=` (repeated) and, only for Any,
-    `?tag_mode=any` in its address.
+  - `GET /api/search?q=&tag=a&tag=b&tag_mode=all|any&folder=&limit=` searches. `q` is plain
+    words (full text over names, paths and text; case and accents ignored) and filters
+    `name:value` (module `dam.query` parses them in one place). Filters: `name` (file
+    name only, `*` and `?` wildcards; without one the text may be anywhere in the name),
+    `in` (a folder and below), `tag`, `collection` (the collection, the collections below
+    it, and the files under a member folder), `from` / `for` (the sender or person assigned
+    in `file_assignments`, contains, case and accents ignored), `type` (an extension or a
+    group: image, doc, sheet, slides, text, mail, archive, audio, video), `date` /
+    `after` / `before` (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`; the date is `doc_date`, the date
+    prefix of the file name, else the modified time; `after` includes the first day of the
+    period, `before` excludes it), `tray` (open items, by tray id or name) and `is`
+    (`starred`, `important`, `locked`, `todo`, `note`, `summary`). A `-` in front excludes.
+    Values with spaces are quoted. Every filter must hold. A name before the colon that is
+    not a filter is a plain word. A bad value (a date that does not exist, an unknown `is`
+    word, a filter with no value) is a 400 with the reason; a tag, collection or tray that
+    does not exist matches nothing (a `-` filter on it excludes nothing). `tag` (repeat it)
+    adds tag filters beside the ones in `q`. With `tag_mode=all` (the default) a file needs
+    every positive tag, with `any` at least one (one lookup over the union of the tags in
+    the `file_tags` index; an unknown tag is then ignored, no known tag: nothing); `-tag:`
+    always excludes. With no words the matching files are listed by name; a query with
+    neither words nor filters finds nothing. Another `tag_mode` value is a 422. Tags,
+    folders, assignments, trays, notes, checklists and collections are looked up through
+    their own indexes; `type`, `date` and `name` compare columns of `files`. Browse keeps
+    the whole query in `?q=` and, only for Any, `?tag_mode=any` (an old `?tag=` link is
+    moved into `?q=`).
   - `GET /api/tags/all?query=` lists every tag, also those no file has yet:
     `{"tags": [{"name", "files", "pinned", "group_id"}], "groups": [{"id", "name"}]}`;
     `GET /api/tags/sidebar` the sidebar's tags (pinned first, then most recently put on a
