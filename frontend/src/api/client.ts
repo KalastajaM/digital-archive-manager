@@ -848,7 +848,10 @@ export const usePage1Backfill = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (enabled: boolean) => put<{ enabled: boolean }>("/api/settings/page1-backfill", { enabled }),
-    onSettled: () => void client.invalidateQueries({ queryKey: keys.status }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.status });
+      void client.invalidateQueries({ queryKey: keys.indexErrors });
+    },
   });
 };
 
@@ -1355,6 +1358,7 @@ export const useIndexSummary = () =>
   useQuery({
     queryKey: [...keys.indexErrors, "summary"],
     queryFn: () => get<IndexSummary>("/api/index/summary?limit=1"),
+    refetchInterval: 15_000, // the page-1 pass moves on while the sheet is open
   });
 
 /** Queue files for indexing again; the list and the status follow. */
@@ -1513,8 +1517,42 @@ export const useRules = (enabled = true) =>
  * goes directly above. */
 export const useReplay = () =>
   useMutation({
-    mutationFn: ({ rule, replaces, placeAbove }: { rule: RuleIn; replaces?: string | null; placeAbove?: string | null }) =>
-      post<Replay>("/api/rules/replay", { rule, replaces: replaces ?? null, place_above: placeAbove ?? null }),
+    mutationFn: ({
+      rule,
+      replaces,
+      placeAbove,
+      after,
+    }: {
+      rule: RuleIn;
+      replaces?: string | null;
+      placeAbove?: string | null;
+      /** go on after this path (the ``next_after`` of a replay that stopped at its time budget) */
+      after?: string | null;
+    }) =>
+      post<Replay>("/api/rules/replay", {
+        rule,
+        replaces: replaces ?? null,
+        place_above: placeAbove ?? null,
+        after: after ?? null,
+      }),
+  });
+
+/** The areas of the rule being tested on one document (matched lines, the best place and
+ * score of a picture area, why one did not match), to draw them on its page 1. */
+export const useAreasFor = (rule: RuleIn | undefined, driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: ["areas-for", driveId, JSON.stringify(rule)],
+    queryFn: () => post<{ areas: Area[] }>("/api/rules/areas-for", { rule, drive_id: driveId }),
+    enabled: enabled && rule !== undefined,
+  });
+
+/** Which rules match a document and why not (their areas, with the score of a picture
+ * area), as a query: for diagnosing a picture rule on a document. */
+export const useRuleExplain = (driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...keys.file, driveId, "explain"],
+    queryFn: () => post<RuleExplain[]>("/api/rules/explain", { drive_id: driveId }),
+    enabled,
   });
 
 /** Save a rule (``replaces``: the id of the rule this one takes the place of;

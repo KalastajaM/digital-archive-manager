@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { IndexProblem } from "../api/client";
 import { type Call, deferred, mockFetch, renderWithProviders } from "../test-utils";
-import { useIndexErrorsSheet } from "./IndexErrors";
+import { timeLeft, useIndexErrorsSheet } from "./IndexErrors";
 
 /** As the status line uses it: the button in a <p>, the sheet beside it. */
 function IndexErrorsButton({ count }: { count: number }) {
@@ -61,6 +61,16 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
         not_readable_by_type: [{ ext: "xlsx", count: 207 }],
         rows: [],
         offset: 0,
+        page1: {
+          read: 3176,
+          total: 8911,
+          backfill: true,
+          rate_per_min: 30,
+          blocked: [
+            { reason: "no OCR engine", count: 12 },
+            { reason: "will be tried again", count: 3 },
+          ],
+        },
       },
     },
     "POST /api/index/retry": (call) => ({ body: { queued: (call.body as { drive_ids: string[] }).drive_ids.length } }),
@@ -75,6 +85,33 @@ const open = async (user: ReturnType<typeof userEvent.setup>) => {
   return screen.findByRole("dialog", { name: "Index" });
 };
 const rows = (dialog: HTMLElement) => within(dialog).getAllByRole("listitem");
+
+describe("Index sheet: page 1", () => {
+  it("shows how far page 1 reading has come, what waits and why, and the time left", async () => {
+    const { user } = setup();
+    const dialog = await open(user);
+    const block = await within(dialog).findByRole("region", { name: "Page 1" });
+    expect(block).toHaveTextContent("Page 1 read for 3 176 of 8 911 documents, about 3 h left at 30 files a minute");
+    expect(within(block).getByText("12 waiting: no OCR engine")).toBeInTheDocument();
+    expect(within(block).getByText("3 waiting: will be tried again")).toBeInTheDocument();
+    expect(within(block).getByRole("checkbox", { name: "Read page 1 of older documents in the background" })).toBeChecked();
+  });
+
+  it("switches the background reading", async () => {
+    const { calls, user } = setup({ "PUT /api/settings/page1-backfill": { body: { enabled: false } } });
+    const dialog = await open(user);
+    await user.click(await within(dialog).findByRole("checkbox", { name: /Read page 1 of older documents/ }));
+    expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-backfill")?.body).toEqual({ enabled: false });
+  });
+
+  it("estimates nothing before the rate is known", () => {
+    expect(timeLeft(5000, null)).toBeNull();
+    expect(timeLeft(0, 30)).toBeNull();
+    expect(timeLeft(40, 30)).toBe("about 2 min left at 30 files a minute");
+    expect(timeLeft(10, 4.5)).toBe("about 3 min left at 4.5 files a minute");
+    expect(timeLeft(100000, 30)).toBe("about 2 days left at 30 files a minute");
+  });
+});
 
 describe("Index errors sheet", () => {
   it("shows the totals per state with plain explanations", async () => {

@@ -64,6 +64,16 @@ class NotChecked:
 
     path: str
     reason: str
+    drive_id: str = ""
+
+
+@dataclass
+class MarkedDoc:
+    """A document the owner marked as from the rule's sender, by path and drive id (to open
+    it)."""
+
+    path: str
+    drive_id: str
 
 
 @dataclass
@@ -74,29 +84,42 @@ class Marked:
 
     total: int = 0
     found: int = 0
-    missed: list[str] = field(default_factory=list)  # paths
+    missed: list[MarkedDoc] = field(default_factory=list)
     not_checked: list[NotChecked] = field(default_factory=list)
 
 
 @dataclass
 class PictureScore:
     """How well a document's page 1 matched the rule's picture areas (the lowest score of
-    them), and whether the rule matched it."""
+    them), and whether the rule matched it. A document that is not matched is only listed
+    when a picture area was the one thing that failed (every other condition held) and
+    the score is within ``NEAR_MISS`` of ``needed``, the score that area asked for."""
 
     path: str
     score: float
     matched: bool
+    drive_id: str = ""
+    needed: float | None = None  # for a non-match: the score the failing area needed
 
 
 # a picture rule's replay reports the lowest scores of its matches and the highest of the
-# documents it did not match: the two ends that show how well they are told apart
+# documents it did not match but came close to: the two ends that show how well they are
+# told apart. A document far below the threshold is no news and is not listed.
 SCORES_MATCHED = 20
 SCORES_NOT_MATCHED = 10
+NEAR_MISS = 0.15
 
 
 def pick_scores(found: list[PictureScore]) -> list[PictureScore]:
     matched = sorted((x for x in found if x.matched), key=lambda x: (x.score, x.path))
-    others = sorted((x for x in found if not x.matched), key=lambda x: (-x.score, x.path))
+    others = sorted(
+        (
+            x
+            for x in found
+            if not x.matched and x.needed is not None and x.needed - x.score <= NEAR_MISS
+        ),
+        key=lambda x: (-x.score, x.path),
+    )
     return matched[:SCORES_MATCHED] + others[:SCORES_NOT_MATCHED]
 
 
@@ -112,6 +135,8 @@ class ReplayResult:
     truncated: bool
     not_checked: list[NotChecked] = field(default_factory=list)
     reading: int = 0  # of the not checked, how many page 1 reads are queued now
+    # when ``truncated``: the path to continue after (pass it as ``after`` to go on)
+    next_after: str | None = None
     marked: Marked | None = None  # only for a rule with a ``sender``
     # only for a rule with picture areas: see ``PictureScore``
     scores: list[PictureScore] = field(default_factory=list)
@@ -216,7 +241,7 @@ def _marked(
             sha256=row.sha256,
         )
         if row.index_state != "indexed":
-            marked.not_checked.append(NotChecked(row.path, "not indexed yet"))
+            marked.not_checked.append(NotChecked(row.path, "not indexed yet", row.drive_id))
             continue
         c = check(
             free,
@@ -231,13 +256,13 @@ def _marked(
             marked.found += 1
         elif c.waiting:
             reason = (layout_blocked(row.drive_id) if layout_blocked else None) or NOT_READ
-            marked.not_checked.append(NotChecked(row.path, reason))
+            marked.not_checked.append(NotChecked(row.path, reason, row.drive_id))
             if reason == NOT_READ:
                 unread.append(row.drive_id)
         elif c.person_unknown:
-            marked.not_checked.append(NotChecked(row.path, PERSON_UNKNOWN))
+            marked.not_checked.append(NotChecked(row.path, PERSON_UNKNOWN, row.drive_id))
         else:
-            marked.missed.append(row.path)
+            marked.missed.append(MarkedDoc(row.path, row.drive_id))
     return marked, unread
 
 
@@ -257,6 +282,7 @@ def replay(
     assigned_persons: Callable[[], dict[str, str]] | None = None,
     sender_ids: Callable[[str], Sequence[str]] | None = None,
     pictures: Pictures | None = None,
+    after: str | None = None,
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
@@ -279,7 +305,16 @@ def replay(
     at, from its page-1 picture in the cache (``pictures``: nothing is read from the
     archive). One without a picture yet is not checked and is handed to ``want_layouts``
     like one without a layout. The time budget applies as ever. ``scores`` then holds the
-    scores of the rule's matches (the lowest) and of its best non-matches."""
+    scores of the rule's matches (the lowest) and of its near misses: documents where every
+    other condition held and only a picture area failed, within ``NEAR_MISS`` of the score
+    it needed (a document that failed a text area, the person or anything else never has a
+    picture score).
+
+    The files are taken in path order. ``after`` continues a replay that stopped at its time
+    budget: only the files whose path comes after it are looked at (and counted), and
+    ``total`` is still the number of all filed files. ``next_after`` is then where it
+    stopped. The marked documents of the rule's sender are compared on the first call only
+    (without ``after``)."""
     started = time.monotonic()
     free = without_folder(rule)
     earlier: list[Rule] = []
@@ -362,7 +397,7 @@ def replay(
         return (layout_blocked(drive_id) if layout_blocked else None) or NOT_READ
 
     def not_checked(drive_id: str, path: str, reason: str) -> None:
-        result.not_checked.append(NotChecked(path, reason))
+        result.not_checked.append(NotChecked(path, reason, drive_id))
         if reason == NOT_READ:
             unread.append(drive_id)
 
@@ -373,6 +408,9 @@ def replay(
             if not skipped(path) and not is_under(path, special.inbox):
                 result.total += 1
         query = select(*cols, file_text.c.text).select_from(joined).where(*where)
+        if after is not None:
+            query = query.where(files.c.path > after)
+        last_path = after
         for chunk in conn.execute(query.order_by(files.c.path)).partitions(LAYOUT_CHUNK):
             load_layouts(chunk)
             for row in chunk:
@@ -380,7 +418,9 @@ def replay(
                     continue
                 if time.monotonic() - started >= budget_s:
                     result.truncated = True
+                    result.next_after = last_path
                     break
+                last_path = row.path
                 folded = fold(row.text or "")
                 rec = FileRecord(
                     drive_id=row.drive_id,
@@ -413,7 +453,11 @@ def replay(
                 if not c.matched:
                     result.checked += 1
                     if c.picture_score is not None:
-                        found_scores.append(PictureScore(row.path, c.picture_score, False))
+                        found_scores.append(
+                            PictureScore(
+                                row.path, c.picture_score, False, row.drive_id, c.picture_needed
+                            )
+                        )
                     continue
                 person = None
                 if template_uses_person(rule.then.folder) or template_uses_person(rule.then.name):
@@ -428,7 +472,7 @@ def replay(
                 result.checked += 1
                 result.matched += 1
                 if c.picture_score is not None:
-                    found_scores.append(PictureScore(row.path, c.picture_score, True))
+                    found_scores.append(PictureScore(row.path, c.picture_score, True, row.drive_id))
                 try:
                     path_rule = _rule_path(rule, rec, special, person)
                 except TemplateError:
@@ -443,7 +487,7 @@ def replay(
                         break
             if result.truncated:
                 break
-    if rule.sender and sender_ids is not None:
+    if rule.sender and sender_ids is not None and after is None:
         result.marked, more = _marked(
             engine,
             free,

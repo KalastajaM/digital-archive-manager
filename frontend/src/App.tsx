@@ -31,6 +31,10 @@ function StatusBadge({ status }: { status: Status }) {
   const sheet = useIndexErrorsSheet();
   const waiting = status.pending + status.cloud_pending;
   const parts: string[] = [`${groupDigits(status.inbox_count)} in inbox`, `${groupDigits(status.indexed)} searchable`];
+  const page1 = status.page1;
+  if (page1 && page1.total > 0 && page1.read < page1.total) {
+    parts.push(`page 1 read ${groupDigits(page1.read)} of ${groupDigits(page1.total)}`);
+  }
   if (waiting > 0) parts.push(`${groupDigits(waiting)} waiting`);
   if (status.unsupported > 0) parts.push(`${groupDigits(status.unsupported)} not readable`);
   if (status.errors > 0) parts.push(plural(status.errors, "error"));

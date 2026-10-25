@@ -6,7 +6,16 @@
  * line (a toast would sit under the modal sheet). */
 import { RotateCw } from "lucide-react";
 import { useRef, useState } from "react";
-import { errorText, type IndexProblem, type IndexProblems, useIndexErrors, useIndexSummary, useRetryIndex } from "../api/client";
+import {
+  errorText,
+  type IndexProblem,
+  type IndexProblems,
+  type IndexSummary,
+  useIndexErrors,
+  useIndexSummary,
+  usePage1Backfill,
+  useRetryIndex,
+} from "../api/client";
 import { groupDigits, plural } from "../format";
 import { visible } from "../text";
 import { DialogStatus, InlineResults, LaunchButtons, useDialogStatus, useFileLaunch } from "./FileLaunch";
@@ -75,6 +84,54 @@ const STATE_NOTES: [key: "searchable" | "waiting" | "not_readable" | "errors" | 
   ["missing", "Missing", "Gone from the archive folder since the last scan."],
 ];
 
+/** "about 3 h left at 30 files a minute" (nothing when the rate is not known yet). */
+export function timeLeft(remaining: number, perMinute: number | null | undefined): string | null {
+  if (!perMinute || perMinute <= 0 || remaining <= 0) return null;
+  const minutes = Math.ceil(remaining / perMinute);
+  const left =
+    minutes < 60 ? `${minutes} min` : minutes < 60 * 48 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes / 1440)} days`;
+  return `about ${left} left at ${perMinute < 10 ? perMinute.toFixed(1) : Math.round(perMinute)} files a minute`;
+}
+
+/** The page-1 pass: how far it has come, what waits and why, the switch for reading older
+ * documents in the background, and an estimate of the time left. */
+function Page1Block({ page1 }: { page1: IndexSummary["page1"] }) {
+  const backfill = usePage1Backfill();
+  const left = timeLeft(page1.total - page1.read, page1.rate_per_min);
+  const blocked = page1.blocked ?? [];
+  return (
+    <section className="index-page1" aria-label="Page 1">
+      <p>
+        Page 1 read for {groupDigits(page1.read)} of {groupDigits(page1.total)} documents
+        {left ? `, ${left}` : ""}
+      </p>
+      {blocked.length > 0 && (
+        <div className="index-page1-blocked" role="group" aria-label="Waiting because page 1 cannot be read now">
+          {blocked.map((b) => (
+            <p key={b.reason} className="hint">
+              {groupDigits(b.count)} waiting: {visible(b.reason)}
+            </p>
+          ))}
+        </div>
+      )}
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={page1.backfill}
+          disabled={backfill.isPending}
+          onChange={(e) => backfill.mutate(e.target.checked)}
+        />
+        Read page 1 of older documents in the background
+      </label>
+      {backfill.isError && (
+        <p className="error" role="alert">
+          {visible(errorText(backfill.error))}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function SummaryBlock() {
   const summary = useIndexSummary();
   if (summary.isError) {
@@ -87,15 +144,18 @@ function SummaryBlock() {
   if (!summary.data) return null;
   const data = summary.data;
   return (
-    <dl className="index-summary" aria-label="Totals">
-      {STATE_NOTES.map(([key, label, note]) => (
-        <div key={key} className="index-summary-row">
-          <dt>{label}</dt>
-          <dd>{groupDigits(data[key])}</dd>
-          <dd className="hint">{note}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl className="index-summary" aria-label="Totals">
+        {STATE_NOTES.map(([key, label, note]) => (
+          <div key={key} className="index-summary-row">
+            <dt>{label}</dt>
+            <dd>{groupDigits(data[key])}</dd>
+            <dd className="hint">{note}</dd>
+          </div>
+        ))}
+      </dl>
+      {data.page1 && <Page1Block page1={data.page1} />}
+    </>
   );
 }
 

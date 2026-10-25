@@ -4,6 +4,7 @@ import hashlib
 import logging
 import threading
 import time
+from collections import deque
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from pathlib import Path
@@ -111,6 +112,7 @@ class ContentIndexer:
         self.layout_timeout_s = layout_timeout_s
         self.layout_retry_s = layout_retry_s
         self._layout_retry: dict[str, float] = {}  # drive_id -> monotonic retry time
+        self._layout_done: deque[float] = deque(maxlen=2000)  # when reads finished (monotonic)
         self._layout_why: dict[str, str] = {}  # drive_id -> why it waits (no OCR engine)
         # the page-1 pictures (picture areas) are kept in this cache folder; None: not kept
         self.cache_dir = cache_dir
@@ -359,6 +361,29 @@ class ContentIndexer:
                 return LAYOUT_NO_PICTURE
         return why
 
+    def layout_rate(self, window_s: float = 600.0) -> float | None:
+        """Page-1 reads finished per minute over the last ``window_s`` seconds (None: too few
+        to say, such as right after start or when nothing is being read)."""
+        now = time.monotonic()
+        with self._lock:
+            recent = [t for t in self._layout_done if now - t <= window_s]
+        if len(recent) < 3:
+            return None
+        return round(len(recent) / max(now - recent[0], 30.0) * 60, 1)
+
+    def layout_waiting(self) -> list[tuple[str, int]]:
+        """``(reason, how many)`` for the documents whose page 1 cannot be read right now,
+        most first: those waiting to be tried again (with the reason when it is known, such
+        as no OCR engine) and those whose page-1 picture cannot be made."""
+        counts: dict[str, int] = {}
+        with self._lock:
+            for drive_id in self._layout_retry:
+                why = self._layout_why.get(drive_id) or "will be tried again"
+                counts[why] = counts.get(why, 0) + 1
+            if self._no_picture:
+                counts[LAYOUT_NO_PICTURE] = counts.get(LAYOUT_NO_PICTURE, 0) + len(self._no_picture)
+        return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
     def _keep_picture(self, drive_id: str, sha256: str | None, picture) -> bool:
         """Keep ``picture`` as the page-1 picture of this content in the cache; never
         fails the caller."""
@@ -534,6 +559,7 @@ class ContentIndexer:
             self._keep_picture(rec.drive_id, rec.sha256, read.picture)
         with self._lock:
             self._wanted.discard(rec.drive_id)
+            self._layout_done.append(time.monotonic())
         return True
 
     def _finish_picture(self, rec: FileRecord, out: dict) -> bool:
@@ -549,6 +575,7 @@ class ContentIndexer:
             with self._lock:
                 self._no_picture.pop(rec.drive_id, None)
                 self._wanted.discard(rec.drive_id)
+                self._layout_done.append(time.monotonic())
             return True
         if error is not None:
             log.warning("page-1 picture failed for %s: %r", rec.path, error)

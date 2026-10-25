@@ -763,8 +763,8 @@ describe("Picture areas", () => {
 
   it("Make a rule… from a picture alone shows the crop and the score, and tests and saves the picture zone", async () => {
     const scores = [
-      { path: "Insurance/a.pdf", score: 0.93, matched: true },
-      { path: "10. Bank/b.pdf", score: 0.71, matched: false },
+      { path: "Insurance/a.pdf", drive_id: "a", score: 0.93, matched: true },
+      { path: "10. Bank/b.pdf", drive_id: "b", score: 0.78, matched: false, needed: 0.85 },
     ];
     const { calls, user } = setup({
       "POST /api/files/d1/page1/lines": { body: READ },
@@ -793,7 +793,7 @@ describe("Picture areas", () => {
     const result = await within(sheet).findByRole("region", { name: "Picture scores" });
     expect(within(result).getByText(/0\.85 is needed/)).toBeInTheDocument();
     expect(within(within(result).getByRole("list", { name: "Matched documents" })).getByText("0.93")).toBeInTheDocument();
-    expect(within(within(result).getByRole("list", { name: "Documents not matched" })).getByText("0.71")).toBeInTheDocument();
+    expect(within(within(result).getByRole("list", { name: "Documents close to matching" })).getByText("0.78")).toBeInTheDocument();
     expect((posts(calls, "/api/rules/replay")[0].body as { rule: { when: { zones: unknown } } }).rule.when.zones).toEqual([
       { box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png" },
     ]);
@@ -822,5 +822,66 @@ describe("Picture areas", () => {
     await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
     expect(await within(panel).findByText(/not made yet/)).toBeInTheDocument();
     expect(within(row(panel, 1)).getByRole("button", { name: "Words" })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("Diagnosing a picture rule on a document", () => {
+  const PICTURE_RULE = {
+    ...RULE,
+    id: "kela",
+    when: { ...RULE.when, zones: [{ box: [0.05, 0.03, 0.35, 0.1], text_contains: null, image: "areas/kela-1.png", min_score: null }] },
+  };
+  const RULES = { rules: [PICTURE_RULE], errors: [], state: { offer: true, declined: 0 }, default_min_score: 0.85 };
+  const area = (over: object) => ({
+    rule_id: "kela", index: 0, box: [0.05, 0.03, 0.35, 0.1], kind: "image", lines: [], score: null,
+    matched: false, reason: null, wins: false, ...over,
+  });
+  const explain = (areas: object[]) => [{ rule_id: "kela", matched: false, why: "x", wins: [], zone_lines: [[]], areas }];
+
+  it("shows where a picture rule that did not match fits best on this page, with its score", async () => {
+    setup({
+      "GET /api/rules": { body: RULES },
+      "POST /api/rules/explain": {
+        body: explain([area({ score: 0.71, lines: [[0.06, 0.04, 0.3, 0.09]], reason: "picture 0.71, needs 0.85" })]),
+      },
+    });
+    const shown = await screen.findByTestId("area-line");
+    expect(shown).toBeInTheDocument();
+    const drawn = document.querySelector('[data-area="kela:0"]') as HTMLElement;
+    expect(drawn).toHaveAttribute("data-matched", "false");
+    expect(drawn).toHaveAttribute("title", "kela: picture 0.71, needs 0.85");
+  });
+
+  it("says why a score could not be worked out", async () => {
+    setup({
+      "GET /api/rules": { body: RULES },
+      "POST /api/rules/explain": { body: explain([area({ reason: "the picture of page 1 is not made yet" })]) },
+    });
+    await waitFor(() => expect(document.querySelector('[data-area="kela:0"]')).not.toBeNull());
+    expect(document.querySelector('[data-area="kela:0"]')).toHaveAttribute("title", "kela: the picture of page 1 is not made yet");
+  });
+
+  it("asks for nothing when no rule has a picture area", async () => {
+    const { calls } = setup();
+    await screen.findByRole("button", { name: "Draw a box" });
+    await waitFor(() => expect(calls.some((c) => c.url === "/api/rules")).toBe(true));
+    expect(posts(calls, "/api/rules/explain")).toHaveLength(0);
+  });
+
+  it("draws the rule being tested instead, from the areas the API gives for this document", async () => {
+    const testRule = { id: "kela", when: { text_contains: [], zones: [{ box: [0.05, 0.03, 0.35, 0.1], image: "areas/kela-1.png" }] }, then: {} };
+    const { calls } = setup(
+      {
+        "POST /api/rules/areas-for": {
+          body: { areas: [area({ score: 0.93, matched: true, lines: [[0.06, 0.04, 0.3, 0.09]] })] },
+        },
+      },
+      pdf,
+      { testRule } as never,
+    );
+    await screen.findByTestId("area-line");
+    expect(posts(calls, "/api/rules/areas-for")[0].body).toEqual({ rule: testRule, drive_id: "d1" });
+    expect(posts(calls, "/api/rules/explain")).toHaveLength(0);
+    expect(document.querySelector('[data-area="kela:0"]')).toHaveAttribute("title", "kela: picture 0.93");
   });
 });
