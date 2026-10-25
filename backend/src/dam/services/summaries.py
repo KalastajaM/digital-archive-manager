@@ -47,6 +47,20 @@ class SummaryService:
         self.engine = engine
         self.repo = repo
 
+    def sources_for(self, drive_ids: list[str]) -> dict[str, set[str]]:
+        """``{drive_id: {"ai", "user"}}`` for the files that have a summary (one query)."""
+        if not drive_ids:
+            return {}
+        out: dict[str, set[str]] = {}
+        with self.engine.connect() as conn:
+            for drive_id, source in conn.execute(
+                select(file_summaries.c.drive_id, file_summaries.c.source).where(
+                    file_summaries.c.drive_id.in_(drive_ids)
+                )
+            ):
+                out.setdefault(drive_id, set()).add(source)
+        return out
+
     def get(self, drive_id: str) -> dict[str, dict | None]:
         """``{ai, user}``: each ``{summary, key_facts, outdated}`` or None."""
         rec = self.repo.get(drive_id)

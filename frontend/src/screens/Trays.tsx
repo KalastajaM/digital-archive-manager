@@ -22,6 +22,7 @@ import { Sheet } from "../components/ui/Sheet";
 import { undoAction, useToast } from "../components/Toasts";
 import { plural } from "../format";
 import { ItemBadges } from "../components/ItemBadges";
+import { RowIcons } from "../components/RowIcons";
 import { TrayDefaultsBanner } from "../components/TrayDefaults";
 import { deletionRefusal } from "../components/MoveTo";
 import { useTrash } from "../components/Trash";
@@ -113,7 +114,10 @@ function Row({
         )}
       </div>
       <div className="tray-row-side">
-        {open && item.date && <UrgencyTag date={item.date} today={today} />}
+        <div className="tray-row-top">
+          <RowIcons item={item} />
+          {open && item.date && <UrgencyTag date={item.date} today={today} />}
+        </div>
         {hasText(amountValue) && (
           <span className="tray-row-amount">
             {item.invalid_fields.includes(amount!)
@@ -123,13 +127,6 @@ function Row({
         )}
         {kind === "waiting" && open && (
           <span className="tray-row-age">{waited(daysBetween(dayOf(item.created), today))}</span>
-        )}
-        {item.has_note && (
-          <span className="tray-row-meta">
-            <span className="note-icon" role="img" aria-label="Has a note" title="Has a note">
-              ✎
-            </span>
-          </span>
         )}
       </div>
     </article>

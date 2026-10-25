@@ -78,6 +78,9 @@ function item(id: number, overrides: Partial<TrayItem> = {}): TrayItem {
     level: null,
     file_state: "ok",
     has_note: false,
+    checklist_open: 0,
+    checklist_total: 0,
+    summary: null,
     first_file: NORTHPOWER_FILE,
     ...overrides,
   };
@@ -95,6 +98,9 @@ const BILL = item(1, {
   date: "2026-10-15",
   level: "overdue",
   has_note: true,
+  checklist_open: 2,
+  checklist_total: 5,
+  summary: "ai",
   files: ["f1", "f2"],
 });
 const LATER = item(2, {
@@ -338,14 +344,16 @@ describe("Trays", () => {
     expect(bill).toHaveTextContent("Northpower Oy");
     expect(bill).toHaveTextContent("84,20 €");
     expect(bill).not.toHaveTextContent("2 files");
-    expect(within(bill).getByRole("img", { name: "Has a note" })).toBeInTheDocument();
+    expect(within(bill).getByRole("img", { name: "Note" })).toBeInTheDocument();
+    expect(within(bill).getByRole("img", { name: "2 of 5 to-dos open" })).toBeInTheDocument();
+    expect(within(bill).getByRole("img", { name: "AI summary" })).toBeInTheDocument();
     expect(within(bill).queryByRole("button")).not.toBeInTheDocument();
     expect(within(row("Water⟨U+202E⟩bill")).getByText("30 Nov")).toHaveClass("tag-grey");
 
     const later = row("Water⟨U+202E⟩bill");
     expect(later).not.toHaveClass("tray-row-overdue");
     expect(within(later).getByText("file in ##. To Delete")).toBeInTheDocument();
-    expect(within(later).queryByRole("img", { name: "Has a note" })).not.toBeInTheDocument();
+    expect(within(later).queryByRole("img", { name: "Note" })).not.toBeInTheDocument();
     const undated = row("Kotihoito");
     expect(within(undated).queryByText("needs a due date")).not.toBeInTheDocument();
     expect(within(undated).getByText("file missing")).toBeInTheDocument();

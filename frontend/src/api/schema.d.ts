@@ -6133,6 +6133,12 @@ export interface components {
             file_state: "ok" | "missing" | "to_delete";
             /** Has Note */
             has_note: boolean;
+            /** Checklist Open */
+            checklist_open: number;
+            /** Checklist Total */
+            checklist_total: number;
+            /** Summary */
+            summary: ("ai" | "written") | null;
             first_file: components["schemas"]["ItemFileOut"] | null;
         };
         /**
