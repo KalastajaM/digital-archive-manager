@@ -8,6 +8,16 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Files on an item: each file tab has a small **×** (on hover or focus) that takes the
+  file off the item, with an Undo that puts it back in the same place. It replaces the
+  icon in the action row. **Add another file…** now searches the whole archive as you type
+  (with each file's path) or lets you browse folders, with arrow keys and Enter, and shows
+  files that are already on the item instead of adding them twice.
+- Drag an item onto another in a tray list to merge them: after a question, its files,
+  notes and checklist are added to the other item and it is removed. Undo restores both.
+  You can also drag a file from Browse or the search results onto an item in the list or
+  onto the open item to attach it. No file is moved or renamed.
+
 - The rule test now says on its own line whether the rule matches the document it is made
   from ("This rule matches this document", or "does not match" with the reason, such as
   "no word found in the area" or "the picture in the area scores 0.71, needs 0.85"). The

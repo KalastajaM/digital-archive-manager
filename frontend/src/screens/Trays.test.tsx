@@ -580,7 +580,7 @@ describe("Item detail", () => {
     expect(amount).toHaveValue("905");
   });
 
-  it("shows the files with tabs and badges; Take this file off the item and Add another file… post", async () => {
+  it("shows the files with tabs and badges; the × on a tab takes the file off (Undo puts it back in place) and Add another file… posts", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/search": {
         body: [
@@ -596,16 +596,20 @@ describe("Item detail", () => {
     expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["northpower.pdf", "receipt.pngfile in ##. To Delete"]);
     expect(within(panel).getByText("file in ##. To Delete")).toBeInTheDocument();
     await user.click(within(tabs).getByRole("tab", { name: /receipt\.png/ }));
-    const takeOff = within(panel).getByRole("button", { name: "Take this file off the item (the file stays where it is)" });
+    // the old icon in the action row is gone: the × on each tab replaces it
+    expect(within(panel).queryByRole("button", { name: /^Take this file off the item/ })).not.toBeInTheDocument();
+    const takeOff = within(tabs).getByRole("button", { name: "Remove receipt.png from this item" });
+    expect(within(tabs).getByRole("button", { name: "Remove northpower.pdf from this item" })).toBeInTheDocument();
     expect(takeOff).toHaveAttribute("data-tip", "Take this file off the item (the file stays where it is)");
-    await user.click(takeOff);
+    takeOff.focus(); // reachable by keyboard
+    await user.keyboard("{Enter}");
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files/remove")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/items/1/files/remove")[0].body).toEqual({ drive_id: "f2" });
     // the toast's Undo adds the file back
     expect(await screen.findByText("Taken off the item: receipt.png")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(1));
-    expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f2" });
+    expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f2", position: 1 });
 
     const attach = within(panel).getByRole("button", { name: "Add another file…" });
     expect(attach).toHaveAttribute("data-tip", expect.stringContaining("Attach another file to this item"));
@@ -989,13 +993,13 @@ describe("Bill view", () => {
     expect(within(panel).queryByRole("button", { name: /and file/ })).not.toBeInTheDocument();
   });
 
-  it("the selected file's actions are on the action row: Ask AI, Move to To Delete and Take this file off", async () => {
+  it("the selected file's actions are on the action row: Ask AI, Move to To Delete (the × is on the file tabs)", async () => {
     renderTrays("/trays/to-pay?item=1");
     const panel = await screen.findByRole("region", { name: "Item" });
     const mine = await within(panel).findByRole("group", { name: "This file" });
     expect(within(mine).getByRole("button", { name: "Ask AI" })).toBeInTheDocument();
     expect(within(mine).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
-    expect(within(mine).getByRole("button", { name: /^Take this file off the item/ })).toBeInTheDocument();
+    expect(within(mine).queryByRole("button", { name: /^Take this file off the item/ })).not.toBeInTheDocument();
     // the done buttons sit in the fields row at the top, not on the action row
     expect(mine.closest(".item-actions")).not.toContainElement(within(panel).getByRole("button", { name: "Mark paid" }));
     const top = mine.closest(".item-fields") as HTMLElement;
@@ -1190,6 +1194,215 @@ describe("Dragging tray rows", () => {
     });
     const li = (await screen.findByRole("article", { name: READ.title })).closest("li")!;
     expect(li).not.toHaveAttribute("draggable", "true");
+  });
+});
+
+const SEARCH_HITS = [
+  { drive_id: "f1", path: "10. Financial/Banks/northpower.pdf", name: "northpower.pdf", snippet: "", rank: 1, marks: [] },
+  { drive_id: "f7", path: "10. Financial/Banks/meter.pdf", name: "meter.pdf", snippet: "", rank: 2, marks: [] },
+];
+
+describe("Merging items by dragging", () => {
+  const dragOnto = (source: HTMLElement, target: HTMLElement) => {
+    const dt = dataTransfer();
+    fireEvent.dragStart(source.closest("li")!, { dataTransfer: dt });
+    fireEvent.dragEnter(target.closest("li")!, { dataTransfer: dt });
+    fireEvent.dragOver(target.closest("li")!, { dataTransfer: dt });
+    fireEvent.drop(target.closest("li")!, { dataTransfer: dt });
+    document.dispatchEvent(new Event("dragend"));
+    return dt;
+  };
+
+  it("a row also says which item it is, next to its files", async () => {
+    renderTrays("/trays/to-pay");
+    const li = (await screen.findByRole("article", { name: "Northpower sähkö" })).closest("li")!;
+    const dt = dataTransfer();
+    fireEvent.dragStart(li, { dataTransfer: dt });
+    expect(JSON.parse(dt.data["application/x-dam-item"])).toEqual({ id: 1 });
+    expect(JSON.parse(dt.data["application/x-dam-files"])).toEqual({ ids: BILL.files });
+    document.dispatchEvent(new Event("dragend"));
+  });
+
+  it("dropping an item on another asks first; Merge posts, names the result and Undo posts the undo", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay", {
+      "POST /api/items/1/merge": { body: { ...BILL, files: ["f1", "f2", "f9"] } },
+      "POST /api/items/1/undo-merge": { body: BILL },
+    });
+    const source = await screen.findByRole("article", { name: "Water⟨U+202E⟩bill" });
+    dragOnto(source, row("Northpower sähkö"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/Merge .*Water.*bill.* into .*Northpower sähkö/);
+    expect(dialog).toHaveTextContent(/Its files, notes and checklist are added to .*Northpower sähkö.*, and .*Water.*bill.* is removed/);
+    expect(sent(calls, "POST", "/api/items/1/merge")).toHaveLength(0);
+    await user.click(within(dialog).getByRole("button", { name: "Merge" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/merge")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/1/merge")[0].body).toEqual({ item_id: 2 });
+    expect(await screen.findByText(/Merged .*Water.*bill.* into .*Northpower sähkö/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/undo-merge")).toHaveLength(1));
+  });
+
+  it("Cancel merges nothing", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay");
+    const source = await screen.findByRole("article", { name: "Water⟨U+202E⟩bill" });
+    dragOnto(source, row("Northpower sähkö"));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(calls.filter((c) => c.url.endsWith("/merge"))).toHaveLength(0);
+  });
+
+  it("an item dropped on itself does nothing", async () => {
+    renderTrays("/trays/to-pay");
+    const only = await screen.findByRole("article", { name: "Northpower sähkö" });
+    dragOnto(only, only);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("the open item's panel moves to the item it was merged into", async () => {
+    const { user } = renderTrays("/trays/to-pay?item=2", {
+      "POST /api/items/1/merge": { body: { ...BILL, files: ["f1", "f2", "f9"] } },
+    });
+    const source = await screen.findByRole("article", { name: "Water⟨U+202E⟩bill" });
+    dragOnto(source, row("Northpower sähkö"));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Merge" }));
+    await waitFor(() => expect(where()).toBe("/trays/to-pay?item=1"));
+  });
+});
+
+describe("Dragging a file from Browse onto an item", () => {
+  const dragFile = (target: HTMLElement, ids = ["f7"]) => {
+    const dt = dataTransfer();
+    dt.setData("application/x-dam-files", JSON.stringify({ ids }));
+    fireEvent.dragEnter(target, { dataTransfer: dt });
+    fireEvent.dragOver(target, { dataTransfer: dt });
+    fireEvent.drop(target, { dataTransfer: dt });
+  };
+
+  it("onto a row in the list attaches it, with an Undo that takes it off again", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay", {
+      "POST /api/items/2/files": { body: { ...LATER, files: ["f1", "f7"] } },
+      "POST /api/items/2/files/remove": { body: LATER },
+    });
+    const target = await screen.findByRole("article", { name: "Water⟨U+202E⟩bill" });
+    dragFile(target.closest("li")!);
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/2/files")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/2/files")[0].body).toEqual({ drive_id: "f7" });
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/2/files/remove")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/2/files/remove")[0].body).toEqual({ drive_id: "f7" });
+  });
+
+  it("a file the item already has is refused, not added twice", async () => {
+    const { calls } = renderTrays("/trays/to-pay");
+    const target = await screen.findByRole("article", { name: "Northpower sähkö" });
+    dragFile(target.closest("li")!, ["f1"]);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(0);
+  });
+
+  it("onto the open item's panel attaches it", async () => {
+    const { calls } = renderTrays("/trays/to-pay?item=1", {
+      "POST /api/items/1/files": { body: { ...BILL, files: ["f1", "f2", "f7"] } },
+    });
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await within(panel).findByRole("tablist", { name: "Files" });
+    dragFile(panel.querySelector(".item-detail") as HTMLElement);
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f7" });
+  });
+
+  it("a done item takes no files", async () => {
+    const { calls } = renderTrays("/trays/to-pay?state=done", {
+      "GET /api/items/9": { body: PAID },
+      "GET /api/items/9/files": { body: [] },
+      "GET /api/items/9/history": { body: [] },
+      "GET /api/notes/item/9": { body: { text: "" } },
+      "GET /api/checklist/item/9": { body: [] },
+    });
+    const target = await screen.findByRole("article", { name: "Old bill" });
+    dragFile(target.closest("li")!);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+});
+
+describe("The file picker of an item", () => {
+  it("the history names a merged-in item with what came along", async () => {
+    renderTrays("/trays/to-pay?item=1", {
+      "GET /api/items/1/history": {
+        body: [{ id: 9, at: 1_760_000_000, kind: "merged_in", data: { title: "Reminder", files: [{ drive_id: "f5" }], note: true, checks: 2 } }],
+      },
+    });
+    expect(await screen.findByText(/Reminder merged in: 1 file, a note, 2 checklist entries/)).toBeInTheDocument();
+  });
+
+  it("lists hits with their path, marks files already on the item and does not add them", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "GET /api/search": { body: SEARCH_HITS },
+    });
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await user.click(await within(panel).findByRole("button", { name: "Add another file…" }));
+    await user.type(within(panel).getByLabelText("Find a file"), "pdf");
+    const taken = await within(panel).findByRole("button", { name: /northpower\.pdf \(already on this item\)/ });
+    expect(taken).toBeDisabled();
+    await user.click(taken);
+    expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(0);
+    expect(within(panel).getByText("10. Financial/Banks/meter.pdf")).toBeInTheDocument();
+  });
+
+  it("arrow keys move through the hits and Enter adds the one under the focus", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "GET /api/search": { body: SEARCH_HITS },
+      "POST /api/items/1/files": { body: { ...BILL, files: ["f1", "f2", "f7"] } },
+    });
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await user.click(await within(panel).findByRole("button", { name: "Add another file…" }));
+    const box = within(panel).getByLabelText("Find a file");
+    await user.type(box, "pdf");
+    const meter = await within(panel).findByRole("button", { name: /^Add meter\.pdf/ });
+    await user.keyboard("{ArrowDown}"); // the first choosable hit (the taken one is skipped)
+    expect(meter).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(box).toHaveFocus();
+    await user.keyboard("{ArrowDown}{Enter}");
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f7" });
+  });
+
+  it("Browse folders walks the archive and adds a file from it", async () => {
+    const dir = (name: string, path: string, drive_id: string) => ({ name, path, is_dir: true, is_link: false, size: null, mtime: null, drive_id, marks: [] });
+    const file = (name: string, path: string, drive_id: string) => ({ name, path, is_dir: false, is_link: false, size: 1, mtime: 1, drive_id, marks: [] });
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "GET /api/browse": (call) => ({
+        body: call.url.includes("path=10.%20Financial")
+          ? [file("meter.pdf", "10. Financial/meter.pdf", "f7"), file("northpower.pdf", "10. Financial/northpower.pdf", "f1")]
+          : [dir("10. Financial", "10. Financial", "d1")],
+      }),
+      "POST /api/items/1/files": { body: { ...BILL, files: ["f1", "f2", "f7"] } },
+    });
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await user.click(await within(panel).findByRole("button", { name: "Add another file…" }));
+    await user.click(within(panel).getByRole("button", { name: "Browse folders…" }));
+    await user.click(await within(panel).findByRole("button", { name: "Open folder 10. Financial" }));
+    expect(await within(panel).findByRole("button", { name: /northpower\.pdf \(already on this item\)/ })).toBeDisabled();
+    await user.click(within(panel).getByRole("button", { name: /^Add meter\.pdf/ }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f7" });
+  });
+
+  it("an item with one file has no × on it (the item keeps a file)", async () => {
+    renderTrays("/trays/to-pay?item=4");
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await within(panel).findByRole("button", { name: "Add another file…" });
+    expect(within(panel).queryByRole("button", { name: /^Remove .* from this item$/ })).not.toBeInTheDocument();
+  });
+
+  it("Esc closes the picker", async () => {
+    const { user } = renderTrays("/trays/to-pay?item=1");
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await user.click(await within(panel).findByRole("button", { name: "Add another file…" }));
+    await user.keyboard("{Escape}");
+    expect(within(panel).queryByLabelText("Find a file")).not.toBeInTheDocument();
   });
 });
 
@@ -1421,7 +1634,7 @@ describe("Trash on a tray item's files", () => {
     });
     const panel = await screen.findByRole("region", { name: "Item" });
     await within(panel).findByRole("tablist", { name: "Files" });
-    (await within(panel).findByRole("button", { name: /^Take this file off the item/ })).focus();
+    (await within(panel).findByRole("button", { name: "Remove from tray" })).focus();
     await user.keyboard("{Backspace}");
     await new Promise((r) => setTimeout(r, 10));
     expect(quarantines(calls)).toHaveLength(0);

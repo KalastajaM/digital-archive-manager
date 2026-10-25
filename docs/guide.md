@@ -723,24 +723,37 @@ note, a checklist and a history.
 - Click the title (or the pencil beside it) to edit it in place: Enter or clicking away
   saves, Esc cancels, an empty title is refused. The file's tags are right under it.
 - The date, **Mark done** and the icon buttons (move to tray, remove from tray, Ask AI,
-  take the file off, move to To Delete) are one row; the icons are at its right end.
+  move to To Delete) are one row; the icons are at its right end.
   **Quick Look** is in the toolbar of the file preview, with zoom, the star and open.
 - Summary, Checklist, Notes and History have an arrow in their heading that folds them to
   one line (for example "2 of 5 done"). Each section stays folded or open the way you left
   it, for all items, collections and documents in this browser.
 
-- **Mark paid** (or **Mark done**) finishes an item; **Reopen** undoes it. While one of
-  the item's files is still in the inbox, **Mark paid and file…** marks it done and opens
-  that file in the Inbox for filing.
+- **Mark paid** (or **Mark done**) finishes an item; **Reopen** undoes it. It asks in a
+  small popover under the button (Enter confirms, Esc or a click outside cancels). While
+  one of the item's files is still in the inbox, **Mark paid and file…** marks it done and
+  opens that file in the Inbox for filing.
 - **Move to tray ▾** moves an open item to another tray. It stays the same item (title,
   note, checklist, history and files); fields the other tray also has carry over, and the
   rest come back if you move it back. A file has at most one open item at a time.
 - **Remove from tray** (or ⌫) asks first, then deletes the item with its note, checklist
   and history. The files are never touched, so there is no undo for this.
-- "1 file · **Add another file…**" under the title attaches another file to the item;
-  **Add file** in the list's toolbar searches the archive and makes a new item for the
-  file you pick.
-- **Take this file off the item** removes a file from the item; the file stays where it is.
+- **Add another file…** under the title opens a picker: type to search the whole archive
+  (each hit shows its path), or choose **Browse folders…** and walk the folders. Click a
+  file, or use the arrow keys and Enter, to attach it. Files already on the item are
+  marked and cannot be added twice. **Add file** in the list's toolbar searches the
+  archive and makes a new item for the file you pick.
+- With several files, each file tab has a small **×** (on hover or focus, and always
+  reachable with the keyboard). It takes that file off the item; the file stays where it is,
+  and **Undo** in the toast puts it back in the same place. An item keeps at least one
+  file, so a lone file has no ×.
+- **Drag an item onto another one** in the list to merge them. A small dialog asks first;
+  then the dragged item's files, notes and checklist are added to the other item and the
+  dragged one is removed. The other item keeps its own title, tray, dates and fields.
+  **Undo** in the toast restores both as they were, as long as you have not changed the
+  other item since.
+- **Drag a file** from Browse or the search results onto an item in the list, or onto the
+  open item's panel, to attach it. Nothing is moved or renamed.
 
 You can add your own trays (for example "To sign") as small text files; see
 [Tray files](reference.md#tray-files) in the technical reference.

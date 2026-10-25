@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 
 type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> & {
   /** The tooltip while the button can be used. */
@@ -6,6 +6,8 @@ type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> & {
   /** Why it is disabled: shown as the tooltip (a disabled button shows none of its own). */
   disabledReason?: string | null;
   type?: "button" | "submit";
+  /** The button element (a popover anchors to it). */
+  ref?: Ref<HTMLButtonElement>;
 };
 
 /** A text button with a CSS tooltip (``data-tip``), like ``IconButton`` for text: a

@@ -1194,6 +1194,16 @@ button[data-tip] { position: relative; }
 .item-fields .field-input > input:not([type="checkbox"]):not([type="date"]) { min-width: 0; width: 100%; }
 .item-fields .hint, .item-fields .error { margin: 3px 0 0; }
 .save-state { color: var(--muted); font-size: var(--fs-xs); }
+.tab-wrap { position: relative; display: inline-flex; }
+.tab-wrap > [role="tab"] { padding-right: 24px; }
+.tab-close { position: absolute; top: 50%; right: 3px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; min-height: 0; padding: 0; border: none; border-radius: 50%; background: transparent; box-shadow: none; color: var(--muted); opacity: 0; }
+.tab-wrap:hover .tab-close, .tab-wrap:focus-within .tab-close, .tab-close:focus-visible { opacity: 1; }
+@media (hover: none) { .tab-close { opacity: 1; } }
+.tab-close:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.item-detail[data-drop="over"] { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: var(--r-lg); }
+.add-file-browse { align-self: flex-start; margin: var(--sp-1) 0; }
+.add-file-where { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-1) 0; }
+.add-file-where code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabs { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-1); }
 .file-list { list-style: none; margin: 0 0 var(--sp-1); padding: 0; }
 .file-list li { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-bottom: 2px; }
