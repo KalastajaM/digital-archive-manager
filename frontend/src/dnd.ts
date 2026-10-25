@@ -13,13 +13,19 @@
  *
  * A folder dragged from Browse carries ``application/x-dam-folder`` = JSON ``{id}`` and
  * nothing else: only a collection takes it (as a folder member). Files targets (folders,
- * trays, the Inbox) never see it, so a folder is never moved or put in a tray by a drop. */
+ * trays, the Inbox) never see it, so a folder is never moved or put in a tray by a drop.
+ *
+ * A row of ``##. Ongoing``, ``##. Important`` or ``##. To Delete`` dragged from Browse
+ * carries ``application/x-dam-special`` = JSON ``{ids}`` instead of the files type: those
+ * rows are the app's links or files marked for deletion, so only Browse's own folders
+ * take them (a collection, tray or the Inbox in the sidebar never see them as files). */
 import { type DragEvent as ReactDragEvent, useEffect, useRef, useState } from "react";
 import { CARD_DRAG_TYPE } from "./components/useCardLayout";
 
 export const DRAG_TYPE = "application/x-dam-files";
 export const COLLECTION_DRAG_TYPE = "application/x-dam-collection";
 export const FOLDER_DRAG_TYPE = "application/x-dam-folder";
+export const SPECIAL_DRAG_TYPE = "application/x-dam-special";
 /** A tray item dragged in a list: it also carries its files as ``DRAG_TYPE`` (so a tray
  * or folder in the sidebar takes it as before), and this adds who it is, so another item
  * can take it in as a merge. */
@@ -66,12 +72,12 @@ function dragImage(text: string): HTMLElement {
 /** Start a drag of ``ids`` (drive ids); ``label`` names a single file in the image.
  * ``paths`` (archive paths, when the source knows them) let a target refuse a drag
  * before the drop, e.g. files already in the inbox; they stay in this window only. */
-export function setDragFiles(e: AnyDragEvent, ids: string[], label: string, paths?: string[]) {
+export function setDragFiles(e: AnyDragEvent, ids: string[], label: string, paths?: string[], special = false) {
   const dt = e.dataTransfer;
   if (!dt) return;
-  dt.setData(DRAG_TYPE, JSON.stringify({ ids }));
+  dt.setData(special ? SPECIAL_DRAG_TYPE : DRAG_TYPE, JSON.stringify({ ids }));
   dt.setData("text/plain", ids.length === 1 ? label : `${ids.length} files`);
-  dt.effectAllowed = "copyMove";
+  dt.effectAllowed = special ? "all" : "copyMove";
   dragging = [...ids];
   draggingCollection = null;
   draggingFolder = null;
@@ -145,6 +151,31 @@ export function readDragFiles(e: AnyDragEvent): string[] | null {
   const raw = dt.getData(DRAG_TYPE);
   if (raw) return parse(raw);
   return dragging ? [...dragging] : null;
+}
+
+/** The ids of a drag of rows from ``##. Ongoing`` / ``##. Important`` / ``##. To Delete``
+ * (``setDragFiles`` with ``special``), or null when it is not one. */
+export function readDragSpecial(e: AnyDragEvent): string[] | null {
+  const dt = e.dataTransfer;
+  if (!dt) return null;
+  const types = Array.from(dt.types ?? []);
+  if (!types.includes(SPECIAL_DRAG_TYPE)) return null;
+  const raw = dt.getData(SPECIAL_DRAG_TYPE);
+  if (raw) return parse(raw);
+  return dragging ? [...dragging] : null;
+}
+
+/** What Browse's own folders and panes take: documents (``special``: rows of the app's
+ * own folders), or a folder (which they refuse, with a reason, instead of ignoring). */
+export type BrowseDrag = { kind: "files"; ids: string[]; special: boolean } | { kind: "folder"; id: string };
+
+export function readBrowseDrag(e: AnyDragEvent): BrowseDrag | null {
+  const ids = readDragFiles(e);
+  if (ids) return { kind: "files", ids, special: false };
+  const special = readDragSpecial(e);
+  if (special) return { kind: "files", ids: special, special: true };
+  const folder = readDragFolder(e);
+  return folder !== null ? { kind: "folder", id: folder } : null;
 }
 
 /** Start a drag of collection ``id``; ``label`` (its name) is the drag image. */
@@ -223,9 +254,13 @@ export function readDragCollection(e: AnyDragEvent): number | null {
 }
 
 type DropOptions<T> = {
-  /** True to accept, false to ignore (no highlight), a string to refuse with a reason. */
-  accept: (value: T) => boolean | string;
-  onDrop: (value: T) => void;
+  /** True to accept, false to ignore (no highlight), a string to refuse with a reason.
+   * ``e`` is the drag event (``dragover`` or ``drop``): its modifier keys are the user's. */
+  accept: (value: T, e: AnyDragEvent) => boolean | string;
+  onDrop: (value: T, e: AnyDragEvent) => void;
+  /** Called when a drag is dropped on this target although it refused it (with the
+   * reason), so a refused drop is never silent. */
+  onRefused?: (reason: string, value: T) => void;
   /** What a drag carries for this target, null when it is not one it takes part in
    * (default: the dragged files). */
   read?: (e: AnyDragEvent) => T | null;
@@ -250,13 +285,13 @@ export type DropTarget = {
 /** A drop target for dragged documents (or, with ``read``, anything else dragged here):
  * highlights while an accepted drag is over it, shows the refusal reason as a tooltip
  * for a refused one, and calls ``onDrop``. */
-export function useDropTarget<T = string[]>({ accept, onDrop, read }: DropOptions<T>): DropTarget {
+export function useDropTarget<T = string[]>({ accept, onDrop, onRefused, read }: DropOptions<T>): DropTarget {
   const readDrag = read ?? (readDragFiles as unknown as (e: AnyDragEvent) => T | null);
   const [state, setState] = useState<{ over: boolean; refusal: string | null }>({ over: false, refusal: null });
   const depth = useRef(0); // dragenter/dragleave also fire for the target's children
   const judge = (e: ReactDragEvent): boolean | string | null => {
     const value = readDrag(e);
-    return value === null ? null : accept(value);
+    return value === null ? null : accept(value, e);
   };
   const reset = () => {
     depth.current = 0;
@@ -291,8 +326,13 @@ export function useDropTarget<T = string[]>({ accept, onDrop, read }: DropOption
       e.preventDefault(); // without it the drop never fires
       e.stopPropagation();
       // A drop effect the drag does not allow cancels the drop in a real browser (the row
-      // still highlights): a folder drag allows only "copy" (it is never moved).
-      if (e.dataTransfer) e.dataTransfer.dropEffect = verdict !== true ? "none" : e.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
+      // still highlights): a folder drag allows only "copy" (it is never moved). A target
+      // with ``onRefused`` wants the drop of a refused drag too (to say why), so it keeps
+      // an allowed effect; the reason is shown on it while the drag is over.
+      if (e.dataTransfer) {
+        const allowed = e.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
+        e.dataTransfer.dropEffect = verdict !== true && !onRefused ? "none" : allowed;
+      }
     },
     onDragLeave: (e) => {
       if (depth.current === 0) return; // not ours: let an enclosing target count it
@@ -302,12 +342,13 @@ export function useDropTarget<T = string[]>({ accept, onDrop, read }: DropOption
     },
     onDrop: (e) => {
       const value = readDrag(e);
-      const verdict = value === null ? null : accept(value);
+      const verdict = value === null ? null : accept(value, e);
       reset();
       if (value === null || verdict === null || verdict === false) return;
       e.preventDefault(); // ours, even when refused: the browser must not open it
       e.stopPropagation();
-      if (verdict === true) onDrop(value);
+      if (verdict === true) onDrop(value, e);
+      else onRefused?.(verdict, value);
     },
   };
   if (state.over) props["data-drop"] = "over";

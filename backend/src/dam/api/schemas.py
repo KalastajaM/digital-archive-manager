@@ -53,10 +53,12 @@ class QuarantineBody(_In):
 
 class RestoreBody(_In):
     """Move these files or folders out of ``##. To Delete`` again: ``to`` ``original``
-    (the path they were marked at) or ``inbox``. ``dry_run``: only resolve the plan."""
+    (the path they were marked at), ``inbox``, or ``folder`` (the archive folder named in
+    ``folder``, e.g. a drag out of To Delete onto it). ``dry_run``: only resolve the plan."""
 
     drive_ids: list[str]
-    to: Literal["original", "inbox"] = "original"
+    to: Literal["original", "inbox", "folder"] = "original"
+    folder: str | None = None  # with ``to`` ``folder``: the archive folder to restore into
     dry_run: bool = False
 
 
@@ -69,10 +71,14 @@ class UnusedPicturesIn(_In):
 
 
 class MoveBody(_In):
-    """Move these files (drive ids) into ``folder`` (archive-relative), names kept."""
+    """Move these files (drive ids) into ``folder`` (archive-relative), names kept. ``mode``
+    ``link``: make a symbolic link in ``folder`` to each file instead (the file stays);
+    ``copy``: copy each file there (a taken name gets ``_N``). A row of ``##. Ongoing`` or
+    ``##. Important`` stands for the file it links to."""
 
     drive_ids: list[str]
     folder: str
+    mode: Literal["move", "link", "copy"] = "move"
 
 
 class RenameBody(_In):
@@ -886,6 +892,8 @@ class StatusOut(BaseModel):
     archive_available: bool
     special_folders: SpecialFoldersOut  # the configured names of the app's folders
     inbox_exists: bool = True  # the inbox folder is there (False: a new archive, no layout yet)
+    # links can be made (False only on Windows without Developer Mode): Link is then off
+    can_link: bool = True
     page1: Page1ProgressOut | None = None  # None only from the setup-mode server
     # False only from the setup-mode server (then only ``archive`` and ``profiles_count``
     # are set besides it): no archive folder yet

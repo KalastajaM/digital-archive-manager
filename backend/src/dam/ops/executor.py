@@ -50,6 +50,12 @@ _PICTURE_KINDS = {OpKind.PICTURE_TO_QUARANTINE, OpKind.PICTURE_BACK}
 _ONGOING_KINDS = {OpKind.MKDIR, OpKind.SYMLINK, OpKind.UNLINK_SYMLINK, OpKind.REMOVE_EMPTY_DIR}
 
 
+def _outside_copy(rop: ResolvedOp) -> bool:
+    """A COPY of a file elsewhere on this computer (``abs:``), not one already in the
+    archive."""
+    return rop.kind is OpKind.COPY and rop.src is not None and rop.src.startswith(ABS_TARGET)
+
+
 class Executor:
     def __init__(
         self,
@@ -150,13 +156,14 @@ class Executor:
     def _in_publish_root(self, rop: ResolvedOp) -> bool:
         return rop.kind in _ONGOING_KINDS and self.paths.in_publish_root(rop.dst) is not None
 
-    def _removal_root(self, rel: str, made: bool = False) -> Path:
+    def _removal_root(self, rel: str, made: bool = False, undo_link: bool = False) -> Path:
         """The publish root a removal at ``rel`` happens in, for the primitive's own
         containment check. The guards have refused anything outside both roots
         already; Ongoing is handed over otherwise, and the primitive refuses it.
-        A folder the app made (``made``, undo of New folder / layout) is checked from
-        the archive folder itself."""
-        if made:
+        A folder the app made (``made``, undo of New folder / layout), and a link the
+        app made outside the publish roots (``undo_link``, undo of a Link drop), are
+        checked from the archive folder itself."""
+        if made or (undo_link and self.paths.in_publish_root(rel) is None):
             return self.paths.root
         root = self.paths.in_publish_root(rel) or self.paths.ongoing
         return self.paths.abs(root)
@@ -202,6 +209,12 @@ class Executor:
                 self.repo.mark_missing_path(rop.dst)  # gone from disk: out of the index now
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
+                return True
+        if rop.kind is OpKind.UNLINK_SYMLINK and rop.expect_target is not None:
+            try:
+                self.repo.mark_missing_path(rop.src)  # the link is gone: out of the index now
+            except SQLAlchemyError as e:
+                result.index_error = f"index update failed for {rop.src}: {e}"
                 return True
         if rop.kind is OpKind.PICTURE_BACK and rop.method != primitives.PICTURE_COPY:
             try:
@@ -270,7 +283,7 @@ class Executor:
         snap = self._empty_snapshot()
         if rop.src is None:
             return snap
-        if rop.kind is OpKind.COPY:  # the file being copied in: only read
+        if _outside_copy(rop):  # the file being copied in: only read
             st = os.stat(Path(rop.src[len(ABS_TARGET) :]))
             snap.update(size=st.st_size, mtime=st.st_mtime, is_file=stat.S_ISREG(st.st_mode))
             return snap
@@ -296,6 +309,8 @@ class Executor:
         )
         if rop.kind is OpKind.PICTURE_BACK:
             snap["content_hash"] = primitives.file_sha256(p)
+        if rop.kind is OpKind.COPY:  # the row describes the new file, not the original's id
+            snap["drive_id"] = None
         return snap
 
     def _link_record(self, link: Path) -> str:
@@ -331,7 +346,7 @@ class Executor:
                     # a COPY keeps only the file's name: the path it was read from (an
                     # upload's temporary file) says nothing, and undo never needs it
                     src=Path(rop.src[len(ABS_TARGET) :]).name
-                    if rop.kind in (OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE)
+                    if _outside_copy(rop) or rop.kind is OpKind.PICTURE_TO_QUARANTINE
                     else rop.src,
                     # UNLINK_SYMLINK: dst records the link's target so undo can recreate
                     # it: an archive-relative path if the target is inside the archive,
@@ -435,8 +450,19 @@ class Executor:
                 raise OpFailed(f"{rop.dst} already exists.")
             if not dst.parent.is_dir() or dst.parent.is_symlink():
                 raise OpFailed(f"The folder for {rop.dst} is missing.")
-            if not Path(rop.src[len(ABS_TARGET) :]).is_file():
-                raise OpFailed(f"{Path(rop.src[len(ABS_TARGET) :]).name} is no longer there.")
+            if _outside_copy(rop):
+                if not Path(rop.src[len(ABS_TARGET) :]).is_file():
+                    raise OpFailed(f"{Path(rop.src[len(ABS_TARGET) :]).name} is no longer there.")
+                return
+            origin = self.paths.abs(rop.src)  # a file already in the archive: a plain file
+            try:
+                st = os.lstat(origin)
+            except OSError:
+                raise OpFailed(f"{rop.src} is no longer there.") from None
+            if not stat.S_ISREG(st.st_mode):
+                raise OpFailed(f"{rop.src} is no longer a plain file.")
+            if rop.drive_id is not None and read_drive_id(origin) != rop.drive_id:
+                raise OpFailed(f"{rop.src} changed since the preview.")
             return
         if rop.kind is OpKind.SYMLINK and rop.src.startswith(ABS_TARGET):
             src = None  # target outside the archive: never looked at
@@ -447,6 +473,10 @@ class Executor:
         if rop.kind is OpKind.UNLINK_SYMLINK:
             if not src.is_symlink():
                 raise OpFailed(f"{rop.src} is no longer a shortcut.")
+            if rop.expect_target is not None and readlink(src) != str(
+                self.link_target(rop.expect_target)
+            ):
+                raise OpFailed(f"{rop.src} points somewhere else now, so it is left alone.")
             return
         if rop.kind is OpKind.REMOVE_EMPTY_DIR:
             if src.is_symlink() or not src.is_dir():
@@ -488,13 +518,22 @@ class Executor:
             case OpKind.SYMLINK:
                 primitives.make_symlink(self.link_target(rop.src), dst)
             case OpKind.UNLINK_SYMLINK:
-                primitives.unlink_symlink(dst, self._removal_root(rop.dst))
+                primitives.unlink_symlink(
+                    dst,
+                    self._removal_root(rop.dst, undo_link=rop.expect_target is not None),
+                    expected_target=None
+                    if rop.expect_target is None
+                    else str(self.link_target(rop.expect_target)),
+                )
             case OpKind.REMOVE_EMPTY_DIR:
                 primitives.remove_empty_dir(
                     dst, self._removal_root(rop.dst, rop.made), identity=rop.identity
                 )
             case OpKind.COPY:
-                primitives.copy_file(Path(rop.src[len(ABS_TARGET) :]), dst)
+                if _outside_copy(rop):
+                    primitives.copy_file(Path(rop.src[len(ABS_TARGET) :]), dst)
+                else:
+                    primitives.copy_file(self.paths.abs(rop.src), dst)
             case _:
                 src = self.paths.abs(rop.src)
                 if self._is_case_variant(src, dst):

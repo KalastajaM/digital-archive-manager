@@ -56,6 +56,12 @@ class Op:
     user-confirmed "New folder" / layout batch (``Plan.new_folders``); it is removed
     again only while it is still the folder with the journaled ``identity`` and empty,
     anywhere in the archive (top level included).
+    COPY may also name a file already in the archive (``src`` an archive path, not
+    ``abs:``): it is copied into an ordinary folder (``dst``) under ``name`` (default the
+    file's own name); undo moves the copy to the quarantine folder.
+    UNLINK_SYMLINK outside ``##. Ongoing`` / ``##. Important`` is only an undo's
+    (``restore`` and ``exact``): ``dst`` is then the target the app made the link with,
+    and the link is removed only while it is still a symbolic link pointing there.
     ``name`` (MOVE and COPY): move *and* rename in one op, landing at ``dst/name``.
     ``exact`` (used by undo, which restores entries to where they were): the final
     path must be free, so a collision is a ``GuardError`` instead of a ``_N`` suffix.
@@ -122,6 +128,9 @@ class ResolvedOp:
     method: str | None = None
     # the sha256 of that picture, read and journaled just before acting (set by the executor)
     content_hash: str | None = None
+    # UNLINK_SYMLINK of an undo: the target (journal form, archive-relative or ``abs:``) the
+    # app made the link with; the link is removed only while it still points there
+    expect_target: str | None = None
 
 
 @dataclass

@@ -31,7 +31,7 @@ import { FitText } from "../components/FitText";
 import type { PreviewFile } from "../components/FilePreview";
 import { BUILTIN_LABEL, ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
-import { type RestoreTo, restoreEntries, useRestoreFlow } from "../components/Restore";
+import { type RestoreTo, type RestoreWhere, restoreEntries, useRestoreFlow } from "../components/Restore";
 import {
   anyMoveRunning,
   backToInbox,
@@ -41,7 +41,6 @@ import {
   inboxRefusal,
   MOVE_BUSY,
   type MoveRequest,
-  moveRefusal,
   MoveToSheet,
   sourceRefusal,
   useInboxFolder,
@@ -61,7 +60,9 @@ import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { Toolbar } from "../components/ui/Toolbar";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
-import { type DropTarget, dragSelection, setDragFiles, setDragFolder, useDropTarget } from "../dnd";
+import { type BrowseDrag, type DropTarget, dragSelection, readBrowseDrag, setDragFiles, setDragFolder, useDropTarget } from "../dnd";
+import { type DropVerdict, FOLDER_DRAG_REASON, judgeDrop, placeOf, SEARCH_DROP_REASON } from "../dropModes";
+import { useDropToCollection } from "../components/useDropToCollection";
 import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
@@ -87,7 +88,7 @@ const KEYS: KeyHint[] = [
   [["⇧⌘M"], "move to…"],
   [["⇧⌘N"], "new folder"],
   [["⌘⌫"], "move to To Delete"],
-  [[], "drag files onto a folder to move them"],
+  [[], "drag files onto a folder to move, link or copy them (hold ⌥ for a copy)"],
 ];
 
 type Item = {
@@ -293,9 +294,11 @@ const fresh = (view: string): PaneSelection => ({ view, index: 0, ids: [], ancho
 type History = { back: string[]; forward: string[] };
 
 type DropProps = {
-  /** Already there, or not a folder: no highlight. A string: "not allowed" and why. */
-  accept: (ids: string[]) => boolean | string;
-  onDrop: (ids: string[]) => void;
+  /** True: a drop does something. A string: "not allowed" and why (shown on the target
+   * while the drag is over it, and as a toast when dropped there anyway). */
+  accept: (drag: BrowseDrag, e: { altKey: boolean }) => boolean | string;
+  onDrop: (drag: BrowseDrag, e: { altKey: boolean }) => void;
+  onRefused: (reason: string) => void;
 };
 
 type RowProps = {
@@ -312,6 +315,11 @@ type RowProps = {
   onDragStart?: (e: DragEvent<HTMLLIElement>) => void;
   /** The archive paths of dragged ids (unknown ones leave the drag without paths). */
   dragPaths?: (ids: string[]) => string[];
+  /** Rows of ##. Ongoing / ##. Important / ##. To Delete in the drag: it then carries the
+   * special type, which only Browse's own folders take. */
+  dragSpecial?: (ids: string[]) => boolean;
+  /** Why a drag over this row is refused (a folder row), shown on the row itself. */
+  refusal?: string | null;
   onToggle: () => void;
   onClick: (e: MouseEvent) => void;
   /** Drop-target props (folder rows only). */
@@ -329,6 +337,8 @@ function EntryRow({
   noFolder = false,
   dragIds,
   dragPaths,
+  dragSpecial,
+  refusal,
   onDragStart,
   onToggle,
   onClick,
@@ -363,7 +373,7 @@ function EntryRow({
         (dragIds
           ? (e) => {
               const ids = dragIds();
-              setDragFiles(e, ids, visible(item.name), dragPaths?.(ids));
+              setDragFiles(e, ids, visible(item.name), dragPaths?.(ids), dragSpecial?.(ids) ?? false);
             }
           : undefined)
       }
@@ -396,6 +406,11 @@ function EntryRow({
         )}
         {item.snippet !== undefined && item.snippet !== item.name && <Snippet text={item.snippet} />}
       </button>
+      {refusal && (
+        <span className="drop-refusal" role="status">
+          {refusal}
+        </span>
+      )}
     </li>
   );
 }
@@ -404,7 +419,7 @@ function EntryRow({
  * folder, which only a collection in the sidebar takes (``collectable``: its area allows
  * that); it is never moved by a drag. */
 function FolderRow({ drop, collectable, ...row }: Omit<RowProps, "dropProps" | "dragIds"> & { drop: DropProps; collectable: boolean }) {
-  const target = useDropTarget(drop);
+  const target = useDropTarget<BrowseDrag>({ ...drop, read: readBrowseDrag, onRefused: drop.onRefused });
   const { item } = row;
   return (
     <EntryRow
@@ -412,6 +427,7 @@ function FolderRow({ drop, collectable, ...row }: Omit<RowProps, "dropProps" | "
       dragIds={null}
       onDragStart={collectable ? (e) => setDragFolder(e, item.drive_id, visible(item.name)) : undefined}
       dropProps={target.props}
+      refusal={target.refusal}
     />
   );
 }
@@ -521,11 +537,17 @@ function NewFolderRow({
   );
 }
 
-/** A pane's list area: dropping files here moves them into the pane's folder. */
-function DropZone({ drop, children }: { drop: DropProps | null; children: ReactNode }) {
-  const target = useDropTarget(drop ?? { accept: () => false, onDrop: () => {} });
+/** A pane's list area: dropping files here puts them in the pane's folder (move, link or
+ * copy), or says why not. */
+function DropZone({ drop, children }: { drop: DropProps; children: ReactNode }) {
+  const target = useDropTarget<BrowseDrag>({ ...drop, read: readBrowseDrag });
   return (
-    <div className="pane-body" data-testid="pane-drop" {...(drop ? target.props : {})}>
+    <div className="pane-body" data-testid="pane-drop" {...target.props}>
+      {target.refusal && (
+        <div className="pane-refusal" role="status">
+          {target.refusal}
+        </div>
+      )}
       {children}
     </div>
   );
@@ -716,14 +738,12 @@ export default function Browse() {
     ],
   );
 
-  // Where each listed file lives, for "already there" before a drop.
-  const known = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const it of [...items.left, ...items.right]) map.set(it.drive_id, parentOf(it.path));
+  /** Every listed row of either pane, by id: what a drag over a folder can look up. */
+  const rowsById = useMemo(() => {
+    const map = new Map<string, Item>();
+    for (const it of [...items.left, ...items.right]) map.set(it.drive_id, it);
     return map;
   }, [items]);
-  const allIn = (dragged: string[], dest: string) =>
-    dragged.every((id) => known.has(id) && known.get(id) === dest);
 
   const [selections, setSelections] = useState<Record<PaneId, PaneSelection>>(() => ({
     left: fresh(viewOf("left")),
@@ -1002,7 +1022,7 @@ export default function Browse() {
     markTargets.length > 0 && !markTargets.every((it) => inToDelete(it.path))
       ? "Restore works on items in To Delete only: deselect the others"
       : null;
-  const startRestore = (ids: string[], to: RestoreTo) => {
+  const startRestore = (ids: string[], to: RestoreTo | RestoreWhere) => {
     if (restoring.running()) toast({ kind: "info", text: "Already restoring…" });
     else if (running()) toast({ kind: "info", text: MOVE_BUSY });
     else restoring.start(ids, to);
@@ -1047,23 +1067,66 @@ export default function Browse() {
     });
   };
 
-  const folderDrop = (item: Item): DropProps => ({
-    accept: (dragged) =>
-      moveRefusal(item.path) ??
-      (lockedIds(dragged) ? LOCKED_REASON : null) ??
-      (allIn(dragged, item.path) ? `Already in ${visible(item.name)}` : running() ? MOVE_BUSY : true),
-    onDrop: (dragged) => startMove(dragged, item.path),
+  // -- dropping files on a folder or a pane: Move / Link / Copy, a restore out of To Delete,
+  // or adding to a collection (dropModes.ts has the rules)
+  const addToCollection = useDropToCollection();
+  const status = useStatus().data;
+  const collectionRows = collections.data?.filter((c) => c.state === "open" && !c.kind);
+  const judge = (drag: BrowseDrag, target: string, alt: boolean): DropVerdict => {
+    if (drag.kind === "folder") return { kind: "refused", reason: FOLDER_DRAG_REASON };
+    const dragged = drag.ids.flatMap((id) => {
+      const it = rowsById.get(id);
+      return it && !it.is_dir ? [{ id, path: it.path, locked: isBlocked(id, it.marks, it.path) }] : [];
+    });
+    return judgeDrop({
+      dragged,
+      count: drag.ids.length,
+      target,
+      areas: specialFolders,
+      collections: collectionRows,
+      canLink: status?.can_link !== false,
+      alt,
+    });
+  };
+  const dropOn = (drag: BrowseDrag, target: string, alt: boolean) => {
+    if (drag.kind === "folder") return;
+    const verdict = judge(drag, target, alt);
+    if (verdict.kind === "refused") {
+      toast({ kind: "info", text: verdict.reason });
+    } else if (verdict.kind === "collection") {
+      const row = collectionRows?.find((c) => c.id === verdict.collection.id);
+      if (row) addToCollection(row, drag.ids);
+    } else if (verdict.kind === "restore") {
+      startRestore(drag.ids, { to: "folder", folder: verdict.folder });
+    } else {
+      startRequest({
+        ids: drag.ids,
+        folder: target,
+        mode: verdict.initial,
+        modes: verdict.modes,
+        fromRows: verdict.place === "ongoing" || verdict.place === "important" ? verdict.place : undefined,
+      });
+    }
+  };
+  const dropTo = (target: string): DropProps => ({
+    accept: (drag, e) => {
+      const verdict = judge(drag, target, e.altKey);
+      if (verdict.kind === "refused") return verdict.reason;
+      return running() ? MOVE_BUSY : true;
+    },
+    onDrop: (drag, e) => dropOn(drag, target, e.altKey),
+    onRefused: (reason) => toast({ kind: "info", text: reason }),
   });
-  const paneDrop = (pane: PaneId): DropProps | null =>
+  const folderDrop = (item: Item): DropProps => dropTo(item.path);
+  const paneDrop = (pane: PaneId): DropProps =>
     searching && pane === sp
-      ? null // search results are no folder
-      : {
-          accept: (dragged) =>
-            allIn(dragged, paths[pane])
-              ? false
-              : (moveRefusal(paths[pane]) ?? (lockedIds(dragged) ? LOCKED_REASON : running() ? MOVE_BUSY : true)),
-          onDrop: (dragged) => startMove(dragged, paths[pane]),
-        };
+      ? {
+          // search results are no folder
+          accept: (drag) => (drag.kind === "folder" ? FOLDER_DRAG_REASON : SEARCH_DROP_REASON),
+          onDrop: () => {},
+          onRefused: (reason) => toast({ kind: "info", text: reason }),
+        }
+      : dropTo(paths[pane]);
 
   useEffect(() => {
     if (!focusRow.current) return;
@@ -1478,17 +1541,22 @@ export default function Browse() {
                     />
                   );
                 }
-                const movable = sourceRefusal(item.path) === null;
                 const dragIds = () => {
                   const own = s.ids.includes(item.drive_id) ? selectedFiles() : [];
                   return dragSelection(own, item.drive_id);
                 };
+                // rows of the app's own folders drag as "special": only Browse's folders take them
+                const dragSpecial = (ids: string[]) =>
+                  ids.some((id) => {
+                    const it = rowsById.get(id);
+                    return !!specialFolders && !!it && placeOf(it.path, specialFolders) !== "plain";
+                  });
                 const dragPaths = (ids: string[]) => {
                   const pathOf = new Map(items[pane].map((it) => [it.drive_id, it.path]));
                   return ids.map((d) => pathOf.get(d)).filter((p): p is string => p !== undefined);
                 };
                 return (
-                  <EntryRow key={item.drive_id} {...row} dragIds={movable ? dragIds : null} dragPaths={dragPaths} />
+                  <EntryRow key={item.drive_id} {...row} dragIds={dragIds} dragPaths={dragPaths} dragSpecial={dragSpecial} />
                 );
               })}
             </ul>

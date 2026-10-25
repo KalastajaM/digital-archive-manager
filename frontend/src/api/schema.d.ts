@@ -731,8 +731,8 @@ export interface paths {
         put?: never;
         /**
          * Restore
-         * @description Take entries out of To Delete again (original place or the inbox); ``dry_run``
-         *     shows the plan, including a folder made again and a name given ``_N``.
+         * @description Take entries out of To Delete again (original place, the inbox or a folder);
+         *     ``dry_run`` shows the plan, including a folder made again and a name given ``_N``.
          */
         post: operations["restore_api_restore_post"];
         delete?: never;
@@ -2176,7 +2176,8 @@ export interface paths {
          * @description Set From and/or For on documents (the owner's word: it beats what page 1 says and
          *     is not overwritten by a filing). A field left out is unchanged, null clears it.
          *     400 for a blank sender or a person not in the people list, 404 for an unknown document;
-         *     nothing is written then. Answers the documents' assignments (a cleared one is absent).
+         *     nothing is written then (also 400 for a file marked for deletion). Answers the documents'
+         *     assignments (a cleared one is absent).
          */
         put: operations["put_assignments_api_assignments_put"];
         post?: never;
@@ -5063,13 +5064,22 @@ export interface components {
         };
         /**
          * MoveBody
-         * @description Move these files (drive ids) into ``folder`` (archive-relative), names kept.
+         * @description Move these files (drive ids) into ``folder`` (archive-relative), names kept. ``mode``
+         *     ``link``: make a symbolic link in ``folder`` to each file instead (the file stays);
+         *     ``copy``: copy each file there (a taken name gets ``_N``). A row of ``##. Ongoing`` or
+         *     ``##. Important`` stands for the file it links to.
          */
         MoveBody: {
             /** Drive Ids */
             drive_ids: string[];
             /** Folder */
             folder: string;
+            /**
+             * Mode
+             * @default move
+             * @enum {string}
+             */
+            mode: "move" | "link" | "copy";
         };
         /**
          * MoveResultOut
@@ -5546,7 +5556,8 @@ export interface components {
         /**
          * RestoreBody
          * @description Move these files or folders out of ``##. To Delete`` again: ``to`` ``original``
-         *     (the path they were marked at) or ``inbox``. ``dry_run``: only resolve the plan.
+         *     (the path they were marked at), ``inbox``, or ``folder`` (the archive folder named in
+         *     ``folder``, e.g. a drag out of To Delete onto it). ``dry_run``: only resolve the plan.
          */
         RestoreBody: {
             /** Drive Ids */
@@ -5556,7 +5567,9 @@ export interface components {
              * @default original
              * @enum {string}
              */
-            to: "original" | "inbox";
+            to: "original" | "inbox" | "folder";
+            /** Folder */
+            folder?: string | null;
             /**
              * Dry Run
              * @default false
@@ -6143,6 +6156,11 @@ export interface components {
              * @default true
              */
             inbox_exists: boolean;
+            /**
+             * Can Link
+             * @default true
+             */
+            can_link: boolean;
             page1?: components["schemas"]["Page1ProgressOut"] | null;
             /**
              * Configured

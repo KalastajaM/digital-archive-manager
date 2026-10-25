@@ -6,7 +6,9 @@ import {
   DRAG_TYPE,
   dragSelection,
   readDragCollection,
+  readBrowseDrag,
   readDragFiles,
+  SPECIAL_DRAG_TYPE,
   setDragCollection,
   setDragFiles,
   useDropTarget,
@@ -15,6 +17,36 @@ import { dataTransfer } from "./test-utils";
 
 /** A drag event as the browser hands it to a listener: only ``dataTransfer`` matters. */
 const dragEvent = (dt: ReturnType<typeof dataTransfer>) => ({ dataTransfer: dt }) as unknown as DragEvent;
+
+describe("rows of the app's own folders", () => {
+  it("drag with their own type: no file target outside Browse sees them as files", () => {
+    const dt = dataTransfer();
+    setDragFiles(dragEvent(dt), ["l1"], "a.pdf", undefined, true);
+    expect(dt.types).toContain(SPECIAL_DRAG_TYPE);
+    expect(dt.types).not.toContain(DRAG_TYPE);
+    expect(readDragFiles(dragEvent(dt))).toBeNull();
+    expect(readBrowseDrag(dragEvent(dt))).toEqual({ kind: "files", ids: ["l1"], special: true });
+    document.dispatchEvent(new Event("dragend"));
+  });
+
+  it("a refused drop is reported, and the browser is still allowed to deliver it", () => {
+    const onRefused = vi.fn();
+    const onDrop = vi.fn();
+    function Refusing() {
+      const target = useDropTarget({ accept: () => "Not here", onDrop, onRefused });
+      return <div data-testid="t" {...target.props} />;
+    }
+    render(<Refusing />);
+    const dt = dataTransfer();
+    setDragFiles(dragEvent(dt), ["f1"], "a.pdf");
+    fireEvent.dragOver(screen.getByTestId("t"), { dataTransfer: dt });
+    expect(dt.dropEffect).not.toBe("none");
+    fireEvent.drop(screen.getByTestId("t"), { dataTransfer: dt });
+    expect(onRefused).toHaveBeenCalledWith("Not here", ["f1"]);
+    expect(onDrop).not.toHaveBeenCalled();
+    document.dispatchEvent(new Event("dragend"));
+  });
+});
 
 describe("dnd payload", () => {
   it("round-trips the ids through the drag data", () => {
@@ -167,7 +199,7 @@ describe("nested drop targets", () => {
     expect(screen.getByTestId("inner")).toHaveAttribute("data-drop", "over");
     expect(screen.getByTestId("outer")).not.toHaveAttribute("data-drop");
     fireEvent.drop(screen.getByTestId("child"), { dataTransfer: dt });
-    expect(innerDrop).toHaveBeenCalledWith(["f1"]);
+    expect(innerDrop).toHaveBeenCalledWith(["f1"], expect.anything());
     expect(outerDrop).not.toHaveBeenCalled();
     document.dispatchEvent(new Event("dragend"));
   });
@@ -201,7 +233,7 @@ describe("nested drop targets", () => {
     fireEvent.dragEnter(screen.getByTestId("child"), { dataTransfer: dt });
     expect(screen.getByTestId("outer")).toHaveAttribute("data-drop", "over");
     fireEvent.drop(screen.getByTestId("child"), { dataTransfer: dt });
-    expect(outerDrop).toHaveBeenCalledWith(["f1"]);
+    expect(outerDrop).toHaveBeenCalledWith(["f1"], expect.anything());
     expect(innerDrop).not.toHaveBeenCalled();
     document.dispatchEvent(new Event("dragend"));
   });

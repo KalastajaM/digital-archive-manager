@@ -7,7 +7,8 @@ safety matter more than speed.
 
 - **Never delete user files.** Marking for deletion moves a file to `##. To Delete`; the
   user empties it. The few allowed removals (app-made links and empty folders in
-  `##. Ongoing` / `##. Important`) are listed in the README "Safety model".
+  `##. Ongoing` / `##. Important`, and, on Undo only, a link the app itself made
+  anywhere in the archive) are listed in docs/reference.md "Safety model in detail".
 - **Only the operation layer writes to the archive.** No other code moves, renames,
   creates or removes anything there.
 - **Every change is previewed, journaled and undoable.** Add a dry run, a journal entry

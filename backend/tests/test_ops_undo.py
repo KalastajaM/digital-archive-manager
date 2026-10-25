@@ -472,12 +472,73 @@ def test_undo_symlink(fake_archive, executor, engine):
     assert journal(engine, done.batch_id)[0]["state"] == "undone"
 
 
-def test_undo_symlink_outside_ongoing_refused(fake_archive, executor):
+def test_undo_symlink_outside_ongoing_removes_the_link_the_app_made(fake_archive, executor, engine):
+    # the owner's approved exception: undo may remove a link the app made, anywhere
+    fake_archive.add("10. Financial/Banks/a.pdf")
+    before = tree(fake_archive.root)
+    done = executor.apply(plan(Op(K.SYMLINK, "10. Financial/Banks/a.pdf", "10. Financial/a.pdf")))
+    assert (fake_archive.root / "10. Financial/a.pdf").is_symlink()
+    result = executor.undo(done.batch_id)
+    assert result.failed is None, result.error
+    assert [r.kind for r in result.done] == [K.UNLINK_SYMLINK]
+    assert tree(fake_archive.root) == before
+    assert (fake_archive.root / "10. Financial/Banks/a.pdf").exists()  # the original stays
+    assert journal(engine, done.batch_id)[0]["state"] == "undone"
+
+
+def test_undo_symlink_outside_ongoing_never_removes_a_regular_file(fake_archive, executor):
     fake_archive.add("10. Financial/Banks/a.pdf")
     done = executor.apply(plan(Op(K.SYMLINK, "10. Financial/Banks/a.pdf", "10. Financial/a.pdf")))
-    with pytest.raises(GuardError):
+    link = fake_archive.root / "10. Financial/a.pdf"
+    primitives.unlink_symlink(link, fake_archive.root)  # the user replaced it by a real file
+    link.write_bytes(b"mine")
+    with pytest.raises(OpFailed, match="cannot be undone"):
         executor.undo(done.batch_id)
-    assert (fake_archive.root / "10. Financial/a.pdf").is_symlink()
+    assert link.read_bytes() == b"mine"
+
+
+def test_undo_symlink_outside_ongoing_never_removes_a_folder(fake_archive, executor):
+    fake_archive.add("10. Financial/Banks/a.pdf")
+    done = executor.apply(plan(Op(K.SYMLINK, "10. Financial/Banks/a.pdf", "10. Financial/a.pdf")))
+    link = fake_archive.root / "10. Financial/a.pdf"
+    primitives.unlink_symlink(link, fake_archive.root)
+    link.mkdir()
+    with pytest.raises(OpFailed, match="cannot be undone"):
+        executor.undo(done.batch_id)
+    assert link.is_dir()
+
+
+def test_undo_symlink_outside_ongoing_leaves_a_link_pointing_elsewhere(fake_archive, executor):
+    fake_archive.add("10. Financial/Banks/a.pdf")
+    fake_archive.add("10. Financial/Banks/b.pdf")
+    done = executor.apply(plan(Op(K.SYMLINK, "10. Financial/Banks/a.pdf", "10. Financial/a.pdf")))
+    link = fake_archive.root / "10. Financial/a.pdf"
+    primitives.unlink_symlink(link, fake_archive.root)
+    link.symlink_to(fake_archive.root / "10. Financial/Banks/b.pdf")  # not the app's link
+    with pytest.raises(OpFailed, match="cannot be undone"):
+        executor.undo(done.batch_id)
+    assert link.is_symlink()
+
+
+def test_undo_symlink_outside_ongoing_refuses_a_link_the_app_did_not_make(fake_archive, executor):
+    # a user's own link: nothing in the journal made it, and a plan cannot ask to remove it
+    fake_archive.add("10. Financial/Banks/a.pdf")
+    fake_archive.link("10. Financial/mine.pdf", "10. Financial/Banks/a.pdf")
+    with pytest.raises(GuardError, match="can be removed"):
+        executor.apply(plan(Op(K.UNLINK_SYMLINK, "10. Financial/mine.pdf", None)))
+    with pytest.raises(GuardError, match="can be removed"):
+        # not even with the flags only an undo may set
+        executor.apply(
+            plan(
+                Op(
+                    K.UNLINK_SYMLINK,
+                    "10. Financial/mine.pdf",
+                    "10. Financial/Banks/a.pdf",
+                    exact=True,
+                )
+            )
+        )
+    assert (fake_archive.root / "10. Financial/mine.pdf").is_symlink()
 
 
 def test_undo_symlink_refuses_if_link_repointed(fake_archive, executor):

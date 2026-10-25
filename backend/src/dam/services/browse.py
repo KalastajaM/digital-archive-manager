@@ -1,5 +1,6 @@
 """Browse the indexed archive and quarantine entries."""
 
+import logging
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
@@ -11,8 +12,12 @@ from dam.index.repo import FLAT_SORTS, FileRecord, FileRepo
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
+from dam.ops.primitives import can_make_links
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.errors import InvalidRequest, NotFound
+from dam.services.links import link_target
+
+log = logging.getLogger(__name__)
 
 
 def _sort_key(s: str) -> str:
@@ -54,6 +59,10 @@ ImportantPaths = Callable[[], list[tuple[str, str, bool]]]
 
 IMPORTANT_REFUSAL = "This file is marked Important; unmark it first"
 IMPORTANT_FOLDER_REFUSAL = "This file is in a folder marked Important; unmark it first"
+LINK_UNAVAILABLE = (
+    "Windows needs Developer Mode to make links: turn it on in Windows settings, or use Copy"
+)
+DROP_MODES = ("move", "link", "copy")
 
 FLAT_LIMIT = 500
 
@@ -76,8 +85,11 @@ class BrowseService:
         member_paths: MemberPaths | None = None,
         important: ImportantPaths | None = None,
         important_lock: AbstractContextManager | None = None,
+        rescan: Callable[[str], object] | None = None,
     ) -> None:
         self.repo = repo
+        # indexes a folder right after a link or copy was made in it (else the watcher does)
+        self.rescan = rescan
         self.executor = executor
         self.special = special
         # a collection's members, for the collection filter (CollectionService.member_paths)
@@ -220,7 +232,12 @@ class BrowseService:
             return self.executor.apply(plan, dry_run=dry_run)
 
     def restore(
-        self, drive_ids: list[str], to: str, origin: str, dry_run: bool = False
+        self,
+        drive_ids: list[str],
+        to: str,
+        origin: str,
+        dry_run: bool = False,
+        folder: str | None = None,
     ) -> BatchResult:
         """Move entries out of the quarantine folder again, as one journaled batch (a
         MOVE per entry; Undo puts them back in To Delete). Never deletes.
@@ -228,14 +245,20 @@ class BrowseService:
         ``to`` ``"original"``: back to the path they were marked at (the path with the
         quarantine prefix stripped); a folder that no longer exists is made again (an
         MKDIR in the plan), a name that is taken gets ``_N`` (the plan says so).
-        ``to`` ``"inbox"``: into the inbox folder. A folder marked for deletion moves as
+        ``to`` ``"inbox"``: into the inbox folder. ``to`` ``"folder"``: into ``folder`` (an
+        ordinary archive folder, made if missing; never the top of the archive, ``##.
+        Ongoing``, ``##. Important`` or ``##. To Delete``): a drag out of To Delete. A
+        folder marked for deletion moves as
         a whole; an entry inside another selected folder comes along with it. Refused
         (``InvalidRequest``): an entry not in the quarantine folder, the quarantine
         folder itself, a folder that stood at the top of the archive, and an original
         place in ``##. Ongoing`` (use the inbox)."""
         check_origin(origin)
-        if to not in ("original", "inbox"):
+        if to not in ("original", "inbox", "folder"):
             raise InvalidRequest(f"cannot restore to {to!r}")
+        if (to == "folder") != (folder is not None):
+            raise InvalidRequest("A folder is given with, and only with, restoring to a folder")
+        target = self._drop_folder(folder, "restored") if folder is not None else None
         if isinstance(drive_ids, str) or not isinstance(drive_ids, list | tuple) or not drive_ids:
             raise InvalidRequest("No files given")
         if len(set(drive_ids)) != len(drive_ids):
@@ -257,6 +280,8 @@ class BrowseService:
             original = self._original(rec.path)
             if to == "inbox":
                 dest = self.special.inbox
+            elif target is not None:
+                dest = target
             else:
                 dest = parent(original)
                 if not dest:
@@ -272,7 +297,11 @@ class BrowseService:
                     ) from None
             ops.append(Op(OpKind.MOVE, rec.path, dest, allow_top_level=to == "original"))
         what = records[0].name if len(records) == 1 else f"{len(records)} files"
-        label = f"Restored {what} from To Delete" + (" to the inbox" if to == "inbox" else "")
+        label = f"Restored {what} from To Delete"
+        if to == "inbox":
+            label += " to the inbox"
+        elif target is not None:
+            label += f" to {target}"
         return self.executor.apply(Plan(ops, origin=origin, label=label), dry_run=dry_run)
 
     def _original(self, path: str) -> str:
@@ -302,37 +331,107 @@ class BrowseService:
             if any(_under(path, p) for p in marked_folders):
                 raise InvalidRequest(f"{IMPORTANT_FOLDER_REFUSAL}: {rec.path}")
 
+    def _drop_folder(self, folder: str, what: str) -> str:
+        """The canonical archive folder files dropped on ``folder`` go into, refused
+        (``InvalidRequest``) for the top of the archive and the app's own folders."""
+        try:
+            dest = canonical(folder, self.executor.paths)
+        except GuardError:
+            raise InvalidRequest(f"{folder!r} is not a folder in the archive") from None
+        if not dest:
+            raise InvalidRequest("Not allowed: the top of the archive holds folders only")
+        for area in (self.special.quarantine, self.special.ongoing, self.special.important):
+            if is_under(dest, area):
+                raise InvalidRequest(f"Nothing is {what} into {area}: the app keeps that folder")
+        return dest
+
+    def _resolve_row(self, rec: FileRecord, mode: str) -> FileRecord:
+        """A row of ``##. Ongoing`` or ``##. Important`` (the app's links) stands for the
+        file it links to: that file is what moves, is linked or is copied. A link that
+        leads nowhere in the archive is refused. A move of a file marked Important is
+        refused (a row in ``##. Important`` is one by definition)."""
+        area = next(
+            (
+                a
+                for a in (self.special.ongoing, self.special.important)
+                if is_under(rec.path, a, strict=True)
+            ),
+            None,
+        )
+        if area is None or not rec.is_link:
+            return rec
+        target = link_target(self.executor.paths, self.repo, rec)
+        if target is None:
+            raise InvalidRequest(f"{rec.path}: the link points outside the archive or to nothing")
+        if mode == "move":
+            if area == self.special.important:
+                raise InvalidRequest(f"{IMPORTANT_REFUSAL}: {target.path}")
+            self._refuse_important([target])
+        return target
+
     # -- move -----------------------------------------------------------------
 
     def move_plan(self, drive_ids: list[str], folder: str, origin: str = "ui") -> Plan:
         """One MOVE op per file into ``folder``, keeping its name (see ``_move_ops``)."""
         return self._move_ops(drive_ids, folder, origin).plan
 
+    def _drop(self, drive_ids: list[str], folder: str, origin: str, mode: str) -> "_Move":
+        """The plan of a drop of files on a folder: ``mode`` ``move`` (rows of Ongoing and
+        Important stand for the file they link to), ``link`` or ``copy`` (see
+        ``_link_copy_ops``)."""
+        if mode not in DROP_MODES:
+            raise InvalidRequest(f"unknown way to put files in a folder: {mode!r}")
+        if mode == "move":
+            return self._move_ops(drive_ids, folder, origin, resolve_rows=True)
+        return self._link_copy_ops(drive_ids, folder, origin, mode)
+
+    def _check_drop(self, ids: list[str], resolved: list[ResolvedOp], mode: str) -> None:
+        kinds = {"move": None, "link": (OpKind.SYMLINK,), "copy": (OpKind.COPY,)}[mode]
+        if kinds is None:
+            self._check_identity(ids, resolved)
+        else:
+            check_disk_identity(self.executor.paths, self.repo, ids, resolved, kinds)
+
     def move_preview(
-        self, drive_ids: list[str], folder: str, origin: str = "ui"
+        self, drive_ids: list[str], folder: str, origin: str = "ui", mode: str = "move"
     ) -> list[ResolvedOp]:
         """The ops ``move`` would run: new folders, ``_N`` collision renames (with their
         note). Nothing is journaled or changed. Refused (``InvalidRequest``) when the
         disk no longer matches the index (``_check_identity``)."""
-        move = self._move_ops(drive_ids, folder, origin)
+        move = self._drop(drive_ids, folder, origin, mode)
         resolved = self.executor.preview(move.plan)
-        self._check_identity(move.ids, resolved)
+        self._check_drop(move.ids, resolved, mode)
         return resolved
 
     def move(
-        self, drive_ids: list[str], folder: str, origin: str = "ui", dry_run: bool = False
+        self,
+        drive_ids: list[str],
+        folder: str,
+        origin: str = "ui",
+        dry_run: bool = False,
+        mode: str = "move",
     ) -> MoveResult:
-        """Move the files into ``folder`` as one journaled (undoable) batch.
+        """Move the files into ``folder`` as one journaled (undoable) batch. ``mode``
+        ``link``: a symbolic link to each file in ``folder`` instead (the file stays;
+        Undo removes the link); ``copy``: a copy of each (Undo moves the copy to ``##. To
+        Delete``).
 
         The resolved ops pass ``_check_identity`` before anything is applied, and the
         executor runs exactly those ops. A failed or interrupted batch is returned as
         is, never raised. Collection members are tracked by drive id: the next scan and
         Ongoing sync repoint their links, nothing is synced here.
         """
-        move = self._move_ops(drive_ids, folder, origin)
+        move = self._drop(drive_ids, folder, origin, mode)
         result = self.executor.apply(
-            move.plan, dry_run=dry_run, check=lambda ops: self._check_identity(move.ids, ops)
+            move.plan,
+            dry_run=dry_run,
+            check=lambda ops: self._check_drop(move.ids, ops, mode),
         )
+        if mode != "move" and result.done and not dry_run and self.rescan is not None:
+            try:
+                self.rescan(move.folder)
+            except Exception:  # the batch is done; the watcher's next scan picks them up
+                log.warning("indexing the new links or copies failed", exc_info=True)
         return MoveResult(**vars(result), unchanged=move.unchanged, folder=move.folder)
 
     # -- rename ("Edit details…") ---------------------------------------------
@@ -365,7 +464,12 @@ class BrowseService:
         check_disk_identity(self.executor.paths, self.repo, ids, resolved)
 
     def _move_ops(
-        self, drive_ids: list[str], folder: str, origin: str, name: str | None = None
+        self,
+        drive_ids: list[str],
+        folder: str,
+        origin: str,
+        name: str | None = None,
+        resolve_rows: bool = False,
     ) -> "_Move":
         """The MOVE plan, the id of each op's file (in plan order), the ids already in
         ``folder`` (no op) and the canonical destination rel.
@@ -374,6 +478,9 @@ class BrowseService:
         quarantine; ``InvalidRequest``). Everything else (collisions, new folders, top
         level, protected paths, a destination that is a file or a link) is left to the
         executor's guards, as for filing.
+
+        ``resolve_rows`` (a drop): a row of ``##. Ongoing`` / ``##. Important`` stands for
+        the file it links to, which is what moves (``_resolve_row``).
 
         ``name`` (one file only, "Edit details…"): the file's new name; in its own
         folder that is a RENAME, elsewhere a MOVE with ``name``.
@@ -401,10 +508,18 @@ class BrowseService:
             raise InvalidRequest(f"{folder!r} is not a folder in the archive") from None
         check_destination_area(dest, self.special)
         move = _Move(Plan([], origin=origin), [], [], dest)
-        for drive_id in drive_ids:
-            rec = self.repo.get(drive_id)
+        requested = list(drive_ids)
+        drive_ids = []  # the files that move: a row of Ongoing / Important is its target
+        for requested_id in requested:
+            rec = self.repo.get(requested_id)
             if rec is None or rec.missing or rec.parked_at is not None:
-                raise NotFound(drive_id)
+                raise NotFound(requested_id)
+            if resolve_rows:
+                rec = self._resolve_row(rec, "move")
+                if rec.drive_id in drive_ids:  # two rows (two collections) of one file
+                    continue
+            drive_id = rec.drive_id
+            drive_ids.append(drive_id)
             if rec.is_dir:
                 raise InvalidRequest(f"{rec.path}: folders cannot be moved yet")
             if rec.is_link:
@@ -424,6 +539,61 @@ class BrowseService:
                 )
             move.ids.append(drive_id)
         move.plan.label = self._move_label(drive_ids, name, dest, move)
+        return move
+
+    def _link_copy_ops(self, drive_ids: list[str], folder: str, origin: str, mode: str) -> "_Move":
+        """``mode`` ``link``: a SYMLINK in ``folder`` to each file (named like it); the
+        file stays where it is. ``copy``: a COPY of each file into ``folder`` (a taken
+        name, also the file's own in its own folder, gets ``_N``). Rows of ``##. Ongoing``
+        / ``##. Important`` act on the file they link to. Files already in ``folder``
+        need no link (``unchanged``). Nothing is made in the top of the archive or in the
+        app's own folders; a file marked for deletion is restored first."""
+        check_origin(origin)
+        verb = "linked" if mode == "link" else "copied"
+        if isinstance(drive_ids, str) or not isinstance(drive_ids, list | tuple):
+            raise InvalidRequest("Drive ids must be a list")
+        if not drive_ids:
+            raise InvalidRequest("No files given")
+        if len(set(drive_ids)) != len(drive_ids):
+            dup = next(d for d in drive_ids if drive_ids.count(d) > 1)
+            raise InvalidRequest(f"File {dup!r} requested more than once")
+        dest = self._drop_folder(folder, verb)
+        if mode == "link" and not can_make_links():
+            raise InvalidRequest(LINK_UNAVAILABLE)
+        move = _Move(Plan([], origin=origin), [], [], dest)
+        chosen: list[FileRecord] = []
+        for requested_id in drive_ids:
+            rec = self.repo.get(requested_id)
+            if rec is None or rec.missing or rec.parked_at is not None:
+                raise NotFound(requested_id)
+            if is_under(rec.path, self.special.quarantine):
+                raise InvalidRequest(f"{rec.path}: restore it first, then it can be {verb}")
+            rec = self._resolve_row(rec, mode)
+            if any(r.drive_id == rec.drive_id for r in chosen):
+                continue  # two rows (two collections) of one file
+            chosen.append(rec)
+            if rec.is_dir:
+                raise InvalidRequest(f"{rec.path}: folders cannot be {verb} yet")
+            if rec.is_link:
+                raise InvalidRequest(f"{rec.path}: links cannot be {verb}")
+            if any(
+                is_under(rec.path, a)
+                for a in (self.special.ongoing, self.special.important, self.special.quarantine)
+            ):
+                raise InvalidRequest(f"{rec.path}: files in the app's own folders cannot be {verb}")
+            if mode == "link":
+                if fold_parts(parent(rec.path)) == fold_parts(dest):
+                    move.unchanged.append(rec.drive_id)
+                    continue
+                move.plan.ops.append(Op(OpKind.SYMLINK, rec.path, f"{dest}/{rec.name}"))
+            else:
+                move.plan.ops.append(Op(OpKind.COPY, rec.path, dest))
+            move.ids.append(rec.drive_id)
+        if move.ids:
+            what = chosen[0].name if len(chosen) == 1 else f"{len(chosen)} files"
+            move.plan.label = (
+                f"Linked {what} in {dest}" if mode == "link" else f"Copied {what} to {dest}"
+            )
         return move
 
     def _move_label(

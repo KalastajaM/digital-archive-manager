@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query
 from dam.api.deps import AppDep, ArchivesDep
 from dam.api.schemas import IndexErrorsOut, IndexSummaryOut, RetryIndexIn, RetryIndexOut, StatusOut
 from dam.app import App
+from dam.ops.primitives import can_make_links
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -38,6 +39,7 @@ def status(app: AppDep, archives: ArchivesDep) -> dict:
         "archive_available": app.archive_available,
         "special_folders": app.settings.special_folders.model_dump(),
         "inbox_exists": _is_real_dir(app, app.paths.inbox),
+        "can_link": can_make_links(),
         "page1": _page1(app),
         **archives.summary(),
     }

@@ -72,7 +72,7 @@ from `backend/`.
 | Quick Look thumbnails of any file | yes | no: PDF pages and images still render | no: same |
 | Desktop notifications | yes | not yet | not yet |
 | Daily reminder job (`dam remind --install`) | LaunchAgent | not yet: schedule `dam remind` with Task Scheduler yourself | not yet: a systemd user timer or cron yourself |
-| Links in `##. Ongoing` / `##. Important` | yes | needs Developer Mode (otherwise refused with a clear message) | yes |
+| Links in `##. Ongoing` / `##. Important`, and **Link** on a drop in Browse | yes | needs Developer Mode (otherwise refused with a clear message; Browse turns Link off) | yes |
 | `.msg` e-mails | `dam[msg]` | `dam[msg]` | `dam[msg]` |
 
 Windows and Linux install and pass the test suite in CI (macOS, Windows and Ubuntu), and
@@ -761,19 +761,44 @@ The user guide's "What dam never does" gives the short version. The details:
 
 - **Never deletes your files.** **Move to To Delete** (`dam quarantine` on the command
   line) moves a file to `##. To Delete/<original path>`. You empty that folder yourself.
-  **Restore** (`POST /api/restore {drive_ids, to: "original" | "inbox", dry_run}`, answering
+  **Restore** (`POST /api/restore {drive_ids, to: "original" | "inbox" | "folder", folder?,
+  dry_run}`, answering
   like `POST /api/quarantine`) moves entries (files, links or folders) out of it again as
   ordinary `move` operations in one journaled batch titled "Restored N files from To
   Delete": `original` is the path with the `##. To Delete` prefix stripped (a missing
   folder gets a `mkdir` in the plan, a taken name `_N` with its note), `inbox` the inbox
   folder. An entry inside another selected folder comes along with it; a folder that stood
   at the top of the archive, or an original place in `##. Ongoing`, is a 400 (use the
-  inbox). Undo is the ordinary undo of a move and puts the entries back in To Delete.
+  inbox). `to: "folder"` (with `folder`) is a drag out of To Delete onto a folder in Browse:
+  the same `move` operations into that ordinary folder (made if missing, a taken name `_N`);
+  the top of the archive, `##. Ongoing`, `##. Important` and `##. To Delete` are a 400.
+  Undo is the ordinary undo of a move and puts the entries back in To Delete.
   While in `##. To Delete`, a file is read-only for the API: setting tags, a summary or a
   note, a checklist entry, ★ / !, a tray item and adding to a collection answer 400
   ("Marked for deletion: restore it first"); its existing tags, collection membership,
   notes and tray items stay, so a restore brings them back.
-  The only removals in the archive are inside `##. Ongoing` and `##. Important`
+  **Link and Copy on a drop.** `POST /api/browse/move/preview` and `/api/browse/move` take
+  `mode`: `move` (default), `link` or `copy`. `link` makes a symlink named like the file in
+  the folder (`symlink` operation; the file stays; a taken name gets `_N`); `copy` makes a
+  copy (`copy` operation with an archive path as its source, into an ordinary folder only,
+  never the top of the archive, `##. Ongoing`, `##. Important`, `##. To Delete` or a
+  protected path; a taken name, also the file's own in its own folder, gets `_N`; a file
+  over 200 MB is refused). A row of `##. Ongoing` or `##. Important` stands for the file
+  it links to (a link that leads outside the archive or nowhere is a 400); a move of a
+  row of `##. Important`, or of a file marked Important, is a 400 ("This file is marked
+  Important; unmark it first"). A file in `##. To Delete` is restored first. Each is one
+  journaled batch ("Linked a.pdf in 20. Home", "Copied a.pdf to 20. Home"). Undo of a copy
+  moves the copy to `##. To Delete` (never deletes it). `GET /api/status` has `can_link`
+  (false only on Windows without Developer Mode, where Link is refused with a clear message).
+  **Undo may remove a link the app made, anywhere in the archive** (approved by the owner;
+  the one exception to "removals only inside `##. Ongoing` / `##. Important`"). It is
+  narrow: only the undo of a journaled `symlink` operation (the planner builds the removal
+  only for undo, flagged `exact`, carrying the target the link was made with), and the
+  entry must still be a symbolic link pointing at exactly that target when the removal is
+  planned and again just before it, so a regular file, a folder or a link someone else made
+  is never removed; never inside `##. To Delete` or a protected path. It uses the same single
+  `Path.unlink` as before (the AST test is unchanged).
+  Apart from that, the only removals in the archive are inside `##. Ongoing` and `##. Important`
   (`special_folders.important`), under the same rules for both: a symlink (the app's own
   links, or a shortcut of yours that a previewed **Convert** replaces with the app's link
   at the same place), and an empty folder inside either one

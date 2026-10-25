@@ -822,6 +822,22 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .entries li[aria-current="true"] { background: var(--selected); }
 .entries li.checked { background: var(--selected-strong); color: var(--selected-strong-text); }
 .entries li.checked .entry-icon, .entries li.checked .entry-path, .entries li.checked .snippet, .entries li.checked .link-icon { color: inherit; opacity: 0.85; }
+/* A refused drag shows its reason on the target itself (a tooltip would need :hover,
+   which browsers do not apply during a drag). */
+.drop-refusal { position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%); max-width: 70%; padding: 1px var(--sp-2); border-radius: var(--r-pill); background: var(--warn-bg); color: var(--warn); font-size: var(--fs-sm); line-height: 1.5; pointer-events: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-shadow: var(--shadow-pop); z-index: 1; }
+.pane-refusal { position: sticky; top: 0; z-index: 2; margin: 0 var(--sp-2) var(--sp-1); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-md); background: var(--warn-bg); color: var(--warn); font-size: var(--fs-sm); pointer-events: none; box-shadow: var(--shadow-pop); }
+.pane-body[data-drop="refused"] { box-shadow: inset 0 0 0 2px var(--warn); }
+.pane-body[data-drop="refused"][data-tip]::after, .entries li[data-drop="refused"][data-tip]::after { display: none; }
+.entries li[data-drop="refused"] { box-shadow: inset 0 0 0 1.5px var(--warn); }
+/* The Move / Link / Copy choice in the drop sheet */
+.drop-modes { display: grid; gap: var(--sp-1); margin: 0 0 var(--sp-3); padding: 0; border: 0; min-width: 0; }
+.drop-mode { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: var(--sp-2); padding: var(--sp-1) var(--sp-2); border-radius: var(--r-md); cursor: pointer; }
+.drop-mode:has(input:checked) { background: var(--accent-soft); }
+.drop-mode[data-off] { opacity: 0.75; cursor: default; }
+.drop-mode-name { font-weight: 600; }
+.drop-mode-hint { color: var(--muted); font-size: var(--fs-sm); }
+.drop-mode[data-off] .drop-mode-hint { color: var(--warn); }
+.drop-from-rows { margin: 0 0 var(--sp-2); }
 .entries li[data-drop="over"] { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); color: var(--text); }
 .entries li input { margin: 0; opacity: 0.35; transition: opacity var(--motion) var(--ease); }
 .entries li:hover input, .entries li input:checked, .entries li input:focus-visible, .entries:has(input:checked) input { opacity: 1; }

@@ -140,7 +140,7 @@ settings, and switch between them from the top of the sidebar.
 | OCR of scans and photos | ✓ Apple Vision | ✓ with [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) | ✓ with Tesseract |
 | Quick Look thumbnails of any file type | ✓ | PDFs and images | PDFs and images |
 | Desktop notifications, daily reminder job | ✓ | e-mail only for now | e-mail only for now |
-| Collection links in the `Ongoing` folder | ✓ | needs Developer Mode | ✓ |
+| Collection links in the `Ongoing` folder, and **Link** when dropping files | ✓ | needs Developer Mode | ✓ |
 
 Details are in the [technical reference](docs/reference.md#platform-support).
 

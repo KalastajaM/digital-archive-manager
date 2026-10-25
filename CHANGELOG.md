@@ -8,6 +8,26 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Move, Link or Copy when you drop files on a folder in Browse.** The confirm that
+  appears after a drop now has the three ways side by side: **Move** (still the default),
+  **Link** (a shortcut in that folder that opens the file, which stays where it is) and
+  **Copy** (marked "not recommended: makes a duplicate"). Holding Option (Alt) while
+  dropping starts with Copy, as in Finder. Each one is previewed and has Undo: Undo of a
+  Link removes the shortcut, Undo of a Copy moves the copy to To Delete. Dropping a file on
+  its own folder says "Already in this folder" (Copy works with Option and gets a number).
+  On Windows without Developer Mode, Link is off with a message.
+- **Rows in `##. Ongoing`, `##. Important` and `##. To Delete` can be dragged.** Dragging an
+  Ongoing row moves the real file (the confirm says where it is now and where it goes) and
+  its collections keep it; Link and Copy use the original. An Important row can be linked
+  or copied, but not moved ("This file is marked Important; unmark it first"). A row from
+  To Delete dropped on a folder restores it there, with a preview and Undo.
+- **Dropping files on a collection's folder in `##. Ongoing` adds them to that collection**
+  (with Undo). Dropping on `##. Ongoing` itself says to drop on a collection's folder.
+- **A refused drop now says why.** While you drag, a folder or pane that cannot take the
+  files shows the reason on itself, and dropping there anyway shows it as a message
+  instead of doing nothing. This also covers a folder dragged onto a folder and a drop on
+  search results.
+
 - **Restore from To Delete.** Select one or several files in `##. To Delete` and choose
   **Restore** in the toolbar (or the two buttons in the file's panel): **Restore to where
   it was** puts them back at the path they were marked at, **Restore to Inbox** puts
@@ -18,6 +38,13 @@ All notable changes are listed here. The format follows
   Undo, which puts them back in To Delete.
 
 ### Changed
+
+- **Undo may now remove a shortcut dam made anywhere in the archive**, not only in
+  `##. Ongoing` and `##. Important`. It applies to the shortcut a Link drop made, only
+  while it is still a shortcut pointing at the same file. It never removes a regular
+  file, a folder or a shortcut you made yourself.
+- Dropping files on `##. To Delete` now says "use Mark for deletion", and dropping on
+  `##. Important` is refused.
 
 - Files in `##. To Delete` are read-only. Starring, marking Important, putting in a tray,
   adding to a collection, tags, From and For, the summary and the notes are all off for

@@ -400,7 +400,9 @@ def _inverse(ex: Executor, row: JournalEntry, made: dict | None = None) -> Op:
         return Op(OpKind.MKDIR, None, row.src, exact=True)
     top = ex.paths.is_top_level(row.src) or ex.paths.is_top_level(row.dst)
     if kind is OpKind.SYMLINK:
-        return Op(OpKind.UNLINK_SYMLINK, row.dst, None)
+        # dst names the target the app made the link with: wherever the link is, it is
+        # removed only while it is still a symbolic link pointing there (guards)
+        return Op(OpKind.UNLINK_SYMLINK, row.dst, row.src, exact=True)
     if kind is OpKind.UNLINK_SYMLINK:
         # dst holds the link's target (archive-relative or abs:). LIMITATION: the link
         # is recreated with an absolute target even if the original was relative.

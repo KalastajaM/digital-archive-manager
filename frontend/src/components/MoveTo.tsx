@@ -8,6 +8,7 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   errorText,
+  type MoveBody,
   type MoveResult,
   type ResolvedOp,
   useMoveFiles,
@@ -21,6 +22,7 @@ import { dialogOpen } from "../keyboard";
 import { unexpectedDestinations } from "../screens/useFiling";
 import { TO_DELETE_REASON } from "../toDelete";
 import { visible } from "../text";
+import { type DropMode, MODE_HINT, MODE_LABEL, DROP_MODES } from "../dropModes";
 import { FolderPicker } from "./FolderPicker";
 import { ConfirmPlan, snapshotKey } from "./PlanPreview";
 import { useToast } from "./Toasts";
@@ -113,8 +115,22 @@ export type MoveRequest = {
   nothing?: string;
   /** Files of the drag left out before the request (already in the inbox). */
   skipped?: number;
+  /** A drop on a folder: how the files get there (default Move). Link makes a shortcut
+   * there and the file stays; Copy makes a duplicate. Undo of a Link removes the link
+   * the app made; Undo of a Copy moves the copy to To Delete. */
+  mode?: DropMode;
+  /** With ``mode``: the sheet offers the choice, each way with the reason it is off (null:
+   * on). Without it the request is plainly a move. */
+  modes?: Record<DropMode, string | null>;
+  /** The dragged rows are links in ##. Ongoing / ##. Important: the sheet names the real
+   * file that moves, is linked or copied. */
+  fromRows?: "ongoing" | "important";
 };
-type Pending = MoveRequest & { ops: ResolvedOp[] };
+type Pending = MoveRequest & { ops: ResolvedOp[]; error?: string | null };
+
+const modeOf = (r: MoveRequest): DropMode => r.mode ?? "move";
+const VERB: Record<DropMode, string> = { move: "move", link: "link", copy: "copy" };
+const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
 /** A window event every move flow sends after an apply that changed something (and,
  * with no ids, after its Undo): a screen showing files it did not move itself (Browse,
@@ -171,13 +187,18 @@ export function useMoveFlow(
   }
 
   // Exactly the request: the preview and the apply send the same body.
+  // a plain move sends no ``mode`` (the server's default), as it always did
+  const body = (r: MoveRequest): MoveBody =>
+    r.mode === undefined || r.mode === "move"
+      ? ({ drive_ids: r.ids, folder: r.folder } as MoveBody)
+      : { drive_ids: r.ids, folder: r.folder, mode: r.mode };
   const previewCall = (r: MoveRequest) =>
     r.name === undefined
-      ? preview.mutateAsync({ drive_ids: r.ids, folder: r.folder })
+      ? preview.mutateAsync(body(r))
       : renamePreview.mutateAsync({ drive_id: r.ids[0], name: r.name, folder: r.folder });
   const applyCall = (r: MoveRequest) =>
     r.name === undefined
-      ? apply.mutateAsync({ drive_ids: r.ids, folder: r.folder })
+      ? apply.mutateAsync(body(r))
       : rename.mutateAsync({ drive_id: r.ids[0], name: r.name, folder: r.folder });
 
   async function previewMove(request: MoveRequest) {
@@ -185,18 +206,40 @@ export function useMoveFlow(
     try {
       ops = await previewCall(request);
     } catch (e) {
-      const text = `Cannot ${request.name === undefined ? "move" : "change"}: ${visible(errorText(e))}`;
+      const text = `Cannot ${request.name === undefined ? VERB[modeOf(request)] : "change"}: ${visible(errorText(e))}`;
       if (onRefused) onRefused(text);
       else toast({ kind: "error", text });
       return;
     }
     if (ops.length === 0) {
-      const nothing = request.name === undefined ? `Nothing to move: already in ${folderLabel(request.folder)}` : "Nothing to change";
+      const nothing =
+        request.name !== undefined
+          ? "Nothing to change"
+          : modeOf(request) === "link"
+            ? `Nothing to link: already in ${folderLabel(request.folder)}`
+            : `Nothing to move: already in ${folderLabel(request.folder)}`;
       if (onRefused) onRefused(request.nothing ?? nothing);
       else toast({ kind: "info", text: request.nothing ?? nothing });
       return;
     }
     setConfirm({ ...request, ops });
+  }
+
+  /** The choice in the sheet: preview the same files the other way; the sheet stays
+   * open, and a way that cannot be previewed says why right there. */
+  async function switchMode(pending: Pending, mode: DropMode) {
+    if (mode === modeOf(pending)) return;
+    const next: MoveRequest = { ...pending, mode };
+    try {
+      const ops = await previewCall(next);
+      if (ops.length === 0) {
+        setConfirm({ ...pending, error: `${MODE_LABEL[mode]}: nothing to do, the files are already in ${folderLabel(pending.folder)}` });
+        return;
+      }
+      setConfirm({ ...next, ops, error: null });
+    } catch (e) {
+      setConfirm({ ...pending, error: `Cannot ${VERB[mode]}: ${visible(errorText(e))}` });
+    }
   }
 
   async function applyMove(pending: Pending) {
@@ -205,7 +248,7 @@ export function useMoveFlow(
     try {
       result = await applyCall(pending);
     } catch (e) {
-      toast({ kind: "error", text: `Could not ${pending.name === undefined ? "move" : "change"}: ${visible(errorText(e))}` });
+      toast({ kind: "error", text: `Could not ${pending.name === undefined ? VERB[modeOf(pending)] : "change"}: ${visible(errorText(e))}` });
       return;
     }
     const complete = !result.error && !result.failed;
@@ -223,13 +266,22 @@ export function useMoveFlow(
     if (result.index_error) {
       toast({ kind: "warning", text: `Index update failed: ${visible(result.index_error)}. The next scan repairs it.` });
     }
-    const moved = result.done.filter((op) => op.kind === "move");
+    const mode = modeOf(pending);
+    const kind = mode === "link" ? "symlink" : mode;
+    const moved = result.done.filter((op) => op.kind === kind);
     const renamed = result.done.find((op) => op.kind === "rename");
     if (result.done.length > 0) {
       const what = moved.length === 1 ? visible(baseName(moved[0].dst)) : plural(moved.length, "file");
       const target = { batchId: result.batch_id };
+      const there = folderLabel(pending.folder);
       const said =
-        moved.length === 0 && renamed ? `Renamed to ${visible(baseName(renamed.dst))}` : `Moved ${what} to ${folderLabel(pending.folder)}`;
+        moved.length === 0 && renamed
+          ? `Renamed to ${visible(baseName(renamed.dst))}`
+          : mode === "link"
+            ? `Linked ${what} in ${there}`
+            : mode === "copy"
+              ? `Copied ${what} to ${there}`
+              : `Moved ${what} to ${there}`;
       toast({
         kind: complete ? "info" : "warning",
         text: `${complete ? "" : "Partly applied: "}${said}`,
@@ -243,28 +295,60 @@ export function useMoveFlow(
         },
       });
       onMoved?.(result, pending);
-      announceMoved(movedIds(result, pending));
+      // a link or a copy moves nothing: the original stays listed, the folder reloads
+      announceMoved(mode === "move" ? movedIds(result, pending) : []);
     }
   }
 
   const renaming = confirm?.name !== undefined;
   const renameOnly = renaming && !confirm?.ops.some((op) => op.kind === "move");
+  const mode = confirm ? modeOf(confirm) : "move";
+  const count = confirm ? plural(confirm.ids.length, "file") : "";
+  const there = confirm ? folderLabel(confirm.folder) : "";
   const view: ReactNode = confirm ? (
     <ConfirmPlan
-      planKey={snapshotKey({ ids: confirm.ids, folder: confirm.folder, name: confirm.name, ops: confirm.ops })}
+      planKey={snapshotKey({ ids: confirm.ids, folder: confirm.folder, name: confirm.name, mode, ops: confirm.ops })}
       title={
         !renaming
-          ? `Move ${plural(confirm.ids.length, "file")} to ${folderLabel(confirm.folder)}?`
+          ? mode === "link"
+            ? `Link ${count} in ${there}?`
+            : mode === "copy"
+              ? `Copy ${count} to ${there}?`
+              : `Move ${count} to ${there}?`
           : renameOnly
             ? `Rename to ${visible(confirm.name ?? "")}?`
-            : `Move to ${folderLabel(confirm.folder)} as ${visible(confirm.name ?? "")}?`
+            : `Move to ${there} as ${visible(confirm.name ?? "")}?`
       }
-      confirmLabel={renameOnly ? "Rename" : "Move"}
+      confirmLabel={renameOnly ? "Rename" : mode === "link" ? "Make links" : MODE_LABEL[mode]}
       intro={
         <>
+          {confirm.modes && (
+            <ModeChoice
+              modes={confirm.modes}
+              mode={mode}
+              busy={busy}
+              onChoose={(m) => void guarded(() => switchMode(confirm, m))}
+            />
+          )}
+          {confirm.error && (
+            <p className="error" role="alert">
+              {confirm.error}
+            </p>
+          )}
+          {confirm.fromRows && <FromRows pending={confirm} mode={mode} />}
           {renaming ? (
             <p>
               A name already taken there gets a suffix such as <code>_2</code>. Undo puts the file back as it was.
+            </p>
+          ) : mode === "link" ? (
+            <p>
+              Each link is a shortcut that opens the file; the file itself stays where it is. A name already taken
+              there gets a suffix such as <code>_2</code>. Undo removes the links.
+            </p>
+          ) : mode === "copy" ? (
+            <p>
+              This makes a second copy of {confirm.ids.length === 1 ? "the file" : "each file"}; the original stays.
+              A name already taken there gets a suffix such as <code>_2</code>. Undo moves the copies to To Delete.
             </p>
           ) : (
             <p>
@@ -295,6 +379,64 @@ export function useMoveFlow(
     /** The confirm sheet while one is pending: render it anywhere. */
     view,
   };
+}
+
+/** Move / Link / Copy, as radio buttons in the sheet: a way that is off says why. */
+function ModeChoice({
+  modes,
+  mode,
+  busy,
+  onChoose,
+}: {
+  modes: Record<DropMode, string | null>;
+  mode: DropMode;
+  busy: boolean;
+  onChoose: (mode: DropMode) => void;
+}) {
+  return (
+    <fieldset className="drop-modes" disabled={busy}>
+      <legend className="visually-hidden">How the files get there</legend>
+      {DROP_MODES.map((m) => (
+        <label key={m} className="drop-mode" data-off={modes[m] ? "" : undefined} data-mode={m}>
+          <input
+            type="radio"
+            name="drop-mode"
+            value={m}
+            checked={mode === m}
+            disabled={modes[m] !== null && mode !== m}
+            onChange={() => onChoose(m)}
+          />
+          <span className="drop-mode-name">{MODE_LABEL[m]}</span>
+          <span className="drop-mode-hint">{modes[m] ?? MODE_HINT[m]}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/** The dragged rows were links in ##. Ongoing / ##. Important: say which real file acts,
+ * and where it is now (the first op's source), so it is clear the filed document moves. */
+function FromRows({ pending, mode }: { pending: Pending; mode: DropMode }) {
+  const source = pending.ops.find((op) => op.src)?.src ?? null;
+  if (!source) return null;
+  const where = folderLabel(parentOf(source));
+  const rows = pending.fromRows === "important" ? "##. Important" : "##. Ongoing";
+  return (
+    <p className="drop-from-rows">
+      {mode === "move" ? (
+        <>
+          You dragged {pending.ids.length === 1 ? "a link" : "links"} from {rows}. This moves the filed document itself
+          (currently in <strong>{visible(where)}</strong>) to <strong>{folderLabel(pending.folder)}</strong>, not just the
+          link. It stays in its collections, and the link in Ongoing follows.
+        </>
+      ) : (
+        <>
+          You dragged {pending.ids.length === 1 ? "a link" : "links"} from {rows}. The {mode === "link" ? "link" : "copy"} is made
+          from the filed document itself (in <strong>{visible(where)}</strong>), which stays there.
+        </>
+      )}
+    </p>
+  );
 }
 
 type SheetProps = {
