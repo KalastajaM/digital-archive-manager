@@ -20,7 +20,8 @@ import {
 } from "../api/client";
 import { AIRejected } from "../components/ai/AIBadge";
 import { AIHint, useAISend, useAIState } from "../components/ai/useAI";
-import { CollectionPicker, pendingCollection } from "../components/CollectionPicker";
+import { CollectionNamesInput } from "../components/CollectionInput";
+import { pendingCollection } from "../components/CollectionPicker";
 import { DetectedFields } from "../components/DetectedFields";
 import { folderOf } from "../components/FileDetails";
 import { FilePreview } from "../components/FilePreview";
@@ -560,7 +561,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
             ) : (
               <TrayFields tray={tray} values={trayFields} found={found} onChange={editField} chips={trayChips} />
             ))}
-          <CollectionPicker
+          <CollectionNamesInput
             value={collections}
             onChange={setCollections}
             text={collectionText}

@@ -24,7 +24,8 @@ import {
 } from "../../api/client";
 import { plural } from "../../format";
 import { isWordToken, visible } from "../../text";
-import { CollectionPicker, pendingCollection } from "../CollectionPicker";
+import { CollectionNamesInput } from "../CollectionInput";
+import { pendingCollection } from "../CollectionPicker";
 import { FolderPicker } from "../FolderPicker";
 import { useInboxFolder } from "../MoveTo";
 import { TagInput } from "../TagInput";
@@ -640,7 +641,7 @@ export function RuleSheet({
             <label htmlFor={`${ids}-tags`}>Tags</label>
             <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} />
           </div>
-          <CollectionPicker
+          <CollectionNamesInput
             label="Add to collection"
             value={collections}
             onChange={setCollections}

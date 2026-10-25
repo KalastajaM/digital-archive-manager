@@ -24,7 +24,7 @@ import {
   useTrays,
 } from "../../api/client";
 import { visible } from "../../text";
-import { CollectionPicker } from "../CollectionPicker";
+import { CollectionNamesInput } from "../CollectionInput";
 import { FolderPicker } from "../FolderPicker";
 import { ConfirmPlan } from "../PlanPreview";
 import { TagInput } from "../TagInput";
@@ -234,7 +234,7 @@ function CodeEditor({
               <FolderPicker label="Folder" value={r.folder} onChange={(v) => edit(r.key, { folder: v })} />
             </div>
             <div className="code-field" data-tip="The collections the filed file is added to">
-              <CollectionPicker
+              <CollectionNamesInput
                 label="Collections"
                 value={r.collections}
                 onChange={(names) => edit(r.key, { collections: names })}

@@ -844,7 +844,17 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .file-meta-head .current-path code { min-width: 0; }
 .file-tags { margin-top: var(--sp-3); }
 .file-tags + .file-details { margin-top: var(--sp-4); }
-.tag-field-wrap { position: relative; }
+.tag-field-wrap { position: relative; display: flex; align-items: flex-start; gap: var(--sp-1); }
+.tag-field-wrap > .tag-field { flex: 1 1 auto; min-width: 0; }
+.tag-field-wrap > .folder-picker-browse { flex: none; }
+.collection-input-row { display: flex; align-items: flex-start; gap: var(--sp-1); }
+.collection-input-row > .tag-field-wrap { flex: 1 1 auto; min-width: 0; }
+.collection-input .tag-token a { color: inherit; text-decoration: none; }
+.collection-input .tag-token a:hover { text-decoration: underline; }
+.tag-browser-group { margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.tag-browser-list { list-style: none; margin: 0; padding: 0; }
+.tag-browser-row { display: flex; justify-content: space-between; gap: var(--sp-2); width: 100%; border: none; box-shadow: none; background: transparent; text-align: left; padding: 3px var(--sp-2); border-radius: var(--r-sm); }
+.tag-browser-row:hover:not(:disabled) { background: var(--hover); }
 .tag-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20; list-style: none; margin: 0; padding: 3px; background: var(--panel); border: 0.5px solid var(--hairline); border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
 .tag-suggest li { display: flex; justify-content: space-between; gap: var(--sp-2); padding: 3px var(--sp-2); border-radius: var(--r-sm); cursor: default; overflow-wrap: anywhere; }
 .tag-suggest li:hover { background: var(--hover); }

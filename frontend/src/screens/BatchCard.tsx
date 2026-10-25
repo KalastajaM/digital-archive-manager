@@ -7,7 +7,8 @@ import {
   useCollections,
   useCreateCollection,
 } from "../api/client";
-import { CollectionPicker, pendingCollection } from "../components/CollectionPicker";
+import { CollectionNamesInput } from "../components/CollectionInput";
+import { pendingCollection } from "../components/CollectionPicker";
 import { changeToast } from "../components/collectionText";
 import { useToast } from "../components/Toasts";
 import { TrashButton } from "../components/Trash";
@@ -318,7 +319,7 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
                 : `${alreadyIn} files are already in ${visible(tray.name)}: no new item for them.`}
             </p>
           )}
-          <CollectionPicker
+          <CollectionNamesInput
             value={collections}
             onChange={setCollections}
             text={collectionText}

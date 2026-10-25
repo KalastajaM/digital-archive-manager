@@ -579,8 +579,9 @@ describe("Selected file", () => {
       },
     });
     const preview = await openFile(user);
-    const badges = await within(preview).findByRole("list", { name: "In trays and collections" });
-    const links = within(badges).getAllByRole("link");
+    const block = await within(preview).findByRole("region", { name: "Collections of this file" });
+    await within(block).findByRole("link", { name: "Sauna" });
+    const links = within(block).getAllByRole("link");
     expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["To pay: Northpower⟨U+202E⟩ bill", "/trays/to-pay?item=42"],
       ["Sauna", "/collections/7"],
@@ -588,7 +589,7 @@ describe("Selected file", () => {
     ]);
   });
 
-  it("a folder on the cursor shows its own panel: its path, its collections and Add to collection", async () => {
+  it("a folder on the cursor shows its own panel: its path, its collections and the collections field", async () => {
     const { calls, user } = setup("10. Financial", {
       "GET /api/files/id-10.%20Financial%2FBanks/links": { body: { items: [], collections: [SAUNA], note: "" } },
       "POST /api/collections/7/members": { body: { collection: SAUNA, batch: null, problems: [] } },
@@ -602,8 +603,7 @@ describe("Selected file", () => {
     expect(within(preview).getByText(/brings everything in it/)).toBeInTheDocument();
     expect(await within(preview).findByRole("link", { name: "Sauna" })).toBeInTheDocument();
     expect(within(preview).queryByRole("button", { name: "Put in tray" })).toBeNull(); // a folder: collections only
-    await user.click(within(preview).getByRole("button", { name: "Add to collection…" }));
-    expect(within(preview).getByRole("region", { name: "Add to collection" })).toBeInTheDocument();
+    expect(within(preview).getByRole("combobox", { name: "Add to collection" })).toBeEnabled();
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0); // nothing until a collection is picked
   });
 
@@ -636,9 +636,11 @@ describe("Selected file", () => {
       "POST /api/collections/7/members/group": { body: { collection: direct, batch: null, problems: [] } },
     });
     const preview = await openFile(user);
-    const badges = await within(preview).findByRole("list", { name: "In trays and collections" });
-    expect(within(badges).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Remove from Sauna"]);
-    await user.click(within(badges).getByRole("button", { name: "Remove from Sauna" }));
+    const block = await within(preview).findByRole("region", { name: "Collections of this file" });
+    await within(block).findByRole("link", { name: "Sauna" });
+    // only a collection the file itself is in has a ×; the "…" opens the collection tree
+    expect(within(block).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Remove from Sauna", "Browse collections…"]);
+    await user.click(within(block).getByRole("button", { name: "Remove from Sauna" }));
     await waitFor(() => expect(posts(calls, "/api/collections/7/members/remove")).toHaveLength(1));
     expect(posts(calls, "/api/collections/7/members/remove")[0].body).toEqual({ drive_id: "f1" });
     await user.click(await screen.findByRole("button", { name: "Undo" }));
@@ -699,7 +701,7 @@ describe("Selected file", () => {
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "a.pdf" })).toBeInTheDocument();
     expect(within(inBlock("header")).getByRole("button", { name: "Move file to…" })).toBeInTheDocument();
     expect(within(inBlock("tags")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
-    expect(within(inBlock("collections")).getByRole("button", { name: "Add to collection…" })).toBeInTheDocument();
+    expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("summary")).getByRole("region", { name: "Summary" })).toBeInTheDocument();
     expect(within(inBlock("own")).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
     expect(within(inBlock("preview")).getByRole("img", { name: "Page 1" })).toBeInTheDocument();
@@ -727,10 +729,8 @@ describe("Selected file", () => {
       },
     });
     const preview = await openFile(user);
-    await user.click(within(preview).getByRole("button", { name: "Add to collection…" }));
-    const form = within(preview).getByRole("region", { name: "Add to collection" });
-    await user.type(within(form).getByRole("combobox", { name: "Collection" }), "sau");
-    await user.click(await within(form).findByRole("option", { name: "Sauna" }));
+    await user.type(within(preview).getByRole("combobox", { name: "Add to collection" }), "sau");
+    await user.click(await within(preview).findByRole("option", { name: "Sauna" }));
     await waitFor(() => expect(posts(calls, "/api/collections/7/members")).toHaveLength(1));
     expect(posts(calls, "/api/collections/7/members")[0].body).toEqual({ drive_ids: ["f1"] });
     expect(posts(calls, "/api/collections")).toHaveLength(0);
@@ -741,6 +741,31 @@ describe("Selected file", () => {
     expect(shown).toHaveTextContent("plan refused: ⟨U+202E⟩x");
   });
 
+  it("an add has Undo in its toast: the file is taken out of the collection again", async () => {
+    const { calls, user } = setup("10. Financial/Banks", {
+      "GET /api/collections": { body: [SAUNA] },
+      "POST /api/collections/7/members": { body: added() },
+      "POST /api/collections/7/members/remove": { body: added() },
+    });
+    const preview = await openFile(user);
+    await user.type(within(preview).getByRole("combobox", { name: "Add to collection" }), "sau");
+    await user.click(await within(preview).findByRole("option", { name: "Sauna" }));
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/7/members/remove")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/7/members/remove")[0].body).toEqual({ drive_id: "f1" });
+  });
+
+  it("the server's refusal of a new name shows under the field and nothing is added", async () => {
+    const { calls, user } = setup("10. Financial/Banks", {
+      "GET /api/collections": { body: [SAUNA] },
+      "POST /api/collections": { status: 400, body: { error: "a collection named ‮x exists" } },
+    });
+    const preview = await openFile(user);
+    await user.type(within(preview).getByRole("combobox", { name: "Add to collection" }), "Car{Enter}");
+    expect(await within(preview).findByText("a collection named ⟨U+202E⟩x exists")).toBeInTheDocument();
+    expect(calls.filter((c) => c.url.includes("/members"))).toHaveLength(0);
+  });
+
   it("Add to collection creates a new one first", async () => {
     const { calls, user } = setup("10. Financial/Banks", {
       "GET /api/collections": { body: [SAUNA] },
@@ -748,9 +773,8 @@ describe("Selected file", () => {
       "POST /api/collections/9/members": { body: added({ collection: { ...SAUNA, id: 9, name: "Car" } }) },
     });
     const preview = await openFile(user);
-    await user.click(within(preview).getByRole("button", { name: "Add to collection…" }));
-    const form = within(preview).getByRole("region", { name: "Add to collection" });
-    await user.type(within(form).getByRole("combobox", { name: "Collection" }), "Car{Enter}");
+    await user.type(within(preview).getByRole("combobox", { name: "Add to collection" }), "Car");
+    await user.click(await within(preview).findByRole("option", { name: 'Create collection "Car"' }));
     await waitFor(() => expect(posts(calls, "/api/collections/9/members")).toHaveLength(1));
     expect(posts(calls, "/api/collections").map((c) => c.body)).toEqual([{ name: "Car" }]);
     expect(await screen.findByText("Added to Car")).toBeInTheDocument();

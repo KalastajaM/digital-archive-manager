@@ -242,7 +242,13 @@ More on the form:
   closes. When no rule names a folder, dam suggests the folder where the most similar
   already-filed documents are ("similar files").
 - **Tags** are chips: Enter or a comma adds one, and tags already in use are suggested as
-  you type.
+  you type. The **...** button beside the field lists every tag by group with its number
+  of files; click one to add it.
+- **Also add to collection** works the same way: the collections the file will be added
+  to are chips (the x takes one out), matching collections are suggested as you type, and
+  Enter or a click adds one. A name that is no collection yet is offered as **Create
+  collection "name"** and is created when you file. The **...** button opens the
+  collections as a tree. Nothing is applied until you file.
 - **Detected fields** (dates, amounts, IBAN, reference, the bank barcode) name where they
   came from. You can remove one, change its value with the pencil, or **Add field**;
   **Reset to detected** brings back what the scan found.
@@ -263,8 +269,10 @@ folder icon beside the path moves it, and tags are chips written at once. A rena
 is shown as a plan first and has **Undo**.
 
 **The file view has the same order everywhere** (Browse, a collection, a tray item): the
-name and folder with the lock, the tags, the collections the file is in (the x on a badge
-takes it out, **Add to collection...** adds it), the summary, then what only that view
+name and folder with the lock, the tags, the collections the file is in (chips like tags:
+the x takes the file out, and typing in the field adds it, offering **Create collection
+"name"** for a new one; **...** opens the tree; both apply at once and the toast has
+**Undo**), the summary, then what only that view
 has (in a tray: the fields, **Mark done** or **Mark paid** and the action row; in a
 collection: the group and **Remove from collection**; in Browse: **Put in tray**), the
 preview with its toolbar, and last the notes, checklist and history. The summary, notes,
@@ -317,7 +325,7 @@ or a name pattern that gives every file the same name) says so even while it is 
 Changes are saved together from the bar at the bottom, which shows while there are
 unsaved changes (**Save** or **Discard**). Leaving Settings keeps them until you come
 back, and closing the window asks first.
-Collections are picked like folders (type to find one, or **…** to browse), and tags work
+Collections are chips like tags (type to find one, or **…** to browse), and tags work
 as everywhere else. Hold the pointer on a field to see what it does. While
 you type a code, dam warns when it is easy to confuse with another one if you write codes
 by hand (`0` and `O`, `1` and `I`, `5` and `S`).
@@ -485,7 +493,7 @@ Then file it like this:
 - **Tags** and **Tray**: what the rule sets. An empty field is one the rule does not set;
   to leave a field out, clear it.
 - **Add to collection**: the collections the Inbox form starts with in "Also add to
-  collection" when this rule matches, picked the same way as folders (type to find, or the
+  collection" when this rule matches, as chips (type to find, or the
   "…" button). It works like tags: the collections of all matching rules are added
   together, and you can still change them on the card before filing. A name that does not
   exist yet is created when the document is filed. The test does not compare collections

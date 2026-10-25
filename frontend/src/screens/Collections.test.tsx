@@ -209,10 +209,11 @@ describe("Collection detail", () => {
     await within(panel()).findByRole("region", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).getByRole("heading", { level: 2, name: "quote.pdf" })).toBeInTheDocument();
-    for (const name of [/^Rename/, "Move file to…", "Put in tray", "Add to collection…", "Quick Look", "Move to To Delete"]) {
+    for (const name of [/^Rename/, "Move file to…", "Put in tray", "Quick Look", "Move to To Delete"]) {
       expect(within(inspector).getByRole("button", { name })).toBeInTheDocument();
     }
     expect(within(inspector).getByRole("region", { name: "Tags" })).toBeInTheDocument();
+    expect(within(inspector).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inspector).getByRole("textbox", { name: "Note on this file" })).toBeInTheDocument();
     // the app's one order in the preview's toolbar: view (Quick Look), ★ / !, Ask AI, the bin last
     const order = ["Quick Look", "Star", "Ask AI", "Move to To Delete"].map((name) => within(inspector).getByRole("button", { name }));
@@ -231,7 +232,7 @@ describe("Collection detail", () => {
     const blocks = Array.from(inspector.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
     expect(blocks).toEqual(["header", "tags", "collections", "summary", "own", "preview", "notes"]);
     const inBlock = (name: string) => inspector.querySelector(`[data-block="${name}"]`) as HTMLElement;
-    expect(within(inBlock("collections")).getByRole("button", { name: "Add to collection…" })).toBeInTheDocument();
+    expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("own")).getByRole("region", { name: "In this collection" })).toBeInTheDocument();
     expect(within(inBlock("own")).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
   });

@@ -14,7 +14,7 @@ import { FilePreview, type PreviewFile } from "../components/FilePreview";
 import { Breakable } from "../components/PlanPreview";
 import { SavedNote } from "../components/SavedNote";
 import { visible } from "../text";
-import { type BackToInbox, FileActions, FileCollections, FolderActions, LinkBadges } from "./FileActions";
+import { type BackToInbox, FileActions, FileCollections, FolderActions } from "./FileActions";
 
 export function FilePanel({
   file,
@@ -82,7 +82,7 @@ export function FilePanel({
 }
 
 /** A selected folder in Browse: its name and path, the collections it is in (× takes
- * it out) and Add to collection. A folder in a collection brings everything in it,
+ * it out) and the field that adds it to more. A folder in a collection brings everything in it,
  * including what is added later. ``refusal``: why it cannot be added (the app's areas). */
 export function FolderPanel({ folder, refusal }: { folder: { drive_id: string; name: string; path: string }; refusal: string | null }) {
   return (
@@ -100,9 +100,6 @@ export function FolderPanel({ folder, refusal }: { folder: { drive_id: string; n
       <p className="hint">
         Added to a collection, a folder brings everything in it, also what is put in it later. Enter opens it.
       </p>
-      <div className="browse-detail-actions">
-        <LinkBadges driveId={folder.drive_id} />
-      </div>
       <FolderActions key={folder.drive_id} driveId={folder.drive_id} refusal={refusal} />
     </div>
   );

@@ -192,12 +192,12 @@ describe("Filing codes (Settings)", () => {
     expect(await within(editor).findByText("Not a valid code")).toBeInTheDocument();
   });
 
-  it("collections are picked like folders, and one typed but not added is saved too", async () => {
+  it("collections are chips like tags, and one typed but not added is saved too", async () => {
     const { calls, user } = setup(ECHO);
     const editor = await openCode(user, /^A To action/);
     const field = within(editor).getByLabelText("Collections");
     await user.type(field, "Taxes 2026{Enter}");
-    expect(within(editor).getByRole("list", { name: "Collections to add" })).toHaveTextContent("Taxes 2026");
+    expect(within(editor).getByRole("button", { name: "Remove Taxes 2026" })).toBeInTheDocument();
     await user.type(field, "Car");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(ofMethod(calls, "PUT", "/api/filing-codes")).toHaveLength(1));
