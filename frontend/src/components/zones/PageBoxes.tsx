@@ -21,7 +21,7 @@ import {
   useRules,
 } from "../../api/client";
 import { isShortcut, useKeydown } from "../../keyboard";
-import { visible } from "../../text";
+import { visible, withoutNoise } from "../../text";
 import { IconButton } from "../ui/IconButton";
 import { AreaChange } from "./AreaChange";
 import { AreaLayer, percent } from "./AreaLayer";
@@ -138,12 +138,25 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
     close();
     setOn(!on);
   };
+  // the picture of a box is cut once; a cut that fails puts the box back on its words
+  const cutPicture = (id: number, box: PageBox) =>
+    cut.mutateAsync({ driveId, box }).then(
+      (got) => change(id, { picture: got.png }),
+      (e) => change(id, { mode: "words", problem: errorText(e) }),
+    );
   const addBox = (drawn: PageBox) => {
     const id = nextId.current++;
     setBoxes((all) => [...all, { id, box: drawn, lines: null, mode: "words" }]);
     // mutateAsync: several boxes can be read at once, and each reply belongs to its box
     readLines.mutateAsync({ driveId, box: drawn }).then(
-      (found) => change(id, { lines: found.lines.map((l) => l.text) }),
+      (found) => {
+        const lines = found.lines.map((l) => l.text);
+        // a box without text can only be matched by its picture: start there (the owner
+        // can still switch back to Words)
+        const empty = lines.map(withoutNoise).every((l) => l === "");
+        change(id, empty ? { lines, mode: "picture" } : { lines });
+        if (empty) void cutPicture(id, drawn);
+      },
       (e) => change(id, { lines: [], problem: errorText(e) }),
     );
   };
@@ -151,12 +164,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
     const k = boxes[index];
     if (!k) return;
     change(k.id, { mode, problem: undefined });
-    if (mode === "picture" && !k.picture) {
-      cut.mutateAsync({ driveId, box: k.box }).then(
-        (got) => change(k.id, { picture: got.png }),
-        (e) => change(k.id, { mode: "words", problem: errorText(e) }),
-      );
-    }
+    if (mode === "picture" && !k.picture) void cutPicture(k.id, k.box);
   };
 
   // Esc: first the box being drawn, then the last box, then the tool.

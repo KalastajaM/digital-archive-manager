@@ -700,15 +700,13 @@ describe("Picture areas", () => {
 
   const row = (panel: HTMLElement, n: number) => within(within(panel).getByRole("list", { name: "Boxes" })).getByText(`Box ${n}`).closest("li") as HTMLElement;
 
-  it("a box without text can be matched by its picture, with the crop shown in its row", async () => {
+  it("a box that comes back without text switches to its picture by itself, with the crop shown in its row", async () => {
     const { calls, user } = setup({
       "POST /api/files/d1/page1/lines": { body: READ },
       "POST /api/rules/area-picture": { body: CROP },
     });
     const panel = await drawAndOpen(user);
-    expect(await within(panel).findByText("No text found")).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeDisabled();
-    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
+    await within(panel).findByRole("img", { name: "Picture of box 1" });
     expect(posts(calls, "/api/rules/area-picture")[0].body).toEqual({
       drive_id: "d1",
       box: [0.1, 0.1, 0.5, 0.3],
@@ -721,9 +719,30 @@ describe("Picture areas", () => {
     expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
     expect(within(panel).getByText(/Add a text box to make this faster and surer/)).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeEnabled();
-    // back to its words: no second cut is asked for later
+    // back to its words, which can be done at will: no second cut is asked for later
     await user.click(within(row(panel, 1)).getByRole("button", { name: "Words" }));
     expect(within(panel).getByText("No text found")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeDisabled();
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
+    expect(posts(calls, "/api/rules/area-picture")).toHaveLength(1);
+  });
+
+  it("a box with only OCR noise switches to its picture too, and a box with text stays on its words", async () => {
+    const { user } = setup({
+      "POST /api/files/d1/page1/lines": { body: { read: true, lines: [{ text: "•ö |", box: [0.1, 0.1, 0.5, 0.2] }], unavailable: null } },
+      "POST /api/rules/area-picture": { body: CROP },
+    });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByRole("img", { name: "Picture of box 1" });
+    expect(within(row(panel, 1)).getByRole("button", { name: "Picture" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("a box with text stays on its words and asks for no picture", async () => {
+    const { calls, user } = setup({ "POST /api/rules/area-picture": { body: CROP } });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByText("Pohjola Vakuutus Oy");
+    expect(within(row(panel, 1)).getByRole("button", { name: "Words" })).toHaveAttribute("aria-pressed", "true");
+    expect(posts(calls, "/api/rules/area-picture")).toHaveLength(0);
   });
 
   it("every box has the choice, and the address choices never take a picture", async () => {
@@ -774,8 +793,6 @@ describe("Picture areas", () => {
       "PUT /api/rules/pohjola": SAVED,
     });
     const panel = await drawAndOpen(user);
-    await within(panel).findByText("No text found");
-    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
     await within(panel).findByRole("img", { name: "Picture of box 1" });
     await user.click(within(panel).getByRole("button", { name: "Make a rule…" }));
     expect(posts(calls, "/api/rules/draft-zone")[0].body).toEqual({
