@@ -276,8 +276,8 @@ the x takes the file out, and typing in the field adds it, offering **Create col
 "name"** for a new one; **...** opens the tree; both apply at once and the toast has
 **Undo**), the summary, then what only that view
 has (in a tray: the fields, **Mark done** or **Mark paid** and the action row; in a
-collection: the group and **Remove from collection**; in Browse: **Put in tray**), the
-preview with its toolbar, and last the notes, checklist and history. The summary, notes,
+collection: the group and **Remove from collection**), the
+preview with its toolbar (zoom, select box, open, show in Finder, open in window and Quick Look), and last the notes, checklist and history. The summary, notes,
 checklist and history fold. A tray item with several files shows the collections of the
 file you chose.
 
@@ -828,9 +828,9 @@ written, otherwise any AI summary.
 
 - Click the title to edit it in place: Enter or clicking away
   saves, Esc cancels, an empty title is refused. The file's tags are right under it.
-- The date, **Mark done** and the icon buttons (move to tray, remove from tray, Ask AI,
-  move to To Delete) are one row; the icons are at its right end.
-  **Quick Look** is in the toolbar of the file preview, with zoom, the star and open.
+- The date and **Mark done** are one row. The file's icon buttons are in the header at
+  the right, over the item, the same group as in Browse (see below). **Quick Look** is in
+  the toolbar of the file preview, with zoom and open.
 - Summary, Checklist, Notes and History have an arrow in their heading that folds them to
   one line (for example "2 of 5 done"). Each section stays folded or open the way you left
   it, for all items, collections and documents in this browser.
@@ -838,12 +838,16 @@ written, otherwise any AI summary.
   small popover under the button (Enter confirms, Esc or a click outside cancels). While
   one of the item's files is still in the inbox, **Mark paid and file…** marks it done and
   opens that file in the Inbox for filing.
-- **Move to tray** (a menu in the icon row) moves an open item to another tray. It stays
+- **Move to tray** (a menu in the header's icons) moves an open item to another tray. It stays
   the same item (title, note, checklist, history and files); fields the other tray also
   has carry over, and the rest come back if you move it back. A file has at most one open
   item at a time.
-- **Remove from tray** (or ⌫) asks first, then deletes the item with its note, checklist
-  and history. The files are never touched, so there is no undo for this.
+- **Remove from tray** (the icon in the header, or ⌫) asks first, then deletes the item with
+  its note, checklist and history. The files are never touched, so there is no undo for
+  this.
+- **Move to To Delete** (the bin, last in the header's icons) acts on the file the item
+  shows, with its usual confirm and Undo; the item keeps the file, now shown as in To
+  Delete. It is not the same as Remove from tray.
 
 ### Files on an item
 
@@ -1030,13 +1034,18 @@ list's width.
 
 - **Two panes**: the split toggle in the toolbar shows two folders side by side, for
   moving files between them. The active pane has an accent edge.
-- **Move to…** (⇧⌘M) and **Move to To Delete** are in the toolbar. A move always shows its
-  preview first.
+- **The file actions** are one group of icons at the right of the header, over the file
+  pane, and the trays have the same group over the item. In this order: **Put in tray**
+  (a menu of the trays), **Back to inbox**, **Move to…** (⇧⌘M), **From…**, **For…**,
+  **Ask AI**, **Star**, **Important**, **Restore** (for files in To Delete) and **Move
+  to To Delete**. They act on the selected files; **Ask AI** needs exactly one file shown
+  in the preview. A greyed icon says why when you hover it. The preview's own toolbar
+  keeps only the viewing tools. A move always shows its preview first.
 - **Restore.** What is in `##. To Delete` is read-only: starring, Important, trays,
   collections, tags, From and For, the summary and the notes are off (hover a greyed
   control for "Marked for deletion: restore it first"), and so is moving it. To get a
   file back, select it, or several with the checkboxes or Select all, and use **Restore**
-  in the toolbar, or the two buttons in the file's panel. **Restore to where it was**
+  in the header, or the two buttons in the file's panel. **Restore to where it was**
   puts it back at the path it was marked at; **Restore to Inbox** puts it in the inbox. A
   folder marked for deletion has the same two choices in its right-click menu and its
   panel. The preview shows a folder that is gone being made again and a name that is

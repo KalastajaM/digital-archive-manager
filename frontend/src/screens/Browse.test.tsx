@@ -530,6 +530,9 @@ const added = (overrides: Partial<CollectionChange> = {}): CollectionChange => (
   ...overrides,
 });
 
+/** The header's file actions (Browse and the trays share them: ``FileActionBar``). */
+const fileBar = () => screen.getByRole("toolbar", { name: "Browse file actions" });
+
 describe("Selected file", () => {
   const openFile = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(await screen.findByText("a.pdf"));
@@ -556,10 +559,12 @@ describe("Selected file", () => {
     expect(within(preview).getByRole("heading", { name: "a.pdf" })).toBeInTheDocument();
     expect(within(preview).getByRole("button", { name: /^Rename/ })).toBeEnabled();
     expect(within(preview).getByRole("button", { name: "Move file to…" })).toBeEnabled();
-    // the toggles sit in the preview's toolbar, with zoom and Open
+    // the toggles are in the header's file actions, not in the preview's toolbar (zoom and Open)
     const tools = within(preview).getByRole("group", { name: "Zoom" });
-    expect(within(tools).getByRole("button", { name: "Star" })).toBeInTheDocument();
-    expect(within(tools).getByRole("button", { name: "Mark Important" })).toBeInTheDocument();
+    expect(within(tools).queryByRole("button", { name: "Star" })).toBeNull();
+    expect(within(tools).queryByRole("button", { name: "Mark Important" })).toBeNull();
+    expect(within(fileBar()).getByRole("button", { name: "Star" })).toBeInTheDocument();
+    expect(within(fileBar()).getByRole("button", { name: "Mark Important" })).toBeInTheDocument();
     expect(await within(preview).findByRole("button", { name: "Remove tag bank" })).toBeInTheDocument();
   });
 
@@ -657,8 +662,8 @@ describe("Selected file", () => {
       "GET /api/trays": { body: { trays: [TO_PAY, TO_READ], errors: [] } },
       "POST /api/items/quick": { body: { created: [ITEM], skipped: [] } },
     });
-    const preview = await openFile(user);
-    await user.click(within(preview).getByRole("button", { name: "Put in tray" }));
+    await openFile(user);
+    await user.click(within(fileBar()).getByRole("button", { name: "Put in tray" }));
     const menu = await screen.findByRole("menu", { name: "Put in tray" });
     await within(menu).findByRole("menuitemcheckbox", { name: "To read" });
     expect(within(menu).getAllByRole("menuitemcheckbox").map((x) => x.textContent?.replace("✓", "").trim())).toEqual(["To pay", "To read"]);
@@ -687,8 +692,8 @@ describe("Selected file", () => {
       "GET /api/trays": { body: { trays: [TO_PAY], errors: [] } },
       "POST /api/items/quick": { status: 400, body: { error: "not a ‮number" } },
     });
-    const preview = await openFile(user);
-    await user.click(within(preview).getByRole("button", { name: "Put in tray" }));
+    await openFile(user);
+    await user.click(within(fileBar()).getByRole("button", { name: "Put in tray" }));
     await user.click(await screen.findByRole("menuitemcheckbox", { name: "To pay" }));
     expect(await screen.findByText(/Could not put .* in To pay: .*not a ⟨U\+202E⟩number/)).toBeInTheDocument();
   });
@@ -698,17 +703,21 @@ describe("Selected file", () => {
     const preview = await openFile(user);
     await within(preview).findByRole("region", { name: "Tags" });
     const blocks = Array.from(preview.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
-    expect(blocks).toEqual(["header", "tags", "collections", "summary", "own", "preview", "notes"]);
+    expect(blocks).toEqual(["header", "tags", "collections", "summary", "preview", "notes"]);
     const inBlock = (name: string) => preview.querySelector(`[data-block="${name}"]`) as HTMLElement;
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "a.pdf" })).toBeInTheDocument();
     expect(within(inBlock("header")).getByRole("button", { name: "Move file to…" })).toBeInTheDocument();
     expect(within(inBlock("tags")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
     expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("summary")).getByRole("region", { name: "Summary" })).toBeInTheDocument();
-    expect(within(inBlock("own")).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
+    // Put in tray, Back to inbox, ★ / ! and Ask AI are in the header's file actions
+    expect(preview.querySelector('[data-block="own"]')).toBeNull();
+    expect(within(preview).queryByRole("button", { name: "Put in tray" })).toBeNull();
+    expect(within(fileBar()).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
     expect(within(inBlock("preview")).getByRole("img", { name: "Page 1" })).toBeInTheDocument();
     for (const name of ["Star", "Mark Important", "Ask AI"]) {
-      expect(within(inBlock("preview")).getByRole("button", { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+      expect(within(inBlock("preview")).queryByRole("button", { name: new RegExp(`^${name}`) })).toBeNull();
+      expect(within(fileBar()).getByRole("button", { name: new RegExp(`^${name}`) })).toBeInTheDocument();
     }
     expect(within(inBlock("notes")).getByRole("textbox", { name: "Note on this file" })).toBeInTheDocument();
   });
@@ -804,7 +813,7 @@ describe("Selected file", () => {
       "GET /api/notes/file/f2": { body: { text: "" } },
     });
     const preview = await openFile(user);
-    expect(within(preview).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
+    expect(within(fileBar()).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
     await user.keyboard("k{Enter}");
     expect(await within(preview).findByText("10. Financial/Banks/b.pdf")).toBeInTheDocument();
   });
@@ -859,8 +868,8 @@ describe("Back to inbox", () => {
       },
       "POST /api/activity/m1/undo": { body: UNDONE },
     });
-    const preview = await openFile(user);
-    const back = await within(preview).findByRole("button", { name: "Back to inbox" });
+    await openFile(user);
+    const back = await within(fileBar()).findByRole("button", { name: "Back to inbox" });
     await waitFor(() => expect(back).toBeEnabled());
     await user.click(back);
     const dialog = await screen.findByRole("dialog", { name: "Move 1 file to ##. Organize?" });
@@ -897,8 +906,8 @@ describe("Back to inbox", () => {
       "POST /api/browse/move/preview": { body: noId },
       "POST /api/browse/move": { body: moveResult({ done: noId, folder: "##. Organize" }) },
     });
-    const preview = await openFile(user);
-    const back = await within(preview).findByRole("button", { name: "Back to inbox" });
+    await openFile(user);
+    const back = await within(fileBar()).findByRole("button", { name: "Back to inbox" });
     await waitFor(() => expect(back).toBeEnabled());
     await user.click(back);
     const dialog = await screen.findByRole("dialog", { name: "Move 1 file to ##. Organize?" });
@@ -910,10 +919,10 @@ describe("Back to inbox", () => {
     LISTINGS["##. Organize"] = [file("##. Organize/scan.pdf", "f1")];
     try {
       const { calls, user } = setup("##. Organize");
-      const preview = await openFile(user, "scan.pdf");
-      const back = await within(preview).findByRole("button", { name: "Back to inbox" });
-      await waitFor(() => expect(back.closest("[data-tip]")).toHaveAttribute("data-tip", "Already in the inbox"));
-      expect(within(preview).getByRole("button", { name: "Back to inbox" })).toBeDisabled();
+      await openFile(user, "scan.pdf");
+      const back = await within(fileBar()).findByRole("button", { name: "Back to inbox" });
+      await waitFor(() => expect(back.closest(".icon-button-wrap")).toHaveAttribute("data-tip", "Already in the inbox"));
+      expect(within(fileBar()).getByRole("button", { name: "Back to inbox" })).toBeDisabled();
       expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
     } finally {
       delete LISTINGS["##. Organize"];
@@ -1642,12 +1651,11 @@ describe("marks in Browse (stars)", () => {
     const a = screen.getByText("a.pdf").closest("li")!;
     expect(within(a).queryByRole("img", { name: "Starred" })).toBeNull();
     await user.click(within(a).getByRole("button", { name: "a.pdf" }));
-    const preview = screen.getByRole("region", { name: "Preview" });
-    await user.click(within(preview).getByRole("button", { name: "Star" }));
+    await user.click(within(fileBar()).getByRole("button", { name: "Star" }));
     await waitFor(() => expect(posts(calls, "/api/marks/star")).toHaveLength(1));
     expect(posts(calls, "/api/marks/star")[0].body).toEqual({ drive_ids: ["f1"] });
     await waitFor(() => expect(within(screen.getByRole("button", { name: /^a\.pdf/ }).closest("li")!).getByRole("img", { name: "Starred" })).toBeInTheDocument());
-    expect(within(preview).getByRole("button", { name: "Remove the star" })).toBeInTheDocument();
+    expect(within(fileBar()).getByRole("button", { name: "Remove the star" })).toBeInTheDocument();
   });
 
   it("with two panes the active pane's toolbar has the toggles of the file it is on", async () => {
@@ -1687,7 +1695,7 @@ describe("marks in Browse (stars)", () => {
     expect(within(results).queryByRole("img", { name: "Starred" })).toBeNull();
     const before = calls.filter((c) => c.url.startsWith("/api/search")).length;
     await user.click(hit);
-    await user.click(within(screen.getByRole("region", { name: "Preview" })).getByRole("button", { name: "Star" }));
+    await user.click(within(fileBar()).getByRole("button", { name: "Star" }));
     expect(await within(results).findByRole("img", { name: "Starred" })).toBeInTheDocument();
     expect(calls.filter((c) => c.url.startsWith("/api/search")).length).toBe(before + 1);
   });

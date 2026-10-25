@@ -2,11 +2,12 @@
  * file view's one block order (``FileView``): name and folder (editable), tags, the
  * file's collections, the summary, the screen's own block (``extras``: a collection's
  * group and Remove; then Put in tray and Back to inbox), the preview with ★ / ! and Ask AI
- * in its toolbar, and the note. A screen adds its own: ``view`` and ``tools`` in the
+ * in its toolbar (Browse puts all of those in its header: ``headerActions``), and the note. A screen adds its own: ``view`` and ``tools`` in the
  * preview's toolbar and ``intro`` under the name. The toolbar keeps the app's one order:
  * view (Open, Show in Finder, ``view``: Quick Look), then ★ / !, then Ask AI, then
  * ``tools`` (the bin last). */
 import type { ReactNode } from "react";
+import type { FilingAI } from "../components/ai/useFilingAI";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
@@ -29,6 +30,7 @@ export function FilePanel({
   backToInbox,
   boxTool = true,
   restore,
+  headerActions,
 }: {
   file: MetaFile;
   /** What the preview shows (Browse: a link's target). */
@@ -44,11 +46,15 @@ export function FilePanel({
   boxTool?: boolean;
   /** Restore this file (one in To Delete only): the screen runs the flow. */
   restore?: (to: RestoreTo) => void;
+  /** The screen's header carries the file actions (``FileActionBar``): Put in tray and Back
+   * to inbox, ★ / ! and Ask AI are not repeated here. ``ai`` is the screen's Ask AI, whose
+   * answer shows in the file's details. */
+  headerActions?: { ai: FilingAI };
 }) {
   // A file in ##. To Delete is read-only until it is restored
   const readOnly = toDeleteReason(file.path);
   return (
-    <FileMeta key={`meta-${file.drive_id}`} file={file} disabled={disabled}>
+    <FileMeta key={`meta-${file.drive_id}`} file={file} disabled={disabled} ai={headerActions?.ai}>
       {(meta) => (
         <FileView
           className="file-panel"
@@ -62,10 +68,19 @@ export function FilePanel({
           collections={<FileCollections driveId={file.drive_id} readOnly={readOnly} />}
           summary={<SummaryBox driveId={file.drive_id} readOnly={readOnly} />}
           own={
+            // the header carries Put in tray and Back to inbox: nothing of its own left, unless To Delete's Restore
+            headerActions && !extras && !(readOnly && restore) ? undefined : (
             <>
               {extras}
-              <FileActions driveId={file.drive_id} backToInbox={backToInbox} readOnly={readOnly} restore={readOnly ? restore : undefined} />
+              <FileActions
+                driveId={file.drive_id}
+                backToInbox={backToInbox}
+                readOnly={readOnly}
+                restore={readOnly ? restore : undefined}
+                headerActions={headerActions !== undefined}
+              />
             </>
+            )
           }
           preview={
             <FilePreview
@@ -74,8 +89,8 @@ export function FilePanel({
               extraTools={
                 <>
                   {view}
-                  {meta.marks}
-                  {meta.ask}
+                  {!headerActions && meta.marks}
+                  {!headerActions && meta.ask}
                   {tools}
                 </>
               }

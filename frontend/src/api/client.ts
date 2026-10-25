@@ -1000,10 +1000,11 @@ export const useTagActions = () => {
   };
 };
 
-export const useFileLinks = (driveId: string) =>
+export const useFileLinks = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.fileLinks, driveId],
     queryFn: () => get<FileLinks>(`/api/files/${enc(driveId)}/links`),
+    enabled,
   });
 
 /** Every tray/collection/note change can show up on Today and in the lists. */
