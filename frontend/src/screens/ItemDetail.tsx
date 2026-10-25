@@ -52,6 +52,8 @@ import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, gro
 import { visible } from "../text";
 import { AddFile } from "../components/AddFile";
 import { FileMeta } from "../components/FileMeta";
+import { FileView } from "../components/FileView";
+import { FileCollections } from "./FileActions";
 import { deletionRefusal } from "../components/MoveTo";
 import { isTrashKey, TrashButton, useTrash } from "../components/Trash";
 import { MarkIcons } from "../components/MarkIcons";
@@ -478,6 +480,9 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   // the title. They belong to the shown file (FileMeta), so they are portaled there.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const [tagSlot, setTagSlot] = useState<HTMLElement | null>(null);
+  // and the shown file's name and folder, and its preview (blocks of the file view, in order)
+  const [headSlot, setHeadSlot] = useState<HTMLElement | null>(null);
+  const [previewSlot, setPreviewSlot] = useState<HTMLElement | null>(null);
   const list = files.data ?? [];
   const shown: ItemFile | undefined = list[Math.min(tab, list.length - 1)];
   const nameOf = (f: ItemFile) => visible(f.path ? baseName(f.path) : f.drive_id);
@@ -708,173 +713,195 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   if (moveEntries.length === 0) moveEntries.push({ label: "No other trays", disabled: true, onSelect: () => {} });
 
   return (
-    <div className={`item-detail item-${kind}`} {...fileDrop.props}>
-      {removing && (
-        <RemoveItemSheet
-          item={item}
-          onClose={() => setRemoving(false)}
-          onRemoved={() => {
-            setRemoving(false);
-            toast({ kind: "info", text: `Removed from ${visible(item.tray_name)}: ${visible(item.title)}` });
-            onClose();
-          }}
-        />
-      )}
-      <header className="item-header">
-        <div className="item-heading">
-          <EditableTitle key={item.id} value={item.title} save={saveTitle} headingId={headingId} />
-          <p className="item-sub">
-            {visible(item.tray_name)}
-            {item.tray_removed && " (removed tray)"}
-            {firstPath && (
+    <FileView
+      className={`item-detail item-${kind}`}
+      rootProps={fileDrop.props}
+      header={
+        <>
+        <header className="item-header">
+          <div className="item-heading">
+            <EditableTitle key={item.id} value={item.title} save={saveTitle} headingId={headingId} />
+            <p className="item-sub">
+              {visible(item.tray_name)}
+              {item.tray_removed && " (removed tray)"}
+              {firstPath && (
+                <>
+                  {" · "}
+                  <span className="item-file">{visible(baseName(firstPath))}</span>
+                </>
+              )}
+            </p>
+            <div className="item-tags-slot" ref={setTagSlot} />
+          </div>
+          {kind === "bill" && typeof amountValue === "string" && amountValue !== "" && (
+            <div className="bill-amount">
+              {item.invalid_fields.includes(amount!) ? visible(amountValue) : visible(formatMoney(amountValue))}
+            </div>
+          )}
+          <IconButton icon={<X />} label="Close" onClick={onClose} />
+        </header>
+        {files.isError && (
+          <p className="error" role="alert">
+            Could not load the files. {visible(errorText(files.error))}
+          </p>
+        )}
+        {/* one file: a count and the way to attach another; several: the files as tabs */}
+        {list.length > 1 ? (
+          <div className="item-files-line">
+            <div className="tabs" role="tablist" aria-label="Files">
+              {list.map((f, i) => (
+                <span key={f.drive_id} className="tab-wrap">
+                  <button type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
+                    {nameOf(f)}
+                    <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
+                    {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
+                  </button>
+                  {/* shown on hover and focus, always reachable by keyboard */}
+                  <button
+                    type="button"
+                    className="tab-close"
+                    aria-label={`Remove ${nameOf(f)} from this item`}
+                    data-tip="Take this file off the item (the file stays where it is)"
+                    disabled={change.isPending}
+                    onClick={() => void takeOff(f)}
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            {addButton}
+          </div>
+        ) : (
+          files.isSuccess && (
+            <p className="item-files-line">
+              <span>{plural(list.length, "file")}</span>
+              {list.length === 1 && FILE_BADGE[list[0].state] && <Tag tone="red">{FILE_BADGE[list[0].state]}</Tag>}
+              <span aria-hidden="true">·</span>
+              {addButton}
+            </p>
+          )
+        )}
+        {adding && (
+          <AddFile
+            taken={item.files}
+            takenMode="mark"
+            takenLabel="already on this item"
+            choose={(hit) => change.mutateAsync({ id: item.id, driveId: hit.drive_id })}
+            onDone={() => setAdding(false)}
+          />
+        )}
+          <div className="item-file-head" ref={setHeadSlot} />
+        </>
+      }
+      collections={
+        shown?.path && shown.state !== "missing" ? (
+          <FileCollections key={shown.drive_id} driveId={shown.drive_id} hideItem={item.id} />
+        ) : null
+      }
+      summary={<ItemSummary item={item} />}
+      own={
+        <>
+        {removing && (
+          <RemoveItemSheet
+            item={item}
+            onClose={() => setRemoving(false)}
+            onRemoved={() => {
+              setRemoving(false);
+              toast({ kind: "info", text: `Removed from ${visible(item.tray_name)}: ${visible(item.title)}` });
+              onClose();
+            }}
+          />
+        )}
+        {fields}
+        {kind === "waiting" && open && (
+          <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>
+        )}
+        {kind === "bill" && tray && <PaymentDetails item={item} tray={tray} today={today} />}
+        {kind === "bill" && open && <Barcode itemId={item.id} pay={tray ? payFacts(item, tray) : undefined} />}
+        {item.state === "done" ? (
+          <p className="item-done">
+            Done{item.done_at !== null && (
               <>
-                {" · "}
-                <span className="item-file">{visible(baseName(firstPath))}</span>
+                {" "}
+                <RelativeDate date={dayOf(item.done_at)} today={today} />
               </>
             )}
+            {item.done_fields && Object.keys(item.done_fields).length > 0 && ` · ${visible(doneFieldsText(item, tray))}`}{" "}
+            <ReopenButton item={item} />
           </p>
-          <div className="item-tags-slot" ref={setTagSlot} />
-        </div>
-        {kind === "bill" && typeof amountValue === "string" && amountValue !== "" && (
-          <div className="bill-amount">
-            {item.invalid_fields.includes(amount!) ? visible(amountValue) : visible(formatMoney(amountValue))}
-          </div>
+        ) : null}
+        {open && doneMode && (doneMode === "file" ? fileAnchor : doneAnchor) && (
+          <Popover
+            anchor={doneMode === "file" ? fileAnchor : doneAnchor}
+            label={doneMode === "file" ? fileLabel : doneText}
+            onClose={() => setDone(null)}
+          >
+            <DoneForm
+              item={item}
+              label={doneText}
+              submitLabel={doneMode === "file" ? fileLabel : undefined}
+              fields={tray?.done?.fields ?? {}}
+              today={today}
+              onClose={() => setDone(null)}
+              onDone={doneMode === "file" ? () => void fileIt() : undefined}
+            />
+          </Popover>
         )}
-        <IconButton icon={<X />} label="Close" onClick={onClose} />
-      </header>
-      {files.isError && (
-        <p className="error" role="alert">
-          Could not load the files. {visible(errorText(files.error))}
-        </p>
-      )}
-      {/* one file: a count and the way to attach another; several: the files as tabs */}
-      {list.length > 1 ? (
-        <div className="item-files-line">
-          <div className="tabs" role="tablist" aria-label="Files">
-            {list.map((f, i) => (
-              <span key={f.drive_id} className="tab-wrap">
-                <button type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
-                  {nameOf(f)}
-                  <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
-                  {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
-                </button>
-                {/* shown on hover and focus, always reachable by keyboard */}
-                <button
-                  type="button"
-                  className="tab-close"
-                  aria-label={`Remove ${nameOf(f)} from this item`}
-                  data-tip="Take this file off the item (the file stays where it is)"
-                  disabled={change.isPending}
-                  onClick={() => void takeOff(f)}
-                >
-                  <X size={12} aria-hidden="true" />
-                </button>
-              </span>
-            ))}
-          </div>
-          {addButton}
-        </div>
-      ) : (
-        files.isSuccess && (
-          <p className="item-files-line">
-            <span>{plural(list.length, "file")}</span>
-            {list.length === 1 && FILE_BADGE[list[0].state] && <Tag tone="red">{FILE_BADGE[list[0].state]}</Tag>}
-            <span aria-hidden="true">·</span>
-            {addButton}
-          </p>
-        )
-      )}
-      {adding && (
-        <AddFile
-          taken={item.files}
-          takenMode="mark"
-          takenLabel="already on this item"
-          choose={(hit) => change.mutateAsync({ id: item.id, driveId: hit.drive_id })}
-          onDone={() => setAdding(false)}
-        />
-      )}
-      {fields}
-      {kind === "waiting" && open && (
-        <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>
-      )}
-      <ItemSummary item={item} />
-      {kind === "bill" && tray && <PaymentDetails item={item} tray={tray} today={today} />}
-      {kind === "bill" && open && <Barcode itemId={item.id} pay={tray ? payFacts(item, tray) : undefined} />}
-      {item.state === "done" ? (
-        <p className="item-done">
-          Done{item.done_at !== null && (
+          {files.isSuccess && (
             <>
-              {" "}
-              <RelativeDate date={dayOf(item.done_at)} today={today} />
+              {fileError && (
+                <p className="error" role="alert">
+                  {visible(fileError)}
+                </p>
+              )}
+              {kind === "dated" && checklist}
+              {shown?.state === "missing" && <p className="notice">This file is missing from the archive.</p>}
             </>
           )}
-          {item.done_fields && Object.keys(item.done_fields).length > 0 && ` · ${visible(doneFieldsText(item, tray))}`}{" "}
-          <ReopenButton item={item} />
-        </p>
-      ) : null}
-      {open && doneMode && (doneMode === "file" ? fileAnchor : doneAnchor) && (
-        <Popover
-          anchor={doneMode === "file" ? fileAnchor : doneAnchor}
-          label={doneMode === "file" ? fileLabel : doneText}
-          onClose={() => setDone(null)}
-        >
-          <DoneForm
-            item={item}
-            label={doneText}
-            submitLabel={doneMode === "file" ? fileLabel : undefined}
-            fields={tray?.done?.fields ?? {}}
-            today={today}
-            onClose={() => setDone(null)}
-            onDone={doneMode === "file" ? () => void fileIt() : undefined}
-          />
-        </Popover>
-      )}
-      {/* not before the files are known: the action row is rebuilt when the shown file is first found */}
-      <div className="item-files">
-        {files.isPending ? null : shown?.path && shown.state !== "missing" ? (
-          <FileMeta key={shown.drive_id} file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }} disabled={trash.busy}>
-            {(meta) => (
-              <>
-                {actionRow(meta.ask)}
-                {fileError && (
-                  <p className="error" role="alert">
-                    {visible(fileError)}
-                  </p>
-                )}
-                {kind === "dated" && checklist}
-                {meta.header}
-                <FilePreview
-                  file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }}
-                  extraTools={
-                    <>
-                      {quickLookButton}
-                      {meta.marks}
-                    </>
-                  }
-                  boxTool={{}}
-                />
-                {tagSlot && createPortal(meta.tags, tagSlot)}
-              </>
-            )}
-          </FileMeta>
-        ) : (
-          <>
-            {actionRow()}
-            {fileError && (
-              <p className="error" role="alert">
-                {visible(fileError)}
-              </p>
-            )}
-            {kind === "dated" && checklist}
-            {shown?.state === "missing" && <p className="notice">This file is missing from the archive.</p>}
-          </>
-        )}
-        {trash.view}
-      </div>
-      {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
-      <SavedNote kind="item" target={String(item.id)} />
-      {kind !== "dated" && checklist}
-      <History item={item} tray={tray} today={today} />
-    </div>
+          {trash.view}
+          {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
+          {/* the action row, an item with no file included, is portaled into the fields row */}
+          {!files.isPending && !(shown?.path && shown.state !== "missing") && actionRow()}
+        </>
+      }
+      preview={
+        <>
+          <div className="item-files" ref={setPreviewSlot} />
+          {!files.isPending && shown?.path && shown.state !== "missing" && (
+            <FileMeta key={shown.drive_id} file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }} disabled={trash.busy}>
+              {(meta) => (
+                <>
+                  {actionRow(meta.ask)}
+                  {headSlot && createPortal(meta.header, headSlot)}
+                  {tagSlot && createPortal(meta.tags, tagSlot)}
+                  {previewSlot &&
+                    createPortal(
+                      <FilePreview
+                        file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }}
+                        extraTools={
+                          <>
+                            {quickLookButton}
+                            {meta.marks}
+                          </>
+                        }
+                        boxTool={{}}
+                      />,
+                      previewSlot,
+                    )}
+                </>
+              )}
+            </FileMeta>
+          )}
+        </>
+      }
+      notes={
+        <>
+          <SavedNote kind="item" target={String(item.id)} />
+          {kind !== "dated" && checklist}
+          <History item={item} tray={tray} today={today} />
+        </>
+      }
+    />
   );
 }

@@ -6,8 +6,18 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The file view has one order in Browse, in a collection and in a tray: name and folder
+  with the lock, tags, the collections the file is in, the summary, what is specific to
+  that view (a tray's fields and Mark done, a collection's group and Remove, Browse's
+  Put in tray), the preview, then notes, checklist and history. Tags and the summary used
+  to be below the preview in Browse and above it in trays.
+
 ### Added
 
+- A tray item shows the collections its file is in as badges (the x takes the file out)
+  and has **Add to collection...**, as Browse does.
 - Tray list rows show what an item has as small icons before the date: a larger pencil
   for a note, a checklist icon with the number of open to-dos (hover for "2 of 5 to-dos
   open"), and a sparkle for an AI summary or a text icon for a summary you wrote.

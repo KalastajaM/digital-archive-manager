@@ -3,7 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FileActions } from "../screens/FileActions";
+import { FileCollections } from "../screens/FileActions";
 import { mockFetch, renderWithProviders } from "../test-utils";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -47,7 +47,7 @@ async function setup() {
   });
   renderWithProviders(
     <MemoryRouter>
-      <FileActions driveId="d7" />
+      <FileCollections driveId="d7" />
     </MemoryRouter>,
   );
   const user = userEvent.setup();

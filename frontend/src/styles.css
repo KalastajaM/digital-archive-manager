@@ -2176,3 +2176,8 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .tag-row-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tag-row-pin { color: var(--muted); flex: none; }
 .tag-row-count { color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+
+/* The file view's blocks (FileView): the wrappers take no space of their own */
+.file-view-block { display: contents; }
+.file-collections { margin: var(--sp-2) 0; }
+.file-collections .actions { justify-content: flex-start; }

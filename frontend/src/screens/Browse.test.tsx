@@ -689,6 +689,26 @@ describe("Selected file", () => {
     expect(await screen.findByText(/Could not put .* in To pay: .*not a ⟨U\+202E⟩number/)).toBeInTheDocument();
   });
 
+  it("the file panel has the file view's one block order, with nothing missing", async () => {
+    const { user } = setup("10. Financial/Banks", { "GET /api/trays": { body: { trays: [TO_PAY], errors: [] } } });
+    const preview = await openFile(user);
+    await within(preview).findByRole("region", { name: "Tags" });
+    const blocks = Array.from(preview.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
+    expect(blocks).toEqual(["header", "tags", "collections", "summary", "own", "preview", "notes"]);
+    const inBlock = (name: string) => preview.querySelector(`[data-block="${name}"]`) as HTMLElement;
+    expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "a.pdf" })).toBeInTheDocument();
+    expect(within(inBlock("header")).getByRole("button", { name: "Move file to…" })).toBeInTheDocument();
+    expect(within(inBlock("tags")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
+    expect(within(inBlock("collections")).getByRole("button", { name: "Add to collection…" })).toBeInTheDocument();
+    expect(within(inBlock("summary")).getByRole("region", { name: "Summary" })).toBeInTheDocument();
+    expect(within(inBlock("own")).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
+    expect(within(inBlock("preview")).getByRole("img", { name: "Page 1" })).toBeInTheDocument();
+    for (const name of ["Star", "Mark Important", "Ask AI"]) {
+      expect(within(inBlock("preview")).getByRole("button", { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+    }
+    expect(within(inBlock("notes")).getByRole("textbox", { name: "Note on this file" })).toBeInTheDocument();
+  });
+
   it("Add to collection adds the file to an existing one", async () => {
     const { calls, user } = setup("10. Financial/Banks", {
       "GET /api/collections": { body: [SAUNA] },
@@ -1825,7 +1845,7 @@ describe("Trash in Browse (stars spec §8)", () => {
 });
 
 describe("Selection, folders and layout (UI review)", () => {
-  it("a highlighted row is the selected file: j shows its detail, preview first", async () => {
+  it("a highlighted row is the selected file: j shows its detail", async () => {
     const { user } = setup("10. Financial/Banks");
     await screen.findByRole("button", { name: "b.pdf" });
     const preview = screen.getByRole("region", { name: "Preview" });
@@ -1837,10 +1857,10 @@ describe("Selection, folders and layout (UI review)", () => {
     const row = screen.getByRole("button", { name: "b.pdf" }).closest("li")!;
     expect(row).toHaveAttribute("aria-current", "true");
     expect(within(preview).getByRole("heading", { name: "b.pdf" })).toBeInTheDocument();
-    // the preview comes before the actions
+    // the file view's one order: the actions (own block) come before the preview
     const html = preview.innerHTML;
     expect(html.indexOf("Page 1")).toBeGreaterThan(-1);
-    expect(html.indexOf("Page 1")).toBeLessThan(html.indexOf("Put in tray"));
+    expect(html.indexOf("Put in tray")).toBeLessThan(html.indexOf("Page 1"));
   });
 
   it("after a move the detail of the moved file is gone, and the next step is highlighted and shown", async () => {
