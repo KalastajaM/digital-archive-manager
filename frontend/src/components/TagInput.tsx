@@ -3,13 +3,18 @@
  * removes the last. While typing, the existing tags that start with the text (most used
  * first) are listed: ↑ ↓ choose, Enter adds the chosen one, Esc closes the list.
  *
+ * The "…" button beside the field opens every tag by group with its count to pick from.
+ *
  * Controlled: ``onChange`` gets the whole new list (the caller writes it at once, or
  * keeps it until filing). */
+import { Ellipsis } from "lucide-react";
 import { type KeyboardEvent, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useTagSuggestions } from "../api/client";
 import { isCmdEnter } from "../keyboard";
 import { visible } from "../text";
+import { TagBrowser } from "./TagBrowser";
+import { IconButton } from "./ui/IconButton";
 
 /** How many existing tags the field suggests at most. */
 const SUGGEST_MAX = 8;
@@ -38,6 +43,7 @@ export function TagInput({
   passCmdEnter?: boolean;
 }) {
   const [text, setText] = useState("");
+  const [browsing, setBrowsing] = useState(false);
   // the list as last given or changed here, so two quick changes both count
   const latest = useRef(value);
   latest.current = value;
@@ -152,6 +158,23 @@ export function TagInput({
           }}
         />
       </div>
+      <IconButton
+        icon={<Ellipsis size={16} />}
+        label="Browse tags…"
+        className="folder-picker-browse"
+        disabled={disabled}
+        onClick={() => setBrowsing(true)}
+      />
+      {browsing && (
+        <TagBrowser
+          taken={value}
+          onCancel={() => setBrowsing(false)}
+          onChoose={(name) => {
+            setBrowsing(false);
+            add([name]);
+          }}
+        />
+      )}
       {listOpen && (
         <ul id={listId} className="tag-suggest" role="listbox" aria-label="Existing tags">
           {suggestions.map((t, i) => (
