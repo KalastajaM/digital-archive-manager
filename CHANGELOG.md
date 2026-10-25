@@ -253,6 +253,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- After dam is updated and restarted, a normal refresh of the browser shows the new
+  version. Before, the browser could keep showing the old one until a hard reload.
 - Testing a rule with a word area is much faster. It folded the whole text of every
   document twice (once to pick the documents that need page 1, once to test them), one
   character at a time, so a long text cost milliseconds, and a rule that only looks at a
