@@ -29,9 +29,11 @@ All notable changes are listed here. The format follows
     of days you choose. dam still never empties To Delete. The empty-folder check leaves
     out the folders the archive is set up with, such as the filing code folders in
     `##. Organize`.
-  - Duplicates show each copy's folder, and its name only where it differs. Collections and
-    trays show where a gone file was last seen instead of an internal id, say what each
-    entry means, and offer **Take out** for a gone file in a collection.
+  - Duplicates show each copy's folder with its details under it, and its name only where
+    it differs. **Remove** is offered only in groups of three or more copies, where there
+    is a choice.
+  - Collections and trays show where a gone file was last seen instead of an internal id,
+    say what each entry means, and offer **Take out** for a gone file in a collection.
   - Each check's card folds to one line (Collapse all and Expand all in the toolbar,
     remembered in this browser). The reset icon at the top right of each card forgets that
     check's result, and **Reset all** in the toolbar every result, without changing the

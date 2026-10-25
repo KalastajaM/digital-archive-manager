@@ -80,14 +80,25 @@ function CarryOverList({ items, asked }: { items: CarryOver[]; asked: boolean })
   );
 }
 
-/** A copy in a group: its folder (the group's head already names the file), and its own
- * name only where it differs from that. */
+/** The copies that could go: not the kept one and not Important or locked. */
+const candidatesOf = (group: DupGroup, keep: string) => group.files.filter((f) => f.drive_id !== keep && !f.locked);
+/** The copies a group's buttons act on. Unticking only applies where there is a choice
+ * (two or more candidates); with one, it always goes. */
+const removalsOf = (group: DupGroup, keep: string, skipped: Set<string>) => {
+  const candidates = candidatesOf(group, keep);
+  return candidates.length > 1 ? candidates.filter((f) => !skipped.has(f.drive_id)) : candidates;
+};
+
+/** A copy in a group, on two lines: its folder (the group's head already names the file),
+ * then its own name where it differs, its size and date. Remove is offered only where
+ * there is a choice of copies to remove. */
 function FileRow({
   file,
   groupName,
   groupKey,
   keep,
   removing,
+  choosable,
   onKeep,
   onToggle,
 }: {
@@ -96,6 +107,8 @@ function FileRow({
   groupKey: string;
   keep: boolean;
   removing: boolean;
+  /** Two or more copies could go, so each can be unticked. */
+  choosable: boolean;
   onKeep: () => void;
   onToggle: () => void;
 }) {
@@ -106,26 +119,33 @@ function FileRow({
         <input type="radio" name={`keep-${groupKey}`} checked={keep} onChange={onKeep} />
         <span>Keep</span>
       </label>
-      <span className="dup-path">
+      <span className="dup-path dup-copy">
         <code title={visible(file.path)}>{visible(folderOf(file.path) || "Top level")}</code>
-        {baseName(file.path) !== groupName && (
-          <span>
-            <span className="hint">named</span> <code>{visible(baseName(file.path))}</code>
+        <span className="dup-meta">
+          {baseName(file.path) !== groupName && (
+            <span>
+              <span className="hint">named</span> <code>{visible(baseName(file.path))}</code>
+            </span>
+          )}
+          <span className="hint">
+            {formatSize(file.size)}
+            {file.mtime !== null && `, ${shortDate(file.mtime)}`}
           </span>
-        )}
-        <span className="hint">
-          {formatSize(file.size)}
-          {file.mtime !== null && `, ${shortDate(file.mtime)}`}
+          {place && <Tag tone="grey">{place}</Tag>}
+          {file.locked && (
+            <Tag tone="orange" title={file.why ?? undefined}>
+              {file.locked === "important" ? "Important" : "Locked"}
+            </Tag>
+          )}
         </span>
-        {place && <Tag tone="grey">{place}</Tag>}
-        {file.locked && (
-          <Tag tone="orange" title={file.why ?? undefined}>
-            {file.locked === "important" ? "Important" : "Locked"}
-          </Tag>
-        )}
       </span>
       <span className="dup-actions">
-        {!keep && (
+        {!keep && !choosable && file.locked && (
+          <span className="hint" title={file.why ?? undefined}>
+            Stays
+          </span>
+        )}
+        {!keep && choosable && (
           <label className="check" title={file.why ?? undefined}>
             <input
               type="checkbox"
@@ -167,7 +187,8 @@ function Group({
   onInclude: () => void;
   onAct: (action: Action) => void;
 }) {
-  const removable = group.files.filter((f) => f.drive_id !== keep && !f.locked && !skipped.has(f.drive_id));
+  const removable = removalsOf(group, keep, skipped);
+  const choosable = candidatesOf(group, keep).length > 1;
   const why = removable.length === 0 ? "Choose at least one copy to remove" : undefined;
   const name = baseName(group.files[0].path);
   return (
@@ -190,6 +211,7 @@ function Group({
             groupKey={group.sha256}
             keep={f.drive_id === keep}
             removing={!skipped.has(f.drive_id)}
+            choosable={choosable}
             onKeep={() => onKeep(f.drive_id)}
             onToggle={() => onToggle(f.drive_id)}
           />
@@ -238,12 +260,9 @@ export function Duplicates() {
     const chosen = keeps[g.sha256];
     return chosen && g.files.some((f) => f.drive_id === chosen) ? chosen : g.keep;
   };
-  const removalsOf = (g: DupGroup) => {
-    const keep = keepOf(g);
-    return g.files.filter((f) => f.drive_id !== keep && !f.locked && !skipped.has(f.drive_id));
-  };
+  const removalsIn = (g: DupGroup) => removalsOf(g, keepOf(g), skipped);
   const bodyFor = (groups: DupGroup[], action: Action, dry_run: boolean): DuplicateResolveBody => ({
-    groups: groups.map((g) => ({ keep: keepOf(g), others: removalsOf(g).map((f) => f.drive_id) })),
+    groups: groups.map((g) => ({ keep: keepOf(g), others: removalsIn(g).map((f) => f.drive_id) })),
     action,
     carry_over: carry,
     dry_run,
@@ -262,7 +281,7 @@ export function Duplicates() {
   };
 
   const begin = (groups: DupGroup[], action: Action) => {
-    const usable = groups.filter((g) => removalsOf(g).length > 0);
+    const usable = groups.filter((g) => removalsIn(g).length > 0);
     if (usable.length === 0 || pending !== null) return;
     void guarded(async () => {
       const body = bodyFor(usable, action, true);
@@ -317,7 +336,7 @@ export function Duplicates() {
   const groups = result?.groups ?? [];
   const includedGroups = groups.filter((g) => !excluded.has(g.sha256));
   const bulk = (action: Action) => begin(includedGroups, action);
-  const bulkCopies = includedGroups.reduce((n, g) => n + removalsOf(g).length, 0);
+  const bulkCopies = includedGroups.reduce((n, g) => n + removalsIn(g).length, 0);
   const est = estimate.data;
   const clearChoices = () => {
     setKeeps({});
