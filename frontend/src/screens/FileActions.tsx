@@ -1,6 +1,6 @@
 /** What Browse offers for the selected file: badges for its open tray items and
- * collections, "Put in tray" (a menu), "Add to collection…" and its own note (a folder:
- * Add to collection only). All of it is
+ * collections, "Put in tray" (a menu), "Add to collection…" (a folder: Add to collection
+ * only). All of it is
  * database-only (the file stays where it is), except that adding to a published
  * collection adds a link in ##. Ongoing through the Ongoing sync. That needs no
  * preview (app-owned links only, journaled, undone by removing the member again), but
@@ -19,11 +19,9 @@ import {
   useGroupChange,
   useTrays,
 } from "../api/client";
-import { SummaryBox } from "../components/ai/SummaryBox";
 import { CollectionPicker } from "../components/CollectionPicker";
 import { changeToast } from "../components/collectionText";
 import { LastChange } from "../components/LastChange";
-import { SavedNote } from "../components/SavedNote";
 import { useToast } from "../components/Toasts";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { trayIcon } from "../components/ui/Sidebar";
@@ -35,7 +33,7 @@ import { visible } from "../text";
  * through a folder), open and not a built-in, has a × that takes the file out of it (as
  * Remove from collection does: the file stays where it is), with Undo in the toast
  * (back in its group too). */
-export function LinkBadges({ driveId }: { driveId: string }) {
+export function LinkBadges({ driveId, hideItem }: { driveId: string; hideItem?: number }) {
   const links = useFileLinks(driveId);
   const members = useCollectionMembers();
   const groupChange = useGroupChange();
@@ -44,7 +42,8 @@ export function LinkBadges({ driveId }: { driveId: string }) {
   if (links.isError) {
     return <p className="hint">Its trays and collections could not be loaded: {visible(errorText(links.error))}</p>;
   }
-  const items = links.data?.items ?? [];
+  // the item whose view this is is not listed as a link to itself
+  const items = (links.data?.items ?? []).filter((i) => i.id !== hideItem);
   const collections = links.data?.collections ?? [];
   if (items.length === 0 && collections.length === 0) return null;
   const remove = async (c: Collection, groupId: number | null) => {
@@ -259,18 +258,32 @@ export function FolderActions({ driveId, refusal }: { driveId: string; refusal: 
   );
 }
 
+/** The collections block of the file view (the same in Browse, a collection and a tray):
+ * the trays and collections the file is in as badges (a collection's × takes the file
+ * out), and "Add to collection…" with its picker. ``hideItem``: a tray item that is not
+ * listed (it is the item being viewed). */
+export function FileCollections({ driveId, hideItem }: { driveId: string; hideItem?: number }) {
+  const collect = useAddToCollectionAction(driveId);
+  return (
+    <section className="file-collections" aria-label="Collections of this file">
+      <LinkBadges driveId={driveId} hideItem={hideItem} />
+      <div className="actions">{collect.button}</div>
+      {collect.view}
+    </section>
+  );
+}
+
 /** "Back to inbox": run by the screen's move flow (preview → confirm → Undo);
  * ``refusal`` says why it cannot run now (e.g. "Already in the inbox"). */
 export type BackToInbox = { refusal: string | null; run: () => void };
 
-/** The selected file's actions and note (keyed by the file: another file starts afresh). */
+/** The selected file's own actions in Browse: Put in tray and Back to inbox (the summary,
+ * the note and Add to collection are blocks of the shared file view). */
 export function FileActions({ driveId, backToInbox }: { driveId: string; backToInbox?: BackToInbox }) {
-  const collect = useAddToCollectionAction(driveId);
   return (
     <div className="file-actions">
       <div className="actions">
         <PutInTrayMenu driveId={driveId} />
-        {collect.button}
         {backToInbox &&
           (backToInbox.refusal ? (
             <span className="button-wrap" data-tip={backToInbox.refusal}>
@@ -284,9 +297,6 @@ export function FileActions({ driveId, backToInbox }: { driveId: string; backToI
             </button>
           ))}
       </div>
-      {collect.view}
-      <SummaryBox driveId={driveId} />
-      <SavedNote kind="file" target={driveId} label="Note on this file" />
     </div>
   );
 }

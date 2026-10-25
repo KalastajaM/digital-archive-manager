@@ -231,6 +231,15 @@ collection, a tray item): clicking the name renames it (the extension stays), th
 folder icon beside the path moves it, and tags are chips written at once. A rename or move
 is shown as a plan first and has **Undo**.
 
+**The file view has the same order everywhere** (Browse, a collection, a tray item): the
+name and folder with the lock, the tags, the collections the file is in (the x on a badge
+takes it out, **Add to collection...** adds it), the summary, then what only that view
+has (in a tray: the fields, **Mark done** or **Mark paid** and the action row; in a
+collection: the group and **Remove from collection**; in Browse: **Put in tray**), the
+preview with its toolbar, and last the notes, checklist and history. The summary, notes,
+checklist and history fold. A tray item with several files shows the collections of the
+file you chose.
+
 ## Filing codes
 
 When you scan a paper you usually know already what it is for: a bill to pay, something
@@ -949,8 +958,8 @@ did.
 ## Browse
 
 Browse shows the archive's folders, with search. Click a file, or step to it with `j`/`k`,
-and the detail beside the list shows its preview, then its trays, marks, actions, summary
-and note. Folders open on click. Drag the edge between list and detail to change the
+and the detail beside the list shows the file view: name and folder, tags, collections,
+summary, actions, the preview and the note. Folders open on click. Drag the edge between list and detail to change the
 list's width.
 
 - **Two panes**: the split toggle in the toolbar shows two folders side by side, for

@@ -1,16 +1,20 @@
-/** The selected file's side panel, the same in Browse and in a collection: its name and
- * folder (editable), the preview with ★ / ! and Ask AI in its toolbar, the tags, its
- * trays and collections, then Put in tray, Add to collection, the summary and the note.
- * A screen adds its own: ``view`` and ``tools`` in the preview's toolbar, ``intro`` under
- * the name and ``extras`` before the shared actions (a collection's group and Remove).
- * The toolbar keeps the app's one order: view (Open, Show in Finder, ``view``: Quick
- * Look), then ★ / !, then Ask AI, then ``tools`` (the bin last). */
+/** The selected file's side panel, the same in Browse and in a collection, laid out in the
+ * file view's one block order (``FileView``): name and folder (editable), tags, the
+ * file's collections, the summary, the screen's own block (``extras``: a collection's
+ * group and Remove; then Put in tray and Back to inbox), the preview with ★ / ! and Ask AI
+ * in its toolbar, and the note. A screen adds its own: ``view`` and ``tools`` in the
+ * preview's toolbar and ``intro`` under the name. The toolbar keeps the app's one order:
+ * view (Open, Show in Finder, ``view``: Quick Look), then ★ / !, then Ask AI, then
+ * ``tools`` (the bin last). */
 import type { ReactNode } from "react";
+import { SummaryBox } from "../components/ai/SummaryBox";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
+import { FileView } from "../components/FileView";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
 import { Breakable } from "../components/PlanPreview";
+import { SavedNote } from "../components/SavedNote";
 import { visible } from "../text";
-import { type BackToInbox, FileActions, FolderActions, LinkBadges } from "./FileActions";
+import { type BackToInbox, FileActions, FileCollections, FolderActions, LinkBadges } from "./FileActions";
 
 export function FilePanel({
   file,
@@ -37,12 +41,26 @@ export function FilePanel({
   boxTool?: boolean;
 }) {
   return (
-    <div className="file-panel">
-      <FileMeta key={`meta-${file.drive_id}`} file={file} disabled={disabled}>
-        {(meta) => (
-          <>
-            {meta.header}
-            {intro}
+    <FileMeta key={`meta-${file.drive_id}`} file={file} disabled={disabled}>
+      {(meta) => (
+        <FileView
+          className="file-panel"
+          header={
+            <>
+              {meta.header}
+              {intro}
+            </>
+          }
+          tags={meta.tags}
+          collections={<FileCollections driveId={file.drive_id} />}
+          summary={<SummaryBox driveId={file.drive_id} />}
+          own={
+            <>
+              {extras}
+              <FileActions driveId={file.drive_id} backToInbox={backToInbox} />
+            </>
+          }
+          preview={
             <FilePreview
               file={preview}
               boxTool={boxTool ? {} : undefined}
@@ -55,16 +73,11 @@ export function FilePanel({
                 </>
               }
             />
-            {meta.tags}
-          </>
-        )}
-      </FileMeta>
-      <div className="browse-detail-actions">
-        <LinkBadges driveId={file.drive_id} />
-      </div>
-      {extras}
-      <FileActions key={file.drive_id} driveId={file.drive_id} backToInbox={backToInbox} />
-    </div>
+          }
+          notes={<SavedNote kind="file" target={file.drive_id} label="Note on this file" />}
+        />
+      )}
+    </FileMeta>
   );
 }
 
