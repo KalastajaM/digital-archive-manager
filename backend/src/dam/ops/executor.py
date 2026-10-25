@@ -6,6 +6,7 @@ import stat
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import Engine, insert, update
@@ -33,6 +34,9 @@ from dam.ops.model import (
 )
 from dam.ops.planner import Planner
 from dam.ops.undo import JournalEntry, RecoveryResult
+
+if TYPE_CHECKING:
+    from dam.locks import LockService
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +66,8 @@ class Executor:
         self.engine = engine
         self.repo = repo
         self.throttle_ms = throttle_ms
+        # refuses a change to a locked file (``dam.locks``); set by the App
+        self.locks: LockService | None = None
 
     def preview(self, plan: Plan) -> list[ResolvedOp]:
         """Validate and resolve ``plan`` without touching the disk or the journal.
@@ -71,7 +77,7 @@ class Executor:
         """
         if plan.origin == UNDO_ORIGIN:
             raise GuardError('origin "undo" is reserved for Executor.undo()')
-        return Planner(self.paths, self.areas_dir).resolve(plan)
+        return Planner(self.paths, self.areas_dir, self.locks).resolve(plan)
 
     def apply(
         self,

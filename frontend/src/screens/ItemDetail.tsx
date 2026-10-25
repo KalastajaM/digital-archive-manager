@@ -755,7 +755,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
               <span key={f.drive_id} className="tab-wrap">
                 <button type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
                   {nameOf(f)}
-                  <MarkIcons marks={f.marks} />
+                  <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
                   {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
                 </button>
                 {/* shown on hover and focus, always reachable by keyboard */}

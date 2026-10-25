@@ -2001,7 +2001,10 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .rule-words { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0 0 var(--sp-2); padding: 0; }
 .rule-word { border-radius: var(--r-pill); padding: 0 10px; font-size: var(--fs-sm); background: var(--grey-bg); color: var(--muted); text-decoration: line-through; }
 .rule-word[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); text-decoration: none; }
-.rule-match { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--muted); }
+.rule-add-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.rule-add-row > input { flex: 0 1 12rem; width: auto; min-width: 8rem; }
+.rule-match { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--muted); }
+.rule-section-head { display: flex; align-items: center; gap: var(--sp-2); }
 .rule-match select { width: auto; }
 .rule-for-choice { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .rule-for-folder { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-top: var(--sp-2); }
@@ -2016,6 +2019,10 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .rule-section { display: flex; flex-direction: column; gap: var(--sp-3); }
 .rule-section + .rule-section { margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
 .rule-section-title { margin: 0; font-size: var(--fs-md); color: var(--text); }
+.replay-stale { margin: 0 0 var(--sp-2); }
+.replay-group { margin: var(--sp-2) 0 0; }
+.replay-group-title { margin: 0; font-weight: 600; }
+.replay-group .hint { margin: 0 0 var(--sp-1); }
 .replay-source { margin: 0 0 var(--sp-3); font-weight: 600; }
 .replay-source-off { color: var(--red-text); }
 .replay-source-unknown { color: var(--muted); }
@@ -2071,7 +2078,8 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .page-box-number { position: absolute; top: 0; left: 0; padding: 0 4px; font-size: var(--fs-sm); font-weight: 600; background: var(--accent-fill); color: var(--on-accent); }
 .box-note { margin: var(--sp-2) 0 0; }
 .box-kept { list-style: none; margin: 0 0 var(--sp-2); padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
-.box-kept li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.box-kept li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.box-kept-problem { flex: 1 0 100%; margin: 0; }
 .box-kept-text { min-width: 0; overflow-wrap: anywhere; }
 .box-mode { font-size: var(--fs-sm); }
 .box-panel { margin: var(--sp-2) 0 0; max-height: 45vh; overflow-y: auto; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
@@ -2113,11 +2121,9 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .rule-picture { display: block; max-width: 100%; max-height: 6rem; margin: 0 0 var(--sp-2); border: 0.5px solid var(--hairline); background: #fff; }
 /* a fixed grid: the value has its own width and the link its own row (always there), so the
    slider never changes length and 1.00 stays reachable */
-.rule-score { display: grid; grid-template-columns: auto minmax(6rem, 1fr) 4ch; align-items: center; column-gap: var(--sp-3); row-gap: var(--sp-1); margin: 0 0 var(--sp-2); }
+.rule-score { display: grid; grid-template-columns: auto minmax(6rem, 1fr) 4ch auto; align-items: center; column-gap: var(--sp-3); row-gap: var(--sp-1); margin: 0 0 var(--sp-2); }
 .rule-score input[type="range"] { width: 100%; min-width: 0; margin: 0; }
 .rule-score output { width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
-.rule-score-reset { grid-column: 2 / 4; min-height: 1.5em; }
-.rule-score-reset .link-button { text-align: left; }
 .replay-scores { margin: var(--sp-1) 0; font-size: var(--fs-sm); }
 .replay-scores ul { list-style: none; margin: var(--sp-1) 0; padding: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
 .replay-score { font-variant-numeric: tabular-nums; font-weight: 600; margin-right: var(--sp-2); }
@@ -2126,6 +2132,12 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .replay-scores-title { margin: var(--sp-2) 0 0; font-weight: 600; }
 .replay-near { margin-top: var(--sp-2); padding: var(--sp-2); border: 1px dashed var(--hairline); border-radius: var(--radius, 6px); color: var(--muted); }
 .replay-path { text-align: left; overflow-wrap: anywhere; }
+
+/* -- locks: a safety catch against renaming and moving a file ------------------------ */
+.mark-lock { color: var(--muted-2); }
+.lock-control { display: inline-flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.lock-control .lock-state, .lock-control .lock-ask { font-size: var(--fs-sm); color: var(--muted); }
+.lock-control button:not(.icon-button) { font-size: var(--fs-sm); }
 
 /* A name or title renamed by clicking it: plain text that is a button */
 .click-edit { all: unset; box-sizing: border-box; max-width: 100%; cursor: text; border-radius: 4px; }

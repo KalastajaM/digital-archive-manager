@@ -80,7 +80,7 @@ class AreaPictures:
                 "The picture of page 1 of this document is not made yet. Try again in a moment."
             ) from None
         if ImageStat.Stat(crop.convert("L")).stddev[0] < MIN_CONTRAST:
-            raise InvalidRequest("There is nothing in that area of page 1: no text and no picture.")
+            raise InvalidRequest("There is nothing in that area: no text and no picture.")
         return crop
 
     @staticmethod

@@ -1,8 +1,8 @@
 /** A file's ★ Ongoing and ! Important icons, after its name in any row (spec §2: the
  * icon follows the file). Nothing for a file with no marks. */
-import { Star } from "lucide-react";
+import { Lock, LockOpen, Star } from "lucide-react";
 import { createContext, useContext } from "react";
-import type { Mark } from "../api/client";
+import { isUnlockedNow, type Mark, useIsBlocked, useLocks } from "../api/client";
 
 export const MARK_LABEL: Record<Mark, string> = { starred: "Starred", important: "Important" };
 /** A built-in collection as the UI names it: "★ Starred" (stored as "Ongoing", its
@@ -29,11 +29,47 @@ export function StarGlyph({ size = 14, filled = true }: { size?: number; filled?
  * icon would repeat on every row, so rows inside leave it out. */
 export const OmitMark = createContext<Mark | null>(null);
 
-export function MarkIcons({ marks, omit }: { marks: readonly Mark[] | null | undefined; omit?: Mark }) {
+/** The lock of a file: shut when its rename, move and To Delete are refused, open while it
+ * is unlocked for now. Nothing for a file that is not locked. */
+function LockIcon({ driveId, marks, path }: { driveId: string; marks: readonly Mark[] | null | undefined; path?: string | null }) {
+  const blocked = useIsBlocked()(driveId, marks, path);
+  const locks = useLocks();
+  const important = marks?.includes("important") ?? false;
+  const locked = important || (locks.data?.files.some((f) => f.drive_id === driveId) ?? false);
+  if (blocked) {
+    return (
+      <span className="mark-icon mark-lock" role="img" aria-label="Locked" title="Locked: it cannot be renamed or moved until you unlock it">
+        <Lock size={12} strokeWidth={2} aria-hidden="true" />
+      </span>
+    );
+  }
+  if (locked && isUnlockedNow(driveId)) {
+    return (
+      <span className="mark-icon mark-lock" role="img" aria-label="Unlocked for now" title="Unlocked until you leave this file">
+        <LockOpen size={12} strokeWidth={2} aria-hidden="true" />
+      </span>
+    );
+  }
+  return null;
+}
+
+/** ``driveId`` (with the file's ``path`` when it may lie in a locked folder) adds the lock icon. */
+export function MarkIcons({
+  marks,
+  omit,
+  driveId,
+  path,
+}: {
+  marks: readonly Mark[] | null | undefined;
+  omit?: Mark;
+  driveId?: string;
+  path?: string | null;
+}) {
   const inherited = useContext(OmitMark);
   const skip = omit ?? inherited;
   const shown = marks?.filter((m) => m !== skip);
-  if (!shown || shown.length === 0) return null;
+  const lock = driveId ? <LockIcon driveId={driveId} marks={marks} path={path} /> : null;
+  if (!shown || shown.length === 0) return lock ? <span className="mark-icons">{lock}</span> : null;
   marks = shown;
   return (
     <span className="mark-icons">
@@ -47,6 +83,7 @@ export function MarkIcons({ marks, omit }: { marks: readonly Mark[] | null | und
           <ImportantGlyph />
         </span>
       )}
+      {lock}
     </span>
   );
 }

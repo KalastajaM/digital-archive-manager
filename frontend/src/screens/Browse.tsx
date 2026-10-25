@@ -20,6 +20,8 @@ import {
   useBrowse,
   type Mark,
   useBrowseFiles,
+  useIsBlocked,
+  LOCKED_REASON,
   useCollectionsWithMarked,
   useCreateFolder,
   useStatus,
@@ -312,7 +314,7 @@ function EntryRow({
       ) : (
         <span className="entry-name">{visible(item.name)}</span>
       )}
-      <MarkIcons marks={item.marks} />
+      <MarkIcons marks={item.marks} driveId={item.is_dir ? undefined : item.drive_id} path={item.path} />
       {item.is_link && (
         <span className="link-icon" role="img" aria-label="Symbolic link" title="Symbolic link">
           ↪
@@ -872,14 +874,22 @@ export default function Browse() {
     return s.touched && at && !at.is_dir ? [at] : [];
   };
   const moveTargets = filesOf(act);
+  // A locked file (until it is unlocked) neither moves nor goes to To Delete
+  const isBlocked = useIsBlocked();
+  const lockedIn = (rows: Item[]) => rows.some((it) => !it.is_dir && isBlocked(it.drive_id, it.marks, it.path));
+  const lockedIds = (ids: string[]) =>
+    lockedIn(ids.flatMap((id) => [...items.left, ...items.right].filter((it) => it.drive_id === id)));
   // Files in ##. To Delete or ##. Ongoing never move from here.
-  const moveBlocked = moveTargets.map((it) => sourceRefusal(it.path)).find((r) => r !== null) ?? null;
+  const moveBlocked =
+    moveTargets.map((it) => sourceRefusal(it.path)).find((r) => r !== null) ??
+    (lockedIn(moveTargets) ? LOCKED_REASON : null);
   // Mark for deletion takes the same rows as Move to…, plus checked folders.
   const markTargets: Item[] =
     checked.length > 0 ? list.filter((it) => checked.includes(it.drive_id)) : moveTargets;
   const markIds = markTargets.map((it) => it.drive_id);
   const markBlocked =
-    markTargets.map((it) => deletionRefusal(it.path, it.marks)).find((r) => r !== null) ?? null;
+    markTargets.map((it) => deletionRefusal(it.path, it.marks)).find((r) => r !== null) ??
+    (lockedIn(markTargets) ? LOCKED_REASON : null);
   selection.current = markIds; // stale dry runs are dropped against this
   // The bin is disabled for these; ⌘⌫ says why instead of doing nothing.
   const trashSelection = () => {
@@ -903,7 +913,13 @@ export default function Browse() {
     }
     move.start(request);
   };
-  const startMove = (dragged: string[], dest: string) => startRequest({ ids: dragged, folder: dest });
+  const startMove = (dragged: string[], dest: string) => {
+    if (lockedIds(dragged)) {
+      toast({ kind: "info", text: LOCKED_REASON });
+      return;
+    }
+    startRequest({ ids: dragged, folder: dest });
+  };
   const inbox = useInboxFolder();
   const openMoveTo = () => {
     if (running() || moveTargets.length === 0 || moveBlocked) return;
@@ -918,6 +934,7 @@ export default function Browse() {
   const folderDrop = (item: Item): DropProps => ({
     accept: (dragged) =>
       moveRefusal(item.path) ??
+      (lockedIds(dragged) ? LOCKED_REASON : null) ??
       (allIn(dragged, item.path) ? `Already in ${visible(item.name)}` : running() ? MOVE_BUSY : true),
     onDrop: (dragged) => startMove(dragged, item.path),
   });
@@ -926,7 +943,9 @@ export default function Browse() {
       ? null // search results are no folder
       : {
           accept: (dragged) =>
-            allIn(dragged, paths[pane]) ? false : (moveRefusal(paths[pane]) ?? (running() ? MOVE_BUSY : true)),
+            allIn(dragged, paths[pane])
+              ? false
+              : (moveRefusal(paths[pane]) ?? (lockedIds(dragged) ? LOCKED_REASON : running() ? MOVE_BUSY : true)),
           onDrop: (dragged) => startMove(dragged, paths[pane]),
         };
 
@@ -1030,7 +1049,8 @@ export default function Browse() {
     {
       canOpen: () => qlIndex >= 0 && !running(),
       // the file Quick Look shows (it moves the pane's row along)
-      trashRefusal: (file) => deletionRefusal(file.path, file.marks),
+      trashRefusal: (file) =>
+        deletionRefusal(file.path, file.marks) ?? (isBlocked(file.drive_id, file.marks as readonly Mark[] | undefined, file.path) ? LOCKED_REASON : null),
       trashBusy: marking.busy,
       onTrash: (file, ui) => {
         if (running()) {
@@ -1445,7 +1465,10 @@ export default function Browse() {
                   disabled={locked}
                   boxTool
                   backToInbox={{
-                    refusal: inboxRefusal([previewed.path], inbox) ?? (locked ? MOVE_BUSY : null),
+                    refusal:
+                      inboxRefusal([previewed.path], inbox) ??
+                      (isBlocked(previewed.drive_id, previewed.marks, previewed.path) ? LOCKED_REASON : null) ??
+                      (locked ? MOVE_BUSY : null),
                     run: () => {
                       if (inbox && !inboxRefusal([previewed.path], inbox)) {
                         startRequest(backToInbox([previewed.drive_id], inbox));

@@ -2,6 +2,7 @@
  * then does, and the proof (a replay over the documents filed so far) below, refreshed
  * 400 ms after the last edit. Saving asks first when the rule would have filed some
  * document somewhere else. */
+import { RotateCcw } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   type Area,
@@ -23,10 +24,13 @@ import {
 } from "../../api/client";
 import { plural } from "../../format";
 import { isWordToken, visible } from "../../text";
+import { CollectionPicker, pendingCollection } from "../CollectionPicker";
+import { FolderPicker } from "../FolderPicker";
 import { useInboxFolder } from "../MoveTo";
 import { TagInput } from "../TagInput";
 import { useToast } from "../Toasts";
 import { SamplePage } from "../zones/SamplePage";
+import { IconButton } from "../ui/IconButton";
 import { Sheet } from "../ui/Sheet";
 import { ReplayResult } from "./ReplayResult";
 import { useReplayJob } from "./useReplayJob";
@@ -90,6 +94,9 @@ const FOLDER_TIP =
   "Leave it empty and the rule does not set the folder. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
 const NAME_TIP =
   "Leave it empty and the rule does not set the name. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
+const AREAS_TIP = "The document needs a word or the picture in every area.";
+const PERSON_IN_FOLDER_TIP =
+  "Puts {person} in the Folder, so each letter goes to the folder of its own person. It does not depend on Anyone or Only for: with Anyone, every person's letters are filed, each in their own folder; with Only for it is usually not needed, because the folder can simply name that person.";
 const PAYEE_TIP = "The name filled in as the payee when this rule puts a bill in To pay.";
 const FOR_TIP =
   "Optional. Only for: the rule applies to letters for that person, as set on the document or found in its address area. {person} in the Folder or Name is filled in with the person of each letter.";
@@ -221,6 +228,9 @@ export function RuleSheet({
   const showPayee =
     payee.trim() !== "" || Object.values(trays.find((t) => t.id === tray)?.fields ?? {}).some((f) => f.prefill === "payee");
   const [tags, setTags] = useState<string[]>(() => start.tags);
+  // collections the Inbox form starts with ("Also add to collection"); a draft has none
+  const [collections, setCollections] = useState<string[]>(() => ("collections" in start ? start.collections : []) ?? []);
+  const [collectionText, setCollectionText] = useState("");
   // closed to begin with; what is set in it shows beside the toggle
   const [more, setMore] = useState(false);
   const [filename, setFilename] = useState(() => (draft ? "" : (initial.when.filename_matches ?? "")));
@@ -263,12 +273,13 @@ export function RuleSheet({
         tags,
         tray: tray || null,
         payee: payee.trim() || null,
+        collections,
       },
       ...(personZone ? { person_zone: personZone } : {}),
       ...(sender ? { sender } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.id, sender, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore, a.match])), person, JSON.stringify(personZone), filename, folderIs, folder, name, tags, tray, payee],
+    [initial.id, sender, JSON.stringify(ticked), JSON.stringify(areas.map((a, i) => [a.box, areaWords[i], a.image, a.minScore, a.match])), person, JSON.stringify(personZone), filename, folderIs, folder, name, tags, collections, tray, payee],
   );
   const ruleKey = JSON.stringify(rule);
 
@@ -345,7 +356,9 @@ export function RuleSheet({
       setError(errorText(e));
     }
   };
-  const canSave = hasCondition && tested !== null && !save.isPending;
+  // a half-typed collection would silently be left out of the rule
+  const pendingColl = pendingCollection(collectionText);
+  const canSave = hasCondition && tested !== null && !save.isPending && pendingColl === null;
   // an existing rule opened from a filing is an update of it
   const title = draft
     ? replaces
@@ -392,6 +405,7 @@ export function RuleSheet({
                     : "Tick at least one word"}
               </span>
             )}
+            {hasCondition && pendingColl && <span className="hint footer-start">{pendingColl}</span>}
             <button type="button" onClick={onClose}>Cancel</button>
             <button
               type="button"
@@ -405,7 +419,10 @@ export function RuleSheet({
         }
       >
         <section className="rule-section" aria-labelledby={`${ids}-when-h`}>
-          <h3 id={`${ids}-when-h`} className="rule-section-title">When a document matches</h3>
+          <div className="rule-section-head">
+            <h3 id={`${ids}-when-h`} className="rule-section-title">When a document matches</h3>
+            {areas.length > 1 && <InfoTip id={`${ids}-areas-tip`} tip={AREAS_TIP} />}
+          </div>
           {(areas.length === 0 || words.length > 0) && (
             <div className="field">
               <span className="field-label" id={`${ids}-words`}>When the text contains</span>
@@ -471,7 +488,6 @@ export function RuleSheet({
               />
             ),
           )}
-          {areas.length > 1 && <p className="hint">The document needs a word or the picture in every area.</p>}
           {pictureOnly && (
             <p className="hint">Add a text box to make this faster and surer: a picture alone takes longer to test and is less sure.</p>
           )}
@@ -552,16 +568,20 @@ export function RuleSheet({
                   ))}
                 </select>
               )}
+              <span className="rule-for-folder">
+                <button
+                  type="button"
+                  disabled={folder.includes("{person}")}
+                  aria-describedby={`${ids}-person-folder-tip`}
+                  onClick={() => setFolder(folderWithPerson(folder, foundPerson ?? person))}
+                >
+                  Use the person in the folder
+                </button>
+                <InfoTip id={`${ids}-person-folder-tip`} tip={PERSON_IN_FOLDER_TIP} />
+              </span>
             </div>
-            <div className="rule-for-folder">
-              <button
-                type="button"
-                disabled={folder.includes("{person}")}
-                onClick={() => setFolder(folderWithPerson(folder, foundPerson ?? person))}
-              >
-                Use the person in the folder
-              </button>
-              {folder.includes("{person}") && (
+            {folder.includes("{person}") && (
+              <div>
                 <span className="hint rule-preview">
                   {visible(
                     foundPerson ?? person
@@ -569,8 +589,8 @@ export function RuleSheet({
                       : "No person is known for this letter, so {person} cannot be filled in here.",
                   )}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
           <div className="rule-more">
             <button type="button" className="link-button" aria-expanded={more} onClick={() => setMore(!more)}>
@@ -606,12 +626,27 @@ export function RuleSheet({
               Filed as: {visible(`${filed.folder}/${filed.name}`)}
             </p>
           )}
-          {textField("Folder", folder, setFolder, FOLDER_TIP)}
+          <div className="field rule-field">
+            <FolderPicker
+              label="Folder"
+              value={folder}
+              onChange={setFolder}
+              labelExtra={<InfoTip id={`${ids}-folder-tip`} tip={FOLDER_TIP} />}
+              describedBy={`${ids}-folder-tip`}
+            />
+          </div>
           {textField("Name", name, setName, NAME_TIP)}
           <div className="field">
             <label htmlFor={`${ids}-tags`}>Tags</label>
             <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} />
           </div>
+          <CollectionPicker
+            label="Add to collection"
+            value={collections}
+            onChange={setCollections}
+            text={collectionText}
+            onTextChange={setCollectionText}
+          />
           <div className="field rule-field">
             <label htmlFor={`${ids}-tray`}>Tray</label>
             <select id={`${ids}-tray`} value={tray} onChange={(e) => setTray(e.target.value)}>
@@ -697,7 +732,7 @@ function AreaWords({
     <div className="field rule-area" role="group" aria-label={label}>
       <div className="rule-area-head">
         <span className="field-label" id={`${id}-label`}>
-          {several ? `In area ${n} of page 1` : "In the area you drew on page 1"}
+          {several ? `Words in area ${n}` : "Words in the area"}
         </span>
         <button type="button" className="link-button" aria-label={`Remove ${label.toLowerCase()}`} onClick={onRemove}>
           Remove
@@ -712,33 +747,35 @@ function AreaWords({
           </li>
         ))}
       </ul>
-      <input
-        aria-label={`Add a word to ${label.toLowerCase()}`}
-        placeholder="Add a word"
-        value={adding}
-        onChange={(e) => setAdding(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            add();
-          }
-        }}
-        onBlur={add}
-      />
-      <div className="rule-match">
-        <label htmlFor={`${id}-match`}>Words match</label>
-        <select
-          id={`${id}-match`}
-          value={match}
-          aria-label={`How the words match in ${label.toLowerCase()}`}
-          aria-describedby={`${id}-match-tip`}
-          onChange={(e) => onMatch(e.target.value as Match)}
-        >
-          {MATCH_CHOICES.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-        <InfoTip id={`${id}-match-tip`} tip={MATCH_TIP} />
+      <div className="rule-add-row">
+        <input
+          aria-label={`Add a word to ${label.toLowerCase()}`}
+          placeholder="Add a word"
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          onBlur={add}
+        />
+        <div className="rule-match">
+          <label htmlFor={`${id}-match`}>Words match</label>
+          <select
+            id={`${id}-match`}
+            value={match}
+            aria-label={`How the words match in ${label.toLowerCase()}`}
+            aria-describedby={`${id}-match-tip`}
+            onChange={(e) => onMatch(e.target.value as Match)}
+          >
+            {MATCH_CHOICES.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+          <InfoTip id={`${id}-match-tip`} tip={MATCH_TIP} />
+        </div>
       </div>
     </div>
   );
@@ -770,7 +807,7 @@ function AreaPictureView({
     <div className="field rule-area" role="group" aria-label={label}>
       <div className="rule-area-head">
         <span className="field-label" id={`${id}-label`}>
-          {several ? `Picture in area ${n} of page 1` : "Picture in the area you drew on page 1"}
+          {several ? `Picture in area ${n}` : "Picture in the area"}
         </span>
         <button type="button" className="link-button" aria-label={`Remove ${label.toLowerCase()}`} onClick={onRemove}>
           Remove
@@ -790,13 +827,12 @@ function AreaPictureView({
           onChange={(e) => onScore(Number(e.target.value))}
         />
         <output htmlFor={`${id}-score`}>{shown.toFixed(2)}</output>
-        <span className="rule-score-reset">
-          {minScore !== null && (
-            <button type="button" className="link-button" onClick={() => onScore(null)}>
-              Use the usual {defaultScore.toFixed(2)}
-            </button>
-          )}
-        </span>
+        <IconButton
+          icon={<RotateCcw size={14} />}
+          label={`Use the default (${defaultScore.toFixed(2)})`}
+          disabled={minScore === null || minScore === defaultScore}
+          onClick={() => onScore(null)}
+        />
       </div>
     </div>
   );

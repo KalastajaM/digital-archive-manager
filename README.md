@@ -19,7 +19,8 @@ without ever deleting a file.
 
 - **Safe by design.** dam never deletes your files. Every change is shown before it
   happens, recorded, and can be undone. "Delete" means moving to a `To Delete` folder that
-  you empty yourself.
+  you empty yourself. Important files are locked against renaming and moving until you
+  unlock them, and you can lock any file.
 - **Decide on paper, file in one go.** Save a scan straight into the inbox's To pay or
   To action folder, or put a printed QR sticker on the paper before scanning (tick ★ or
   ! on it to star it or mark it Important). dam fills in the tray, folder and tags from

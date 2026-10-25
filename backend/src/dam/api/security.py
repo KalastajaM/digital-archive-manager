@@ -32,6 +32,7 @@ import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+from dam.locks import _TOKENS, UNLOCK_HEADER, parse_tokens
 from dam.logging_setup import log_internal_error
 
 log = logging.getLogger(__name__)
@@ -174,6 +175,25 @@ class ArchiveGuardMiddleware:
                 await send_json(send, 409, {"error": STALE_WINDOW})
                 return
         await self.app(scope, receive, send)
+
+
+class UnlockTokenMiddleware:
+    """Put the page's unlock tokens (``X-Dam-Unlock``) where the operation layer finds
+    them for this request. A token only counts if the server issued it and it is still
+    live (``dam.locks``); the header itself unlocks nothing."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        reset = _TOKENS.set(parse_tokens(_headers(scope).get(UNLOCK_HEADER)))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _TOKENS.reset(reset)
 
 
 class InternalErrorMiddleware:

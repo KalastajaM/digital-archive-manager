@@ -306,6 +306,40 @@ class MarkBody(_In):
     group: str | None = None
 
 
+class UnlockIn(_In):
+    """``POST /api/files/{id}/unlock``: ``now`` unlocks until the page lets the file go
+    (the answer carries the token to send as ``X-Dam-Unlock``); ``for_good`` removes the
+    owner's lock (never for an Important file)."""
+
+    mode: Literal["now", "for_good"]
+
+
+class LockStateOut(BaseModel):
+    """A file's lock. ``locked``: it is locked whatever this request carries; ``reason``
+    ``important`` (always locked) or ``file`` (the owner's lock). ``token`` only after an
+    unlock "now"; ``unlocked_now``: a live temporary unlock exists."""
+
+    drive_id: str
+    locked: bool
+    reason: Literal["important", "file"] | None = None
+    unlocked_now: bool = False
+    token: str | None = None
+    expires_after_idle_seconds: int | None = None
+
+
+class LockedFileOut(BaseModel):
+    drive_id: str
+    reason: Literal["important", "file"]
+
+
+class LocksOut(BaseModel):
+    """Every locked file, and the folders whose content is locked (a folder marked
+    Important): a file inside one has no entry of its own."""
+
+    files: list[LockedFileOut]
+    folders: list[str]
+
+
 class AssignmentOut(BaseModel):
     """Who a document is from (``sender``) and for (``person``), as set by the owner
     (``set_by`` "owner") or recorded by a confirmed filing ("filing")."""
@@ -1536,6 +1570,7 @@ class RuleThenIn(_In):
     tags: list[str] = Field(default_factory=list)
     tray: str | None = None
     payee: str | None = None
+    collections: list[str] = Field(default_factory=list)
 
 
 class RuleIn(_In):
@@ -1629,6 +1664,7 @@ class RuleThenOut(BaseModel):
     tags: list[str]
     tray: str | None
     payee: str | None
+    collections: list[str]
 
 
 class RuleStatsOut(BaseModel):

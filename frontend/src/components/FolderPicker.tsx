@@ -1,5 +1,5 @@
 import { Ellipsis } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useFolders } from "../api/client";
 import { visible } from "../text";
 import { FolderBrowser, type RefusedRoot } from "./FolderBrowser";
@@ -19,13 +19,17 @@ type Props = {
   /** A problem with this field (e.g. "Choose a folder."): shown under it, with
    * ``aria-invalid`` and ``aria-describedby`` on the input. */
   error?: string | null;
+  /** Shown right after the label (an info mark). */
+  labelExtra?: ReactNode;
+  /** The id of an element that describes the field (e.g. the info mark in ``labelExtra``). */
+  describedBy?: string;
 };
 
 /** Text field with type-to-filter suggestions from /api/folders. Any text is allowed:
  * a folder that does not exist yet shows up as "New folder" in the plan. The "…"
  * button opens the folder browser to walk the tree instead (stars spec §9). */
 export const FolderPicker = forwardRef<HTMLInputElement, Props>(function FolderPicker(
-  { label, value, onChange, required, refuse, error },
+  { label, value, onChange, required, refuse, error, labelExtra, describedBy },
   ref,
 ) {
   const id = useId();
@@ -69,7 +73,14 @@ export const FolderPicker = forwardRef<HTMLInputElement, Props>(function FolderP
 
   return (
     <div className="folder-picker">
-      <label htmlFor={id}>{label}</label>
+      {labelExtra ? (
+        <div className="field-label-row">
+          <label htmlFor={id}>{label}</label>
+          {labelExtra}
+        </div>
+      ) : (
+        <label htmlFor={id}>{label}</label>
+      )}
       <div className="folder-picker-row">
         <input
           ref={setInput}
@@ -80,7 +91,7 @@ export const FolderPicker = forwardRef<HTMLInputElement, Props>(function FolderP
           aria-controls={listId}
           aria-activedescendant={shown && active < matches.length ? `${listId}-${active}` : undefined}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={[error ? errorId : null, describedBy].filter(Boolean).join(" ") || undefined}
           className={error ? "invalid" : undefined}
           autoComplete="off"
           spellCheck={false}

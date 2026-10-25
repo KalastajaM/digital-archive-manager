@@ -14,6 +14,7 @@
 - [Paying a bill with the bank barcode](#paying-a-bill-with-the-bank-barcode)
 - [Collections](#collections)
 - [Starred and Important](#starred-and-important)
+- [Locking a file](#locking-a-file)
 - [Browse](#browse)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
@@ -422,6 +423,15 @@ Then file it like this:
 - **Folder and name patterns**: `{year}`, `{doc_date:%Y%m%d}` and `{stem}` stand for the
   document's year, its date and its original file name, and are filled in for each
   document the rule files (the tips beside Folder and Name list them).
+- **Folder**: type it, or press the "…" button to pick a folder from the tree; the path
+  you pick goes into the field, and patterns such as `{person}` and `{year}` can still be
+  typed in it.
+- **Add to collection**: the collections the Inbox form starts with in "Also add to
+  collection" when this rule matches, picked the same way (type to find, or the "…"
+  button). It works like tags: the collections of all matching rules are added together,
+  and you can still change them on the card before filing. A name that does not exist yet
+  is created when the document is filed. The test does not compare collections (it only
+  checks where documents would be filed).
 - **Tags, tray and payee**: what the rule sets. An empty field is one the rule does not
   set; to leave a field out, clear it. **Payee** is only there when the chosen tray has
   a payee field (To pay does): it is the name filled in as the payee when the rule puts
@@ -447,8 +457,20 @@ the result again after each edit: "Matches 14 documents you filed before: 12 wou
 exactly where they are", then every one that would land somewhere else, current place
 beside the rule's place. It also says how many documents in the inbox now the rule
 catches, and, when an earlier rule already wins for some of the matches, "For 3 of them
-rule fortum comes first". If no filed document matches, it says "Not tested yet: no
-filed document matches it", and you can still save.
+rule fortum comes first". If no filed document matches, it says so, and you can still
+save.
+
+Documents the test could not judge yet are counted ("2 documents could not be judged
+yet") and listed, closed, under **Could not be judged yet**, grouped by reason. Each group
+says what the reason means and what happens next: "Page 1 not read yet" (dam reads page 1
+in the background and the test picks the documents up when they are read; **Read page 1
+of these N now** does it first), "Person unknown" (the address area does not say who the
+letter is for, so a rule that files by person cannot be judged; set For on those
+documents, or add the people in Settings), "No OCR engine", "Missing", "Took too long" and
+"No picture of page 1". A rule that names no person (Anyone, and no `{person}` in the
+Folder or Name) never has documents in "Person unknown". While you edit, the result on
+screen is the one for the rule before your last change, and the sheet says so until the
+test of the rule as it is now answers.
 
 **Save** waits ("Testing…") until the proof for what is on screen is in. If some
 documents would land elsewhere it asks "2 documents would land somewhere else. Save
@@ -504,8 +526,11 @@ its own x to remove it. Esc drops the box you are dragging, then the last box, t
 closes the tool; the x at the top of the panel ("Close and drop the boxes") drops them
 all. The panel offers:
 
-- **Make a rule…**: a rule sheet opens with the words in the boxes as chips under "In the
-  area you drew on page 1" (one group for each box). The rule does not have to be about
+- **Make a rule…**: a rule sheet opens with the words in the boxes as chips under "Words
+  in area 1", "Words in area 2" and so on (one group for each box; "Picture in area 3" for
+  a picture box). With more than one area, the ? beside "When a document matches" says the
+  document needs a word or the picture in every area. Each text area has its **Words
+  match** choice next to its word box. The rule does not have to be about
   a sender: a box can just as well pick out the kind of letter or any other fixed text.
   The proof works as above. Documents whose page 1 has not been read yet are read first
   ("Reading page 1 of N documents…"); any that cannot be read are listed as not checked,
@@ -568,7 +593,8 @@ Some letterheads are only a picture: a logo, and the box holds no text. Then dam
 recognise the picture itself. Draw the box and, in its row, choose **Picture** instead of **Words**
 (it is offered for any box, not only an empty one). The panel shows the picture that was
 cut out of it. **Make a rule…** then makes a rule with that area; the rule sheet shows the picture and a slider, **Match
-needed**.
+needed**; the small reset button right of its value ("Use the default (0.85)") puts the
+score back to the default, and is greyed out while it is there.
 
 How it works: dam keeps a small grayscale picture of page 1 of each PDF and image (about
 25 KB, in the cache folder, never in the archive). It looks for the cut-out picture in
@@ -671,8 +697,11 @@ The rule sheet's **For** row says who the address area found on the document the
 made from ("Tiina, found in the address area", "Nobody found", "Tiina and Michiel found",
 or, when the People list is empty, where to add people). Choose **Anyone** or **Only for**
 a person from the list; the rule then applies to letters for that person only, and the
-test follows. **Use the person in the folder** puts `{person}` in the Folder field: it
-replaces a folder part that is the person's name already, else adds `/{person}` at the end.
+test follows. **Use the person in the folder**, on the same row, puts `{person}` in the
+Folder field: it replaces a folder part that is the person's name already, else adds
+`/{person}` at the end. It is independent of Anyone / Only for: each letter then goes to
+the folder of its own person. It works with Anyone, and with Only for it is usually not
+needed, because the folder can simply name that person (its ? says this).
 A line under the buttons shows where this letter would go ("This letter would go to
 50. Medical/Tiina/Kela"). For a rule opened from Settings there is no document, so the
 row has the choice but no "found" line.
@@ -853,7 +882,31 @@ Two marks for files you need often, without making a collection:
 
 Mark or unmark with one click wherever a file is shown. **Marking never moves or renames
 a file.** A file marked Important cannot be moved to To Delete (unmark it first), nor can
-a folder holding one.
+a folder holding one. An Important file is also locked (see the next section).
+
+## Locking a file
+
+A lock is a safety catch against slips, such as a drag and drop in the wrong place. A
+locked file can still be viewed and described: tags, notes, checklists, From and For,
+trays, stars, the Important mark, summaries and previews all work. What it refuses is
+anything that changes the file on disk: rename, move (also drag and drop, Move to… and
+Back to inbox), filing from the Inbox, and Move to To Delete. A locked file shows a lock
+icon in lists and in its details, and those controls are off, with the reason as their
+tooltip.
+
+- **Important files are always locked.** You can unlock one only **for now**.
+- **Any other file can be locked** with **Lock** next to its name, and unlocked again
+  with **Unlock**, which asks **For now** or **For good**. For good removes the lock.
+- **For now lasts until you leave the file.** The details say "Unlocked until you leave
+  this file", with **Lock again**. Select another file, close the panel, go to another
+  page or reload, and the file is locked again. While it is unlocked you can make as
+  many changes as you like.
+
+If a change would touch a locked file, dam refuses the whole change before anything moves
+and says "This file is locked. Unlock it to change it." For several files at once it
+names the locked ones. There is no password: the lock stops mistakes, not other people
+using your computer. Undo still works on a locked file, since it only puts back what you
+did.
 
 ## Browse
 
@@ -1056,6 +1109,9 @@ folders can be opened and dropped on, not dragged.
   `##. To Delete`, keeping its original path; you empty that folder yourself. The only
   things dam ever removes are its own links and its own empty folders in `##. Ongoing` and
   `##. Important`, and only after checking they are still exactly the ones it made.
+- **It never moves or renames a locked file.** Important files are always locked, and you
+  can lock any file; you unlock it on purpose, and for Important files only until you
+  leave the file.
 - **It never changes anything without showing you first.** Moves, renames, new folders
   and conversions are previewed and need your confirmation. A name already taken gets
   `_2`; nothing is ever overwritten.
