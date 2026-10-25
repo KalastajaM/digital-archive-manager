@@ -84,13 +84,17 @@ import {
 } from "../components/GroupTree";
 import { LastChange } from "../components/LastChange";
 import { BUILTIN_LABEL } from "../components/MarkIcons";
-import { MarkToggles } from "../components/MarkToggles";
+import { FileActionBar, useAskAction } from "../components/FileActionBar";
+import { type FilingAI, useFilingAI } from "../components/ai/useFilingAI";
+import { allMarked, useBatchMark } from "../components/useBatchMark";
+import { toDeleteReason } from "../toDelete";
+import { usePutInTrayEntries } from "./FileActions";
 import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
 import { RelativeDate, useLocalToday } from "../components/RelativeDate";
 import { SavedNote, SaveState } from "../components/SavedNote";
 import { type ToastAction, useToast } from "../components/Toasts";
 import { deletionRefusal } from "../components/MoveTo";
-import { isTrashKey, TrashButton, useTrash } from "../components/Trash";
+import { isTrashKey, useTrash } from "../components/Trash";
 import { EmptyState } from "../components/ui/EmptyState";
 import { IconButton } from "../components/ui/IconButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
@@ -565,28 +569,25 @@ function NewChildSheet({
 }
 
 /** The selected member. A file in the index gets the shared file panel (as in Browse),
- * with the bin and Quick Look in its preview's toolbar and, before the shared actions,
- * its group (the keyboard way to move it) and Remove from collection (not offered in the
- * built-in ones, whose ★ / ! toggle is that). A folder, a missing file, one in To Delete
- * or one not in the index has nothing to preview or edit: its details and the same
- * collection controls. */
+ * with Quick Look in its preview's toolbar and, in its own block, its group (the keyboard
+ * way to move it). What acts on the file (Put in tray, Remove from collection, Ask AI, ★,
+ * !, the bin) is in the page's header (``FileActionBar``). A folder, a missing file, one in
+ * To Delete or one not in the index has nothing to preview or edit: its details and the
+ * same collection controls. */
 function Inspector({
   member,
   groups,
   busy,
   onGroup,
-  onRemove,
   onQuickLook,
-  onTrash,
+  ai,
 }: {
-  /** Trash for the selected file. */
-  onTrash: () => void;
+  /** The page's Ask AI, whose answer shows in the file's details. */
+  ai: FilingAI;
   member: Member | null;
   groups: { group: Group; path: string }[];
   busy: boolean;
   onGroup: (gid: number | null) => void;
-  /** Takes the file out of the collection (none: the built-in collections). */
-  onRemove?: () => void;
   onQuickLook?: () => void;
 }) {
   const selectId = useId();
@@ -599,13 +600,7 @@ function Inspector({
     );
   }
   const name = memberName(member);
-  const trashButton = <TrashButton disabled={busy} disabledReason={trashRefusal(member)} onClick={onTrash} />;
   const quickLookButton = onQuickLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />;
-  const removeButton = onRemove && (
-    <button type="button" aria-label={`Remove ${name} from the collection`} disabled={busy} onClick={onRemove}>
-      Remove from collection
-    </button>
-  );
   // the file's own folder in Browse, with the file selected (a click on a member keeps the
   // collection's page; Today's Starred card opens Browse on a click)
   const showButton = !member.is_dir && member.path && (
@@ -641,17 +636,12 @@ function Inspector({
           preview={{ drive_id: member.drive_id, path: member.path, ext: extOf(member.path), is_link: member.is_link }}
           disabled={busy}
           view={quickLookButton}
-          tools={trashButton}
+          headerActions={{ ai }}
           extras={
-            (group || removeButton || showButton) && (
+            (group || showButton) && (
               <section className="inspector-collection" aria-label="In this collection">
                 {group}
-                {(showButton || removeButton) && (
-                  <div className="inspector-actions">
-                    {showButton}
-                    {removeButton}
-                  </div>
-                )}
+                {showButton && <div className="inspector-actions">{showButton}</div>}
               </section>
             )
           }
@@ -660,21 +650,16 @@ function Inspector({
     );
   }
 
-  /** The Quick Look ★ ! Ask AI Trash row, the app's one order, with Show in Browse for a
-   * folder (``ask``: only an entry that can be edited has it). */
-  const actions = (ask?: ReactNode) => (
+  /** Quick Look, with Show in Browse for a folder (the file actions are in the header). */
+  const actions = () => (
     <div className="inspector-actions">
       {quickLookButton}
-      <MarkToggles driveId={member.drive_id} name={member.path ? baseName(member.path) : member.drive_id} marks={member.marks} path={member.path} />
-      {ask}
-      {trashButton}
       {member.is_dir && member.path && !member.missing && (
         <button type="button" onClick={() => navigate(`/browse?path=${encodeURIComponent(member.path!)}`)}>
           Show in Browse
         </button>
       )}
       {showButton}
-      {removeButton}
     </div>
   );
   const notice = (member.missing || member.quarantined) && (
@@ -691,13 +676,13 @@ function Inspector({
         </>
       ) : member.path ? (
         // a folder: its name and path (its Rename and Move to… say why they are off)
-        <FileMeta key={member.drive_id} file={{ ...member, name }} disabled={busy}>
+        <FileMeta key={member.drive_id} file={{ ...member, name }} disabled={busy} ai={ai}>
           {(meta) => (
             <>
               {meta.header}
               <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path ?? "" }} identity={false} />
               {group}
-              {actions(meta.ask)}
+              {actions()}
             </>
           )}
         </FileMeta>
@@ -717,13 +702,13 @@ function Inspector({
 function EntryInspector({
   entry,
   busy,
-  onTrash,
   onQuickLook,
+  ai,
 }: {
   entry: DirEntry;
   busy: boolean;
-  onTrash: () => void;
   onQuickLook: () => void;
+  ai: FilingAI;
 }) {
   const folder = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
   return (
@@ -734,7 +719,7 @@ function EntryInspector({
         disabled={busy}
         intro={<p className="hint">In the folder {visible(folder)}, which is in this collection. The file itself is not a member.</p>}
         view={<IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
-        tools={<TrashButton disabled={busy} disabledReason={deletionRefusal(entry.path, entry.marks)} onClick={onTrash} />}
+        headerActions={{ ai }}
       />
     </aside>
   );
@@ -1096,6 +1081,23 @@ export default function CollectionDetail({
     });
   };
 
+  // The header's file actions (``FileActionBar``) act on the file the side panel shows: the
+  // selected member, or a file inside a folder member.
+  const filingAI = useFilingAI();
+  const batchMarks = useBatchMark();
+  const shownFile = browsed ?? selected;
+  const shownPath = shownFile?.path ?? null;
+  // a file in the index (not a folder, a missing file or one in To Delete) has the full set
+  const shownIsFile = !!shownFile && !!shownPath && !shownFile.is_dir && !("missing" in shownFile && (shownFile.missing || shownFile.quarantined));
+  const trayEntries = usePutInTrayEntries(shownIsFile ? [shownFile.drive_id] : [], null);
+  const askBar = useAskAction(
+    filingAI,
+    shownFile && shownPath && !("missing" in shownFile && (shownFile.missing || shownFile.quarantined))
+      ? { drive_id: shownFile.drive_id, path: shownPath, is_dir: shownFile.is_dir, is_link: shownFile.is_link }
+      : null,
+    "Select a file to ask AI",
+    busy,
+  );
   const select = (driveId: string) => {
     setChosen(driveId);
     setBrowsed(null);
@@ -1246,6 +1248,38 @@ export default function CollectionDetail({
         },
   ];
 
+  const markReason = toDeleteReason(shownPath);
+  const markable = shownFile && shownPath ? [{ drive_id: shownFile.drive_id, name: baseName(shownPath), marks: shownFile.marks }] : [];
+  const trashWhy = browsed ? deletionRefusal(browsed.path, browsed.marks) : selected ? trashRefusal(selected) : null;
+  const fileBar = shownFile ? (
+    <FileActionBar
+      tray={
+        shownIsFile
+          ? { label: "Put in tray", entries: trayEntries, disabled: busy, reason: markReason }
+          : undefined
+      }
+      removeFromCollection={
+        !browsed && selected && !builtin
+          ? { name: memberName(selected), run: () => void removeMember(selected), disabled: busy }
+          : undefined
+      }
+      ask={shownPath && !("missing" in shownFile && (shownFile.missing || shownFile.quarantined)) ? askBar : undefined}
+      star={
+        shownPath
+          ? { on: allMarked(markable, "star"), run: () => void batchMarks.run("star", markable), disabled: busy || batchMarks.busy, reason: markReason }
+          : undefined
+      }
+      important={
+        shownPath
+          ? { on: allMarked(markable, "important"), run: () => void batchMarks.run("important", markable), disabled: busy || batchMarks.busy, reason: markReason }
+          : undefined
+      }
+      trash={{ run: trashSelected, disabled: busy || trashWhy !== null, reason: trashWhy }}
+    />
+  ) : (
+    <FileActionBar />
+  );
+
   const subtitle = (
     <>
       {builtin ? "Built in" : isOpen ? "Open" : "Closed"}
@@ -1274,9 +1308,11 @@ export default function CollectionDetail({
   const parentName = (g: Group) => (g.parent_id === null ? null : c.groups.find((x) => x.id === g.parent_id)?.name ?? null);
 
   return (
-    <div className="collection" ref={split.hostRef} style={split.hostStyle}>
-      <div className="collection-main">
+    <div className="collection">
         <Toolbar
+          className="collection-toolbar"
+          style={split.hostStyle}
+          trailing={fileBar}
           title={name}
           titleEditor={renaming ? <RenameField name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} /> : undefined}
           subtitle={subtitle}
@@ -1331,6 +1367,8 @@ export default function CollectionDetail({
             </>
           }
         />
+      <div className="collection-cols" ref={split.hostRef} style={split.hostStyle}>
+      <div className="collection-main">
         <div className="collection-body">
           {banner}
           {!builtin && <Where c={c} all={allCollections.data ?? []} />}
@@ -1401,7 +1439,7 @@ export default function CollectionDetail({
       </div>
       <Splitter split={split} label="Resize the inspector" />
       {browsed ? (
-        <EntryInspector entry={browsed} busy={busy} onTrash={trashSelected} onQuickLook={quickLook.open} />
+        <EntryInspector entry={browsed} busy={busy} onQuickLook={quickLook.open} ai={filingAI} />
       ) : (
       <Inspector
         member={selected}
@@ -1412,13 +1450,14 @@ export default function CollectionDetail({
           const where = gid === null ? "Ungrouped" : (c.groups.find((g) => g.id === gid)?.name ?? "");
           void run({ op: "members", id, drive_ids: [selected.drive_id], group_id: gid }, `Moved to ${where}`);
         }}
-        onRemove={builtin ? undefined : () => selected && void removeMember(selected)}
         onQuickLook={selected && looks.includes(selected) ? quickLook.open : undefined}
-        onTrash={trashSelected}
+        ai={filingAI}
       />
       )}
+      </div>
       {quickLook.view}
       {trash.view}
+      {filingAI.sheet}
       <Sheet
         open={exporting}
         title={`Export ${name}`}

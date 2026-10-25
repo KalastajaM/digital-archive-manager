@@ -916,7 +916,7 @@ describe("Item detail", () => {
     });
   });
 
-  it("the list header has two rows: the name with its count, then Add file and Open / Done at the right", async () => {
+  it("the list header has the name with its count, Add file and Open / Done together in the lead (one row, left-aligned)", async () => {
     renderTrays("/trays/to-pay");
     await screen.findByRole("article", { name: "Northpower sähkö" });
     const header = trayHeader();
@@ -930,6 +930,8 @@ describe("Item detail", () => {
     expect(header.querySelector(".toolbar-title")).not.toContainElement(actions);
     expect(within(actions).getByRole("button", { name: "Add file" })).toBeInTheDocument();
     expect(within(actions).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    // one row: the title, then the controls, as siblings in the lead (not stacked under it)
+    expect(Array.from(lead.children)).toEqual([lead.querySelector(".toolbar-title"), actions]);
   });
 
   it("a done item in the panel shows its done date and Reopen", async () => {

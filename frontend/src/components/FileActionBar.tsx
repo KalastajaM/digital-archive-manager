@@ -3,7 +3,7 @@
  * order, the labels, the tooltips and the disabled reasons are the same in both.
  *
  * Order: Put in tray (a pull-down of the trays; "Move to tray" in a tray), Remove from
- * tray, Back to inbox, Move to…, From…, For…, Ask AI, Star, Important, Restore, and the
+ * tray (in a collection: Remove from collection), Back to inbox, Move to…, From…, For…, Ask AI, Star, Important, Restore, and the
  * bin last (Move to To Delete). An action the screen leaves out is not shown; a disabled
  * one keeps its reason as the tooltip. The screen decides what each button does and on
  * which files; this component only draws them. */
@@ -41,6 +41,9 @@ export type FileActionBarProps = {
   /** Put in tray (Browse) or Move to tray (a tray): ``entries`` are the pull-down. */
   tray?: { label: "Put in tray" | "Move to tray"; entries: MenuEntry[]; disabled?: boolean; reason?: string | null };
   removeFromTray?: BarAction;
+  /** Take the file out of the collection the screen shows (it sits where Remove from tray
+   * does in a tray; ``name`` is the file's, which the accessible name carries). */
+  removeFromCollection?: BarAction & { name: string };
   backToInbox?: BarAction;
   moveTo?: BarAction & { shortcut?: string };
   sender?: BarAction;
@@ -81,6 +84,16 @@ export function FileActionBar(p: FileActionBarProps) {
           disabled={off(p.removeFromTray)}
           disabledReason={why(p.removeFromTray)}
           onClick={p.removeFromTray.run}
+        />
+      )}
+      {p.removeFromCollection && (
+        <IconButton
+          icon={<CircleMinus />}
+          label={`Remove ${p.removeFromCollection.name} from the collection`}
+          tip="Remove from this collection (the file stays where it is)"
+          disabled={off(p.removeFromCollection)}
+          disabledReason={why(p.removeFromCollection)}
+          onClick={p.removeFromCollection.run}
         />
       )}
       {p.backToInbox && (

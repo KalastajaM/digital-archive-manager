@@ -279,7 +279,7 @@ the x takes the file out, and typing in the field adds it, offering **Create col
 "name"** for a new one; **...** opens the tree; both apply at once and the toast has
 **Undo**), the summary, then what only that view
 has (in a tray: the fields, **Mark done** or **Mark paid** and the action row; in a
-collection: the group and **Remove from collection**), the
+collection: the group), the
 preview with its toolbar (zoom, select box, open, show in Finder, open in window and Quick Look), and last the notes, checklist and history. The summary, notes,
 checklist and history fold. A tray item with several files shows the collections of the
 file you chose.
@@ -904,7 +904,16 @@ when they are moved or renamed. A file can be in several collections.
 
 A collection's page has a summary, a **Needs attention** strip (members in an open tray
 item or still in the inbox), its child collections, its groups of files, a note and a
-checklist. The selected file shows on the right with its details and buttons.
+checklist. The selected file shows on the right with its details.
+
+The header has the same two parts as Browse and the trays. The left part is for the
+collection: its name and subtitle, **New group**, the folder button, **Export…** and **⋯**.
+Over the selected file, at the right, is one group of icons for the file actions, in this
+order: **Put in tray** (a menu of the trays), **Remove from collection** (not in Starred and
+Important, where the star and the exclamation mark do that), **Ask AI**, **Star**,
+**Important** and **Move to To Delete**. A greyed icon says why when you hover it. The
+preview's toolbar keeps only the viewing tools and Quick Look. In a narrow window the left
+part takes the row and the file actions follow at the right.
 
 **In Finder or Explorer**, open collections appear in `##. Ongoing`: a collection with
 several members is a folder of links, and one whose only member is a folder is a single

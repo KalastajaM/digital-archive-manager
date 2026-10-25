@@ -248,7 +248,9 @@ describe("the Important page and its sidebar row", () => {
     expect(within(page).getByText(/2 not in the app yet/)).toBeInTheDocument(); // beside the count
     // the selected file's toggles; its row shows its icon
     const selected = within(page).getByRole("complementary", { name: "Selected file" });
-    expect(within(selected).getByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
+    // (the file's actions are in the page's header)
+    expect(within(page).getByRole("toolbar", { name: "! Important file actions" })).toBeInTheDocument();
+    expect(await within(page).findByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     // the ! toggle is the way out: no second "Remove from Important" button
     expect(within(selected).queryByRole("button", { name: /^Remove from Important/ })).not.toBeInTheDocument();
     const memberRow = within(page).getAllByText("deed.pdf").find((el) => el.closest(".member-row"))!;

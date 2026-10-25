@@ -84,6 +84,16 @@ All notable changes are listed here. The format follows
   tools (zoom, select box, open, show in Finder, open in window, Quick Look), and the
   Browse file panel no longer repeats **Put in tray** and **Back to inbox**. On a narrow
   window the list part takes the row and the file actions follow at the right.
+- A collection (your own, **Important** and **Starred**) now has the same header: its
+  name, subtitle and list buttons (**New group**, the folder button, **Export…**, **⋯**)
+  at the left, and over the selected file one group of icon buttons: **Put in tray**,
+  **Remove from collection**, **Ask AI**, **Star**, **Important** and **Move to To Delete**.
+  **Remove from collection** sits where **Remove from tray** does in a tray. The file panel
+  no longer repeats these buttons, and its toolbar keeps only the viewing tools. The group
+  and **Show in folder** stay in the file panel.
+- In a tray's header the name with its count, **Add file** and **Open / Done** now sit on
+  one row at the left, level with the file buttons, instead of **Add file** and the
+  switch on a second row at the right. They wrap only in a narrow window.
 - Collections are now a chip field like tags, everywhere a file's collections are set:
   the file view in Browse, a collection and a tray, the Inbox card and batch ("Also add
   to collection"), the rule sheet and the filing codes. The collections show as chips
