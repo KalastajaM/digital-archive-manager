@@ -45,6 +45,7 @@
 - [Starred and Important](#starred-and-important)
 - [Locking a file](#locking-a-file)
 - [Browse](#browse)
+- [Searching](#searching)
 - [Tags](#tags)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
@@ -207,7 +208,8 @@ nothing overdue", or "All clear") and the date, then cards.
   to-dos (open checklist entries, or files still in the inbox), **Starred** files, and
   the result of the last reminder check.
 - **Search** is a box on top of the second column: type and press Enter, and Browse opens
-  with that search (`tag:name` works too, see [Browse](#browse)).
+  with that search (filters such as `tag:name` work too, see [Searching](#searching); the
+  **?** next to the box lists them).
 
 Trays with nothing open are folded into one **Clear** card, so the cards with content get
 the room. Each tray row has a round checkbox that marks the item done at once (a bill is
@@ -1034,12 +1036,9 @@ list's width.
   between the folder view and a flat list of every file below the current folder, with
   sortable Name, Folder, Date and Size columns (up to 500 rows).
 - **Search** looks at file names, paths and text (the Search card on Today opens Browse
-  with the same search). Type `tag:medical` (or
-  `tag:"tax return"`) and a space, or pick a tag from the suggestions, and the tag becomes a
-  chip in a row under the pane's toolbar (the search box keeps only the words). Words work
-  beside tags ("Kela" with the tag medical). In that row, × on a chip drops the tag, **+ Tag**
-  adds another from the suggestions, and with two or more tags **All / Any** chooses
-  whether a file needs every tag (All, the default) or at least one (Any).
+  with the same search). Beside words it takes filters such as `tag:medical`, `type:pdf`
+  or `-in:"90. Other People"`; each finished filter becomes a chip in a row under the
+  pane's toolbar and the search box keeps only the words. See [Searching](#searching).
 - **Search results by folder.** With **Folders** selected, results are grouped under the
   folders that hold them: one header per folder with its path and the number of matches,
   folders in the order of the folder tree. The arrow at the left of a header folds the
@@ -1049,6 +1048,45 @@ list's width.
   **Files** shows the flat list with the Folder column.
 - **Links.** A link to a file inside the archive previews and opens as that file, with
   **Go to target**. A link to something outside the archive only has Show in Finder.
+
+## Searching
+
+The search box in Browse (and the Search card on Today, which opens Browse) takes plain
+words, which search file names, paths and the text of the files, and **filters** of the
+form `name:value`. The **?** next to the box lists them; a click on an example puts it in
+the box. A search with only filters lists the matching files by name.
+
+| Filter | Finds | Example |
+|---|---|---|
+| `name:` | Words in the file name only. `*` stands for any text and `?` for one character. Without a `*` or `?` the text can be anywhere in the name; with one, the pattern must fit the whole name. | `name:*kela*`, `name:2026*` |
+| `in:` | Files in a folder and the folders below it (the case of the name is ignored). | `in:"50. Medical"` |
+| `tag:` | Files with the tag. | `tag:insurance` |
+| `collection:` | Files in a collection, including the collections inside it and, for a folder that is a member, the files in that folder. | `collection:"House sale"` |
+| `from:` | Files whose sender (From, as you set it on the file) contains the text. | `from:Kela` |
+| `for:` | Files whose person (For) is that person. Only what you set, or what a confirmed filing recorded, is searched; the names found on page 1 are not. | `for:Tiina` |
+| `type:` | The kind of file: an extension (`pdf`, `docx`) or a group: `image`, `doc`, `sheet`, `slides`, `text`, `mail`, `archive`, `audio`, `video`. | `type:pdf`, `type:image` |
+| `date:` | The document date: the date at the start of the file name (`20261003_...`), and for a file without one the date it was last modified, which is the Date column in Browse. Takes `YYYY`, `YYYY-MM` or `YYYY-MM-DD`. | `date:2026-10` |
+| `after:` | Dated on or after the first day of that year, month or day. | `after:2025` |
+| `before:` | Dated before the first day of that year, month or day. | `before:2026-06` |
+| `tray:` | Files with an open item in that tray, by its id or name. | `tray:to-pay` |
+| `is:` | `starred`, `important`, `locked` (your locks and everything Important), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary` (the file has a summary). | `is:locked` |
+
+Tips:
+
+- Put a value with spaces in quotes: `in:"50. Medical"`.
+- A `-` in front leaves out what matches, for any filter: `-tag:paid`,
+  `-in:"90. Other People"`.
+- Filters combine with each other (a file must satisfy all of them) and with words:
+  `kela type:pdf after:2025`. Two `tag:` filters need both tags unless you pick **Any**
+  in the filter row, which asks for at least one.
+- Typing the start of a filter name (`col`) offers `collection:`, and after the colon the
+  collections, tags, people, senders, trays, folders or file types that fit. Enter or a
+  click takes a suggestion; a finished filter followed by a space becomes a chip. The cross on a chip
+  removes that filter.
+- A word with a colon that is not a filter name (such as `http:`) is searched as text. A
+  date that does not exist, or an unknown `is:` word, is refused with a message.
+- The whole search is in the address (`/browse?q=kela type:pdf`), so Back and a copied
+  link bring the same search.
 
 ## Tags
 
@@ -1071,8 +1109,8 @@ menu, and every change shows a toast with **Undo**:
   deleting a group keeps its tags, ungrouped.
 
 **Searching by tag.** Type `tag:medical` in a search, or click a tag here or in the sidebar,
-and Browse shows the files with that tag (see [Browse](#browse)). With several tags,
-**All / Any** in the tags row picks files with every tag or with at least one.
+and Browse shows the files with that tag (see [Searching](#searching)). With several tags,
+**All / Any** in the filter row picks files with every tag or with at least one.
 
 Tags are kept in dam's own database, not in the archive, so changing them moves no file.
 
