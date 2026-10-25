@@ -88,6 +88,7 @@ def test_status(client, app, fake_archive):
         "archive": {"id": "main", "name": "Main", "color": "#3b6fd4"},
         "profiles_count": 1,
         "inbox_exists": True,
+        "can_link": True,
         "page1": {
             "read": 0,
             "total": 0,

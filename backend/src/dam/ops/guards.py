@@ -103,13 +103,45 @@ def _check_abs_target(op: Op, restore: bool) -> None:
         raise GuardError(f"invalid link target {op.src!r}")
 
 
+def _check_copy_within(op: Op, paths: ArchivePaths) -> None:
+    """COPY of a file that is already in the archive (a drop with Copy): the source is an
+    archive path (only read, never inside ``##. Ongoing`` or ``##. To Delete``), the
+    destination an existing ordinary folder (never the archive folder, ``##. Ongoing``,
+    ``##. Important``, ``##. To Delete`` or a protected path), and the copy gets a plain
+    name (a taken one gets ``_N``; nothing is overwritten). Undo moves the copy to
+    ``##. To Delete``."""
+    if op.exact or op.allow_top_level or op.identity is not None or op.made:
+        raise GuardError(f"{op.kind} takes only a source file, a folder and a name")
+    src = canonical(op.src, paths)
+    if paths.is_root(src) or paths.is_top_level(src):
+        raise GuardError("Only a file inside a folder can be copied.")
+    if any(is_under(src, area) for area in (*paths.publish_roots, paths.quarantine)):
+        raise GuardError(f"{src!r} is in one of the app's own folders and cannot be copied")
+    name = op.name if op.name is not None else PurePosixPath(src).name
+    _check_name(name)
+    _check_not_ds_store(name)
+    if name.startswith(".") or name != name.strip() or "\\" in name:
+        raise GuardError(f"{name!r} is not a usable file name")
+    folder = canonical(op.dst, paths)
+    if paths.is_root(folder):
+        raise GuardError("Files cannot go directly in the archive folder.")
+    if any(is_under(folder, area) for area in (*paths.publish_roots, paths.quarantine)):
+        raise GuardError(f"Files are not copied into {folder!r}: the app keeps that folder")
+    if touches_protected(join(folder, name), paths):
+        raise GuardError(f"{folder!r} is protected: nothing is copied into it")
+
+
 def _check_copy(op: Op, paths: ArchivePaths) -> None:
     """COPY: a file from anywhere on this computer (only read) into the inbox folder
-    itself, under a plain file name. Never anywhere else in the archive."""
+    itself, under a plain file name; or (``_check_copy_within``) a file already in the
+    archive into an ordinary folder. Never anywhere else."""
+    if isinstance(op.src, str) and not op.src.startswith(ABS_TARGET):
+        _check_copy_within(op, paths)
+        return
     if op.exact or op.allow_top_level or op.identity is not None or op.made:
         raise GuardError(f"{op.kind} takes only a source file, the inbox and a name")
     if not (isinstance(op.src, str) and op.src.startswith(ABS_TARGET)):
-        raise GuardError("COPY needs the file to copy as an absolute path")
+        raise GuardError("COPY needs the file to copy as a path")
     source = op.src[len(ABS_TARGET) :]
     if "\0" in source or not os.path.isabs(source):
         raise GuardError(f"invalid file to copy {op.src!r}")
@@ -244,6 +276,23 @@ def _check_removal_root(src: str, paths: ArchivePaths, what: str) -> None:
         raise GuardError(f"{src!r} is protected and cannot be removed")
 
 
+def _check_undo_link(op: Op, src: str, paths: ArchivePaths, restore: bool) -> None:
+    """The one removal outside ``##. Ongoing`` / ``##. Important`` (approved by the owner:
+    "undo may remove links the app made, anywhere in the archive"): an undo (``restore``
+    and ``exact``) of a SYMLINK the journal shows the app made, here at ``src``. ``op.dst``
+    must name the target that link was made with (the journal's); the executor removes
+    the entry only while it is still a symbolic link pointing there, so a regular file,
+    a folder or a link someone else made is never removed. Not at or inside a protected
+    path, and never in ``##. To Delete``."""
+    if not _is_restore(op, restore) or op.dst is None:
+        raise GuardError(
+            f"only links inside {paths.ongoing!r} or {paths.important!r} can be removed"
+            " (or, by an undo, a link the app made)"
+        )
+    if touches_protected(src, paths) or is_under(src, paths.quarantine):
+        raise GuardError(f"{src!r} is protected and cannot be removed")
+
+
 def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
     """Raise ``GuardError`` if ``op`` is not allowed. Path policy only, no disk access.
 
@@ -318,7 +367,10 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
             _check_not_ds_store(PurePosixPath(link).name)
             _check_not_top(link, op, paths, "link")
         case OpKind.UNLINK_SYMLINK:
-            _check_removal_root(src, paths, "links")
+            if paths.in_publish_root(src) is not None:
+                _check_removal_root(src, paths, "links")
+            else:
+                _check_undo_link(op, src, paths, restore)
         case OpKind.QUARANTINE:
             if touches_protected(src, paths):
                 raise GuardError(f"{src!r} is protected and cannot be quarantined")

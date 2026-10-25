@@ -46,9 +46,14 @@ LOCAL_ID_PREFIX = "local:"  # the scanner's id for an entry without a Drive id x
 
 
 def check_disk_identity(
-    paths: ArchivePaths, repo: "FileRepo", ids: list[str], resolved: list[ResolvedOp]
+    paths: ArchivePaths,
+    repo: "FileRepo",
+    ids: list[str],
+    resolved: list[ResolvedOp],
+    kinds: tuple[OpKind, ...] = _RELOCATIONS,
 ) -> None:
-    """Refuse (``InvalidRequest``) unless each RENAME/MOVE in ``resolved`` is the file
+    """Refuse (``InvalidRequest``) unless each RENAME/MOVE in ``resolved`` (``kinds``:
+    or a SYMLINK / COPY of a drop, whose source is the file asked for) is the file
     asked for. ``ids`` holds the requested drive id of each such op, in plan order.
 
     - A Drive id: the id the planner read from the disk must equal it.
@@ -60,7 +65,7 @@ def check_disk_identity(
 
     Catches a stale index (the file was replaced since the last scan). Pass it as
     ``Executor.apply(check=...)`` so the ops checked are the ops run."""
-    relocations = [r for r in resolved if r.kind in _RELOCATIONS]
+    relocations = [r for r in resolved if r.kind in kinds]
     if len(relocations) != len(ids):
         raise InvalidRequest("The files have changed since this was planned. Scan and try again.")
     for drive_id, rop in zip(ids, relocations, strict=True):

@@ -39,6 +39,15 @@ _EXACT_SOURCE = {OpKind.QUARANTINE, OpKind.REMOVE_EMPTY_DIR}  # never follow a r
 # "abs:" file; PICTURE_BACK is handled by its own case (its source is in the archive)
 _OUTSIDE_SOURCE = {OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE}
 
+
+def _outside(op: Op) -> bool:
+    """The op's source is not an archive path: a COPY of a file elsewhere on this
+    computer, or a rule picture. (A COPY of a file already in the archive is read like
+    any other archive source.)"""
+    if op.kind is OpKind.COPY:
+        return isinstance(op.src, str) and op.src.startswith(ABS_TARGET)
+    return op.kind in _OUTSIDE_SOURCE
+
 COLLISION_NOTE = "renamed to avoid collision"
 COPY_NOTE = "copied, then removed from dam's settings folder"
 COPY_BACK_NOTE = "copied back; the copy in To Delete stays"
@@ -208,7 +217,7 @@ class Planner:
         for op in ops:
             validate(op, self.paths, restore=restore)
             redirect = None
-            if op.kind not in _OUTSIDE_SOURCE and op.src is not None and not is_abs_target(op):
+            if not _outside(op) and op.src is not None and not is_abs_target(op):
                 src = self.sim.spell(canonical(op.src, self.paths))
                 src, redirect = self._alias(src)
                 if redirect is not None and op.kind in _EXACT_SOURCE:
@@ -500,10 +509,15 @@ class Planner:
                         f"The folder {folder!r} does not exist yet, so there is nowhere to"
                         " copy the file to. Create the archive's special folders first."
                     )
-                name = self.sim.free_name(folder, op.name)
+                within = not _outside(op)
+                if within:  # a file already in the archive: a plain file, never a link
+                    self._require_src(op.src, kinds=("file",))
+                wanted = op.name or PurePosixPath(op.src).name
+                name = self.sim.free_name(folder, wanted)
                 dst = join(folder, name)
-                note = COLLISION_NOTE if name != op.name else None
-                self.out.append(ResolvedOp(op.kind, op.src, dst, None, note))
+                note = COLLISION_NOTE if name != wanted else None
+                drive_id = self._drive_id(op.src) if within else None
+                self.out.append(ResolvedOp(op.kind, op.src, dst, drive_id, note))
                 self.sim.events.append(("create", dst, "file"))
             case OpKind.PICTURE_TO_QUARANTINE:
                 self._picture_to_quarantine(op)
@@ -525,7 +539,17 @@ class Planner:
                 self.sim.events.append(("create", dst, "link"))
             case OpKind.UNLINK_SYMLINK:
                 self._require_src(op.src, kinds=("link",))
-                self.out.append(ResolvedOp(op.kind, op.src, op.src))
+                # outside the publish roots only an undo gets here (guards): it names the
+                # target the app made the link with
+                outside_roots = self.paths.in_publish_root(op.src) is None
+                self.out.append(
+                    ResolvedOp(
+                        op.kind,
+                        op.src,
+                        op.src,
+                        expect_target=op.dst if outside_roots or op.exact else None,
+                    )
+                )
                 self.sim.events.append(("remove", op.src))
             case OpKind.REMOVE_EMPTY_DIR:
                 self._require_src(op.src, kinds=("dir",))

@@ -198,6 +198,7 @@ class App:
             self.collections.member_paths,
             important=self.marks.important_paths,
             important_lock=self.collections.important_lock,
+            rescan=self.scan,
         )
         self.activity = ActivityService(
             self.executor,

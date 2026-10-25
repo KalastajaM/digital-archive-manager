@@ -14,6 +14,7 @@ nothing else is ever passed.
 import ctypes
 import ctypes.util
 import errno
+import functools
 import hashlib
 import os
 import shutil
@@ -26,7 +27,7 @@ try:  # not installed on Windows
 except ImportError:  # pragma: no cover - platform dependent
     xattr = None
 
-from dam.core.fs import resolve
+from dam.core.fs import readlink, resolve
 from dam.core.paths import nfc
 from dam.ops.identity import Identity, of_fd, of_stat
 from dam.ops.identity import same_object as same_identity
@@ -224,6 +225,25 @@ def _is_windows() -> bool:
     return sys.platform == "win32"
 
 
+@functools.cache
+def can_make_links() -> bool:
+    """Whether this computer lets the app make links (symbolic links). Always on macOS and
+    Linux; on Windows only with Developer Mode (or an administrator), tried once in the
+    system's temporary folder (never in the archive)."""
+    if not _is_windows():
+        return True
+    import tempfile
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "target.txt"
+            target.write_bytes(b"")
+            os.symlink(target, Path(tmp) / "link.txt")
+    except OSError:
+        return False
+    return True
+
+
 def make_symlink(target: Path, link: Path) -> None:
     """Create ``link`` pointing at ``target``; fails if ``link`` exists."""
     try:
@@ -247,11 +267,15 @@ def _fold_parts(p: Path) -> tuple[str, ...]:
     return tuple(nfc(x).casefold() for x in Path(p).parts)
 
 
-def unlink_symlink(link: Path, root_dir: Path) -> None:
+def unlink_symlink(link: Path, root_dir: Path, expected_target: str | None = None) -> None:
     """Remove the symbolic link ``link`` if, and only if, it lives inside ``root_dir``
-    (a publish root: ``##. Ongoing`` or ``##. Important``)."""
+    (a publish root: ``##. Ongoing`` or ``##. Important``; for an undo of a Link drop,
+    the archive folder). ``expected_target``: the link must point exactly there (what
+    the app made it with), else it is left alone."""
     if not link.is_symlink():
         raise GuardError(f"{link} is not a symbolic link")
+    if expected_target is not None and readlink(link) != expected_target:
+        raise GuardError(f"{link} points somewhere else now")
     try:
         if not stat.S_ISDIR(os.lstat(root_dir).st_mode):  # lstat: a link is refused
             raise GuardError(f"{root_dir} is not a real folder")
@@ -267,6 +291,8 @@ def unlink_symlink(link: Path, root_dir: Path) -> None:
     # and unlink() on a directory fails rather than removing it.
     if not link.is_symlink():  # re-check right before acting
         raise GuardError(f"{link} is not a symbolic link")
+    if expected_target is not None and readlink(link) != expected_target:
+        raise GuardError(f"{link} points somewhere else now")
     link.unlink()
 
 

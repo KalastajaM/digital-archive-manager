@@ -73,19 +73,21 @@ def quarantine(app: AppDep, body: QuarantineBody):
 
 @router.post("/restore", response_model=BatchResultOut)
 def restore(app: AppDep, body: RestoreBody):
-    """Take entries out of To Delete again (original place or the inbox); ``dry_run``
-    shows the plan, including a folder made again and a name given ``_N``."""
-    return app.browse.restore(body.drive_ids, body.to, origin=UI_ORIGIN, dry_run=body.dry_run)
+    """Take entries out of To Delete again (original place, the inbox or a folder);
+    ``dry_run`` shows the plan, including a folder made again and a name given ``_N``."""
+    return app.browse.restore(
+        body.drive_ids, body.to, origin=UI_ORIGIN, dry_run=body.dry_run, folder=body.folder
+    )
 
 
 @router.post("/browse/move/preview", response_model=list[ResolvedOpOut])
 def move_preview(app: AppDep, body: MoveBody) -> list:
-    return app.browse.move_preview(body.drive_ids, body.folder, origin=UI_ORIGIN)
+    return app.browse.move_preview(body.drive_ids, body.folder, origin=UI_ORIGIN, mode=body.mode)
 
 
 @router.post("/browse/move", response_model=MoveResultOut)
 def move(app: AppDep, body: MoveBody):
-    return app.browse.move(body.drive_ids, body.folder, origin=UI_ORIGIN)
+    return app.browse.move(body.drive_ids, body.folder, origin=UI_ORIGIN, mode=body.mode)
 
 
 @router.post("/browse/rename/preview", response_model=list[ResolvedOpOut])
