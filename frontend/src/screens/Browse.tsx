@@ -1040,6 +1040,9 @@ export default function Browse() {
   // (Files that cannot be moved can still be marked.)
   const marks = useBatchMark();
   const starAll = allMarked(moveTargets, "star");
+  // A single file is starred from its preview's toolbar; the header does it for several
+  // checked files, and in two panes (no preview there).
+  const batchMarks = split || checked.length > 1;
   const importantAll = allMarked(moveTargets, "important");
   const batchMark = (kind: "star" | "important") => marks.run(kind, moveTargets);
   const startRequest = (request: MoveRequest) => {
@@ -1740,6 +1743,11 @@ export default function Browse() {
               disabledReason={newFolderWhy(act) ?? undefined}
               onClick={startNewFolder}
             />
+          </>
+        }
+        search={searchBox}
+        trailing={
+          <>
             <IconButton
               icon={<FolderInput />}
               label="Move to…"
@@ -1764,22 +1772,26 @@ export default function Browse() {
               disabledReason={readOnlyWhy ?? undefined}
               onClick={() => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) })}
             />
-            <IconButton
-              icon={<StarGlyph size={16} filled={starAll} />}
-              label={starAll ? "Remove the star" : "Star"}
-              pressed={starAll}
-              disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
-              disabledReason={readOnlyWhy ?? undefined}
-              onClick={() => void batchMark("star")}
-            />
-            <IconButton
-              icon={<ImportantGlyph large />}
-              label={importantAll ? "Unmark Important" : "Mark Important"}
-              pressed={importantAll}
-              disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
-              disabledReason={readOnlyWhy ?? undefined}
-              onClick={() => void batchMark("important")}
-            />
+            {batchMarks && (
+              <>
+              <IconButton
+                icon={<StarGlyph size={16} filled={starAll} />}
+                label={starAll ? "Remove the star" : "Star"}
+                pressed={starAll}
+                disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
+                disabledReason={readOnlyWhy ?? undefined}
+                onClick={() => void batchMark("star")}
+              />
+              <IconButton
+                icon={<ImportantGlyph large />}
+                label={importantAll ? "Unmark Important" : "Mark Important"}
+                pressed={importantAll}
+                disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
+                disabledReason={readOnlyWhy ?? undefined}
+                onClick={() => void batchMark("important")}
+              />
+              </>
+            )}
             {markTargets.some((it) => inToDelete(it.path)) && (
               <Menu
                 label="Restore from To Delete"
@@ -1796,7 +1808,6 @@ export default function Browse() {
             />
           </>
         }
-        search={searchBox}
       />
       {marking.message && (
       <div className="browse-filters">

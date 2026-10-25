@@ -89,6 +89,7 @@ describe("Files in To Delete are read-only", () => {
     const { user } = setup();
     await screen.findByText("a.pdf");
     await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
     for (const name of ["Star", "Mark Important", "From…", "For…", "Move to…"]) {
       expect(screen.getByRole("button", { name })).toBeDisabled();
     }
