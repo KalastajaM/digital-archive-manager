@@ -46,18 +46,22 @@ def _like_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _tag_ids(engine: Engine, names: list[str]) -> list[list[int]] | None:
+def _tag_ids(
+    engine: Engine, names: list[str], skip_unknown: bool = False
+) -> list[list[int]] | None:
     """For each wanted tag the ids of the tags with that name (case and accents ignored);
-    None when one of them does not exist, so nothing can match."""
+    None when one of them does not exist, so nothing can match (or, with
+    ``skip_unknown``, when none of them exists)."""
     with engine.connect() as conn:
         known = [(r.id, fold(r.name)) for r in conn.execute(select(tags.c.id, tags.c.name))]
     found: list[list[int]] = []
     for name in dict.fromkeys(n.strip() for n in names if n.strip()):
         ids = [i for i, folded in known if folded == fold(name)]
-        if not ids:
+        if ids:
+            found.append(ids)
+        elif not skip_unknown:
             return None
-        found.append(ids)
-    return found
+    return found if found or not skip_unknown else None
 
 
 def search(
@@ -66,14 +70,17 @@ def search(
     limit: int = 50,
     folder: str | None = None,
     tag_names: list[str] | None = None,
+    tag_mode: str = "all",
 ) -> list[SearchHit]:
     """Best matches first. Skips missing and parked files; ``folder`` limits to a subtree.
 
-    ``tag_names``: only files that have every one of these tags (looked up in the
-    ``file_tags`` index, so the number of files does not matter); with no words the
-    tagged files are listed by name."""
+    ``tag_names``: only files that have every one of these tags (``tag_mode`` "all"), or
+    at least one of them ("any"); looked up in the ``file_tags`` index, so the number
+    of files does not matter. With no words the tagged files are listed by name. For
+    "any" a tag that does not exist is simply left out (all unknown: no hits)."""
     match = _fts_query(query)
-    wanted = _tag_ids(engine, tag_names) if tag_names else []
+    any_mode = tag_mode == "any"
+    wanted = _tag_ids(engine, tag_names, skip_unknown=any_mode) if tag_names else []
     if wanted is None or (not match and not wanted):
         return []
     params: dict = {"limit": limit, "open": _OPEN, "close": _CLOSE}
@@ -93,10 +100,17 @@ def search(
             "AND f.is_dir IS NOT 1 AND f.is_link IS NOT 1"
         )
         order = " ORDER BY f.name COLLATE NOCASE, f.path LIMIT :limit"
-    for i, ids in enumerate(wanted):
-        marks = ", ".join(f":t{i}_{j}" for j in range(len(ids)))
+    if any_mode and wanted:
+        # one index lookup over the union of all the ids
+        every = [tag_id for ids in wanted for tag_id in ids]
+        marks = ", ".join(f":t{j}" for j in range(len(every)))
         sql += f" AND f.drive_id IN (SELECT drive_id FROM file_tags WHERE tag_id IN ({marks}))"
-        params.update({f"t{i}_{j}": tag_id for j, tag_id in enumerate(ids)})
+        params.update({f"t{j}": tag_id for j, tag_id in enumerate(every)})
+    else:
+        for i, ids in enumerate(wanted):
+            marks = ", ".join(f":t{i}_{j}" for j in range(len(ids)))
+            sql += f" AND f.drive_id IN (SELECT drive_id FROM file_tags WHERE tag_id IN ({marks}))"
+            params.update({f"t{i}_{j}": tag_id for j, tag_id in enumerate(ids)})
     base = nfc(folder).strip("/") if folder else ""
     if base:
         sql += " AND (f.path_nfc = :folder OR f.path_nfc LIKE :pattern ESCAPE '\\')"

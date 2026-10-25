@@ -1028,8 +1028,17 @@ list's width.
 - **Search** looks at file names, paths and text (the Search card on Today opens Browse
   with the same search). Type `tag:medical` (or
   `tag:"tax return"`) and a space, or pick a tag from the suggestions, and the tag becomes a
-  chip that filters the results to files with that tag; several chips need all of them,
-  and words work beside them ("Kela" with the tag medical). Click × on a chip to drop it.
+  chip in a row under the pane's toolbar (the search box keeps only the words). Words work
+  beside tags ("Kela" with the tag medical). In that row, × on a chip drops the tag, **+ Tag**
+  adds another from the suggestions, and with two or more tags **All / Any** chooses
+  whether a file needs every tag (All, the default) or at least one (Any).
+- **Search results by folder.** With **Folders** selected, results are grouped under the
+  folders that hold them: one header per folder with its path and the number of matches,
+  folders in the order of the folder tree. The arrow at the left of a header folds the
+  folder's files (all are open at first, and a new search opens them again). Click the
+  folder's name to open that folder in Browse; this ends the search. Rows under a header
+  select, preview, drag and Quick Look as usual, and the arrow keys skip the headers.
+  **Files** shows the flat list with the Folder column.
 - **Links.** A link to a file inside the archive previews and opens as that file, with
   **Go to target**. A link to something outside the archive only has Show in Finder.
 
@@ -1054,7 +1063,8 @@ menu, and every change shows a toast with **Undo**:
   deleting a group keeps its tags, ungrouped.
 
 **Searching by tag.** Type `tag:medical` in a search, or click a tag here or in the sidebar,
-and Browse shows the files with that tag (see [Browse](#browse)).
+and Browse shows the files with that tag (see [Browse](#browse)). With several tags,
+**All / Any** in the tags row picks files with every tag or with at least one.
 
 Tags are kept in dam's own database, not in the archive, so changing them moves no file.
 

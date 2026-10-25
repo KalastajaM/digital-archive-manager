@@ -1,4 +1,4 @@
-import { Building2, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus, User } from "lucide-react";
+import { Building2, ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus, User } from "lucide-react";
 import {
   type DragEvent,
   Fragment,
@@ -71,7 +71,7 @@ import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { useSearch } from "./useSearch";
 import { splitTagQuery } from "../searchTags";
-import { TagChips, TagSuggestions } from "../components/TagSearch";
+import { TagBar, TagSuggestions, type TagMode } from "../components/TagSearch";
 
 /** One row of the folder listing or of the search results. */
 const KEYS: KeyHint[] = [
@@ -171,6 +171,28 @@ function sortHits(items: Item[], { sort, dir }: SortState): Item[] {
     }
     return byText(a.name, b.name) || byText(a.path, b.path);
   });
+}
+/** Folders sort like the folder tree: parents before their children, siblings by name. */
+function byFolder(a: string, b: string): number {
+  const x = a === "" ? [] : a.split("/");
+  const y = b === "" ? [] : b.split("/");
+  for (let i = 0; i < Math.min(x.length, y.length); i++) {
+    const c = byText(x[i], y[i]);
+    if (c !== 0) return c;
+  }
+  return x.length - y.length;
+}
+/** Search hits under their folders; the order inside a folder is the order given. */
+type HitGroup = { folder: string; files: Item[] };
+function groupHits(hits: Item[]): HitGroup[] {
+  const by = new Map<string, Item[]>();
+  for (const h of hits) {
+    const folder = parentOf(h.path);
+    const list = by.get(folder);
+    if (list) list.push(h);
+    else by.set(folder, [h]);
+  }
+  return [...by].sort(([a], [b]) => byFolder(a, b)).map(([folder, files]) => ({ folder, files }));
 }
 const extOf = (name: string) => (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null);
 const previewOf = (item: Item): PreviewFile => ({
@@ -279,6 +301,8 @@ type RowProps = {
   checked: boolean;
   /** The Files view: the folder, date and size columns. */
   columns?: boolean;
+  /** With ``columns``: leave the folder column out (the rows sit under their folder). */
+  noFolder?: boolean;
   /** The ids a drag of this row carries; null: the row is not draggable (as files). */
   dragIds: (() => string[]) | null;
   /** A folder row's own drag (to a collection), instead of ``dragIds``. */
@@ -299,6 +323,7 @@ function EntryRow({
   current,
   checked,
   columns = false,
+  noFolder = false,
   dragIds,
   dragPaths,
   onDragStart,
@@ -357,7 +382,9 @@ function EntryRow({
         {columns ? (
           <>
             <span className="entry-main">{main}</span>
-            <FitText mode="path" className="entry-col entry-folder" text={visible(parentOf(item.path)) || "Archive"} />
+            {!noFolder && (
+              <FitText mode="path" className="entry-col entry-folder" text={visible(parentOf(item.path)) || "Archive"} />
+            )}
             <span className="entry-col entry-date">{item.mtime != null ? shortDate(item.mtime) : ""}</span>
             <span className="entry-col entry-size">{item.size != null ? formatSize(item.size) : ""}</span>
           </>
@@ -610,6 +637,8 @@ export default function Browse() {
   }, [location.key]);
   const tags = params.getAll("tag");
   const tagsKey = tags.join("\n");
+  // several tags: every one (the default) or at least one; the address keeps only "any"
+  const tagMode: TagMode = tags.length > 1 && params.get("tag_mode") === "any" ? "any" : "all";
   const typed = splitTagQuery(query);
   const [scope, setScope] = useState<"folder" | "everywhere">("everywhere");
   // The search results' column order; null: best match first (the API's order).
@@ -621,16 +650,29 @@ export default function Browse() {
   const sp: PaneId = split ? searchPane : "left";
   const inFolder = scope === "folder" && !!paths[sp];
   const folder = inFolder ? paths[sp] : "";
-  const search = useSearch(q, folder, reload, tags);
+  const search = useSearch(q, folder, reload, tags, tagMode);
+  // Folders: the results under their folders (a folded folder hides its files); Files: flat.
+  // Folding is forgotten when the search changes.
+  const grouped = searching && panes[sp].view === "folders";
+  const searchKey = `${q}\n${tagsKey}\n${tagMode}\n${folder}`;
+  const [folded, setFolded] = useState<{ key: string; folders: Set<string> }>({ key: "", folders: new Set() });
+  const foldedFolders = folded.key === searchKey ? folded.folders : NONE;
+  const searchGroups = useMemo<HitGroup[]>(() => {
+    if (!grouped) return [];
+    const hits: Item[] = (search.hits ?? []).map((h) => ({ ...h, is_dir: false, is_link: false }));
+    return groupHits(searchSort ? sortHits(hits, searchSort) : hits);
+  }, [grouped, search.hits, searchSort]);
 
   const viewOf = (pane: PaneId) => {
-    if (searching && pane === sp) return `search\n${q}\n${tagsKey}\n${folder}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
+    if (searching && pane === sp) return `search\n${q}\n${tagsKey}\n${tagMode}\n${folder}\n${grouped ? "grouped" : "flat"}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
     const { path, collection, view } = panes[pane];
     const sort = view === "files" ? `${sorts[pane].sort} ${sorts[pane].dir}` : "";
     return `browse\n${path}\n${collection ?? ""}\n${view}\n${sort}`;
   };
   const itemsOf = (pane: PaneId): Item[] =>
-    searching && pane === sp
+    searching && pane === sp && grouped
+      ? searchGroups.filter((g) => !foldedFolders.has(g.folder)).flatMap((g) => g.files)
+      : searching && pane === sp
       ? (() => {
           // SearchHit has no is_dir/is_link (the API does not say); hits are indexed files.
           const hits: Item[] = (search.hits ?? []).map((h) => ({ ...h, is_dir: false, is_link: false }));
@@ -654,6 +696,8 @@ export default function Browse() {
       panes.right.view,
       search.hits,
       searchSort,
+      searchGroups,
+      foldedFolders,
       q,
       tagsKey,
       sp,
@@ -716,6 +760,7 @@ export default function Browse() {
     // the search stays while you move through folders
     if (q) p.set("q", q);
     for (const tag of tags) p.append("tag", tag);
+    if (tagMode === "any") p.set("tag_mode", "any");
     return p;
   };
   const withPath = (pane: PaneId, to: string) => ({ ...panes, [pane]: { ...panes[pane], path: to } });
@@ -727,6 +772,29 @@ export default function Browse() {
     if (to === paths[pane]) return;
     setHistory((h) => ({ ...h, [pane]: { back: [...h[pane].back, paths[pane]], forward: [] } }));
     setParams(urlFor(withPath(pane, to), split));
+  };
+  /** A folder header of the grouped results: open that folder in Browse and leave the
+   * search (the words and tags go; Back brings the folder you were in). */
+  const openFolderFromSearch = (pane: PaneId, to: string) => {
+    setHistory((h) => ({ ...h, [pane]: { back: [...h[pane].back, paths[pane]], forward: [] } }));
+    const p = urlFor(withPath(pane, to), split);
+    p.delete("q");
+    p.delete("tag");
+    p.delete("tag_mode");
+    setQuery("");
+    setParams(p);
+  };
+  const toggleFolded = (folder: string) => {
+    const group = searchGroups.find((g) => g.folder === folder);
+    const next = new Set(foldedFolders);
+    if (next.has(folder)) next.delete(folder);
+    else {
+      next.add(folder);
+      // files that are hidden are no longer selected
+      const hidden = new Set(group?.files.map((f) => f.drive_id));
+      update(sp, { ids: selOf(sp).ids.filter((id) => !hidden.has(id)) });
+    }
+    setFolded({ key: searchKey, folders: next });
   };
   const goBack = (pane: PaneId) => {
     const h = history[pane];
@@ -1192,6 +1260,8 @@ export default function Browse() {
     const flat = flatOf(pane) && !isSearch;
     // the Files view and search results have the folder, date and size columns
     const columns = flat || isSearch;
+    const byFolders = isSearch && grouped;
+    const sortColumns = byFolders ? SORT_COLUMNS.filter((c) => c.sort !== "folder") : SORT_COLUMNS;
     const body = bodyOf(pane);
     const state = panes[pane];
     const nameRow = naming?.pane === pane && naming.parent === paths[pane] && !flat && !isSearch ? naming : null;
@@ -1202,6 +1272,15 @@ export default function Browse() {
     const onFiles = split && act === pane ? filesOf(pane) : [];
     const marked = onFiles.length === 1 ? onFiles[0] : null;
     const fileRows = rows.filter((it) => !it.is_dir);
+    // What the list shows: the rows, with a header row before each folder's files when
+    // grouped. ``i`` is the row's place in ``rows`` (the headers are not rows).
+    let next = 0;
+    const listed: ({ header: HitGroup; item: null } | { header: null; item: Item; i: number })[] = byFolders
+      ? searchGroups.flatMap((g) => [
+          { header: g, item: null },
+          ...(foldedFolders.has(g.folder) ? [] : g.files).map((f) => ({ header: null, item: f, i: next++ })),
+        ])
+      : rows.map((item, i) => ({ header: null, item, i }));
     const selectAllBox = (
       <SelectAll
         checked={fileRows.filter((it) => s.ids.includes(it.drive_id)).length}
@@ -1216,7 +1295,10 @@ export default function Browse() {
     return (
       <section
         key={pane}
-        className={split && act === pane ? "browse-pane browse-pane-active" : "browse-pane"}
+        className={
+          (split && act === pane ? "browse-pane browse-pane-active" : "browse-pane") +
+          (byFolders ? " browse-pane-grouped" : "")
+        }
         aria-label={split ? PANE_NAME[pane] : "Browse"}
         onMouseDownCapture={() => setActive(pane)}
         onFocusCapture={() => setActive(pane)}
@@ -1262,6 +1344,15 @@ export default function Browse() {
             />
           </div>
         </div>
+        {isSearch && tags.length > 0 && (
+          <TagBar
+            tags={tags}
+            mode={tagMode}
+            onMode={setTagMode}
+            onRemove={(name) => setTags(tags.filter((t) => t !== name))}
+            onAdd={(name) => addTags([name])}
+          />
+        )}
         <DropZone drop={paneDrop(pane)}>
           {body === null && !columns && (
             <div className="list-head">
@@ -1273,7 +1364,7 @@ export default function Browse() {
             <div className="flat-head" role="group" aria-label="Sort by">
               {selectAllBox}
               <div className="flat-head-cols">
-                {SORT_COLUMNS.map((c) => {
+                {sortColumns.map((c) => {
                   const on = sortState?.sort === c.sort;
                   const dir = sortState?.dir === "asc" ? "ascending" : "descending";
                   // a search column sorted both ways goes back to best match on the next click
@@ -1301,18 +1392,50 @@ export default function Browse() {
               ref={(el) => {
                 listRef.current[pane] = el;
               }}
-              className={columns ? "entries entries-flat" : "entries"}
+              className={columns ? (byFolders ? "entries entries-flat entries-grouped" : "entries entries-flat") : "entries"}
               aria-label={isSearch ? "Search results" : flat ? "Files" : "Folder contents"}
             >
               {nameRow && (
                 <NewFolderRow onCreate={(name) => makeFolder(nameRow, name)} onCancel={() => setNaming(null)} />
               )}
-              {rows.map((item, i) => {
+              {listed.map((entry) => {
+                if (entry.header) {
+                  const g = entry.header;
+                  const label = g.folder === "" ? "Archive" : visible(g.folder);
+                  const open = !foldedFolders.has(g.folder);
+                  return (
+                    <li key={`group:${g.folder}`} className="group-head">
+                      <button
+                        type="button"
+                        className="group-fold"
+                        aria-expanded={open}
+                        aria-label={`${open ? "Fold" : "Unfold"} ${label}`}
+                        onClick={() => toggleFolded(g.folder)}
+                      >
+                        {open ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        className="group-name"
+                        data-tip={`Open ${label}`}
+                        aria-label={`Open folder ${label}`}
+                        onClick={() => openFolderFromSearch(pane, g.folder)}
+                      >
+                        <Folder size={14} strokeWidth={1.5} aria-hidden="true" /> {label}
+                      </button>
+                      <span className="group-count">
+                        {g.files.length} {g.files.length === 1 ? "match" : "matches"}
+                      </span>
+                    </li>
+                  );
+                }
+                const { item, i } = entry;
                 const row = {
                   item,
                   current: i === s.index && s.touched,
                   checked: s.ids.includes(item.drive_id),
                   columns,
+                  noFolder: byFolders,
                   onToggle: () => toggle(pane, item.drive_id),
                   onClick: (e: MouseEvent) => clickRow(pane, e, i),
                 };
@@ -1361,6 +1484,13 @@ export default function Browse() {
     const p = new URLSearchParams(params);
     p.delete("tag");
     for (const t of next) p.append("tag", t);
+    if (next.length < 2) p.delete("tag_mode");
+    setParams(p);
+  };
+  const setTagMode = (mode: TagMode) => {
+    const p = new URLSearchParams(params);
+    if (mode === "any") p.set("tag_mode", "any");
+    else p.delete("tag_mode");
     setParams(p);
   };
   const addTags = (names: string[]) => {
@@ -1407,7 +1537,6 @@ export default function Browse() {
       <label htmlFor={`${ids}-q`} className="visually-hidden">
         Search
       </label>
-      <TagChips tags={tags} onRemove={(name) => setTags(tags.filter((t) => t !== name))} />
       <div className="search-field">
         <input
           id={`${ids}-q`}

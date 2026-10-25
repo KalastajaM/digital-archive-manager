@@ -51,6 +51,57 @@ def test_several_tags_need_all(client):
     assert [h["drive_id"] for h in r.json()] == ["id-1"]
 
 
+def test_any_needs_at_least_one_tag(client):
+    two = [("tag", "medical"), ("tag", "tax")]
+    r = client.get("/api/search", params=[*two, ("tag_mode", "any")])
+    assert sorted(h["drive_id"] for h in r.json()) == ["id-1", "id-2", "id-3"]
+    r = client.get("/api/search", params=two)  # the default is all
+    assert r.json() == []
+    r = client.get("/api/search", params=[*two, ("tag_mode", "all")])
+    assert r.json() == []
+
+
+def test_any_and_all_with_three_tags(client):
+    three = [("tag", "medical"), ("tag", "Kela"), ("tag", "tax")]
+    r = client.get("/api/search", params=[*three, ("tag_mode", "any")])
+    assert sorted(h["drive_id"] for h in r.json()) == ["id-1", "id-2", "id-3"]
+    assert client.get("/api/search", params=three).json() == []
+    r = client.get("/api/search", params=[("tag", "medical"), ("tag", "Kela"), ("tag_mode", "all")])
+    assert [h["drive_id"] for h in r.json()] == ["id-1"]
+
+
+def test_any_with_an_unknown_tag_ignores_it(client):
+    params = [("tag", "medical"), ("tag", "nope")]
+    r = client.get("/api/search", params=[*params, ("tag_mode", "any")])
+    assert sorted(h["drive_id"] for h in r.json()) == ["id-1", "id-2"]
+    assert client.get("/api/search", params=params).json() == []  # all: nothing can match
+    r = client.get("/api/search", params=[("tag", "nope"), ("tag", "x"), ("tag_mode", "any")])
+    assert r.json() == []
+
+
+def test_any_combines_with_words_and_folder(client, app, fake_archive):
+    fake_archive.add("Other/g1.pdf", drive_id="id-5", content=b"%PDF kela letter")
+    app.scan()
+    app.tags.add("id-5", ["tax"])
+    for d in ("id-1", "id-3", "id-5"):
+        app.repo.save_content(d, None, ExtractedText("decision", "t"), "indexed")
+    app.repo.save_content("id-2", None, ExtractedText("other", "t"), "indexed")
+    two = [("tag", "medical"), ("tag", "tax"), ("tag_mode", "any")]
+    assert search(client, q="decision", tag=["medical", "tax"], tag_mode="any") == [
+        "id-1",
+        "id-3",
+        "id-5",
+    ]
+    r = client.get("/api/search", params=[("q", "decision"), ("folder", "Other"), *two])
+    assert [h["drive_id"] for h in r.json()] == ["id-5"]
+    r = client.get("/api/search", params=[("folder", BANKS), *two])
+    assert sorted(h["drive_id"] for h in r.json()) == ["id-1", "id-2", "id-3"]
+
+
+def test_bad_tag_mode_is_refused(client):
+    assert client.get("/api/search", params={"tag": "tax", "tag_mode": "some"}).status_code == 422
+
+
 def test_tag_matches_without_case_or_accents(client, app):
     app.tags.add("id-4", ["Ääni"])
     assert search(client, tag="aani") == ["id-4"]

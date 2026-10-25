@@ -301,6 +301,7 @@ describe("Search results' columns", () => {
     await screen.findByText("readme.txt");
     await user.type(screen.getByRole("searchbox", { name: "Search" }), "pdf");
     await screen.findByRole("list", { name: "Search results" });
+    await user.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Files" }));
     expect(order()).toEqual(["b.pdf", "a.pdf", "c.pdf"]); // best match first
     const head = screen.getByRole("group", { name: "Sort by" });
     expect(screen.getByText("10. Financial")).toBeInTheDocument(); // the folder column

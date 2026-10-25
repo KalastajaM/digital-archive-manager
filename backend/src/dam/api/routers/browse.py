@@ -53,9 +53,13 @@ def search(
     folder: str | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     tag: Annotated[list[str] | None, Query(max_length=20)] = None,
+    tag_mode: Literal["all", "any"] = "all",
 ) -> list:
-    """Words in ``q`` and/or ``tag`` (repeat it: a file needs all of them)."""
-    return with_marks(app, app.search(q, folder=folder or None, limit=limit, tags=tag))
+    """Words in ``q`` and/or ``tag`` (repeat it). ``tag_mode`` ``all``: a file needs every
+    tag; ``any``: at least one."""
+    return with_marks(
+        app, app.search(q, folder=folder or None, limit=limit, tags=tag, tag_mode=tag_mode)
+    )
 
 
 @router.post("/quarantine", response_model=BatchResultOut)

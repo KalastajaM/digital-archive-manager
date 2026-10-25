@@ -688,7 +688,8 @@ export interface paths {
         };
         /**
          * Search
-         * @description Words in ``q`` and/or ``tag`` (repeat it: a file needs all of them).
+         * @description Words in ``q`` and/or ``tag`` (repeat it). ``tag_mode`` ``all``: a file needs every
+         *     tag; ``any``: at least one.
          */
         get: operations["search_api_search_get"];
         put?: never;
@@ -10287,6 +10288,7 @@ export interface operations {
                 folder?: string | null;
                 limit?: number;
                 tag?: string[] | null;
+                tag_mode?: "all" | "any";
             };
             header?: never;
             path?: never;

@@ -16,6 +16,14 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Search results in Browse follow the **Folders / Files** switch. Folders groups the
+  results under their folders (a header with the path and the number of matches, in the
+  order of the folder tree, each foldable; clicking the folder name opens it and ends the
+  search). Files stays the flat list.
+- Tag filters now sit in their own row under the pane's toolbar instead of inside the
+  search box, with **+ Tag** to add another tag from suggestions. With two or more tags an
+  **All / Any** switch chooses between files that have every tag (the default) and files
+  that have at least one. The address keeps `tag_mode=any` for the second case.
 - A tray item shows the collections its file is in as badges (the x takes the file out)
   and has **Add to collection...**, as Browse does.
 - Tray list rows show what an item has as small icons before the date: a larger pencil
