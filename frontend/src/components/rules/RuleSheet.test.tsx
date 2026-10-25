@@ -1106,7 +1106,7 @@ describe("The rule sheet, reviewed", () => {
     await user.type(field, "Sau");
     await user.click(await screen.findByRole("option", { name: "Sauna" }));
     await user.type(field, "Legal{Enter}");
-    expect(within(within(sheet).getByRole("list", { name: "Collections to add" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Sauna×", "Legal×"]);
+    expect(within(sheet).getAllByRole("button", { name: /^Remove (Sauna|Legal)$/ }).map((b) => b.getAttribute("aria-label"))).toEqual(["Remove Sauna", "Remove Legal"]);
     await waitFor(() => expect(lastRule(calls).then.collections).toEqual(["Sauna", "Legal"]));
   });
 
@@ -1134,7 +1134,7 @@ describe("The rule sheet, reviewed", () => {
     };
     const { calls } = open(rule);
     const sheet = await screen.findByRole("dialog");
-    expect(within(within(sheet).getByRole("list", { name: "Collections to add" })).getByText("Taxes")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Remove Taxes" })).toBeInTheDocument();
     await waitFor(() => expect(lastRule(calls).then.collections).toEqual(["Taxes"]));
   });
 

@@ -1744,7 +1744,7 @@ describe("The item view layout", () => {
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "Northpower sähkö" })).toBeInTheDocument();
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "northpower.pdf" })).toBeInTheDocument();
     expect(within(inBlock("header")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
-    expect(within(inBlock("collections")).getByRole("button", { name: "Add to collection…" })).toBeInTheDocument();
+    expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("summary")).getByRole("region", { name: "Summary" })).toBeInTheDocument();
     expect(within(inBlock("own")).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
     expect(within(inBlock("own")).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument();
@@ -1753,7 +1753,7 @@ describe("The item view layout", () => {
     expect(within(inBlock("notes")).getByRole("button", { name: "History" })).toBeInTheDocument();
   });
 
-  it("the file's collections are chips in the item view: × removes, Add to collection adds", async () => {
+  it("the file's collections are chips in the item view: × removes, the field adds", async () => {
     const SAUNA = {
       id: 7, name: "Sauna", state: "open", created: 1, closed_at: null, publish: { ongoing: false }, ongoing_rel: null,
       members: [{ drive_id: "f1", path: "10. Financial/Banks/northpower.pdf", is_dir: false, missing: false, quarantined: false, group_id: null, marks: [] }],
@@ -1769,18 +1769,15 @@ describe("The item view layout", () => {
     });
     await screen.findByRole("region", { name: "Item" });
     const block = await within(detail()).findByRole("region", { name: "Collections of this file" });
-    const badges = await within(block).findByRole("list", { name: "In trays and collections" });
+    await within(block).findByRole("link", { name: "Sauna" });
     // the item being viewed is not listed as a link to itself
-    expect(within(badges).queryByRole("link", { name: /Northpower/ })).not.toBeInTheDocument();
-    expect(within(badges).getByRole("link", { name: "Sauna" })).toBeInTheDocument();
-    await user.click(within(badges).getByRole("button", { name: "Remove from Sauna" }));
+    expect(within(block).queryByRole("link", { name: /Northpower/ })).not.toBeInTheDocument();
+    await user.click(within(block).getByRole("button", { name: "Remove from Sauna" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/collections/7/members/remove")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/collections/7/members/remove")[0].body).toEqual({ drive_id: "f1" });
 
-    await user.click(within(block).getByRole("button", { name: "Add to collection…" }));
-    const form = await within(block).findByRole("region", { name: "Add to collection" });
-    await user.type(within(form).getByRole("combobox", { name: "Collection" }), "car");
-    await user.click(await within(form).findByRole("option", { name: "Car" }));
+    await user.type(within(block).getByRole("combobox", { name: "Add to collection" }), "car");
+    await user.click(await within(block).findByRole("option", { name: "Car" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/collections/8/members")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/collections/8/members")[0].body).toEqual({ drive_ids: ["f1"] });
   });

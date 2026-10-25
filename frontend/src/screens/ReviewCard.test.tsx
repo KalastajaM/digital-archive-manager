@@ -189,6 +189,10 @@ const clearTags = async (user: ReturnType<typeof userEvent.setup>) => {
   for (const b of screen.queryAllByRole("button", { name: /^Remove tag / })) await user.click(b);
 };
 
+/** The names of the × buttons (of the collection chips) matching ``name``. */
+const removers = (name: RegExp) =>
+  screen.queryAllByRole("button", { name }).map((b) => b.getAttribute("aria-label") ?? "");
+
 describe("ReviewCard", () => {
   it("a locked inbox file is not filed until it is unlocked", async () => {
     const first = ENTRIES[0].record.drive_id;
@@ -850,14 +854,10 @@ describe("ReviewCard", () => {
       const picker = screen.getByLabelText("Also add to collection");
       await user.type(picker, "Kitchen{Enter}"); // new: created on filing
       await user.type(picker, "leg");
-      expect(screen.getByRole("option", { name: "Create ‘leg’" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: 'Create collection "leg"' })).toBeInTheDocument();
       await user.keyboard("{ArrowDown}{Enter}"); // the existing "Legal"
       await user.type(picker, "kitchen{Enter}"); // already chosen: no second chip
-      const chips = screen.getByRole("list", { name: "Collections to add" });
-      expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-        "Kitchen×",
-        "Legal×",
-      ]);
+      expect(removers(/^Remove (Kitchen|Legal)$/)).toEqual(["Remove Kitchen", "Remove Legal"]);
       await user.type(screen.getByLabelText("Note (optional)"), "Pay before the trip");
       // Enter in the picker and typing never previewed or filed anything.
       expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
@@ -1081,8 +1081,7 @@ describe("ReviewCard", () => {
       await user.type(picker, "STRASSE");
       expect(screen.queryByRole("option", { name: /Create/ })).not.toBeInTheDocument();
       await user.keyboard("{Enter}");
-      const chips = screen.getByRole("list", { name: "Collections to add" });
-      expect(within(chips).getByRole("listitem")).toHaveTextContent("Straße");
+      expect(removers(/^Remove /).filter((n) => n.includes("Straße"))).toEqual(["Remove Straße"]);
     });
 
     it("a batch follow-up error names the files it may concern", async () => {

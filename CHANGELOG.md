@@ -8,6 +8,17 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Collections are now a chip field like tags, everywhere a file's collections are set:
+  the file view in Browse, a collection and a tray, the Inbox card and batch ("Also add
+  to collection"), the rule sheet and the filing codes. The collections show as chips
+  (the x takes one out), matching collections are suggested as you type, and a name that
+  is no collection yet is offered as **Create collection "name"**. The **...** button
+  still opens the collection tree. On a file the change applies at once, with Undo in
+  the toast (adding now has an Undo too); in the Inbox and in rules it is kept until
+  filing or saving. This replaces the **Add to collection...** button and its box.
+- Tag fields have a **...** button too. It lists every tag by group with its number of
+  files, and a click adds the tag.
+
 - The file view has one order in Browse, in a collection and in a tray: name and folder
   with the lock, tags, the collections the file is in, the summary, what is specific to
   that view (a tray's fields and Mark done, a collection's group and Remove, Browse's

@@ -51,7 +51,6 @@ async function setup() {
     </MemoryRouter>,
   );
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: "Add to collection…" }));
   await user.click(await screen.findByRole("button", { name: "Browse collections…" }));
   const sheet = await screen.findByRole("dialog", { name: "Choose a collection" });
   const tree = within(sheet).getByRole("tree", { name: "Collections" });

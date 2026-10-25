@@ -1,12 +1,12 @@
 /** What Browse offers for the selected file: badges for its open tray items and
- * collections, "Put in tray" (a menu), "Add to collection…" (a folder: Add to collection
+ * collections, "Put in tray" (a menu), the collections field (a folder: that field
  * only). All of it is
  * database-only (the file stays where it is), except that adding to a published
  * collection adds a link in ##. Ongoing through the Ongoing sync. That needs no
  * preview (app-owned links only, journaled, undone by removing the member again), but
  * the batch that ran is shown under the actions. */
 import { X } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   type Collection,
@@ -19,7 +19,7 @@ import {
   useGroupChange,
   useTrays,
 } from "../api/client";
-import { CollectionPicker } from "../components/CollectionPicker";
+import { type CollectionChip, CollectionInput } from "../components/CollectionInput";
 import { changeToast } from "../components/collectionText";
 import { LastChange } from "../components/LastChange";
 import { useToast } from "../components/Toasts";
@@ -28,24 +28,13 @@ import { trayIcon } from "../components/ui/Sidebar";
 import { useQuickPut } from "../components/useQuickPut";
 import { visible } from "../text";
 
-/** Badges under the file name: its open items (→ the item in its tray) and its
- * collections (→ the collection). A collection the file is itself a member of (not only
- * through a folder), open and not a built-in, has a × that takes the file out of it (as
- * Remove from collection does: the file stays where it is), with Undo in the toast
- * (back in its group too). */
-export function LinkBadges({ driveId, hideItem }: { driveId: string; hideItem?: number }) {
-  const links = useFileLinks(driveId);
+/** Takes a file out of a collection (as Remove from collection does: the file stays where
+ * it is), with Undo in the toast (back in its group too). One at a time. */
+function useRemoveFromCollection(driveId: string) {
   const members = useCollectionMembers();
   const groupChange = useGroupChange();
   const toast = useToast();
   const inFlight = useRef(false);
-  if (links.isError) {
-    return <p className="hint">Its trays and collections could not be loaded: {visible(errorText(links.error))}</p>;
-  }
-  // the item whose view this is is not listed as a link to itself
-  const items = (links.data?.items ?? []).filter((i) => i.id !== hideItem);
-  const collections = links.data?.collections ?? [];
-  if (items.length === 0 && collections.length === 0) return null;
   const remove = async (c: Collection, groupId: number | null) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -67,8 +56,32 @@ export function LinkBadges({ driveId, hideItem }: { driveId: string; hideItem?: 
       inFlight.current = false;
     }
   };
+  return { remove, pending: members.isPending };
+}
+
+/** A collection the file is itself a member of (not only through a folder), open and not
+ * a built-in, can be taken out. */
+const removableMember = (c: Collection, driveId: string) => {
+  const member = c.members.find((m) => m.drive_id === driveId);
+  return member !== undefined && c.state === "open" && c.kind == null ? member : null;
+};
+
+/** Badges under the file name: its open items (→ the item in its tray) and, unless
+ * ``collections`` is off, its collections (→ the collection). A collection the file is
+ * itself a member of has a × that takes the file out of it. */
+export function LinkBadges({ driveId, hideItem, collections: withCollections = true }: { driveId: string; hideItem?: number; collections?: boolean }) {
+  const links = useFileLinks(driveId);
+  const removal = useRemoveFromCollection(driveId);
+  if (links.isError) {
+    if (!withCollections) return null; // the collections field says so
+    return <p className="hint">Its trays and collections could not be loaded: {visible(errorText(links.error))}</p>;
+  }
+  // the item whose view this is is not listed as a link to itself
+  const items = (links.data?.items ?? []).filter((i) => i.id !== hideItem);
+  const collections = withCollections ? (links.data?.collections ?? []) : [];
+  if (items.length === 0 && collections.length === 0) return null;
   return (
-    <ul className="badges link-badges" aria-label="In trays and collections">
+    <ul className="badges link-badges" aria-label={withCollections ? "In trays and collections" : "In trays"}>
       {items.map((i) => (
         <li key={`i${i.id}`}>
           <Link className="tag tag-grey" to={`/trays/${encodeURIComponent(i.tray_id)}?item=${i.id}`}>
@@ -77,22 +90,21 @@ export function LinkBadges({ driveId, hideItem }: { driveId: string; hideItem?: 
         </li>
       ))}
       {collections.map((c) => {
-        const member = c.members.find((m) => m.drive_id === driveId);
-        const removable = member !== undefined && c.state === "open" && c.kind == null;
+        const member = removableMember(c, driveId);
         return (
-          <li key={`c${c.id}`} className={removable ? "badge-removable" : undefined}>
+          <li key={`c${c.id}`} className={member ? "badge-removable" : undefined}>
             <Link className="tag tag-grey" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
               {visible(c.name)}
               {c.state === "closed" && " (closed)"}
             </Link>
-            {removable && (
+            {member && (
               <button
                 type="button"
                 className="badge-remove"
                 aria-label={`Remove from ${visible(c.name)}`}
                 data-tip={`Remove from ${visible(c.name)} (the file stays where it is)`}
-                disabled={members.isPending}
-                onClick={() => void remove(c, member.group_id)}
+                disabled={removal.pending}
+                onClick={() => void removal.remove(c, member.group_id)}
               >
                 <X size={12} aria-hidden="true" />
               </button>
@@ -145,130 +157,95 @@ function PutInTrayMenu({ driveId }: { driveId: string }) {
   return <Menu label="Put in tray" text="Put in tray" icon={null} entries={entries} className="file-action-menu" />;
 }
 
-/** Pick an open collection (or type a new name: created first) and add the file. */
-function AddToCollection({
-  driveId,
-  onDone,
-  onCancel,
-}: {
-  driveId: string;
-  onDone: (result: CollectionChange) => void;
-  onCancel: () => void;
-}) {
-  const collections = useCollections("open");
+/** The file's (or folder's) collections as chips with the field that adds to them, all
+ * applied at once: × takes it out and typing a collection adds it (a name that is none
+ * yet is created first), each with Undo in the toast. Adding to a published collection
+ * adds a link in ##. Ongoing (app-owned, journaled): the batch that ran is shown under
+ * the field. ``refusal``: why it cannot be added to (the field is off, saying so). */
+function CollectionsField({ driveId, refusal = null }: { driveId: string; refusal?: string | null }) {
+  const links = useFileLinks(driveId);
+  const open = useCollections("open");
   const create = useCreateCollection();
   const members = useCollectionMembers();
+  const removal = useRemoveFromCollection(driveId);
   const toast = useToast();
-  const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const inFlight = useRef(false);
-
-  const add = async (name: string) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setError(null);
-    try {
-      const existing = (collections.data ?? []).find((c) => c.name === name);
-      const id = existing?.id ?? (await create.mutateAsync(name)).id;
-      const result = await members.mutateAsync({ id, add: [driveId] });
-      onDone(result);
-      toast(changeToast(`Added to ${result.collection.name}`, result));
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      inFlight.current = false;
-    }
-  };
-
-  return (
-    <section className="file-action" aria-label="Add to collection">
-      <CollectionPicker
-        label="Collection"
-        value={[]}
-        onChange={(names) => {
-          const name = names.at(-1);
-          if (name) void add(name);
-        }}
-        text={text}
-        onTextChange={setText}
-      />
-      <div className="actions">
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-      {(create.isPending || members.isPending) && (
-        <p className="hint" role="status">
-          Adding…
-        </p>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {visible(error)}
-        </p>
-      )}
-    </section>
-  );
-}
-
-/** "Add to collection…" (``button``) and what it opens and leaves (``view``: the picker,
- * then the batch the last add ran in ##. Ongoing): for a file or a folder.
- * ``refusal``: why it cannot be added (the button is off, saying so). */
-function useAddToCollectionAction(driveId: string, refusal: string | null = null): { button: ReactNode; view: ReactNode } {
-  const [picking, setPicking] = useState(false);
-  // The batch the last "Add to collection" ran in ##. Ongoing (links only), as returned.
+  // The batch the last add ran in ##. Ongoing (links only), as returned.
   const [added, setAdded] = useState<CollectionChange | null>(null);
-  const button = refusal ? (
-    <span className="button-wrap" data-tip={refusal}>
-      <button type="button" disabled>
-        Add to collection…
-      </button>
-    </span>
-  ) : (
-    <button type="button" aria-expanded={picking} onClick={() => setPicking((p) => !p)}>
-      Add to collection…
-    </button>
+  const all = links.data?.collections ?? [];
+  const chips: CollectionChip[] = all.map((c) => ({
+    key: String(c.id),
+    name: c.name,
+    to: `/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`,
+    suffix: c.state === "closed" ? " (closed)" : undefined,
+    removable: removableMember(c, driveId) !== null,
+  }));
+  const add = async (name: string) => {
+    const same = (n: string) => n.normalize("NFC").toLowerCase() === name.normalize("NFC").toLowerCase();
+    const existing = (open.data ?? []).find((c) => c.kind == null && same(c.name));
+    const id = existing?.id ?? (await create.mutateAsync(name)).id;
+    const result = await members.mutateAsync({ id, add: [driveId] });
+    setAdded(result);
+    const undo = async () => {
+      try {
+        await members.mutateAsync({ id, remove: driveId });
+      } catch (e) {
+        toast({ kind: "error", text: `Could not take it out of ${visible(result.collection.name)}: ${visible(errorText(e))}` });
+      }
+    };
+    toast({
+      ...changeToast(`Added to ${result.collection.name}`, result),
+      actions: [{ label: "Undo", run: () => void undo() }],
+    });
+  };
+  const field = (
+    <CollectionInput
+      label="Add to collection"
+      placeholder="Add to collection"
+      value={chips}
+      removeLabel={(name) => `Remove from ${name}`}
+      disabled={refusal !== null}
+      onAdd={add}
+      onRemove={(chip) => {
+        const c = all.find((x) => String(x.id) === chip.key);
+        const member = c && removableMember(c, driveId);
+        if (c && member) void removal.remove(c, member.group_id);
+      }}
+    />
   );
-  const view = (
+  return (
     <>
-      {picking && (
-        <AddToCollection
-          driveId={driveId}
-          onDone={(result) => {
-            setPicking(false);
-            setAdded(result);
-          }}
-          onCancel={() => setPicking(false)}
-        />
+      {refusal ? (
+        <span className="button-wrap" data-tip={refusal}>
+          {field}
+        </span>
+      ) : (
+        field
+      )}
+      {links.isError && (
+        <p className="hint">Its collections could not be loaded: {visible(errorText(links.error))}</p>
       )}
       {added && <LastChange title={`Added to ${added.collection.name}: what happened in ##. Ongoing`} result={added} />}
     </>
   );
-  return { button, view };
 }
 
-/** A selected folder's one action: Add to collection (everything in it then belongs). */
+/** A selected folder's one action: add it to a collection (everything in it then belongs). */
 export function FolderActions({ driveId, refusal }: { driveId: string; refusal: string | null }) {
-  const collect = useAddToCollectionAction(driveId, refusal);
   return (
     <div className="file-actions">
-      <div className="actions">{collect.button}</div>
-      {collect.view}
+      <CollectionsField driveId={driveId} refusal={refusal} />
     </div>
   );
 }
 
 /** The collections block of the file view (the same in Browse, a collection and a tray):
- * the trays and collections the file is in as badges (a collection's × takes the file
- * out), and "Add to collection…" with its picker. ``hideItem``: a tray item that is not
- * listed (it is the item being viewed). */
+ * the file's tray items as badges, and its collections as chips with the field that
+ * adds more. ``hideItem``: a tray item that is not listed (it is the item being viewed). */
 export function FileCollections({ driveId, hideItem }: { driveId: string; hideItem?: number }) {
-  const collect = useAddToCollectionAction(driveId);
   return (
     <section className="file-collections" aria-label="Collections of this file">
-      <LinkBadges driveId={driveId} hideItem={hideItem} />
-      <div className="actions">{collect.button}</div>
-      {collect.view}
+      <LinkBadges driveId={driveId} hideItem={hideItem} collections={false} />
+      <CollectionsField driveId={driveId} />
     </section>
   );
 }
