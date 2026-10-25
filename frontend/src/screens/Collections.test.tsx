@@ -223,6 +223,19 @@ describe("Collection detail", () => {
     expect(within(own).getByRole("button", { name: "Remove quote.pdf from the collection" })).toBeInTheDocument();
   });
 
+  it("the inspector has the file view's one block order; the collection's own parts are in the own block", async () => {
+    renderCollections("/collections/7");
+    await within(panel()).findByRole("region", { name: "Members" });
+    const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
+    await within(inspector).findByRole("region", { name: "Tags" });
+    const blocks = Array.from(inspector.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
+    expect(blocks).toEqual(["header", "tags", "collections", "summary", "own", "preview", "notes"]);
+    const inBlock = (name: string) => inspector.querySelector(`[data-block="${name}"]`) as HTMLElement;
+    expect(within(inBlock("collections")).getByRole("button", { name: "Add to collection…" })).toBeInTheDocument();
+    expect(within(inBlock("own")).getByRole("region", { name: "In this collection" })).toBeInTheDocument();
+    expect(within(inBlock("own")).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
+  });
+
   it("Quick Look is an icon button with a tooltip; the members scroll in their own box; no Ask AI by the name", async () => {
     renderCollections("/collections/7");
     const members = await within(panel()).findByRole("region", { name: "Members" });

@@ -1732,6 +1732,59 @@ describe("The item view layout", () => {
     expect(heading.compareDocumentPosition(tags) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("the item view has the file view's block order, with the item's own block in the middle", async () => {
+    renderTrays("/trays/to-pay?item=1");
+    await screen.findByRole("region", { name: "Item" });
+    await within(detail()).findByRole("region", { name: "Tags" });
+    await within(detail()).findByRole("img", { name: "Page 1" });
+    const blocks = Array.from(detail().querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
+    // the tags sit under the title, inside the header block (the item view's earlier decision)
+    expect(blocks).toEqual(["header", "collections", "summary", "own", "preview", "notes"]);
+    const inBlock = (name: string) => detail().querySelector(`[data-block="${name}"]`) as HTMLElement;
+    expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "Northpower sähkö" })).toBeInTheDocument();
+    expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "northpower.pdf" })).toBeInTheDocument();
+    expect(within(inBlock("header")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
+    expect(within(inBlock("collections")).getByRole("button", { name: "Add to collection…" })).toBeInTheDocument();
+    expect(within(inBlock("summary")).getByRole("region", { name: "Summary" })).toBeInTheDocument();
+    expect(within(inBlock("own")).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
+    expect(within(inBlock("own")).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument();
+    expect(within(inBlock("preview")).getByRole("button", { name: "Quick Look" })).toBeInTheDocument();
+    expect(within(inBlock("notes")).getByRole("region", { name: "Checklist" })).toBeInTheDocument();
+    expect(within(inBlock("notes")).getByRole("button", { name: "History" })).toBeInTheDocument();
+  });
+
+  it("the file's collections are chips in the item view: × removes, Add to collection adds", async () => {
+    const SAUNA = {
+      id: 7, name: "Sauna", state: "open", created: 1, closed_at: null, publish: { ongoing: false }, ongoing_rel: null,
+      members: [{ drive_id: "f1", path: "10. Financial/Banks/northpower.pdf", is_dir: false, missing: false, quarantined: false, group_id: null, marks: [] }],
+      ongoing_status: null, summary: "", groups: [], parent_id: null, path: ["Sauna"], kind: null, position: 0, files: 1, open_checks: 0,
+    };
+    const CAR = { ...SAUNA, id: 8, name: "Car", path: ["Car"], members: [], files: 0 };
+    const change = (c: object) => ({ body: { collection: c, batch: null, problems: [], ongoing_status: null } });
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "GET /api/files/f1/links": { body: { items: [{ id: 1, tray_id: "to-pay", tray_name: "To pay", title: "Northpower sähkö", state: "open" }], collections: [SAUNA], note: "" } },
+      "GET /api/collections": { body: [SAUNA, CAR] },
+      "POST /api/collections/7/members/remove": change(SAUNA),
+      "POST /api/collections/8/members": change(CAR),
+    });
+    await screen.findByRole("region", { name: "Item" });
+    const block = await within(detail()).findByRole("region", { name: "Collections of this file" });
+    const badges = await within(block).findByRole("list", { name: "In trays and collections" });
+    // the item being viewed is not listed as a link to itself
+    expect(within(badges).queryByRole("link", { name: /Northpower/ })).not.toBeInTheDocument();
+    expect(within(badges).getByRole("link", { name: "Sauna" })).toBeInTheDocument();
+    await user.click(within(badges).getByRole("button", { name: "Remove from Sauna" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/collections/7/members/remove")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/collections/7/members/remove")[0].body).toEqual({ drive_id: "f1" });
+
+    await user.click(within(block).getByRole("button", { name: "Add to collection…" }));
+    const form = await within(block).findByRole("region", { name: "Add to collection" });
+    await user.type(within(form).getByRole("combobox", { name: "Collection" }), "car");
+    await user.click(await within(form).findByRole("option", { name: "Car" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/collections/8/members")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/collections/8/members")[0].body).toEqual({ drive_ids: ["f1"] });
+  });
+
   it("Summary, Checklist, Notes and History fold with aria-expanded, a hint, and are remembered", async () => {
     const first = renderTrays("/trays/to-pay?item=1");
     await screen.findByRole("region", { name: "Item" });

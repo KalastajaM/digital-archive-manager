@@ -1,14 +1,14 @@
-/** The Browse file panel has the selected file's summary box (spec §3). */
+/** The file view's summary block is the file's summary box (spec §3). */
 import { screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STATUS_ON } from "../components/ai/testData";
 import { mockFetch, renderWithProviders } from "../test-utils";
-import { FileActions } from "./FileActions";
+import { SummaryBox } from "../components/ai/SummaryBox";
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("FileActions", () => {
+describe("The summary block of the file view", () => {
   it("shows the file's summary with Summarize with AI", async () => {
     mockFetch({
       "GET /api/ai/status": { body: STATUS_ON },
@@ -19,7 +19,7 @@ describe("FileActions", () => {
     });
     renderWithProviders(
       <MemoryRouter>
-        <FileActions driveId="d7" />
+        <SummaryBox driveId="d7" />
       </MemoryRouter>,
     );
     const box = await screen.findByRole("region", { name: "Summary" });
