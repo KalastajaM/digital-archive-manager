@@ -131,12 +131,12 @@ export function BoxPanel({
           <li key={k.id}>
             <span className="box-kept-text">
               <strong>Box {i + 1}</strong>{" "}
-              <span className="box-mode" role="group" aria-label={`What box ${i + 1} matches`}>
+              <span className="segmented box-mode" role="group" aria-label={`What box ${i + 1} matches`}>
                 {(["words", "picture"] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
-                    className="link-button"
+                    className="segmented-option"
                     aria-pressed={k.mode === m}
                     onClick={() => k.mode !== m && onMode(i, m)}
                   >

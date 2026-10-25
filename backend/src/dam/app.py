@@ -26,6 +26,7 @@ from dam.extract.base import ExtractorRegistry, default_registry
 from dam.index.content import ContentIndexer
 from dam.index.repo import FileRepo, TagRepo
 from dam.index.scanner import ScanReport, listable, scan
+from dam.locks import LockService
 from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.reminders.engine import clear_unsent
@@ -76,6 +77,7 @@ class App:
     publishers: PublisherRegistry = field(init=False)
     collections: CollectionService = field(init=False)
     marks: MarkService = field(init=False)
+    locks: LockService = field(init=False)
     ongoing: OngoingPublisher = field(init=False)
     convert: OngoingConverter = field(init=False)
     convert_important: ImportantConverter = field(init=False)
@@ -121,6 +123,9 @@ class App:
         self.publishers = PublisherRegistry()
         self.collections = CollectionService(self.engine, self.repo, self.publishers, special)
         self.marks = MarkService(self.collections)
+        # a locked file (Important, or locked by the owner) is not changed on disk
+        self.locks = LockService(self.engine, self.marks.important_paths)
+        self.executor.locks = self.locks
         self.ongoing = OngoingPublisher(self.paths, self.repo, self.executor, self.collections)
         self.publishers.register(self.ongoing)
         self.convert = OngoingConverter(

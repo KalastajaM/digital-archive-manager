@@ -190,6 +190,24 @@ const clearTags = async (user: ReturnType<typeof userEvent.setup>) => {
 };
 
 describe("ReviewCard", () => {
+  it("a locked inbox file is not filed until it is unlocked", async () => {
+    const first = ENTRIES[0].record.drive_id;
+    const { calls, user } = await setup({
+      "GET /api/locks": { body: { files: [{ drive_id: first, reason: "file" }], folders: [] } },
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+    });
+    const fileIt = await screen.findByRole("button", { name: "File it" });
+    await waitFor(() => expect(fileIt).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move to To Delete" }).closest(".icon-button-wrap")).toHaveAttribute(
+      "data-tip",
+      "This file is locked. Unlock it to change it.",
+    );
+    expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    expect(posts(calls, "/api/inbox/file")).toHaveLength(0);
+  });
+
   it("renders the suggested name, folder, tags and detected fields", async () => {
     const { name } = await setup();
     expect(name).toHaveValue("2026-10-01 Kotihoito lasku.pdf");

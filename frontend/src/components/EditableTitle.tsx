@@ -1,12 +1,11 @@
-/** A heading edited in place: click it, or the pencil beside it (shown on hover and focus,
- * always there for the keyboard and screen readers). Enter or leaving the field saves, Esc
+/** A heading edited in place: click it (it is a button, so the keyboard reaches it too).
+ * Enter or leaving the field saves, Esc
  * cancels, an empty title is refused with the message the server gives for it. The save
  * is the caller's (``save`` returns the stored title); "Saving…/Saved" shows beside it. */
-import { Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { visible } from "../text";
 import { SaveState } from "./SavedNote";
-import { IconButton } from "./ui/IconButton";
+import { ClickToEdit } from "./ui/ClickToEdit";
 import { useAutoSave } from "./useAutoSave";
 
 export const BLANK_TITLE = "A title must not be blank";
@@ -93,10 +92,11 @@ export function EditableTitle({
   }
   return (
     <div className="editable-title">
-      <h2 id={headingId} className="editable-title-text" onClick={start}>
-        {visible(auto.shown)}
+      <h2 id={headingId} className="editable-title-text" aria-label={visible(auto.shown)}>
+        <ClickToEdit label="Edit title" tip="Click to edit the title" onClick={start}>
+          {visible(auto.shown)}
+        </ClickToEdit>
       </h2>
-      <IconButton icon={<Pencil />} label="Edit title" onClick={start} />
       <SaveState status={auto.status} />
     </div>
   );

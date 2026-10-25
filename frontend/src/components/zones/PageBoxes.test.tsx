@@ -716,6 +716,12 @@ describe("Picture areas", () => {
     const kept = within(panel).getByRole("list", { name: "Boxes" });
     expect(await within(kept).findByRole("img", { name: "Picture of box 1" })).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
     expect(within(row(panel, 1)).getByRole("button", { name: "Picture" })).toHaveAttribute("aria-pressed", "true");
+    // Words / Picture is the same segmented control as the rule sheet's Anyone / Only for
+    const group = within(row(panel, 1)).getByRole("group", { name: "What box 1 matches" });
+    expect(group).toHaveClass("segmented");
+    expect(within(group).getByRole("button", { name: "Picture" })).toHaveClass("segmented-option");
+    expect(within(group).getByRole("button", { name: "Words" })).toHaveClass("segmented-option");
+    expect(within(group).getByRole("button", { name: "Words" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getAllByTestId("kept-box")).toHaveLength(1);
     expect(within(panel).getByText(/Add a text box to make this faster and surer/)).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Make a rule…" })).toBeEnabled();

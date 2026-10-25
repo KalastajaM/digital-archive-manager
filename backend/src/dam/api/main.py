@@ -20,6 +20,7 @@ from dam.api.routers import (
     inbox,
     items,
     layout,
+    locks,
     marks,
     notes,
     ongoing,
@@ -33,7 +34,12 @@ from dam.api.routers import (
 )
 from dam.api.routers import archives as archives_router
 from dam.api.schemas import ErrorBody
-from dam.api.security import ArchiveGuardMiddleware, InternalErrorMiddleware, LocalOnlyMiddleware
+from dam.api.security import (
+    ArchiveGuardMiddleware,
+    InternalErrorMiddleware,
+    LocalOnlyMiddleware,
+    UnlockTokenMiddleware,
+)
 from dam.app import App
 from dam.core.paths import OutsideArchiveError
 from dam.ops.model import GuardError, OpFailed
@@ -68,6 +74,11 @@ STATIC_HEADERS = {
         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
     ),
 }
+# The start page and the other files with fixed names are checked with the server on every
+# load, so a normal refresh after an update shows the new version. The bundles in assets/
+# have a content hash in their name and never change, so they are cached for good.
+NO_CACHE = {**STATIC_HEADERS, "Cache-Control": "no-cache"}
+CACHED_FOR_GOOD = {**STATIC_HEADERS, "Cache-Control": "public, max-age=31536000, immutable"}
 
 _ERROR = {"model": ErrorBody}
 ERROR_RESPONSES = {
@@ -125,8 +136,9 @@ def _mount_frontend(api: FastAPI, static_dir: Path) -> None:
             raise StarletteHTTPException(404, "Not Found")
         candidate = (root / full_path).resolve()
         if full_path and candidate.is_relative_to(root) and candidate.is_file():
-            return FileResponse(candidate, headers=STATIC_HEADERS)
-        return FileResponse(index, headers=STATIC_HEADERS)
+            hashed = candidate.is_relative_to(root / "assets")
+            return FileResponse(candidate, headers=CACHED_FOR_GOOD if hashed else NO_CACHE)
+        return FileResponse(index, headers=NO_CACHE)
 
 
 def create_api(
@@ -151,6 +163,7 @@ def create_api(
         inbox,
         layout,
         files,
+        locks,
         browse,
         activity,
         today,
@@ -178,6 +191,7 @@ def create_api(
         _mount_frontend(api, static_dir)
     if archives is not None:
         api.add_middleware(ArchiveGuardMiddleware, archive_id=archives.current_id)
+    api.add_middleware(UnlockTokenMiddleware)
     # Added last = outermost: the host/origin checks run before anything else.
     api.add_middleware(InternalErrorMiddleware, logs_dir=app.app_paths.logs_dir)
     api.add_middleware(LocalOnlyMiddleware)

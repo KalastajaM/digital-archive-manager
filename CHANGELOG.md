@@ -17,6 +17,17 @@ All notable changes are listed here. The format follows
 - The Folder field of the rule sheet has a "…" button that opens the folder browser and
   puts the path you pick in the field. Patterns such as `{person}` and `{year}` can still
   be typed.
+- A lock on files, a safety catch against slips. A locked file can still be viewed, tagged
+  and described, but it cannot be renamed, moved (also by drag and drop, Move to… or Back
+  to inbox), filed from the Inbox or moved to To Delete. Files marked Important are always
+  locked; you can lock any other file with **Lock** next to its name. **Unlock** asks
+  **For now** or **For good**. An Important file can only be unlocked for now. Unlocking
+  for now lasts until you leave the file (select another, close the panel, go to another
+  page or reload), and the details say "Unlocked until you leave this file" with **Lock
+  again**. A lock icon shows on locked files in Browse, the Inbox, trays and collections.
+  A change that includes a locked file is refused as a whole, naming the file. dam itself
+  enforces the lock, so no screen or script can get around it, and no unlock survives a
+  restart.
 
 - The rule test now says on its own line whether the rule matches the document it is made
   from ("This rule matches this document", or "does not match" with the reason, such as
@@ -268,6 +279,8 @@ All notable changes are listed here. The format follows
   unknown" for a rule that no longer files by person. The sheet now says that the result
   is of the rule before your last change until the new test answers. A rule that names no
   person never lists documents as "person unknown" (covered by a test).
+- After dam is updated and restarted, a normal refresh of the browser shows the new
+  version. Before, the browser could keep showing the old one until a hard reload.
 - Testing a rule with a word area is much faster. It folded the whole text of every
   document twice (once to pick the documents that need page 1, once to test them), one
   character at a time, so a long text cost milliseconds, and a rule that only looks at a
@@ -326,6 +339,13 @@ All notable changes are listed here. The format follows
   person in the folder** sits on the Anyone / Only for row with a ? that says how the two
   relate, and areas are called "Words in area 1" and "Picture in area 2" (no more "of page
   1"). The message for a box with nothing in it now has its own line under the box.
+- To rename a file, click its name (in Browse, a collection or an item);
+  the separate pencil button is gone. The same goes for an item's title and a collection's
+  name. The name takes the keyboard focus, so Enter or Space on it works too, and the
+  rename is still previewed and can be undone.
+- In the box panel, the choice between **Words** and **Picture** for each box is now a
+  switch like the rule's "Anyone / Only for": the selected side is filled, so you can see
+  which one is on.
 - The rule sheet is split into **When a document matches** (the areas, From, For and More
   conditions) and **Then file it like this** (Folder, Name, Tags, Tray, Payee). Payee only
   shows when the chosen tray has a payee field, such as To pay, or when the rule already

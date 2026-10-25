@@ -208,7 +208,7 @@ describe("Collection detail", () => {
     await within(panel()).findByRole("region", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).getByRole("heading", { level: 2, name: "quote.pdf" })).toBeInTheDocument();
-    for (const name of ["Rename", "Move file to…", "Put in tray", "Add to collection…", "Quick Look", "Move to To Delete"]) {
+    for (const name of [/^Rename/, "Move file to…", "Put in tray", "Add to collection…", "Quick Look", "Move to To Delete"]) {
       expect(within(inspector).getByRole("button", { name })).toBeInTheDocument();
     }
     expect(within(inspector).getByRole("region", { name: "Tags" })).toBeInTheDocument();
@@ -274,13 +274,13 @@ describe("Collection detail", () => {
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).queryByRole("button", { name: "Edit details…" })).not.toBeInTheDocument();
     expect(within(inspector).getByRole("heading", { name: "quote.pdf" })).toBeInTheDocument();
-    expect(within(inspector).getByRole("button", { name: "Rename" })).toBeEnabled();
+    expect(within(inspector).getByRole("button", { name: /^Rename/ })).toBeEnabled();
     expect(within(inspector).getByRole("button", { name: "Move file to…" })).toBeEnabled();
     await user.click(within(tree()).getByText("Plans"));
-    expect(within(inspector).getByRole("button", { name: "Rename" })).toBeDisabled();
+    expect(within(inspector).getByRole("button", { name: /^Rename/ })).toBeDisabled();
     expect(within(inspector).getByRole("button", { name: "Move file to…" })).toBeDisabled();
     await user.keyboard("k");
-    await user.click(within(inspector).getByRole("button", { name: "Rename" }));
+    await user.click(within(inspector).getByRole("button", { name: /^Rename/ }));
     expect(await within(inspector).findByRole("textbox", { name: "File name" })).toHaveValue("quote");
   });
 
@@ -391,7 +391,18 @@ describe("Collection detail", () => {
         body: changeOf({ ...SAUNA, name: (call.body as { name: string }).name }),
       }),
     });
-    await fromMenu(user, "Rename");
+    // the name itself is the click target (no pencil); Enter and Space on it work too
+    const nameButton = () => within(panel()).getByRole("button", { name: "Rename Sauna" });
+    await within(panel()).findByRole("button", { name: "Rename Sauna" });
+    expect(nameButton()).toHaveAttribute("title", "Click to rename");
+    expect(within(panel()).queryByRole("button", { name: "Edit name" })).not.toBeInTheDocument();
+    for (const key of ["{Enter}", " "]) {
+      nameButton().focus();
+      await user.keyboard(key);
+      await user.type(within(panel()).getByRole("textbox", { name: "Collection name" }), "{Escape}");
+      expect(within(panel()).queryByRole("textbox", { name: "Collection name" })).not.toBeInTheDocument();
+    }
+    await user.click(nameButton());
     const input = within(panel()).getByRole("textbox", { name: "Collection name" });
     await user.clear(input);
     await user.type(input, "Quiet{Enter}");

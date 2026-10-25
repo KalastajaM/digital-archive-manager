@@ -844,6 +844,17 @@ def test_static_and_spa_fallback(app, static_dir):
         assert c.get("/", headers={"Host": "evil.com"}).status_code == 403
 
 
+def test_the_start_page_is_always_revalidated_and_hashed_assets_are_cached(app, static_dir):
+    # after an update a normal refresh must load the new start page, which names the new
+    # (content-hashed) bundles; those never change and can be cached for good
+    (static_dir / "appearance.js").write_text("// theme", encoding="utf-8")
+    with make_client(app, static_dir) as c:
+        for url in ("/", "/inbox/some/route", "/index.html", "/appearance.js"):
+            assert c.get(url).headers["cache-control"] == "no-cache", url
+        cached = c.get("/assets/app.js").headers["cache-control"]
+        assert cached == "public, max-age=31536000, immutable"
+
+
 def test_no_static_dir_means_api_only(app, tmp_path):
     with make_client(app, tmp_path / "missing") as c:
         assert c.get("/").status_code == 404

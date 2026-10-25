@@ -551,7 +551,7 @@ describe("Selected file", () => {
     const preview = await openFile(user);
     expect(within(preview).queryByRole("button", { name: "Edit details…" })).not.toBeInTheDocument();
     expect(within(preview).getByRole("heading", { name: "a.pdf" })).toBeInTheDocument();
-    expect(within(preview).getByRole("button", { name: "Rename" })).toBeEnabled();
+    expect(within(preview).getByRole("button", { name: /^Rename/ })).toBeEnabled();
     expect(within(preview).getByRole("button", { name: "Move file to…" })).toBeEnabled();
     // the toggles sit in the preview's toolbar, with zoom and Open
     const tools = within(preview).getByRole("group", { name: "Zoom" });
@@ -564,9 +564,9 @@ describe("Selected file", () => {
     const { user } = setup("10. Financial/Banks");
     await user.click(await screen.findByText("link.pdf"));
     const preview = await screen.findByRole("region", { name: "Preview" });
-    const rename = within(preview).getByRole("button", { name: "Rename" });
+    const rename = within(preview).getByRole("button", { name: /^Rename/ });
     expect(rename).toBeDisabled();
-    expect(rename.closest("span")).toHaveAttribute("data-tip", "Links cannot be renamed or moved");
+    expect(rename).toHaveAttribute("title", "Links cannot be renamed or moved");
     expect(within(preview).getByRole("button", { name: "Move file to…" })).toBeDisabled();
     expect(within(preview).getByRole("combobox", { name: "Add a tag to link.pdf" })).toBeDisabled();
   });
@@ -2038,5 +2038,38 @@ describe("New folder", () => {
     await user.type(screen.getByRole("searchbox", { name: "Search" }), "zzz");
     await waitFor(() => expect(newButton()).toBeDisabled());
     expect(newButton().closest(".icon-button-wrap")?.getAttribute("data-tip")).toMatch(/^Search results/);
+  });
+});
+
+describe("Locked files in Browse", () => {
+  const LOCKS = { "GET /api/locks": { body: { files: [{ drive_id: "f1", reason: "file" }], folders: [] } } };
+  const REASON = "This file is locked. Unlock it to change it.";
+
+  it("shows the lock on the row, and the bin and Move to… are off with the reason", async () => {
+    const { user } = setup("10. Financial/Banks", LOCKS);
+    await user.click(await screen.findByRole("checkbox", { name: "Select a.pdf" }));
+    const row = rowOf(listing(), "a.pdf");
+    expect(await within(row).findByRole("img", { name: "Locked" })).toBeInTheDocument();
+    expect(within(rowOf(listing(), "b.pdf")).queryByRole("img", { name: "Locked" })).toBeNull();
+    const bin = screen.getByRole("button", { name: "Move to To Delete" });
+    expect(bin).toBeDisabled();
+    expect(bin.closest(".icon-button-wrap")).toHaveAttribute("data-tip", REASON);
+    expect(screen.getByRole("button", { name: "Move to…" })).toBeDisabled();
+  });
+
+  it("a locked file dragged onto a folder is not moved", async () => {
+    const { calls } = setup("", {
+      "GET /api/locks": { body: { files: [{ drive_id: "f0", reason: "file" }], folders: [] } },
+      "POST /api/browse/move/preview": { body: [] },
+    });
+    await screen.findByText("readme.txt");
+    await within(rowOf(listing(), "readme.txt")).findByRole("img", { name: "Locked" });
+    const dt = dragFrom(rowOf(listing(), "readme.txt"));
+    const taxes = rowOf(listing(), "13. Taxes");
+    fireEvent.dragEnter(taxes, { dataTransfer: dt });
+    expect(taxes).not.toHaveAttribute("data-drop", "over");
+    fireEvent.drop(taxes, { dataTransfer: dt });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
   });
 });

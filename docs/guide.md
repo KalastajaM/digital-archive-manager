@@ -14,6 +14,7 @@
 - [Paying a bill with the bank barcode](#paying-a-bill-with-the-bank-barcode)
 - [Collections](#collections)
 - [Starred and Important](#starred-and-important)
+- [Locking a file](#locking-a-file)
 - [Browse](#browse)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
@@ -221,7 +222,7 @@ More on the form:
   brings it back), and below about 760 px everything stacks.
 
 **Editing a filed document** works the same way wherever its details are shown (Browse, a
-collection, a tray item): the pencil beside the name renames it (the extension stays), the
+collection, a tray item): clicking the name renames it (the extension stays), the
 folder icon beside the path moves it, and tags are chips written at once. A rename or move
 is shown as a plan first and has **Undo**.
 
@@ -748,7 +749,7 @@ A tray's screen has the list (Open / Done) and the selected item beside it; ↑/
 highlight and open the item. An item has a title, one or more files, the tray's fields, a
 note, a checklist and a history.
 
-- Click the title (or the pencil beside it) to edit it in place: Enter or clicking away
+- Click the title to edit it in place: Enter or clicking away
   saves, Esc cancels, an empty title is refused. The file's tags are right under it.
 - The date, **Mark done** and the icon buttons (move to tray, remove from tray, Ask AI,
   take the file off, move to To Delete) are one row; the icons are at its right end.
@@ -868,7 +869,31 @@ Two marks for files you need often, without making a collection:
 
 Mark or unmark with one click wherever a file is shown. **Marking never moves or renames
 a file.** A file marked Important cannot be moved to To Delete (unmark it first), nor can
-a folder holding one.
+a folder holding one. An Important file is also locked (see the next section).
+
+## Locking a file
+
+A lock is a safety catch against slips, such as a drag and drop in the wrong place. A
+locked file can still be viewed and described: tags, notes, checklists, From and For,
+trays, stars, the Important mark, summaries and previews all work. What it refuses is
+anything that changes the file on disk: rename, move (also drag and drop, Move to… and
+Back to inbox), filing from the Inbox, and Move to To Delete. A locked file shows a lock
+icon in lists and in its details, and those controls are off, with the reason as their
+tooltip.
+
+- **Important files are always locked.** You can unlock one only **for now**.
+- **Any other file can be locked** with **Lock** next to its name, and unlocked again
+  with **Unlock**, which asks **For now** or **For good**. For good removes the lock.
+- **For now lasts until you leave the file.** The details say "Unlocked until you leave
+  this file", with **Lock again**. Select another file, close the panel, go to another
+  page or reload, and the file is locked again. While it is unlocked you can make as
+  many changes as you like.
+
+If a change would touch a locked file, dam refuses the whole change before anything moves
+and says "This file is locked. Unlock it to change it." For several files at once it
+names the locked ones. There is no password: the lock stops mistakes, not other people
+using your computer. Undo still works on a locked file, since it only puts back what you
+did.
 
 ## Browse
 
@@ -1071,6 +1096,9 @@ folders can be opened and dropped on, not dragged.
   `##. To Delete`, keeping its original path; you empty that folder yourself. The only
   things dam ever removes are its own links and its own empty folders in `##. Ongoing` and
   `##. Important`, and only after checking they are still exactly the ones it made.
+- **It never moves or renames a locked file.** Important files are always locked, and you
+  can lock any file; you unlock it on purpose, and for Important files only until you
+  leave the file.
 - **It never changes anything without showing you first.** Moves, renames, new folders
   and conversions are previewed and need your confirmation. A name already taken gets
   `_2`; nothing is ever overwritten.

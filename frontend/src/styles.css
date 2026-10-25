@@ -246,10 +246,6 @@ main { flex: 1; padding: var(--sp-4) var(--sp-5); min-width: 0; }
 }
 .toolbar-title { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
 .toolbar-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 700; white-space: nowrap; }
-.toolbar-title-editable { cursor: text; }
-.toolbar-title-pencil { align-self: center; opacity: 0; }
-.toolbar-title:hover .toolbar-title-pencil, .toolbar-title:focus-within .toolbar-title-pencil { opacity: 1; }
-@media (hover: none) { .toolbar-title-pencil { opacity: 1; } }
 .toolbar-subtitle { color: var(--muted); font-size: var(--fs-sm); white-space: nowrap; }
 .toolbar-actions { display: flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
 .toolbar-search { margin-left: var(--sp-2); width: 180px; }
@@ -1220,10 +1216,7 @@ button.check-text { padding: 0; min-height: 0; border: none; background: transpa
 
 /* A heading edited in place: click it or the pencil (shown on hover and focus) */
 .editable-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-1); min-width: 0; }
-.editable-title h2 { cursor: text; min-width: 0; }
-.editable-title .icon-button { opacity: 0; }
-.editable-title:hover .icon-button, .editable-title:focus-within .icon-button { opacity: 1; }
-@media (hover: none) { .editable-title .icon-button { opacity: 1; } }
+.editable-title h2 { min-width: 0; }
 .editable-title.editing { display: block; }
 .editable-title-input { width: 100%; font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.01em; }
 .editable-title .save-state { margin-left: var(--sp-1); }
@@ -2071,8 +2064,7 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .box-kept li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .box-kept-problem { flex: 1 0 100%; margin: 0; }
 .box-kept-text { min-width: 0; overflow-wrap: anywhere; }
-.box-mode { display: inline-flex; gap: var(--sp-2); font-size: var(--fs-sm); }
-.box-mode [aria-pressed="true"] { font-weight: 600; text-decoration: none; }
+.box-mode { font-size: var(--fs-sm); }
 .box-panel { margin: var(--sp-2) 0 0; max-height: 45vh; overflow-y: auto; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
 .box-panel p { margin: 0 0 var(--sp-2); }
 .box-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-1); }
@@ -2123,3 +2115,15 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .replay-scores-title { margin: var(--sp-2) 0 0; font-weight: 600; }
 .replay-near { margin-top: var(--sp-2); padding: var(--sp-2); border: 1px dashed var(--hairline); border-radius: var(--radius, 6px); color: var(--muted); }
 .replay-path { text-align: left; overflow-wrap: anywhere; }
+
+/* -- locks: a safety catch against renaming and moving a file ------------------------ */
+.mark-lock { color: var(--muted-2); }
+.lock-control { display: inline-flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.lock-control .lock-state, .lock-control .lock-ask { font-size: var(--fs-sm); color: var(--muted); }
+.lock-control button:not(.icon-button) { font-size: var(--fs-sm); }
+
+/* A name or title renamed by clicking it: plain text that is a button */
+.click-edit { all: unset; box-sizing: border-box; max-width: 100%; cursor: text; border-radius: 4px; }
+.click-edit:hover:not(:disabled) { text-decoration: underline dotted; text-underline-offset: 3px; }
+.click-edit:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
+.click-edit:disabled { cursor: default; }

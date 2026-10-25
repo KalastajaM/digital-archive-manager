@@ -7,6 +7,7 @@ import dataclasses
 import os
 import stat
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.naming import unique_name
@@ -29,6 +30,9 @@ from dam.ops.guards import (
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind, Plan, ResolvedOp
 from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME
 
+if TYPE_CHECKING:
+    from dam.locks import LockService
+
 _EXACT_SOURCE = {OpKind.QUARANTINE, OpKind.REMOVE_EMPTY_DIR}  # never follow a redirect
 
 # ops whose source is not (only) an archive path: COPY and PICTURE_TO_QUARANTINE read an
@@ -39,6 +43,9 @@ COLLISION_NOTE = "renamed to avoid collision"
 COPY_NOTE = "copied, then removed from dam's settings folder"
 COPY_BACK_NOTE = "copied back; the copy in To Delete stays"
 MKDIR_NOTE = "create missing folder"
+
+
+_UNREAD = object()
 
 
 def _same(a: str, b: str) -> bool:
@@ -174,9 +181,16 @@ class _Sim:
 
 
 class Planner:
-    def __init__(self, paths: ArchivePaths, areas_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        paths: ArchivePaths,
+        areas_dir: Path | None = None,
+        locks: "LockService | None" = None,
+    ) -> None:
         self.paths = paths
         self.areas_dir = areas_dir  # the rules' picture folder (PICTURE_* ops only)
+        # the lock service, when locked files must be refused (never in an undo)
+        self.locks = locks
 
     def resolve(self, plan: Plan, *, restore: bool = False) -> list[ResolvedOp]:
         """``restore``: only for plans built by ``dam.ops.undo`` (see ``validate``)."""
@@ -184,6 +198,9 @@ class Planner:
         self.aliases: list[tuple[str, str]] = []  # (requested path, actual path)
         self.from_protected: list[str] = []  # current paths of entries moved out of protection
         self.out: list[ResolvedOp] = []
+        self._restore = restore
+        self._locked_state = _UNREAD  # read when the first file is to be changed
+        self.locked_names: list[str] = []  # files this plan may not change (locked)
         if plan.inbox_folders and not plan.new_folders:
             raise GuardError("Inbox folders are made only by a new-folder plan.")
         self.made = plan.new_folders  # MKDIRs of a New folder / layout batch are "made"
@@ -206,7 +223,47 @@ class Planner:
             self._resolve_one(op)
             if redirect is not None:  # the op's own entry is always appended last
                 self.out[-1].note = _add_note(self.out[-1].note, redirect)
+        if self.locked_names:
+            raise GuardError(self._locked_message(len(plan.ops)))
         return self.out
+
+    def _lock_state(self):
+        """(locked entries, ids unlocked by this request's grants), or None when locks do
+        not apply: no lock service, nothing locked, or an undo (it only puts back what
+        the owner did)."""
+        if self.locks is None or self._restore:
+            return None
+        from dam.locks import request_tokens
+
+        entries = self.locks.entries()
+        if not entries:
+            return None
+        return entries, self.locks.granted(request_tokens())
+
+    def _check_locked(self, src: str) -> None:
+        """Note ``src`` (a RENAME, MOVE or QUARANTINE source) when it is, holds or lies
+        inside a locked file that no unlock covers. The plan is refused at the end, with
+        every such file named."""
+        if self._locked_state is _UNREAD:
+            self._locked_state = self._lock_state()
+        if self._locked_state is None:
+            return
+        disk, _ = self.sim._origin(src)
+        if disk is None:  # made earlier in this batch: nothing locked about it
+            return
+        entries, granted = self._locked_state
+        if self.locks.refused(disk, self._drive_id(src), entries, granted):
+            self.locked_names.append(PurePosixPath(src).name)
+
+    def _locked_message(self, ops: int) -> str:
+        from dam.locks import LOCKED_MESSAGE
+
+        names = list(dict.fromkeys(self.locked_names))
+        if ops == 1 and len(names) == 1:
+            return LOCKED_MESSAGE
+        if len(names) == 1:
+            return f"This file is locked ({names[0]}). Unlock it to change it."
+        return f"These files are locked ({', '.join(names)}). Unlock them to change them."
 
     def _new_folder_ops(self, plan: Plan) -> list[Op]:
         """The ops of a ``Plan.new_folders`` plan (the user-confirmed New folder and
@@ -335,6 +392,7 @@ class Planner:
         """MOVE / QUARANTINE / RENAME: put ``op.src`` into ``folder`` under a free name."""
         src = op.src
         self._require_src(src)
+        self._check_locked(src)
         into_quarantine = is_under(folder, self.paths.quarantine)
         if into_quarantine and self._is_protected_origin(src):
             raise GuardError(f"{src!r} comes from a protected path and cannot be quarantined")
