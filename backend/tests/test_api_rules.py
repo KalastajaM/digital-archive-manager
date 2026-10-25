@@ -230,3 +230,25 @@ def test_save_path_id_must_match_body_and_not_be_reserved(app, api):
     for name in ("replay", "explain"):
         r = put(api, f"/api/rules/{name}", rule_body(name))
         assert r.status_code == 400 and "reserved" in r.json()["error"]
+
+
+def test_a_rules_collections_are_saved_listed_and_prefill_the_inbox(app, api, fake_archive):
+    body = rule_body("kela", "kela", "50. Medical", collections=["Sauna", "Taxes"])
+    body["when"]["folder_is"] = INBOX
+    assert put(api, "/api/rules/kela", body).status_code == 200
+    listed = api.get("/api/rules").json()["rules"][0]
+    assert listed["then"]["collections"] == ["Sauna", "Taxes"]
+    assert "collections:" in (app.rules_dir / "learned.yaml").read_text(encoding="utf-8")
+    fake_archive.add(f"{INBOX}/scan.pdf", content=b"k", drive_id="k")
+    scan(app.paths, app.repo)
+    app.repo.save_content("k", None, ExtractedText("Kela", "test"), "indexed")
+    suggestion = api.get("/api/inbox").json()[0]["suggestion"]
+    assert suggestion["collections"] == ["Sauna", "Taxes"]
+    assert suggestion["collection_sources"] == {"Sauna": "rule:kela", "Taxes": "rule:kela"}
+
+
+def test_a_rule_without_collections_lists_an_empty_list(api):
+    put(api, "/api/rules/a", rule_body("a"))
+    assert api.get("/api/rules").json()["rules"][0]["then"]["collections"] == []
+    bad = put(api, "/api/rules/b", rule_body("b", collections=[" "]))
+    assert bad.status_code == 400

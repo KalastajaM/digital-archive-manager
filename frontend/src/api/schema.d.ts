@@ -5245,6 +5245,8 @@ export interface components {
             tray?: string | null;
             /** Payee */
             payee?: string | null;
+            /** Collections */
+            collections?: string[];
         };
         /** RuleThenOut */
         RuleThenOut: {
@@ -5258,6 +5260,8 @@ export interface components {
             tray: string | null;
             /** Payee */
             payee: string | null;
+            /** Collections */
+            collections: string[];
         };
         /** RuleWhenIn */
         RuleWhenIn: {

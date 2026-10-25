@@ -360,3 +360,31 @@ def test_blank_folder_and_name_are_not_set():
     assert Then(folder="  ", name="").name is None
     kept = Then(folder=" 10. Money/{year} ", name="x")
     assert kept.folder == "10. Money/{year}" and kept.name == "x"
+
+
+def test_rule_collections_are_united_like_tags_and_name_their_rule():
+    r1 = rule("one", {"text_contains": ["a"]}, collections=["Sauna", "Taxes"])
+    r2 = rule("two", {"text_contains": ["a"]}, collections=["taxes", "Sauna", "Legal"])
+    s = suggest(rec("f.pdf"), "a", [r1, r2])
+    # a name is added once (the model drops a repeat within a rule, the engine across rules)
+    assert s.collections == ["Sauna", "Taxes", "taxes", "Legal"]
+    assert s.collection_sources["Sauna"] == "rule:one"
+    assert s.collection_sources["Legal"] == "rule:two"
+
+
+def test_a_rule_without_collections_loads_and_suggests_none():
+    plain = Rule.model_validate(
+        {"id": "old", "when": {"text_contains": ["a"]}, "then": {"tags": ["x"]}}
+    )
+    assert plain.then.collections == []
+    s = suggest(rec("f.pdf"), "a", [plain])
+    assert s.collections == [] and s.collection_sources == {}
+    assert "collections" not in plain.model_dump(exclude_defaults=True)["then"]
+
+
+def test_collections_in_a_rule_are_trimmed_and_checked():
+    r = Rule.model_validate({"id": "c", "then": {"collections": [" Sauna ", "sauna", "Taxes"]}})
+    assert r.then.collections == ["Sauna", "Taxes"]
+    for bad in ([" "], ["x" * 121]):
+        with pytest.raises(ValueError):
+            Rule.model_validate({"id": "c", "then": {"collections": bad}})

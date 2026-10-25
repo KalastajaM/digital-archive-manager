@@ -1521,6 +1521,7 @@ class RuleThenIn(_In):
     tags: list[str] = Field(default_factory=list)
     tray: str | None = None
     payee: str | None = None
+    collections: list[str] = Field(default_factory=list)
 
 
 class RuleIn(_In):
@@ -1614,6 +1615,7 @@ class RuleThenOut(BaseModel):
     tags: list[str]
     tray: str | None
     payee: str | None
+    collections: list[str]
 
 
 class RuleStatsOut(BaseModel):
