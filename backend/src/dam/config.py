@@ -158,9 +158,19 @@ class Person(BaseModel):
 DEFAULT_ADDRESS_ZONE = (0.095, 0.135, 0.524, 0.27)  # 20-110 mm across, 40-80 mm down
 
 
+class ExtraFolder(BaseModel):
+    """A further archive folder (for example on another disk) that shows up in the
+    archive under ``label``. Detached entries stay listed but are not mapped."""
+
+    label: str
+    path: Path
+    attached: bool = True
+
+
 class Settings(BaseModel):
     # unset until first-run setup (``dam init`` or the app's first-run screen) writes it
     archive_root: Path | None = None
+    extra_folders: list[ExtraFolder] = Field(default_factory=list)
     special_folders: SpecialFolders = Field(default_factory=SpecialFolders)
     protected_paths: list[str] = Field(default_factory=lambda: ["##. Important"])
     indexer_reads_per_minute: int = 30
@@ -329,4 +339,6 @@ def load_settings(app_paths: AppPaths) -> Settings:
     settings = Settings.model_validate(raw)
     if settings.archive_root is not None:
         settings.archive_root = settings.archive_root.expanduser()
+    for extra in settings.extra_folders:
+        extra.path = extra.path.expanduser()
     return settings

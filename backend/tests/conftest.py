@@ -144,6 +144,17 @@ def app_paths(tmp_path: Path, fake_archive: FakeArchive) -> AppPaths:
 
 
 @pytest.fixture
+def extra_folder(tmp_path: Path, app_paths: AppPaths) -> FakeArchive:
+    """A second archive folder ("Old years") on another fake disk, listed in the settings."""
+    extra = FakeArchive(tmp_path / "disk" / "Archive 2000-2015")
+    settings_file = app_paths.config_dir / "settings.yaml"
+    data = yaml.safe_load(settings_file.read_text(encoding="utf-8"))
+    data["extra_folders"] = [{"label": "Old years", "path": str(extra.root)}]
+    settings_file.write_text(yaml.safe_dump(data), encoding="utf-8")
+    return extra
+
+
+@pytest.fixture
 def engine(tmp_path: Path) -> Engine:
     eng = make_engine(tmp_path / "dam.sqlite")
     migrate(eng)

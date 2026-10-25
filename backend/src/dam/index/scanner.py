@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from dam.core.fs import readlink
+from dam.core.fs import listable, readlink  # noqa: F401 (listable is re-exported)
 from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchivePaths, nfc
 from dam.index.driveid import read_drive_id
@@ -231,15 +231,6 @@ def scan(paths: ArchivePaths, repo: FileRepo, subtree: str = "") -> ScanReport:
     """
     with SCAN_LOCK:
         return _scan(paths, repo, subtree)
-
-
-def listable(directory: Path) -> bool:
-    """True when ``directory`` can be opened and listed right now."""
-    try:
-        with os.scandir(directory):
-            return True
-    except OSError:
-        return False
 
 
 def _root_looks_empty(root: Path) -> bool:

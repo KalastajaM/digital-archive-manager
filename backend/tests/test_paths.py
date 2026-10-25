@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from dam.config import Settings
+from dam.config import ExtraFolder, Settings
+from dam.core.fs import resolve
 from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
 
 
@@ -134,3 +135,61 @@ def test_resolve_errors_fail_closed(paths, monkeypatch):
 
 def test_protected_casefold(paths):
     assert paths.is_protected("##. important/x.pdf")
+
+
+def _with_extra(tmp_path, attached=True):
+    main, extra = tmp_path / "main", tmp_path / "disk" / "old"
+    main.mkdir()
+    extra.mkdir(parents=True)
+    s = Settings(
+        archive_root=main,
+        extra_folders=[ExtraFolder(label="Old years", path=extra, attached=attached)],
+    )
+    return main, extra, ArchivePaths(main, s)
+
+
+def test_extra_folder_paths_map_to_their_root(tmp_path):
+    main, extra, p = _with_extra(tmp_path)
+    assert p.abs("Old years/2009/a.pdf") == resolve(extra) / "2009" / "a.pdf"
+    assert p.rel(extra / "2009" / "a.pdf") == "Old years/2009/a.pdf"
+    assert p.rel(extra) == "Old years"
+    assert p.abs("Taxes/a.pdf") == resolve(main) / "Taxes" / "a.pdf"
+    assert p.join("Old years/2009") == resolve(extra) / "2009"
+    assert p.join("Taxes") == resolve(main) / "Taxes"
+    assert [f.label for f in p.folders] == ["", "Old years"]
+    assert p.extra_labels == ("Old years",)
+    assert p.folder_of("Old years/x").root == resolve(extra)
+    assert p.folder_of("Taxes").label == ""
+
+
+def test_label_of_matches_whole_components(tmp_path):
+    _, _, p = _with_extra(tmp_path)
+    assert p.label_of("Old years") == "Old years"
+    assert p.label_of("Old years 2/x") == ""
+    assert p.label_of("old years/x") == "Old years"
+    assert p.label_of(unicodedata.normalize("NFD", "Old years/x")) == "Old years"
+    assert p.label_of("") == ""
+
+
+def test_escape_from_extra_folder_refused(tmp_path):
+    _, _, p = _with_extra(tmp_path)
+    with pytest.raises(OutsideArchiveError):
+        p.abs("Old years/../x")
+    with pytest.raises(OutsideArchiveError):
+        p.abs("Old years/..")
+
+
+def test_detached_folder_is_not_mapped(tmp_path):
+    main, _, p = _with_extra(tmp_path, attached=False)
+    assert p.abs("Old years/a") == resolve(main) / "Old years" / "a"
+    assert p.extra_labels == ()
+    assert len(p.folders) == 1
+
+
+def test_disconnected_labels(tmp_path):
+    _, extra, p = _with_extra(tmp_path)
+    assert p.disconnected_labels() == ()
+    assert p.is_connected("Old years") and p.is_connected("")
+    extra.rename(extra.with_name("gone"))
+    assert p.disconnected_labels() == ("Old years",)
+    assert not p.is_connected("Old years")

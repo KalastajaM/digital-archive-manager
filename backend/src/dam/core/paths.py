@@ -2,10 +2,11 @@
 
 import os
 import unicodedata
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from dam.config import Settings
-from dam.core.fs import resolve
+from dam.core.fs import listable, resolve
 
 
 class OutsideArchiveError(ValueError):
@@ -26,10 +27,59 @@ def _fold(s: str) -> str:
     return nfc(s).casefold()
 
 
+@dataclass(frozen=True)
+class ArchiveFolder:
+    """One folder of the archive: ``label == ""`` is the main folder, any other label
+    is the first path component its content appears under."""
+
+    label: str
+    root: Path
+
+
 class ArchivePaths:
     def __init__(self, root: Path, settings: Settings) -> None:
         self.root = resolve(root)
         self.settings = settings
+        self.folders: tuple[ArchiveFolder, ...] = (
+            ArchiveFolder("", self.root),
+            *(
+                ArchiveFolder(extra.label, resolve(extra.path))
+                for extra in settings.extra_folders
+                if extra.attached
+            ),
+        )
+
+    @property
+    def extra_labels(self) -> tuple[str, ...]:
+        return tuple(f.label for f in self.folders[1:])
+
+    def label_of(self, rel: str) -> str:
+        """The extra folder's label ``rel`` lies at or under, else ``""``."""
+        parts = PurePosixPath(rel).parts
+        if not parts:
+            return ""
+        first = _fold(parts[0])
+        for f in self.folders[1:]:
+            if _fold(f.label) == first:
+                return f.label
+        return ""
+
+    def folder_of(self, rel: str) -> ArchiveFolder:
+        label = self.label_of(rel)
+        return next(f for f in self.folders if f.label == label)
+
+    def join(self, rel: str) -> Path:
+        """Where ``rel`` lies on disk: the extra label maps to its root. No containment
+        check (see ``abs``)."""
+        folder = self.folder_of(rel)
+        parts = PurePosixPath(rel).parts
+        return folder.root.joinpath(*(parts[1:] if folder.label else parts))
+
+    def is_connected(self, label: str) -> bool:
+        return listable(next(f for f in self.folders if f.label == label).root)
+
+    def disconnected_labels(self) -> tuple[str, ...]:
+        return tuple(f.label for f in self.folders[1:] if not listable(f.root))
 
     @property
     def inbox(self) -> str:
@@ -75,11 +125,17 @@ class ArchivePaths:
             raise OutsideArchiveError(f"cannot resolve {p}") from None
 
     def rel(self, p: Path) -> str:
-        try:
-            r = self._locate(p).relative_to(self.root)
-        except ValueError:
-            raise OutsideArchiveError(f"{p} is outside the archive") from None
-        return "" if r == Path(".") else r.as_posix()
+        located = self._locate(p)
+        for folder in self.folders:
+            try:
+                r = located.relative_to(folder.root)
+            except ValueError:
+                continue
+            inner = "" if r == Path(".") else r.as_posix()
+            if not folder.label:
+                return inner
+            return f"{folder.label}/{inner}" if inner else folder.label
+        raise OutsideArchiveError(f"{p} is outside the archive")
 
     def abs(self, rel: str) -> Path:
         parts = PurePosixPath(rel).parts
@@ -90,9 +146,11 @@ class ArchivePaths:
             or (os.name == "nt" and (PureWindowsPath(rel).drive or PureWindowsPath(rel).root))
         ):
             raise OutsideArchiveError(f"{rel!r} is outside the archive")
-        result = self.root.joinpath(*parts)
-        if not self.is_inside(result):
-            raise OutsideArchiveError(f"{rel!r} is outside the archive")
+        result = self.join(rel)
+        try:
+            self._locate(result).relative_to(self.folder_of(rel).root)
+        except ValueError:
+            raise OutsideArchiveError(f"{rel!r} is outside the archive") from None
         return result
 
     def is_inside(self, p: Path) -> bool:
