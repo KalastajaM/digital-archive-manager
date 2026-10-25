@@ -72,7 +72,7 @@ class BadReference:
     owner_name: str
     item_id: int | None  # the tray item, for kind tray
     drive_id: str
-    path: str | None
+    path: str | None  # where the file is, or for a missing one was last seen (None: unknown)
     reason: str  # "missing" | "in To Delete"
 
 
@@ -222,15 +222,26 @@ def bad_references(
     tray_name: Callable[[str], str],
 ) -> BadReferences:
     """Collection members and files of open tray items whose file is gone from the index
-    or lies in ``##. To Delete``."""
+    or lies in ``##. To Delete``. A missing file is shown at the path it was last seen:
+    its index row's, else the last one the journal has for it."""
     quarantine = nfc(paths.quarantine)
 
     def problem(row) -> tuple[str | None, str | None]:
         if row.f_id is None or row.missing or row.parked_at is not None:
-            return None, "missing"
+            return row.f_path, "missing"
         if is_under(row.f_path_nfc, quarantine):
             return row.f_path, "in To Delete"
         return None, None
+
+    def last_seen(drive_id: str) -> str | None:
+        with engine.connect() as conn:
+            op = conn.execute(
+                select(operations.c.src, operations.c.dst)
+                .where(operations.c.drive_id == drive_id, operations.c.state == "done")
+                .order_by(operations.c.id.desc())
+                .limit(1)
+            ).first()
+        return None if op is None else (op.dst or op.src)
 
     out = BadReferences()
     with engine.connect() as conn:
@@ -284,6 +295,7 @@ def bad_references(
         out.total += 1
         if len(out.items) < LIST_LIMIT:
             name = {"starred": "Starred", "important": "Important"}.get(row.kind, row.name)
+            path = path if path is not None else last_seen(row.drive_id)
             out.items.append(
                 BadReference("collection", str(row.owner_id), name, None, row.drive_id, path, why)
             )
@@ -295,6 +307,7 @@ def bad_references(
             continue
         out.total += 1
         if len(out.items) < LIST_LIMIT:
+            path = path if path is not None else last_seen(row.drive_id)
             out.items.append(
                 BadReference(
                     "tray",

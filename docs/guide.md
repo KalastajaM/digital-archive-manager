@@ -1192,8 +1192,9 @@ see every operation first, confirm, and the toast offers **Undo**. Nothing is ev
 
 Each check's card folds to one line with the arrow before its title (what it found, or
 that it has not run); **Collapse all** and **Expand all** are in the toolbar, and dam
-remembers the folds in this browser. **Reset** on a card forgets that check's result, and
-**Reset all** in the toolbar forgets every result, so the screen is as before any check
+remembers the folds in this browser. The reset icon at the top right of a card forgets
+that check's result (and ends it if it is running), and **Reset all** in the toolbar
+forgets every result, so the screen is as before any check
 ran. Reset changes nothing in the archive.
 
 ### Duplicates
@@ -1212,6 +1213,7 @@ ran. Reset changes nothing in the archive.
   copy marked Important or locked is suggested first, because it cannot be removed. Untick
   **Remove** on a copy you want to leave where it is. A copy marked Important or locked is
   never chosen for removal, and the row says why.
+- Each copy shows its folder; its name too only where it differs from the group's name.
 - For the other copies, per group or for all ticked groups at once, choose **Move to To
   Delete**, or **Replace with a link**: each copy goes to To Delete and a link to the kept
   copy is put at its old path, so anything that points there still opens the file. The
@@ -1237,7 +1239,11 @@ ran. Reset changes nothing in the archive.
   moved to To Delete, which you can Undo. Undo of removing a link in Ongoing or Important
   cannot make a link to a file that is gone, so that one stays removed.
 - **Collections and trays**: collection members and files of open tray items that are gone
-  or in To Delete. Each entry links to its collection or tray, where you take it out.
+  or in To Delete. Each entry links to its collection or tray item and shows where the file
+  is, or for a gone file where it was last seen. **Take out** removes a gone file from its
+  collection (there is no Undo, because the file is gone). A file in To Delete keeps its
+  entries, so it comes back with them if you restore it. For a tray item, open the tray and
+  take the file out or mark the item done.
 - **File names**: files in the numbered folders whose name does not start with
   `YYYYMMDD_`, with a suggested name from the date the name already starts with, else the
   document date, else the day the file was last changed. **Rename** is the normal previewed

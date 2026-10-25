@@ -943,6 +943,10 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   `DELETE /api/maintenance/jobs?kind=` (Reset) forgets the jobs of the kind, or of every
   kind without `kind`, ending one still running; answers `{forgotten}`. Nothing in the
   archive changes.
+- The `references` check gives a missing file's `path` as last seen: its index row's
+  path, else the latest done journal operation for its drive id (null when neither
+  knows). A gone collection member is taken out with the existing
+  `POST /api/collections/{id}/members/remove`.
 - The empty-folder check leaves out the top level, the app's own folders (`##. To Delete`,
   `##. Ongoing`, `##. Important`), protected paths and the folders an archive is set up
   with: the special folders themselves and the filing codes' inbox folders

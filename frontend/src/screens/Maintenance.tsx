@@ -3,7 +3,7 @@
  * progress, can be stopped, and ends in a list. Anything that changes the archive goes
  * through the usual preview, confirm and Undo. Each card folds to one line, and Reset
  * forgets the results (one check's, or all of them) without changing the archive. */
-import { ChevronsDownUp, ChevronsUpDown, RotateCcw, Wrench } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { errorText, forgetMaintenanceJobs } from "../api/client";
 import { Duplicates } from "../components/maintenance/Duplicates";
@@ -36,6 +36,7 @@ function Screen() {
       <Toolbar
         title="Maintenance"
         subtitle="Checks you start yourself"
+        className="maintenance-toolbar"
         actions={
           <>
             {view && (
@@ -55,10 +56,6 @@ function Screen() {
         }
       />
       <div className="maintenance-body" key={round}>
-        <p className="hint">
-          <Wrench size={12} aria-hidden="true" /> Nothing here runs by itself. Each check starts when you click it and
-          can be stopped; what it finds is a list, and every change goes through a preview you confirm, with Undo.
-        </p>
         <Duplicates />
         <EmptyFolders />
         <BrokenLinks />

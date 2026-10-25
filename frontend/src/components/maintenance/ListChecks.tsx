@@ -1,7 +1,7 @@
 /** The small checks: each a button that starts a check, a list, and the existing flow that
  * acts on it (Move to To Delete, the previewed rename, a previewed link removal). Nothing
  * runs until its button is clicked. */
-import { Folder, Link2Off, ListX, Trash2, Type } from "lucide-react";
+import { Folder, Link2Off, ListX, RotateCcw, Trash2, Type } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -9,9 +9,11 @@ import {
   type BatchResult,
   errorText,
   type MaintenanceKind,
+  useCollectionMembers,
   useRemoveBrokenLinks,
   useStatus,
 } from "../../api/client";
+import { changeToast } from "../collectionText";
 import { inFileManager } from "../../fileManager";
 import { dialogOpen } from "../../keyboard";
 import { formatSize, groupDigits, plural, shortDate } from "../../format";
@@ -22,6 +24,7 @@ import { undoAction, useBlockToastActions, useToast } from "../Toasts";
 import { useTrash } from "../Trash";
 import { useUndoConfirm } from "../UndoConfirm";
 import { Card } from "../ui/Card";
+import { IconButton } from "../ui/IconButton";
 import { Tag } from "../ui/Tag";
 import { JobProgress } from "./JobProgress";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
@@ -40,17 +43,19 @@ export function foldedLine(check: Check, found: string | null) {
   return found ?? "Nothing found.";
 }
 
-/** Forgets the check's result; nothing in the archive changes. */
-export function ResetButton({ check, busy = false }: { check: Check; busy?: boolean }) {
+/** In a check card's header: forgets the check's result (a running check is ended);
+ * nothing in the archive changes. */
+export function ResetButton({ check, title, busy = false }: { check: Check; title: string; busy?: boolean }) {
+  const nothing = check.job === null && !check.error;
   return (
-    <button
-      type="button"
+    <IconButton
+      icon={<RotateCcw size={14} />}
+      label={`Reset ${title}`}
+      tip="Reset: forget this result, as if the check had not run. Nothing in the archive changes."
       onClick={check.reset}
-      disabled={busy || check.starting || (check.job === null && !check.error)}
-      title="Forget this result, as if the check had not run. Nothing in the archive changes."
-    >
-      Reset
-    </button>
+      disabled={busy || check.starting || nothing}
+      disabledReason={nothing ? "Nothing to reset" : undefined}
+    />
   );
 }
 
@@ -87,14 +92,15 @@ function CheckCard({
 }) {
   const ended = check.job !== null && !check.running;
   const fold = useFold(kind);
+  const reset = <ResetButton check={check} title={title} />;
   if (fold?.folded)
     return (
-      <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold}>
+      <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={reset}>
         <p className="hint">{foldedLine(check, found ? summary : empty || null)}</p>
       </Card>
     );
   return (
-    <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold}>
+    <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={reset}>
       <p>{intro}</p>
       <div className="check-actions">
         {check.running ? (
@@ -107,7 +113,6 @@ function CheckCard({
           </button>
         )}
         {extra}
-        {!check.running && <ResetButton check={check} />}
       </div>
       {check.running && check.job && <JobProgress job={check.job} noun="items" />}
       {check.error && (
@@ -355,36 +360,88 @@ const ownerLink = (kind: string, id: string, name: string) => {
   return `/collections/${encodeURIComponent(id)}`;
 };
 
+/** Why an entry is listed. */
+function referenceHint(r: { reason: string; path?: string | null }) {
+  if (r.reason !== "missing")
+    return "Marked for deletion. The entry stays, so it comes back with the file if you restore it.";
+  if (!r.path) return "The file is gone, and the app no longer knows where it was.";
+  return "The file is gone: it is no longer there or anywhere else in the archive.";
+}
+
 export function Missing() {
   const check = useMaintenanceJob("references");
-  const rows = check.job?.references?.items ?? [];
+  const members = useCollectionMembers();
+  const toast = useToast();
+  const [taken, setTaken] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<string | null>(null);
+  const key = (r: { kind: string; owner_id: string; item_id?: number | null; drive_id: string }) =>
+    `${r.kind}-${r.owner_id}-${r.item_id ?? ""}-${r.drive_id}`;
+  const rows = (check.job?.references?.items ?? []).filter((r) => !taken.has(key(r)));
+  const takeOut = (r: (typeof rows)[number]) => {
+    if (busy) return;
+    setBusy(key(r));
+    const what = r.path ? visible(r.path.slice(r.path.lastIndexOf("/") + 1)) : "the missing file";
+    members
+      .mutateAsync({ id: Number(r.owner_id), remove: r.drive_id })
+      .then((result) => {
+        setTaken((s) => new Set(s).add(key(r)));
+        toast(changeToast(`Took ${what} out of ${visible(r.owner_name)}`, result));
+      })
+      .catch((e) => toast({ kind: "error", text: `Not taken out: ${visible(refusal(e))}` }))
+      .finally(() => setBusy(null));
+  };
+  const start = () => {
+    setTaken(new Set());
+    check.start();
+  };
   return (
     <CheckCard
       title="Collections and trays"
       icon={<ListX />}
       kind="references"
-      intro="Collection members and files of open tray items that are gone or are in To Delete. Open the collection or tray to take them out."
-      check={check}
+      intro="Collection members and files of open tray items whose file is gone, or is in To Delete. Take a gone file out of its collection here; for a tray item, open the tray and take the file out or mark the item done."
+      check={{ ...check, start }}
       empty="Every collection member and tray file is where it should be."
       found={rows.length > 0}
-      summary={plural(check.job?.references?.total ?? 0, "entry", "entries")}
+      summary={plural(rows.length, "entry", "entries")}
     >
       {rows.length > 0 && (
         <>
           <p>
-            <strong>{plural(check.job?.references?.total ?? 0, "entry", "entries")}</strong>
+            <strong>{plural(Math.max(0, (check.job?.references?.total ?? 0) - taken.size), "entry", "entries")}</strong>
           </p>
           <ul className="check-list">
             {rows.map((r) => (
-              <li key={`${r.kind}-${r.owner_id}-${r.item_id ?? ""}-${r.drive_id}`}>
-                <span>
-                  <Link to={ownerLink(r.kind, r.owner_id, r.owner_name)} className="card-link">
-                    {visible(r.owner_name)}
-                  </Link>{" "}
-                  <span className="hint">{r.kind === "tray" ? "tray item" : "collection"}:</span>{" "}
-                  <code>{visible(r.path ?? r.drive_id)}</code>
+              <li key={key(r)}>
+                <span className="ref-entry">
+                  <span>
+                    <span className="hint">{r.kind === "tray" ? "Tray item" : "In"}</span>{" "}
+                    <Link to={ownerLink(r.kind, r.owner_id, r.owner_name)} className="card-link">
+                      {visible(r.owner_name)}
+                    </Link>
+                    {r.path ? (
+                      <>
+                        {" "}
+                        <span className="hint">{r.reason === "missing" ? "was" : "is"} at</span>{" "}
+                        <code title={visible(r.drive_id)}>{visible(r.path)}</code>
+                      </>
+                    ) : null}
+                  </span>
+                  <span className="hint">{referenceHint(r)}</span>
                 </span>
-                <Tag tone={r.reason === "missing" ? "red" : "orange"}>{r.reason === "missing" ? "Missing" : "In To Delete"}</Tag>
+                <span className="dup-actions">
+                  <Tag tone={r.reason === "missing" ? "red" : "orange"}>{r.reason === "missing" ? "Missing" : "In To Delete"}</Tag>
+                  {r.kind === "collection" && r.reason === "missing" && (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => takeOut(r)}
+                      title="Takes the entry out of the collection. The file is gone, so this has no Undo."
+                    >
+                      Take out
+                    </button>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

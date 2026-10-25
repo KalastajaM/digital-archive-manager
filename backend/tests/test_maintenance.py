@@ -545,6 +545,22 @@ def test_collection_and_tray_entries_pointing_nowhere(app, fake_archive):
     assert tray_row.item_id is not None
 
 
+def test_a_missing_entry_shows_where_the_file_was_last_seen(app, fake_archive):
+    fake_archive.add(f"{BANKS}/c.pdf", b"c", drive_id="id-c")
+    fake_archive.add(f"{BANKS}/d.pdf", b"d", drive_id="id-d")
+    app.scan()
+    col = app.collections.create("Trip")
+    app.collections.add_members(col.id, ["id-c", "id-d"])
+    (fake_archive.root / BANKS / "c.pdf").rename(fake_archive.root / "elsewhere.tmp")
+    app.browse.quarantine(["id-d"], origin="ui")
+    app.scan()
+    with app.engine.begin() as conn:  # the index forgot it; the journal still knows
+        conn.execute(files.delete().where(files.c.drive_id == "id-d"))
+    paths = {r.drive_id: (r.reason, r.path) for r in run(app, "references").result.items}
+    assert paths["id-c"] == ("missing", f"{BANKS}/c.pdf")
+    assert paths["id-d"] == ("missing", f"{QUAR}/{BANKS}/d.pdf")
+
+
 def test_names_that_do_not_follow_the_convention(app, fake_archive):
     old = time.mktime((2021, 3, 4, 12, 0, 0, 0, 0, -1))
     path = fake_archive.add(f"{BANKS}/statement march.pdf", b"a", drive_id="id-a")

@@ -207,6 +207,10 @@ describe("Maintenance screen", () => {
     await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
     const keep = (await screen.findAllByRole("radio")) as HTMLInputElement[];
     expect(keep.map((r) => r.checked)).toEqual([true, false, false]);
+    // a row shows its folder; its name only where it differs from the group's
+    const rows = within(card("Duplicates")).getAllByRole("listitem").filter((li) => li.classList.contains("dup-file"));
+    expect(rows[0]).toHaveTextContent(/^Keep10\. Financial\/Banks2,0 KB/);
+    expect(rows[1]).toHaveTextContent("##. Organizenamed scan.pdf");
     expect(screen.getByText("Important")).toBeInTheDocument();
     const stays = screen.getByRole("checkbox", { name: "Remove 20. Home/bill copy.pdf" });
     expect(stays).toBeDisabled();
@@ -393,6 +397,32 @@ describe("The other checks", () => {
     expect(screen.getByText("Missing")).toBeInTheDocument();
   });
 
+  it("collections and trays: a missing member says where it was and can be taken out", async () => {
+    const { calls, user } = setup(
+      { "POST /api/collections/5/members/remove": { body: { collection: { id: 5, name: "Important" }, batch: null, problems: [] } } },
+      {
+        references: {
+          references: {
+            items: [
+              { kind: "collection", owner_id: "5", owner_name: "Important", item_id: null, drive_id: "gone", path: "20. Home/deed.pdf", reason: "missing" },
+              { kind: "collection", owner_id: "5", owner_name: "Important", item_id: null, drive_id: "lost", path: null, reason: "missing" },
+            ],
+            total: 2,
+          },
+        },
+      },
+    );
+    const refs = card("Collections and trays");
+    await user.click(within(refs).getByRole("button", { name: "Check" }));
+    expect(await within(refs).findByText("20. Home/deed.pdf")).toBeInTheDocument();
+    expect(within(refs).queryByText("lost")).not.toBeInTheDocument(); // no raw id
+    expect(within(refs).getByText(/the app no longer knows where it was/)).toBeInTheDocument();
+    await user.click(within(refs).getAllByRole("button", { name: "Take out" })[0]);
+    await waitFor(() => expect(within(refs).queryByText("20. Home/deed.pdf")).not.toBeInTheDocument());
+    expect(posts(calls, "/api/collections/5/members/remove")[0].body).toEqual({ drive_id: "gone" });
+    expect(within(refs).getByText("1 entry")).toBeInTheDocument();
+  });
+
   it("file names: Rename goes through the previewed rename with the suggestion", async () => {
     const { calls, user } = setup(
       {
@@ -486,8 +516,8 @@ describe("Maintenance: folding and Reset", () => {
     });
     const folders = card("Empty folders");
     expect(await within(folders).findByText("20. Home/Old")).toBeInTheDocument();
-    expect(within(card("Broken links")).getByRole("button", { name: "Reset" })).toBeDisabled();
-    await user.click(within(folders).getByRole("button", { name: "Reset" }));
+    expect(within(card("Broken links")).getByRole("button", { name: "Reset Broken links" })).toBeDisabled();
+    await user.click(within(folders).getByRole("button", { name: "Reset Empty folders" }));
     expect(within(folders).queryByText("20. Home/Old")).not.toBeInTheDocument();
     expect(within(folders).getByRole("button", { name: "Check" })).toBeInTheDocument();
     const deletes = () => calls.filter((c) => c.method === "DELETE").map((c) => c.url);
