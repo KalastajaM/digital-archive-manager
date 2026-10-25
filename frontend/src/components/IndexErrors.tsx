@@ -6,6 +6,7 @@
  * line (a toast would sit under the modal sheet). */
 import { RotateCw } from "lucide-react";
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   errorText,
   type IndexProblem,
@@ -13,13 +14,11 @@ import {
   type IndexSummary,
   useIndexErrors,
   useIndexSummary,
-  usePage1Backfill,
   useRetryIndex,
 } from "../api/client";
 import { groupDigits, plural } from "../format";
 import { visible } from "../text";
 import { DialogStatus, InlineResults, LaunchButtons, useDialogStatus, useFileLaunch } from "./FileLaunch";
-import { Page1Speed } from "./Page1Speed";
 import { IconButton } from "./ui/IconButton";
 import { Sheet } from "./ui/Sheet";
 import { Tag } from "./ui/Tag";
@@ -109,47 +108,35 @@ export function page1TimeLeft(page1: IndexSummary["page1"]): string | null {
   return `about ${minutesText(minutes)} left (${parts.join(", ")})`;
 }
 
-/** The page-1 pass: how far it has come, what waits and why, the switch for reading older
- * documents in the background, and an estimate of the time left. */
-function Page1Block({ page1 }: { page1: IndexSummary["page1"] }) {
-  const backfill = usePage1Backfill();
-  const left = page1TimeLeft(page1) ?? timeLeft(page1.total - page1.read, page1.rate_per_min);
+/** The page-1 pass as a row of the totals: how far it has come, the time left while it
+ * runs, and what waits and why. Its switch and speed are in Settings, Indexing. */
+function Page1Row({ page1, onSettings }: { page1: IndexSummary["page1"]; onSettings?: () => void }) {
+  const done = page1.read >= page1.total;
+  const left = done ? null : (page1TimeLeft(page1) ?? timeLeft(page1.total - page1.read, page1.rate_per_min));
   const blocked = page1.blocked ?? [];
   return (
-    <section className="index-page1" aria-label="Page 1">
-      <p>
-        Page 1 read for {groupDigits(page1.read)} of {groupDigits(page1.total)} documents
-        {left ? `, ${left}` : ""}
-      </p>
-      {blocked.length > 0 && (
-        <div className="index-page1-blocked" role="group" aria-label="Waiting because page 1 cannot be read now">
-          {blocked.map((b) => (
-            <p key={b.reason} className="hint">
-              {groupDigits(b.count)} waiting: {visible(b.reason)}
-            </p>
-          ))}
-        </div>
-      )}
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={page1.backfill}
-          disabled={backfill.isPending}
-          onChange={(e) => backfill.mutate(e.target.checked)}
-        />
-        Read page 1 of older documents in the background
-      </label>
-      {backfill.isError && (
-        <p className="error" role="alert">
-          {visible(errorText(backfill.error))}
-        </p>
-      )}
-      {page1.text_per_min ? <Page1Speed textPerMin={page1.text_per_min} scansPerMin={page1.scans_per_min ?? 30} /> : null}
-    </section>
+    <div className="index-summary-row">
+      <dt>Page 1</dt>
+      <dd>
+        {groupDigits(page1.read)} of {groupDigits(page1.total)}
+      </dd>
+      <dd className="hint">
+        Where the text sits on page 1, for rules by area{left ? `; ${left}` : ""}.
+        {blocked.map((b) => (
+          <span key={b.reason} className="index-page1-blocked">
+            {" "}
+            {groupDigits(b.count)} waiting: {visible(b.reason)}.
+          </span>
+        ))}{" "}
+        <Link to="/settings/indexing" onClick={onSettings}>
+          Reading in the background and its speed: Settings
+        </Link>
+      </dd>
+    </div>
   );
 }
 
-function SummaryBlock() {
+function SummaryBlock({ onSettings }: { onSettings?: () => void }) {
   const summary = useIndexSummary();
   if (summary.isError) {
     return (
@@ -170,8 +157,8 @@ function SummaryBlock() {
             <dd className="hint">{note}</dd>
           </div>
         ))}
+        {data.page1 && <Page1Row page1={data.page1} onSettings={onSettings} />}
       </dl>
-      {data.page1 && <Page1Block page1={data.page1} />}
     </>
   );
 }
@@ -232,7 +219,7 @@ export function IndexErrorsSheet({ onClose }: { onClose: () => void }) {
       }
     >
       <InlineResults.Provider value={status.report}>
-        <SummaryBlock />
+        <SummaryBlock onSettings={onClose} />
         <label className="index-errors-toggle">
           <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show not readable files
         </label>
