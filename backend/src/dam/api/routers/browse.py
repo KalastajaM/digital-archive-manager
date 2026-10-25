@@ -49,11 +49,13 @@ def folders(app: AppDep) -> list[str]:
 @router.get("/search", response_model=list[SearchHitOut])
 def search(
     app: AppDep,
-    q: str,
+    q: str = "",
     folder: str | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    tag: Annotated[list[str] | None, Query(max_length=20)] = None,
 ) -> list:
-    return with_marks(app, app.search(q, folder=folder or None, limit=limit))
+    """Words in ``q`` and/or ``tag`` (repeat it: a file needs all of them)."""
+    return with_marks(app, app.search(q, folder=folder or None, limit=limit, tags=tag))
 
 
 @router.post("/quarantine", response_model=BatchResultOut)

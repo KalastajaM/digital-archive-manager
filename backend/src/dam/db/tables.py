@@ -100,6 +100,18 @@ tags = Table(
     metadata,
     Column("id", Integer, primary_key=True),
     Column("name", Text, unique=True),
+    # migration 0033: pinned for the sidebar (when), the group it is shown in (no
+    # foreign key: SQLite cannot add one to a column), when it was last put on a file
+    Column("pinned_at", Float, nullable=True),
+    Column("group_id", Integer, nullable=True),
+    Column("last_used_at", Float, nullable=True),
+)
+
+tag_groups = Table(
+    "tag_groups",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", Text, nullable=False, unique=True),
 )
 
 file_tags = Table(
@@ -107,6 +119,7 @@ file_tags = Table(
     metadata,
     Column("drive_id", Text, ForeignKey("files.drive_id"), primary_key=True),
     Column("tag_id", Integer, ForeignKey("tags.id"), primary_key=True),
+    Index("ix_file_tags_tag_id", "tag_id"),  # migration 0033
 )
 
 operations = Table(

@@ -1095,24 +1095,38 @@ class TagRepo:
         self.engine = engine
 
     def add(self, drive_id: str, tag_names: list[str]) -> None:
+        now = time.time()
         with write_tx(self.engine) as conn:
             for name in tag_names:
                 conn.execute(sqlite_insert(tags).values(name=name).on_conflict_do_nothing())
                 tag_id = conn.execute(select(tags.c.id).where(tags.c.name == name)).scalar_one()
-                conn.execute(
+                added = conn.execute(
                     sqlite_insert(file_tags)
                     .values(drive_id=drive_id, tag_id=tag_id)
                     .on_conflict_do_nothing()
                 )
+                if added.rowcount:
+                    conn.execute(update(tags).where(tags.c.id == tag_id).values(last_used_at=now))
 
     def set_for_file(self, drive_id: str, tag_names: list[str]) -> None:
-        """Make ``tag_names`` the file's tags, exactly (one transaction)."""
+        """Make ``tag_names`` the file's tags, exactly (one transaction). A tag the file
+        did not have is marked as just used (the sidebar's recent tags)."""
+        now = time.time()
         with write_tx(self.engine) as conn:
+            had = set(
+                conn.execute(
+                    select(tags.c.name)
+                    .join(file_tags, file_tags.c.tag_id == tags.c.id)
+                    .where(file_tags.c.drive_id == drive_id)
+                ).scalars()
+            )
             conn.execute(file_tags.delete().where(file_tags.c.drive_id == drive_id))
             for name in tag_names:
                 conn.execute(sqlite_insert(tags).values(name=name).on_conflict_do_nothing())
                 tag_id = conn.execute(select(tags.c.id).where(tags.c.name == name)).scalar_one()
                 conn.execute(sqlite_insert(file_tags).values(drive_id=drive_id, tag_id=tag_id))
+                if name not in had:
+                    conn.execute(update(tags).where(tags.c.id == tag_id).values(last_used_at=now))
 
     def popular(self, prefix: str = "", limit: int = 8) -> list[tuple[str, int]]:
         """Tags starting with ``prefix`` (case and accents ignored) with the number of files

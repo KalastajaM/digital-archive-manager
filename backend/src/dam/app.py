@@ -52,6 +52,7 @@ from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
 from dam.settings_write import write_keys
 from dam.setup import NOT_CONFIGURED
+from dam.tags import TagAdmin
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
 from dam.trays.service import TrayService
@@ -67,6 +68,7 @@ class App:
     engine: Engine
     repo: FileRepo
     tags: TagRepo
+    tag_admin: TagAdmin = field(init=False)
     executor: Executor
     registry: ExtractorRegistry
     content: ContentIndexer
@@ -144,6 +146,7 @@ class App:
             self.engine, lambda drive_id: self.inbox.detected_fields(drive_id)
         )
         self.rule_record = RuleRecord(self.engine)
+        self.tag_admin = TagAdmin(self.engine)
         # page-1 pictures (cache) and the crops of picture areas (the rules' folder)
         self.pictures = Pictures(lambda: self.rules_dir, self.app_paths.cache_dir)
         self.replay_jobs = ReplayJobs()  # rule tests that run in the background
@@ -561,9 +564,16 @@ class App:
                 read += n
         return total
 
-    def search(self, query: str, folder: str | None = None, limit: int = 50) -> list[SearchHit]:
-        """Full-text search over names and extracted text; ``folder`` limits to a subtree."""
-        return search(self.engine, query, limit=limit, folder=folder)
+    def search(
+        self,
+        query: str,
+        folder: str | None = None,
+        limit: int = 50,
+        tags: list[str] | None = None,
+    ) -> list[SearchHit]:
+        """Full-text search over names and extracted text; ``folder`` limits to a subtree,
+        ``tags`` to files that have all of them."""
+        return search(self.engine, query, limit=limit, folder=folder, tag_names=tags)
 
     def close(self) -> None:
         self.replay_jobs.close()
