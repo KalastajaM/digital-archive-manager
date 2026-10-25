@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { ClickToEdit } from "./ClickToEdit";
 
 type Props = {
@@ -18,12 +18,15 @@ type Props = {
    * second (a narrow list column). The title is cut with an ellipsis only as a last resort,
    * and then it is whole in the tooltip. */
   stacked?: boolean;
+  /** Extra class and inline style for the header (a screen that sizes it to a column). */
+  className?: string;
+  style?: CSSProperties;
 };
 
 /** The unified toolbar at the top of a screen: title, subtitle, actions, search. */
-export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, stacked }: Props) {
+export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, stacked, className, style }: Props) {
   return (
-    <header className={stacked ? "toolbar toolbar-stacked" : "toolbar"}>
+    <header className={[stacked ? "toolbar toolbar-stacked" : "toolbar", className].filter(Boolean).join(" ")} style={style}>
       <div className="toolbar-title">
         {titleEditor ?? (
           <>
