@@ -6013,6 +6013,13 @@ export interface components {
             sender: string | null;
             /** Place Above */
             place_above: string | null;
+            /** Person */
+            person?: string | null;
+            /**
+             * People Found
+             * @default []
+             */
+            people_found: string[];
         };
         /**
          * ZoneDraftPictureOut
@@ -6036,7 +6043,9 @@ export interface components {
          * @description An area of page 1: ``box`` is [x0, y0, x1, y1] as fractions of the page, origin top
          *     left. It has words (``text_contains``) or a picture (``image``, ``areas/<name>.png``
          *     from ``POST /api/rules/area-picture``): exactly one. ``min_score`` (a picture's, 0 to 1)
-         *     is the score the picture needs; left out, the default (0.85).
+         *     is the score the picture needs; left out, the default (0.85). ``match`` (for words):
+         *     how a word matches, ``word_start`` (begins a word, any ending), ``whole_word`` or
+         *     ``anywhere``. Left out it is ``anywhere`` (how rules written before it matched).
          */
         ZoneIn: {
             /** Box */
@@ -6047,6 +6056,8 @@ export interface components {
             image?: string | null;
             /** Min Score */
             min_score?: number | null;
+            /** Match */
+            match?: ("word_start" | "whole_word" | "anywhere") | null;
         };
         /** ZoneOut */
         ZoneOut: {
@@ -6058,6 +6069,12 @@ export interface components {
             image: string | null;
             /** Min Score */
             min_score?: number | null;
+            /**
+             * Match
+             * @default anywhere
+             * @enum {string}
+             */
+            match: "word_start" | "whole_word" | "anywhere";
         };
     };
     responses: never;

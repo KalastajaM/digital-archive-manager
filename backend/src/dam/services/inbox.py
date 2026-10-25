@@ -523,7 +523,8 @@ class InboxService:
         doc_date = parse_doc_date(name) or rec.doc_date
         frequency = make_doc_frequency(*self._frequency_counter())
         taken = {r.id for r in self._rules()} | RESERVED_IDS
-        person = person_for(self.people_context(drive_id), layout).name
+        who = person_for(self.people_context(drive_id), layout)
+        person = who.name
         first: RuleDraft | None = None
         zones: list[ZoneDraftArea] = []
         for n, area in enumerate(areas, start=1):
@@ -575,6 +576,8 @@ class InboxService:
             folder_is=self.special.inbox,
             sender=sender,
             place_above=self._place_above(rec, layout),
+            person=person,
+            people_found=list(who.found),
         )
 
     def _place_above(self, rec: FileRecord, layout) -> str | None:

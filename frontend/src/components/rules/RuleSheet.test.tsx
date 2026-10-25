@@ -308,7 +308,7 @@ describe("RuleSheet", () => {
         text_contains: [],
         filename_matches: null,
         folder_is: "##. Organize",
-        zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola", "vakuutus"], image: null }],
+        zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola", "vakuutus"], image: null, match: "anywhere" as const }],
         person: "Tiina",
       },
       then: { folder: "Insurance/{person}", name: null, tags: [], tray: null, payee: null },
@@ -345,8 +345,8 @@ describe("RuleSheet", () => {
         ...ZONE_RULE.when,
         person: null,
         zones: [
-          { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"], image: null },
-          { box: [0.55, 0.05, 0.95, 0.12], text_contains: ["vakuutuskirja", "policy"], image: null },
+          { box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola"], image: null, match: "anywhere" as const },
+          { box: [0.55, 0.05, 0.95, 0.12], text_contains: ["vakuutuskirja", "policy"], image: null, match: "anywhere" as const },
         ],
       },
     };
@@ -451,7 +451,7 @@ describe("RuleSheet", () => {
           ...WITH_SAMPLE,
           when: {
             ...WITH_SAMPLE.when,
-            zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: null, image: "areas/pohjola-1.png" }, WITH_SAMPLE.when.zones[1]],
+            zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: null, image: "areas/pohjola-1.png", match: "anywhere" as const }, WITH_SAMPLE.when.zones[1]],
           },
         };
         const waiting: ((image: string) => void)[] = [];
@@ -637,8 +637,8 @@ describe("RuleSheet", () => {
         filename_matches: null,
         folder_is: "##. Organize",
         zones: [
-          { box: [0.05, 0.03, 0.35, 0.1], text_contains: null, image: "areas/acme-1.png", min_score: 0.9 },
-          { box: [0.5, 0.05, 0.9, 0.1], text_contains: ["lasku"], image: null, min_score: null },
+          { box: [0.05, 0.03, 0.35, 0.1], text_contains: null, image: "areas/acme-1.png", min_score: 0.9, match: "anywhere" as const },
+          { box: [0.5, 0.05, 0.9, 0.1], text_contains: ["lasku"], image: null, min_score: null, match: "anywhere" as const },
         ],
         person: null,
       },
@@ -741,5 +741,190 @@ describe("RuleSheet", () => {
       expect(within(near).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["0.78" + "10. Bank/c.pdf"]);
       expect(within(list).getByText("Matched (0.90 is needed)")).toBeInTheDocument();
     });
+  });
+});
+
+describe("How an area's words match", () => {
+  const PEOPLE = {
+    people: [
+      { name: "Tiina", match: ["Tiina Visser"] },
+      { name: "Michiel", match: ["Michiel Visser"] },
+    ],
+    address_zone: [0.06, 0.1, 0.52, 0.3],
+    default_address_zone: [0.06, 0.1, 0.52, 0.3],
+  };
+  const ZONE_DRAFT = {
+    ...DRAFT,
+    folder: "50. Medical/Kela",
+    words: [],
+    zones: [{ box: [0.1, 0.1, 0.5, 0.3], words: [{ word: "kela", ticked: true }], lines: ["Kela"] }],
+    pictures: [],
+    folder_is: "##. Organize",
+    sender: null,
+    place_above: null,
+    person: "Tiina",
+    people_found: ["Tiina"],
+  };
+  const lastRule = (calls: Call[]) =>
+    (posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { person?: string; zones: { match?: string }[] }; then: { folder: string } } }).rule;
+  const open = (draft: object = ZONE_DRAFT, people: object = PEOPLE) =>
+    setup(REPLAY, { initial: draft as never, filed: undefined }, { "GET /api/settings/people": { body: people } });
+
+  it("a drawn area starts on Starts a word, with a tooltip that gives the examples", async () => {
+    const { calls } = open();
+    const area = await screen.findByRole("group", { name: "Area" });
+    expect(within(area).getByRole("combobox", { name: "How the words match in area" })).toHaveValue("word_start");
+    expect(within(area).getByRole("img", { name: /Kela finds Kela, Kelan and Kelalta.*Henkivakuutus/ })).toBeInTheDocument();
+    await waitFor(() => expect(lastRule(calls).when.zones).toEqual([{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["kela"], match: "word_start" }]));
+  });
+
+  it("changing the choice sends it and tests again; Anywhere leaves the key out", async () => {
+    const { calls, user } = open();
+    const area = await screen.findByRole("group", { name: "Area" });
+    await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(1));
+    await user.selectOptions(within(area).getByRole("combobox", { name: "How the words match in area" }), "whole_word");
+    await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(2));
+    expect(lastRule(calls).when.zones[0].match).toBe("whole_word");
+    await user.selectOptions(within(area).getByRole("combobox", { name: "How the words match in area" }), "anywhere");
+    await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(3));
+    expect(lastRule(calls).when.zones[0]).not.toHaveProperty("match");
+  });
+
+  it("an area of a saved rule without match shows Anywhere and sends no match", async () => {
+    const rule = {
+      id: "old",
+      file: "learned.yaml",
+      learned: true,
+      when: { text_contains: [], filename_matches: null, folder_is: null, zones: [{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["kela"], image: null }], person: null },
+      then: { folder: null, name: null, tags: [], tray: null, payee: null },
+      person_zone: null,
+      sender: null,
+      stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
+    };
+    const { calls } = open(rule);
+    const area = await screen.findByRole("group", { name: "Area" });
+    expect(within(area).getByRole("combobox", { name: "How the words match in area" })).toHaveValue("anywhere");
+    await waitFor(() => expect(lastRule(calls).when.zones).toEqual([{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["kela"] }]));
+  });
+});
+
+describe("The For row", () => {
+  const PEOPLE = {
+    people: [
+      { name: "Tiina", match: ["Tiina Visser"] },
+      { name: "Michiel", match: ["Michiel Visser"] },
+    ],
+    address_zone: [0.06, 0.1, 0.52, 0.3],
+    default_address_zone: [0.06, 0.1, 0.52, 0.3],
+  };
+  const ZONE_DRAFT = {
+    ...DRAFT,
+    folder: "50. Medical/Tiina/Kela",
+    words: [],
+    zones: [{ box: [0.1, 0.1, 0.5, 0.3], words: [{ word: "kela", ticked: true }], lines: ["Kela"] }],
+    pictures: [],
+    folder_is: "##. Organize",
+    sender: null,
+    place_above: null,
+    person: "Tiina",
+    people_found: ["Tiina"],
+  };
+  const open = (draft: object = ZONE_DRAFT, people: object = PEOPLE) =>
+    setup(REPLAY, { initial: draft as never, filed: undefined }, { "GET /api/settings/people": { body: people } });
+  const lastRule = (calls: Call[]) =>
+    (posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { person?: string }; then: { folder: string } } }).rule;
+  const forRow = async () => within(await screen.findByRole("dialog")).findByRole("group", { name: "For" });
+
+  it("says who the address area found", async () => {
+    open();
+    expect(await within(await forRow()).findByText("Tiina, found in the address area")).toBeInTheDocument();
+  });
+
+  it("says when nobody was found", async () => {
+    open({ ...ZONE_DRAFT, person: null, people_found: [] });
+    expect(await within(await forRow()).findByText("Nobody found in the address area")).toBeInTheDocument();
+  });
+
+  it("says when two people were found", async () => {
+    open({ ...ZONE_DRAFT, person: null, people_found: ["Tiina", "Michiel"] });
+    expect(await within(await forRow()).findByText("Tiina and Michiel found in the address area")).toBeInTheDocument();
+  });
+
+  it("points to Settings when no people are listed", async () => {
+    open(ZONE_DRAFT, { ...PEOPLE, people: [] });
+    expect(await within(await forRow()).findByText("No people listed yet: add them in Settings → Filing rules → People.")).toBeInTheDocument();
+  });
+
+  it("shows only the choice for a rule opened without a document", async () => {
+    const rule = {
+      id: "old",
+      file: "learned.yaml",
+      learned: true,
+      when: { text_contains: ["kela"], filename_matches: null, folder_is: null, zones: [], person: null },
+      then: { folder: null, name: null, tags: [], tray: null, payee: null },
+      person_zone: null,
+      sender: null,
+      stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
+    };
+    open(rule);
+    const row = await forRow();
+    await within(row).findByRole("button", { name: "Anyone" });
+    expect(within(row).queryByText(/found in the address area|Nobody found/)).toBeNull();
+    expect(within(row).getByRole("button", { name: "Anyone" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Only for sets the person on the rule and tests again; Anyone clears it", async () => {
+    const { calls, user } = open();
+    const row = await forRow();
+    await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(1));
+    expect(lastRule(calls).when.person).toBeUndefined();
+    await user.click(within(row).getByRole("button", { name: "Only for" }));
+    // it starts on the person found
+    expect(within(row).getByRole("combobox", { name: "Person" })).toHaveValue("Tiina");
+    await waitFor(() => expect(lastRule(calls).when.person).toBe("Tiina"));
+    await user.selectOptions(within(row).getByRole("combobox", { name: "Person" }), "Michiel");
+    await waitFor(() => expect(lastRule(calls).when.person).toBe("Michiel"));
+    await user.click(within(row).getByRole("button", { name: "Anyone" }));
+    await waitFor(() => expect(lastRule(calls).when.person).toBeUndefined());
+    expect(within(row).queryByRole("combobox", { name: "Person" })).toBeNull();
+  });
+
+  it("a rule that is for a person opens on Only for that person", async () => {
+    const rule = {
+      id: "old",
+      file: "learned.yaml",
+      learned: true,
+      when: { text_contains: ["kela"], filename_matches: null, folder_is: null, zones: [], person: "Michiel" },
+      then: { folder: null, name: null, tags: [], tray: null, payee: null },
+      person_zone: null,
+      sender: null,
+      stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
+    };
+    open(rule);
+    expect(await within(await forRow()).findByRole("combobox", { name: "Person" })).toHaveValue("Michiel");
+  });
+
+  it("Use the person in the folder replaces the person's own folder part and previews the path", async () => {
+    const { calls, user } = open();
+    const row = await forRow();
+    await user.click(within(row).getByRole("button", { name: "Use the person in the folder" }));
+    expect(screen.getByLabelText("Folder")).toHaveValue("50. Medical/{person}/Kela");
+    expect(within(row).getByText("This letter would go to 50. Medical/Tiina/Kela")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Use the person in the folder" })).toBeDisabled();
+    await waitFor(() => expect(lastRule(calls).then.folder).toBe("50. Medical/{person}/Kela"));
+  });
+
+  it("Use the person in the folder adds /{person} when the folder has no part with the name", async () => {
+    const { user } = open({ ...ZONE_DRAFT, folder: "50. Medical/Kela" });
+    const row = await forRow();
+    await user.click(within(row).getByRole("button", { name: "Use the person in the folder" }));
+    expect(screen.getByLabelText("Folder")).toHaveValue("50. Medical/Kela/{person}");
+    expect(within(row).getByText("This letter would go to 50. Medical/Kela/Tiina")).toBeInTheDocument();
+  });
+
+  it("with an empty folder, the folder becomes just {person}", async () => {
+    const { user } = open({ ...ZONE_DRAFT, folder: null });
+    await user.click(within(await forRow()).getByRole("button", { name: "Use the person in the folder" }));
+    expect(screen.getByLabelText("Folder")).toHaveValue("{person}");
   });
 });

@@ -915,10 +915,10 @@ def _why(
                 hit = next(
                     (
                         raw
-                        for raw, term in zip(
-                            zone.text_contains or [], rule._folded_zones[i], strict=True
+                        for raw, test in zip(
+                            zone.text_contains or [], rule._zone_tests[i], strict=True
                         )
-                        if any(term in fold(ln.text) for ln in zone_hits(rule, i, layout))
+                        if any(test(fold(ln.text)) for ln in zone_hits(rule, i, layout))
                     ),
                     None,
                 )

@@ -8,7 +8,7 @@ import threading
 from collections.abc import Callable, Collection
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageStat
 
 from dam.codes.configfile import write_config_bytes
 from dam.extract.layout import Box, check_box
@@ -25,6 +25,9 @@ _NOT_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 MAX_PER_RULE = 99
 # a smaller crop would be under 4 px at matching size and always score 0
 MIN_SIDE = 0.01
+# a crop whose grey levels hardly vary (standard deviation, 0 to 255) is blank paper with
+# scan noise: there is nothing in it to recognise
+MIN_CONTRAST = 6.0
 # the name a picture gets in ##. To Delete, so it is recognisable there
 QUARANTINE_PREFIX = "dam rule picture "
 
@@ -69,13 +72,16 @@ class AreaPictures:
         try:
             with Image.open(path) as page:
                 page.load()
-                return cut_crop(page, area)
+                crop = cut_crop(page, area)
         except (OSError, ValueError):
             if self._want is not None:
                 self._want([drive_id])  # the picture pass makes it next
             raise InvalidRequest(
                 "The picture of page 1 of this document is not made yet. Try again in a moment."
             ) from None
+        if ImageStat.Stat(crop.convert("L")).stddev[0] < MIN_CONTRAST:
+            raise InvalidRequest("There is nothing in that area of page 1: no text and no picture.")
+        return crop
 
     @staticmethod
     def preview(crop: Image.Image) -> dict:

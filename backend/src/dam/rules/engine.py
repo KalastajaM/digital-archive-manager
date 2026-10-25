@@ -243,12 +243,17 @@ def has_picture_zones(rule: Rule) -> bool:
 def zone_hits(rule: Rule, index: int, layout: Page1Layout) -> list[Line]:
     """The lines of page 1 in the rule's zone ``index`` that have one of its words."""
     zone = rule.when.zones[index]
-    terms = rule._folded_zones[index]
+    tests = rule._zone_tests[index]
     return [
         line
         for line in lines_in_zone(layout.lines, zone.box, ZONE_MARGIN)
-        if any(t in fold(line.text) for t in terms)
+        if line_has_word(tests, fold(line.text))
     ]
+
+
+def line_has_word(tests, folded_line: str) -> bool:
+    """One of a zone's word tests (``Rule._zone_tests``) holds for the folded line."""
+    return any(t(folded_line) for t in tests)
 
 
 def zone_matches(rule: Rule, index: int, layout: Page1Layout) -> bool:
@@ -260,8 +265,8 @@ def zones_in_text(rule: Rule, folded_text: str) -> bool:
     """Every text zone has one of its words in the document's text. Page 1's lines are
     part of the indexed text, so a zone whose words are not there cannot match."""
     return all(
-        any(t in folded_text for t in terms)
-        for zone, terms in zip(rule.when.zones, rule._folded_zones, strict=True)
+        line_has_word(tests, folded_text)
+        for zone, tests in zip(rule.when.zones, rule._zone_tests, strict=True)
         if not zone.is_picture
     )
 

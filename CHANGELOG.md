@@ -8,6 +8,19 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Each area of a rule now says how its words match: **Starts a word**, **Whole word** or
+  **Anywhere**. New areas start on Starts a word, so "kela" finds Kela, Kelan and Kelalta
+  and "vakuutus" finds Vakuutuskirja, but neither finds a word that only contains it, such
+  as Henkivakuutus. Whole word finds "Kela" and not "Kelan". Rules you already have keep
+  matching anywhere until you change it. Changing the choice tests the rule again.
+- The rule sheet has a **For** row. It says who the address area found on the document the
+  rule is made from, lets you pick **Anyone** or **Only for** one of your people, and has
+  **Use the person in the folder**, which puts `{person}` in the Folder field and shows
+  where this letter would go.
+- A box you draw that holds no text now switches to Picture by itself. You can switch it
+  back to Words. A box over blank paper, with neither text nor a picture, says so instead
+  of becoming a picture area.
+
 - Every document in the test result of a rule is a button that opens it in the preview with
   the rule's areas drawn on its first page, and for a picture area the place where it fits best
   and its score. In any preview with the box tool, picture rules that did not match are

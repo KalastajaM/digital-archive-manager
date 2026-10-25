@@ -494,6 +494,21 @@ all. The panel offers:
 - **Address area for all letters**: where dam looks for who a letter is for; shown when
   one box is drawn.
 
+**How the words of an area match.** Each area with words has a choice, **Words match**:
+
+- **Starts a word** (the choice for new areas): the word must begin a word but may have
+  an ending. "kela" finds Kela, Kelan and Kelalta, and "vakuutus" finds Vakuutuskirja, but
+  "vakuutus" does not find Henkivakuutus.
+- **Whole word**: only the word itself. "kela" finds Kela but not Kelan.
+- **Anywhere**: the letters anywhere in a word, so "vakuutus" also finds Henkivakuutus.
+
+A word starts or ends where a space, hyphen, slash, dot or other mark that is not a letter
+or digit is (or at the edge of the line), so "pohjola" is found in "OP-Pohjola". Digits
+count as part of a word. Capitals and accents do not matter. A word of several words
+(such as "maksu pohjolaan") has to appear in that order. Changing the choice tests the rule
+again. Rules written before this choice existed keep matching anywhere, so nothing changes
+for them until you change it.
+
 dam keeps where each word of page 1 sits, so a box drawn tightly around one word lists
 only that word, and a rule word has to be among the words inside the box. Letters that
 were read before dam kept word positions are matched by whole lines (a line counts when
@@ -628,6 +643,16 @@ letters. Use `{person}` in a rule's folder or name to file per person, such as
 `Insurance/Pohjola/{person}`. When nobody is found the rule gives no folder; a letter to
 two people asks **For whom?**. The address area starts at the usual place of the address
 on a Finnish business letter; change it there or with Draw a box.
+
+The rule sheet's **For** row says who the address area found on the document the rule was
+made from ("Tiina, found in the address area", "Nobody found", "Tiina and Michiel found",
+or, when the People list is empty, where to add people). Choose **Anyone** or **Only for**
+a person from the list; the rule then applies to letters for that person only, and the
+test follows. **Use the person in the folder** puts `{person}` in the Folder field: it
+replaces a folder part that is the person's name already, else adds `/{person}` at the end.
+A line under the buttons shows where this letter would go ("This letter would go to
+50. Medical/Tiina/Kela"). For a rule opened from Settings there is no document, so the
+row has the choice but no "found" line.
 
 ### From and For
 

@@ -137,7 +137,7 @@ def test_a_rule_with_a_picture_area_saves_and_lists_with_its_picture(app, doc):
         listed = c.get("/api/rules").json()
     (rule,) = [x for x in listed["rules"] if x["id"] == "acme"]
     assert rule["when"]["zones"] == [
-        {"box": BOX, "text_contains": None, "image": image, "min_score": 0.9}
+        {"box": BOX, "text_contains": None, "image": image, "min_score": 0.9, "match": "anywhere"}
     ]
     assert listed["unused_pictures"] == [] and listed["default_min_score"] == 0.85
 
@@ -360,6 +360,22 @@ def test_two_saves_at_once_get_two_files_and_neither_overwrites_the_other(app, m
     assert stored == sorted(png_bytes(c) for c in crops)
 
 
+def test_a_box_with_nothing_in_it_is_refused_as_a_picture(app, fake_archive):
+    # blank paper between the logo and the text, clean and with light scan noise
+    add(app, fake_archive, f"{INBOX}/b.pdf", "b", "Acme letter")
+    keep(app, "b", synth.noisy(synth.letter(), 2.0))
+    blank = [0.5, 0.12, 0.8, 0.25]
+    with make_client(app) as c:
+        r = post(c, "/api/rules/area-picture", {"drive_id": "b", "box": blank})
+        assert r.status_code == 400 and "nothing in that area" in r.json()["error"]
+        r = post(c, "/api/rules/draft-zone", {"drive_id": "b", "picture_boxes": [blank]})
+        assert r.status_code == 400 and "nothing in that area" in r.json()["error"]
+        # the logo next to it is a picture
+        r = post(c, "/api/rules/area-picture", {"drive_id": "b", "box": BOX})
+        assert r.status_code == 200
+    assert not areas_dir(app).exists()
+
+
 def test_a_picture_box_under_one_percent_of_the_page_is_refused(app, doc):
     tiny = [0.1, 0.1, 0.105, 0.3]  # 0.5% wide
     flat = [0.1, 0.1, 0.4, 0.105]
@@ -369,6 +385,6 @@ def test_a_picture_box_under_one_percent_of_the_page_is_refused(app, doc):
             assert r.status_code == 400 and "too small" in r.json()["error"]
             r = post(c, "/api/rules/draft-zone", {"drive_id": doc, "picture_boxes": [box]})
             assert r.status_code == 400 and "too small" in r.json()["error"]
-        ok = [0.1, 0.1, 0.12, 0.12]
+        ok = [0.06, 0.03, 0.08, 0.05]  # 2% of the page, on the logo's edge
         assert post(c, "/api/rules/area-picture", {"drive_id": doc, "box": ok}).status_code == 200
     assert not areas_dir(app).exists()
