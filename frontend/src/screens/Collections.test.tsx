@@ -1441,3 +1441,134 @@ describe("Trash on collection members", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
+
+describe("The header's Browse file actions on a collection member", () => {
+  const STATUS = { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } };
+  const moved = (src: string, dst: string, id = "f1") => ({ kind: "move", src, dst, drive_id: id, note: null });
+  const applied = (op: ReturnType<typeof moved>, folder: string) => ({
+    batch_id: "m1", dry_run: false, done: [op], failed: null, error: null, index_error: null, unchanged: [], folder,
+  });
+  const ready = () => screen.findByRole("region", { name: "Members" });
+  const names = () => Array.from(bar().querySelectorAll("button")).map((b) => b.getAttribute("aria-label"));
+
+  it("a file has them all, in Browse's order", async () => {
+    renderCollections("/collections/7", { "GET /api/status": { body: STATUS } });
+    await within(panel()).findByRole("region", { name: "Members" });
+    await waitFor(() => expect(names()).toContain("Back to inbox"));
+    expect(names()).toEqual([
+      "Put in tray",
+      "Remove quote.pdf from the collection",
+      "Back to inbox",
+      "Move to…",
+      "From…",
+      "For…",
+      "Ask AI",
+      "Star",
+      "Mark Important",
+      "Move to To Delete",
+    ]);
+  });
+
+  it("Back to inbox goes through the move confirm with Undo, and the member row follows the file", async () => {
+    let done = false;
+    const op = moved("40. House/Sauna/quote.pdf", "##. Organize/quote.pdf");
+    const after = { ...SAUNA, members: SAUNA.members.map((m) => (m.drive_id === "f1" ? { ...m, path: "##. Organize/quote.pdf" } : m)) };
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/status": { body: STATUS },
+      "GET /api/collections/7": () => ({ body: done ? after : SAUNA }),
+      "POST /api/browse/move/preview": { body: [op] },
+      "POST /api/browse/move": () => {
+        done = true;
+        return { body: applied(op, "##. Organize") };
+      },
+    });
+    await ready();
+    const back = await waitFor(() => {
+      const b = within(bar()).getByRole("button", { name: "Back to inbox" });
+      expect(b).toBeEnabled();
+      return b;
+    });
+    await user.click(back);
+    const dialog = await screen.findByRole("dialog", { name: "Move 1 file to ##. Organize?" });
+    expect(posts(calls, "/api/browse/move/preview")[0].body).toEqual({ drive_ids: ["f1"], folder: "##. Organize" });
+    expect(posts(calls, "/api/browse/move")).toHaveLength(0);
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(posts(calls, "/api/browse/move")).toHaveLength(1));
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+    // still a member (the collection follows the file), now with its new folder
+    const row = (await within(tree()).findByText("quote.pdf")).closest("li")!;
+    await waitFor(() => expect(row).toHaveTextContent("##. Organize"));
+  });
+
+  it("Move to… opens the folder sheet, previews and moves the shown file", async () => {
+    const op = moved("40. House/Sauna/quote.pdf", "10. Financial/quote.pdf");
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/status": { body: STATUS },
+      "POST /api/browse/move/preview": { body: [op] },
+      "POST /api/browse/move": { body: applied(op, "10. Financial") },
+    });
+    await ready();
+    await user.click(within(bar()).getByRole("button", { name: "Move to…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Move 1 file to…" });
+    await user.type(within(sheet).getByLabelText("Folder"), "10. Financial");
+    await user.click(within(sheet).getByRole("button", { name: "Preview move" }));
+    const dialog = await screen.findByRole("dialog", { name: "Move 1 file to 10. Financial?" });
+    expect(posts(calls, "/api/browse/move/preview")[0].body).toEqual({ drive_ids: ["f1"], folder: "10. Financial" });
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(posts(calls, "/api/browse/move")).toHaveLength(1));
+  });
+
+  it("From… sets the sender of the shown file", async () => {
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/senders": { body: [] },
+      "PUT /api/assignments": { body: [] },
+    });
+    await ready();
+    await user.click(within(bar()).getByRole("button", { name: "From…" }));
+    const sheet = await screen.findByRole("dialog", { name: "From" });
+    await user.type(within(sheet).getByLabelText("Sender"), "Pohjola");
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+    expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ drive_ids: ["f1"], sender: "Pohjola" });
+  });
+
+  it("a member in To Delete has Restore (the restore confirm) and the other moves say why they are off", async () => {
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/status": { body: STATUS },
+      "POST /api/restore": (call) => ({
+        body: {
+          batch_id: "r1",
+          dry_run: (call.body as { dry_run: boolean }).dry_run,
+          done: [moved("##. To Delete/x.pdf", "10. Financial/x.pdf", "f3")],
+          failed: null,
+          error: null,
+          index_error: null,
+          unchanged: [],
+        },
+      }),
+    });
+    await ready();
+    await user.click(within(tree()).getByText("x.pdf"));
+    for (const name of ["Move to…", "Back to inbox", "From…", "For…"]) {
+      const b = within(bar()).getByRole("button", { name });
+      expect(b).toBeDisabled();
+      expect(b.parentElement).toHaveAttribute("data-tip", expect.stringMatching(/To Delete|Marked for deletion/));
+    }
+    await user.click(within(bar()).getByRole("button", { name: "Restore from To Delete" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restore to where it was" }));
+    await screen.findByRole("dialog", { name: "Restore from To Delete?" });
+    expect(posts(calls, "/api/restore")[0].body).toEqual({ drive_ids: ["f3"], to: "original", dry_run: true });
+  });
+
+  it("a folder member and a missing file say why the move actions are off", async () => {
+    const { user } = renderCollections("/collections/7", { "GET /api/status": { body: STATUS } });
+    await ready();
+    await user.click(within(tree()).getByText("Plans"));
+    const move = within(bar()).getByRole("button", { name: "Move to…" });
+    expect(move).toBeDisabled();
+    expect(move.parentElement).toHaveAttribute("data-tip", "Folders are moved from Browse");
+    await user.click(within(tree()).getByText("old⟨U+202E⟩.pdf"));
+    const from = within(bar()).getByRole("button", { name: "From…" });
+    expect(from.parentElement).toHaveAttribute("data-tip", "The file is missing");
+  });
+});

@@ -43,6 +43,8 @@ import {
   useExport,
   useGroupChange,
   useSetCollectionParent,
+  LOCKED_REASON,
+  useIsBlocked,
   useStatus,
 } from "../api/client";
 import { AIProposal } from "../components/ai/AIProposal";
@@ -93,7 +95,19 @@ import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
 import { RelativeDate, useLocalToday } from "../components/RelativeDate";
 import { SavedNote, SaveState } from "../components/SavedNote";
 import { type ToastAction, useToast } from "../components/Toasts";
-import { deletionRefusal } from "../components/MoveTo";
+import {
+  backToInbox,
+  deletionRefusal,
+  inboxRefusal,
+  MOVE_BUSY,
+  MoveToSheet,
+  sourceRefusal,
+  useInboxFolder,
+  useMoveFlow,
+  anyMoveRunning,
+} from "../components/MoveTo";
+import { type RestoreTo, restoreEntries, useRestoreFlow } from "../components/Restore";
+import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { isTrashKey, useTrash } from "../components/Trash";
 import { EmptyState } from "../components/ui/EmptyState";
 import { IconButton } from "../components/ui/IconButton";
@@ -774,6 +788,14 @@ export default function CollectionDetail({
   const toast = useToast();
   // Trash (the inspector's bin, ⌫ on the list, Quick Look): the selected member's file.
   const trash = useTrash();
+  // The header's Back to inbox, Move to…, From…, For… and Restore: Browse's own flows
+  // (preview, confirm, Undo), on the file the side panel shows.
+  const moveFlow = useMoveFlow();
+  const restoring = useRestoreFlow();
+  const inbox = useInboxFolder();
+  const isBlocked = useIsBlocked();
+  const [moveSheet, setMoveSheet] = useState<{ id: string; name: string } | null>(null);
+  const [assigning, setAssigning] = useState<{ kind: AssignKind; ids: string[] } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [removing, setRemoving] = useState<Group | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -809,7 +831,7 @@ export default function CollectionDetail({
   const creatingGroup = useRef(false); // New group twice at once adds one
   const latestGroups = useRef<{ all: Group[]; top: Group[] }>({ all: [], top: [] }); // as last rendered
   const busy =
-    preview.isPending || change.isPending || members.isPending || groupChange.isPending || setParent.isPending || trash.busy;
+    preview.isPending || change.isPending || members.isPending || groupChange.isPending || setParent.isPending || trash.busy || moveFlow.busy;
 
   const report = (title: string, done: string, r: CollectionChange, action?: ToastAction) => {
     setResult({ title, change: r });
@@ -1248,6 +1270,30 @@ export default function CollectionDetail({
         },
   ];
 
+  // What the file actions that move or edit a file need: a file in the index, not locked.
+  const gone = !!shownFile && "missing" in shownFile && shownFile.missing;
+  const inTrash = !!shownFile && "quarantined" in shownFile && shownFile.quarantined;
+  const fileWhy = !shownFile
+    ? null
+    : !shownPath
+      ? "The file is not in the index"
+      : gone
+        ? "The file is missing"
+        : (toDeleteReason(shownPath) ?? (inTrash ? "Marked for deletion: restore it first" : null)) ??
+          (shownFile.is_dir ? "Folders are moved from Browse" : null);
+  const lockedWhy = shownFile && shownPath && !shownFile.is_dir && isBlocked(shownFile.drive_id, shownFile.marks, shownPath) ? LOCKED_REASON : null;
+  const moveWhy = fileWhy ?? (shownPath ? sourceRefusal(shownPath) : null) ?? lockedWhy ?? (busy ? MOVE_BUSY : null);
+  const inboxWhy = fileWhy ?? (shownPath ? inboxRefusal([shownPath], inbox) : null) ?? lockedWhy ?? (busy ? MOVE_BUSY : null);
+  const startMove = (req: { ids: string[]; folder: string }) => {
+    if (anyMoveRunning()) toast({ kind: "info", text: MOVE_BUSY });
+    else moveFlow.start(req);
+  };
+  const startRestore = (to: RestoreTo) => {
+    if (!shownFile) return;
+    if (restoring.running()) toast({ kind: "info", text: "Already restoring…" });
+    else if (anyMoveRunning()) toast({ kind: "info", text: MOVE_BUSY });
+    else restoring.start([shownFile.drive_id], to);
+  };
   const markReason = toDeleteReason(shownPath);
   const markable = shownFile && shownPath ? [{ drive_id: shownFile.drive_id, name: baseName(shownPath), marks: shownFile.marks }] : [];
   const trashWhy = browsed ? deletionRefusal(browsed.path, browsed.marks) : selected ? trashRefusal(selected) : null;
@@ -1263,6 +1309,23 @@ export default function CollectionDetail({
           ? { name: memberName(selected), run: () => void removeMember(selected), disabled: busy }
           : undefined
       }
+      backToInbox={{
+        run: () => {
+          if (inbox && shownPath && !inboxWhy) startMove(backToInbox([shownFile.drive_id], inbox, [shownPath]));
+        },
+        disabled: busy,
+        reason: inboxWhy,
+      }}
+      moveTo={{
+        run: () => {
+          if (!moveWhy) setMoveSheet({ id: shownFile.drive_id, name: baseName(shownPath!) });
+        },
+        shortcut: "⇧⌘M",
+        disabled: busy,
+        reason: moveWhy,
+      }}
+      sender={{ run: () => setAssigning({ kind: "sender", ids: [shownFile.drive_id] }), disabled: busy, reason: fileWhy }}
+      person={{ run: () => setAssigning({ kind: "person", ids: [shownFile.drive_id] }), disabled: busy, reason: fileWhy }}
       ask={shownPath && !("missing" in shownFile && (shownFile.missing || shownFile.quarantined)) ? askBar : undefined}
       star={
         shownPath
@@ -1274,6 +1337,7 @@ export default function CollectionDetail({
           ? { on: allMarked(markable, "important"), run: () => void batchMarks.run("important", markable), disabled: busy || batchMarks.busy, reason: markReason }
           : undefined
       }
+      restore={inTrash ? { entries: restoreEntries(startRestore, null) } : undefined}
       trash={{ run: trashSelected, disabled: busy || trashWhy !== null, reason: trashWhy }}
     />
   ) : (
@@ -1458,6 +1522,21 @@ export default function CollectionDetail({
       {quickLook.view}
       {trash.view}
       {filingAI.sheet}
+      {moveFlow.view}
+      {restoring.view}
+      {moveSheet && (
+        <MoveToSheet
+          names={[moveSheet.name]}
+          initial=""
+          onCancel={() => setMoveSheet(null)}
+          onChoose={(dest) => {
+            const chosen = moveSheet;
+            setMoveSheet(null);
+            startMove({ ids: [chosen.id], folder: dest });
+          }}
+        />
+      )}
+      {assigning && <AssignSheet kind={assigning.kind} driveIds={assigning.ids} onClose={() => setAssigning(null)} />}
       <Sheet
         open={exporting}
         title={`Export ${name}`}

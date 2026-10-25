@@ -86,9 +86,12 @@ All notable changes are listed here. The format follows
   window the list part takes the row and the file actions follow at the right.
 - A collection (your own, **Important** and **Starred**) now has the same header: its
   name, subtitle and list buttons (**New group**, the folder button, **Export…**, **⋯**)
-  at the left, and over the selected file one group of icon buttons: **Put in tray**,
-  **Remove from collection**, **Ask AI**, **Star**, **Important** and **Move to To Delete**.
-  **Remove from collection** sits where **Remove from tray** does in a tray. The file panel
+  at the left, and over the selected file one group of icon buttons, in Browse's order:
+  **Put in tray**, **Remove from collection**, **Back to inbox**, **Move to…**, **From…**,
+  **For…**, **Ask AI**, **Star**, **Important**, **Restore** (a file in To Delete) and
+  **Move to To Delete**. Moves and Restore show their preview first and have Undo, as in
+  Browse, and a moved file stays in the collection. **Remove from collection** sits where
+  **Remove from tray** does in a tray. The file panel
   no longer repeats these buttons, and its toolbar keeps only the viewing tools. The group
   and **Show in folder** stay in the file panel.
 - In a tray's header the name with its count, **Add file** and **Open / Done** now sit on

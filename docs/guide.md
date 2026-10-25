@@ -910,8 +910,12 @@ The header has the same two parts as Browse and the trays. The left part is for 
 collection: its name and subtitle, **New group**, the folder button, **Export…** and **⋯**.
 Over the selected file, at the right, is one group of icons for the file actions, in this
 order: **Put in tray** (a menu of the trays), **Remove from collection** (not in Starred and
-Important, where the star and the exclamation mark do that), **Ask AI**, **Star**,
-**Important** and **Move to To Delete**. A greyed icon says why when you hover it. The
+Important, where the star and the exclamation mark do that), **Back to inbox**,
+**Move to…**, **From…**, **For…**, **Ask AI**, **Star**, **Important**, **Restore** (for a
+file in To Delete) and **Move to To Delete**. They are the same as in Browse: a move shows
+its preview first and has Undo, and the file stays in the collection (it follows the file,
+and its row shows the new folder). A greyed icon says why when you hover it: a locked or
+Important file, a file in To Delete, a missing file, and a folder (moved from Browse). The
 preview's toolbar keeps only the viewing tools and Quick Look. In a narrow window the left
 part takes the row and the file actions follow at the right.
 
