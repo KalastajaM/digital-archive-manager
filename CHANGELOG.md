@@ -54,6 +54,11 @@ All notable changes are listed here. The format follows
 - The search filter `is:locked` now finds only the files you locked yourself. Important
   files are always locked, but you find them with `is:important`.
 
+- The Browse header now sits over the file list instead of the whole window: the
+  **Folder / Archive** switch, the search box with its **?**, the two-panes and **New
+  folder** buttons and the other file buttons line up with the list, and the preview
+  beside it is left clear. With two panes they sit over the left pane. On a narrow
+  list the search wraps under the buttons.
 - Collections are now a chip field like tags, everywhere a file's collections are set:
   the file view in Browse, a collection and a tray, the Inbox card and batch ("Also add
   to collection"), the rule sheet and the filing codes. The collections show as chips

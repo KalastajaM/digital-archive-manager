@@ -1721,6 +1721,8 @@ export default function Browse() {
     <div className={split ? "browse browse-split" : "browse"}>
       <Toolbar
         title="Browse"
+        className="browse-toolbar"
+        style={split ? undefined : listSplit.hostStyle}
         subtitle={checked.length > 0 ? `${checked.length} selected` : undefined}
         actions={
           <>
