@@ -10,6 +10,8 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   errorText,
+  LOCKED_REASON,
+  useIsBlocked,
   itemFilesQuery,
   type FieldDef,
   type Item,
@@ -58,7 +60,7 @@ import { AddFile } from "../components/AddFile";
 import { FileMeta } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
 import { FileCollections } from "./FileActions";
-import { deletionRefusal } from "../components/MoveTo";
+import { backToInbox, deletionRefusal, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../components/MoveTo";
 import { isTrashKey, useTrash } from "../components/Trash";
 import { MarkIcons } from "../components/MarkIcons";
 import { useKeydown } from "../keyboard";
@@ -670,6 +672,17 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     "This item has no file",
     trash.busy,
   );
+  // Back to inbox moves the shown file (the item stays in its tray), through the move flow:
+  // preview, confirm, Undo.
+  const fileMove = useMoveFlow();
+  const inbox = useInboxFolder();
+  const isBlocked = useIsBlocked();
+  const inboxWhy =
+    hasFile && shown
+      ? (inboxRefusal([shown.path!], inbox) ??
+        (isBlocked(shown.drive_id, shown.marks, shown.path) ? LOCKED_REASON : null) ??
+        (trash.busy || fileMove.busy ? MOVE_BUSY : null))
+      : null;
   const markReason = hasFile && shown ? toDeleteReason(shown.path) : null;
   const markable = hasFile && shown ? [{ drive_id: shown.drive_id, name: baseName(shown.path ?? ""), marks: shown.marks }] : [];
   // (Move to tray is also done by dragging the item onto a tray in the sidebar; this is the
@@ -681,6 +694,16 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         barRef={actionsRef}
         tray={open ? { label: "Move to tray", entries: moveEntries } : undefined}
         removeFromTray={{ run: () => setRemoving(true), disabled: moveItem.isPending }}
+        backToInbox={
+          hasFile && shown
+            ? {
+                run: () => {
+                  if (inbox && !inboxWhy) fileMove.start(backToInbox([shown.drive_id], inbox, [shown.path!]));
+                },
+                reason: inboxWhy,
+              }
+            : undefined
+        }
         ask={hasFile ? askBar : undefined}
         star={
           hasFile
@@ -878,6 +901,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           {trash.view}
           {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
           {filingAI.sheet}
+          {fileMove.view}
           {!files.isPending && actionRow}
         </>
       }

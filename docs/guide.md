@@ -845,6 +845,7 @@ written, otherwise any AI summary.
 - **Remove from tray** (the icon in the header, or ⌫) asks first, then deletes the item with
   its note, checklist and history. The files are never touched, so there is no undo for
   this.
+- **Back to inbox** (in the header's icons) moves the file the item shows into the inbox, with the usual preview and Undo; the item stays in its tray.
 - **Move to To Delete** (the bin, last in the header's icons) acts on the file the item
   shows, with its usual confirm and Undo; the item keeps the file, now shown as in To
   Delete. It is not the same as Remove from tray.

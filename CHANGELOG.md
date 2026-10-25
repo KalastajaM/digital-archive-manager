@@ -58,7 +58,7 @@ All notable changes are listed here. The format follows
   **Folder / Archive** switch, the search and the **New folder** and two-panes buttons, in a tray its name, count, **Add file** and **Open / Done**. The right part,
   over the file, is one group of icon buttons for the file actions, the same in both and
   in the same order: **Put in tray** (a menu of the trays, **Move to tray** inside a
-  tray), **Remove from tray** (in a tray), **Back to inbox**, **Move to…**, **From…**,
+  tray), **Remove from tray** (in a tray), **Back to inbox** (in a tray it moves the shown file; the item stays), **Move to…**, **From…**,
   **For…**, **Ask AI**, **Star**, **Important**, **Restore** (files in To Delete) and
   **Move to To Delete**. In Browse they act on the selected files, **Star** and
   **Important** also for a single file. The preview's toolbar keeps only the viewing

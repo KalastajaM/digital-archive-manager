@@ -633,6 +633,39 @@ describe("Item detail", () => {
     expect(sent(calls, "POST", "/api/items/1/files")[1].body).toEqual({ drive_id: "f7" });
   });
 
+  it("Back to inbox moves the shown file through the move confirm, with Undo; the item stays; a file already in the inbox is refused", async () => {
+    const STATUS = { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } };
+    const op = { kind: "move", src: NORTHPOWER_FILE.path!, dst: "##. Organize/northpower.pdf", drive_id: "f1", note: null };
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "GET /api/status": { body: STATUS },
+      "POST /api/browse/move/preview": { body: [op] },
+      "POST /api/browse/move": {
+        body: { batch_id: "m1", dry_run: false, done: [op], failed: null, error: null, index_error: null, unchanged: [], folder: "##. Organize" },
+      },
+    });
+    await screen.findByRole("tablist", { name: "Files" });
+    const back = await within(fileBar()).findByRole("button", { name: "Back to inbox" });
+    await waitFor(() => expect(back).toBeEnabled());
+    await user.click(back);
+    const dialog = await screen.findByRole("dialog", { name: "Move 1 file to ##. Organize?" });
+    expect(sent(calls, "POST", "/api/browse/move/preview")[0].body).toEqual({ drive_ids: ["f1"], folder: "##. Organize" });
+    expect(sent(calls, "POST", "/api/browse/move")).toHaveLength(0);
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/browse/move")).toHaveLength(1));
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+    expect(where()).toBe("/trays/to-pay?item=1");
+  });
+
+  it("Back to inbox is off for a file in the inbox, saying why", async () => {
+    renderTrays("/trays/to-pay?item=1", {
+      "GET /api/status": { body: { special_folders: { inbox: "10. Financial", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } } },
+    });
+    await screen.findByRole("tablist", { name: "Files" });
+    const back = await within(fileBar()).findByRole("button", { name: "Back to inbox" });
+    await waitFor(() => expect(back.closest(".icon-button-wrap")).toHaveAttribute("data-tip", "Already in the inbox"));
+    expect(back).toBeDisabled();
+  });
+
   it("the header's bin keeps its reason as the tooltip for an Important file, and Star acts on the shown file", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/items/1/files": { body: [{ ...FILES[0], marks: ["important"] }, FILES[1]] },
@@ -746,13 +779,14 @@ describe("Item detail", () => {
     expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
       "Move to tray",
       "Remove from tray",
+      "Back to inbox",
       "Ask AI",
       "Star",
       "Mark Important",
       "Move to To Delete",
     ]);
     expect(within(detail()).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
-    for (const name of ["Move to tray", "Remove from tray", "Ask AI", "Star", "Mark Important", "Move to To Delete"]) {
+    for (const name of ["Move to tray", "Remove from tray", "Back to inbox", "Ask AI", "Star", "Mark Important", "Move to To Delete"]) {
       expect(within(detail()).queryByRole("button", { name })).toBeNull();
     }
     expect(within(detail().querySelector(".item-header") as HTMLElement).queryByRole("button", { name: "Quick Look" })).toBeNull();
