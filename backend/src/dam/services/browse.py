@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from dam.config import SpecialFolders
 from dam.core.paths import nfc
@@ -218,6 +218,67 @@ class BrowseService:
             what = records[0].name if len(records) == 1 else f"{len(records)} files"
             plan = Plan(ops, origin=origin, label=f"Moved {what} to To Delete")
             return self.executor.apply(plan, dry_run=dry_run)
+
+    def restore(
+        self, drive_ids: list[str], to: str, origin: str, dry_run: bool = False
+    ) -> BatchResult:
+        """Move entries out of the quarantine folder again, as one journaled batch (a
+        MOVE per entry; Undo puts them back in To Delete). Never deletes.
+
+        ``to`` ``"original"``: back to the path they were marked at (the path with the
+        quarantine prefix stripped); a folder that no longer exists is made again (an
+        MKDIR in the plan), a name that is taken gets ``_N`` (the plan says so).
+        ``to`` ``"inbox"``: into the inbox folder. A folder marked for deletion moves as
+        a whole; an entry inside another selected folder comes along with it. Refused
+        (``InvalidRequest``): an entry not in the quarantine folder, the quarantine
+        folder itself, a folder that stood at the top of the archive, and an original
+        place in ``##. Ongoing`` (use the inbox)."""
+        check_origin(origin)
+        if to not in ("original", "inbox"):
+            raise InvalidRequest(f"cannot restore to {to!r}")
+        if isinstance(drive_ids, str) or not isinstance(drive_ids, list | tuple) or not drive_ids:
+            raise InvalidRequest("No files given")
+        if len(set(drive_ids)) != len(drive_ids):
+            dup = next(d for d in drive_ids if drive_ids.count(d) > 1)
+            raise InvalidRequest(f"File {dup!r} requested more than once")
+        quarantine = self.special.quarantine
+        records = []
+        for drive_id in drive_ids:
+            rec = self.repo.get(drive_id)
+            if rec is None or rec.missing or rec.parked_at is not None:
+                raise NotFound(drive_id)
+            if not is_under(rec.path, quarantine, strict=True):
+                raise InvalidRequest(f"{rec.path} is not in {quarantine}: nothing to restore")
+            records.append(rec)
+        dirs = [r.path for r in records if r.is_dir]
+        records = [r for r in records if not any(is_under(r.path, d, strict=True) for d in dirs)]
+        ops = []
+        for rec in records:
+            original = self._original(rec.path)
+            if to == "inbox":
+                dest = self.special.inbox
+            else:
+                dest = parent(original)
+                if not dest:
+                    raise InvalidRequest(
+                        f"{rec.path}: it stood at the top of the archive; restore it to the inbox"
+                    )
+                try:
+                    check_destination_area(dest, self.special)
+                except InvalidRequest:
+                    raise InvalidRequest(
+                        f"{rec.path}: its original place is in {self.special.ongoing};"
+                        " restore it to the inbox"
+                    ) from None
+            ops.append(Op(OpKind.MOVE, rec.path, dest, allow_top_level=to == "original"))
+        what = records[0].name if len(records) == 1 else f"{len(records)} files"
+        label = f"Restored {what} from To Delete" + (" to the inbox" if to == "inbox" else "")
+        return self.executor.apply(Plan(ops, origin=origin, label=label), dry_run=dry_run)
+
+    def _original(self, path: str) -> str:
+        """``path`` (inside the quarantine folder) without the quarantine prefix."""
+        parts = PurePosixPath(path).parts[len(PurePosixPath(self.special.quarantine).parts) :]
+        return PurePosixPath(*parts).as_posix()
 
     def _refuse_important(self, records: list[FileRecord]) -> None:
         """One query for the Important entries; refuse if any record is one, is a

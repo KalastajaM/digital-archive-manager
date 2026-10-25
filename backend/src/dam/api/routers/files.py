@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 
 from dam.api import preview
-from dam.api.deps import AppDep, live_record
+from dam.api.deps import AppDep, live_record, require_editable
 from dam.api.marks import with_record_marks
 from dam.api.schemas import (
     ErrorBody,
@@ -152,6 +152,7 @@ def file_suggestions(app: AppDep, drive_id: str) -> dict:
 def put_file_tags(app: AppDep, drive_id: str, body: FileTagsIn) -> dict:
     """Set the file's tags exactly (trimmed, empty and repeated ones dropped)."""
     live_record(app, drive_id)
+    require_editable(app, [drive_id])
     app.tags.set_for_file(drive_id, normalise_tags(body.tags))
     return {"tags": app.tags.for_file(drive_id)}
 
@@ -170,6 +171,7 @@ def put_file_summary(app: AppDep, drive_id: str, body: FileSummaryIn) -> dict:
     """Save a summary ("Use this summary", or one the user typed). 409 when it would
     overwrite a current user summary without ``replace``."""
     live_record(app, drive_id)
+    require_editable(app, [drive_id])
     return app.summaries.put(drive_id, body.source, body.summary, body.key_facts, body.replace)
 
 

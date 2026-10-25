@@ -196,8 +196,10 @@ def test_is_starred_important_locked(archive):
     archive.locks.lock("tax")
     assert ids(archive, "is:starred") == ["kela"]
     assert ids(archive, "is:important") == ["bill", "xray"]  # a marked folder covers its files
-    assert ids(archive, "is:locked") == ["bill", "tax", "xray"]  # Important is always locked
-    assert ids(archive, "type:pdf -is:locked") == ["kela", "other", "sale1"]
+    # only the owner's own locks; Important files (always locked) are found with is:important
+    assert ids(archive, "is:locked") == ["tax"]
+    assert ids(archive, "type:pdf -is:locked") == ["bill", "kela", "other", "sale1"]
+    assert ids(archive, "is:locked is:important") == []
 
 
 def test_is_todo_note_summary(archive):
