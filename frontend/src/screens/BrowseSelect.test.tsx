@@ -118,16 +118,53 @@ describe("Star and Important for the checked files", () => {
     expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["f1", "f2"] });
   });
 
-  it("are in the header only for several checked files: one file has them in its preview", async () => {
+  it("are in the header for one file too (not in the preview's toolbar), off with nothing selected", async () => {
     const { user } = setup(FILES);
     await screen.findByText("a.pdf");
     const header = () => screen.getByRole("toolbar", { name: "Browse file actions" });
-    expect(within(header()).queryByRole("button", { name: "Star" })).toBeNull();
+    expect(within(header()).getByRole("button", { name: "Star" })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
-    expect(within(header()).queryByRole("button", { name: "Star" })).toBeNull();
+    expect(within(header()).getByRole("button", { name: "Star" })).toBeEnabled();
+    expect(within(header()).getByRole("button", { name: "Mark Important" })).toBeEnabled();
     await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
     expect(within(header()).getByRole("button", { name: "Star" })).toBeEnabled();
     expect(within(header()).getByRole("button", { name: "Mark Important" })).toBeEnabled();
+  });
+});
+
+describe("The header's file actions", () => {
+  const bar = () => within(screen.getByRole("toolbar", { name: "Browse file actions" }));
+  const names = () => bar().getAllByRole("button").map((b) => b.getAttribute("aria-label"));
+
+  it("are one group in the shared order, over the file pane; the preview's toolbar keeps only viewing tools", async () => {
+    const { user } = setup(FILES);
+    await screen.findByText("a.pdf");
+    await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
+    expect(names()).toEqual([
+      "Put in tray",
+      "Back to inbox",
+      "Move to…",
+      "From…",
+      "For…",
+      "Ask AI",
+      "Star",
+      "Mark Important",
+      "Move to To Delete",
+    ]);
+    const preview = screen.getByRole("region", { name: "Preview" });
+    for (const name of ["Star", "Mark Important", "Ask AI", "Put in tray", "Back to inbox"]) {
+      expect(within(preview).queryByRole("button", { name })).toBeNull();
+    }
+  });
+
+  it("with several files checked Ask AI is off and says to pick one", async () => {
+    const { user } = setup(FILES);
+    await screen.findByText("a.pdf");
+    await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
+    const ask = bar().getByRole("button", { name: "Ask AI" });
+    expect(ask).toBeDisabled();
+    expect(ask.parentElement).toHaveAttribute("data-tip", "Select one file to ask AI");
   });
 });
 

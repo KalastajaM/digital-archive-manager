@@ -1123,10 +1123,23 @@ time.overdue { color: var(--red-text); font-weight: 600; }
 /* ---- Trays: list | item, like the inbox --------------------------------------------- */
 .app:has(.trays) .content { height: 100%; }
 main:has(> .trays) { padding: 0; min-height: 0; display: flex; }
-.trays { --split: 295px; flex: 1; min-height: 0; position: relative; display: grid; grid-template-columns: var(--split) minmax(0, 1fr); }
+.trays { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
+.trays-main { --split: 295px; flex: 1; min-height: 0; position: relative; display: grid; grid-template-columns: var(--split) minmax(0, 1fr); }
 .trays-list { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-right: 0.5px solid var(--separator); }
-.trays-list .toolbar { padding: 0 var(--sp-4); }
-.trays-list .toolbar-subtitle { font-variant-numeric: tabular-nums; }
+/* The header like Browse's, in two parts: the tray's title, count and list controls over the
+   list, and the open item's file actions at the far right over the item. --split is set on
+   the header like on .trays-main, so the parts follow the splitter. */
+.trays-toolbar { --split: 295px; flex-wrap: wrap; align-content: center; row-gap: var(--sp-1); padding: var(--sp-1) var(--sp-4); }
+.trays-toolbar .toolbar-lead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); min-width: 0; flex: 0 0 calc(var(--split) - var(--sp-4) - var(--sp-3)); }
+.trays-toolbar .toolbar-title { flex: 1 1 100%; }
+.trays-toolbar .toolbar-title h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.trays-toolbar .toolbar-subtitle { flex: none; font-variant-numeric: tabular-nums; }
+.trays-toolbar .toolbar-lead .toolbar-actions { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; margin-left: 0; }
+.trays-toolbar .toolbar-trailing { margin-left: auto; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 1000px) { .trays-toolbar .toolbar-lead { flex: 1 1 auto; } }
+/* the file actions: the bar and its slot add no box of their own, so the buttons are the
+   header group's items */
+.file-action-bar, .file-action-slot { display: contents; }
 .trays-list .empty-state { flex: 1; }
 .tray-error { margin: var(--sp-2) var(--sp-4) 0; }
 .tray-loading { padding: var(--sp-4); }
@@ -1215,12 +1228,6 @@ dialog.sheet.barcode-sheet { width: fit-content; max-width: 96vw; }
 .barcode-mismatch-title { font-weight: 600; }
 
 .item-done-buttons { display: flex; gap: var(--sp-2); margin-top: calc(var(--fs-xs) * 1.5 + 3px); /* level with the inputs, not their labels */ }
-/* the icon buttons sit at the right end of the fields row, level with the inputs */
-.item-action-slot { margin-left: auto; margin-top: calc(var(--fs-xs) * 1.5 + 3px); display: flex; justify-content: flex-end; min-width: 0; }
-.item-action-slot:empty { display: none; }
-.item-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-1) var(--sp-2); }
-.item-tray-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
-.item-file-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
 button[data-tip] { position: relative; }
 .item-files-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: var(--sp-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
 .item-files-line .tabs { margin-bottom: 0; }
@@ -1531,7 +1538,7 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 
 /* ---- Narrow windows ---------------------------------------------------------------- */
 @media (max-width: 900px) {
-  .today-grid, .trays, .collection, .browse-main { grid-template-columns: 1fr; }
+  .today-grid, .trays-main, .collection, .browse-main { grid-template-columns: 1fr; }
   .app:has(.browse) .content { height: auto; }
   .pane-body { overflow: visible; }
   .browse-pane + .browse-pane, .browse-pane ~ .browse-preview { border-left: none; border-top: 0.5px solid var(--separator); }

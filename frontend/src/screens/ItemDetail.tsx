@@ -4,12 +4,14 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRightLeft, CircleMinus, Eye, X } from "lucide-react";
+import { Eye, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   errorText,
+  LOCKED_REASON,
+  useIsBlocked,
   itemFilesQuery,
   type FieldDef,
   type Item,
@@ -41,10 +43,14 @@ import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
 import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
+import { FileActionBar, useAskAction } from "../components/FileActionBar";
+import { useFilingAI } from "../components/ai/useFilingAI";
+import { allMarked, useBatchMark } from "../components/useBatchMark";
+import { toDeleteReason } from "../toDelete";
 import { Popover } from "../components/ui/Popover";
 import { Tag } from "../components/ui/Tag";
 import { TipButton } from "../components/ui/TipButton";
-import { Menu, type MenuEntry } from "../components/ui/Menu";
+import type { MenuEntry } from "../components/ui/Menu";
 import { RemoveItemSheet } from "../components/RemoveItemSheet";
 import { UrgencyTag } from "../components/UrgencyTag";
 import { useAutoSave } from "../components/useAutoSave";
@@ -54,8 +60,8 @@ import { AddFile } from "../components/AddFile";
 import { FileMeta } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
 import { FileCollections } from "./FileActions";
-import { deletionRefusal } from "../components/MoveTo";
-import { isTrashKey, TrashButton, useTrash } from "../components/Trash";
+import { backToInbox, deletionRefusal, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../components/MoveTo";
+import { isTrashKey, useTrash } from "../components/Trash";
 import { MarkIcons } from "../components/MarkIcons";
 import { useKeydown } from "../keyboard";
 import { readDragFiles, readDragItem, useDropTarget } from "../dnd";
@@ -130,23 +136,20 @@ const fieldSize = (type: string): "date" | "text" | "money" | "checkbox" =>
 
 /** The item's editable fields on one action row that wraps only when the panel is narrow:
  * the tray's fields in order (a date with its urgency tag after it), then ``trailing``
- * (the done buttons), then the ``slot`` at the right end, where the item's and the file's
- * icon buttons are put (the title is edited in the header). ``part``: a bill shows only the
- * done buttons and icons in its top row and the fields further down. */
+ * (the done buttons). The file's icon buttons are in the screen's header (``FileActionBar``);
+ * the title is edited in the item header. ``part``: a bill shows only the done buttons in
+ * its top row and the fields further down. */
 function Fields({
   item,
   tray,
   tag,
   trailing,
-  slot,
   part = "all",
 }: {
   item: Item;
   tray: TrayDef | undefined;
   tag?: ReactNode;
   trailing?: ReactNode;
-  /** A ref callback for the element the icon buttons are rendered into. */
-  slot?: (el: HTMLElement | null) => void;
   part?: "all" | "top" | "rest";
 }) {
   const update = useItemUpdate();
@@ -189,7 +192,6 @@ function Fields({
           );
         })}
       {trailing && <div className="item-done-buttons">{trailing}</div>}
-      {part !== "rest" && slot && <div className="item-action-slot" ref={slot} />}
     </div>
   );
 }
@@ -439,6 +441,8 @@ type ItemProps = {
   onClose: () => void;
   /** Opens Quick Look on the item's file (the tray list's). */
   onQuickLook?: () => void;
+  /** The element in the screen's header the file actions are rendered into (``FileActionBar``). */
+  barSlot?: HTMLElement | null;
 };
 
 export default function ItemDetail({ id, ...rest }: ItemProps & { id: number }) {
@@ -457,7 +461,7 @@ export default function ItemDetail({ id, ...rest }: ItemProps & { id: number }) 
 /** "Mark done" unless the tray names its own done label ("Mark paid"). */
 const markLabel = (doneLabel: string) => (doneLabel === "Done" ? "Mark done" : doneLabel);
 
-function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuickLook }: ItemProps & { item: Item }) {
+function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuickLook, barSlot }: ItemProps & { item: Item }) {
   const files = useItemFiles(item.id);
   const change = useItemFileChange();
   const client = useQueryClient();
@@ -476,9 +480,8 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const actionsRef = useRef<HTMLDivElement>(null);
   const update = useItemUpdate();
   const saveTitle = async (title: string) => (await update.mutateAsync({ id: item.id, title })).title;
-  // Where the action row's icons and the file's tags are shown: in the fields row and under
-  // the title. They belong to the shown file (FileMeta), so they are portaled there.
-  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
+  // Where the file's tags are shown: under the title. They belong to the shown file
+  // (FileMeta), so they are portaled there.
   const [tagSlot, setTagSlot] = useState<HTMLElement | null>(null);
   // and the shown file's name and folder, and its preview (blocks of the file view, in order)
   const [headSlot, setHeadSlot] = useState<HTMLElement | null>(null);
@@ -654,41 +657,82 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       </>
     ) : null;
 
-  /** Quick Look is on the file preview's toolbar (it acts on the file); this row has Move
-   * to / Remove from tray, then the shown file's own actions (``ask`` is its Ask AI): one
-   * cluster of icons at the right end of the fields row. */
-  const actionRow = (ask?: ReactNode) =>
-    actionSlot &&
-    createPortal(
-    <div className="item-actions" ref={actionsRef}>
-      <span className="item-tray-actions" role="group" aria-label="This item">
-        {/* also by dragging the item onto a tray in the sidebar; this is the way without a mouse */}
-        {open && <Menu label="Move to tray" icon={<ArrowRightLeft />} entries={moveEntries} align="end" />}
-        {/* Not a bin: removing from the tray deletes nothing (the bin is To Delete). */}
-        <IconButton
-          icon={<CircleMinus />}
-          label="Remove from tray"
-          tip="Remove from this tray (the files stay where they are)"
-          disabled={moveItem.isPending}
-          onClick={() => setRemoving(true)}
-        />
-      </span>
-      {shown && (
-        <span className="item-file-actions" role="group" aria-label="This file">
-          {ask}
-          {/* the bin last, as everywhere */}
-          {canTrash(shown) && (
-            <TrashButton
-              disabled={trash.busy}
-              disabledReason={deletionRefusal(shown.path!, shown.marks)}
-              onClick={() => trashFile(shown)}
-            />
-          )}
-        </span>
-      )}
-    </div>,
-    actionSlot,
+  const moveEntries: MenuEntry[] = [...trays.values()]
+    .filter((t) => t.id !== item.tray_id)
+    .map((t) => ({ label: visible(t.name), disabled: moveItem.isPending, onSelect: () => void moveTo(t) }));
+  if (moveEntries.length === 0) moveEntries.push({ label: "No other trays", disabled: true, onSelect: () => {} });
+  // The file actions are one group of icons in the screen's header (the same bar as Browse):
+  // Move to tray / Remove from tray act on the item, the rest on the shown file.
+  const hasFile = !!shown?.path && shown.state !== "missing";
+  const filingAI = useFilingAI();
+  const batchMarks = useBatchMark();
+  const askBar = useAskAction(
+    filingAI,
+    hasFile && shown ? { drive_id: shown.drive_id, path: shown.path ?? null } : null,
+    "This item has no file",
+    trash.busy,
   );
+  // Back to inbox moves the shown file (the item stays in its tray), through the move flow:
+  // preview, confirm, Undo.
+  const fileMove = useMoveFlow();
+  const inbox = useInboxFolder();
+  const isBlocked = useIsBlocked();
+  const inboxWhy =
+    hasFile && shown
+      ? (inboxRefusal([shown.path!], inbox) ??
+        (isBlocked(shown.drive_id, shown.marks, shown.path) ? LOCKED_REASON : null) ??
+        (trash.busy || fileMove.busy ? MOVE_BUSY : null))
+      : null;
+  const markReason = hasFile && shown ? toDeleteReason(shown.path) : null;
+  const markable = hasFile && shown ? [{ drive_id: shown.drive_id, name: baseName(shown.path ?? ""), marks: shown.marks }] : [];
+  // (Move to tray is also done by dragging the item onto a tray in the sidebar; this is the
+  // way without a mouse. Remove from tray is not a bin: it deletes nothing, the bin is To Delete.)
+  const actionRow =
+    barSlot &&
+    createPortal(
+      <FileActionBar
+        barRef={actionsRef}
+        tray={open ? { label: "Move to tray", entries: moveEntries } : undefined}
+        removeFromTray={{ run: () => setRemoving(true), disabled: moveItem.isPending }}
+        backToInbox={
+          hasFile && shown
+            ? {
+                run: () => {
+                  if (inbox && !inboxWhy) fileMove.start(backToInbox([shown.drive_id], inbox, [shown.path!]));
+                },
+                reason: inboxWhy,
+              }
+            : undefined
+        }
+        ask={hasFile ? askBar : undefined}
+        star={
+          hasFile
+            ? {
+                on: allMarked(markable, "star"),
+                run: () => void batchMarks.run("star", markable),
+                disabled: batchMarks.busy,
+                reason: markReason,
+              }
+            : undefined
+        }
+        important={
+          hasFile
+            ? {
+                on: allMarked(markable, "important"),
+                run: () => void batchMarks.run("important", markable),
+                disabled: batchMarks.busy,
+                reason: markReason,
+              }
+            : undefined
+        }
+        trash={
+          shown && canTrash(shown)
+            ? { run: () => trashFile(shown), disabled: trash.busy, reason: deletionRefusal(shown.path!, shown.marks) }
+            : undefined
+        }
+      />,
+      barSlot,
+    );
 
   const quickLookButton = onQuickLook && firstPath && (
     <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
@@ -703,14 +747,9 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       tray={tray}
       tag={tag}
       trailing={doneButtons}
-      slot={setActionSlot}
       part={kind === "bill" ? "top" : "all"}
     />
   );
-  const moveEntries: MenuEntry[] = [...trays.values()]
-    .filter((t) => t.id !== item.tray_id)
-    .map((t) => ({ label: visible(t.name), disabled: moveItem.isPending, onSelect: () => void moveTo(t) }));
-  if (moveEntries.length === 0) moveEntries.push({ label: "No other trays", disabled: true, onSelect: () => {} });
 
   return (
     <FileView
@@ -861,18 +900,18 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           )}
           {trash.view}
           {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
-          {/* the action row, an item with no file included, is portaled into the fields row */}
-          {!files.isPending && !(shown?.path && shown.state !== "missing") && actionRow()}
+          {filingAI.sheet}
+          {fileMove.view}
+          {!files.isPending && actionRow}
         </>
       }
       preview={
         <>
           <div className="item-files" ref={setPreviewSlot} />
           {!files.isPending && shown?.path && shown.state !== "missing" && (
-            <FileMeta key={shown.drive_id} file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }} disabled={trash.busy}>
+            <FileMeta key={shown.drive_id} file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }} disabled={trash.busy} ai={filingAI}>
               {(meta) => (
                 <>
-                  {actionRow(meta.ask)}
                   {headSlot && createPortal(meta.header, headSlot)}
                   {tagSlot && createPortal(meta.tags, tagSlot)}
                   {previewSlot &&
@@ -882,7 +921,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
                         extraTools={
                           <>
                             {quickLookButton}
-                            {meta.marks}
                           </>
                         }
                         boxTool={{}}

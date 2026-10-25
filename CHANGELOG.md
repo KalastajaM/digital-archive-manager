@@ -72,17 +72,18 @@ All notable changes are listed here. The format follows
   notes and tray items are kept, so a restored file comes back with them.
 - The search filter `is:locked` now finds only the files you locked yourself. Important
   files are always locked, but you find them with `is:important`.
-
-- The Browse header now sits over the file list instead of the whole window: the
-  **Folder / Archive** switch, the search box with its **?**, the two-panes and **New
-  folder** buttons and the other file buttons line up with the list, and the preview
-  beside it is left clear. With two panes they sit over the left pane. On a narrow
-  list the search wraps under the buttons.
-- The buttons that act on the selected files (**Move to…**, **From…**, **For…**, **Move
-  to To Delete**) now sit at the right of the Browse header, over the file pane; the
-  two-panes and **New folder** buttons and the search stay over the list. **Star** and
-  **Important** show in the header only when several files are checked or with two panes:
-  for one file they are in its preview's toolbar.
+- The Browse header no longer spans the whole window, and the trays have the same header.
+  The left part is for the list: in Browse the
+  **Folder / Archive** switch, the search and the **New folder** and two-panes buttons, in a tray its name, count, **Add file** and **Open / Done**. The right part,
+  over the file, is one group of icon buttons for the file actions, the same in both and
+  in the same order: **Put in tray** (a menu of the trays, **Move to tray** inside a
+  tray), **Remove from tray** (in a tray), **Back to inbox** (in a tray it moves the shown file; the item stays), **Move to…**, **From…**,
+  **For…**, **Ask AI**, **Star**, **Important**, **Restore** (files in To Delete) and
+  **Move to To Delete**. In Browse they act on the selected files, **Star** and
+  **Important** also for a single file. The preview's toolbar keeps only the viewing
+  tools (zoom, select box, open, show in Finder, open in window, Quick Look), and the
+  Browse file panel no longer repeats **Put in tray** and **Back to inbox**. On a narrow
+  window the list part takes the row and the file actions follow at the right.
 - Collections are now a chip field like tags, everywhere a file's collections are set:
   the file view in Browse, a collection and a tray, the Inbox card and batch ("Also add
   to collection"), the rule sheet and the filing codes. The collections show as chips

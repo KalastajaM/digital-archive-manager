@@ -128,23 +128,25 @@ export function LinkBadges({
   );
 }
 
-/** "Put in tray": a pull-down of the trays; choosing one puts the file in it at once
- * (an item with the scan's values, as Today's "Put in" does: DB only, with Open and
- * Undo in the toast). A tray the file already has an open item in is checked, and
- * "Remove from <tray>" takes that item back (while nobody changed it since). */
-function PutInTrayMenu({ driveId, readOnly = null }: { driveId: string; readOnly?: string | null }) {
+/** The entries of a "Put in tray" menu for ``ids`` (the files a screen acts on): choosing a
+ * tray puts them in it at once (an item per file with the scan's values, as Today's "Put
+ * in" does: DB only, with Open and Undo in the toast). For one file, a tray it already
+ * has an open item in is checked, and "Remove from <tray>" takes that item back (while
+ * nobody changed it since). ``name`` is the one file's name for the toast. */
+export function usePutInTrayEntries(ids: string[], name: string | null): MenuEntry[] {
   const trays = useTrays();
-  const links = useFileLinks(driveId);
+  const single = ids.length === 1 ? ids[0] : null;
+  const links = useFileLinks(single ?? "", single !== null);
   const quick = useQuickPut();
   const list = trays.data?.trays ?? [];
-  const open = (links.data?.items ?? []).filter((i) => i.state === "open");
+  const open = single === null ? [] : (links.data?.items ?? []).filter((i) => i.state === "open");
   const entries: MenuEntry[] = list.map((t) => {
     const Icon = trayIcon(t);
     return {
       label: visible(t.name),
       icon: <Icon size={14} aria-hidden="true" />,
-      checked: open.some((i) => i.tray_id === t.id),
-      onSelect: () => void quick.put({ tray: t.id, trayName: t.name, ids: [driveId], name: null }),
+      checked: single === null ? undefined : open.some((i) => i.tray_id === t.id),
+      onSelect: () => void quick.put({ tray: t.id, trayName: t.name, ids, name }),
     };
   });
   if (list.length === 0) {
@@ -161,11 +163,18 @@ function PutInTrayMenu({ driveId, readOnly = null }: { driveId: string; readOnly
         label: `Remove from ${visible(item.tray_name)}`,
         onSelect: () =>
           void quick.takeBack([item], visible(item.tray_name), () =>
-            void quick.put({ tray: item.tray_id, trayName: item.tray_name, ids: [driveId], name: null }),
+            void quick.put({ tray: item.tray_id, trayName: item.tray_name, ids, name }),
           ),
       });
     }
   }
+  return entries;
+}
+
+/** "Put in tray" as a text pull-down (a collection's file panel; Browse has it as an icon
+ * in the header's file actions). */
+function PutInTrayMenu({ driveId, readOnly = null }: { driveId: string; readOnly?: string | null }) {
+  const entries = usePutInTrayEntries([driveId], null);
   if (readOnly) {
     return (
       <span className="button-wrap" data-tip={readOnly}>
@@ -316,20 +325,24 @@ export function FileActions({
   backToInbox,
   readOnly = null,
   restore,
+  headerActions = false,
 }: {
   driveId: string;
   backToInbox?: BackToInbox;
+  /** The screen's header carries Put in tray and Back to inbox: only Restore stays here. */
+  headerActions?: boolean;
   /** Why the file cannot be changed (null: it can): a file in To Delete. */
   readOnly?: string | null;
   /** A file in To Delete: Restore it to where it was or to the inbox. */
   restore?: (to: RestoreTo) => void;
 }) {
+  if (headerActions && !restore) return null;
   return (
     <div className="file-actions">
       <div className="actions">
-        <PutInTrayMenu driveId={driveId} readOnly={readOnly} />
+        {!headerActions && <PutInTrayMenu driveId={driveId} readOnly={readOnly} />}
         {restore && <RestoreButtons restore={restore} />}
-        {backToInbox &&
+        {!headerActions && backToInbox &&
           (backToInbox.refusal ? (
             <span className="button-wrap" data-tip={backToInbox.refusal}>
               <button type="button" disabled>

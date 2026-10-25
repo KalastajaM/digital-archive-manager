@@ -1,4 +1,4 @@
-import { ArchiveRestore, Building2, ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderInput, FolderPlus, User } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderPlus } from "lucide-react";
 import {
   type DragEvent,
   Fragment,
@@ -29,7 +29,7 @@ import {
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
 import type { PreviewFile } from "../components/FilePreview";
-import { BUILTIN_LABEL, ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
+import { BUILTIN_LABEL, MarkIcons } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
 import { type RestoreTo, type RestoreWhere, restoreEntries, useRestoreFlow } from "../components/Restore";
 import {
@@ -46,7 +46,7 @@ import {
   useInboxFolder,
   useMoveFlow,
 } from "../components/MoveTo";
-import { isTrashKey, TRASH_BUSY, TrashButton, useTrash } from "../components/Trash";
+import { isTrashKey, TRASH_BUSY, useTrash } from "../components/Trash";
 import { undoAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { useNewFolder } from "../components/NewFolder";
@@ -71,6 +71,9 @@ import { inToDelete, toDeleteReasonFor } from "../toDelete";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
+import { FileActionBar, useAskAction } from "../components/FileActionBar";
+import { useFilingAI } from "../components/ai/useFilingAI";
+import { usePutInTrayEntries } from "./FileActions";
 import { SEARCH_DEBOUNCE_MS, useSearch } from "./useSearch";
 import { filterToken, positiveTags, readQuery, sameFilter, type SearchFilter, serializeQuery, splitSearch, withFilter } from "../searchFilters";
 import { FilterBar, SearchSuggestions, type TagMode } from "../components/TagSearch";
@@ -1040,11 +1043,15 @@ export default function Browse() {
   // (Files that cannot be moved can still be marked.)
   const marks = useBatchMark();
   const starAll = allMarked(moveTargets, "star");
-  // A single file is starred from its preview's toolbar; the header does it for several
-  // checked files, and in two panes (no preview there).
-  const batchMarks = split || checked.length > 1;
   const importantAll = allMarked(moveTargets, "important");
   const batchMark = (kind: "star" | "important") => marks.run(kind, moveTargets);
+  // The header's file actions: Put in tray (a pull-down of the trays) and Ask AI work on
+  // the selected files / the one file the preview shows.
+  const trayEntries = usePutInTrayEntries(
+    moveTargets.map((it) => it.drive_id),
+    moveTargets.length === 1 ? moveTargets[0].name : null,
+  );
+  const filingAI = useFilingAI();
   const startRequest = (request: MoveRequest) => {
     if (running()) {
       toast({ kind: "info", text: MOVE_BUSY }); // accept refuses this already; never silent
@@ -1151,6 +1158,21 @@ export default function Browse() {
   // a folder on the cursor shows its own panel: its collections and Add to collection
   const folderShown: Item | null =
     !split && sel.touched && currentItem?.is_dir && !gone.has(currentItem.drive_id) ? currentItem : null;
+  // Back to inbox for the selected files: why not (the inbox is unknown, they are there already, locked)
+  const inboxWhy =
+    moveTargets.length === 0
+      ? null
+      : (inboxRefusal(moveTargets.map((it) => it.path), inbox) ??
+        (lockedIn(moveTargets) ? LOCKED_REASON : null) ??
+        (locked ? MOVE_BUSY : null));
+  // Ask AI works on one file, the one the preview shows (two panes have no details to
+  // show its answer in)
+  const askBar = useAskAction(
+    filingAI,
+    previewed && moveTargets.length === 1 && moveTargets[0].drive_id === previewed.drive_id ? previewed : null,
+    split ? "Ask AI works on one file: use one pane" : "Select one file to ask AI",
+    locked,
+  );
   const open = (pane: PaneId, item: Item | undefined) => {
     if (item?.is_dir) go(pane, item.path);
   };
@@ -1747,66 +1769,69 @@ export default function Browse() {
         }
         search={searchBox}
         trailing={
-          <>
-            <IconButton
-              icon={<FolderInput />}
-              label="Move to…"
-              shortcut="⇧⌘M"
-              disabled={moveTargets.length === 0 || moveBlocked !== null || locked}
-              disabledReason={moveBlocked ?? undefined}
-              onClick={openMoveTo}
-            />
-            <IconButton
-              icon={<Building2 />}
-              label="From…"
-              tip="Say who sent these documents"
-              disabled={moveTargets.length === 0 || locked || readOnlyWhy !== null}
-              disabledReason={readOnlyWhy ?? undefined}
-              onClick={() => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) })}
-            />
-            <IconButton
-              icon={<User />}
-              label="For…"
-              tip="Say who these documents are for"
-              disabled={moveTargets.length === 0 || locked || readOnlyWhy !== null}
-              disabledReason={readOnlyWhy ?? undefined}
-              onClick={() => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) })}
-            />
-            {batchMarks && (
-              <>
-              <IconButton
-                icon={<StarGlyph size={16} filled={starAll} />}
-                label={starAll ? "Remove the star" : "Star"}
-                pressed={starAll}
-                disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
-                disabledReason={readOnlyWhy ?? undefined}
-                onClick={() => void batchMark("star")}
-              />
-              <IconButton
-                icon={<ImportantGlyph large />}
-                label={importantAll ? "Unmark Important" : "Mark Important"}
-                pressed={importantAll}
-                disabled={moveTargets.length === 0 || marks.busy || readOnlyWhy !== null}
-                disabledReason={readOnlyWhy ?? undefined}
-                onClick={() => void batchMark("important")}
-              />
-              </>
-            )}
-            {markTargets.some((it) => inToDelete(it.path)) && (
-              <Menu
-                label="Restore from To Delete"
-                icon={<ArchiveRestore />}
-                align="end"
-                entries={restoreEntries((to) => startRestore(markIds, to), restoreWhy)}
-              />
-            )}
-            <TrashButton
-              count={markIds.length}
-              disabled={markIds.length === 0 || marking.busy}
-              disabledReason={markBlocked}
-              onClick={trashSelection}
-            />
-          </>
+          <FileActionBar
+            tray={{
+              label: "Put in tray",
+              entries: trayEntries,
+              disabled: moveTargets.length === 0 || locked,
+              reason: readOnlyWhy,
+            }}
+            backToInbox={{
+              run: () => {
+                if (inbox && !inboxRefusal(moveTargets.map((it) => it.path), inbox)) {
+                  startRequest(
+                    backToInbox(
+                      moveTargets.map((it) => it.drive_id),
+                      inbox,
+                      moveTargets.map((it) => it.path),
+                    ),
+                  );
+                }
+              },
+              disabled: moveTargets.length === 0 || locked,
+              reason: inboxWhy,
+            }}
+            moveTo={{
+              run: openMoveTo,
+              shortcut: "⇧⌘M",
+              disabled: moveTargets.length === 0 || locked,
+              reason: moveBlocked,
+            }}
+            sender={{
+              run: () => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) }),
+              disabled: moveTargets.length === 0 || locked,
+              reason: readOnlyWhy,
+            }}
+            person={{
+              run: () => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) }),
+              disabled: moveTargets.length === 0 || locked,
+              reason: readOnlyWhy,
+            }}
+            ask={askBar}
+            star={{
+              on: starAll,
+              run: () => void batchMark("star"),
+              disabled: moveTargets.length === 0 || marks.busy,
+              reason: readOnlyWhy,
+            }}
+            important={{
+              on: importantAll,
+              run: () => void batchMark("important"),
+              disabled: moveTargets.length === 0 || marks.busy,
+              reason: readOnlyWhy,
+            }}
+            restore={
+              markTargets.some((it) => inToDelete(it.path))
+                ? { entries: restoreEntries((to) => startRestore(markIds, to), restoreWhy) }
+                : undefined
+            }
+            trash={{
+              count: markIds.length,
+              run: trashSelection,
+              disabled: markIds.length === 0 || marking.busy,
+              reason: markBlocked,
+            }}
+          />
         }
       />
       {marking.message && (
@@ -1843,17 +1868,7 @@ export default function Browse() {
                   disabled={locked}
                   restore={(to) => startRestore([previewed.drive_id], to)}
                   boxTool
-                  backToInbox={{
-                    refusal:
-                      inboxRefusal([previewed.path], inbox) ??
-                      (isBlocked(previewed.drive_id, previewed.marks, previewed.path) ? LOCKED_REASON : null) ??
-                      (locked ? MOVE_BUSY : null),
-                    run: () => {
-                      if (inbox && !inboxRefusal([previewed.path], inbox)) {
-                        startRequest(backToInbox([previewed.drive_id], inbox));
-                      }
-                    },
-                  }}
+                  headerActions={{ ai: filingAI }}
                 />
               ) : folderShown ? (
                 <FolderPanel
@@ -1875,6 +1890,7 @@ export default function Browse() {
       <KeyHints hints={KEYS} className="browse-keys" />
       {quickLook.view}
       {move.view}
+      {filingAI.sheet}
       {moveTo && (
         <MoveToSheet
           names={moveTo.names}

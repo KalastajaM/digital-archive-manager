@@ -276,6 +276,8 @@ function TrayPage({ today: fixed }: { today?: string }) {
   const list = useMemo(() => (trayId ? (items.data ?? []) : []), [trayId, items.data]);
   const opened = Number(search.get("item")) || null;
   const [doneAt, setDoneAt] = useState<DoneAt>(null);
+  // where the open item's file actions are drawn: the right part of the header
+  const [barSlot, setBarSlot] = useState<HTMLElement | null>(null);
   // "Add file": search the index and put the chosen file in this tray as a new item
   const [addingFile, setAddingFile] = useState(false);
   const quickPut = useQuickPut();
@@ -386,8 +388,9 @@ function TrayPage({ today: fixed }: { today?: string }) {
 
   useKeydown((e) => {
     if (!isShortcut(e)) return;
-    // The list's keys belong to the list: never while the focus is in the item panel.
-    if (e.target instanceof Element && e.target.closest(".trays-detail")) return;
+    // The list's keys belong to the list: never while the focus is in the item panel or on
+    // the file actions in the header.
+    if (e.target instanceof Element && e.target.closest(".trays-detail, .toolbar-trailing")) return;
     if (e.key === "j" || e.key === "ArrowDown") move(1);
     else if (e.key === "k" || e.key === "ArrowUp") move(-1);
     else if (e.key === "Enter") {
@@ -514,14 +517,14 @@ function TrayPage({ today: fixed }: { today?: string }) {
   else if (items.data) subtitle = `${list.length} ${state}`;
 
   return (
-    <div className="trays" ref={split.hostRef} style={split.hostStyle}>
-      <section className="trays-list" aria-label="Tray items">
-        <Toolbar
-          stacked
-          title={visible(tray?.name ?? trayId)}
-          subtitle={subtitle}
-          actions={
-            <>
+    <div className="trays">
+      <Toolbar
+        className="trays-toolbar"
+        style={split.hostStyle}
+        title={visible(tray?.name ?? trayId)}
+        subtitle={subtitle}
+        actions={
+          <>
             <TipButton
               className="tray-add-file"
               tip="Add another file to the tray"
@@ -541,9 +544,12 @@ function TrayPage({ today: fixed }: { today?: string }) {
                 { value: "done", label: "Done" },
               ]}
             />
-            </>
-          }
-        />
+          </>
+        }
+        trailing={<div className="file-action-slot" ref={setBarSlot} />}
+      />
+      <div className="trays-main" ref={split.hostRef} style={split.hostStyle}>
+      <section className="trays-list" aria-label="Tray items">
         {addingFile && tray && (
           <AddFile
             taken={list.flatMap((i) => i.files)}
@@ -576,11 +582,13 @@ function TrayPage({ today: fixed }: { today?: string }) {
             setDone={(mode) => setDoneAt(mode ? { id: opened, mode } : null)}
             onClose={() => setSearch(query(state, null))}
             onQuickLook={current?.id === opened ? quickLook.open : undefined}
+            barSlot={barSlot}
           />
         ) : (
           <EmptyState title="No item selected" hint="Select an item to see its details, files, note and history." />
         )}
       </section>
+      </div>
       {quickLook.view}
       {trash.view}
       {merging && (

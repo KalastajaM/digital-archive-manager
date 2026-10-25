@@ -9,9 +9,10 @@
  * reason as their tooltip. */
 import { FolderInput, Sparkles } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { errorText, type FilingSuggestion, LOCKED_REASON, type Mark, useFileDetail, useFileLock, usePutFileTags } from "../api/client";
+import { errorText, LOCKED_REASON, type Mark, useFileDetail, useFileLock, usePutFileTags } from "../api/client";
 import { visible } from "../text";
-import { useAISend, useAIState } from "./ai/useAI";
+import { useAIState } from "./ai/useAI";
+import { type FilingAI, useFilingAI } from "./ai/useFilingAI";
 import { LockControl } from "./LockControl";
 import { MarkToggles } from "./MarkToggles";
 import { MoveToSheet, sourceRefusal, useMoveFlow } from "./MoveTo";
@@ -68,10 +69,14 @@ export type MetaParts = {
 export function FileMeta({
   file,
   disabled = false,
+  ai: given,
   children,
 }: {
   file: MetaFile;
   disabled?: boolean;
+  /** The screen's own "Ask AI" (its header button): this file's answer shows here as chips,
+   * and the screen renders the "What will be sent" sheet. Else this component has its own. */
+  ai?: FilingAI;
   children: (parts: MetaParts) => ReactNode;
 }) {
   const id = file.drive_id;
@@ -93,9 +98,9 @@ export function FileMeta({
   const busy = disabled || move.busy || move.confirming;
 
   const aiState = useAIState();
-  const [heldAnswer, setAnswer] = useState<FilingSuggestion | null>(null);
-  const answer = aiState.on ? heldAnswer : null;
-  const ai = useAISend<FilingSuggestion>("suggest-filing", setAnswer);
+  const own = useFilingAI();
+  const ai = given ?? own;
+  const answer = aiState.on ? ai.answerFor(id) : null;
   const aiOffer = (value: string | null | undefined, confidence?: number): Offer | null =>
     value ? { value, source: AI_SOURCE, note: aiNote(confidence, answer?.reason) } : null;
   const nameOffers = offersFor(name, [aiOffer(answer?.name, answer?.confidence.name)]);
@@ -202,7 +207,7 @@ export function FileMeta({
       tip="Ask AI to suggest a name, folder and tags"
       disabled={refusal !== null || busy || ai.busy || !aiState.on}
       disabledReason={refusal ?? (aiState.off ? "AI is off: Activity → AI turns it on" : undefined)}
-      onClick={() => ai.ask({ drive_id: id })}
+      onClick={() => ai.ask(id)}
     />
   );
   const marks = <MarkToggles driveId={id} name={name} marks={file.marks} path={file.path} />;
@@ -219,7 +224,7 @@ export function FileMeta({
   return (
     <>
       {children({ header, marks, ask, tags })}
-      {ai.sheet}
+      {own.sheet}
       {move.view}
       {picking && (
         <MoveToSheet
