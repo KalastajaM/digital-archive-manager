@@ -27,6 +27,7 @@ from dam.api.marks import collection_out, collections_out
 from dam.api.schemas import (
     CollectionChangeOut,
     CollectionCreateBody,
+    CollectionMoveBody,
     CollectionOut,
     CollectionRowOut,
     DriveIdBody,
@@ -163,6 +164,27 @@ def set_parent(app: AppDep, collection_id: int, body: ParentBody) -> dict:
     c = app.collections.set_parent(collection_id, body.parent_id, notify=False)
     where = f"into {_name(app, body.parent_id)}" if body.parent_id is not None else "to the top"
     return _synced(app, collection_id, f"Moved collection {c.name} {where}")
+
+
+@router.post("/{collection_id}/move", response_model=CollectionChangeOut)
+def move(app: AppDep, collection_id: int, body: CollectionMoveBody) -> dict:
+    """Put the collection before or after another (the built-in ★ and ! stay first and
+    cannot move or be moved beside). With a sibling only the order changes: no preview,
+    no batch and no sync. With a collection of another parent it goes into that parent
+    too, as ``PATCH .../parent`` does (cycle 400, closed parent 409, Ongoing sync)."""
+    old = app.collections.get(collection_id)
+    c = app.collections.move(
+        collection_id, before_id=body.before_id, after_id=body.after_id, notify=False
+    )
+    if c.parent_id != old.parent_id:
+        where = f"into {_name(app, c.parent_id)}" if c.parent_id is not None else "to the top"
+        return _synced(app, collection_id, f"Moved collection {c.name} {where}")
+    return {
+        "collection": collection_out(app, c),
+        "batch": None,
+        "problems": [],
+        "ongoing_status": c.ongoing_status,
+    }
 
 
 @router.post("/{collection_id}/members", response_model=CollectionChangeOut)

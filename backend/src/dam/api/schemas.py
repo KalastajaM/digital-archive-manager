@@ -132,6 +132,14 @@ class CollectionCreateBody(_In):
     parent_id: int | None = None  # None: at the top
 
 
+class CollectionMoveBody(_In):
+    """Where to put a collection among its siblings: just before ``before_id`` or just
+    after ``after_id`` (give exactly one)."""
+
+    before_id: int | None = None
+    after_id: int | None = None
+
+
 class ParentBody(_In):
     """The new parent collection; required, null for the top."""
 
@@ -1050,6 +1058,8 @@ class CollectionOut(BaseModel):
     path: list[str]  # the names from the root down to this collection
     # the built-in ★ Ongoing ("starred") or ! Important ("important"); None: ordinary
     kind: Mark | None
+    # the owner's order among the collections with the same parent (0, 1, ...)
+    position: int
 
 
 class CollectionRowOut(CollectionOut):

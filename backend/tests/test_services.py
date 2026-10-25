@@ -597,7 +597,7 @@ def test_undo_removes_created_items_memberships_note(app, fake_archive):
     [item_id] = outcome.items
     assert app.notes.get("item", str(item_id)) == "paid?"
     assert app.notes.get("file", "id-a") == ""
-    assert [c.name for c in app.collections.for_file("id-a")] == ["Remont", "Sauna"]
+    assert [c.name for c in app.collections.for_file("id-a")] == ["Sauna", "Remont"]
     assert app.collections.by_name("Sauna").id == existing.id  # reused, case-insensitively
     undo = app.activity.undo(outcome.batch.batch_id)
     assert undo.batch.failed is None and undo.batch.error is None

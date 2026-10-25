@@ -142,7 +142,7 @@ def test_list_by_state_sorted(svc):
     svc.close(b.id)
     assert [c.name for c in svc.list()] == ["A"]
     assert [c.name for c in svc.list("closed")] == ["b"]
-    assert [c.name for c in svc.list(None)] == ["A", "b"]
+    assert [c.name for c in svc.list(None)] == ["b", "A"]  # in the order they were made
     with pytest.raises(InvalidRequest):
         svc.list("bogus")
 
@@ -279,7 +279,7 @@ def test_for_file_via_folder_member(svc, tree):
     svc.add_members(closed_c.id, ["f2"])
     svc.add_members(other.id, ["d-sib"])
     svc.close(closed_c.id)
-    assert [c.name for c in svc.for_file("f2")] == ["alpha", "Zed"]  # nested, closed counts
+    assert [c.name for c in svc.for_file("f2")] == ["Zed", "alpha"]  # nested, closed counts
     assert [c.name for c in svc.for_file("f-sib")] == ["Other"]  # not the "Sauna" prefix
     assert svc.for_file("solo") == []
     assert svc.for_file("nope") == []

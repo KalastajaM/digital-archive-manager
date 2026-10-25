@@ -4,7 +4,15 @@ import { groupDigits, plural } from "../format";
 /** Parent collections: the tree of a collection list, paths and where a collection may
  * move. Names are unique across all collections, so a path of names names one. */
 
-type Node = { id: number; name: string; parent_id?: number | null; path?: string[]; state?: "open" | "closed" };
+type Node = {
+  id: number;
+  name: string;
+  parent_id?: number | null;
+  path?: string[];
+  state?: "open" | "closed";
+  /** The owner's order among the collections with the same parent. */
+  position?: number;
+};
 
 /** Between the names of a path, as Finder shows a path. */
 export const PATH_SEP = " › ";
@@ -19,7 +27,10 @@ export const pathOf = (c: Node): string[] => (c.path && c.path.length > 0 ? c.pa
 /** "Houses › 2026 Sauna conversion". Pass the result through ``visible`` to show it. */
 export const pathLabel = (c: Node): string => pathOf(c).join(PATH_SEP);
 
-/** The collections by parent id (null: the top), A–Z on each level. A collection whose
+/** The owner's order among siblings: by position, then A–Z. */
+export const byPosition = (a: Node, b: Node) => (a.position ?? 0) - (b.position ?? 0) || byName(a, b);
+
+/** The collections by parent id (null: the top), in the owner's order on each level (then A–Z). A collection whose
  * parent is not in the list (a closed one's open parent in the Closed list) is at the
  * top here. */
 export function childrenOf<T extends Node>(list: readonly T[]): Map<number | null, T[]> {
@@ -31,7 +42,7 @@ export function childrenOf<T extends Node>(list: readonly T[]): Map<number | nul
     if (level) level.push(c);
     else out.set(parent, [c]);
   }
-  for (const level of out.values()) level.sort(byName);
+  for (const level of out.values()) level.sort(byPosition);
   return out;
 }
 
@@ -92,6 +103,37 @@ export function countsOf(c: CollectionRow, collections = 0): string {
   if (c.groups.length > 0) parts.push(plural(c.groups.length, "group"));
   if (c.open_checks > 0) parts.push(plural(c.open_checks, "open check"));
   return parts.join(" · ");
+}
+
+/** Where a dragged collection is over a row: the top third puts it before the row, the
+ * bottom third after it, the middle third inside it (null). */
+export function dropZone(clientY: number, rect: { top: number; height: number }): "before" | "after" | null {
+  if (rect.height <= 0) return null;
+  const at = (clientY - rect.top) / rect.height;
+  return at < 1 / 3 ? "before" : at > 2 / 3 ? "after" : null;
+}
+
+/** The siblings of ``c`` in ``list`` (itself included), in the owner's order. */
+export function siblingsOf<T extends Node>(list: readonly T[], c: Node): T[] {
+  return childrenOf(list).get(c.parent_id != null && list.some((x) => x.id === c.parent_id) ? c.parent_id : null) ?? [];
+}
+
+/** ``list`` depth-first in the owner's order (a parent before its own, siblings by
+ * position, then A–Z): the order the API lists them in, for a list that may not be. */
+export function inTreeOrder<T extends Node>(list: readonly T[]): T[] {
+  const kids = childrenOf(list);
+  const out: T[] = [];
+  const seen = new Set<number>();
+  const walk = (parent: number | null) => {
+    for (const c of kids.get(parent) ?? []) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push(c);
+      walk(c.id);
+    }
+  };
+  walk(null);
+  return out;
 }
 
 /** Tree order: by the names of the path, A–Z on each level (a parent before its own). */

@@ -8,6 +8,16 @@ import { type CollectionRow, errorText, useCollections, useCreateCollection } fr
 import { COLLECTION_NAME_MAX } from "../components/CollectionPicker";
 import { sentence } from "../components/collectionText";
 import { childrenOf, countsOf, PATH_SEP, pathOf } from "../components/collectionTree";
+import {
+  type CollectionOrder,
+  orderKeys,
+  useCollectionDragging,
+  useCollectionOrder,
+  useMoveCollection,
+  useOrderMenu,
+  useReorderRow,
+} from "../components/useCollectionOrder";
+import { readDragCollection, setDragCollection, useDropTarget } from "../dnd";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Tag } from "../components/ui/Tag";
 import { Segmented } from "../components/ui/Segmented";
@@ -73,9 +83,38 @@ function NewCollection({ onCreated }: { onCreated: (id: number) => void }) {
 
 /** One collection of the index. ``where``: the parent path of one whose parent is not
  * in this list (a closed collection inside an open one). */
-function Row({ c, href, collections, where }: { c: CollectionRow; href: string; collections: number; where?: string }) {
+function Row({
+  c,
+  href,
+  collections,
+  where,
+  order,
+  onMenu,
+  mover,
+}: {
+  c: CollectionRow;
+  href: string;
+  collections: number;
+  where?: string;
+  order: CollectionOrder;
+  onMenu: (c: CollectionRow) => (e: React.MouseEvent) => void;
+  mover: ReturnType<typeof useMoveCollection>;
+}) {
+  // a dragged collection: top or bottom third puts it before or after this row (a drop
+  // line), the middle third inside it (highlighted)
+  const target = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(c), onDrop: mover.move(c) });
+  const reorder = useReorderRow(order, c, target.props);
   return (
-    <article className="collection-row" aria-label={visible(c.name)}>
+    <article
+      className="collection-row"
+      aria-label={visible(c.name)}
+      data-collection-id={c.id}
+      draggable
+      onDragStart={(e) => setDragCollection(e, c.id, c.name)}
+      onKeyDown={orderKeys(order, c)}
+      onContextMenu={onMenu(c)}
+      {...reorder.props}
+    >
       <Layers className="collection-row-icon" size={18} strokeWidth={1.75} aria-hidden="true" />
       <div className="collection-row-main">
         <p className="collection-row-title">
@@ -113,6 +152,11 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
   const navigate = useNavigate();
   const list = useCollections(state);
   const suffix = state === "closed" ? "?state=closed" : "";
+  const order = useCollectionOrder(list.data ?? []);
+  const menu = useOrderMenu(order);
+  const mover = useMoveCollection(list.data ?? [], () => {});
+  const dragging = useCollectionDragging();
+  const top = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
 
   let body: ReactNode;
   if (list.isPending) body = <p className="placeholder">Loading…</p>;
@@ -140,7 +184,7 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
         const where = c.parent_id != null && !ids.has(c.parent_id) && parent.length > 0 ? parent.join(PATH_SEP) : undefined;
         return (
           <li key={c.id}>
-            <Row c={c} href={`/collections/${c.id}${suffix}`} collections={under.length} where={where} />
+            <Row c={c} href={`/collections/${c.id}${suffix}`} collections={under.length} where={where} order={order} onMenu={menu.onContextMenu} mover={mover} />
             {under.length > 0 && <ul className="collection-list collection-children-list">{branch(under)}</ul>}
           </li>
         );
@@ -171,7 +215,13 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
       />
       <div className="collections-index-body">
         {state === "open" && <NewCollection onCreated={(id) => navigate(`/collections/${id}`)} />}
+        {dragging && (
+          <p className="collections-top-drop hint" {...top.props}>
+            Drop here to move it to the top level, last
+          </p>
+        )}
         {body}
+        {menu.element}
       </div>
     </div>
   );

@@ -2144,3 +2144,14 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .click-edit:hover:not(:disabled) { text-decoration: underline dotted; text-underline-offset: 3px; }
 .click-edit:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
 .click-edit:disabled { cursor: default; }
+
+/* Putting a collection before or after a sibling: a line at the edge it will land on. */
+[data-reorder] { position: relative; }
+[data-reorder="before"]::before, [data-reorder="after"]::before {
+  content: ""; position: absolute; left: var(--sp-2); right: var(--sp-2); height: 3px;
+  border-radius: 2px; background: var(--accent); pointer-events: none;
+}
+[data-reorder="before"]::before { top: -2px; }
+[data-reorder="after"]::before { bottom: -2px; }
+
+.collections-top-drop { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--separator); border-radius: var(--r-lg); text-align: center; }

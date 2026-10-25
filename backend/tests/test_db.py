@@ -115,7 +115,7 @@ PHASE2_COLUMNS = {
     "reminders_sent": ["item_id", "rule", "occasion", "fired_at", "channels"],
     "collections": [
         "id", "name", "name_fold", "state", "created", "closed_at", "publish", "ongoing_rel",
-        "ongoing_status", "summary", "parent_id", "kind",
+        "ongoing_status", "summary", "parent_id", "kind", "position",
     ],
     "collection_members": [
         "collection_id", "drive_id", "added", "created_by_batch", "group_id", "link_name",

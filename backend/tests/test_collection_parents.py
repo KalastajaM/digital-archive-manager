@@ -192,13 +192,14 @@ def test_tree_order(svc):
     svc.create("Attic", parent_id=houses.id)
     svc.create("Zebra")
     svc.create("bench", parent_id=sauna.id)
+    # siblings in the order they were made (new ones go last), depth-first
     assert names(svc.list()) == [
-        ("apple", ["apple"]),
         ("Houses", ["Houses"]),
-        ("Attic", ["Houses", "Attic"]),
         ("Sauna", ["Houses", "Sauna"]),
-        ("bench", ["Houses", "Sauna", "bench"]),
         ("Deck", ["Houses", "Sauna", "Deck"]),
+        ("bench", ["Houses", "Sauna", "bench"]),
+        ("Attic", ["Houses", "Attic"]),
+        ("apple", ["apple"]),
         ("Zebra", ["Zebra"]),
     ]
 
@@ -211,7 +212,7 @@ def test_tree_order_with_a_state_filter_keeps_full_paths(svc):
     svc.create("Zebra")
     assert names(svc.list("closed")) == [("Sauna", ["Houses", "Sauna"])]
     assert [c.name for c in svc.list()] == ["Houses", "Attic", "Zebra"]
-    assert [c.name for c in svc.list(None)] == ["Houses", "Attic", "Sauna", "Zebra"]
+    assert [c.name for c in svc.list(None)] == ["Houses", "Sauna", "Attic", "Zebra"]
     assert svc.get(attic.id).path == ["Houses", "Attic"]
 
 
@@ -262,7 +263,7 @@ def test_migration_0015_upgrades_a_db_at_0014(tmp_path: Path, new_engine):
         conn.execute(text("INSERT INTO collection_members VALUES (1, 'd1', 1.0, NULL, NULL)"))
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0031"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0032"
         assert conn.execute(
             text("SELECT name, parent_id FROM collections WHERE kind IS NULL")
         ).one() == (
@@ -298,7 +299,7 @@ def test_migration_0016_upgrades_a_db_at_0015(tmp_path: Path, new_engine):
         )
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0031"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0032"
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(ongoing_switched)"))]
         assert cols == ["id", "batch_id", "collection_id", "rel", "link_value", "created"]
         fks = [
@@ -345,8 +346,8 @@ def test_parent_routes(client, app):
     rows = client.get("/api/collections").json()
     assert [(c["name"], c["path"]) for c in rows] == [
         ("Houses", ["Houses"]),
-        ("Attic", ["Houses", "Attic"]),
         ("Sauna", ["Houses", "Sauna"]),
+        ("Attic", ["Houses", "Attic"]),  # moved in last: at the end of its new siblings
     ]
 
     r = send(client, "PATCH", f"/api/collections/{houses['id']}/parent", {"parent_id": sauna["id"]})

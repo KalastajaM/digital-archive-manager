@@ -26,6 +26,20 @@ All notable changes are listed here. The format follows
 - The Folder field of the rule sheet has a "…" button that opens the folder browser and
   puts the path you pick in the field. Patterns such as `{person}` and `{year}` can still
   be typed.
+- You can change the order of your collections. Drag a collection onto another one in the
+  sidebar or on the Collections page: the top third of a row puts it before, the bottom
+  third after (a line shows where), the middle third inside it (the row is highlighted).
+  Dropping beside a row of another level also moves it to that level, so a nested
+  collection can be dragged back out; dropping on the Collections heading moves it to the
+  top level. Alt+Up, Alt+Down and Alt+Left, or Move up, Move down and Move out one level
+  in the right-click menu or the ... menu, do the same from the keyboard. Important and
+  Starred always stay on top. Collections you had keep their A to Z order until you change
+  it; new ones go last.
+
+- In Starred and Important, clicking a file opens Browse in the folder the file sits in,
+  with the file selected and previewed. In other collections a click works as before, and
+  Show in folder in the file's panel does the same.
+
 - A lock on files, a safety catch against slips. A locked file can still be viewed, tagged
   and described, but it cannot be renamed, moved (also by drag and drop, Move to… or Back
   to inbox), filed from the Inbox or moved to To Delete. Files marked Important are always

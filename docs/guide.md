@@ -832,10 +832,34 @@ preview first.
 ### Parent collections
 
 A collection can live inside another, to any depth: `Houses › Sauna › Deck`. Drag it onto
-another collection in the sidebar (or onto the **Collections** caption for the top level),
+the middle of another collection in the sidebar or on the Collections page (or onto the
+**Collections** caption for the top level; see Order of collections),
 or use **Move to…** in its **⋯** menu; **New collection inside…** creates a child. In
 `##. Ongoing` a child is a folder inside its parent's folder. A parent with open children
 cannot be closed, and a child under a closed parent cannot be reopened.
+
+### Order of collections
+
+Collections are listed in your own order: **Important** and **Starred** always come first
+and cannot be moved; the others follow in the order you give them, among the collections
+with the same parent. A new collection goes at the end of its siblings, and so does one
+you move into another.
+
+Drag a collection (in the sidebar or on the **Collections** page) onto another row. The row
+has three zones. The **top third** puts the dragged collection just before the row and the
+**bottom third** just after it, shown by a line. The **middle third** puts it inside that
+collection, shown by a highlighted row. When the row belongs to another parent, the line
+moves the collection to that parent as well, at that place: that is how you take a nested
+collection back out. Dropping on the **Collections** heading in the sidebar (or on the
+strip that appears above the list on the Collections page while you drag) moves it to the
+top level, as the last one. A collection cannot go inside itself or one of its own
+collections.
+
+From the keyboard, press **Alt+↑** or **Alt+↓** on a collection, or use **Move up** and
+**Move down** in its right-click menu (sidebar and page) or in the **⋯** menu on its page.
+For a nested collection **Move out one level** (or **Alt+←**) puts it right after its
+parent. Each move is announced. A move within one parent changes only the order: no file
+or link moves.
 
 ### Groups
 
@@ -879,6 +903,11 @@ Two marks for files you need often, without making a collection:
 - **! Important** is for documents that must always be easy to find: passports, deeds.
   They show in the sidebar's **Important** row and as links in `##. Important`, where
   they can be arranged in groups (such as `Houses › Hillside`).
+
+Clicking a file in **Starred** or **Important** opens Browse in the folder the file sits
+in, with the file selected and previewed; Back returns to the list. In an ordinary
+collection a click keeps you on the collection's page, and **Show in folder** in the
+file's panel does the same.
 
 Mark or unmark with one click wherever a file is shown. **Marking never moves or renames
 a file.** A file marked Important cannot be moved to To Delete (unmark it first), nor can

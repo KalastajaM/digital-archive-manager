@@ -516,6 +516,7 @@ const SAUNA: CollectionRow = {
   parent_id: null,
   path: ["Sauna"],
   kind: null,
+  position: 0,
   files: 0,
   open_checks: 0,
 };

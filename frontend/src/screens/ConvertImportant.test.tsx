@@ -203,6 +203,7 @@ const IMPORTANT: Collection = {
   parent_id: null,
   path: ["Important"],
   kind: "important",
+  position: 0,
 };
 
 describe("the Important page and its sidebar row", () => {
