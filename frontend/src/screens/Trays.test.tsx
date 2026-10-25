@@ -1650,22 +1650,44 @@ describe("The item view layout", () => {
     window.localStorage.clear();
   });
 
-  it("has no separate Title field; clicking the title or its pencil opens it, Esc cancels", async () => {
+  it("has no separate Title field; clicking the title (no pencil) or Enter / Space on it opens it, Esc cancels", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1");
-    const heading = await within(await screen.findByRole("region", { name: "Item" })).findByRole("heading", { name: "Northpower sähkö" });
+    await within(await screen.findByRole("region", { name: "Item" })).findByRole("heading", { name: "Northpower sähkö" });
     expect(within(detail()).queryByLabelText("Title")).not.toBeInTheDocument();
-    expect(within(detail()).getByRole("button", { name: "Edit title" })).toBeInTheDocument();
+    const clickable = within(detail()).getByRole("button", { name: "Edit title" });
+    expect(clickable).toHaveAttribute("title", "Click to edit the title");
+    expect(clickable).toHaveTextContent("Northpower sähkö");
+    expect(within(detail()).getAllByRole("button", { name: /title/i })).toHaveLength(1); // no pencil beside it
 
-    await user.click(heading);
+    await user.click(clickable);
     let field = within(detail()).getByLabelText("Title");
     expect(field).toHaveValue("Northpower sähkö");
     await user.type(field, " draft{Escape}");
     expect(within(detail()).queryByLabelText("Title")).not.toBeInTheDocument();
     expect(within(detail()).getByRole("heading", { name: "Northpower sähkö" })).toBeInTheDocument();
 
-    field = await editTitle(user);
-    await user.type(field, "x{Escape}");
+    for (const key of ["{Enter}", " "]) {
+      within(detail()).getByRole("button", { name: "Edit title" }).focus();
+      await user.keyboard(key);
+      field = within(detail()).getByLabelText("Title");
+      await user.type(field, "x{Escape}");
+      expect(within(detail()).queryByLabelText("Title")).not.toBeInTheDocument();
+    }
     expect(sent(calls, "PATCH", "/api/items/1")).toHaveLength(0);
+  });
+
+  it("the file name under the title is renamed by clicking it, and Esc cancels", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1");
+    await within(await screen.findByRole("region", { name: "Item" })).findByRole("heading", { name: "Northpower sähkö" });
+    const name = await within(detail()).findByRole("button", { name: "Rename northpower.pdf" });
+    expect(within(detail()).getAllByRole("button", { name: /^Rename/ })).toHaveLength(1); // no pencil
+    await user.click(name);
+    await user.type(await within(detail()).findByRole("textbox", { name: "File name" }), "x{Escape}");
+    expect(within(detail()).queryByRole("textbox", { name: "File name" })).not.toBeInTheDocument();
+    within(detail()).getByRole("button", { name: "Rename northpower.pdf" }).focus();
+    await user.keyboard("{Enter}");
+    expect(await within(detail()).findByRole("textbox", { name: "File name" })).toHaveValue("northpower");
+    expect(calls.filter((c) => c.method === "POST" && c.url.includes("rename"))).toHaveLength(0);
   });
 
   it("an empty title is refused with the server's message and nothing is sent", async () => {
