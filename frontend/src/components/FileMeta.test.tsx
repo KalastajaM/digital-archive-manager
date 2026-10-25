@@ -88,7 +88,7 @@ describe("layout", () => {
   it("shows the name, the path, Rename, Move file to…, Ask AI, and ★ / ! as their own group", async () => {
     setup();
     expect(screen.getByRole("heading", { name: "scan⟨U+202E⟩.pdf" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rename" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Rename/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Move file to…" })).toBeEnabled();
     expect(within(screen.getByTestId("actions")).getByRole("button", { name: "Ask AI" })).toHaveAttribute(
       "data-tip",
@@ -110,7 +110,7 @@ describe("Rename", () => {
       "POST /api/activity/r1/undo": { body: result([{ ...op, src: op.dst, dst: PATH }]) },
     });
     const user_ = user;
-    await user_.click(screen.getByRole("button", { name: "Rename" }));
+    await user_.click(screen.getByRole("button", { name: /^Rename/ }));
     const box = await nameBox();
     expect(box).toHaveValue("scan‮"); // the stem; ".pdf" is shown beside it, not editable
     expect(screen.getByText(".pdf")).toBeInTheDocument();
@@ -134,9 +134,29 @@ describe("Rename", () => {
     await waitFor(() => expect(sent(calls, "POST", "/api/activity/r1/undo")).toHaveLength(1));
   });
 
+  it("the name itself is the click target (no pencil), named and hinted, and Enter or Space on it opens the field", async () => {
+    const { user, calls } = setup();
+    const name = screen.getByRole("button", { name: /^Rename/ });
+    expect(name).toHaveAccessibleName("Rename scan⟨U+202E⟩.pdf");
+    expect(name).toHaveAttribute("title", "Click to rename");
+    expect(name).toHaveTextContent("scan⟨U+202E⟩.pdf");
+    expect(screen.getAllByRole("button", { name: /^Rename/ })).toHaveLength(1);
+    for (const key of ["{Enter}", " "]) {
+      const again = screen.getByRole("button", { name: /^Rename/ }); // a new element after each close
+      again.focus();
+      expect(again).toHaveFocus();
+      await user.keyboard(key);
+      await user.type(await nameBox(), "x{Escape}");
+      expect(screen.queryByRole("textbox", { name: "File name" })).not.toBeInTheDocument();
+    }
+    await user.click(screen.getByRole("button", { name: /^Rename/ }));
+    expect(await nameBox()).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
   it("Esc cancels without asking the server anything", async () => {
     const { user, calls } = setup();
-    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(screen.getByRole("button", { name: /^Rename/ }));
     await user.type(await nameBox(), "x{Escape}");
     expect(screen.queryByRole("textbox", { name: "File name" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "scan⟨U+202E⟩.pdf" })).toBeInTheDocument();
@@ -145,7 +165,7 @@ describe("Rename", () => {
 
   it("an unchanged name just closes the field; an empty one is refused", async () => {
     const { user, calls } = setup();
-    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(screen.getByRole("button", { name: /^Rename/ }));
     await user.clear(await nameBox());
     await user.keyboard("{Enter}");
     expect(screen.getByRole("alert")).toHaveTextContent("Enter a name.");
@@ -157,7 +177,7 @@ describe("Rename", () => {
   it("Cancel on the confirm changes nothing and keeps the typed name", async () => {
     const op = rename("10. Financial/Banks/x.pdf");
     const { user, calls } = setup({ "POST /api/browse/rename/preview": { body: [op] } });
-    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(screen.getByRole("button", { name: /^Rename/ }));
     const box = await nameBox();
     await user.clear(box);
     await user.type(box, "x{Enter}");
@@ -171,7 +191,7 @@ describe("Rename", () => {
     const { user } = setup({
       "POST /api/browse/rename/preview": { status: 400, body: { error: "the name is longer than 255 bytes" } },
     });
-    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(screen.getByRole("button", { name: /^Rename/ }));
     const box = await nameBox();
     await user.clear(box);
     await user.type(box, "long{Enter}");
@@ -317,9 +337,9 @@ describe("what cannot be edited", () => {
     [{ drive_id: "x", path: null }, "The file is not in the index"],
   ])("Rename, Move file to…, Ask AI and the tag field are disabled, saying why, for %o", (file, why) => {
     setup({ "GET /api/files/x": { body: { ...DETAIL, record: { ...DETAIL.record, drive_id: "x" } } } }, { file });
-    const rename = screen.getByRole("button", { name: "Rename" });
+    const rename = screen.getByRole("button", { name: /^Rename/ });
     expect(rename).toBeDisabled();
-    expect(rename.closest("span")).toHaveAttribute("data-tip", why);
+    expect(rename).toHaveAttribute("title", why);
     const move = screen.getByRole("button", { name: "Move file to…" });
     expect(move).toBeDisabled();
     expect(move.closest("span")).toHaveAttribute("data-tip", why);
@@ -331,7 +351,7 @@ describe("what cannot be edited", () => {
 
   it("everything waits while another change is under way", async () => {
     setup({}, { disabled: true });
-    expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Rename/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move file to…" })).toBeDisabled();
   });
 });
