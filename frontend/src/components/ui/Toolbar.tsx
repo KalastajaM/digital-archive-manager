@@ -1,13 +1,12 @@
-import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
-import { IconButton } from "./IconButton";
+import { ClickToEdit } from "./ClickToEdit";
 
 type Props = {
   title: string;
   /** Shown in place of the title while it is renamed in place (an input). */
   titleEditor?: ReactNode;
-  /** Edits the title in place: a click on it, or the pencil beside it (shown on hover and
-   * focus, always there for the keyboard), calls this. */
+  /** Edits the title in place: a click on it (it is a button, so the keyboard reaches it
+   * too) calls this. */
   onEditTitle?: () => void;
   /** Muted text after the title, e.g. "6 documents". */
   subtitle?: ReactNode;
@@ -24,10 +23,15 @@ export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, se
       <div className="toolbar-title">
         {titleEditor ?? (
           <>
-            <h2 className={onEditTitle ? "toolbar-title-editable" : undefined} onClick={onEditTitle}>
-              {title}
+            <h2 aria-label={onEditTitle ? title : undefined}>
+              {onEditTitle ? (
+                <ClickToEdit label={`Rename ${title}`} tip="Click to rename" onClick={onEditTitle}>
+                  {title}
+                </ClickToEdit>
+              ) : (
+                title
+              )}
             </h2>
-            {onEditTitle && <IconButton className="toolbar-title-pencil" icon={<Pencil />} label="Edit name" onClick={onEditTitle} />}
           </>
         )}
         {!titleEditor && subtitle && <span className="toolbar-subtitle">{subtitle}</span>}

@@ -134,8 +134,8 @@ describe("a locked file", () => {
     const calls = mockFetch(routes);
     const user = userEvent.setup();
     show(FILE());
-    await waitFor(() => expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled());
-    expect(screen.getByRole("button", { name: "Rename" }).parentElement).toHaveAttribute("data-tip", REASON);
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Rename / })).toBeDisabled());
+    expect(screen.getByRole("button", { name: /^Rename / })).toHaveAttribute("title", REASON);
     const move = screen.getByRole("button", { name: "Move file to…" });
     expect(move).toBeDisabled();
     expect(move.parentElement).toHaveAttribute("data-tip", REASON);
@@ -158,17 +158,17 @@ describe("a locked file", () => {
     await user.click(screen.getByRole("button", { name: "For now" }));
     expect(await screen.findByText("Unlocked until you leave this file")).toBeInTheDocument();
     expect(sent(calls, "POST", "/api/files/d1/unlock")[0].body).toEqual({ mode: "now" });
-    expect(screen.getByRole("button", { name: "Rename" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Rename / })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Move file to…" })).toBeEnabled();
     // the page now sends the token with every call
-    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(screen.getByRole("button", { name: /^Rename / }));
     await user.type(await screen.findByRole("textbox", { name: "File name" }), "x{Enter}");
     await waitFor(() => expect(sent(calls, "POST", "/api/browse/rename/preview")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/browse/rename/preview")[0].headers["X-Dam-Unlock"]).toBe("tok-1");
     await user.keyboard("{Escape}");
     await user.click(await screen.findByRole("button", { name: "Lock again" }));
     await waitFor(() => expect(sent(calls, "DELETE", "/api/files/d1/unlock")).toHaveLength(1));
-    expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Rename / })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Unlock" })).toBeInTheDocument();
     // once locked again, nothing carries the token
     await user.click(screen.getByRole("button", { name: "Unlock" }));
@@ -184,11 +184,11 @@ describe("a locked file", () => {
     await user.click(screen.getByRole("button", { name: "For good" }));
     expect(sent(calls, "POST", "/api/files/d1/unlock")[0].body).toEqual({ mode: "for_good" });
     const lock = await screen.findByRole("button", { name: "Lock" });
-    expect(screen.getByRole("button", { name: "Rename" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Rename / })).toBeEnabled();
     await user.click(lock);
     await waitFor(() => expect(sent(calls, "POST", "/api/files/d1/lock")).toHaveLength(1));
     expect(await screen.findByRole("button", { name: "Unlock" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Rename / })).toBeDisabled();
   });
 
   it("an Important file only unlocks for now, and says it locks again", async () => {
@@ -228,7 +228,7 @@ describe("a locked file", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByRole("button", { name: "Unlock" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Rename / })).toBeDisabled();
     again.unmount();
   });
 });

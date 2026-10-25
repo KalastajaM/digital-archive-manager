@@ -222,7 +222,7 @@ More on the form:
   brings it back), and below about 760 px everything stacks.
 
 **Editing a filed document** works the same way wherever its details are shown (Browse, a
-collection, a tray item): the pencil beside the name renames it (the extension stays), the
+collection, a tray item): clicking the name renames it (the extension stays), the
 folder icon beside the path moves it, and tags are chips written at once. A rename or move
 is shown as a plan first and has **Undo**.
 
@@ -721,7 +721,7 @@ A tray's screen has the list (Open / Done) and the selected item beside it; ↑/
 highlight and open the item. An item has a title, one or more files, the tray's fields, a
 note, a checklist and a history.
 
-- Click the title (or the pencil beside it) to edit it in place: Enter or clicking away
+- Click the title to edit it in place: Enter or clicking away
   saves, Esc cancels, an empty title is refused. The file's tags are right under it.
 - The date, **Mark done** and the icon buttons (move to tray, remove from tray, Ask AI,
   take the file off, move to To Delete) are one row; the icons are at its right end.
