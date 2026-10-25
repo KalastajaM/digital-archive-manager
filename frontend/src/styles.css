@@ -1130,13 +1130,14 @@ main:has(> .trays) { padding: 0; min-height: 0; display: flex; }
    list, and the open item's file actions at the far right over the item. --split is set on
    the header like on .trays-main, so the parts follow the splitter. */
 .trays-toolbar { --split: 295px; flex-wrap: wrap; align-content: center; row-gap: var(--sp-1); padding: var(--sp-1) var(--sp-4); }
-.trays-toolbar .toolbar-lead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); min-width: 0; flex: 0 0 calc(var(--split) - var(--sp-4) - var(--sp-3)); }
-.trays-toolbar .toolbar-title { flex: 1 1 100%; }
+.trays-toolbar .toolbar-lead { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-1) var(--sp-3); min-width: 0; flex: 0 1 auto; }
+.trays-toolbar .toolbar-title { flex: 0 1 auto; min-width: 0; }
 .trays-toolbar .toolbar-title h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .trays-toolbar .toolbar-subtitle { flex: none; font-variant-numeric: tabular-nums; }
-.trays-toolbar .toolbar-lead .toolbar-actions { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; margin-left: 0; }
+.trays-toolbar .toolbar-lead .toolbar-actions { flex: none; margin-left: 0; }
 .trays-toolbar .toolbar-trailing { margin-left: auto; justify-content: flex-end; flex-wrap: wrap; }
-@media (max-width: 1000px) { .trays-toolbar .toolbar-lead { flex: 1 1 auto; } }
+/* a narrow window: the lead takes the row (its parts may wrap) and the file actions follow */
+@media (max-width: 1000px) { .trays-toolbar .toolbar-lead { flex: 1 1 auto; flex-wrap: wrap; } }
 /* the file actions: the bar and its slot add no box of their own, so the buttons are the
    header group's items */
 .file-action-bar, .file-action-slot { display: contents; }
@@ -1340,12 +1341,20 @@ main:has(> .collections-index), main:has(> .collection-page) { padding: 0; min-h
 /* One collection: the content and the selected file's inspector. */
 .collection-page { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .collection-page > .placeholder, .collection-page > .error { margin: var(--sp-5); }
-.collection { --split: 380px; flex: 1; min-width: 0; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--split); }
+.collection { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--panel); }
+.collection-cols { --split: 380px; flex: 1; min-width: 0; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--split); }
 .collection-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--panel); }
-.collection-main .toolbar { padding: 0 var(--sp-5); }
-.collection-main .toolbar-title { min-width: 0; flex: 1; }
-.collection-main .toolbar-title h2 { overflow: hidden; text-overflow: ellipsis; }
-.collection-main .toolbar-actions { flex: none; }
+/* The header like Browse's and the trays': the title, subtitle and list actions over the
+   list, the shown file's actions (one FileActionBar) at the far right over the side panel.
+   --split is set on the header like on .collection-cols, so the parts follow the splitter. */
+.collection-toolbar { --split: 380px; flex-wrap: wrap; align-content: center; row-gap: var(--sp-1); padding: var(--sp-1) var(--sp-4) var(--sp-1) var(--sp-5); }
+.collection-toolbar .toolbar-lead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); min-width: 0; flex: 1 1 calc(100% - var(--split)); max-width: calc(100% - var(--split) - var(--sp-3)); }
+.collection-toolbar .toolbar-title { min-width: 0; }
+.collection-toolbar .toolbar-title h2 { overflow: hidden; text-overflow: ellipsis; }
+.collection-toolbar .toolbar-lead .toolbar-actions { flex: none; margin-left: 0; }
+.collection-toolbar .toolbar-trailing { margin-left: auto; justify-content: flex-end; flex-wrap: wrap; max-width: calc(var(--split) - var(--sp-4)); }
+/* a narrow window: the lead takes the row and the file actions follow on the right */
+@media (max-width: 1000px) { .collection-toolbar .toolbar-lead { flex: 1 1 auto; max-width: none; } .collection-toolbar .toolbar-trailing { max-width: none; } }
 .collection-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) var(--sp-5) var(--sp-8); }
 .collection-body > .notice, .collection-body > .error { margin-top: 0; margin-bottom: var(--sp-3); }
 .collection-where { margin: 0 0 var(--sp-3); color: var(--muted); font-size: var(--fs-sm); }
@@ -1538,13 +1547,15 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 
 /* ---- Narrow windows ---------------------------------------------------------------- */
 @media (max-width: 900px) {
-  .today-grid, .trays-main, .collection, .browse-main { grid-template-columns: 1fr; }
+  .today-grid, .trays-main, .collection-cols, .browse-main { grid-template-columns: 1fr; }
   .app:has(.browse) .content { height: auto; }
   .pane-body { overflow: visible; }
   .browse-pane + .browse-pane, .browse-pane ~ .browse-preview { border-left: none; border-top: 0.5px solid var(--separator); }
   .splitter { display: none; }
   .app:has(.collection-page) .content, .app:has(.collections-index) .content { height: auto; }
   .collection-body, .collection-inspector { overflow: visible; }
+  .collection, .collection-cols { min-height: auto; }
+  .collection-cols { flex: 0 0 auto; }
   .collection-inspector { border-left: none; border-top: 0.5px solid var(--separator); }
   .app:has(.trays) .content, .app:has(.activity) .content, .app:has(.ongoing-convert) .content { height: auto; }
   .activity-body, .ongoing-body { overflow: visible; }

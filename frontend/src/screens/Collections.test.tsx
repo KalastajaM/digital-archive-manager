@@ -101,6 +101,8 @@ const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "
 const patches = (calls: Call[], url: string) => calls.filter((c) => c.method === "PATCH" && c.url === url);
 const where = () => screen.getByTestId("where").textContent;
 const panel = () => screen.getByRole("region", { name: "Collection" });
+/** The header's file actions (the one FileActionBar, over the side panel). */
+const bar = () => within(panel()).getByRole("toolbar", { name: /file actions$/ });
 const tree = () => within(panel()).getByRole("region", { name: "Members" });
 
 /** Open the ⋯ menu of the toolbar and pick ``item``. */
@@ -197,31 +199,62 @@ describe("Collection detail", () => {
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     // no groups: nothing to choose, so no Group select (and no "Ungrouped" in it)
     expect(within(inspector).queryByRole("combobox", { name: "Group" })).toBeNull();
-    await user.click(within(inspector).getByRole("button", { name: "Remove quote.pdf from the collection" }));
+    await user.click(within(bar()).getByRole("button", { name: "Remove quote.pdf from the collection" }));
     await waitFor(() => expect(posts(calls, "/api/collections/7/members/remove")).toHaveLength(1));
     expect(posts(calls, "/api/collections/7/members/remove")[0].body).toEqual({ drive_id: "f1" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); // no confirm
     expect(await within(panel()).findByText("plan refused: x")).toBeInTheDocument();
   });
 
-  it("the inspector is Browse's file panel (rename, preview, tags, Put in tray, Add to collection, summary, note) plus the collection's own", async () => {
+  it("the inspector is Browse's file panel (rename, preview, tags, Add to collection, summary, note) with Quick Look; the file actions are in the header", async () => {
     renderCollections("/collections/7");
     await within(panel()).findByRole("region", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).getByRole("heading", { level: 2, name: "quote.pdf" })).toBeInTheDocument();
-    for (const name of [/^Rename/, "Move file to…", "Put in tray", "Quick Look", "Move to To Delete"]) {
+    for (const name of [/^Rename/, "Move file to…", "Quick Look"]) {
       expect(within(inspector).getByRole("button", { name })).toBeInTheDocument();
     }
     expect(within(inspector).getByRole("region", { name: "Tags" })).toBeInTheDocument();
     expect(within(inspector).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inspector).getByRole("textbox", { name: "Note on this file" })).toBeInTheDocument();
-    // the app's one order in the preview's toolbar: view (Quick Look), ★ / !, Ask AI, the bin last
-    const order = ["Quick Look", "Star", "Ask AI", "Move to To Delete"].map((name) => within(inspector).getByRole("button", { name }));
-    for (let i = 1; i < order.length; i++) {
-      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // what acts on the file is in the header, not repeated in the panel
+    for (const name of ["Put in tray", "Star", "Mark Important", "Ask AI", "Move to To Delete", "Remove quote.pdf from the collection"]) {
+      expect(within(inspector).queryByRole("button", { name })).toBeNull();
     }
-    const own = within(inspector).getByRole("region", { name: "In this collection" });
-    expect(within(own).getByRole("button", { name: "Remove quote.pdf from the collection" })).toBeInTheDocument();
+  });
+
+  it("the header has the collection's list actions at the left and the shown file's actions in one group at the right, in the app's order", async () => {
+    renderCollections("/collections/7");
+    await within(panel()).findByRole("region", { name: "Members" });
+    const toolbar = panel().querySelector("header.toolbar") as HTMLElement;
+    const lead = toolbar.querySelector(".toolbar-lead") as HTMLElement;
+    expect(within(lead).getByRole("heading", { level: 2 })).toBeInTheDocument();
+    expect(within(lead).getByRole("button", { name: "New group" })).toBeInTheDocument();
+    expect(within(lead).getByRole("button", { name: "Export…" })).toBeInTheDocument();
+    // the file actions are not in the lead, and not in the list actions
+    expect(within(lead).queryByRole("button", { name: "Star" })).toBeNull();
+    expect(toolbar.lastElementChild).toBe(bar());
+    const names = ["Put in tray", "Remove quote.pdf from the collection", "Ask AI", "Star", "Mark Important", "Move to To Delete"];
+    const buttons = names.map((name) => within(bar()).getByRole("button", { name }));
+    for (let i = 1; i < buttons.length; i++) {
+      expect(buttons[i - 1].compareDocumentPosition(buttons[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    // the preview's toolbar keeps only viewing tools
+    const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
+    expect(within(inspector).getByRole("button", { name: "Quick Look" })).toBeInTheDocument();
+  });
+
+  it("a disabled file action in the header says why", async () => {
+    renderCollections("/collections/7");
+    await within(panel()).findByRole("region", { name: "Members" });
+    // the second member is missing: its bin is off, with the reason as the tooltip
+    await userEvent.setup().click(within(tree()).getByText("old⟨U+202E⟩.pdf"));
+    const bin = within(bar()).getByRole("button", { name: "Move to To Delete" });
+    expect(bin).toBeDisabled();
+    expect(bin.parentElement).toHaveAttribute("data-tip", "The file is missing");
+    // a file that is not there has no Put in tray or Ask AI
+    expect(within(bar()).queryByRole("button", { name: "Put in tray" })).toBeNull();
+    expect(within(bar()).queryByRole("button", { name: "Ask AI" })).toBeNull();
   });
 
   it("the inspector has the file view's one block order; the collection's own parts are in the own block", async () => {
@@ -234,18 +267,17 @@ describe("Collection detail", () => {
     const inBlock = (name: string) => inspector.querySelector(`[data-block="${name}"]`) as HTMLElement;
     expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("own")).getByRole("region", { name: "In this collection" })).toBeInTheDocument();
-    expect(within(inBlock("own")).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
+    expect(within(inBlock("own")).queryByRole("button", { name: "Put in tray" })).toBeNull(); // in the header
   });
 
-  it("Quick Look is an icon button with a tooltip; the members scroll in their own box; no Ask AI by the name", async () => {
+  it("Quick Look is an icon button with a tooltip; the members scroll in their own box; Ask AI is in the header", async () => {
     renderCollections("/collections/7");
     const members = await within(panel()).findByRole("region", { name: "Members" });
     expect(members.closest(".collection-members")).not.toBeNull();
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look Space");
-    // Ask AI is in the preview's toolbar, as in Browse (not by the name)
-    expect(await within(inspector).findByRole("button", { name: "Ask AI" })).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
-    expect(inspector.querySelector(".file-meta-title")!.querySelector("[aria-label='Ask AI']")).toBeNull();
+    expect(await within(bar()).findByRole("button", { name: "Ask AI" })).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
+    expect(within(inspector).queryByRole("button", { name: "Ask AI" })).toBeNull();
   });
 
   it("the file panel of a member has the Draw a box tool, as in Browse", async () => {
@@ -330,9 +362,9 @@ describe("Collection detail", () => {
     await user.click(within(tree()).getByText("Plans"));
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(inspector.querySelector(".current-path")).toHaveTextContent("40. House/Sauna/Plans"); // the path row
-    expect(within(inspector).getByRole("button", { name: "Remove Plans from the collection" })).toBeInTheDocument();
+    expect(within(bar()).getByRole("button", { name: "Remove Plans from the collection" })).toBeInTheDocument();
     await user.keyboard("k");
-    expect(within(inspector).getByRole("button", { name: "Remove quote.pdf from the collection" })).toBeInTheDocument();
+    expect(within(bar()).getByRole("button", { name: "Remove quote.pdf from the collection" })).toBeInTheDocument();
   });
 
   it("close shows the plan from the preview endpoint, applies it, and shows what the apply did", async () => {
@@ -588,7 +620,7 @@ describe("Collection detail", () => {
           ? built.promise
           : { body: { token: null, size: 300 * 1024 * 1024, needs_confirm: true, not_included: [] } },
     });
-    const remove = await within(panel()).findByRole("button", { name: "Remove quote.pdf from the collection" });
+    const remove = await waitFor(() => within(bar()).getByRole("button", { name: "Remove quote.pdf from the collection" }));
     act(() => {
       remove.click();
       remove.click();
@@ -871,8 +903,7 @@ describe("Collection groups, summary and attention", () => {
     const row = within(tree()).getByText("old⟨U+202E⟩.pdf").closest("li")!;
     expect(within(row).getByText(/To pay/)).toHaveClass("tag-red");
     await user.click(bill);
-    const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
-    expect(within(inspector).getByRole("button", { name: "Remove old⟨U+202E⟩.pdf from the collection" })).toBeInTheDocument();
+    expect(within(bar()).getByRole("button", { name: "Remove old⟨U+202E⟩.pdf from the collection" })).toBeInTheDocument();
   });
 
   it("no attention strip when nothing needs it", async () => {
@@ -1318,7 +1349,6 @@ describe("Parent collections", () => {
 });
 
 describe("Trash on collection members", () => {
-  const inspector = () => within(panel()).getByRole("complementary", { name: "Selected file" });
   const quarantines = (calls: Call[]) => posts(calls, "/api/quarantine").map((c) => c.body);
 
   it("the inspector's bin moves the selected file to ##. To Delete through the confirm; Undo restores", async () => {
@@ -1328,7 +1358,7 @@ describe("Trash on collection members", () => {
       "POST /api/activity/q1/undo": { body: { batch_id: "u1", dry_run: false, done: [], failed: null, error: null, index_error: null } },
     });
     await within(panel()).findByRole("region", { name: "Members" });
-    await user.click(within(inspector()).getByRole("button", { name: "Move to To Delete" }));
+    await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(dialog).toHaveTextContent("40. House/Sauna/quote.pdf → ##. To Delete/40. House/Sauna/quote.pdf");
     await user.click(within(dialog).getByRole("button", { name: "Move to To Delete" }));
@@ -1347,7 +1377,7 @@ describe("Trash on collection members", () => {
     });
     const members = await within(panel()).findByRole("region", { name: "Members" });
     await user.click(within(within(members).getByText("x.pdf").closest("li")!).getByRole("button"));
-    const bin = within(inspector()).getByRole("button", { name: "Move to To Delete" });
+    const bin = within(bar()).getByRole("button", { name: "Move to To Delete" });
     expect(bin).toBeDisabled();
     expect(bin.parentElement).toHaveAttribute("data-tip", "Already in ##. To Delete");
     await user.keyboard("{Meta>}{Backspace}{/Meta}");
@@ -1368,7 +1398,7 @@ describe("Trash on collection members", () => {
       "POST /api/quarantine": quarantineRoute({ f1: "40. House/Sauna/quote.pdf" }),
     });
     await within(panel()).findByRole("region", { name: "Members" });
-    await user.click(within(inspector()).getByRole("button", { name: "Move to To Delete" }));
+    await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(dialog).toHaveTextContent("A link moves the link; its target stays.");
     expect(quarantines(calls)).toEqual([{ drive_ids: ["f1"], dry_run: true }]);
@@ -1379,7 +1409,7 @@ describe("Trash on collection members", () => {
       "POST /api/quarantine": quarantineRoute({ f1: "40. House/Sauna/quote.pdf" }),
     });
     await within(panel()).findByRole("region", { name: "Members" });
-    await user.click(within(inspector()).getByRole("button", { name: "Move to To Delete" }));
+    await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(dialog).not.toHaveTextContent(/link/);
   });
@@ -1391,7 +1421,7 @@ describe("Trash on collection members", () => {
       "POST /api/quarantine": quarantineRoute({ f1: "40. House/Sauna/quote.pdf" }),
     });
     await within(panel()).findByRole("region", { name: "Members" });
-    const bin = within(inspector()).getByRole("button", { name: "Move to To Delete" });
+    const bin = within(bar()).getByRole("button", { name: "Move to To Delete" });
     expect(bin).toBeDisabled();
     expect(bin.parentElement).toHaveAttribute("data-tip", "This file is marked Important; unmark it first");
     await user.keyboard("{Meta>}{Backspace}{/Meta}");
@@ -1406,8 +1436,139 @@ describe("Trash on collection members", () => {
       "POST /api/quarantine": IMPORTANT_REFUSED("40. House/Sauna/quote.pdf"),
     });
     await within(panel()).findByRole("region", { name: "Members" });
-    await user.click(within(inspector()).getByRole("button", { name: "Move to To Delete" }));
+    await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     expect(await screen.findByText(/This file is marked Important; unmark it first/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("The header's Browse file actions on a collection member", () => {
+  const STATUS = { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } };
+  const moved = (src: string, dst: string, id = "f1") => ({ kind: "move", src, dst, drive_id: id, note: null });
+  const applied = (op: ReturnType<typeof moved>, folder: string) => ({
+    batch_id: "m1", dry_run: false, done: [op], failed: null, error: null, index_error: null, unchanged: [], folder,
+  });
+  const ready = () => screen.findByRole("region", { name: "Members" });
+  const names = () => Array.from(bar().querySelectorAll("button")).map((b) => b.getAttribute("aria-label"));
+
+  it("a file has them all, in Browse's order", async () => {
+    renderCollections("/collections/7", { "GET /api/status": { body: STATUS } });
+    await within(panel()).findByRole("region", { name: "Members" });
+    await waitFor(() => expect(names()).toContain("Back to inbox"));
+    expect(names()).toEqual([
+      "Put in tray",
+      "Remove quote.pdf from the collection",
+      "Back to inbox",
+      "Move to…",
+      "From…",
+      "For…",
+      "Ask AI",
+      "Star",
+      "Mark Important",
+      "Move to To Delete",
+    ]);
+  });
+
+  it("Back to inbox goes through the move confirm with Undo, and the member row follows the file", async () => {
+    let done = false;
+    const op = moved("40. House/Sauna/quote.pdf", "##. Organize/quote.pdf");
+    const after = { ...SAUNA, members: SAUNA.members.map((m) => (m.drive_id === "f1" ? { ...m, path: "##. Organize/quote.pdf" } : m)) };
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/status": { body: STATUS },
+      "GET /api/collections/7": () => ({ body: done ? after : SAUNA }),
+      "POST /api/browse/move/preview": { body: [op] },
+      "POST /api/browse/move": () => {
+        done = true;
+        return { body: applied(op, "##. Organize") };
+      },
+    });
+    await ready();
+    const back = await waitFor(() => {
+      const b = within(bar()).getByRole("button", { name: "Back to inbox" });
+      expect(b).toBeEnabled();
+      return b;
+    });
+    await user.click(back);
+    const dialog = await screen.findByRole("dialog", { name: "Move 1 file to ##. Organize?" });
+    expect(posts(calls, "/api/browse/move/preview")[0].body).toEqual({ drive_ids: ["f1"], folder: "##. Organize" });
+    expect(posts(calls, "/api/browse/move")).toHaveLength(0);
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(posts(calls, "/api/browse/move")).toHaveLength(1));
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+    // still a member (the collection follows the file), now with its new folder
+    const row = (await within(tree()).findByText("quote.pdf")).closest("li")!;
+    await waitFor(() => expect(row).toHaveTextContent("##. Organize"));
+  });
+
+  it("Move to… opens the folder sheet, previews and moves the shown file", async () => {
+    const op = moved("40. House/Sauna/quote.pdf", "10. Financial/quote.pdf");
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/status": { body: STATUS },
+      "POST /api/browse/move/preview": { body: [op] },
+      "POST /api/browse/move": { body: applied(op, "10. Financial") },
+    });
+    await ready();
+    await user.click(within(bar()).getByRole("button", { name: "Move to…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Move 1 file to…" });
+    await user.type(within(sheet).getByLabelText("Folder"), "10. Financial");
+    await user.click(within(sheet).getByRole("button", { name: "Preview move" }));
+    const dialog = await screen.findByRole("dialog", { name: "Move 1 file to 10. Financial?" });
+    expect(posts(calls, "/api/browse/move/preview")[0].body).toEqual({ drive_ids: ["f1"], folder: "10. Financial" });
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(posts(calls, "/api/browse/move")).toHaveLength(1));
+  });
+
+  it("From… sets the sender of the shown file", async () => {
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/senders": { body: [] },
+      "PUT /api/assignments": { body: [] },
+    });
+    await ready();
+    await user.click(within(bar()).getByRole("button", { name: "From…" }));
+    const sheet = await screen.findByRole("dialog", { name: "From" });
+    await user.type(within(sheet).getByLabelText("Sender"), "Pohjola");
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+    expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ drive_ids: ["f1"], sender: "Pohjola" });
+  });
+
+  it("a member in To Delete has Restore (the restore confirm) and the other moves say why they are off", async () => {
+    const { calls, user } = renderCollections("/collections/7", {
+      "GET /api/status": { body: STATUS },
+      "POST /api/restore": (call) => ({
+        body: {
+          batch_id: "r1",
+          dry_run: (call.body as { dry_run: boolean }).dry_run,
+          done: [moved("##. To Delete/x.pdf", "10. Financial/x.pdf", "f3")],
+          failed: null,
+          error: null,
+          index_error: null,
+          unchanged: [],
+        },
+      }),
+    });
+    await ready();
+    await user.click(within(tree()).getByText("x.pdf"));
+    for (const name of ["Move to…", "Back to inbox", "From…", "For…"]) {
+      const b = within(bar()).getByRole("button", { name });
+      expect(b).toBeDisabled();
+      expect(b.parentElement).toHaveAttribute("data-tip", expect.stringMatching(/To Delete|Marked for deletion/));
+    }
+    await user.click(within(bar()).getByRole("button", { name: "Restore from To Delete" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restore to where it was" }));
+    await screen.findByRole("dialog", { name: "Restore from To Delete?" });
+    expect(posts(calls, "/api/restore")[0].body).toEqual({ drive_ids: ["f3"], to: "original", dry_run: true });
+  });
+
+  it("a folder member and a missing file say why the move actions are off", async () => {
+    const { user } = renderCollections("/collections/7", { "GET /api/status": { body: STATUS } });
+    await ready();
+    await user.click(within(tree()).getByText("Plans"));
+    const move = within(bar()).getByRole("button", { name: "Move to…" });
+    expect(move).toBeDisabled();
+    expect(move.parentElement).toHaveAttribute("data-tip", "Folders are moved from Browse");
+    await user.click(within(tree()).getByText("old⟨U+202E⟩.pdf"));
+    const from = within(bar()).getByRole("button", { name: "From…" });
+    expect(from.parentElement).toHaveAttribute("data-tip", "The file is missing");
   });
 });
