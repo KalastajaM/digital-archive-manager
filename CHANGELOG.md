@@ -18,7 +18,8 @@ All notable changes are listed here. The format follows
   **Use the person in the folder**, which puts `{person}` in the Folder field and shows
   where this letter would go.
 - A box you draw that holds no text now switches to Picture by itself. You can switch it
-  back to Words.
+  back to Words. A box over blank paper, with neither text nor a picture, says so instead
+  of becoming a picture area.
 
 - Every document in the test result of a rule is a button that opens it in the preview with
   the rule's areas drawn on its first page, and for a picture area the place where it fits best
