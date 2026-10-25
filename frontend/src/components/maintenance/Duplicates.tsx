@@ -80,8 +80,11 @@ function CarryOverList({ items, asked }: { items: CarryOver[]; asked: boolean })
   );
 }
 
+/** A copy in a group: its folder (the group's head already names the file), and its own
+ * name only where it differs from that. */
 function FileRow({
   file,
+  groupName,
   groupKey,
   keep,
   removing,
@@ -89,6 +92,7 @@ function FileRow({
   onToggle,
 }: {
   file: DupFile;
+  groupName: string;
   groupKey: string;
   keep: boolean;
   removing: boolean;
@@ -103,7 +107,12 @@ function FileRow({
         <span>Keep</span>
       </label>
       <span className="dup-path">
-        <code title={visible(file.path)}>{visible(file.path)}</code>
+        <code title={visible(file.path)}>{visible(folderOf(file.path) || "Top level")}</code>
+        {baseName(file.path) !== groupName && (
+          <span>
+            <span className="hint">named</span> <code>{visible(baseName(file.path))}</code>
+          </span>
+        )}
         <span className="hint">
           {formatSize(file.size)}
           {file.mtime !== null && `, ${shortDate(file.mtime)}`}
@@ -177,6 +186,7 @@ function Group({
           <FileRow
             key={f.drive_id}
             file={f}
+            groupName={name}
             groupKey={group.sha256}
             keep={f.drive_id === keep}
             removing={!skipped.has(f.drive_id)}
@@ -319,6 +329,19 @@ export function Duplicates() {
     check.start();
   };
   const fold = useFold("duplicates");
+  const reset = (
+    <ResetButton
+      title="Duplicates"
+      busy={busy}
+      check={{
+        ...check,
+        reset: () => {
+          clearChoices();
+          check.reset();
+        },
+      }}
+    />
+  );
 
   const confirmView = (() => {
     if (!pending) return null;
@@ -350,14 +373,14 @@ export function Duplicates() {
 
   if (fold?.folded)
     return (
-      <Card title="Duplicates" icon={<Copy />} fold={fold}>
+      <Card title="Duplicates" icon={<Copy />} fold={fold} actions={reset}>
         <p className="hint">
           {foldedLine(check, result && (result.groups_total > 0 ? plural(result.groups_total, "group") + " of identical files" : "No duplicates."))}
         </p>
       </Card>
     );
   return (
-    <Card title="Duplicates" icon={<Copy />} fold={fold}>
+    <Card title="Duplicates" icon={<Copy />} fold={fold} actions={reset}>
       <p>
         Finds files with exactly the same content. Only files that share a size with another file are read, and a
         file read before is not read again.
@@ -393,18 +416,6 @@ export function Duplicates() {
           <button type="button" className="primary" onClick={start} disabled={check.starting || busy}>
             {result ? "Find duplicates again" : "Find duplicates"}
           </button>
-        )}
-        {!check.running && (
-          <ResetButton
-            busy={busy}
-            check={{
-              ...check,
-              reset: () => {
-                clearChoices();
-                check.reset();
-              },
-            }}
-          />
         )}
       </div>
       {check.running && check.job && <JobProgress job={check.job} />}

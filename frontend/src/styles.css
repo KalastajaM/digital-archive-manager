@@ -2276,8 +2276,10 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .search-help-tips li { color: var(--muted); padding: 1px 0; }
 
 /* Maintenance screen */
-.maintenance-screen { display: flex; flex-direction: column; gap: var(--sp-3); }
-.maintenance-body { display: flex; flex-direction: column; gap: var(--sp-4); padding: 0 var(--sp-3) var(--sp-6); max-width: 900px; }
+.maintenance-screen { --maintenance-w: 900px; display: flex; flex-direction: column; gap: var(--sp-3); }
+.maintenance-body { display: flex; flex-direction: column; gap: var(--sp-4); padding: 0 var(--sp-3) var(--sp-6); max-width: var(--maintenance-w); }
+/* the toolbar spans the pane; its buttons end where the cards do */
+.maintenance-toolbar { padding-right: max(var(--sp-3), calc(100% - var(--maintenance-w) + var(--sp-3))); }
 .maintenance-body .card p { margin: 0 0 var(--sp-2); }
 .maintenance-body .card h4 { margin: var(--sp-4) 0 var(--sp-1); font-size: var(--fs-md); }
 .check-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0; }
@@ -2290,6 +2292,7 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .check-list { list-style: none; margin: var(--sp-2) 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .check-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 3px var(--sp-2); border-radius: var(--r-sm); }
 .check-list li:hover { background: var(--hover); }
+.ref-entry { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .check-list code, .dup-path code { overflow-wrap: anywhere; }
 .check-head { margin-top: var(--sp-2); }
 .name-change { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

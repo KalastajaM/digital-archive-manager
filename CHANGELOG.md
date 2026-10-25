@@ -29,9 +29,13 @@ All notable changes are listed here. The format follows
     of days you choose. dam still never empties To Delete. The empty-folder check leaves
     out the folders the archive is set up with, such as the filing code folders in
     `##. Organize`.
+  - Duplicates show each copy's folder, and its name only where it differs. Collections and
+    trays show where a gone file was last seen instead of an internal id, say what each
+    entry means, and offer **Take out** for a gone file in a collection.
   - Each check's card folds to one line (Collapse all and Expand all in the toolbar,
-    remembered in this browser), and **Reset** forgets a check's result (**Reset all** every
-    result) without changing the archive.
+    remembered in this browser). The reset icon at the top right of each card forgets that
+    check's result, and **Reset all** in the toolbar every result, without changing the
+    archive.
 - **Move, Link or Copy when you drop files on a folder in Browse.** The confirm that
   appears after a drop now has the three ways side by side: **Move** (still the default),
   **Link** (a shortcut in that folder that opens the file, which stays where it is) and
