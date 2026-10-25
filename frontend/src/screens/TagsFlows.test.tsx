@@ -389,7 +389,7 @@ describe("Sidebar Tags section", () => {
   });
 
   it("marks only the tag Browse filters by as current, none on Browse without a tag", async () => {
-    setup(SIDEBAR, "/browse?tag=Kela&q=");
+    setup(SIDEBAR, "/browse?q=tag%3AKela");
     const nav = screen.getByRole("navigation", { name: "Main" });
     const kela = await within(nav).findByRole("link", { name: "Kela (2)" });
     const health = within(nav).getByRole("link", { name: "health (1)" });
@@ -397,6 +397,13 @@ describe("Sidebar Tags section", () => {
     expect(kela).toHaveClass("active");
     expect(health).not.toHaveAttribute("aria-current");
     expect(health).not.toHaveClass("active");
+  });
+
+  it("marks no tag current when the search has more than that tag", async () => {
+    setup(SIDEBAR, "/browse?q=invoice+tag%3AKela");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    await within(nav).findByRole("link", { name: "Kela (2)" });
+    expect(within(nav).getByRole("link", { name: "Kela (2)" })).not.toHaveAttribute("aria-current");
   });
 
   it("marks no tag current on Browse without a tag filter", async () => {
