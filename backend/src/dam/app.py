@@ -570,10 +570,13 @@ class App:
         folder: str | None = None,
         limit: int = 50,
         tags: list[str] | None = None,
+        tag_mode: str = "all",
     ) -> list[SearchHit]:
         """Full-text search over names and extracted text; ``folder`` limits to a subtree,
-        ``tags`` to files that have all of them."""
-        return search(self.engine, query, limit=limit, folder=folder, tag_names=tags)
+        ``tags`` to files that have all of them (``tag_mode`` "any": at least one)."""
+        return search(
+            self.engine, query, limit=limit, folder=folder, tag_names=tags, tag_mode=tag_mode
+        )
 
     def close(self) -> None:
         self.replay_jobs.close()

@@ -590,10 +590,11 @@ export const useBrowseFiles = (
 
 /** Full-text search; ``folder`` limits it to that subtree. Up to the API's 500 hits, so
  * sorting the results by a column sorts (nearly) every match, not just the best 50. */
-export const searchFiles = (q: string, folder?: string, tags: string[] = []) => {
+export const searchFiles = (q: string, folder?: string, tags: string[] = [], tagMode: "all" | "any" = "all") => {
   const params = new URLSearchParams({ q, limit: "500" });
   if (folder) params.set("folder", folder);
   for (const tag of tags) params.append("tag", tag);
+  if (tags.length > 1 && tagMode === "any") params.set("tag_mode", "any");
   return get<SearchHit[]>(`/api/search?${params}`);
 };
 
