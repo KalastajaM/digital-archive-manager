@@ -100,7 +100,7 @@ class _Sim:
         disk, kind = self._origin(rel)
         if disk is None:
             return kind
-        p = self.paths.root / disk if disk else self.paths.root
+        p = self.paths.join(disk)
         if p.is_symlink():
             return "link"
         if p.is_dir():
@@ -109,7 +109,7 @@ class _Sim:
 
     def disk_path(self, rel: str) -> Path | None:
         disk, _ = self._origin(rel)
-        return None if disk is None else self.paths.root / disk
+        return None if disk is None else self.paths.join(disk)
 
     def _current(self, start: int, rel: str) -> str | None:
         """Where an entry created/moved at event ``start`` is now (None if gone)."""
@@ -182,7 +182,7 @@ class _Sim:
         an unnecessary suffix, never risks a collision).
         """
         disk = self.disk_path(folder)
-        directory = disk if disk is not None else self.paths.root / folder
+        directory = disk if disk is not None else self.paths.join(folder)
         added = self.added_names(folder)
         if exclude is not None:
             added = [a for a in added if fold_parts(a) != fold_parts(exclude)]
@@ -436,7 +436,7 @@ class Planner:
         folder = self.sim.spell(canonical(op.dst, self.paths))
         self._ensure_folder(folder, False, quarantine_root=True)
         # a rename works only on one disk: look at the folder, or at what holds it
-        disk = self.paths.root / folder
+        disk = self.paths.join(folder)
         while not os.path.lexists(disk) and disk != disk.parent:
             disk = disk.parent
         method = PICTURE_RENAME if primitives.same_disk(areas, disk) else PICTURE_COPY

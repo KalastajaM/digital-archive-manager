@@ -120,6 +120,7 @@ def _prune_pictures(app: App) -> None:
 
 
 def _initial_scan(app: App, wake: threading.Event) -> None:
+    # the log names the main folder: extra folders get their own report with the scan
     synced = False
     try:
         report = app.scan()

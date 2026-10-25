@@ -472,3 +472,22 @@ def test_a_local_file_replaced_by_a_folder_is_refused(app, fake_archive):
     with pytest.raises(InvalidRequest, match="not a file on disk"):
         app.browse.move([drive_id], TAXES)
     assert journal(app) == []
+
+
+def test_move_within_extra_folder(extra_folder, app):
+    from dam.index.repo import FileRecord
+
+    src = extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    st = src.stat()
+    app.repo.upsert(
+        FileRecord(drive_id="x1", path="Old years/2009/a.pdf", size=st.st_size, mtime=st.st_mtime)
+    )
+    result = app.browse.move(["x1"], "Old years/2010", origin="ui")
+    assert result.failed is None and result.error is None
+    assert not src.exists()
+    assert (extra_folder.root / "2010" / "a.pdf").read_bytes() == b"a"
+    assert app.repo.get("x1").path == "Old years/2010/a.pdf"
+    outcome = app.activity.undo(result.batch_id)
+    assert outcome.batch.failed is None and outcome.batch.error is None
+    assert src.read_bytes() == b"a"
+    assert not (extra_folder.root / "2010" / "a.pdf").exists()

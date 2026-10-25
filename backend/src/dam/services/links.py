@@ -40,6 +40,15 @@ def _rel_inside(root: Path, real: Path) -> str | None:
     return None
 
 
+def _rel_in_folders(paths: ArchivePaths, real: Path) -> str | None:
+    """``real`` as an archive path, found in whichever folder (main or extra) holds it."""
+    for folder in paths.folders:
+        inner = _rel_inside(folder.root, real)
+        if inner:
+            return f"{folder.label}/{inner}" if folder.label else inner
+    return None
+
+
 def _same_file(paths: ArchivePaths, real_st: os.stat_result, rec: FileRecord) -> bool:
     try:
         return os.path.samestat(real_st, os.stat(paths.abs(rec.path)))
@@ -56,7 +65,7 @@ def link_target(paths: ArchivePaths, repo: FileRepo, rec: FileRecord) -> FileRec
         real_st = os.stat(real)
     except (OSError, RuntimeError, OutsideArchiveError):
         return None  # missing, a loop, or a stored path that is not the archive's
-    rel = _rel_inside(paths.root, real)
+    rel = _rel_in_folders(paths, real)
     if not rel:
         return None
     target = repo.by_path(rel)

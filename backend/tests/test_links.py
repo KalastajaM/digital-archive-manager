@@ -3,6 +3,7 @@ only when the target resolves to a regular file inside the archive root. Every l
 refusal applies to the target. Nothing launches: runners are injected."""
 
 import io
+import os
 import sys
 from pathlib import Path
 
@@ -336,3 +337,18 @@ def test_no_target_wording(app, client, fake_archive):
     app.scan()
     r = client.get(f"/api/files/{link_id(app, f'{HOUSES}/gone.pdf')}/raw")
     assert r.json() == {"error": "No preview (the link points outside the archive or to nothing)"}
+
+
+def test_link_drop_from_extra_folder(extra_folder, app, fake_archive):
+    from dam.index.repo import FileRecord
+
+    src = extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    st = src.stat()
+    app.repo.upsert(
+        FileRecord(drive_id="x1", path="Old years/2009/a.pdf", size=st.st_size, mtime=st.st_mtime)
+    )
+    result = app.browse.move(["x1"], "10. Financial/Banks", origin="ui", mode="link")
+    assert result.failed is None and result.error is None
+    link = fake_archive.root / "10. Financial" / "Banks" / "a.pdf"
+    assert link.is_symlink()
+    assert Path(os.readlink(link)) == src.resolve()

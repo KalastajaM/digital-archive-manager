@@ -335,6 +335,7 @@ class App:
     @property
     def archive_available(self) -> bool:
         """The archive folder can be listed right now (Drive may go away)."""
+        # the main folder: extra folders being offline is reported per folder
         return listable(self.paths.root)
 
     @property

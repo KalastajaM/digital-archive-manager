@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from dam.core.fs import resolve
-from dam.core.paths import ArchivePaths, OutsideArchiveError
+from dam.core.paths import ArchiveFolder, ArchivePaths, OutsideArchiveError
 from dam.index.repo import FileRecord
 from dam.services.errors import Conflict, NotFound, NotSupported
 
@@ -91,15 +91,24 @@ def run_open(args: list[str]) -> int:
     return done.returncode
 
 
+def _require_connected(paths: ArchivePaths, folder: ArchiveFolder) -> None:
+    if folder.label and not paths.is_connected(folder.label):
+        raise Conflict(
+            f"'{folder.label}' is not connected ({folder.root}). Connect it and try again."
+        )
+
+
 def resolve_inside(paths: ArchivePaths, rec: FileRecord) -> Path:
     """``rec``'s file with every symlink resolved; ``NotFound`` if it does not exist,
     ``OutsideArchiveError`` if it resolves outside the archive root."""
+    folder = paths.folder_of(rec.path)
+    _require_connected(paths, folder)
     path = paths.abs(rec.path)
     try:
         real = resolve(path, strict=True)
     except (OSError, RuntimeError):
         raise NotFound(f"{rec.name} is not there any more") from None
-    if not real.is_relative_to(paths.root):
+    if not real.is_relative_to(folder.root):
         raise OutsideArchiveError(f"{rec.name} resolves to a path outside the archive")
     return real
 
@@ -119,7 +128,7 @@ def _runnable(
     names += Path(rec.path).parts[:-1]
     if via is not None:
         names += Path(via.path).parts
-    names += real.relative_to(paths.root).parts[:-1]
+    names += paths.rel(real).split("/")[:-1]
     if any(_runnable_name(n) for n in names):
         return True
     try:
@@ -152,13 +161,13 @@ class LaunchService:
         (Finder, Explorer, ...). It is resolved and must be a real folder inside the
         archive."""
         self._check_platform()
+        folder = self.paths.folder_of(rel)
+        _require_connected(self.paths, folder)
         try:
             real = resolve(self.paths.abs(rel), strict=True)
         except (OSError, RuntimeError, OutsideArchiveError):
             raise NotFound(f"{rel or 'the archive folder'} is not there") from None
-        if not real.is_dir() or not (
-            real == self.paths.root or real.is_relative_to(self.paths.root)
-        ):
+        if not real.is_dir() or not (real == folder.root or real.is_relative_to(folder.root)):
             raise NotFound(f"{rel or 'the archive folder'} is not a folder in the archive")
         status = self.runner(self.command(False, real))
         if status != 0:
@@ -180,6 +189,8 @@ class LaunchService:
             self._run(target, ["-R"])
             return
         self._check_platform()
+        folder = self.paths.folder_of(link.path)
+        _require_connected(self.paths, folder)
         path = self.paths.abs(link.path)
         if not path.is_symlink():
             raise NotFound(f"{link.name} is not there any more")
@@ -187,7 +198,7 @@ class LaunchService:
             parent = resolve(path.parent, strict=True)
         except (OSError, RuntimeError):
             raise NotFound(f"{link.name} is not there any more") from None
-        if not parent.is_relative_to(self.paths.root):
+        if not parent.is_relative_to(folder.root):
             raise OutsideArchiveError(f"{link.name} lies outside the archive")
         self._launch(link, ["-R"], parent / path.name)
 
