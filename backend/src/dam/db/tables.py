@@ -458,3 +458,13 @@ file_assignments = Table(
     Column("set_by", Text, nullable=False),  # "owner" | "filing"
     Column("set_at", Float, nullable=False),
 )
+
+# Files the owner locked: a safety catch against file changes (``dam.locks``). Keyed by
+# drive id so the lock survives moves and renames; no FK (rows may be parked or purged).
+# Important files are always locked and need no row. Temporary unlocks are never stored.
+file_locks = Table(
+    "file_locks",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("locked_at", Float, nullable=False),
+)

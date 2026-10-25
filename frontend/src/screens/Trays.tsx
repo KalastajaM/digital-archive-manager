@@ -79,7 +79,7 @@ function Row({
           <Link to={href} onClick={onOpen} aria-current={selected ? "true" : undefined}>
             {visible(item.title)}
           </Link>
-          <MarkIcons marks={item.first_file?.marks} />
+          <MarkIcons marks={item.first_file?.marks} driveId={item.first_file?.drive_id} />
         </p>
         {payee && <p className="tray-row-sub">{visible(payee)}</p>}
         <ItemBadges fileState={item.file_state} />

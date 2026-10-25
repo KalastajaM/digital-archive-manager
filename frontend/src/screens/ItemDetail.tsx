@@ -777,7 +777,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             {list.map((f, i) => (
               <button key={f.drive_id} type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
                 {nameOf(f)}
-                <MarkIcons marks={f.marks} />
+                <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
                 {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
               </button>
             ))}

@@ -506,7 +506,7 @@ export default function Inbox() {
                     <span className="entry-text">
                       <span className="entry-suggestion">
                         {visible(e.suggestion.name)}
-                        <MarkIcons marks={e.record.marks} />
+                        <MarkIcons marks={e.record.marks} driveId={id} path={e.record.path} />
                       </span>
                       <span className="entry-meta">
                         {visible(name)}

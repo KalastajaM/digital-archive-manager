@@ -246,7 +246,7 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
             <li key={e.record.drive_id}>
               <span className="batch-from">
                 {visible(e.record.name ?? e.record.path)}
-                <MarkIcons marks={e.record.marks} />
+                <MarkIcons marks={e.record.marks} driveId={e.record.drive_id} path={e.record.path} />
               </span>
               <span className="batch-arrow" aria-hidden="true">
                 →

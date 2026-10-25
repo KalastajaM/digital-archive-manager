@@ -2040,3 +2040,36 @@ describe("New folder", () => {
     expect(newButton().closest(".icon-button-wrap")?.getAttribute("data-tip")).toMatch(/^Search results/);
   });
 });
+
+describe("Locked files in Browse", () => {
+  const LOCKS = { "GET /api/locks": { body: { files: [{ drive_id: "f1", reason: "file" }], folders: [] } } };
+  const REASON = "This file is locked. Unlock it to change it.";
+
+  it("shows the lock on the row, and the bin and Move to… are off with the reason", async () => {
+    const { user } = setup("10. Financial/Banks", LOCKS);
+    await user.click(await screen.findByRole("checkbox", { name: "Select a.pdf" }));
+    const row = rowOf(listing(), "a.pdf");
+    expect(await within(row).findByRole("img", { name: "Locked" })).toBeInTheDocument();
+    expect(within(rowOf(listing(), "b.pdf")).queryByRole("img", { name: "Locked" })).toBeNull();
+    const bin = screen.getByRole("button", { name: "Move to To Delete" });
+    expect(bin).toBeDisabled();
+    expect(bin.closest(".icon-button-wrap")).toHaveAttribute("data-tip", REASON);
+    expect(screen.getByRole("button", { name: "Move to…" })).toBeDisabled();
+  });
+
+  it("a locked file dragged onto a folder is not moved", async () => {
+    const { calls } = setup("", {
+      "GET /api/locks": { body: { files: [{ drive_id: "f0", reason: "file" }], folders: [] } },
+      "POST /api/browse/move/preview": { body: [] },
+    });
+    await screen.findByText("readme.txt");
+    await within(rowOf(listing(), "readme.txt")).findByRole("img", { name: "Locked" });
+    const dt = dragFrom(rowOf(listing(), "readme.txt"));
+    const taxes = rowOf(listing(), "13. Taxes");
+    fireEvent.dragEnter(taxes, { dataTransfer: dt });
+    expect(taxes).not.toHaveAttribute("data-drop", "over");
+    fireEvent.drop(taxes, { dataTransfer: dt });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
+  });
+});

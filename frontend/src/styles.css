@@ -2110,6 +2110,12 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .replay-near { margin-top: var(--sp-2); padding: var(--sp-2); border: 1px dashed var(--hairline); border-radius: var(--radius, 6px); color: var(--muted); }
 .replay-path { text-align: left; overflow-wrap: anywhere; }
 
+/* -- locks: a safety catch against renaming and moving a file ------------------------ */
+.mark-lock { color: var(--muted-2); }
+.lock-control { display: inline-flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.lock-control .lock-state, .lock-control .lock-ask { font-size: var(--fs-sm); color: var(--muted); }
+.lock-control button:not(.icon-button) { font-size: var(--fs-sm); }
+
 /* A name or title renamed by clicking it: plain text that is a button */
 .click-edit { all: unset; box-sizing: border-box; max-width: 100%; cursor: text; border-radius: 4px; }
 .click-edit:hover:not(:disabled) { text-decoration: underline dotted; text-underline-offset: 3px; }

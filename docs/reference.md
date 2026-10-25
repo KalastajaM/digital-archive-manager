@@ -808,6 +808,36 @@ The user guide's "What dam never does" gives the short version. The details:
   reserved Windows names, trailing dots, `##.` unless it is a special folder), none inside
   the app's own folders. Every path is confined to the archive root (no `..`, no escaping
   symlinks). A refused dry run has no Apply.
+- **Locks.** A locked file is not renamed, moved or quarantined. Files marked Important
+  (and everything under a marked folder) are always locked; any other file can be locked
+  by the owner (table `file_locks`, migration 0031: `drive_id` primary key, `locked_at`;
+  keyed by drive id so a lock survives moves and renames). The planner
+  (`dam.ops.planner`) refuses a RENAME, MOVE or QUARANTINE of a locked file, of a folder
+  holding one, and of a file inside a locked folder, for every route (rename, Move to…,
+  drag and drop, Back to inbox, filing, Move to To Delete, conversions, the command
+  line), before anything is journaled. One refusal names every locked file of the plan
+  ("This file is locked. Unlock it to change it." for one, "These files are locked (a.pdf,
+  b.pdf). Unlock them to change them." for several). Links, new folders and the app's own
+  link syncs are not file changes; tags, notes, checklists, From and For, trays, stars,
+  the Important mark and summaries are the app's own data and stay open. Undo is not
+  gated (it only puts back what was done and is verified as always). The existing refusal
+  to quarantine an Important file ("unmark it first") stays and comes first.
+
+  A temporary unlock is a grant held in the server's memory (`dam.locks.LockService`),
+  never stored, so a restart or a crash locks everything again. `POST /api/files/{id}/unlock
+  {mode: "now"}` answers `{drive_id, locked, reason ("important" | "file" | null),
+  unlocked_now, token, expires_after_idle_seconds}`; the page sends its tokens in the
+  `X-Dam-Unlock` header (comma separated) and the planner accepts a locked file only when a
+  live grant for exactly that file is among them. A grant expires after 15 minutes without
+  use (each accepted use renews it) and is dropped by `DELETE /api/files/{id}/unlock`,
+  which the page calls when the file is left. `{mode: "for_good"}` removes an ordinary
+  lock (409 "An Important file can only be unlocked for now." for an Important file).
+  `POST /api/files/{id}/lock` stores a lock (only files; also ends the file's grants).
+  `GET /api/locks` answers `{files: [{drive_id, reason}], folders: [path]}`. The
+  command line has no way to unlock, so `dam file`, `dam quarantine` and the like refuse a
+  locked file; unlock it in the app first. Locking is not journaled (it changes nothing in
+  the archive). It is a catch against mistakes, not a security boundary: anything that can
+  call the local API can unlock.
 - **`##. Ongoing` ownership.** The app owns an entry only if it still is the exact thing
   it created (the identity above). An entry you made yourself, or one that was replaced,
   is never touched, never adopted and never deleted. If a name is taken by something
@@ -820,8 +850,8 @@ The user guide's "What dam never does" gives the short version. The details:
   file upload of "Choose files…" (`POST /api/inbox/upload`, `application/octet-stream`),
   which passes the same host and origin checks. The UI is served with a strict CSP. Other
   web pages cannot read or change your archive.
-- **The database only.** Trays, items, notes, checklists, reminders, collections, stars
-  and tags live in `dam.sqlite` in the data folder. Nothing about them is written into the
+- **The database only.** Trays, items, notes, checklists, reminders, collections, stars,
+  locks and tags live in `dam.sqlite` in the data folder. Nothing about them is written into the
   archive; the only archive writes for them are links and folders in `##. Ongoing` /
   `##. Important` and the moves of the conversion screens, always previewed and journaled.
 

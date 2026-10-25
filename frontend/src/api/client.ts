@@ -1,6 +1,6 @@
 /** Typed JSON client for the dam API, plus TanStack Query hooks. */
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { components } from "./schema";
 
 type Schemas = components["schemas"];
@@ -131,6 +131,9 @@ export type FileLinks = Schemas["FileLinksOut"];
 export type Mark = Schemas["FileRecordOut"]["marks"][number];
 export type MarkAction = "star" | "unstar" | "important" | "unimportant";
 export type FileDetail = Schemas["FileDetailOut"];
+/** A file's lock (see ``useFileLock``) and the list of locked files and folders. */
+export type LockState = Schemas["LockStateOut"];
+export type Locks = Schemas["LocksOut"];
 export type ChecklistItem = Schemas["ChecklistItemOut"];
 export type InboxStats = Schemas["InboxStatsOut"];
 export type Found = Schemas["FoundOut"];
@@ -229,8 +232,28 @@ export const navigation = {
   },
 };
 
+/** Unlock tokens by file: "unlocked until you leave this file". Memory only: a reload
+ * forgets them (and so locks every file again); the server drops them after a while too. */
+const unlockTokens = new Map<string, string>();
+const unlockListeners = new Set<() => void>();
+let unlockVersion = 0;
+const unlocksChanged = () => {
+  unlockVersion += 1;
+  for (const l of unlockListeners) l();
+};
+export const isUnlockedNow = (driveId: string) => unlockTokens.has(driveId);
+/** Forget every unlock (tests; and the page being left). */
+export const forgetUnlocks = () => {
+  if (unlockTokens.size === 0) return;
+  unlockTokens.clear();
+  unlocksChanged();
+};
+
 async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
+  // the temporary unlocks this page holds: the server accepts a change to a locked file
+  // only with the token it issued for it (see "Locks" below)
+  if (unlockTokens.size > 0) headers["X-Dam-Unlock"] = [...unlockTokens.values()].join(",");
   const sendsBody = method !== "GET" && method !== "DELETE";
   if (sendsBody) headers["Content-Type"] = "application/json";
   if (method !== "GET" && activeArchive) headers["X-Dam-Archive"] = activeArchive;
@@ -317,6 +340,7 @@ const keys = {
   checklist: ["checklist"],
   ongoing: ["ongoing"],
   important: ["important"],
+  locks: ["locks"],
   file: ["file"],
   ai: ["ai"],
   fileFields: ["file-fields"],
@@ -467,6 +491,7 @@ function useRefresh() {
     void client.invalidateQueries({ queryKey: keys.notes });
     void client.invalidateQueries({ queryKey: keys.ongoing }); // undo of a conversion
     void client.invalidateQueries({ queryKey: keys.important });
+    void client.invalidateQueries({ queryKey: keys.locks });
     void client.invalidateQueries({ queryKey: keys.file }); // the viewer's record (its marks)
   };
 }
@@ -1066,6 +1091,7 @@ function useRefreshMarks() {
       keys.collections,
       keys.ongoing,
       keys.important,
+      keys.locks,
       keys.file,
     ]) {
       void client.invalidateQueries({ queryKey: key });
@@ -1799,4 +1825,157 @@ export function useAskSession() {
   const add = (entry: Omit<AskEntry, "id">) =>
     client.setQueryData<AskEntry[]>(askKey, (old = []) => [{ ...entry, id: (old[0]?.id ?? 0) + 1 }, ...old]);
   return { answers: query.data, add };
+}
+
+// -- Locks ----------------------------------------------------------------------
+// A locked file (Important, or locked by the owner) can be viewed and described but not
+// renamed, moved or sent to To Delete. "Unlock" gets a token from the server that the page
+// sends with every call until the file is left; the server does the refusing.
+
+export const LOCKED_REASON = "This file is locked. Unlock it to change it.";
+
+/** Every locked file and the locked folders (Important ones and the owner's). */
+export const useLocks = () =>
+  useQuery({
+    queryKey: keys.locks,
+    queryFn: () => get<Locks>("/api/locks"),
+    staleTime: 30_000,
+  });
+
+const lockedIn = (locks: Locks | undefined, driveId: string, path?: string | null) => {
+  if (locks === undefined) return false;
+  if (locks.files.some((f) => f.drive_id === driveId)) return true;
+  const here = path?.normalize("NFC");
+  return here != null && locks.folders.some((f) => here === f || here.startsWith(`${f}/`));
+};
+
+/** Re-render when a file is unlocked or locked again here. */
+function useUnlockVersion() {
+  return useSyncExternalStore(
+    (listener) => {
+      unlockListeners.add(listener);
+      return () => unlockListeners.delete(listener);
+    },
+    () => unlockVersion,
+  );
+}
+
+/** Whether the page may offer to change a file on disk: `(driveId, marks, path) => blocked`.
+ * Blocked means locked and not unlocked for now. Only the server enforces the lock; this
+ * keeps the controls honest. */
+export function useIsBlocked() {
+  const locks = useLocks();
+  useUnlockVersion();
+  return useCallback(
+    (driveId: string, marks?: readonly Mark[] | null, path?: string | null) =>
+      !isUnlockedNow(driveId) && ((marks?.includes("important") ?? false) || lockedIn(locks.data, driveId, path)),
+    [locks.data],
+  );
+}
+
+export type FileLock = {
+  /** Locked (Important, or by the owner), whether or not unlocked for now. */
+  locked: boolean;
+  important: boolean;
+  /** Unlocked for now: until the page lets this file go. */
+  unlockedNow: boolean;
+  /** Locked and not unlocked: its rename, move and To Delete are off. */
+  blocked: boolean;
+  busy: boolean;
+  error: string | null;
+  lock: () => Promise<void>;
+  /** "now": until you leave this file; "for_good": remove the owner's lock (not for an Important file). */
+  unlock: (mode: "now" | "for_good") => Promise<void>;
+  /** End a temporary unlock at once. */
+  relock: () => void;
+};
+
+const releaseUnlock = (driveId: string) => {
+  if (!unlockTokens.delete(driveId)) return;
+  unlocksChanged();
+};
+
+/** A file's lock. ``marks``/``path`` are the caller's, when it has them (else the file's
+ * record is read). Leaving the file (this component going away) locks it again; hold the
+ * hook in one component per open file (``LockControl``). */
+export function useFileLock(driveId: string, marks?: readonly Mark[], path?: string | null, holder = false): FileLock {
+  const client = useQueryClient();
+  const locks = useLocks();
+  const detail = useFileDetail(driveId, marks === undefined && driveId !== "");
+  useUnlockVersion();
+  const known = marks ?? detail.data?.record.marks;
+  const filePath = path ?? detail.data?.record.path ?? null;
+  const important = known?.includes("important") ?? false;
+  const locked = important || lockedIn(locks.data, driveId, filePath);
+  const unlockedNow = isUnlockedNow(driveId);
+  const pending = useRef(0);
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+
+  const call = async (run: () => Promise<void>) => {
+    pending.current += 1;
+    setState({ busy: true, error: null });
+    try {
+      await run();
+      setState({ busy: pending.current > 1, error: null });
+    } catch (e) {
+      setState({ busy: pending.current > 1, error: errorText(e) });
+    } finally {
+      pending.current -= 1;
+    }
+  };
+  const refresh = () => client.invalidateQueries({ queryKey: keys.locks });
+
+  // leaving the file locks it again, here and on the server
+  useEffect(() => {
+    if (!holder) return;
+    return () => {
+      if (unlockTokens.has(driveId)) {
+        releaseUnlock(driveId);
+        void del(`/api/files/${enc(driveId)}/unlock`).catch(() => {});
+      }
+    };
+  }, [driveId, holder]);
+
+  return {
+    locked,
+    important,
+    unlockedNow,
+    blocked: locked && !unlockedNow,
+    busy: state.busy,
+    error: state.error,
+    lock: () =>
+      call(async () => {
+        await post<LockState>(`/api/files/${enc(driveId)}/lock`);
+        await refresh();
+      }),
+    unlock: (mode) =>
+      call(async () => {
+        const answer = await post<LockState>(`/api/files/${enc(driveId)}/unlock`, { mode });
+        if (mode === "now" && answer.token) {
+          unlockTokens.set(driveId, answer.token);
+          unlocksChanged();
+        }
+        await refresh();
+      }),
+    relock: () => {
+      if (!unlockTokens.has(driveId)) return;
+      releaseUnlock(driveId);
+      void del(`/api/files/${enc(driveId)}/unlock`).catch(() => {});
+    },
+  };
+}
+
+// the page being closed or reloaded: tell the server to lock everything again (it would
+// anyway after a while, and a reload forgets the tokens)
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    for (const driveId of unlockTokens.keys()) {
+      void fetch(`/api/files/${encodeURIComponent(driveId)}/unlock`, {
+        method: "DELETE",
+        keepalive: true,
+        credentials: "same-origin",
+        headers: activeArchive ? { "X-Dam-Archive": activeArchive } : {},
+      }).catch(() => {});
+    }
+  });
 }
