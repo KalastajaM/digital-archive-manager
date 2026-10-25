@@ -213,6 +213,9 @@ collections = Table(
     # starred | important: the two built-in collections (★ Ongoing, ! Important), one
     # of each; NULL for an ordinary collection. Migration 0017
     Column("kind", Text, nullable=True),
+    # the owner's order among the collections with the same parent (0, 1, 2, ...; ties
+    # by name); the built-ins ignore it. Migration 0032
+    Column("position", Integer, nullable=False, server_default="0"),
     Index("ix_collections_parent_id", "parent_id"),
     Index("ux_collections_kind", "kind", unique=True, sqlite_where=text("kind IS NOT NULL")),
 )

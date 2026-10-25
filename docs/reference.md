@@ -946,7 +946,18 @@ the command line: `dam errors [--all] [--retry]`.
 - Browse: `GET /api/browse?path=&collection=` and
   `GET /api/browse/files?path=&collection=&sort=&dir=&limit=` (at most 500). Collections:
   `POST /api/collections {name, parent_id?}` and
-  `PATCH /api/collections/{id}/parent {parent_id}` (null for the top). Notes:
+  `PATCH /api/collections/{id}/parent {parent_id}` (null for the top). Order:
+  `POST /api/collections/{id}/move {before_id?, after_id?}` puts an ordinary collection
+  just before or after a sibling (same parent; give exactly one; 400 for a built-in
+  collection on either side, itself, another parent or none/both, 404 for an unknown id)
+  and answers like the other collection changes with `batch: null` (only the order
+  changes: no sync, no journal). Table `collections` has `position` (migration 0032,
+  integer, default 0): the order among the collections with the same parent, backfilled
+  from the name order; a new or reparented collection goes last; built-ins ignore it.
+  Every list (`GET /api/collections`, the sidebar, pickers) is in tree order: built-ins
+  first, then `position`, then folded name. `CollectionOut` has `position`. Browse takes
+  `?path=<folder>&select=<drive id>` to open a folder with that file selected and
+  previewed (a file no longer in it gives a notice). Notes:
   `POST /api/notes/{kind}/{target}/append`.
 
 ## Logs

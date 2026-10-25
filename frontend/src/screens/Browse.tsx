@@ -761,6 +761,10 @@ export default function Browse() {
     const i = items.left.findIndex((it) => it.drive_id === selectId);
     if (i >= 0) {
       update("left", { ids: [], index: i, anchor: selectId, touched: true });
+      // the row is in view (a long folder): after this render has marked it
+      setTimeout(() => listRef.current.left?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" }), 0);
+    } else {
+      toast({ kind: "info", text: "That file is no longer in this folder. Showing the folder it was last in." });
     }
     const next = new URLSearchParams(params);
     next.delete("select");

@@ -29,6 +29,7 @@ const SAUNA: Collection = {
   parent_id: null,
   path: ["Sauna"],
   kind: null,
+  position: 0,
 };
 const entry = (name: string, dir: string, is_dir: boolean, drive_id: string): DirEntry => ({
   name,

@@ -31,6 +31,7 @@ const SAUNA: Collection = {
   parent_id: null,
   path: ["Sauna"],
   kind: null,
+  position: 0,
 };
 const row = (c: Collection, files: number, open_checks: number): CollectionRow => ({ ...c, files, open_checks });
 const CLOSED: Collection = { ...SAUNA, id: 8, name: "Old car", path: ["Old car"], state: "closed", closed_at: 1_760_500_000, ongoing_rel: null };

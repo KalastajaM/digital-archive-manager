@@ -53,10 +53,10 @@ import { Collapsible, firstLine } from "../components/Collapsible";
 import { COLLECTION_NAME_MAX } from "../components/CollectionPicker";
 import { changeToast, CLOSE_CHILDREN_FIRST, NOT_SHOWN } from "../components/collectionText";
 import {
-  byPath,
   childrenOf,
   endCollectionMove,
   holdsText,
+  inTreeOrder,
   movedText,
   recreatedLinks,
   recreatedNote,
@@ -68,6 +68,7 @@ import {
 } from "../components/collectionTree";
 import { CopyButton } from "../components/CopyButton";
 import { FileDetails } from "../components/FileDetails";
+import { useCollectionOrder } from "../components/useCollectionOrder";
 import {
   attentionTags,
   type FoldKey,
@@ -76,6 +77,7 @@ import {
   GroupTree,
   groupPaths,
   baseName,
+  browseHref,
   memberName,
   treeOf,
   visibleMembers,
@@ -427,10 +429,9 @@ function MoveSheet({
   const [needle, setNeedle] = useState("");
   const [choice, setChoice] = useState<number | null>(c.parent_id);
   const own = useMemo(() => subtreeOf(open, c.id), [open, c.id]); // itself and everything under it
-  const candidates = open
+  const candidates = inTreeOrder(open)
     .filter((x) => !own.has(x.id))
-    .filter((x) => !fold(needle) || fold(pathLabel(x)).includes(fold(needle)))
-    .sort((a, b) => byPath(a, b));
+    .filter((x) => !fold(needle) || fold(pathLabel(x)).includes(fold(needle)));
   const name = visible(c.name);
   return (
     <Sheet
@@ -605,6 +606,13 @@ function Inspector({
       Remove from collection
     </button>
   );
+  // the file's own folder in Browse, with the file selected (an ordinary collection keeps
+  // its page on a click; Starred and Important go there on a click)
+  const showButton = !member.is_dir && member.path && (
+    <button type="button" onClick={() => navigate(browseHref(member.path!, member.drive_id))}>
+      Show in folder
+    </button>
+  );
   // without groups there is nothing to choose (and no "Ungrouped" to show)
   const group = groups.length > 0 && (
     <div className="field inspector-group">
@@ -635,10 +643,15 @@ function Inspector({
           view={quickLookButton}
           tools={trashButton}
           extras={
-            (group || removeButton) && (
+            (group || removeButton || showButton) && (
               <section className="inspector-collection" aria-label="In this collection">
                 {group}
-                {removeButton && <div className="inspector-actions">{removeButton}</div>}
+                {(showButton || removeButton) && (
+                  <div className="inspector-actions">
+                    {showButton}
+                    {removeButton}
+                  </div>
+                )}
               </section>
             )
           }
@@ -660,6 +673,7 @@ function Inspector({
           Show in Browse
         </button>
       )}
+      {showButton}
       {removeButton}
     </div>
   );
@@ -764,6 +778,7 @@ export default function CollectionDetail({
   // one list for the path, the child collections and Move to… (the open ones)
   const allCollections = useCollections("all");
   const openCollections = useMemo(() => (allCollections.data ?? []).filter((x) => x.state === "open"), [allCollections.data]);
+  const reorder = useCollectionOrder(allCollections.data ?? []);
   const navigate = useNavigate();
   const status = useStatus();
   const [movingTo, setMovingTo] = useState(false);
@@ -1187,10 +1202,17 @@ export default function CollectionDetail({
       return next;
     });
 
+  const ownRow = builtin ? undefined : allCollections.data?.find((x) => x.id === id);
   const openChildren = (allCollections.data ?? []).some((x) => x.parent_id === id && x.state === "open");
   const more: MenuEntry[] = [
     { label: "Rename", disabled: busy, onSelect: () => setRenaming(true) },
     { label: "Move to…", disabled: busy, onSelect: () => setMovingTo(true) },
+    ...(ownRow
+      ? [
+          { label: "Move up", disabled: busy || !reorder.canStep(ownRow, -1), onSelect: () => reorder.step(ownRow, -1) },
+          { label: "Move down", disabled: busy || !reorder.canStep(ownRow, 1), onSelect: () => reorder.step(ownRow, 1) },
+        ]
+      : []),
     // a closed collection takes no new collection (the server refuses a closed parent)
     { label: "New collection inside…", disabled: busy || !isOpen, onSelect: () => setNewChild(true) },
     {
@@ -1354,6 +1376,7 @@ export default function CollectionDetail({
           )}
           <div className="collection-members">
           <GroupTree
+            showInBrowse={builtin !== null}
             collection={c}
             attention={attentionBy}
             selected={browsed ? null : (selected?.drive_id ?? null)}

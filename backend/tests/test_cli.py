@@ -612,9 +612,9 @@ def test_collections_command_shows_the_tree(run, app):
     start, end = header.index("NAME"), header.index("MEMBERS")
     assert [x[start:end].rstrip() for x in lines] == [
         "Houses",
-        "  Attic",
         "  Sauna",
         "    Deck",
+        "  Attic",
         "Zebra",
     ]
     app.collections.close(app.collections.by_name("Deck").id)

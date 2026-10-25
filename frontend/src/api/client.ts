@@ -1201,6 +1201,18 @@ export const useSetCollectionParent = () => {
   });
 };
 
+/** Put a collection before or after a sibling (its place among those with the same
+ * parent). Only the order changes: no file moves, no batch. Built-in collections and
+ * other parents are refused (400). */
+export const useMoveCollectionOrder = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...place }: { id: number } & ({ before_id: number } | { after_id: number })) =>
+      post<CollectionChange>(`/api/collections/${id}/move`, place),
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.collections }),
+  });
+};
+
 /** Add files/folders to a collection, or remove one (DB only: files stay put). The
  * Ongoing sync runs after it: the answer carries its batch and problems. */
 export const useCollectionMembers = () => {

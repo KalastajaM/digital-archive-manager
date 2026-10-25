@@ -57,6 +57,7 @@ import {
 } from "../collectionTree";
 import { anyMoveRunning, backToInbox, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../MoveTo";
 import { useBlockToastActions, useToast } from "../Toasts";
+import { type CollectionOrder, orderKeys, useCollectionOrder, useOrderMenu, useReorderRow } from "../useCollectionOrder";
 import { useUndoConfirm } from "../UndoConfirm";
 import { useQuickPut } from "../useQuickPut";
 
@@ -318,12 +319,14 @@ type TreeProps = {
   folds: ReturnType<typeof useFolds<number>>;
   collect: ReturnType<typeof useAddToCollection>;
   mover: ReturnType<typeof useMoveCollection>;
+  order: CollectionOrder;
+  onMenu: (c: CollectionRow) => (e: React.MouseEvent) => void;
 };
 
 /** One collection in the sidebar tree, its children below it (unless folded). The row
  * takes dropped files (members) and dropped collections (moved inside), and drags as
  * a collection itself; "Move to…" on the collection page is the keyboard way. */
-function CollectionNode({ c, kids, folds, collect, mover }: TreeProps) {
+function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeProps) {
   const children = kids.get(c.id) ?? [];
   const open = !folds.folded.has(c.id);
   const addFiles = collect.accept(c);
@@ -335,6 +338,9 @@ function CollectionNode({ c, kids, folds, collect, mover }: TreeProps) {
     accept: (d) => (d.kind === "files" ? addFiles(d.ids) : takeCollection(d.id)),
     onDrop: (d) => (d.kind === "files" ? add(d.ids) : moveHere(d.id)),
   });
+  // near a sibling's top or bottom edge a dragged collection is put before or after it
+  // (a drop line); in the middle it goes inside, as before
+  const reorder = useReorderRow(order, c, target.props);
   const name = visible(c.name);
   return (
     <li className="sidebar-tree-item">
@@ -342,9 +348,12 @@ function CollectionNode({ c, kids, folds, collect, mover }: TreeProps) {
         to={`/collections/${c.id}`}
         className={children.length > 0 ? "sidebar-row sidebar-row-parent" : "sidebar-row"}
         aria-label={name}
+        data-collection-id={c.id}
         draggable
         onDragStart={(e) => setDragCollection(e, c.id, c.name)}
-        {...target.props}
+        onKeyDown={orderKeys(order, c)}
+        onContextMenu={onMenu(c)}
+        {...reorder.props}
       >
         <Layers className="sidebar-icon" {...ICON} />
         <span className="sidebar-label">{name}</span>
@@ -364,7 +373,7 @@ function CollectionNode({ c, kids, folds, collect, mover }: TreeProps) {
       {children.length > 0 && open && (
         <ul className="sidebar-list sidebar-children">
           {children.map((child) => (
-            <CollectionNode key={child.id} c={child} kids={kids} folds={folds} collect={collect} mover={mover} />
+            <CollectionNode key={child.id} c={child} kids={kids} folds={folds} collect={collect} mover={mover} order={order} onMenu={onMenu} />
           ))}
         </ul>
       )}
@@ -381,6 +390,8 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
   const collect = useAddToCollection();
   const mover = useMoveCollection(list, (target) => target && folds.unfold(target.id));
   const kids = childrenOf(list);
+  const order = useCollectionOrder(list);
+  const menu = useOrderMenu(order);
   const top = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
   return (
     <Section
@@ -393,8 +404,9 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
       <ImportantRow />
       <StarredRow />
       {(kids.get(null) ?? []).map((c) => (
-        <CollectionNode key={c.id} c={c} kids={kids} folds={folds} collect={collect} mover={mover} />
+        <CollectionNode key={c.id} c={c} kids={kids} folds={folds} collect={collect} mover={mover} order={order} onMenu={menu.onContextMenu} />
       ))}
+      {menu.element}
     </Section>
   );
 }
@@ -406,7 +418,7 @@ function ImportantRow() {
   const n = important.data?.members.length ?? 0;
   return (
     <li>
-      <NavLink to="/important" className="sidebar-row" aria-label={n ? `Important (${n})` : "Important"}>
+      <NavLink to="/important" className="sidebar-row" draggable={false} aria-label={n ? `Important (${n})` : "Important"}>
         <span className="sidebar-icon sidebar-important" aria-hidden="true">
           <ImportantGlyph large />
         </span>
@@ -423,7 +435,7 @@ function StarredRow() {
   const n = starred.data?.members.length ?? 0;
   return (
     <li>
-      <NavLink to="/starred" className="sidebar-row" aria-label={n ? `Starred (${n})` : "Starred"}>
+      <NavLink to="/starred" className="sidebar-row" draggable={false} aria-label={n ? `Starred (${n})` : "Starred"}>
         <span className="sidebar-icon sidebar-starred" aria-hidden="true">
           <StarGlyph size={16} />
         </span>

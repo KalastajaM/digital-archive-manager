@@ -1420,6 +1420,28 @@ export interface paths {
         patch: operations["set_parent_api_collections__collection_id__parent_patch"];
         trace?: never;
     };
+    "/api/collections/{collection_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move
+         * @description Put the collection before or after a sibling (same parent; the built-in ★ and !
+         *     stay first and cannot move or be moved beside). Only the order changes: no file or
+         *     link moves, so no preview, no batch and no sync.
+         */
+        post: operations["move_api_collections__collection_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/collections/{collection_id}/members": {
         parameters: {
             query?: never;
@@ -3498,6 +3520,17 @@ export interface components {
             /** Parent Id */
             parent_id?: number | null;
         };
+        /**
+         * CollectionMoveBody
+         * @description Where to put a collection among its siblings: just before ``before_id`` or just
+         *     after ``after_id`` (give exactly one).
+         */
+        CollectionMoveBody: {
+            /** Before Id */
+            before_id?: number | null;
+            /** After Id */
+            after_id?: number | null;
+        };
         /** CollectionOut */
         CollectionOut: {
             /** Id */
@@ -3533,6 +3566,8 @@ export interface components {
             path: string[];
             /** Kind */
             kind: ("starred" | "important") | null;
+            /** Position */
+            position: number;
         };
         /**
          * CollectionRowOut
@@ -3573,6 +3608,8 @@ export interface components {
             path: string[];
             /** Kind */
             kind: ("starred" | "important") | null;
+            /** Position */
+            position: number;
             /** Files */
             files: number;
             /** Open Checks */
@@ -13873,6 +13910,104 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ParentBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionChangeOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    move_api_collections__collection_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionMoveBody"];
             };
         };
         responses: {

@@ -131,6 +131,8 @@ class Collection:
     path: list[str] = field(default_factory=list)
     # "starred" | "important" for the two built-in collections; None otherwise
     kind: str | None = None
+    # the owner's order among the collections with the same parent (0, 1, ...)
+    position: int = 0
 
 
 def _fold(name: str) -> str:
@@ -257,6 +259,12 @@ class _Node:
     name_fold: str
     parent_id: int | None
     state: str
+    position: int = 0
+    kind: str | None = None
+
+    def sort_key(self, cid: int) -> tuple[int, int, str, int]:
+        """Among siblings: the built-ins first, then the owner's order, then A-Z."""
+        return (0 if self.kind else 1, self.position, self.name_fold, cid)
 
 
 CLOSE_CHILDREN_FIRST = "Close or move its collections first"
@@ -265,7 +273,7 @@ CLOSE_CHILDREN_FIRST = "Close or move its collections first"
 def _tree(conn: Connection) -> dict[int, _Node]:
     """Every collection's place in the tree, by id (one small query)."""
     return {
-        r.id: _Node(r.name, r.name_fold, r.parent_id, r.state)
+        r.id: _Node(r.name, r.name_fold, r.parent_id, r.state, r.position, r.kind)
         for r in conn.execute(
             select(
                 collections.c.id,
@@ -273,6 +281,8 @@ def _tree(conn: Connection) -> dict[int, _Node]:
                 collections.c.name_fold,
                 collections.c.parent_id,
                 collections.c.state,
+                collections.c.position,
+                collections.c.kind,
             )
         ).all()
     }
@@ -312,14 +322,15 @@ def _subtree(tree: dict[int, _Node], root: int) -> list[int]:
 
 
 def _tree_order(tree: dict[int, _Node]) -> list[int]:
-    """Every id, depth-first, siblings A-Z (folded name, then id). A collection whose
+    """Every id, depth-first, siblings in the owner's order (built-ins first; then
+    ``position``, folded name, id). A collection whose
     parent is unknown, or that sits in a cycle, is placed at the top so none is lost."""
     children: dict[int | None, list[int]] = {}
     for cid, node in tree.items():
         parent = node.parent_id if node.parent_id in tree else None
         children.setdefault(parent, []).append(cid)
     for ids in children.values():
-        ids.sort(key=lambda i: (tree[i].name_fold, i))
+        ids.sort(key=lambda i: tree[i].sort_key(i))
     order: list[int] = []
     seen: set[int] = set()
 
@@ -331,7 +342,7 @@ def _tree_order(tree: dict[int, _Node]) -> list[int]:
                 walk(cid)
 
     walk(None)
-    for cid in sorted(set(tree) - seen, key=lambda i: (tree[i].name_fold, i)):
+    for cid in sorted(set(tree) - seen, key=lambda i: tree[i].sort_key(i)):
         if cid not in seen:  # in a cycle: start a walk from it
             seen.add(cid)
             order.append(cid)
@@ -477,6 +488,7 @@ class CollectionService:
                 parent_id=r.parent_id,
                 path=_path(tree, r.id),
                 kind=r.kind,
+                position=r.position,
             )
             for r in rows
         ]
@@ -510,9 +522,10 @@ class CollectionService:
 
     def list(self, state: str | None = "open", include_builtin: bool = False) -> list[Collection]:
         """Collections in ``state`` (``"open"`` by default; ``None`` for all) in tree
-        order: depth-first, A-Z per level. The order (and each ``path``) is that of the
-        whole tree, so a closed child of an open parent keeps its place and full path
-        in the closed list. The built-in collections only with ``include_builtin``."""
+        order: depth-first, the owner's order per level (then A-Z). The order (and each
+        ``path``) is that of the whole tree, so a closed child of an open parent keeps its
+        place and full path in the closed list. The built-in collections only with
+        ``include_builtin``."""
         if state is not None and state not in STATES:
             raise InvalidRequest(f"state must be one of {', '.join(STATES)}")
         with self.engine.connect() as conn:
@@ -596,9 +609,24 @@ class CollectionService:
                 created=time.time(),
                 publish={"ongoing": True},
                 parent_id=parent_id,
+                position=self._next_position(conn, parent_id),
             )
         )
         return result.inserted_primary_key[0]
+
+    @staticmethod
+    def _next_position(conn: Connection, parent_id: int | None) -> int:
+        """The place after the last ordinary collection inside ``parent_id``: a new
+        collection (or one moved in) goes at the end of its siblings."""
+        parent = (
+            collections.c.parent_id.is_(None)
+            if parent_id is None
+            else collections.c.parent_id == parent_id
+        )
+        top = conn.execute(
+            select(func.max(collections.c.position)).where(parent, collections.c.kind.is_(None))
+        ).scalar()
+        return 0 if top is None else top + 1
 
     def create(self, name: str, parent_id: int | None = None, *, notify: bool = True) -> Collection:
         """A new open collection, inside ``parent_id`` (None: at the top), which must
@@ -638,10 +666,48 @@ class CollectionService:
                 conn.execute(
                     update(collections)
                     .where(collections.c.id == collection_id)
-                    .values(parent_id=parent_id)
+                    .values(parent_id=parent_id, position=self._next_position(conn, parent_id))
                 )
         if moved and notify:
             self._changed()
+        return self.get(collection_id)
+
+    def move(
+        self, collection_id: int, *, before_id: int | None = None, after_id: int | None = None
+    ) -> Collection:
+        """Put the collection just before ``before_id`` or just after ``after_id`` (give
+        exactly one), which must be a sibling: same parent, never a built-in one (they
+        stay first, and are not movable). A change of the order only: no file, link or
+        parent changes, so there is no Ongoing sync. The same place again changes
+        nothing."""
+        if (before_id is None) == (after_id is None):
+            raise InvalidRequest("Give exactly one of before_id and after_id")
+        anchor_id = before_id if before_id is not None else after_id
+        with write_tx(self.engine) as conn:
+            self._ordinary(conn, collection_id, "moved")
+            if anchor_id == collection_id:
+                raise InvalidRequest("A collection cannot be put beside itself")
+            kind = self._kind(conn, anchor_id)
+            if kind is not None:
+                raise InvalidRequest(f"{BUILTINS[kind]!r} is built in: it stays first")
+            tree = _tree(conn)
+            parent = tree[collection_id].parent_id
+            if tree[anchor_id].parent_id != parent:
+                raise InvalidRequest("A collection can only move among those in the same place")
+            order = sorted(
+                (i for i, n in tree.items() if n.parent_id == parent and n.kind is None),
+                key=lambda i: tree[i].sort_key(i),
+            )
+            before = list(order)
+            order = [i for i in order if i != collection_id]
+            at = order.index(anchor_id) + (0 if before_id is not None else 1)
+            order.insert(at, collection_id)
+            if order != before:
+                for pos, cid in enumerate(order):
+                    if tree[cid].position != pos:
+                        conn.execute(
+                            update(collections).where(collections.c.id == cid).values(position=pos)
+                        )
         return self.get(collection_id)
 
     def get_or_create(self, name: str, *, notify: bool = True) -> Collection:
@@ -1380,5 +1446,7 @@ class CollectionService:
             query = select(collections).where(collections.c.id.in_(ids))
             if not include_builtin:
                 query = query.where(collections.c.kind.is_(None))
-            rows = conn.execute(query.order_by(collections.c.name_fold, collections.c.id)).all()
-            return self._load(conn, rows)
+            tree = _tree(conn)
+            rank = {cid: i for i, cid in enumerate(_tree_order(tree))}
+            rows = sorted(conn.execute(query).all(), key=lambda r: rank.get(r.id, len(rank)))
+            return self._load(conn, rows, tree)
