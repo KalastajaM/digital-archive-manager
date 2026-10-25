@@ -764,7 +764,10 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .browse-toolbar { --split: 45%; flex-wrap: wrap; align-content: center; row-gap: var(--sp-1); padding-block: var(--sp-1); padding-right: calc(100% - max(300px, var(--split)) + var(--sp-4)); }
 .browse-split .browse-toolbar { padding-right: calc(50% + var(--sp-4)); }
 .browse-toolbar .toolbar-actions { flex-wrap: wrap; }
-.browse-toolbar .toolbar-search { flex: 1 1 auto; min-width: 0; }
+.browse-toolbar .toolbar-search { flex: 1 1 320px; min-width: 0; }
+.browse-toolbar .toolbar-search .search { width: 100%; }
+/* a narrow window: the list is too slim to carry the header, so it spans the content again */
+@media (max-width: 1000px) { .browse-toolbar, .browse-split .browse-toolbar { padding-right: var(--sp-4); } }
 .browse-toolbar .toolbar-actions + .toolbar-search, .browse-toolbar .toolbar-title + .toolbar-search { margin-left: 0; }
 /* Search: the scope (this folder and below, or the whole archive) beside the box */
 .browse .search { display: flex; align-items: center; gap: var(--sp-2); }
