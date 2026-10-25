@@ -746,7 +746,11 @@ can go. Four trays come with dam:
 | **Follow up** | things you wait on from others (a delivery, a reply, a refund), with an optional check-by date | on the check date and once when overdue |
 
 A tray's screen has the list (Open / Done) and the selected item beside it; ↑/↓ move the
-highlight and open the item. An item has a title, one or more files, the tray's fields, a
+highlight and open the item. At the right end of a row, before the date, small icons say
+what the item has: a pencil for a note, a checklist icon with the number of to-dos still
+open (hover for "2 of 5 to-dos open"; nothing once all are done), and a sparkle for an AI
+summary or a text icon for one you wrote. With several files, a summary you wrote on any
+of them shows as written, otherwise any AI summary. An item has a title, one or more files, the tray's fields, a
 note, a checklist and a history.
 
 - Click the title to edit it in place: Enter or clicking away

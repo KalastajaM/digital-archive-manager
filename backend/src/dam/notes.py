@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from sqlalchemy import Connection, Engine, case, delete, insert, select, update
+from sqlalchemy import Connection, Engine, case, delete, func, insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.db.engine import write_tx
@@ -74,6 +74,43 @@ class NotesService:
                 )
             ).scalar_one_or_none()
         return text or ""
+
+    def item_facts(self, item_ids: list[int]) -> dict[int, tuple[bool, int, int]]:
+        """For tray lists, two queries for all items: ``{id: (has_note, open, total)}``
+        (open and total count the item's checklist entries)."""
+        if not item_ids:
+            return {}
+        ids = [str(i) for i in item_ids]
+        out = {i: (False, 0, 0) for i in item_ids}
+        with self.engine.connect() as conn:
+            noted = {
+                r[0]
+                for r in conn.execute(
+                    select(notes.c.target_id, notes.c.text).where(
+                        notes.c.target_kind == "item", notes.c.target_id.in_(ids)
+                    )
+                )
+                if (r[1] or "").strip()
+            }
+            counts = {
+                r[0]: (r[1], r[2])
+                for r in conn.execute(
+                    select(
+                        checklist_items.c.target_id,
+                        func.count(),
+                        func.coalesce(func.sum(case((checklist_items.c.done, 0), else_=1)), 0),
+                    )
+                    .where(
+                        checklist_items.c.target_kind == "item",
+                        checklist_items.c.target_id.in_(ids),
+                    )
+                    .group_by(checklist_items.c.target_id)
+                )
+            }
+        for i in item_ids:
+            total, open_ = counts.get(str(i), (0, 0))
+            out[i] = (str(i) in noted, int(open_), int(total))
+        return out
 
     def set(self, kind: str, target_id: str, text: str, batch_id: str | None = None) -> None:
         """Store the note (surrounding whitespace stripped); blank text removes it."""

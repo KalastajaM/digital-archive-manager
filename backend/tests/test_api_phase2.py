@@ -827,3 +827,31 @@ def test_note_target_ids_out_of_range_are_4xx(client, kind):
         r = client.get(f"/api/notes/{kind}/{target}")
         assert 400 <= r.status_code < 500, (target, r.status_code)
     assert client.get(f"/api/notes/{kind}/{'9' * 18}").status_code == 404
+
+
+def test_tray_items_carry_checklist_counts_and_summary_kind(client, app, files):
+    plain = new_item(client, ["f1"])
+    todo = new_item(client, ["f2"])
+    for text in ("a", "b", "c"):
+        r = send(client, "POST", f"/api/checklist/item/{todo['id']}", {"text": text})
+        assert r.status_code == 200, r.text
+    first = send(client, "GET", f"/api/checklist/item/{todo['id']}", None).json()[0]
+    send(client, "PATCH", f"/api/checklist/{first['id']}", {"done": True})
+
+    def rows():
+        return {r["id"]: r for r in client.get("/api/trays/to-pay/items").json()}
+
+    r = rows()
+    assert (r[plain["id"]]["checklist_open"], r[plain["id"]]["checklist_total"]) == (0, 0)
+    assert r[plain["id"]]["summary"] is None
+    assert (r[todo["id"]]["checklist_open"], r[todo["id"]]["checklist_total"]) == (2, 3)
+    for entry in send(client, "GET", f"/api/checklist/item/{todo['id']}", None).json():
+        send(client, "PATCH", f"/api/checklist/{entry['id']}", {"done": True})
+    assert (rows()[todo["id"]]["checklist_open"], rows()[todo["id"]]["checklist_total"]) == (0, 3)
+
+    app.summaries.put("f1", "ai", "A bill.")
+    app.summaries.put("f2", "ai", "Another bill.")
+    assert rows()[plain["id"]]["summary"] == "ai"
+    app.summaries.put("f2", "user", "Mine.")
+    assert rows()[todo["id"]]["summary"] == "written"
+    assert rows()[plain["id"]]["summary"] == "ai"

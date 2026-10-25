@@ -33,14 +33,22 @@ def tray_items(app: AppDep, tray_id: str, state: Literal["open", "done"] = "open
     out = []
     items = app.trays.list(tray_id, state)
     marks = app.marks.marks_for([item.files[0] for item in items if item.files])
+    facts = app.notes.item_facts([item.id for item in items])
+    sources = app.summaries.sources_for([d for item in items for d in item.files])
     for item in items:
+        has_note, checklist_open, checklist_total = facts[item.id]
+        # The item's files decide: a summary the owner wrote on any file wins over AI ones.
+        found = set().union(*(sources.get(d, set()) for d in item.files))
         info = app.today.file_info(item)
         out.append(
             {
                 **asdict(item),
                 "level": app.today.level(item, day),
                 "file_state": app.today.file_state(item, info),
-                "has_note": bool(app.notes.get("item", str(item.id)).strip()),
+                "has_note": has_note,
+                "checklist_open": checklist_open,
+                "checklist_total": checklist_total,
+                "summary": "written" if "user" in found else "ai" if "ai" in found else None,
                 "first_file": (
                     file_rows(app, item.files[:1], info[:1], marks)[0] if item.files else None
                 ),

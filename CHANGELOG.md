@@ -8,6 +8,9 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Tray list rows show what an item has as small icons before the date: a larger pencil
+  for a note, a checklist icon with the number of open to-dos (hover for "2 of 5 to-dos
+  open"), and a sparkle for an AI summary or a text icon for a summary you wrote.
 - Files on an item: each file tab has a small **×** (on hover or focus) that takes the
   file off the item, with an Undo that puts it back in the same place. It replaces the
   icon in the action row. **Add another file…** now searches the whole archive as you type

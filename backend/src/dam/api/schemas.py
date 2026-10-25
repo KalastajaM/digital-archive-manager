@@ -998,6 +998,10 @@ class TrayItemOut(ItemOut):
     level: Literal["overdue", "today", "soon", "undated"] | None
     file_state: Literal["ok", "missing", "to_delete"]
     has_note: bool
+    checklist_open: int  # open to-dos on the item's checklist
+    checklist_total: int
+    # "written": the owner wrote a summary on any of its files, else "ai" if any has one
+    summary: Literal["ai", "written"] | None
     first_file: ItemFileOut | None  # None: the item has no files
 
 
