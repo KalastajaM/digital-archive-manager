@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -228,6 +228,11 @@ const where = () => screen.getByTestId("where").textContent;
 const sent = (calls: Call[], method: string, url: string) => calls.filter((c) => c.method === method && c.url === url);
 const row = (title: string) => screen.getByRole("article", { name: title });
 const detail = () => screen.getByRole("region", { name: "Item" });
+/** Opens the header title for editing (its pencil) and returns the text field. */
+const editTitle = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await within(await screen.findByRole("region", { name: "Item" })).findByRole("button", { name: "Edit title" }));
+  return within(detail()).getByLabelText("Title");
+};
 
 describe("Add file in the tray list", () => {
   it("searches the index and puts the chosen file in the tray as a new item, which opens", async () => {
@@ -386,8 +391,7 @@ describe("Trays", () => {
   it("j/k never fire while typing", async () => {
     const { user } = renderTrays("/trays/to-pay?item=1");
     await screen.findByRole("article", { name: "Northpower sähkö" });
-    const title = await within(detail()).findByLabelText("Title");
-    await user.click(title);
+    await editTitle(user);
     await user.keyboard("j");
     expect(row("Northpower sähkö").closest("li")).toHaveAttribute("aria-current", "true");
   });
@@ -437,8 +441,7 @@ describe("Trays", () => {
   it("list keys are ignored while typing or with the focus in the item panel", async () => {
     const { user } = renderTrays("/trays/to-pay?item=1");
     await screen.findByRole("article", { name: "Northpower sähkö" });
-    const title = await within(detail()).findByLabelText("Title");
-    await user.click(title);
+    await editTitle(user);
     await user.keyboard("d");
     expect(screen.queryByRole("form", { name: "Mark paid" })).not.toBeInTheDocument();
 
@@ -471,16 +474,18 @@ describe("Item detail", () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "PATCH /api/items/1": { body: { ...BILL, title: "Northpower oct" } },
     });
-    const title = await within(await screen.findByRole("region", { name: "Item" })).findByLabelText("Title");
-    await user.click(within(detail()).getByLabelText("IBAN"));
+    await screen.findByRole("region", { name: "Item" });
+    await user.click(await within(detail()).findByLabelText("IBAN"));
     await user.tab();
     expect(sent(calls, "PATCH", "/api/items/1")).toHaveLength(0);
+    const title = await editTitle(user);
     await user.clear(title);
     await user.type(title, "Northpower oct{Enter}");
     await waitFor(() => expect(sent(calls, "PATCH", "/api/items/1")).toHaveLength(1));
     expect(sent(calls, "PATCH", "/api/items/1")[0].body).toEqual({ title: "Northpower oct" });
     await user.tab(); // the blur after Enter does not send it again
     expect(sent(calls, "PATCH", "/api/items/1")).toHaveLength(1);
+    expect(await within(detail()).findByText("Saved")).toBeInTheDocument();
   });
 
   it("a 400 is shown at the field, which keeps the typed text", async () => {
@@ -702,15 +707,17 @@ describe("Item detail", () => {
     await waitFor(() => expect(where()).toBe("/trays/to-pay?item=1"));
   });
 
-  it("Quick Look, Move to tray and Remove from tray are icons together in the action row, not in the header", async () => {
+  it("Move to tray and Remove from tray are icons in the action row, with the date and Mark paid; Quick Look is in the preview toolbar", async () => {
     renderTrays("/trays/to-pay?item=1");
     await screen.findByRole("region", { name: "Checklist" });
     const group = await within(detail()).findByRole("group", { name: "This item" });
     expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
-      "Quick Look",
       "Move to tray",
       "Remove from tray",
     ]);
+    const row = detail().querySelector(".item-fields") as HTMLElement;
+    expect(row).toContainElement(group);
+    expect(row).toContainElement(within(detail()).getByRole("button", { name: "Mark paid" }));
     expect(within(detail().querySelector(".item-header") as HTMLElement).queryByRole("button", { name: "Quick Look" })).toBeNull();
   });
 
@@ -920,8 +927,8 @@ describe("Bill view", () => {
     expect(within(mine).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
     expect(within(mine).getByRole("button", { name: /^Take this file off the item/ })).toBeInTheDocument();
     // the done buttons sit in the fields row at the top, not on the action row
-    expect(mine.parentElement).not.toContainElement(within(panel).getByRole("button", { name: "Mark paid" }));
-    const top = within(panel).getByLabelText("Title").closest(".item-fields") as HTMLElement;
+    expect(mine.closest(".item-actions")).not.toContainElement(within(panel).getByRole("button", { name: "Mark paid" }));
+    const top = mine.closest(".item-fields") as HTMLElement;
     expect(within(top).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
   });
 
@@ -960,24 +967,22 @@ describe("To action and To read", () => {
     renderTrays("/trays/to-action?item=4");
     const panel = await screen.findByRole("region", { name: "Item" });
     const date = await within(panel).findByLabelText(/^Due/);
-    // title, the date field (tag right after the input) and Mark done share one row; no separate read-only date line
+    // the date field (tag right after the input) and Mark done share one row; no separate read-only date line
     const row = date.closest(".item-fields") as HTMLElement;
     expect(row).not.toBeNull();
     expect(date).toHaveValue("2026-10-22");
-    expect(within(row).getByLabelText("Title")).toBeInTheDocument();
+    expect(within(row).queryByLabelText("Title")).not.toBeInTheDocument();
     const tag = within(row).getByText("in 3 days");
     expect(tag).toHaveClass("tag-orange");
     expect(date.nextElementSibling).toBe(tag);
     const mark = within(row).getByRole("button", { name: "Mark done" });
     expect(mark.closest(".item-actions")).toBeNull();
-    // keyboard order: title, the fields, then the done buttons
-    const title0 = within(row).getByLabelText("Title");
-    expect(title0.compareDocumentPosition(date) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // keyboard order: the fields, then the done buttons
     expect(date.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(panel.querySelector(".item-when")).toBeNull();
     expect(within(panel).queryByRole("group", { name: "Due" })).not.toBeInTheDocument();
     const checklist = await within(panel).findByRole("region", { name: "Checklist" });
-    const title = within(panel).getByLabelText("Title");
+    const title = within(panel).getByRole("heading", { name: "Water pipe inspection" });
     // the title and date come before the summary and the checklist
     expect(title.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const summary = within(panel).getByRole("region", { name: "Summary" });
@@ -997,7 +1002,7 @@ describe("To action and To read", () => {
     renderTrays("/trays/to-read?item=5");
     const panel = await screen.findByRole("region", { name: "Item" });
     const mark = await within(panel).findByRole("button", { name: "Mark done" });
-    const row = within(panel).getByLabelText("Title").closest(".item-fields") as HTMLElement;
+    const row = mark.closest(".item-fields") as HTMLElement;
     expect(row).toContainElement(mark);
     expect(mark.closest(".item-actions")).toBeNull();
   });
@@ -1028,9 +1033,11 @@ describe("Quick Look and the selection in a tray", () => {
     expect(quickLook()).toHaveAccessibleName("Quick Look: northpower.pdf");
   });
 
-  it("the item header has the Quick Look eye with its tooltip, not a text link or a key hint", async () => {
+  it("the file preview toolbar has the Quick Look eye with its tooltip, not a text link or a key hint", async () => {
     const { user } = renderTrays("/trays/to-pay?item=1");
     const eye = await screen.findByRole("button", { name: "Quick Look" });
+    expect(eye.closest(".preview-tools, .zoom-controls")).not.toBeNull();
+    expect(eye.closest(".item-actions")).toBeNull();
     expect(eye).toHaveClass("icon-button");
     expect(eye).toHaveAttribute("data-tip", "Quick Look Space");
     expect(document.querySelector(".item-header kbd")).toBeNull();
@@ -1352,5 +1359,110 @@ describe("Trash on a tray item's files", () => {
     expect(await screen.findByText(/This file is marked Important; unmark it first/)).toBeInTheDocument();
     expect(quarantines(calls)).toEqual([{ drive_ids: ["f1"], dry_run: true }]);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("The item view layout", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("has no separate Title field; clicking the title or its pencil opens it, Esc cancels", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1");
+    const heading = await within(await screen.findByRole("region", { name: "Item" })).findByRole("heading", { name: "Northpower sähkö" });
+    expect(within(detail()).queryByLabelText("Title")).not.toBeInTheDocument();
+    expect(within(detail()).getByRole("button", { name: "Edit title" })).toBeInTheDocument();
+
+    await user.click(heading);
+    let field = within(detail()).getByLabelText("Title");
+    expect(field).toHaveValue("Northpower sähkö");
+    await user.type(field, " draft{Escape}");
+    expect(within(detail()).queryByLabelText("Title")).not.toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Northpower sähkö" })).toBeInTheDocument();
+
+    field = await editTitle(user);
+    await user.type(field, "x{Escape}");
+    expect(sent(calls, "PATCH", "/api/items/1")).toHaveLength(0);
+  });
+
+  it("an empty title is refused with the server's message and nothing is sent", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1");
+    const field = await editTitle(user);
+    await user.clear(field);
+    await user.keyboard("{Enter}");
+    expect(await within(detail()).findByRole("alert")).toHaveTextContent("A title must not be blank");
+    expect(within(detail()).getByLabelText("Title")).toBeInTheDocument();
+    expect(sent(calls, "PATCH", "/api/items/1")).toHaveLength(0);
+  });
+
+  it("leaving the title field saves it and says Saved", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "PATCH /api/items/1": { body: { ...BILL, title: "Power bill" } },
+    });
+    const field = await editTitle(user);
+    await user.clear(field);
+    await user.type(field, "Power bill");
+    await user.tab();
+    await waitFor(() => expect(sent(calls, "PATCH", "/api/items/1")).toHaveLength(1));
+    expect(sent(calls, "PATCH", "/api/items/1")[0].body).toEqual({ title: "Power bill" });
+    expect(await within(detail()).findByText("Saved")).toBeInTheDocument();
+    expect(within(detail()).queryByLabelText("Title")).not.toBeInTheDocument();
+  });
+
+  it("the tags are under the title in the header", async () => {
+    renderTrays("/trays/to-pay?item=1");
+    await screen.findByRole("region", { name: "Item" });
+    const tags = await within(detail()).findByRole("region", { name: "Tags" });
+    const header = detail().querySelector(".item-header") as HTMLElement;
+    expect(header).toContainElement(tags);
+    const heading = within(header).getByRole("heading", { name: "Northpower sähkö" });
+    expect(heading.compareDocumentPosition(tags) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("Summary, Checklist, Notes and History fold with aria-expanded, a hint, and are remembered", async () => {
+    const first = renderTrays("/trays/to-pay?item=1");
+    await screen.findByRole("region", { name: "Item" });
+    await within(detail()).findByText("Check meter");
+    for (const name of ["Summary", "Checklist", "Notes", "History"]) {
+      expect(within(detail()).getByRole("button", { name })).toHaveAttribute("aria-expanded", "true");
+    }
+    const checklist = within(detail()).getByRole("region", { name: "Checklist" });
+    await first.user.click(within(detail()).getByRole("button", { name: "Checklist" }));
+    expect(within(detail()).getByRole("button", { name: "Checklist" })).toHaveAttribute("aria-expanded", "false");
+    expect(checklist).toHaveTextContent("1 of 2 done");
+    expect(within(checklist).getByLabelText("Add to checklist")).not.toBeVisible();
+    await first.user.click(within(detail()).getByRole("button", { name: "History" }));
+    expect(detail().querySelector(".history")).toHaveTextContent("4 entries");
+    expect(window.localStorage.getItem("dam.collapsed.checklist")).toBe("1");
+
+    // another item (a fresh mount) starts the way it was left
+    cleanup();
+    renderTrays("/trays/to-action?item=4");
+    await screen.findByRole("region", { name: "Item" });
+    await within(detail()).findByRole("region", { name: "Checklist" });
+    expect(within(detail()).getByRole("button", { name: "Checklist" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(detail()).getByRole("button", { name: "Summary" })).toHaveAttribute("aria-expanded", "true");
+    // and it opens again
+    const again = userEvent.setup();
+    await again.click(within(detail()).getByRole("button", { name: "Checklist" }));
+    expect(within(detail()).getByRole("button", { name: "Checklist" })).toHaveAttribute("aria-expanded", "true");
+    expect(window.localStorage.getItem("dam.collapsed.checklist")).toBeNull();
+  });
+
+  it("a note and the summary show their first line when folded", async () => {
+    const { user } = renderTrays("/trays/to-pay?item=1");
+    await screen.findByRole("region", { name: "Item" });
+    await within(detail()).findByLabelText("Note (optional)");
+    await user.click(within(detail()).getByRole("button", { name: "Notes" }));
+    expect(within(detail()).getByRole("region", { name: "Notes" })).toHaveTextContent("call first");
+    await user.click(within(detail()).getByRole("button", { name: "Summary" }));
+    expect(within(detail()).getByRole("region", { name: "Summary" })).toHaveTextContent("No summary yet.");
+  });
+
+  it("Space still opens Quick Look from the list", async () => {
+    const { user } = renderTrays("/trays/to-pay?item=1");
+    await screen.findByRole("button", { name: "Quick Look" });
+    await user.keyboard(" ");
+    expect(await screen.findByRole("dialog", { name: /^Quick Look/ })).toBeInTheDocument();
   });
 });
