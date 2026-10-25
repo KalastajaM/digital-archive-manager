@@ -2,6 +2,7 @@
  * values show. Shared by the item, collection and file panels. */
 import { errorText, type NoteKind, useNote, useSetNote } from "../api/client";
 import { visible } from "../text";
+import { Collapsible, firstLine } from "./Collapsible";
 import { NoteEditor } from "./NoteEditor";
 import { type SaveStatus, useAutoSave } from "./useAutoSave";
 
@@ -36,9 +37,11 @@ export function SavedNote({ kind, target, label }: { kind: NoteKind; target: str
     );
   }
   return (
-    <div className="item-note" onBlur={() => void auto.commit()}>
-      <NoteEditor value={auto.shown} onChange={auto.change} label={label} />
-      <SaveState status={auto.status} />
-    </div>
+    <Collapsible name="notes" title="Notes" className="item-note" hint={firstLine(auto.shown) || "No note yet"}>
+      <div onBlur={() => void auto.commit()}>
+        <NoteEditor value={auto.shown} onChange={auto.change} label={label} />
+        <SaveState status={auto.status} />
+      </div>
+    </Collapsible>
   );
 }
