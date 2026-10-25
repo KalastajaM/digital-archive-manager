@@ -1177,6 +1177,12 @@ it has come, and has a **Stop** button. Leaving the screen stops a check that is
 A check ends in a list, and what you do with the list is the usual previewed batch: you
 see every operation first, confirm, and the toast offers **Undo**. Nothing is ever deleted.
 
+Each check's card folds to one line with the arrow before its title (what it found, or
+that it has not run); **Collapse all** and **Expand all** are in the toolbar, and dam
+remembers the folds in this browser. **Reset** on a card forgets that check's result, and
+**Reset all** in the toolbar forgets every result, so the screen is as before any check
+ran. Reset changes nothing in the archive.
+
 ### Duplicates
 
 **Find duplicates** looks for files with exactly the same content.
@@ -1210,8 +1216,9 @@ see every operation first, confirm, and the toast offers **Undo**. Nothing is ev
 
 ### The other checks
 
-- **Empty folders** (not the top level, not the app's own folders): tick the ones to
-  **Mark for deletion**; the folder moves to To Delete like a file.
+- **Empty folders** (not the top level, not the app's own folders, and not the folders the
+  archive is set up with, such as `##. Organize/To pay`, which may well be empty): tick
+  the ones to **Mark for deletion**; the folder moves to To Delete like a file.
 - **Broken links**: links whose target is gone. A broken link in `##. Ongoing` or
   `##. Important` can be removed (the app may remove links there). Everywhere else a link is
   moved to To Delete, which you can Undo. Undo of removing a link in Ongoing or Important

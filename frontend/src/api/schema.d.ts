@@ -665,7 +665,12 @@ export interface paths {
          *     ``GET /api/maintenance/jobs/{job_id}``; stop it with ``POST .../stop``.
          */
         post: operations["start_api_maintenance_jobs_post"];
-        delete?: never;
+        /**
+         * Forget
+         * @description Reset: forget the checks of ``kind`` (all kinds when left out) and their results,
+         *     ending one still running. Nothing in the archive changes.
+         */
+        delete: operations["forget_api_maintenance_jobs_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5357,6 +5362,11 @@ export interface components {
             files: components["schemas"]["LockedFileOut"][];
             /** Folders */
             folders: string[];
+        };
+        /** MaintenanceForgetOut */
+        MaintenanceForgetOut: {
+            /** Forgotten */
+            forgotten: number;
         };
         /**
          * MaintenanceJobOut
@@ -10640,6 +10650,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaintenanceJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    forget_api_maintenance_jobs_delete: {
+        parameters: {
+            query?: {
+                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceForgetOut"];
                 };
             };
             /** @description Bad Request */

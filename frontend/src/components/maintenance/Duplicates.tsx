@@ -27,7 +27,9 @@ import { useUndoConfirm } from "../UndoConfirm";
 import { Card } from "../ui/Card";
 import { Tag } from "../ui/Tag";
 import { JobProgress } from "./JobProgress";
+import { foldedLine, ResetButton } from "./ListChecks";
 import { useMaintenanceJob } from "./useMaintenanceJob";
+import { useFold } from "./view";
 
 type Action = DuplicateResolveBody["action"];
 
@@ -307,12 +309,16 @@ export function Duplicates() {
   const bulk = (action: Action) => begin(includedGroups, action);
   const bulkCopies = includedGroups.reduce((n, g) => n + removalsOf(g).length, 0);
   const est = estimate.data;
-  const start = () => {
+  const clearChoices = () => {
     setKeeps({});
     setSkipped(new Set());
     setExcluded(new Set());
+  };
+  const start = () => {
+    clearChoices();
     check.start();
   };
+  const fold = useFold("duplicates");
 
   const confirmView = (() => {
     if (!pending) return null;
@@ -342,8 +348,16 @@ export function Duplicates() {
     );
   })();
 
+  if (fold?.folded)
+    return (
+      <Card title="Duplicates" icon={<Copy />} fold={fold}>
+        <p className="hint">
+          {foldedLine(check, result && (result.groups_total > 0 ? plural(result.groups_total, "group") + " of identical files" : "No duplicates."))}
+        </p>
+      </Card>
+    );
   return (
-    <Card title="Duplicates" icon={<Copy />}>
+    <Card title="Duplicates" icon={<Copy />} fold={fold}>
       <p>
         Finds files with exactly the same content. Only files that share a size with another file are read, and a
         file read before is not read again.
@@ -379,6 +393,18 @@ export function Duplicates() {
           <button type="button" className="primary" onClick={start} disabled={check.starting || busy}>
             {result ? "Find duplicates again" : "Find duplicates"}
           </button>
+        )}
+        {!check.running && (
+          <ResetButton
+            busy={busy}
+            check={{
+              ...check,
+              reset: () => {
+                clearChoices();
+                check.reset();
+              },
+            }}
+          />
         )}
       </div>
       {check.running && check.job && <JobProgress job={check.job} />}

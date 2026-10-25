@@ -2136,9 +2136,18 @@ class DuplicateEstimateOut(BaseModel):
     to_read_bytes: int
 
 
+MaintenanceKindIn = Literal[
+    "duplicates", "empty_folders", "broken_links", "references", "names", "waiting"
+]
+
+
 class MaintenanceStartIn(_In):
-    kind: Literal["duplicates", "empty_folders", "broken_links", "references", "names", "waiting"]
+    kind: MaintenanceKindIn
     days: int | None = None
+
+
+class MaintenanceForgetOut(BaseModel):
+    forgotten: int
 
 
 class DupFileOut(BaseModel):

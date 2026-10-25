@@ -25,13 +25,37 @@ import { Card } from "../ui/Card";
 import { Tag } from "../ui/Tag";
 import { JobProgress } from "./JobProgress";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
+import { useFold } from "./view";
 
 const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
 const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const browseTo = (path: string, driveId: string) =>
   `/browse?${new URLSearchParams({ path: folderOf(path), select: driveId })}`;
 
-/** A check's card: what it looks for, its button, progress with Stop, and the result. */
+/** What a folded check card shows in place of its body. */
+export function foldedLine(check: Check, found: string | null) {
+  if (check.running) return "Checking…";
+  if (check.error || check.job?.state === "error") return "The check failed.";
+  if (check.job === null) return "Not checked yet.";
+  return found ?? "Nothing found.";
+}
+
+/** Forgets the check's result; nothing in the archive changes. */
+export function ResetButton({ check, busy = false }: { check: Check; busy?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={check.reset}
+      disabled={busy || check.starting || (check.job === null && !check.error)}
+      title="Forget this result, as if the check had not run. Nothing in the archive changes."
+    >
+      Reset
+    </button>
+  );
+}
+
+/** A check's card: what it looks for, its button, progress with Stop, and the result.
+ * Folded, it shows one line: what the check found, or that it has not run. */
 function CheckCard({
   title,
   icon,
@@ -42,6 +66,7 @@ function CheckCard({
   extra,
   empty,
   found,
+  summary,
   children,
 }: {
   title: string;
@@ -56,11 +81,20 @@ function CheckCard({
   empty: string;
   /** The check ended and has something to show (else ``empty`` is). */
   found: boolean;
+  /** The headline of what was found, for the folded card. */
+  summary: string;
   children: ReactNode;
 }) {
   const ended = check.job !== null && !check.running;
+  const fold = useFold(kind);
+  if (fold?.folded)
+    return (
+      <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold}>
+        <p className="hint">{foldedLine(check, found ? summary : empty || null)}</p>
+      </Card>
+    );
   return (
-    <Card title={title} icon={icon} className={`check-card check-${kind}`}>
+    <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold}>
       <p>{intro}</p>
       <div className="check-actions">
         {check.running ? (
@@ -73,6 +107,7 @@ function CheckCard({
           </button>
         )}
         {extra}
+        {!check.running && <ResetButton check={check} />}
       </div>
       {check.running && check.job && <JobProgress job={check.job} noun="items" />}
       {check.error && (
@@ -128,10 +163,11 @@ export function EmptyFolders() {
       title="Empty folders"
       icon={<Folder />}
       kind="empty_folders"
-      intro="Folders with nothing in them (a Finder cache file does not count). The app's own folders and the top level are left out."
+      intro="Folders with nothing in them (a Finder cache file does not count). The top level, the app's own folders and the folders the archive is set up with (such as the filing code folders in the Inbox) are left out."
       check={check}
       empty="No empty folders."
       found={items.length > 0}
+      summary={plural(check.job?.empty_folders?.total ?? 0, "empty folder")}
     >
       {items.length > 0 && (
         <>
@@ -250,6 +286,7 @@ export function BrokenLinks() {
       check={check}
       empty="No broken links."
       found={items.length > 0}
+      summary={plural(check.job?.broken_links?.total ?? 0, "broken link")}
     >
       {items.length > 0 && (
         <>
@@ -330,6 +367,7 @@ export function Missing() {
       check={check}
       empty="Every collection member and tray file is where it should be."
       found={rows.length > 0}
+      summary={plural(check.job?.references?.total ?? 0, "entry", "entries")}
     >
       {rows.length > 0 && (
         <>
@@ -375,6 +413,7 @@ export function Names() {
       check={check}
       empty="Every file in the numbered folders follows the naming convention."
       found={rows.length > 0}
+      summary={`${plural(check.job?.names?.total ?? 0, "file")} to rename`}
     >
       {rows.length > 0 && (
         <>
@@ -461,6 +500,9 @@ export function Waiting() {
       }
       empty=""
       found={result !== null}
+      summary={
+        result ? `${plural(result.total, "file")} waiting longer than ${plural(result.days, "day")}` : ""
+      }
     >
       {result && (
         <>

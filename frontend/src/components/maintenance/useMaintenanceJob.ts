@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   errorText,
+  forgetMaintenanceJobs,
   getMaintenanceJob,
   latestMaintenanceJob,
   type MaintenanceJob,
@@ -25,6 +26,8 @@ export type Check = {
   stop: () => void;
   /** Ask the server for the job again (its result without what changed since). */
   reload: () => void;
+  /** Forget the check and its result (a running one is ended): as before it ran. */
+  reset: () => void;
 };
 
 export function useMaintenanceJob(kind: MaintenanceKind): Check {
@@ -119,5 +122,14 @@ export function useMaintenanceJob(kind: MaintenanceKind): Check {
       .catch(() => {});
   }, [job]);
 
-  return { job, running: job?.state === "running", starting, error, start, stop, reload };
+  const reset = useCallback(() => {
+    epoch.current += 1;
+    clearTimeout(timer.current);
+    live.current = null;
+    setJob(null);
+    setError(null);
+    void forgetMaintenanceJobs(kind).catch((e) => setError(errorText(e)));
+  }, [kind]);
+
+  return { job, running: job?.state === "running", starting, error, start, stop, reload, reset };
 }

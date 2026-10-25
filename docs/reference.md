@@ -940,6 +940,13 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   deletion since are left out of a result on every read. `GET
   /api/maintenance/jobs/latest/{kind}` answers the latest job of the kind (null for none).
   `POST /api/maintenance/jobs/{job_id}/stop` ends it where it is; what it found stays.
+  `DELETE /api/maintenance/jobs?kind=` (Reset) forgets the jobs of the kind, or of every
+  kind without `kind`, ending one still running; answers `{forgotten}`. Nothing in the
+  archive changes.
+- The empty-folder check leaves out the top level, the app's own folders (`##. To Delete`,
+  `##. Ongoing`, `##. Important`), protected paths and the folders an archive is set up
+  with: the special folders themselves and the filing codes' inbox folders
+  (`##. Organize/To pay`), which are often empty on purpose.
 - The duplicate check hashes only the candidates, reads each file in chunks and checks for
   a stop between chunks, and stores the sha256 in `files.sha256` for the file as the scan
   recorded it (size and modified time must still match; the scanner clears a hash when a

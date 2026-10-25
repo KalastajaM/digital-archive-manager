@@ -1702,6 +1702,9 @@ export const getMaintenanceJob = (id: string) => get<MaintenanceJob>(`/api/maint
 export const latestMaintenanceJob = (kind: MaintenanceKind) =>
   get<MaintenanceJob | null>(`/api/maintenance/jobs/latest/${enc(kind)}`);
 export const stopMaintenanceJob = (id: string) => post<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}/stop`);
+/** Reset: forget the checks of ``kind`` (every kind when left out) and their results. */
+export const forgetMaintenanceJobs = (kind?: MaintenanceKind) =>
+  del<{ forgotten: number }>(`/api/maintenance/jobs${kind ? `?${new URLSearchParams({ kind })}` : ""}`);
 
 /** Move the chosen copies to To Delete, or replace them with a link to the copy kept
  * (one batch); a dry run lists the operations and what is carried over. */

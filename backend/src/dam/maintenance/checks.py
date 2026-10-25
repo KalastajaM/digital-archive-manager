@@ -124,12 +124,25 @@ def _live(*extra):
 # --- empty folders -----------------------------------------------------------------------
 
 
+def _default_folder(rel: str, paths: ArchivePaths, repo: FileRepo) -> bool:
+    """One of the folders the archive is set up with, which may well be empty: a special
+    folder (``##. Organize``, ``##. To Delete``, ...) or a filing code's inbox folder
+    (``##. Organize/To pay``)."""
+    folded = nfc(rel).casefold()
+    special = paths.settings.special_folders
+    if folded in {nfc(f).casefold() for f in special.model_dump().values()}:
+        return True
+    above, _, name = folded.rpartition("/")
+    return above == nfc(paths.inbox).casefold() and name in repo.code_folders
+
+
 def empty_folders(
     ctx: JobContext, repo: FileRepo, paths: ArchivePaths, engine: Engine
 ) -> EmptyFolders:
-    """Folders (below the top level, outside the app's own folders and protected paths)
-    with nothing in them but a Finder cache file. The index names the candidates; each is
-    listed on disk before it is shown."""
+    """Folders (below the top level, outside the app's own folders and protected paths,
+    and not one of the archive's default folders) with nothing in them but a Finder
+    cache file. The index names the candidates; each is listed on disk before it is
+    shown."""
     with engine.connect() as conn:
         rows = conn.execute(select(files.c.path, files.c.is_dir).where(*_live())).all()
     parents = {PurePosixPath(r.path).parent.as_posix() for r in rows}
@@ -145,6 +158,7 @@ def empty_folders(
             len(PurePosixPath(rel).parts) < 2
             or any(is_under(rel, area) for area in own_folders(paths))
             or touches_protected(rel, paths)
+            or _default_folder(rel, paths, repo)
         ):
             continue
         try:

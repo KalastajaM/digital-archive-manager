@@ -463,6 +463,16 @@ def test_a_listed_folder_drops_out_once_it_is_marked_for_deletion(app, fake_arch
     assert (result.items, result.total) == ([], 0)
 
 
+def test_the_default_folders_are_not_listed_when_empty(app, fake_archive):
+    fake_archive.add(f"{BANKS}/keeps-this-folder.txt", b"k", drive_id="id-k")
+    (fake_archive.root / INBOX / "To pay").mkdir(parents=True)  # a filing code's folder
+    (fake_archive.root / INBOX / "to read").mkdir()  # the same, in other case
+    (fake_archive.root / INBOX / "Scans").mkdir()  # the owner's own: listed
+    (fake_archive.root / QUAR).mkdir(exist_ok=True)
+    app.scan()
+    assert [f.path for f in run(app, "empty_folders").result.items] == [f"{INBOX}/Scans"]
+
+
 def test_a_folder_with_something_not_yet_indexed_is_not_empty(app, fake_archive):
     fake_archive.add(f"{BANKS}/keeps-this-folder.txt", b"k", drive_id="id-k")
     (fake_archive.root / HOME / "Old").mkdir(parents=True)
@@ -612,6 +622,24 @@ def poll(client, job_id):
             return body
         time.sleep(0.05)
     raise AssertionError("job did not finish")
+
+
+def test_api_reset_forgets_a_kind_or_all(client, app, fake_archive):
+    fake_archive.add(f"{BANKS}/a.txt", b"a", drive_id="id-a")
+    app.scan()
+    for kind in ("names", "empty_folders"):
+        poll(
+            client,
+            client.post("/api/maintenance/jobs", json={"kind": kind}, headers=H).json()["job_id"],
+        )
+    gone = client.delete("/api/maintenance/jobs", params={"kind": "names"}, headers=H)
+    assert gone.json() == {"forgotten": 1}
+    assert client.get("/api/maintenance/jobs/latest/names", headers=H).json() is None
+    assert client.get("/api/maintenance/jobs/latest/empty_folders", headers=H).json() is not None
+    assert client.delete("/api/maintenance/jobs", headers=H).json() == {"forgotten": 1}
+    assert client.get("/api/maintenance/jobs/latest/empty_folders", headers=H).json() is None
+    bad = client.delete("/api/maintenance/jobs", params={"kind": "nope"}, headers=H)
+    assert bad.status_code in (400, 422)
 
 
 def test_api_duplicates_flow(client, app, pair):

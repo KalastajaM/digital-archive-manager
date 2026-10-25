@@ -14,7 +14,9 @@ from dam.api.schemas import (
     DuplicateResolveIn,
     DuplicateResolveOut,
     LinkRemoveIn,
+    MaintenanceForgetOut,
     MaintenanceJobOut,
+    MaintenanceKindIn,
     MaintenanceStartIn,
 )
 from dam.app import App
@@ -59,6 +61,13 @@ def start(app: AppDep, body: MaintenanceStartIn) -> dict:
     """Start a check. An earlier job of the same kind is ended. Poll it with
     ``GET /api/maintenance/jobs/{job_id}``; stop it with ``POST .../stop``."""
     return _job_out(app, app.maintenance.start(body.kind, body.days))
+
+
+@router.delete("/jobs", response_model=MaintenanceForgetOut)
+def forget(app: AppDep, kind: MaintenanceKindIn | None = None) -> dict:
+    """Reset: forget the checks of ``kind`` (all kinds when left out) and their results,
+    ending one still running. Nothing in the archive changes."""
+    return {"forgotten": app.maintenance.jobs.forget(kind)}
 
 
 @router.get("/jobs/latest/{kind}", response_model=MaintenanceJobOut | None)

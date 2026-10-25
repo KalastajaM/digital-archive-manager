@@ -136,6 +136,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   maintenancePolling.ms = 700;
+  localStorage.clear();
 });
 
 describe("Maintenance screen", () => {
@@ -311,7 +312,7 @@ describe("Maintenance screen", () => {
       `/browse?${new URLSearchParams({ left: "10. Financial/Banks", right: "20. Home" })}`,
     );
     expect(screen.getAllByRole("link", { name: "Show in Browse" })).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: /To Delete/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^(Move|Replace)/ })).not.toBeInTheDocument();
   });
 });
 
@@ -455,5 +456,44 @@ describe("The other checks", () => {
     await user.clear(days);
     await user.click(within(waiting).getByRole("button", { name: "Check" }));
     expect(posts(calls, "/api/maintenance/jobs")).toEqual([]);
+  });
+});
+
+describe("Maintenance: folding and Reset", () => {
+  const found = { empty_folders: { empty_folders: { items: [{ drive_id: "f1", path: "20. Home/Old" }], total: 1 } } };
+
+  it("folds a card to one line, remembered, and Collapse all / Expand all fold every card", async () => {
+    const { user } = setup({ "GET /api/maintenance/jobs/latest/empty_folders": { body: job("empty_folders", found.empty_folders) } });
+    expect(await within(card("Empty folders")).findByText("20. Home/Old")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Collapse Empty folders" }));
+    expect(within(card("Empty folders")).getByText("1 empty folder")).toBeInTheDocument();
+    expect(within(card("Empty folders")).queryByText("20. Home/Old")).not.toBeInTheDocument();
+    expect(within(card("Broken links")).getByRole("button", { name: "Check" })).toBeInTheDocument();
+    expect(localStorage.getItem("dam.maintenance.folded.v1")).toBe('["empty_folders"]');
+
+    await user.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(screen.queryByRole("button", { name: "Check" })).not.toBeInTheDocument();
+    expect(within(card("Broken links")).getByText("Not checked yet.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(within(card("Empty folders")).getByText("20. Home/Old")).toBeInTheDocument();
+    expect(localStorage.getItem("dam.maintenance.folded.v1")).toBeNull();
+  });
+
+  it("Reset forgets one check's result; Reset all forgets every one", async () => {
+    const { calls, user } = setup({
+      "GET /api/maintenance/jobs/latest/empty_folders": { body: job("empty_folders", found.empty_folders) },
+      "DELETE /api/maintenance/jobs": { body: { forgotten: 1 } },
+    });
+    const folders = card("Empty folders");
+    expect(await within(folders).findByText("20. Home/Old")).toBeInTheDocument();
+    expect(within(card("Broken links")).getByRole("button", { name: "Reset" })).toBeDisabled();
+    await user.click(within(folders).getByRole("button", { name: "Reset" }));
+    expect(within(folders).queryByText("20. Home/Old")).not.toBeInTheDocument();
+    expect(within(folders).getByRole("button", { name: "Check" })).toBeInTheDocument();
+    const deletes = () => calls.filter((c) => c.method === "DELETE").map((c) => c.url);
+    expect(deletes()).toEqual(["/api/maintenance/jobs?kind=empty_folders"]);
+
+    await user.click(screen.getByRole("button", { name: "Reset all" }));
+    await waitFor(() => expect(deletes()).toEqual(["/api/maintenance/jobs?kind=empty_folders", "/api/maintenance/jobs"]));
   });
 });
