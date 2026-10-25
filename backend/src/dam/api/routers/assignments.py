@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from dam.api.deps import AppDep
+from dam.api.deps import AppDep, require_editable
 from dam.api.schemas import AssignmentOut, AssignmentsIn, SenderOut
 from dam.services.assignments import UNSET
 
@@ -29,7 +29,9 @@ def put_assignments(app: AppDep, body: AssignmentsIn) -> list:
     """Set From and/or For on documents (the owner's word: it beats what page 1 says and
     is not overwritten by a filing). A field left out is unchanged, null clears it.
     400 for a blank sender or a person not in the people list, 404 for an unknown document;
-    nothing is written then. Answers the documents' assignments (a cleared one is absent)."""
+    nothing is written then (also 400 for a file marked for deletion). Answers the documents'
+    assignments (a cleared one is absent)."""
+    require_editable(app, body.drive_ids)
     given = body.model_fields_set
     done = app.assignments.set(
         body.drive_ids,

@@ -220,6 +220,8 @@ def test_changes_to_a_file_in_to_delete_are_refused_and_nothing_is_lost(client, 
     refused(post(client, "/api/checklist/file/id-a", {"text": "todo"}))
     refused(post(client, "/api/marks/star", {"drive_ids": ["id-a"]}))
     refused(post(client, "/api/marks/important", {"drive_ids": ["id-a"]}))
+    who = {"drive_ids": ["id-a"], "sender": "Kela"}
+    refused(client.put("/api/assignments", json=who, headers=LOCAL_ORIGIN))
     refused(post(client, f"/api/collections/{col.id}/members", {"drive_ids": ["id-a"]}))
     refused(post(client, "/api/items/quick", {"tray": "to-read", "drive_ids": ["id-a"]}))
     refused(post(client, "/api/items", {"tray": "to-read", "drive_ids": ["id-a"]}))
