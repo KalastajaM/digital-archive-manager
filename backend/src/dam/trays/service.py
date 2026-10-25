@@ -823,7 +823,7 @@ class TrayService:
                 .order_by(literal_column("item_files.rowid"))
             ).scalars()
         )
-        order.remove(drive_id)
+        order = [d for d in order if d != drive_id]
         order.insert(max(0, min(position, len(order))), drive_id)
         conn.execute(delete(item_files).where(item_files.c.item_id == item_id))
         conn.execute(insert(item_files), [{"item_id": item_id, "drive_id": d} for d in order])
