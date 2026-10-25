@@ -244,6 +244,11 @@ main { flex: 1; padding: var(--sp-4) var(--sp-5); min-width: 0; }
   border-bottom: 0.5px solid var(--separator);
   background: var(--panel);
 }
+.toolbar-stacked { flex-wrap: wrap; align-content: center; row-gap: var(--sp-1); padding-block: var(--sp-2); }
+.toolbar-stacked .toolbar-title { flex: 1 1 100%; }
+.toolbar-stacked .toolbar-title h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.toolbar-stacked .toolbar-subtitle { flex: none; }
+.toolbar-stacked .toolbar-actions { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; }
 .toolbar-title { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
 .toolbar-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 700; white-space: nowrap; }
 .toolbar-title-editable { cursor: text; }
@@ -1415,6 +1420,8 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 .menu-separator { height: 0.5px; margin: 4px 8px; background: var(--separator); }
 .popover { right: 0; width: 320px; padding: var(--sp-3); }
 .popover p { margin: 0 0 var(--sp-2); }
+.popover-fixed { position: fixed; z-index: 60; width: auto; max-width: min(380px, calc(100vw - 16px)); padding: var(--sp-2); }
+.popover-fixed .done-form { margin: 0; padding: 0; background: transparent; max-width: none; }
 /* The filter button rows of Collections (Show) and the export (Format); the trays use a
  * Segmented control now. */
 .tray-filter { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-2); }

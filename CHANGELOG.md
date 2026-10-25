@@ -300,6 +300,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Marking an item done (Mark done, Mark paid, and the "and file" button) now asks in a small
+  popover under the button you pressed, instead of in a box further down the page. Enter
+  confirms, Esc or a click outside cancels, and the focus goes back to the button.
+- The header of a tray list has two rows: the tray name with its count on the first, and
+  Add file with the Open / Done switch on the second, so the name and count are no longer
+  cut off.
 - The rule sheet is split into **When a document matches** (the areas, From, For and More
   conditions) and **Then file it like this** (Folder, Name, Tags, Tray, Payee). Payee only
   shows when the chosen tray has a payee field, such as To pay, or when the rule already

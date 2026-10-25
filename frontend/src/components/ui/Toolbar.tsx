@@ -15,22 +15,32 @@ type Props = {
   actions?: ReactNode;
   /** A search field, kept at the right edge. */
   search?: ReactNode;
+  /** Two rows: the title with its subtitle on the first, the actions right-aligned on the
+   * second (a narrow list column). The title is cut with an ellipsis only as a last resort,
+   * and then it is whole in the tooltip. */
+  stacked?: boolean;
 };
 
 /** The unified toolbar at the top of a screen: title, subtitle, actions, search. */
-export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search }: Props) {
+export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, stacked }: Props) {
   return (
-    <header className="toolbar">
+    <header className={stacked ? "toolbar toolbar-stacked" : "toolbar"}>
       <div className="toolbar-title">
         {titleEditor ?? (
           <>
-            <h2 className={onEditTitle ? "toolbar-title-editable" : undefined} onClick={onEditTitle}>
+            <h2
+              className={onEditTitle ? "toolbar-title-editable" : undefined}
+              onClick={onEditTitle}
+              title={stacked ? title : undefined}
+            >
               {title}
             </h2>
             {onEditTitle && <IconButton className="toolbar-title-pencil" icon={<Pencil />} label="Edit name" onClick={onEditTitle} />}
           </>
         )}
-        {!titleEditor && subtitle && <span className="toolbar-subtitle">{subtitle}</span>}
+        {!titleEditor && subtitle && <span className="toolbar-subtitle" title={stacked && typeof subtitle === "string" ? subtitle : undefined}>
+            {subtitle}
+          </span>}
       </div>
       {actions && (
         <div className="toolbar-actions" role="toolbar" aria-label={`${title} actions`}>

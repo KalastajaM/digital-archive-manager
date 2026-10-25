@@ -362,7 +362,7 @@ describe("Trays", () => {
     expect(where()).toBe("/trays/to-pay?item=2");
     await user.keyboard("d");
     expect(where()).toBe("/trays/to-pay?item=2");
-    const form = await within(detail()).findByRole("form", { name: "Mark paid" });
+    const form = await screen.findByRole("form", { name: "Mark paid" });
     expect(within(form).getByLabelText("Paid on")).toHaveValue(DAY);
     expect(within(form).getByLabelText("Paid on")).toHaveFocus();
     await user.keyboard("{Enter}");
@@ -782,12 +782,82 @@ describe("Item detail", () => {
     });
     const panel = await screen.findByRole("region", { name: "Item" });
     await user.click(await within(panel).findByRole("button", { name: "Mark paid" }));
-    const form = within(panel).getByRole("form", { name: "Mark paid" });
+    const form = screen.getByRole("form", { name: "Mark paid" });
     expect(within(form).getByLabelText("Paid on")).toHaveFocus();
     expect(within(row("Northpower sähkö")).queryByRole("form")).not.toBeInTheDocument();
     await user.keyboard("{Enter}");
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: DAY } });
+  });
+
+  describe("the done confirm is a popover on its button", () => {
+    const openIt = async () => {
+      const r = renderTrays("/trays/to-pay?item=1", {
+        "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
+      });
+      const panel = await screen.findByRole("region", { name: "Item" });
+      const button = await within(panel).findByRole("button", { name: "Mark paid" });
+      await r.user.click(button);
+      return { ...r, panel, button };
+    };
+
+    it("opens outside the page flow, the button stays and says it is expanded", async () => {
+      const { panel, button } = await openIt();
+      const pop = screen.getByRole("dialog", { name: "Mark paid" });
+      expect(panel).not.toContainElement(pop);
+      expect(pop.closest(".popover")).toHaveClass("popover-fixed");
+      expect(within(pop).getByRole("form", { name: "Mark paid" })).toBeInTheDocument();
+      expect(button).toHaveAttribute("aria-expanded", "true");
+    });
+
+    it("Enter confirms", async () => {
+      const { calls, user } = await openIt();
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(1));
+    });
+
+    it("Cancel closes it and the focus returns to the button", async () => {
+      const { user, button } = await openIt();
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(button).toHaveFocus();
+    });
+
+    it("Esc closes it and the focus returns to the button", async () => {
+      const { user, button, calls } = await openIt();
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(button).toHaveFocus();
+      expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(0);
+    });
+
+    it("a click outside closes it without marking done", async () => {
+      const { user, calls } = await openIt();
+      await user.click(row("Water⟨U+202E⟩bill"));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(0);
+    });
+
+    it("pressing the button again closes it", async () => {
+      const { user, button } = await openIt();
+      await user.click(button);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("the list header has two rows: the name with its count, then Add file and Open / Done at the right", async () => {
+    renderTrays("/trays/to-pay");
+    await screen.findByRole("article", { name: "Northpower sähkö" });
+    const header = screen.getByRole("region", { name: "Tray items" }).querySelector("header.toolbar") as HTMLElement;
+    expect(header).toHaveClass("toolbar-stacked");
+    const heading = within(header).getByRole("heading", { name: "To pay" });
+    expect(heading).toHaveAttribute("title", "To pay");
+    expect(header.querySelector(".toolbar-title")).toContainElement(heading);
+    expect(header.querySelector(".toolbar-subtitle")?.textContent).toMatch(/\S/);
+    const actions = within(header).getByRole("toolbar");
+    expect(header.querySelector(".toolbar-title")).not.toContainElement(actions);
+    expect(within(actions).getByRole("button", { name: "Add file" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "Done" })).toBeInTheDocument();
   });
 
   it("a done item in the panel shows its done date and Reopen", async () => {
@@ -939,7 +1009,7 @@ describe("Bill view", () => {
     });
     const panel = await screen.findByRole("region", { name: "Item" });
     await user.click(await within(panel).findByRole("button", { name: "Mark paid and file…" }));
-    const form = within(panel).getByRole("form", { name: "Mark paid" });
+    const form = screen.getByRole("form", { name: "Mark paid" });
     await user.click(within(form).getByRole("button", { name: "Mark paid and file…" }));
     await waitFor(() => expect(where()).toBe("/inbox?file=i1"));
     expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(1);
@@ -1084,12 +1154,12 @@ describe("Review fixes", () => {
     const { user } = renderTrays("/trays/to-pay?item=1");
     const panel = await screen.findByRole("region", { name: "Item" });
     await user.click(await within(panel).findByRole("button", { name: "Mark paid" }));
-    expect(within(panel).getByRole("form", { name: "Mark paid" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Mark paid" })).toBeInTheDocument();
     await user.click(within(row("Water⟨U+202E⟩bill")).getByRole("link"));
     await within(detail()).findByRole("heading", { name: "Water⟨U+202E⟩bill" });
     await user.click(within(row("Northpower sähkö")).getByRole("link"));
     await within(detail()).findByRole("heading", { name: "Northpower sähkö" });
-    expect(within(detail()).queryByRole("form", { name: "Mark paid" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Mark paid" })).not.toBeInTheDocument();
     expect(within(detail()).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
   });
 

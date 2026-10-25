@@ -41,6 +41,7 @@ import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
 import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
+import { Popover } from "../components/ui/Popover";
 import { Tag } from "../components/ui/Tag";
 import { TipButton } from "../components/ui/TipButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
@@ -528,6 +529,8 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const headingId = useId();
   const [tab, setTab] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [doneAnchor, setDoneAnchor] = useState<HTMLButtonElement | null>(null);
+  const [fileAnchor, setFileAnchor] = useState<HTMLButtonElement | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const moveItem = useMoveItem();
@@ -641,24 +644,31 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     </button>
   );
 
+  // The confirm opens as a popover under the button that was pressed; pressing it again
+  // closes it. The buttons stay while it is open, so the focus has somewhere to return.
+  const toggleDone = (mode: DoneMode) => setDone(doneMode === mode ? null : mode);
   const doneButtons =
-    open && !doneMode ? (
+    open ? (
       <>
         <TipButton
+          ref={setDoneAnchor}
           className="primary"
           tip="Mark this item done; it moves to the Done list"
+          aria-expanded={doneMode === "done"}
           disabled={tray === undefined}
           disabledReason={TRAYS_LOADING}
-          onClick={() => setDone("done")}
+          onClick={() => toggleDone("done")}
         >
           {visible(doneText)}
         </TipButton>
         {anyInInbox && (
           <TipButton
+            ref={setFileAnchor}
             tip="Mark this item done, then open its file in the Inbox to file it"
+            aria-expanded={doneMode === "file"}
             disabled={tray === undefined}
             disabledReason={TRAYS_LOADING}
-            onClick={() => setDone("file")}
+            onClick={() => toggleDone("file")}
           >
             {visible(fileLabel)}
           </TipButton>
@@ -819,8 +829,13 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           {item.done_fields && Object.keys(item.done_fields).length > 0 && ` · ${visible(doneFieldsText(item, tray))}`}{" "}
           <ReopenButton item={item} />
         </p>
-      ) : (
-        doneMode && (
+      ) : null}
+      {open && doneMode && (doneMode === "file" ? fileAnchor : doneAnchor) && (
+        <Popover
+          anchor={doneMode === "file" ? fileAnchor : doneAnchor}
+          label={doneMode === "file" ? fileLabel : doneText}
+          onClose={() => setDone(null)}
+        >
           <DoneForm
             item={item}
             label={doneText}
@@ -830,7 +845,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             onClose={() => setDone(null)}
             onDone={doneMode === "file" ? () => void fileIt() : undefined}
           />
-        )
+        </Popover>
       )}
       {/* not before the files are known: the action row is rebuilt when the shown file is first found */}
       <div className="item-files">

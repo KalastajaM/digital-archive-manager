@@ -391,6 +391,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
     <div className="trays" ref={split.hostRef} style={split.hostStyle}>
       <section className="trays-list" aria-label="Tray items">
         <Toolbar
+          stacked
           title={visible(tray?.name ?? trayId)}
           subtitle={subtitle}
           actions={
