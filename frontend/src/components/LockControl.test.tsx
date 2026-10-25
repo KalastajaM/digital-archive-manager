@@ -175,6 +175,28 @@ describe("a locked file", () => {
     expect(sent(calls, "DELETE", "/api/files/d1/unlock")[0].headers["X-Dam-Unlock"]).toBeUndefined();
   });
 
+  it("shows the state: a closed padlock while locked, an open one while not", async () => {
+    const { routes } = server();
+    mockFetch(routes);
+    const user = userEvent.setup();
+    show(FILE());
+    const closed = (b: HTMLElement) => b.querySelector("svg.lucide-lock") !== null;
+    const open = (b: HTMLElement) => b.querySelector("svg.lucide-lock-open") !== null;
+    const unlock = await screen.findByRole("button", { name: "Unlock" });
+    expect(closed(unlock) && !open(unlock)).toBe(true);
+    expect(unlock.getAttribute("data-tip")).toMatch(/^Locked/);
+    await user.click(unlock);
+    await user.click(screen.getByRole("button", { name: "For now" }));
+    const again = await screen.findByRole("button", { name: "Lock again" });
+    expect(open(again) && !closed(again)).toBe(true);
+    await user.click(again);
+    await user.click(await screen.findByRole("button", { name: "Unlock" }));
+    await user.click(screen.getByRole("button", { name: "For good" }));
+    const lock = await screen.findByRole("button", { name: "Lock" });
+    expect(open(lock) && !closed(lock)).toBe(true);
+    expect(lock.getAttribute("data-tip")).toMatch(/^Not locked/);
+  });
+
   it("for good removes the lock, and Lock puts it back", async () => {
     const { routes } = server();
     const calls = mockFetch(routes);
