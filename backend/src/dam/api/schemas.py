@@ -2121,3 +2121,190 @@ class AssignmentsIn(_In):
 class SenderOut(BaseModel):
     sender: str
     count: int
+
+
+# -- maintenance ------------------------------------------------------------
+
+
+class DuplicateEstimateOut(BaseModel):
+    """What the duplicate check would read, from the index alone."""
+
+    files: int
+    candidates: int
+    known: int
+    to_read_files: int
+    to_read_bytes: int
+
+
+class MaintenanceStartIn(_In):
+    kind: Literal["duplicates", "empty_folders", "broken_links", "references", "names", "waiting"]
+    days: int | None = None
+
+
+class DupFileOut(BaseModel):
+    drive_id: str
+    path: str
+    name: str
+    size: int
+    mtime: float | None
+    place: Literal["numbered", "inbox", "other"]
+    locked: Literal["important", "file"] | None
+    why: str | None
+
+
+class DupGroupOut(BaseModel):
+    sha256: str
+    size: int
+    files: list[DupFileOut]
+    keep: str
+
+
+class NameGroupOut(BaseModel):
+    name: str
+    files: list[DupFileOut]
+
+
+class UnreadableOut(BaseModel):
+    path: str
+    reason: str
+
+
+class DuplicatesOut(BaseModel):
+    groups: list[DupGroupOut]
+    groups_total: int
+    name_groups: list[NameGroupOut]
+    name_groups_total: int
+    unreadable: list[UnreadableOut]
+    changed: int
+    read_files: int
+    reused: int
+    complete: bool
+
+
+class EmptyFolderOut(BaseModel):
+    drive_id: str
+    path: str
+
+
+class EmptyFoldersOut(BaseModel):
+    items: list[EmptyFolderOut]
+    total: int
+
+
+class BrokenLinkOut(BaseModel):
+    drive_id: str
+    path: str
+    target: str | None
+    inside: str | None
+
+
+class BrokenLinksOut(BaseModel):
+    items: list[BrokenLinkOut]
+    total: int
+
+
+class BadReferenceOut(BaseModel):
+    kind: Literal["collection", "tray"]
+    owner_id: str
+    owner_name: str
+    item_id: int | None
+    drive_id: str
+    path: str | None
+    reason: str
+
+
+class BadReferencesOut(BaseModel):
+    items: list[BadReferenceOut]
+    total: int
+
+
+class BadNameOut(BaseModel):
+    drive_id: str
+    path: str
+    name: str
+    folder: str
+    suggestion: str | None
+
+
+class BadNamesOut(BaseModel):
+    items: list[BadNameOut]
+    total: int
+
+
+class WaitingFileOut(BaseModel):
+    drive_id: str
+    path: str
+    size: int
+    since: float
+    days: int
+    approximate: bool
+
+
+class WaitingOut(BaseModel):
+    days: int
+    items: list[WaitingFileOut]
+    total: int
+    total_size: int
+    in_to_delete: int
+    in_to_delete_size: int
+
+
+class MaintenanceJobOut(BaseModel):
+    """A check running (or finished): its progress and, once it has something, its result
+    (only the field of its kind is set)."""
+
+    job_id: str
+    kind: str
+    state: Literal["running", "done", "stopped", "error"]
+    version: int
+    done: int
+    total: int
+    bytes_done: int
+    bytes_total: int
+    current: str | None
+    elapsed_s: float
+    error: str | None
+    duplicates: DuplicatesOut | None = None
+    empty_folders: EmptyFoldersOut | None = None
+    broken_links: BrokenLinksOut | None = None
+    references: BadReferencesOut | None = None
+    names: BadNamesOut | None = None
+    waiting: WaitingOut | None = None
+
+
+class DuplicateChoiceIn(_In):
+    keep: str
+    others: list[str]
+
+
+class DuplicateResolveIn(_In):
+    """What to do with the copies of one or more duplicate groups: ``quarantine`` moves
+    each copy in ``others`` to To Delete, ``link`` also leaves a link to ``keep`` where it
+    was. ``carry_over`` adds what the removed copies had to the kept one."""
+
+    groups: list[DuplicateChoiceIn]
+    action: Literal["quarantine", "link"]
+    carry_over: bool = True
+    dry_run: bool = False
+
+
+class CarryOverOut(BaseModel):
+    drive_id: str
+    name: str
+    tags: list[str]
+    collections: list[str]
+    notes: list[str]
+    checklist: list[str]
+    items: list[str]
+    sender: str | None
+    person: str | None
+
+
+class DuplicateResolveOut(BatchResultOut):
+    carry_over: list[CarryOverOut]
+    carry_errors: list[str]
+
+
+class LinkRemoveIn(_In):
+    drive_ids: list[str]
+    dry_run: bool = False
