@@ -302,6 +302,13 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- To rename a file, click its name (in Browse, a collection or an item);
+  the separate pencil button is gone. The same goes for an item's title and a collection's
+  name. The name takes the keyboard focus, so Enter or Space on it works too, and the
+  rename is still previewed and can be undone.
+- In the box panel, the choice between **Words** and **Picture** for each box is now a
+  switch like the rule's "Anyone / Only for": the selected side is filled, so you can see
+  which one is on.
 - The rule sheet is split into **When a document matches** (the areas, From, For and More
   conditions) and **Then file it like this** (Folder, Name, Tags, Tray, Payee). Payee only
   shows when the chosen tray has a payee field, such as To pay, or when the rule already

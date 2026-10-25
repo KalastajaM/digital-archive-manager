@@ -1,5 +1,5 @@
 /** The inline details of a file already in the archive (stars spec §7, replacing the
- * "Edit details…" dialog): the name with a Rename pencil, the folder with Move to…,
+ * "Edit details…" dialog): the name (click it to rename), the folder with Move to…,
  * the ★ / ! toggles and Ask AI for the screen's action row, and the tags as removable chips.
  *
  * Tags are written at once (nothing is previewed or journaled). A new name or folder
@@ -7,7 +7,7 @@
  * request that was previewed (the snapshot rule). A file that cannot be renamed or
  * moved (a link, a folder, one in ##. To Delete) gets the same controls disabled, the
  * reason as their tooltip. */
-import { FolderInput, Pencil, Sparkles } from "lucide-react";
+import { FolderInput, Sparkles } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { errorText, type FilingSuggestion, type Mark, useFileDetail, usePutFileTags } from "../api/client";
 import { visible } from "../text";
@@ -18,6 +18,7 @@ import { Breakable } from "./PlanPreview";
 import { AI_SOURCE, aiNote, FieldChips, type Offer, offersFor, tagOffers } from "./SuggestionChip";
 import { TagInput } from "./TagInput";
 import { useBlockToastActions } from "./Toasts";
+import { ClickToEdit } from "./ui/ClickToEdit";
 import { IconButton } from "./ui/IconButton";
 
 export type MetaFile = {
@@ -147,16 +148,16 @@ export function FileMeta({
             {ext && <span className="file-meta-ext">{visible(ext)}</span>}
           </form>
         ) : (
-          <>
-            <h2>{visible(name)}</h2>
-            <IconButton
-              icon={<Pencil />}
-              label="Rename"
+          <h2 aria-label={visible(name)}>
+            <ClickToEdit
+              label={`Rename ${visible(name)}`}
+              tip={refusal ?? "Click to rename"}
               disabled={refusal !== null || busy}
-              disabledReason={refusal ?? undefined}
               onClick={() => startRename()}
-            />
-          </>
+            >
+              {visible(name)}
+            </ClickToEdit>
+          </h2>
         )}
       </div>
       <p className="current-path">

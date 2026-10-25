@@ -551,7 +551,7 @@ describe("Selected file", () => {
     const preview = await openFile(user);
     expect(within(preview).queryByRole("button", { name: "Edit details…" })).not.toBeInTheDocument();
     expect(within(preview).getByRole("heading", { name: "a.pdf" })).toBeInTheDocument();
-    expect(within(preview).getByRole("button", { name: "Rename" })).toBeEnabled();
+    expect(within(preview).getByRole("button", { name: /^Rename/ })).toBeEnabled();
     expect(within(preview).getByRole("button", { name: "Move file to…" })).toBeEnabled();
     // the toggles sit in the preview's toolbar, with zoom and Open
     const tools = within(preview).getByRole("group", { name: "Zoom" });
@@ -564,9 +564,9 @@ describe("Selected file", () => {
     const { user } = setup("10. Financial/Banks");
     await user.click(await screen.findByText("link.pdf"));
     const preview = await screen.findByRole("region", { name: "Preview" });
-    const rename = within(preview).getByRole("button", { name: "Rename" });
+    const rename = within(preview).getByRole("button", { name: /^Rename/ });
     expect(rename).toBeDisabled();
-    expect(rename.closest("span")).toHaveAttribute("data-tip", "Links cannot be renamed or moved");
+    expect(rename).toHaveAttribute("title", "Links cannot be renamed or moved");
     expect(within(preview).getByRole("button", { name: "Move file to…" })).toBeDisabled();
     expect(within(preview).getByRole("combobox", { name: "Add a tag to link.pdf" })).toBeDisabled();
   });
