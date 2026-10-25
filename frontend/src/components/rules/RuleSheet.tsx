@@ -90,6 +90,7 @@ const FOLDER_TIP =
   "Leave it empty and the rule does not set the folder. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
 const NAME_TIP =
   "Leave it empty and the rule does not set the name. Patterns are filled in for each document: {year}, {doc_date:%Y%m%d}, {stem} (the file name without its ending) and {person}.";
+const PAYEE_TIP = "The name filled in as the payee when this rule puts a bill in To pay.";
 const FOR_TIP =
   "Optional. Only for: the rule applies to letters for that person, as set on the document or found in its address area. {person} in the Folder or Name is filled in with the person of each letter.";
 const FROM_TIP =
@@ -125,12 +126,12 @@ export function OfferRuleSheet({
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [failed]);
-  if (update === null) return <RuleSheet initial={offer.draft} filed={filed} onClose={onClose} />;
+  if (update === null) return <RuleSheet initial={offer.draft} filed={filed} sourceDriveId={offer.drive_id} onClose={onClose} />;
   if (!rules.data) return null;
   const rule = rules.data.rules.find((r) => r.id === update);
-  if (!rule) return <RuleSheet initial={offer.draft} filed={filed} onClose={onClose} />;
+  if (!rule) return <RuleSheet initial={offer.draft} filed={filed} sourceDriveId={offer.drive_id} onClose={onClose} />;
   const initial: Rule = { ...rule, then: { ...rule.then, folder: offer.draft.folder, name: offer.draft.name } };
-  return <RuleSheet initial={initial} replaces={rule.id} filed={filed} onClose={onClose} />;
+  return <RuleSheet initial={initial} replaces={rule.id} filed={filed} sourceDriveId={offer.drive_id} onClose={onClose} />;
 }
 
 export function RuleSheet({
@@ -140,6 +141,7 @@ export function RuleSheet({
   before,
   samplePage = false,
   nearDriveId,
+  sourceDriveId,
   onClose,
 }: {
   initial: RuleDraft | ZoneDraft | Rule;
@@ -154,6 +156,8 @@ export function RuleSheet({
   samplePage?: boolean;
   /** The document the areas were drawn on: the test looks at the documents in its folder early. */
   nearDriveId?: string;
+  /** The document the rule is made from: the test judges it on its own line and leaves it out of every count. */
+  sourceDriveId?: string;
   onClose: () => void;
 }) {
   const draft = isDraft(initial);
@@ -212,6 +216,10 @@ export function RuleSheet({
   const [name, setName] = useState(() => start.name ?? "");
   const [payee, setPayee] = useState(() => start.payee ?? "");
   const [tray, setTray] = useState(() => start.tray ?? "");
+  // The payee is for bills: shown when the chosen tray has a payee field, or when the rule
+  // already has one (nothing is hidden).
+  const showPayee =
+    payee.trim() !== "" || Object.values(trays.find((t) => t.id === tray)?.fields ?? {}).some((f) => f.prefill === "payee");
   const [tags, setTags] = useState<string[]>(() => start.tags);
   // closed to begin with; what is set in it shows beside the toggle
   const [more, setMore] = useState(false);
@@ -271,14 +279,14 @@ export function RuleSheet({
   const test = useReplayJob({
     enabled: hasCondition,
     jobKey: testKey,
-    request: { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, nearDriveId },
+    request: { rule, replaces: replacing, placeAbove: replacing ? null : placeAbove, nearDriveId, sourceDriveId },
   });
 
   // How the rule did before the change (a test of the old rule, asked once).
   const baselineTest = useReplayJob({
     enabled: before !== undefined,
     jobKey: before?.id ?? "",
-    request: { rule: before ? ruleInOf(before) : rule, replaces: before?.id, nearDriveId },
+    request: { rule: before ? ruleInOf(before) : rule, replaces: before?.id, nearDriveId, sourceDriveId },
     delayMs: 0,
   });
   const baseline = baselineTest.replay ?? null;
@@ -396,219 +404,225 @@ export function RuleSheet({
           </>
         }
       >
-        {(areas.length === 0 || words.length > 0) && (
+        <section className="rule-section" aria-labelledby={`${ids}-when-h`}>
+          <h3 id={`${ids}-when-h`} className="rule-section-title">When a document matches</h3>
+          {(areas.length === 0 || words.length > 0) && (
+            <div className="field">
+              <span className="field-label" id={`${ids}-words`}>When the text contains</span>
+              <ul className="rule-words" aria-labelledby={`${ids}-words`}>
+                {words.map((w) => (
+                  <li key={w.word}>
+                    <button
+                      type="button"
+                      className="rule-word"
+                      aria-pressed={w.ticked}
+                      onClick={() => setWords((all) => all.map((x) => (x.word === w.word ? { ...x, ticked: !x.ticked } : x)))}
+                    >
+                      {visible(w.word)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <input
+                aria-label="Add a word"
+                placeholder="Add a word"
+                value={adding}
+                onChange={(e) => setAdding(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addWord();
+                  }
+                }}
+                onBlur={addWord}
+              />
+              <p className="hint">Any ticked word is enough; more words catch more documents.</p>
+            </div>
+          )}
+          {areas.map((area, at) =>
+            area.image ? (
+              <AreaPictureView
+                key={at}
+                n={at + 1}
+                several={areas.length > 1}
+                image={area.image}
+                minScore={area.minScore ?? null}
+                defaultScore={defaultMin}
+                onScore={(minScore) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, minScore } : a)))}
+                onRemove={() => {
+                  recutTag.current.removed++;
+                  setAreas((all) => all.filter((_, i) => i !== at));
+                }}
+              />
+            ) : (
+              <AreaWords
+                key={at}
+                n={at + 1}
+                several={areas.length > 1}
+                words={area.words}
+                match={area.match ?? "anywhere"}
+                onMatch={(match) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, match } : a)))}
+                onToggle={(word) => changeArea(at, (all) => all.map((x) => (x.word === word ? { ...x, ticked: !x.ticked } : x)))}
+                onAdd={(word) => changeArea(at, (all) => withWord(all, word))}
+                onRemove={() => {
+                  recutTag.current.removed++;
+                  setAreas((all) => all.filter((_, i) => i !== at));
+                }}
+              />
+            ),
+          )}
+          {areas.length > 1 && <p className="hint">The document needs a word or the picture in every area.</p>}
+          {pictureOnly && (
+            <p className="hint">Add a text box to make this faster and surer: a picture alone takes longer to test and is less sure.</p>
+          )}
+          {recutError && (
+            <p className="error" role="alert">
+              {visible(recutError)}
+            </p>
+          )}
+          {samplePage && (areas.length > 0 || personZone) && (
+            <SampleAreas
+              ruleId={initial.id}
+              sample={draft ? null : initial.sample}
+              areas={areas.map((a) => ({ box: a.box, picture: !!a.image }))}
+              personZone={personZone}
+              onArea={(i, box, driveId) => void moveArea(i, box, driveId)}
+              onPersonZone={setPersonZone}
+            />
+          )}
           <div className="field">
-            <span className="field-label" id={`${ids}-words`}>When the text contains</span>
-            <ul className="rule-words" aria-labelledby={`${ids}-words`}>
-              {words.map((w) => (
-                <li key={w.word}>
-                  <button
-                    type="button"
-                    className="rule-word"
-                    aria-pressed={w.ticked}
-                    onClick={() => setWords((all) => all.map((x) => (x.word === w.word ? { ...x, ticked: !x.ticked } : x)))}
-                  >
-                    {visible(w.word)}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="field-label-row">
+              <label htmlFor={`${ids}-from`}>From (sender)</label>
+              <InfoTip id={`${ids}-from-tip`} tip={FROM_TIP} />
+            </div>
             <input
-              aria-label="Add a word"
-              placeholder="Add a word"
-              value={adding}
-              onChange={(e) => setAdding(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addWord();
-                }
-              }}
-              onBlur={addWord}
+              id={`${ids}-from`}
+              aria-describedby={`${ids}-from-tip`}
+              value={fromText}
+              placeholder="Optional, such as Pohjola"
+              onChange={(e) => setFromText(e.target.value)}
             />
-            <p className="hint">Any ticked word is enough; more words catch more documents.</p>
+            {(senders.data?.length ?? 0) > 0 && (
+              <ul className="assign-choices" aria-label="Senders you have used">
+                {senders.data?.map((s) => (
+                  <li key={s.sender}>
+                    <button
+                      type="button"
+                      className="assign-choice"
+                      aria-pressed={sender === s.sender}
+                      onClick={() => setFromText(s.sender)}
+                    >
+                      {visible(s.sender)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        )}
-        {areas.map((area, at) =>
-          area.image ? (
-            <AreaPictureView
-              key={at}
-              n={at + 1}
-              several={areas.length > 1}
-              image={area.image}
-              minScore={area.minScore ?? null}
-              defaultScore={defaultMin}
-              onScore={(minScore) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, minScore } : a)))}
-              onRemove={() => {
-                recutTag.current.removed++;
-                setAreas((all) => all.filter((_, i) => i !== at));
-              }}
-            />
-          ) : (
-            <AreaWords
-              key={at}
-              n={at + 1}
-              several={areas.length > 1}
-              words={area.words}
-              match={area.match ?? "anywhere"}
-              onMatch={(match) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, match } : a)))}
-              onToggle={(word) => changeArea(at, (all) => all.map((x) => (x.word === word ? { ...x, ticked: !x.ticked } : x)))}
-              onAdd={(word) => changeArea(at, (all) => withWord(all, word))}
-              onRemove={() => {
-                recutTag.current.removed++;
-                setAreas((all) => all.filter((_, i) => i !== at));
-              }}
-            />
-          ),
-        )}
-        {areas.length > 1 && <p className="hint">The document needs a word or the picture in every area.</p>}
-        {pictureOnly && (
-          <p className="hint">Add a text box to make this faster and surer: a picture alone takes longer to test and is less sure.</p>
-        )}
-        {recutError && (
-          <p className="error" role="alert">
-            {visible(recutError)}
-          </p>
-        )}
-        {samplePage && (areas.length > 0 || personZone) && (
-          <SampleAreas
-            ruleId={initial.id}
-            sample={draft ? null : initial.sample}
-            areas={areas.map((a) => ({ box: a.box, picture: !!a.image }))}
-            personZone={personZone}
-            onArea={(i, box, driveId) => void moveArea(i, box, driveId)}
-            onPersonZone={setPersonZone}
-          />
-        )}
-        <div className="field">
-          <div className="field-label-row">
-            <label htmlFor={`${ids}-from`}>From (sender)</label>
-            <InfoTip id={`${ids}-from-tip`} tip={FROM_TIP} />
-          </div>
-          <input
-            id={`${ids}-from`}
-            aria-describedby={`${ids}-from-tip`}
-            value={fromText}
-            placeholder="Optional, such as Pohjola"
-            onChange={(e) => setFromText(e.target.value)}
-          />
-          {(senders.data?.length ?? 0) > 0 && (
-            <ul className="assign-choices" aria-label="Senders you have used">
-              {senders.data?.map((s) => (
-                <li key={s.sender}>
-                  <button
-                    type="button"
-                    className="assign-choice"
-                    aria-pressed={sender === s.sender}
-                    onClick={() => setFromText(s.sender)}
-                  >
-                    {visible(s.sender)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="field rule-for" role="group" aria-label="For">
-          <div className="field-label-row">
-            <span className="field-label">For</span>
-            <InfoTip id={`${ids}-for-tip`} tip={FOR_TIP} />
-          </div>
-          {people !== undefined && people.length === 0 ? (
-            <p className="hint">No people listed yet: add them in Settings → Filing rules → People.</p>
-          ) : (
-            zoneDraft && people !== undefined && <p className="hint rule-found">{visible(foundText(peopleFound, foundPerson))}</p>
-          )}
-          <div className="rule-for-choice">
-            <span className="segmented" role="group" aria-label="Who the rule is for">
-              <button type="button" className="segmented-option" aria-pressed={person === null} onClick={() => setPerson(null)}>
-                Anyone
-              </button>
+          <div className="field rule-for" role="group" aria-label="For">
+            <div className="field-label-row">
+              <span className="field-label">For</span>
+              <InfoTip id={`${ids}-for-tip`} tip={FOR_TIP} />
+            </div>
+            {people !== undefined && people.length === 0 ? (
+              <p className="hint">No people listed yet: add them in Settings → Filing rules → People.</p>
+            ) : (
+              zoneDraft && people !== undefined && <p className="hint rule-found">{visible(foundText(peopleFound, foundPerson))}</p>
+            )}
+            <div className="rule-for-choice">
+              <span className="segmented" role="group" aria-label="Who the rule is for">
+                <button type="button" className="segmented-option" aria-pressed={person === null} onClick={() => setPerson(null)}>
+                  Anyone
+                </button>
+                <button
+                  type="button"
+                  className="segmented-option"
+                  aria-pressed={person !== null}
+                  onClick={() => setPerson(person ?? foundPerson ?? people?.[0]?.name ?? "")}
+                >
+                  Only for
+                </button>
+              </span>
+              {person !== null && (
+                <select aria-label="Person" value={person} onChange={(e) => setPerson(e.target.value)}>
+                  {person === "" && <option value="">Pick a person</option>}
+                  {person !== "" && !(people ?? []).some((p) => p.name === person) && <option value={person}>{visible(person)}</option>}
+                  {(people ?? []).map((p) => (
+                    <option key={p.name} value={p.name}>{visible(p.name)}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="rule-for-folder">
               <button
                 type="button"
-                className="segmented-option"
-                aria-pressed={person !== null}
-                onClick={() => setPerson(person ?? foundPerson ?? people?.[0]?.name ?? "")}
+                disabled={folder.includes("{person}")}
+                onClick={() => setFolder(folderWithPerson(folder, foundPerson ?? person))}
               >
-                Only for
+                Use the person in the folder
               </button>
-            </span>
-            {person !== null && (
-              <select aria-label="Person" value={person} onChange={(e) => setPerson(e.target.value)}>
-                {person === "" && <option value="">Pick a person</option>}
-                {person !== "" && !(people ?? []).some((p) => p.name === person) && <option value={person}>{visible(person)}</option>}
-                {(people ?? []).map((p) => (
-                  <option key={p.name} value={p.name}>{visible(p.name)}</option>
-                ))}
-              </select>
-            )}
+              {folder.includes("{person}") && (
+                <span className="hint rule-preview">
+                  {visible(
+                    foundPerson ?? person
+                      ? `This letter would go to ${folder.trim().replaceAll("{person}", (foundPerson ?? person) as string)}`
+                      : "No person is known for this letter, so {person} cannot be filled in here.",
+                  )}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="rule-for-folder">
-            <button
-              type="button"
-              disabled={folder.includes("{person}")}
-              onClick={() => setFolder(folderWithPerson(folder, foundPerson ?? person))}
-            >
-              Use the person in the folder
+          <div className="rule-more">
+            <button type="button" className="link-button" aria-expanded={more} onClick={() => setMore(!more)}>
+              More conditions
             </button>
-            {folder.includes("{person}") && (
-              <span className="hint rule-preview">
-                {visible(
-                  foundPerson ?? person
-                    ? `This letter would go to ${folder.trim().replaceAll("{person}", (foundPerson ?? person) as string)}`
-                    : "No person is known for this letter, so {person} cannot be filled in here.",
-                )}
-              </span>
-            )}
+            {!more && <span className="hint">{visible(moreSummary || "None set")}</span>}
           </div>
-        </div>
-        {filed && (
-          <p className="hint rule-filed">
-            Filed as: {visible(`${filed.folder}/${filed.name}`)}
-          </p>
-        )}
-        {textField("Folder", folder, setFolder, FOLDER_TIP)}
-        {textField("Name", name, setName, NAME_TIP)}
-        <div className="field">
-          <label htmlFor={`${ids}-tags`}>Tags</label>
-          <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} />
-        </div>
-        <div className="field rule-field">
-          <label htmlFor={`${ids}-tray`}>Tray</label>
-          <select id={`${ids}-tray`} value={tray} onChange={(e) => setTray(e.target.value)}>
-            <option value="">None</option>
-            {trays.map((t) => (
-              <option key={t.id} value={t.id}>{visible(t.name)}</option>
-            ))}
-          </select>
-        </div>
-        {textField("Payee", payee, setPayee)}
-        <div className="rule-more">
-          <button type="button" className="link-button" aria-expanded={more} onClick={() => setMore(!more)}>
-            More conditions
-          </button>
-          {!more && <span className="hint">{visible(moreSummary || "None set")}</span>}
-        </div>
-        {more && (
-          <>
-            <div className="field">
-              <div className="field-label-row">
-                <label htmlFor={`${ids}-file`}>File name matches</label>
-                <InfoTip id={`${ids}-file-tip`} tip={FILENAME_TIP} />
+          {more && (
+            <>
+              <div className="field">
+                <div className="field-label-row">
+                  <label htmlFor={`${ids}-file`}>File name matches</label>
+                  <InfoTip id={`${ids}-file-tip`} tip={FILENAME_TIP} />
+                </div>
+                <input
+                  id={`${ids}-file`}
+                  value={filename}
+                  aria-describedby={`${ids}-file-tip`}
+                  onChange={(e) => setFilename(e.target.value)}
+                />
               </div>
-              <input
-                id={`${ids}-file`}
-                value={filename}
-                aria-describedby={`${ids}-file-tip`}
-                onChange={(e) => setFilename(e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor={`${ids}-in`}>Document is in folder</label>
-              <input id={`${ids}-in`} value={folderIs} onChange={(e) => setFolderIs(e.target.value)} />
-            </div>
-          </>
-        )}
+              <div className="field">
+                <label htmlFor={`${ids}-in`}>Document is in folder</label>
+                <input id={`${ids}-in`} value={folderIs} onChange={(e) => setFolderIs(e.target.value)} />
+              </div>
+            </>
+          )}
+        </section>
+        <section className="rule-section" aria-labelledby={`${ids}-then-h`}>
+          <h3 id={`${ids}-then-h`} className="rule-section-title">Then file it like this</h3>
+          {filed && (
+            <p className="hint rule-filed">
+              Filed as: {visible(`${filed.folder}/${filed.name}`)}
+            </p>
+          )}
+          {textField("Folder", folder, setFolder, FOLDER_TIP)}
+          {textField("Name", name, setName, NAME_TIP)}
+          <div className="field">
+            <label htmlFor={`${ids}-tags`}>Tags</label>
+            <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} />
+          </div>
+          <div className="field rule-field">
+            <label htmlFor={`${ids}-tray`}>Tray</label>
+            <select id={`${ids}-tray`} value={tray} onChange={(e) => setTray(e.target.value)}>
+              <option value="">None</option>
+              {trays.map((t) => (
+                <option key={t.id} value={t.id}>{visible(t.name)}</option>
+              ))}
+            </select>
+          </div>
+          {showPayee && textField("Payee", payee, setPayee, PAYEE_TIP)}
+        </section>
         {hasCondition && (
           <ReplayResult
             replay={test.replay}

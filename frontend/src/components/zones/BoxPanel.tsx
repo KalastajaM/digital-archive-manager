@@ -208,7 +208,7 @@ export function BoxPanel({
       </div>
       {rule && !rule.learned && <p className="hint">{visible(rewriteNote("Saving", rule.file))}</p>}
       {problem && <p className="error" role="alert">{visible(problem)}</p>}
-      {draft && <RuleSheet initial={draft} nearDriveId={driveId} onClose={() => setDraft(null)} />}
+      {draft && <RuleSheet initial={draft} nearDriveId={driveId} sourceDriveId={driveId} onClose={() => setDraft(null)} />}
     </section>
   );
 }

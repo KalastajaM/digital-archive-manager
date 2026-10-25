@@ -120,6 +120,7 @@ def replay_rule(app: AppDep, body: RuleReplayIn) -> dict:
             pictures=app.pictures,
             after=body.after,
             near_folder=folder_of(near.path) if near is not None else None,
+            source_drive_id=body.source_drive_id,
         )
     except StaleCursor as e:
         raise InvalidRequest(str(e)) from e
@@ -217,6 +218,7 @@ def start_replay_job(app: AppDep, body: RuleReplayJobIn) -> dict:
             sender_ids=app.assignments.with_sender,
             pictures=app.pictures,
             near_folder=near_folder,
+            source_drive_id=body.source_drive_id,
         )
 
     job = app.replay_jobs.start(body.sheet, make)

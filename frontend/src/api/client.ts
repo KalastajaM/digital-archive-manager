@@ -1535,6 +1535,7 @@ export const startReplayJob = (body: {
   replaces?: string | null;
   placeAbove?: string | null;
   nearDriveId?: string | null;
+  sourceDriveId?: string | null;
 }) =>
   post<ReplayJob>("/api/rules/replay/jobs", {
     rule: body.rule,
@@ -1542,6 +1543,7 @@ export const startReplayJob = (body: {
     replaces: body.replaces ?? null,
     place_above: body.placeAbove ?? null,
     near_drive_id: body.nearDriveId ?? null,
+    source_drive_id: body.sourceDriveId ?? null,
   });
 
 /** The state of a background test and its result so far; with ``since`` (the version

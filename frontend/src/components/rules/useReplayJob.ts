@@ -25,6 +25,7 @@ export type JobRequest = {
   replaces?: string | null;
   placeAbove?: string | null;
   nearDriveId?: string | null;
+  sourceDriveId?: string | null;
 };
 
 export type JobTest = {

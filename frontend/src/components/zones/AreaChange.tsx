@@ -73,7 +73,7 @@ function RuleAreaSheet({ driveId, area, box, onClose }: { driveId: string; area:
   }, [gone]);
   if (!rule || (picture && image === null)) return null;
   return (
-    <RuleSheet initial={withChangedArea(rule, area, box, image ?? undefined)} replaces={rule.id} before={rule} nearDriveId={driveId} onClose={onClose} />
+    <RuleSheet initial={withChangedArea(rule, area, box, image ?? undefined)} replaces={rule.id} before={rule} nearDriveId={driveId} sourceDriveId={driveId} onClose={onClose} />
   );
 }
 
