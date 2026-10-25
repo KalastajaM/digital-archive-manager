@@ -1211,6 +1211,7 @@ export default function CollectionDetail({
       ? [
           { label: "Move up", disabled: busy || !reorder.canStep(ownRow, -1), onSelect: () => reorder.step(ownRow, -1) },
           { label: "Move down", disabled: busy || !reorder.canStep(ownRow, 1), onSelect: () => reorder.step(ownRow, 1) },
+          ...(reorder.canOut(ownRow) ? [{ label: "Move out one level", disabled: busy, onSelect: () => reorder.out(ownRow) }] : []),
         ]
       : []),
     // a closed collection takes no new collection (the server refuses a closed parent)

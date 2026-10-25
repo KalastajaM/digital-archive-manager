@@ -1,15 +1,75 @@
 import { type DragEvent as ReactDragEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { type CollectionRow, errorText, useMoveCollectionOrder } from "../api/client";
-import { type DropTarget, readDragCollection } from "../dnd";
+import { useNavigate } from "react-router-dom";
+import {
+  type CollectionRow,
+  errorText,
+  useMoveCollectionOrder,
+  useSetCollectionParent,
+} from "../api/client";
+import { COLLECTION_DRAG_TYPE, type DropTarget, readDragCollection } from "../dnd";
 import { visible } from "../text";
-import { dropZone, siblingsOf } from "./collectionTree";
+import { changeToast } from "./collectionText";
+import {
+  collectionMoveRunning,
+  dropZone,
+  endCollectionMove,
+  isWithin,
+  moveRefusal,
+  movedText,
+  recreatedLinks,
+  siblingsOf,
+  startCollectionMove,
+} from "./collectionTree";
 import { ContextMenu } from "./ui/ContextMenu";
 import { useToast } from "./Toasts";
 
-/** Changing the order of collections among their siblings (the owner's order; Starred
- * and Important stay first and are never offered). One place for the sidebar, the
- * collections page and the collection's ⋯ menu: drag with a drop line, Alt+↑/↓ and
- * "Move up" / "Move down". Each move is said in a toast (a polite live region). */
+/** Changing the order of collections and where they sit (the owner's order; Starred and
+ * Important stay first and are never offered). One place for the sidebar, the collections
+ * page and the collection's ⋯ menu. A collection dragged onto a row: the top third puts
+ * it before the row, the bottom third after it (a drop line; into the row's parent when
+ * that is another one), the middle third inside it (the row is highlighted). The heading
+ * and the page's top strip take it to the top level, last. Keyboard: Alt+↑/↓ (and Alt+←
+ * out one level) or Move up / Move down / Move out one level in the menus. Each move is
+ * said in a toast (a polite live region). */
+
+/** Dropping a collection on another moves it inside; on the section caption, to the
+ * top. No confirm (as for member and group changes): the Ongoing sync only moves
+ * app-owned entries, journaled, and moving it back reverses it; the toast says what
+ * Ongoing did. A cycle or a closed parent is refused before the drop. */
+export function useMoveCollection(list: CollectionRow[], onMoved: (target: CollectionRow | null) => void) {
+  const setParent = useSetCollectionParent();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const find = (id: number) => list.find((c) => c.id === id) ?? null;
+  const accept = (target: CollectionRow | null) => (id: number) => {
+    const dragged = find(id);
+    if (!dragged) return false; // not one this sidebar shows
+    const refusal = moveRefusal(list, dragged, target);
+    if (refusal) return visible(refusal);
+    return collectionMoveRunning() ? "Another move is still running" : true;
+  };
+  const move = (target: CollectionRow | null) => (id: number) => {
+    const dragged = find(id);
+    if (!dragged || !startCollectionMove()) return; // shared with the page's Move to…
+    const name = visible(dragged.name);
+    const where = target === null ? null : visible(target.name);
+    // The collection page shows the batch that ran (LastChange) and Activity has it.
+    const open = { label: "Open", run: () => navigate(`/collections/${id}`) };
+    setParent
+      .mutateAsync({ id, parent_id: target?.id ?? null })
+      .then((result) => {
+        onMoved(target);
+        toast({ ...changeToast(movedText(name, where, recreatedLinks(result)), result), actions: [open] });
+      })
+      .catch((err) => {
+        const to = where === null ? "to the top level" : `into ${where}`;
+        toast({ kind: "error", text: `Could not move ${name} ${to}: ${visible(errorText(err))}` });
+      })
+      .finally(endCollectionMove);
+  };
+  return { accept, move };
+}
+
 
 type Zone = "before" | "after";
 
@@ -19,7 +79,8 @@ export function useCollectionOrder(list: readonly CollectionRow[]) {
   const running = useRef(false); // synchronous: a second drop sees it at once
   const find = (id: number) => list.find((c) => c.id === id) ?? null;
 
-  /** Put ``id`` before or after the sibling ``anchor``; ``said``: the toast text. */
+  /** Put ``id`` before or after ``anchor`` (a sibling, or a row of another parent: it goes
+   * into that parent too); ``said``: the toast text when only the order changed. */
   const place = (id: number, anchor: number, where: Zone, said: string) => {
     const c = find(id);
     if (!c || running.current) return;
@@ -27,17 +88,23 @@ export function useCollectionOrder(list: readonly CollectionRow[]) {
     const call = where === "before" ? { id, before_id: anchor } : { id, after_id: anchor };
     mutation
       .mutateAsync(call)
-      .then(() => toast({ kind: "info", text: said }))
+      .then((result) => {
+        const now = result.collection.parent_id ?? null;
+        if (now === (c.parent_id ?? null)) return toast({ kind: "info", text: said });
+        const into = now === null ? null : visible(result.collection.path.slice(-2, -1)[0] ?? "");
+        toast(changeToast(movedText(visible(c.name), into, recreatedLinks(result)), result));
+      })
       .catch((err) => toast({ kind: "error", text: `Could not move ${visible(c.name)}: ${visible(errorText(err))}` }))
       .finally(() => {
         running.current = false;
       });
   };
 
-  /** A sibling a drag of ``id`` may be put beside (never itself or another parent's). */
+  /** Whether a drag of ``id`` may be put beside the row ``target``: any other collection
+   * unless the row's parent would be inside the dragged one (a cycle). */
   const sibling = (id: number, target: CollectionRow) => {
     const dragged = find(id);
-    return !!dragged && dragged.id !== target.id && (dragged.parent_id ?? null) === (target.parent_id ?? null);
+    return !!dragged && dragged.id !== target.id && !isWithin(list, target.id, dragged.id);
   };
 
   const drop = (id: number, target: CollectionRow, where: Zone) =>
@@ -54,7 +121,16 @@ export function useCollectionOrder(list: readonly CollectionRow[]) {
     const to = sibs[sibs.findIndex((x) => x.id === c.id) + dir];
     place(c.id, to.id, dir < 0 ? "before" : "after", `Moved ${visible(c.name)} ${dir < 0 ? "up" : "down"}`);
   };
-  return { sibling, drop, canStep, step };
+  const parentRow = (c: CollectionRow) => (c.parent_id == null ? null : find(c.parent_id));
+  const canOut = (c: CollectionRow) => parentRow(c) !== null;
+  /** Out of its parent, to the parent's level, right after it. */
+  const out = (c: CollectionRow) => {
+    const parent = parentRow(c);
+    if (!parent) return;
+    const to = parent.parent_id == null ? "the top level" : visible(find(parent.parent_id)?.name ?? "");
+    place(c.id, parent.id, "after", `Moved ${visible(c.name)} out of ${visible(parent.name)} to ${to}`);
+  };
+  return { sibling, drop, canStep, step, canOut, out };
 }
 
 export type CollectionOrder = ReturnType<typeof useCollectionOrder>;
@@ -62,8 +138,12 @@ export type CollectionOrder = ReturnType<typeof useCollectionOrder>;
 /** Alt+↑ / Alt+↓ on a focused collection row moves it; the row keeps the focus. */
 export function orderKeys(order: CollectionOrder, c: CollectionRow) {
   return (e: KeyboardEvent) => {
-    if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "ArrowLeft")) return;
     e.preventDefault();
+    if (e.key === "ArrowLeft") {
+      order.out(c);
+      return;
+    }
     const dir = e.key === "ArrowUp" ? -1 : 1;
     if (!order.canStep(c, dir)) return;
     const row = e.currentTarget as HTMLElement;
@@ -76,12 +156,11 @@ export function orderKeys(order: CollectionOrder, c: CollectionRow) {
   };
 }
 
-/** The drop line on a row: spread the props on the row (after its own drop props, when
- * it has some: ``inner``) and mark it with ``zone`` (CSS shows the line). A collection
- * dragged over the edge of a sibling is put before or after it; anywhere else the drag
- * is the row's own (``inner``: files added, a collection moved inside). ``halves``: no
- * middle, for rows that only reorder. */
-export function useReorderRow(order: CollectionOrder, c: CollectionRow, inner: DropTarget["props"] | null, halves = false) {
+/** The drop line on a row: spread the props on the row (after its own drop props:
+ * ``inner``) and mark it with ``zone`` (CSS shows the line). A collection dragged over
+ * the top or bottom third of a row is put before or after it; over the middle third the
+ * drag is the row's own (``inner``: files added, a collection moved inside). */
+export function useReorderRow(order: CollectionOrder, c: CollectionRow, inner: DropTarget["props"] | null) {
   const [zone, setZone] = useState<Zone | null>(null);
   useEffect(() => {
     const end = () => setZone(null);
@@ -95,7 +174,7 @@ export function useReorderRow(order: CollectionOrder, c: CollectionRow, inner: D
   const zoneOf = (e: ReactDragEvent): { id: number; zone: Zone } | null => {
     const id = readDragCollection(e);
     if (id === null || !order.sibling(id, c)) return null;
-    const z = dropZone(e.clientY, e.currentTarget.getBoundingClientRect(), halves);
+    const z = dropZone(e.clientY, e.currentTarget.getBoundingClientRect());
     return z === null ? null : { id, zone: z };
   };
   const props = {
@@ -144,6 +223,7 @@ export function useOrderMenu(order: CollectionOrder) {
       entries={[
         { label: "Move up", disabled: !order.canStep(menu.c, -1), onSelect: () => order.step(menu.c, -1) },
         { label: "Move down", disabled: !order.canStep(menu.c, 1), onSelect: () => order.step(menu.c, 1) },
+        ...(order.canOut(menu.c) ? [{ label: "Move out one level", onSelect: () => order.out(menu.c) }] : []),
       ]}
       onClose={() => setMenu(null)}
     />
@@ -155,4 +235,25 @@ export function useOrderMenu(order: CollectionOrder) {
       setMenu({ x: e.clientX, y: e.clientY, c });
     },
   };
+}
+
+/** Whether a collection is being dragged in this page right now (a strip that only exists
+ * for such a drag shows while it lasts). */
+export function useCollectionDragging(): boolean {
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    const start = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes(COLLECTION_DRAG_TYPE)) setDragging(true);
+    };
+    const stop = () => setDragging(false);
+    document.addEventListener("dragstart", start);
+    document.addEventListener("dragend", stop);
+    document.addEventListener("drop", stop);
+    return () => {
+      document.removeEventListener("dragstart", start);
+      document.removeEventListener("dragend", stop);
+      document.removeEventListener("drop", stop);
+    };
+  }, []);
+  return dragging;
 }

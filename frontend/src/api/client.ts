@@ -1201,15 +1201,16 @@ export const useSetCollectionParent = () => {
   });
 };
 
-/** Put a collection before or after a sibling (its place among those with the same
- * parent). Only the order changes: no file moves, no batch. Built-in collections and
- * other parents are refused (400). */
+/** Put a collection before or after another. A sibling: only the order changes. A row of
+ * another parent: the collection goes into that parent too (as the parent change does,
+ * with the Ongoing sync: the batch comes back). Built-in collections and cycles are
+ * refused (400), and so is a closed parent (409). */
 export const useMoveCollectionOrder = () => {
-  const client = useQueryClient();
+  const refresh = useRefresh(); // a new parent moves folders in ##. Ongoing
   return useMutation({
     mutationFn: ({ id, ...place }: { id: number } & ({ before_id: number } | { after_id: number })) =>
       post<CollectionChange>(`/api/collections/${id}/move`, place),
-    onSettled: () => void client.invalidateQueries({ queryKey: keys.collections }),
+    onSettled: refresh,
   });
 };
 

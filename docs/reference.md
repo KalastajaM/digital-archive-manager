@@ -948,10 +948,12 @@ the command line: `dam errors [--all] [--retry]`.
   `POST /api/collections {name, parent_id?}` and
   `PATCH /api/collections/{id}/parent {parent_id}` (null for the top). Order:
   `POST /api/collections/{id}/move {before_id?, after_id?}` puts an ordinary collection
-  just before or after a sibling (same parent; give exactly one; 400 for a built-in
-  collection on either side, itself, another parent or none/both, 404 for an unknown id)
-  and answers like the other collection changes with `batch: null` (only the order
-  changes: no sync, no journal). Table `collections` has `position` (migration 0032,
+  just before or after another one (give exactly one; 400 for a built-in collection on
+  either side, itself, a cycle or none/both, 404 for an unknown id, 409 for a closed
+  parent). With a sibling only the order changes and the answer has `batch: null` (no
+  sync, no journal). With a collection of another parent it also moves into that parent,
+  as `PATCH .../parent` does, at that position, and the answer carries the Ongoing sync's
+  batch. Table `collections` has `position` (migration 0032,
   integer, default 0): the order among the collections with the same parent, backfilled
   from the name order; a new or reparented collection goes last; built-ins ignore it.
   Every list (`GET /api/collections`, the sidebar, pickers) is in tree order: built-ins

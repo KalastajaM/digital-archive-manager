@@ -45,7 +45,16 @@ const coll = (id: number, name: string, position: number, parent_id: number | nu
 const CAR = coll(1, "Car", 0);
 const ATTIC = coll(2, "Attic", 1);
 const BOAT = coll(3, "Boat", 2);
+const SOFA = coll(4, "Sofa", 0, 2); // inside Attic
+const NESTED = [CAR, ATTIC, SOFA, BOAT];
 const LIST = [CAR, ATTIC, BOAT];
+/** What the server answers when ``c`` now sits under ``parent`` (null: at the top). */
+const placed = (c: CollectionRow, parent: CollectionRow | null) => ({
+  collection: { ...c, parent_id: parent?.id ?? null, path: parent ? [parent.name, c.name] : [c.name] },
+  batch: null,
+  problems: [],
+  ongoing_status: null,
+});
 
 const CHANGE = { collection: CAR, batch: null, problems: [], ongoing_status: null };
 const moves = (calls: Call[]) => calls.filter((c) => c.method === "POST" && /\/move$/.test(c.url));
@@ -59,11 +68,14 @@ const BASE = {
   "POST /api/collections/1/move": { body: CHANGE },
   "POST /api/collections/2/move": { body: CHANGE },
   "POST /api/collections/3/move": { body: CHANGE },
+  "POST /api/collections/4/move": { body: placed(SOFA, null) },
+  "PATCH /api/collections/4/parent": { body: placed(SOFA, null) },
+  "PATCH /api/collections/3/parent": { body: placed(BOAT, ATTIC) },
   "POST /api/collections/1/members": { body: { ...CHANGE, collection: { ...CAR, members: [] } } },
 };
 
-function sidebar(list = LIST) {
-  const calls = mockFetch({ ...BASE, "GET /api/collections": { body: list } });
+function sidebar(list = LIST, extra: Parameters<typeof mockFetch>[0] = {}) {
+  const calls = mockFetch({ ...BASE, ...extra, "GET /api/collections": { body: list } });
   renderWithProviders(
     <MemoryRouter initialEntries={["/browse"]}>
       <Sidebar />
@@ -72,8 +84,8 @@ function sidebar(list = LIST) {
   return { calls, user: userEvent.setup() };
 }
 
-function page(list = LIST) {
-  const calls = mockFetch({ ...BASE, "GET /api/collections": { body: list } });
+function page(list = LIST, extra: Parameters<typeof mockFetch>[0] = {}) {
+  const calls = mockFetch({ ...BASE, ...extra, "GET /api/collections": { body: list } });
   renderWithProviders(
     <MemoryRouter initialEntries={["/collections"]}>
       <Routes>
@@ -168,13 +180,85 @@ describe("sidebar order", () => {
     expect(moves(calls)).toHaveLength(0);
   });
 
-  it("a collection of another parent is not reordered at an edge", async () => {
-    const inner = coll(4, "Sofa", 0, 2);
-    sidebar([CAR, ATTIC, inner, BOAT]);
+  it("the zones are thirds: top and bottom put it beside the row, the middle inside it", async () => {
+    sidebar();
+    const car = sized(await within(nav()).findByRole("link", { name: "Car" }));
+    const dt = dragColl(3, "Boat");
+    fireEvent.dragEnter(car, { dataTransfer: dt, clientY: 20 });
+    const zone = (y: number) => {
+      fireEvent.dragOver(car, { dataTransfer: dt, clientY: y });
+      return [car.getAttribute("data-reorder"), car.getAttribute("data-drop")];
+    };
+    expect(zone(13)).toEqual(["before", null]); // 13 of 40 is still the top third
+    expect(zone(14)).toEqual([null, "over"]); // the middle: a highlighted row, no line
+    expect(zone(26)).toEqual([null, "over"]);
+    expect(zone(27)).toEqual(["after", null]);
+  });
+
+  it("dropping on the edge of a row of another parent moves it out to that level, at that place", async () => {
+    const { calls } = sidebar(NESTED);
     const car = sized(await within(nav()).findByRole("link", { name: "Car" }));
     const dt = dragColl(4, "Sofa");
     fireEvent.dragOver(car, { dataTransfer: dt, clientY: 2 });
-    expect(car).not.toHaveAttribute("data-reorder");
+    expect(car).toHaveAttribute("data-reorder", "before");
+    fireEvent.drop(car, { dataTransfer: dt, clientY: 2 });
+    await waitFor(() => expect(moves(calls)).toHaveLength(1));
+    expect(moves(calls)[0].url).toBe("/api/collections/4/move");
+    expect(moves(calls)[0].body).toEqual({ before_id: 1 });
+    expect(await screen.findByText("Moved Sofa to the top level")).toBeInTheDocument();
+  });
+
+  it("dropping on the edge of a nested row moves it into that parent", async () => {
+    const { calls } = sidebar(NESTED, { "POST /api/collections/3/move": { body: placed(BOAT, ATTIC) } });
+    const sofa = sized(await within(nav()).findByRole("link", { name: "Sofa" }));
+    const dt = dragColl(3, "Boat");
+    fireEvent.dragOver(sofa, { dataTransfer: dt, clientY: 38 });
+    expect(sofa).toHaveAttribute("data-reorder", "after");
+    fireEvent.drop(sofa, { dataTransfer: dt, clientY: 38 });
+    await waitFor(() => expect(moves(calls)).toHaveLength(1));
+    expect(moves(calls)[0].body).toEqual({ after_id: 4 });
+    expect(await screen.findByText("Moved Boat into Attic")).toBeInTheDocument();
+  });
+
+  it("a cycle is refused: no line beside a collection inside the dragged one", async () => {
+    const { calls } = sidebar(NESTED);
+    const sofa = sized(await within(nav()).findByRole("link", { name: "Sofa" }));
+    const dt = dragColl(2, "Attic");
+    fireEvent.dragEnter(sofa, { dataTransfer: dt, clientY: 2 });
+    fireEvent.dragOver(sofa, { dataTransfer: dt, clientY: 2 });
+    expect(sofa).not.toHaveAttribute("data-reorder");
+    fireEvent.drop(sofa, { dataTransfer: dt, clientY: 2 });
+    expect(moves(calls)).toHaveLength(0);
+  });
+
+  it("dropping on the Collections heading moves a nested collection to the top level", async () => {
+    const { calls } = sidebar(NESTED);
+    await within(nav()).findByRole("link", { name: "Sofa" }); // the list is loaded
+    const heading = within(nav()).getByRole("link", { name: "Collections" });
+    const dt = dragColl(4, "Sofa");
+    fireEvent.dragEnter(heading, { dataTransfer: dt });
+    expect(heading).toHaveAttribute("data-drop", "over");
+    fireEvent.drop(heading, { dataTransfer: dt });
+    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH" && c.url === "/api/collections/4/parent")).toHaveLength(1));
+    expect(calls.find((c) => c.url === "/api/collections/4/parent")!.body).toEqual({ parent_id: null });
+  });
+
+  it("Alt+ArrowLeft and the menu's Move out one level take a nested collection out, after its parent", async () => {
+    const { calls, user } = sidebar(NESTED);
+    const sofa = await within(nav()).findByRole("link", { name: "Sofa" });
+    sofa.focus();
+    await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    await waitFor(() => expect(moves(calls)).toHaveLength(1));
+    expect(moves(calls)[0].url).toBe("/api/collections/4/move");
+    expect(moves(calls)[0].body).toEqual({ after_id: 2 });
+    expect(await screen.findByText("Moved Sofa to the top level")).toBeInTheDocument();
+    await user.pointer({ keys: "[MouseRight]", target: within(nav()).getByRole("link", { name: "Car" }) });
+    const menu = await screen.findByRole("menu", { name: "Order of Car" });
+    expect(within(menu).queryByRole("menuitem", { name: "Move out one level" })).toBeNull(); // top level
+    await user.keyboard("{Escape}");
+    await user.pointer({ keys: "[MouseRight]", target: within(nav()).getByRole("link", { name: "Sofa" }) });
+    await user.click(await screen.findByRole("menuitem", { name: "Move out one level" }));
+    await waitFor(() => expect(moves(calls)).toHaveLength(2));
   });
 
   it("a file dropped on a sidebar collection is still added to it", async () => {
@@ -232,7 +316,7 @@ describe("collections page order", () => {
     expect(names).toEqual(["Zed", "Alpha"]);
   });
 
-  it("dragging a row over the upper half of a sibling shows a line and drops before it", async () => {
+  it("dragging a row over the top third of a sibling shows a line and drops before it", async () => {
     const { calls } = page();
     const car = await rowOf("Car");
     const dt = dragColl(3, "Boat");
@@ -244,7 +328,44 @@ describe("collections page order", () => {
     expect(moves(calls)[0].body).toEqual({ before_id: 1 });
   });
 
-  it("the lower half drops after it", async () => {
+  it("the middle third highlights the row; dropping there moves it inside", async () => {
+    const { calls } = page();
+    const car = await rowOf("Car");
+    const dt = dragColl(3, "Boat");
+    fireEvent.dragEnter(car, { dataTransfer: dt, clientY: 20 });
+    fireEvent.dragOver(car, { dataTransfer: dt, clientY: 20 });
+    expect(car).toHaveAttribute("data-drop", "over");
+    expect(car).not.toHaveAttribute("data-reorder");
+    fireEvent.drop(car, { dataTransfer: dt, clientY: 20 });
+    await waitFor(() => expect(calls.filter((c) => c.url === "/api/collections/3/parent")).toHaveLength(1));
+    expect(calls.find((c) => c.url === "/api/collections/3/parent")!.body).toEqual({ parent_id: 1 });
+    expect(moves(calls)).toHaveLength(0);
+  });
+
+  it("a nested row dropped on another level's edge moves out; the top strip takes it to the top level", async () => {
+    const { calls } = page(NESTED);
+    const car = await rowOf("Car");
+    const dt = dragColl(4, "Sofa");
+    fireEvent.dragOver(car, { dataTransfer: dt, clientY: 2 });
+    fireEvent.drop(car, { dataTransfer: dt, clientY: 2 });
+    await waitFor(() => expect(moves(calls)).toHaveLength(1));
+    expect(moves(calls)[0].body).toEqual({ before_id: 1 });
+  });
+
+  it("while a collection is dragged a strip takes it to the top level", async () => {
+    const { calls } = page(NESTED);
+    const sofa = await rowOf("Sofa");
+    expect(screen.queryByText(/top level, last/)).toBeNull();
+    const dt = dragColl(4, "Sofa");
+    rtlFire(sofa, createEvent.dragStart(sofa, { dataTransfer: dt } as EventInit));
+    const strip = await screen.findByText(/top level, last/);
+    fireEvent.dragEnter(strip, { dataTransfer: dt });
+    expect(strip).toHaveAttribute("data-drop", "over");
+    fireEvent.drop(strip, { dataTransfer: dt });
+    await waitFor(() => expect(calls.filter((c) => c.url === "/api/collections/4/parent")).toHaveLength(1));
+  });
+
+  it("the bottom third drops after it", async () => {
     const { calls } = page();
     const boat = await rowOf("Boat");
     const dt = dragColl(1, "Car");

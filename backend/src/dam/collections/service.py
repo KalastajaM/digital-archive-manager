@@ -638,6 +638,17 @@ class CollectionService:
             self._changed()
         return self.get(new_id)
 
+    @staticmethod
+    def _check_no_cycle(tree: dict[int, _Node], collection_id: int, parent_id: int) -> None:
+        """Refuse ``parent_id`` being the collection or anything below it."""
+        ancestor: int | None = parent_id
+        seen: set[int] = set()
+        while ancestor is not None and ancestor not in seen:
+            if ancestor == collection_id:
+                raise InvalidRequest("A collection cannot go inside itself")
+            seen.add(ancestor)
+            ancestor = tree[ancestor].parent_id if ancestor in tree else None
+
     def set_parent(
         self, collection_id: int, parent_id: int | None, *, notify: bool = True
     ) -> Collection:
@@ -650,14 +661,7 @@ class CollectionService:
             self._ordinary(conn, collection_id, "moved")
             if parent_id is not None:
                 self._check_parent(conn, parent_id)
-                tree = _tree(conn)
-                ancestor: int | None = parent_id
-                seen: set[int] = set()
-                while ancestor is not None and ancestor not in seen:
-                    if ancestor == collection_id:
-                        raise InvalidRequest("A collection cannot go inside itself")
-                    seen.add(ancestor)
-                    ancestor = tree[ancestor].parent_id if ancestor in tree else None
+                self._check_no_cycle(_tree(conn), collection_id, parent_id)
             current = conn.execute(
                 select(collections.c.parent_id).where(collections.c.id == collection_id)
             ).scalar_one()
@@ -673,16 +677,23 @@ class CollectionService:
         return self.get(collection_id)
 
     def move(
-        self, collection_id: int, *, before_id: int | None = None, after_id: int | None = None
+        self,
+        collection_id: int,
+        *,
+        before_id: int | None = None,
+        after_id: int | None = None,
+        notify: bool = True,
     ) -> Collection:
         """Put the collection just before ``before_id`` or just after ``after_id`` (give
-        exactly one), which must be a sibling: same parent, never a built-in one (they
-        stay first, and are not movable). A change of the order only: no file, link or
-        parent changes, so there is no Ongoing sync. The same place again changes
-        nothing."""
+        exactly one). The anchor is never a built-in one (they stay first). When the
+        anchor has another parent the collection goes into that parent too (as
+        ``set_parent``: a cycle or a closed parent is refused, and the Ongoing sync
+        follows unless ``notify`` is off); within one parent only the order changes and
+        there is no sync. The same place again changes nothing."""
         if (before_id is None) == (after_id is None):
             raise InvalidRequest("Give exactly one of before_id and after_id")
         anchor_id = before_id if before_id is not None else after_id
+        reparented = False
         with write_tx(self.engine) as conn:
             self._ordinary(conn, collection_id, "moved")
             if anchor_id == collection_id:
@@ -691,9 +702,11 @@ class CollectionService:
             if kind is not None:
                 raise InvalidRequest(f"{BUILTINS[kind]!r} is built in: it stays first")
             tree = _tree(conn)
-            parent = tree[collection_id].parent_id
-            if tree[anchor_id].parent_id != parent:
-                raise InvalidRequest("A collection can only move among those in the same place")
+            parent = tree[anchor_id].parent_id
+            reparented = parent != tree[collection_id].parent_id
+            if reparented and parent is not None:
+                self._check_parent(conn, parent)
+                self._check_no_cycle(tree, collection_id, parent)
             order = sorted(
                 (i for i, n in tree.items() if n.parent_id == parent and n.kind is None),
                 key=lambda i: tree[i].sort_key(i),
@@ -702,12 +715,19 @@ class CollectionService:
             order = [i for i in order if i != collection_id]
             at = order.index(anchor_id) + (0 if before_id is not None else 1)
             order.insert(at, collection_id)
-            if order != before:
+            if order != before or reparented:
                 for pos, cid in enumerate(order):
-                    if tree[cid].position != pos:
+                    values: dict[str, object] = {}
+                    if tree[cid].position != pos or (cid == collection_id and reparented):
+                        values["position"] = pos
+                    if cid == collection_id and reparented:
+                        values["parent_id"] = parent
+                    if values:
                         conn.execute(
-                            update(collections).where(collections.c.id == cid).values(position=pos)
+                            update(collections).where(collections.c.id == cid).values(**values)
                         )
+        if reparented and notify:
+            self._changed()
         return self.get(collection_id)
 
     def get_or_create(self, name: str, *, notify: bool = True) -> Collection:

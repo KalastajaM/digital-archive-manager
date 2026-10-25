@@ -8,8 +8,16 @@ import { type CollectionRow, errorText, useCollections, useCreateCollection } fr
 import { COLLECTION_NAME_MAX } from "../components/CollectionPicker";
 import { sentence } from "../components/collectionText";
 import { childrenOf, countsOf, PATH_SEP, pathOf } from "../components/collectionTree";
-import { type CollectionOrder, orderKeys, useCollectionOrder, useOrderMenu, useReorderRow } from "../components/useCollectionOrder";
-import { setDragCollection } from "../dnd";
+import {
+  type CollectionOrder,
+  orderKeys,
+  useCollectionDragging,
+  useCollectionOrder,
+  useMoveCollection,
+  useOrderMenu,
+  useReorderRow,
+} from "../components/useCollectionOrder";
+import { readDragCollection, setDragCollection, useDropTarget } from "../dnd";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Tag } from "../components/ui/Tag";
 import { Segmented } from "../components/ui/Segmented";
@@ -82,6 +90,7 @@ function Row({
   where,
   order,
   onMenu,
+  mover,
 }: {
   c: CollectionRow;
   href: string;
@@ -89,9 +98,12 @@ function Row({
   where?: string;
   order: CollectionOrder;
   onMenu: (c: CollectionRow) => (e: React.MouseEvent) => void;
+  mover: ReturnType<typeof useMoveCollection>;
 }) {
-  // dragging a row puts it before or after a sibling (the upper or lower half): a drop line
-  const reorder = useReorderRow(order, c, null, true);
+  // a dragged collection: top or bottom third puts it before or after this row (a drop
+  // line), the middle third inside it (highlighted)
+  const target = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(c), onDrop: mover.move(c) });
+  const reorder = useReorderRow(order, c, target.props);
   return (
     <article
       className="collection-row"
@@ -142,6 +154,9 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
   const suffix = state === "closed" ? "?state=closed" : "";
   const order = useCollectionOrder(list.data ?? []);
   const menu = useOrderMenu(order);
+  const mover = useMoveCollection(list.data ?? [], () => {});
+  const dragging = useCollectionDragging();
+  const top = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
 
   let body: ReactNode;
   if (list.isPending) body = <p className="placeholder">Loading…</p>;
@@ -169,7 +184,7 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
         const where = c.parent_id != null && !ids.has(c.parent_id) && parent.length > 0 ? parent.join(PATH_SEP) : undefined;
         return (
           <li key={c.id}>
-            <Row c={c} href={`/collections/${c.id}${suffix}`} collections={under.length} where={where} order={order} onMenu={menu.onContextMenu} />
+            <Row c={c} href={`/collections/${c.id}${suffix}`} collections={under.length} where={where} order={order} onMenu={menu.onContextMenu} mover={mover} />
             {under.length > 0 && <ul className="collection-list collection-children-list">{branch(under)}</ul>}
           </li>
         );
@@ -200,6 +215,11 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
       />
       <div className="collections-index-body">
         {state === "open" && <NewCollection onCreated={(id) => navigate(`/collections/${id}`)} />}
+        {dragging && (
+          <p className="collections-top-drop hint" {...top.props}>
+            Drop here to move it to the top level, last
+          </p>
+        )}
         {body}
         {menu.element}
       </div>

@@ -61,9 +61,46 @@ def test_move_among_nested_siblings_only(svc):
     assert top(svc) == ["Houses", "Attic", "Sauna", "Cars"]
     svc.move(houses.id, after_id=cars.id)  # the subtree goes along
     assert top(svc) == ["Cars", "Houses", "Attic", "Sauna"]
-    with pytest.raises(InvalidRequest, match="same place"):
-        svc.move(s1.id, before_id=cars.id)  # another parent: reparenting is separate
     assert top(svc) == ["Cars", "Houses", "Attic", "Sauna"]
+
+
+def test_move_beside_a_collection_of_another_parent_reparents(svc):
+    houses = svc.create("Houses")
+    sauna = svc.create("Sauna", parent_id=houses.id)
+    attic = svc.create("Attic", parent_id=houses.id)
+    cars = svc.create("Cars")
+    boat = svc.create("Boat")
+    calls = []
+    svc.on_change = lambda *a: calls.append(1)
+    # out to the top level, right after Houses
+    moved = svc.move(sauna.id, after_id=houses.id)
+    assert moved.parent_id is None and moved.path == ["Sauna"]
+    assert top(svc) == ["Houses", "Attic", "Sauna", "Cars", "Boat"]
+    assert len(calls) == 1  # a new parent follows the Ongoing sync
+    svc.move(cars.id, before_id=houses.id)
+    assert len(calls) == 1  # the same parent: order only, no sync
+    # in to Houses, before Attic (a sibling there)
+    moved = svc.move(boat.id, before_id=attic.id)
+    assert moved.parent_id == houses.id and moved.path == ["Houses", "Boat"]
+    assert top(svc) == ["Cars", "Houses", "Boat", "Attic", "Sauna"]
+    assert [c.position for c in svc.list("open") if c.parent_id == houses.id] == [0, 1]
+    # a subtree goes along
+    svc.move(houses.id, before_id=cars.id)
+    assert svc.get(attic.id).path == ["Houses", "Attic"]
+
+
+def test_cross_level_move_refuses_cycles_and_closed_parents(svc):
+    houses = svc.create("Houses")
+    sauna = svc.create("Sauna", parent_id=houses.id)
+    deck = svc.create("Deck", parent_id=sauna.id)
+    other = svc.create("Other")
+    with pytest.raises(InvalidRequest, match="inside itself"):
+        svc.move(houses.id, before_id=deck.id)  # Deck's parent is below Houses
+    with pytest.raises(InvalidRequest, match="inside itself"):
+        svc.move(sauna.id, after_id=deck.id)
+    svc.move(other.id, before_id=deck.id)  # not a cycle: Other is not above Deck
+    assert svc.get(other.id).path == ["Houses", "Sauna", "Other"]
+    assert svc.get(deck.id).path == ["Houses", "Sauna", "Deck"]
 
 
 def test_closed_siblings_keep_their_place(svc):
@@ -197,6 +234,12 @@ def test_move_route_refusals(client, app):
     assert send(client, "POST", url.format(a), {"before_id": starred}).status_code == 400
     assert send(client, "POST", url.format(a), {}).status_code == 400
     assert send(client, "POST", url.format(a), {"before_id": a}).status_code == 400
-    assert send(client, "POST", url.format(inner), {"before_id": b}).status_code == 400
+    # another parent is no refusal now: it moves out, to b's level (b is top level)
+    r = send(client, "POST", url.format(inner), {"before_id": b})
+    assert r.status_code == 200, r.text
+    assert r.json()["collection"]["parent_id"] is None
+    assert [c["name"] for c in client.get("/api/collections").json()] == ["A", "In", "B"]
+    kid = send(client, "POST", "/api/collections", {"name": "Kid", "parent_id": a}).json()["id"]
+    assert send(client, "POST", url.format(a), {"before_id": kid}).status_code == 400  # a cycle
     assert send(client, "POST", url.format(a), {"before_id": 999}).status_code == 404
     assert send(client, "POST", url.format(999), {"before_id": a}).status_code == 404

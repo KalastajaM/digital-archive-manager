@@ -1431,9 +1431,10 @@ export interface paths {
         put?: never;
         /**
          * Move
-         * @description Put the collection before or after a sibling (same parent; the built-in ★ and !
-         *     stay first and cannot move or be moved beside). Only the order changes: no file or
-         *     link moves, so no preview, no batch and no sync.
+         * @description Put the collection before or after another (the built-in ★ and ! stay first and
+         *     cannot move or be moved beside). With a sibling only the order changes: no preview,
+         *     no batch and no sync. With a collection of another parent it goes into that parent
+         *     too, as ``PATCH .../parent`` does (cycle 400, closed parent 409, Ongoing sync).
          */
         post: operations["move_api_collections__collection_id__move_post"];
         delete?: never;

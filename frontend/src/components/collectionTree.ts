@@ -105,14 +105,12 @@ export function countsOf(c: CollectionRow, collections = 0): string {
   return parts.join(" · ");
 }
 
-/** Which edge of a row a dragged collection is over: the top quarter puts it before the
- * row, the bottom quarter after it, anything between is the middle (null). With
- * ``halves`` there is no middle: the upper half is before, the lower half after. */
-export function dropZone(clientY: number, rect: { top: number; height: number }, halves = false): "before" | "after" | null {
+/** Where a dragged collection is over a row: the top third puts it before the row, the
+ * bottom third after it, the middle third inside it (null). */
+export function dropZone(clientY: number, rect: { top: number; height: number }): "before" | "after" | null {
   if (rect.height <= 0) return null;
   const at = (clientY - rect.top) / rect.height;
-  if (halves) return at < 0.5 ? "before" : "after";
-  return at < 0.25 ? "before" : at > 0.75 ? "after" : null;
+  return at < 1 / 3 ? "before" : at > 2 / 3 ? "after" : null;
 }
 
 /** The siblings of ``c`` in ``list`` (itself included), in the owner's order. */

@@ -49,9 +49,10 @@ describe("the owner's order", () => {
     expect(inTreeOrder(list).map((c) => c.name)).toEqual(["Zed", "Kid a", "Kid b", "Mango", "Apple"]);
     const rect = { top: 100, height: 40 };
     expect(dropZone(102, rect)).toBe("before");
-    expect(dropZone(120, rect)).toBeNull();
-    expect(dropZone(138, rect)).toBe("after");
-    expect(dropZone(110, rect, true)).toBe("before");
-    expect(dropZone(130, rect, true)).toBe("after");
+        expect(dropZone(138, rect)).toBe("after");
+    expect(dropZone(112, rect)).toBe("before"); // the top third
+    expect(dropZone(113.4, rect)).toBeNull();
+    expect(dropZone(126, rect)).toBeNull();
+    expect(dropZone(127, rect)).toBe("after"); // the bottom third
   });
 });

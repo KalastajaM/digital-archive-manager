@@ -16,7 +16,7 @@ import {
   Sun,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import {
   archiveKey,
   type CollectionRow,
@@ -28,7 +28,6 @@ import {
   useStatus,
   useToday,
   useTodayFollowsInbox,
-  useSetCollectionParent,
   useTrays,
 } from "../../api/client";
 import {
@@ -48,16 +47,17 @@ import { ArchiveSwitcher } from "../ArchiveSwitcher";
 import { ImportantGlyph, StarGlyph } from "../MarkIcons";
 import {
   childrenOf,
-  collectionMoveRunning,
-  endCollectionMove,
-  movedText,
-  recreatedLinks,
-  moveRefusal,
-  startCollectionMove,
 } from "../collectionTree";
 import { anyMoveRunning, backToInbox, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../MoveTo";
 import { useBlockToastActions, useToast } from "../Toasts";
-import { type CollectionOrder, orderKeys, useCollectionOrder, useOrderMenu, useReorderRow } from "../useCollectionOrder";
+import {
+  type CollectionOrder,
+  orderKeys,
+  useCollectionOrder,
+  useMoveCollection,
+  useOrderMenu,
+  useReorderRow,
+} from "../useCollectionOrder";
 import { useUndoConfirm } from "../UndoConfirm";
 import { useQuickPut } from "../useQuickPut";
 
@@ -273,44 +273,6 @@ function useFolds<T extends number | string>(key: string, valid: (x: unknown) =>
         return next;
       }),
   };
-}
-
-/** Dropping a collection on another moves it inside; on the section caption, to the
- * top. No confirm (as for member and group changes): the Ongoing sync only moves
- * app-owned entries, journaled, and moving it back reverses it; the toast says what
- * Ongoing did. A cycle or a closed parent is refused before the drop. */
-function useMoveCollection(list: CollectionRow[], onMoved: (target: CollectionRow | null) => void) {
-  const setParent = useSetCollectionParent();
-  const toast = useToast();
-  const navigate = useNavigate();
-  const find = (id: number) => list.find((c) => c.id === id) ?? null;
-  const accept = (target: CollectionRow | null) => (id: number) => {
-    const dragged = find(id);
-    if (!dragged) return false; // not one this sidebar shows
-    const refusal = moveRefusal(list, dragged, target);
-    if (refusal) return visible(refusal);
-    return collectionMoveRunning() ? "Another move is still running" : true;
-  };
-  const move = (target: CollectionRow | null) => (id: number) => {
-    const dragged = find(id);
-    if (!dragged || !startCollectionMove()) return; // shared with the page's Move to…
-    const name = visible(dragged.name);
-    const where = target === null ? null : visible(target.name);
-    // The collection page shows the batch that ran (LastChange) and Activity has it.
-    const open = { label: "Open", run: () => navigate(`/collections/${id}`) };
-    setParent
-      .mutateAsync({ id, parent_id: target?.id ?? null })
-      .then((result) => {
-        onMoved(target);
-        toast({ ...changeToast(movedText(name, where, recreatedLinks(result)), result), actions: [open] });
-      })
-      .catch((err) => {
-        const to = where === null ? "to the top level" : `into ${where}`;
-        toast({ kind: "error", text: `Could not move ${name} ${to}: ${visible(errorText(err))}` });
-      })
-      .finally(endCollectionMove);
-  };
-  return { accept, move };
 }
 
 type TreeProps = {
