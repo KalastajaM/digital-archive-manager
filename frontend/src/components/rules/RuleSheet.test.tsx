@@ -159,7 +159,7 @@ describe("RuleSheet", () => {
     const sent = posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { id: string; when: unknown; then: unknown } };
     expect(sent.rule.id).toBe("kotihoito");
     expect(sent.rule.when).toEqual({ text_contains: ["kotihoito", "lasku"], filename_matches: null, folder_is: "##. Organize" });
-    expect(sent.rule.then).toEqual({ folder: "20. Health/{year}", name: "{doc_date}_{stem}", tags: ["invoice"], tray: null, payee: null });
+    expect(sent.rule.then).toEqual({ folder: "20. Health/{year}", name: "{doc_date}_{stem}", tags: ["invoice"], tray: null, payee: null, collections: [] });
   });
 
   it("tells the test which document the areas were drawn on, so its folder is tested early", async () => {
@@ -267,7 +267,7 @@ describe("RuleSheet", () => {
       file,
       learned,
       when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zones: [], person: null },
-      then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
+      then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null, collections: [] },
       person_zone: null,
       sender: null,
       stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
@@ -286,7 +286,7 @@ describe("RuleSheet", () => {
         file: "learned.yaml",
         learned: true,
         when: { text_contains: ["kotihoito"], filename_matches: null, folder_is: null, zones: [], person: null },
-        then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null },
+        then: { folder: "20. Health", name: null, tags: [], tray: null, payee: null, collections: [] },
         person_zone: null,
         sender: null,
         stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
@@ -384,7 +384,7 @@ describe("RuleSheet", () => {
         zones: [{ box: [0.05, 0.02, 0.45, 0.14], text_contains: ["pohjola", "vakuutus"], image: null, match: "anywhere" as const }],
         person: "Tiina",
       },
-      then: { folder: "Insurance/{person}", name: null, tags: [], tray: null, payee: null },
+      then: { folder: "Insurance/{person}", name: null, tags: [], tray: null, payee: null, collections: [] },
       person_zone: [0.1, 0.2, 0.6, 0.4],
       sender: "Pohjola",
       stats: { suggested: 2, changed: 0, last_used: null, flagged: false },
@@ -579,9 +579,11 @@ describe("RuleSheet", () => {
           { path: "Insurance/b.pdf", drive_id: "nb", reason: "no OCR engine" },
         ],
       });
-      expect(await screen.findByText(/\(2 not checked yet\)/)).toBeInTheDocument();
-      await user.click(screen.getByText("Not checked yet (2)"));
-      expect(screen.getByText(row("Insurance/b.pdf: no OCR engine"))).toBeVisible();
+      expect(await screen.findByText(/2 documents could not be judged yet/)).toBeInTheDocument();
+      await user.click(screen.getByText("Could not be judged yet (2)"));
+      expect(screen.getByText("No OCR engine (1)")).toBeVisible();
+      expect(screen.getByText(/no OCR engine is installed/)).toBeVisible();
+      expect(screen.getByText(row("Insurance/b.pdf"))).toBeVisible();
     });
 
     it("keeps asking while page 1 is being read, shows the count and picks the pages up as they arrive", async () => {
@@ -604,7 +606,7 @@ describe("RuleSheet", () => {
       expect(await screen.findByText(/Waiting for page 1 of 23…/)).toBeInTheDocument();
       arrived = true; // the pages are read
       await waitFor(() => expect(screen.queryByText(/Waiting for page 1 of/)).toBeNull());
-      expect(screen.queryByText(/not checked yet/)).toBeNull();
+      expect(screen.queryByText(/could not be judged yet/)).toBeNull();
     });
 
     it("offers to read page 1 of the documents the test waits for now, then shows it is reading them", async () => {
@@ -717,7 +719,7 @@ describe("RuleSheet", () => {
         ],
         person: null,
       },
-      then: { folder: "Insurance/Acme", name: null, tags: [], tray: null, payee: null },
+      then: { folder: "Insurance/Acme", name: null, tags: [], tray: null, payee: null, collections: [] },
       person_zone: null,
       sender: null,
       stats: { suggested: 2, changed: 0, last_used: null, flagged: false },
@@ -745,7 +747,7 @@ describe("RuleSheet", () => {
         { box: [0.05, 0.03, 0.35, 0.1], image: "areas/acme-1.png", min_score: 0.9 },
         { box: [0.5, 0.05, 0.9, 0.1], text_contains: ["lasku"] },
       ]);
-      await user.click(within(sheet).getByRole("button", { name: "Use the usual 0.80" }));
+      await user.click(within(sheet).getByRole("button", { name: "Use the default (0.80)" }));
       await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(2));
       expect(zones(posts(calls, "/api/rules/replay/jobs")[1])[0]).toEqual({ box: [0.05, 0.03, 0.35, 0.1], image: "areas/acme-1.png" });
       expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("0.8");
@@ -758,9 +760,9 @@ describe("RuleSheet", () => {
       expect(slider).toHaveAttribute("min", "0.5");
       expect(slider).toHaveAttribute("max", "1");
       expect(slider).toHaveAttribute("step", "0.01");
-      // the value and the link sit in cells of their own, so the slider never shrinks
+      // the value and the reset button sit in cells of their own, so the slider never shrinks
       const cell = slider.closest(".rule-score") as HTMLElement;
-      expect(Array.from(cell.children).map((c) => c.tagName)).toEqual(["LABEL", "INPUT", "OUTPUT", "SPAN"]);
+      expect(Array.from(cell.children).map((c) => c.tagName)).toEqual(["LABEL", "INPUT", "OUTPUT", "BUTTON"]);
       fireEvent.change(slider, { target: { value: "1" } });
       await waitFor(() => expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("1"));
       expect(within(sheet).getByText("1.00")).toBeInTheDocument();
@@ -769,8 +771,8 @@ describe("RuleSheet", () => {
         expect(last.rule.when.zones[0].min_score).toBe(1);
       });
       // the same cells with the link away
-      await user.click(within(sheet).getByRole("button", { name: "Use the usual 0.80" }));
-      expect(Array.from(cell.children).map((c) => c.tagName)).toEqual(["LABEL", "INPUT", "OUTPUT", "SPAN"]);
+      await user.click(within(sheet).getByRole("button", { name: "Use the default (0.80)" }));
+      expect(Array.from(cell.children).map((c) => c.tagName)).toEqual(["LABEL", "INPUT", "OUTPUT", "BUTTON"]);
     });
 
     it("opens a document of the result with the tested rule drawn on it", async () => {
@@ -871,7 +873,7 @@ describe("How an area's words match", () => {
       file: "learned.yaml",
       learned: true,
       when: { text_contains: [], filename_matches: null, folder_is: null, zones: [{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["kela"], image: null }], person: null },
-      then: { folder: null, name: null, tags: [], tray: null, payee: null },
+      then: { folder: null, name: null, tags: [], tray: null, payee: null, collections: [] },
       person_zone: null,
       sender: null,
       stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
@@ -936,7 +938,7 @@ describe("The For row", () => {
       file: "learned.yaml",
       learned: true,
       when: { text_contains: ["kela"], filename_matches: null, folder_is: null, zones: [], person: null },
-      then: { folder: null, name: null, tags: [], tray: null, payee: null },
+      then: { folder: null, name: null, tags: [], tray: null, payee: null, collections: [] },
       person_zone: null,
       sender: null,
       stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
@@ -970,7 +972,7 @@ describe("The For row", () => {
       file: "learned.yaml",
       learned: true,
       when: { text_contains: ["kela"], filename_matches: null, folder_is: null, zones: [], person: "Michiel" },
-      then: { folder: null, name: null, tags: [], tray: null, payee: null },
+      then: { folder: null, name: null, tags: [], tray: null, payee: null, collections: [] },
       person_zone: null,
       sender: null,
       stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
@@ -1001,5 +1003,225 @@ describe("The For row", () => {
     const { user } = open({ ...ZONE_DRAFT, folder: null });
     await user.click(within(await forRow()).getByRole("button", { name: "Use the person in the folder" }));
     expect(screen.getByLabelText("Folder")).toHaveValue("{person}");
+  });
+});
+
+describe("The rule sheet, reviewed", () => {
+  const PEOPLE = { people: [{ name: "Tiina", match: ["Tiina Visser"] }], address_zone: [0.06, 0.1, 0.52, 0.3], default_address_zone: [0.06, 0.1, 0.52, 0.3] };
+  const COLLECTIONS = [
+    { id: 1, name: "Sauna", kind: null, state: "open", count: 0, parent_id: null },
+    { id: 2, name: "Taxes", kind: null, state: "open", count: 0, parent_id: null },
+  ];
+  const TWO_AREAS = {
+    ...DRAFT,
+    folder: "50. Medical/Tiina/Kela",
+    words: [],
+    zones: [
+      { box: [0.1, 0.1, 0.5, 0.3], words: [{ word: "kela", ticked: true }], lines: ["Kela"] },
+      { box: [0.5, 0.1, 0.9, 0.3], words: [{ word: "sv8", ticked: true }], lines: ["SV8"] },
+    ],
+    pictures: [{ box: [0.1, 0.4, 0.3, 0.5], image: "areas/x-1.png", width: 10, height: 10, png: "" }],
+    folder_is: "##. Organize",
+    sender: null,
+    place_above: null,
+    person: "Tiina",
+    people_found: ["Tiina"],
+  };
+  const lastRule = (calls: Call[]) =>
+    (posts(calls, "/api/rules/replay/jobs").at(-1)?.body as { rule: { when: { zones: unknown[] }; then: Record<string, unknown> } }).rule;
+  const open = (draft: object = TWO_AREAS, replay: object = REPLAY, extra: Record<string, unknown> = {}) =>
+    setup(replay, { initial: draft as never, filed: undefined }, {
+      "GET /api/settings/people": { body: PEOPLE },
+      "GET /api/folders": { body: ["10. Financial", "50. Medical", "50. Medical/Tiina", "50. Medical/Tiina/Kela"] },
+      "GET /api/collections": { body: COLLECTIONS },
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } } },
+      ...extra,
+    });
+
+  it("puts Words match on the row of the word box, with its tooltip", async () => {
+    open();
+    const sheet = await screen.findByRole("dialog");
+    const add = within(sheet).getByLabelText("Add a word to area 1");
+    const rowOfAdd = add.closest(".rule-add-row") as HTMLElement;
+    expect(within(rowOfAdd).getByLabelText("How the words match in area 1")).toBeInTheDocument();
+    expect(within(rowOfAdd).getByText("Words match")).toBeInTheDocument();
+    expect(within(rowOfAdd).getByRole("img", { name: /Starts a word: the word must begin a word/ })).toBeInTheDocument();
+  });
+
+  it("names the areas by what they hold, without 'of page 1'", async () => {
+    open();
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("Words in area 1")).toBeInTheDocument();
+    expect(within(sheet).getByText("Words in area 2")).toBeInTheDocument();
+    expect(within(sheet).getByText("Picture in area 3")).toBeInTheDocument();
+    expect(within(sheet).queryByText(/of page 1/)).toBeNull();
+  });
+
+  it("explains that every area is needed in a tooltip on the heading, not in fixed text", async () => {
+    open();
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).queryByText("The document needs a word or the picture in every area.", { selector: "p" })).toBeNull();
+    const head = within(sheet).getByRole("heading", { name: "When a document matches" }).parentElement as HTMLElement;
+    expect(within(head).getByRole("img", { name: "The document needs a word or the picture in every area." })).toBeInTheDocument();
+  });
+
+  it("has no tooltip on the heading for one area", async () => {
+    open({ ...TWO_AREAS, zones: TWO_AREAS.zones.slice(0, 1), pictures: [] });
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("Words in the area")).toBeInTheDocument();
+    const head = within(sheet).getByRole("heading", { name: "When a document matches" }).parentElement as HTMLElement;
+    expect(within(head).queryByRole("img")).toBeNull();
+  });
+
+  it("puts Use the person in the folder on the Anyone / Only for row, with a tooltip on how they relate", async () => {
+    open();
+    const sheet = await screen.findByRole("dialog");
+    const choice = within(sheet).getByRole("button", { name: "Anyone" }).closest(".rule-for-choice") as HTMLElement;
+    expect(within(choice).getByRole("button", { name: "Use the person in the folder" })).toBeInTheDocument();
+    const tip = within(choice).getByRole("img", { name: /each letter goes to the folder of its own person/ });
+    expect(tip).toHaveAttribute("aria-label", expect.stringMatching(/with Anyone.*with Only for it is usually not needed/));
+    expect(within(choice).getByRole("button", { name: "Use the person in the folder" })).toHaveAccessibleDescription(/own person/);
+  });
+
+  it("the Folder field opens the folder picker and takes the path chosen, and patterns can still be typed", async () => {
+    const { calls, user } = open();
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: "Browse folders…" }));
+    const browser = await screen.findByRole("dialog", { name: "Choose a folder" });
+    await user.click(await within(browser).findByRole("treeitem", { name: /^10\. Financial/ }));
+    await user.click(within(browser).getByRole("button", { name: "Choose" }));
+    expect(within(sheet).getByRole("combobox", { name: "Folder" })).toHaveValue("10. Financial");
+    await waitFor(() => expect(lastRule(calls).then.folder).toBe("10. Financial"));
+    await user.type(within(sheet).getByRole("combobox", { name: "Folder" }), "/{{year}");
+    expect(within(sheet).getByRole("combobox", { name: "Folder" })).toHaveValue("10. Financial/{year}");
+    await waitFor(() => expect(lastRule(calls).then.folder).toBe("10. Financial/{year}"));
+  });
+
+  it("Add to collection takes the collections of the rule, picked like in the Inbox, and sends them with the test", async () => {
+    const { calls, user } = open();
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).queryByLabelText("Also add to collection")).toBeNull();
+    const field = within(sheet).getByRole("combobox", { name: "Add to collection" });
+    expect(within(sheet).getByRole("button", { name: "Browse collections…" })).toBeInTheDocument();
+    await user.type(field, "Sau");
+    await user.click(await screen.findByRole("option", { name: "Sauna" }));
+    await user.type(field, "Legal{Enter}");
+    expect(within(within(sheet).getByRole("list", { name: "Collections to add" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Sauna×", "Legal×"]);
+    await waitFor(() => expect(lastRule(calls).then.collections).toEqual(["Sauna", "Legal"]));
+  });
+
+  it("Save waits for a half-typed collection to be added or cleared", async () => {
+    const { user } = open();
+    const sheet = await screen.findByRole("dialog");
+    await within(sheet).findByText(/Matches 4 documents/);
+    await user.type(within(sheet).getByRole("combobox", { name: "Add to collection" }), "Leg");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled());
+    expect(screen.getByText("Press Enter to add ‘Leg’ or clear it")).toBeInTheDocument();
+    await user.type(within(sheet).getByRole("combobox", { name: "Add to collection" }), "{Enter}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
+  });
+
+  it("an edited rule opens with its collections", async () => {
+    const rule = {
+      id: "old",
+      file: "learned.yaml",
+      learned: true,
+      when: { text_contains: ["kela"], filename_matches: null, folder_is: null, zones: [], person: null },
+      then: { folder: null, name: null, tags: [], tray: null, payee: null, collections: ["Taxes"] },
+      person_zone: null,
+      sender: null,
+      stats: { suggested: 0, changed: 0, last_used: null, flagged: false },
+    };
+    const { calls } = open(rule);
+    const sheet = await screen.findByRole("dialog");
+    expect(within(within(sheet).getByRole("list", { name: "Collections to add" })).getByText("Taxes")).toBeInTheDocument();
+    await waitFor(() => expect(lastRule(calls).then.collections).toEqual(["Taxes"]));
+  });
+
+  it("marks the shown result as the one before the last change while the new test has not answered", async () => {
+    const first = deferred<void>();
+    void first;
+    const { user } = open(TWO_AREAS, REPLAY);
+    const sheet = await screen.findByRole("dialog");
+    await within(sheet).findByText(/Matches 4 documents/);
+    expect(within(sheet).queryByText(/Testing the rule as it is now/)).toBeNull();
+    await user.type(within(sheet).getByRole("combobox", { name: "Folder" }), "x");
+    expect(await within(sheet).findByText(/Testing the rule as it is now/)).toBeInTheDocument();
+    await waitFor(() => expect(within(sheet).queryByText(/Testing the rule as it is now/)).toBeNull());
+  });
+});
+
+describe("The reasons a document could not be judged", () => {
+  const NOT_CHECKED = [
+    { path: "Kela/a.pdf", drive_id: "a", reason: "page 1 not read yet" },
+    { path: "Kela/b.pdf", drive_id: "b", reason: "person unknown" },
+    { path: "Kela/c.pdf", drive_id: "c", reason: "person unknown" },
+    { path: "Kela/d.pdf", drive_id: "d", reason: "page 1 took too long to read" },
+    { path: "Kela/e.pdf", drive_id: "e", reason: "missing" },
+    { path: "Kela/f.pdf", drive_id: "f", reason: "something new" },
+  ];
+
+  it("says no filed document could be judged, then groups the documents by reason with what happens next", async () => {
+    const { user } = setup({ ...REPLAY, matched: 0, same: 0, different: [], inbox: 0, shadowed: [], not_checked: NOT_CHECKED });
+    expect(await screen.findByText(/6 documents could not be judged yet, so no filed document is known to match/)).toBeInTheDocument();
+    expect(screen.queryByText(/Not tested yet/)).toBeNull();
+    await user.click(screen.getByText("Could not be judged yet (6)"));
+    const group = (reason: string) => document.querySelector(`[data-reason="${reason}"]`) as HTMLElement;
+    expect(within(group("page 1 not read yet")).getByText("Page 1 not read yet (1)")).toBeVisible();
+    expect(within(group("page 1 not read yet")).getByText("dam reads page 1 of these in the background; the test picks them up when they are read.")).toBeVisible();
+    expect(within(group("person unknown")).getByText("Person unknown (2)")).toBeVisible();
+    expect(within(group("person unknown")).getByText(/address area does not say who these are for.*Set For on them, or add the people in Settings\./)).toBeVisible();
+    expect(within(group("person unknown")).getAllByRole("button").map((b) => b.textContent)).toEqual(["Kela/b.pdf", "Kela/c.pdf"]);
+    expect(within(group("page 1 took too long to read")).getByText(/took too long, so dam gave up on them for now/)).toBeVisible();
+    expect(within(group("missing")).getByText(/not in the archive any more/)).toBeVisible();
+    // a reason the sheet does not know is shown as the server wrote it, with no made-up explanation
+    expect(within(group("something new")).getByText("something new (1)")).toBeVisible();
+    expect(group("something new").querySelector(".hint")).toBeNull();
+  });
+
+  it("when some match, the not judged ones are counted in the summary line", async () => {
+    setup({ ...REPLAY, not_checked: NOT_CHECKED.slice(0, 2) });
+    expect(await screen.findByText(/\(2 documents could not be judged yet\)/)).toBeInTheDocument();
+  });
+
+  it("while page 1 is being read and nothing is listed yet, says so plainly", async () => {
+    setup({ ...REPLAY, matched: 0, same: 0, different: [], inbox: 0, shadowed: [], not_checked: [], reading: 3 });
+    expect(await screen.findByText("No filed document could be judged yet: page 1 of some is still being read.")).toBeInTheDocument();
+  });
+});
+
+describe("The reset of the picture score", () => {
+  const RULE = {
+    id: "acme",
+    file: "learned.yaml",
+    learned: true,
+    when: {
+      text_contains: [],
+      filename_matches: null,
+      folder_is: "##. Organize",
+      zones: [
+        { box: [0.05, 0.03, 0.35, 0.1], text_contains: null, image: "areas/acme-1.png", min_score: 0.9, match: "anywhere" as const },
+        { box: [0.5, 0.05, 0.9, 0.1], text_contains: ["lasku"], image: null, min_score: null, match: "anywhere" as const },
+      ],
+      person: null,
+    },
+    then: { folder: "Insurance/Acme", name: null, tags: [], tray: null, payee: null, collections: [] },
+    person_zone: null,
+    sender: null,
+    stats: { suggested: 2, changed: 0, last_used: null, flagged: false },
+  };
+  const rules = { rules: [RULE], errors: [], state: { offer: true, declined: 0 }, unused_pictures: [], default_min_score: 0.85 };
+
+  it("is an icon button right of the value, with the default in its tooltip, and goes back to the default", async () => {
+    const { user } = setup(REPLAY, { initial: RULE as never, filed: undefined }, { "GET /api/rules": { body: rules } });
+    const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+    const reset = await within(sheet).findByRole("button", { name: "Use the default (0.85)" });
+    expect(reset).toHaveAttribute("data-tip", "Use the default (0.85)");
+    expect(reset).toBeEnabled();
+    expect(reset.previousElementSibling?.tagName).toBe("OUTPUT");
+    expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("0.9");
+    await user.click(reset);
+    expect(within(sheet).getByRole("slider", { name: "Match needed for area 1" })).toHaveValue("0.85");
+    expect(within(sheet).getByRole("button", { name: "Use the default (0.85)" })).toBeDisabled();
   });
 });

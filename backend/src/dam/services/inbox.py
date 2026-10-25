@@ -531,7 +531,7 @@ class InboxService:
             which = f" (box {n})" if len(areas) > 1 else ""
             lines = [ln.text for ln in lines_in_zone(layout.lines, area)]
             if not lines:
-                raise InvalidRequest(f"There is no text in that area of page 1{which}.")
+                raise InvalidRequest(f"There is no text in that area{which}.")
             draft = draft_rule(
                 text="\n".join(lines),
                 original_name="",
@@ -546,7 +546,7 @@ class InboxService:
                 person=person,
             )
             if draft is None:
-                raise InvalidRequest(f"There is no usable word in that area of page 1{which}.")
+                raise InvalidRequest(f"There is no usable word in that area{which}.")
             first = first or draft
             zones.append(ZoneDraftArea(area, draft.words, lines))
         if first is None:

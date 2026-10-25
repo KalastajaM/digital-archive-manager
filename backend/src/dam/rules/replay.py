@@ -1094,6 +1094,8 @@ def explain(
         ]
         if matched and any(src == mine for src in s.tag_sources.values()):
             wins.append("tags")
+        if matched and any(src == mine for src in s.collection_sources.values()):
+            wins.append("collections")
         zone_lines = [
             [ln.text for ln in lines_in_zone(layout.lines, zone.box)]
             if layout is not None and not zone.is_picture

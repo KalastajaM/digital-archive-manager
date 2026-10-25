@@ -28,6 +28,7 @@ from pydantic import (
 
 from dam.rules.picture import DEFAULT_MIN_SCORE, check_image_path
 
+COLLECTION_NAME_MAX = 120  # as the collections' own limit (``dam.collections.service``)
 _NON_ASCII = re.compile(r"[^\x00-\x7f]+")
 # the combining marks that Western text has the most (diaeresis, ring, acute, grave, tilde,
 # cedilla, caron): removed with one fast pass each before any other mark is looked for
@@ -205,6 +206,22 @@ class Then(BaseModel):
     # heuristic) and the payee for the To pay tray's ``payee`` prefill
     tray: str | None = None
     payee: str | None = None
+    # collections the Inbox form is prefilled to "Also add to collection" with (like
+    # ``tags``); a name that does not exist yet is created when the document is filed
+    collections: list[str] = Field(default_factory=list)
+
+    @field_validator("collections")
+    @classmethod
+    def _clean_collections(cls, names: list[str]) -> list[str]:
+        out: dict[str, str] = {}
+        for raw in names:
+            name = raw.strip()
+            if not name:
+                raise ValueError("collections entries must not be blank")
+            if len(name) > COLLECTION_NAME_MAX:
+                raise ValueError(f"a collection name is at most {COLLECTION_NAME_MAX} characters")
+            out.setdefault(name.casefold(), name)
+        return list(out.values())
 
     @field_validator("folder", "name", "tray", "payee")
     @classmethod

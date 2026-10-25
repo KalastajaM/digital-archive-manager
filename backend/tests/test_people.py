@@ -460,3 +460,34 @@ def test_people_are_found_in_the_words_inside_the_box_not_the_whole_line():
     ]
     assert detect_people(page, (0.05, 0.05, 0.45, 0.2), people) == ["Michiel"]
     assert detect_people(page, (0, 0, 1, 1), people) == ["Michiel", "Tiina"]
+
+
+def test_a_rule_that_names_no_person_never_reports_person_unknown(app, fake_archive):
+    """The owner's rule: For = Anyone, a literal folder with the person's name in it, a name
+    ending in the person's name, a sender and an area. Documents whose person is not known
+    (several, none, a file with no page 1) are judged like any other: no "person unknown"."""
+    fill(app, fake_archive)
+    add(
+        app,
+        fake_archive,
+        "Mail/Tiina/20250610_Kela.pdf",
+        "f",
+        "Kela",
+        addressed("Michiel Visser", "Tiina Visser"),
+    )
+    rule = person_rule(
+        folder="Mail/Tiina/Kela",
+        name="{doc_date:%Y%m%d}_Kela_SV8_Tiina",
+        when={"zones": [{"box": [0.0, 0.0, 1.0, 1.0], "text_contains": ["kela"]}]},
+        sender="Kela",
+    )
+    assert rule.when.person is None
+    r = run(app, rule, sender_ids=lambda sender: ["a", "c", "e", "f"])
+    reasons = {n.reason for n in r.not_checked}
+    assert PERSON_UNKNOWN not in reasons
+    assert r.marked is not None
+    assert PERSON_UNKNOWN not in {n.reason for n in r.marked.not_checked}
+    # the same rule without the area, too
+    plain = person_rule(folder="Mail/Tiina/Kela", name="{doc_date:%Y%m%d}_Kela_SV8_Tiina")
+    r = run(app, plain)
+    assert r.not_checked == [] and r.matched == 6

@@ -8,6 +8,15 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- A rule can now add the document to collections. The rule sheet has an **Add to
+  collection** field under Folder, with the same picker as the Inbox ("…" opens the
+  collections as a tree). When the rule matches, the Inbox card starts with those
+  collections in "Also add to collection", like tags; you can change them before
+  filing. In a rule file this is `then.collections`; files without it load as before.
+  The rule test does not compare collections.
+- The Folder field of the rule sheet has a "…" button that opens the folder browser and
+  puts the path you pick in the field. Patterns such as `{person}` and `{year}` can still
+  be typed.
 - A lock on files, a safety catch against slips. A locked file can still be viewed, tagged
   and described, but it cannot be renamed, moved (also by drag and drop, Move to… or Back
   to inbox), filed from the Inbox or moved to To Delete. Files marked Important are always
@@ -265,6 +274,11 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- While you edit a rule, the test result still on screen was the one for the rule before
+  your last change, with nothing to tell you, so it could show things like "person
+  unknown" for a rule that no longer files by person. The sheet now says that the result
+  is of the rule before your last change until the new test answers. A rule that names no
+  person never lists documents as "person unknown" (covered by a test).
 - After dam is updated and restarted, a normal refresh of the browser shows the new
   version. Before, the browser could keep showing the old one until a hard reload.
 - Testing a rule with a word area is much faster. It folded the whole text of every
@@ -314,6 +328,17 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- The rule test explains why documents "could not be judged yet" instead of "Not
+  checked yet": they are grouped by reason, and each group says what it means and what
+  happens next (page 1 is read in the background, the address area does not say who the
+  letter is for, no OCR engine, the file is missing, reading took too long). The line
+  above says "2 documents could not be judged yet" rather than "Not tested yet".
+- Rule sheet tidying: **Words match** sits next to the word box, the picture score has a
+  small reset icon ("Use the default (0.85)") instead of a text link, "The document needs
+  a word or the picture in every area" is a ? beside "When a document matches", **Use the
+  person in the folder** sits on the Anyone / Only for row with a ? that says how the two
+  relate, and areas are called "Words in area 1" and "Picture in area 2" (no more "of page
+  1"). The message for a box with nothing in it now has its own line under the box.
 - To rename a file, click its name (in Browse, a collection or an item);
   the separate pencil button is gone. The same goes for an item's title and a collection's
   name. The name takes the keyboard focus, so Enter or Space on it works too, and the

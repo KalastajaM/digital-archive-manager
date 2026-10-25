@@ -587,6 +587,8 @@ def suggest(
     folder: str | None = None
     tags: list[str] = []
     tag_sources: dict[str, str] = {}
+    collections: list[str] = []
+    collection_sources: dict[str, str] = {}
     folder_rule: Rule | None = None
     name_rule: Rule | None = None
     person_rule: Rule | None = None  # a rule that used its own person_zone for what it gave
@@ -621,6 +623,10 @@ def suggest(
             if tag not in tags:
                 tags.append(tag)
                 tag_sources[tag] = f"rule:{rule.id}"
+        for coll in rule.then.collections:
+            if coll not in collections:
+                collections.append(coll)
+                collection_sources[coll] = f"rule:{rule.id}"
         sources.append(f"rule:{rule.id}" + (" (template error)" if errored else ""))
 
     who = person_for(people, layout, person_rule)
@@ -671,6 +677,8 @@ def suggest(
         name_source=f"rule:{name_rule.id}" if name_rule is not None else "scan",
         folder_source=f"rule:{folder_rule.id}" if folder_rule is not None else None,
         tag_sources=tag_sources,
+        collections=collections,
+        collection_sources=collection_sources,
         tray_source=f"rule:{tray_rule.id}" if tray_rule and tray_rule.then.tray else None,
         waiting_for_page1=waiting,
         person=who.name,

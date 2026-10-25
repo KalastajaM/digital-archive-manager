@@ -346,6 +346,7 @@ To add a rule, create e.g. `config/rules/10-mine.yaml` (a YAML list):
     folder: "13. Taxes/{year}"           # templates: {doc_date:%Y%m%d}, {year}, {stem}, {person}
     name: "{doc_date:%Y%m%d}_Benefits"      # stem only; the extension is added
     tags: ["benefits"]
+    # collections: ["Taxes 2026"]        # optional: the Inbox form starts with these in "Also add to collection"
     # tray: to-pay                       # optional: the tray it is guessed to belong in
     # payee: "Acme Benefits"        # optional: prefills the To pay tray's payee
 ```
@@ -468,6 +469,13 @@ fits best.
 `folder_is` is the folder the file sits in. The inbox (`##. Organize`) also matches files
 directly in a filing code's inbox folder (such as `##. Organize/To pay`); naming a code's
 folder (`folder_is: "##. Organize/To pay"`) matches only the files in that folder.
+
+`then.collections` is a list of collection names, like `tags`: the collections of all
+matching rules are added together and prefill the Inbox form's "Also add to collection"
+(each suggested collection says which rule it came from). Names are trimmed, a repeat is
+dropped, and a name is at most 120 characters. A collection that does not exist yet is
+created when the document is filed. A rule file without the key loads as before. The
+rule test (replay) does not compare collections.
 
 `then.tray` and `then.payee` come from the same rule as the folder (the first matching
 rule with a folder; if no rule gives a folder, the first matching rule that has either).
