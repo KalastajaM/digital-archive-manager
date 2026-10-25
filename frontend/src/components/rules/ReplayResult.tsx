@@ -56,21 +56,65 @@ function SourceLine({ source }: { source: NonNullable<Replay["source"]> }) {
   );
 }
 
-/** A list of documents (paths) that were not looked at, with the reason for each; closed
- * until asked for. */
+/** What each reason a document could not be judged means and what happens next, in plain
+ * words. The reasons are the server's (``NotCheckedOut.reason``); one not listed is shown
+ * as it comes. */
+const REASONS: Record<string, { title: string; text: string }> = {
+  "page 1 not read yet": {
+    title: "Page 1 not read yet",
+    text: "dam reads page 1 of these in the background; the test picks them up when they are read.",
+  },
+  "person unknown": {
+    title: "Person unknown",
+    text: "The address area does not say who these are for, so a rule that files by person cannot be judged. Set For on them, or add the people in Settings.",
+  },
+  "no OCR engine": {
+    title: "No OCR engine",
+    text: "Page 1 of these is a picture and no OCR engine is installed to read it. Install one, then test again.",
+  },
+  missing: {
+    title: "Missing",
+    text: "These files are not in the archive any more, so page 1 cannot be read.",
+  },
+  "page 1 took too long to read": {
+    title: "Took too long",
+    text: "Reading page 1 of these took too long, so dam gave up on them for now.",
+  },
+  "no picture of page 1 can be made": {
+    title: "No picture of page 1",
+    text: "No picture of page 1 can be made for these, so a picture area cannot be judged.",
+  },
+  "not indexed yet": {
+    title: "Not read yet",
+    text: "dam has not read these documents yet; it does in the background.",
+  },
+};
+
+/** The documents that could not be judged yet, grouped by why, each group with a line on what
+ * it means and what happens next; closed until asked for. */
 function NotChecked({ items }: { items: Replay["not_checked"] }) {
   if (items.length === 0) return null;
+  const groups = new Map<string, Replay["not_checked"]>();
+  for (const n of items) groups.set(n.reason, [...(groups.get(n.reason) ?? []), n]);
   return (
     <details className="replay-not-checked">
-      <summary>Not checked yet ({items.length})</summary>
-      <ul className="replay-different">
-        {items.map((n) => (
-          <li key={n.path}>
-            <DocButton driveId={n.drive_id} path={n.path} />
-            {visible(`: ${n.reason}`)}
-          </li>
-        ))}
-      </ul>
+      <summary>Could not be judged yet ({items.length})</summary>
+      {[...groups].map(([reason, list]) => {
+        const known = REASONS[reason];
+        return (
+          <div key={reason} className="replay-group" data-reason={reason}>
+            <p className="replay-group-title">{visible(`${known?.title ?? reason} (${list.length})`)}</p>
+            {known && <p className="hint">{known.text}</p>}
+            <ul className="replay-different">
+              {list.map((n) => (
+                <li key={n.path}>
+                  <DocButton driveId={n.drive_id} path={n.path} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </details>
   );
 }
@@ -250,18 +294,21 @@ export function ReplayResult({
     <OpenDocument.Provider value={(d) => setOpened(qlFile(d))}>
     <section className="replay-result" aria-labelledby={`${id}-title`} aria-busy={pending}>
       <h4 id={`${id}-title`}>Test against your filed documents</h4>
+      {pending && <p className="hint replay-stale">Testing the rule as it is now. The result below is of the rule before your last change.</p>}
       {replay.source && <SourceLine source={replay.source} />}
       {replay.matched === 0 ? (
         <p className="hint">
-          {notChecked.length > 0 || reading > 0
-            ? `Not tested yet: ${notChecked.length} not checked yet`
-            : "No filed document matches this rule yet, so it could not be tested against them."}
+          {notChecked.length > 0
+            ? `${plural(notChecked.length, "document")} could not be judged yet, so no filed document is known to match. See below why.`
+            : reading > 0
+              ? "No filed document could be judged yet: page 1 of some is still being read."
+              : "No filed document matches this rule yet, so it could not be tested against them."}
         </p>
       ) : (
         <p>
           Matches {plural(replay.matched, "document")} you filed before: {replay.same} would land exactly where they
           are.
-          {notChecked.length > 0 && ` (${notChecked.length} not checked yet)`}
+          {notChecked.length > 0 && ` (${plural(notChecked.length, "document")} could not be judged yet)`}
         </p>
       )}
       {reading > 0 && !progress && (

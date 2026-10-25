@@ -840,6 +840,20 @@ describe("Picture areas", () => {
     expect(await within(panel).findByText(/not made yet/)).toBeInTheDocument();
     expect(within(row(panel, 1)).getByRole("button", { name: "Words" })).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("shows the message for a box with nothing in it on its own line under the box, not inside its text", async () => {
+    const { user } = setup({
+      "POST /api/rules/area-picture": () => ({ status: 400, body: { error: "There is nothing in that area: no text and no picture." } }),
+    });
+    const panel = await drawAndOpen(user);
+    await within(panel).findByText("Pohjola Vakuutus Oy");
+    await user.click(within(row(panel, 1)).getByRole("button", { name: "Picture" }));
+    const message = await within(panel).findByText("There is nothing in that area: no text and no picture.");
+    expect(message).toHaveClass("box-kept-problem");
+    expect(message.closest(".box-kept-text")).toBeNull();
+    expect(message.parentElement).toBe(row(panel, 1));
+    expect(message.textContent).not.toMatch(/of page 1/);
+  });
 });
 
 describe("Diagnosing a picture rule on a document", () => {

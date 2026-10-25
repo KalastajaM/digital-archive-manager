@@ -157,11 +157,11 @@ export function BoxPanel({
               ) : (
                 visible(boxWords(k).join(" / "))
               )}
-              {k.problem && <span className="error" role="alert"> {visible(k.problem)}</span>}
             </span>
             <button type="button" className="icon-button" aria-label={`Remove box ${i + 1}`} onClick={() => onRemove(i)}>
               <X size={14} aria-hidden="true" />
             </button>
+            {k.problem && <p className="error box-kept-problem" role="alert">{visible(k.problem)}</p>}
           </li>
         ))}
       </ul>

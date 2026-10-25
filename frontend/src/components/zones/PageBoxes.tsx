@@ -209,7 +209,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
         <IconButton
           icon={<Layers />}
           label="Show areas"
-          tip="Show the areas of page 1 behind the suggestion, and the score of picture rules that did not match"
+          tip="Show the areas behind the suggestion, and the score of picture rules that did not match"
           pressed={showAreas}
           onClick={() => setAreasOn(!showAreas)}
         />
