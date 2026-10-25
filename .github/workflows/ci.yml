@@ -1,12 +1,43 @@
 name: CI
 
 on:
+  # every PR, and main after a merge; a push to a PR branch is covered by its PR
   push:
+    branches: [main]
   pull_request:
 
+# A newer push to the same PR cancels the run that is still going; runs on main finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Which parts a PR touches. A frontend-only PR skips the backend jobs and vice versa;
+  # the workflow file itself counts for both. On main everything runs.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ github.event_name == 'push' || steps.filter.outputs.backend == 'true' }}
+      frontend: ${{ github.event_name == 'push' || steps.filter.outputs.frontend == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'defaults/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+
   backend:
     name: backend (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -20,6 +51,8 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.14"  # as .python-version; the runner's own Python may be newer
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
       - name: Install Tesseract (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -31,6 +64,8 @@ jobs:
 
   frontend:
     name: frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,3 +80,18 @@ jobs:
       - run: npm ci
       - run: npm test -- --run
       - run: npm run build
+
+  # One check to require in branch protection: it passes when every job that ran passed
+  # (skipped ones count as passed), so a PR that skips a part never waits for it.
+  ci-ok:
+    name: CI ok
+    needs: [changes, backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks that ran passed
+        run: |
+          echo "changes=${{ needs.changes.result }} backend=${{ needs.backend.result }} frontend=${{ needs.frontend.result }}"
+          for r in "${{ needs.changes.result }}" "${{ needs.backend.result }}" "${{ needs.frontend.result }}"; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then exit 1; fi
+          done
