@@ -624,6 +624,24 @@ value for a new field until you set one.
 The move of an item between trays is `POST /api/items/{id}/move`, and its undo
 `POST /api/items/{id}/undo-move` (only while the move is the item's latest change).
 
+Files on an item: `POST /api/items/{id}/files {drive_id, position?}` attaches a file (at
+the end, or at `position`, 0-based, which is how an Undo puts a taken-off file back in its
+place; a file already on the item stays) and `POST /api/items/{id}/files/remove {drive_id}`
+takes one off (an item keeps at least one file, else 400). Both change the database only.
+
+Merging items: `POST /api/items/{id}/merge {item_id}` merges the open item `item_id` into
+the open item `{id}` in one transaction and returns the target. The target keeps its
+title, tray, dates and fields; it gains the other item's files (in order, those it has
+already skipped), its note (appended after a line `--- <title> ---`) and its checklist
+(appended, with the done flags). The other item is then removed. 400 for merging an item
+into itself, for a done item, or when the combined note would pass the note limit
+(nothing changes then); 404 for an unknown id. The target's history gets a `merged_in`
+event (title, files added, whether a note and how many checklist entries came along). The
+event also holds the removed item whole (files, history, note, checklist, reminder
+records), which `GET /api/items/{id}/history` leaves out. `POST /api/items/{id}/undo-merge`
+uses it to bring both items back as they were, under the old item's id; it answers 409 once
+the target changed since (a new event, or its note edited). No archive file is touched.
+
 ## Reminders setup
 
 A reminder check runs hourly while `dam serve` is up (the first one a minute after the

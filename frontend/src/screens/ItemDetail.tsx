@@ -4,7 +4,7 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRightLeft, CircleMinus, Eye, Unlink, X } from "lucide-react";
+import { ArrowRightLeft, CircleMinus, Eye, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -41,6 +41,7 @@ import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
 import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
+import { Popover } from "../components/ui/Popover";
 import { Tag } from "../components/ui/Tag";
 import { TipButton } from "../components/ui/TipButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
@@ -49,12 +50,13 @@ import { UrgencyTag } from "../components/UrgencyTag";
 import { useAutoSave } from "../components/useAutoSave";
 import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, groupIban, plural } from "../format";
 import { visible } from "../text";
-import { useSearch } from "./useSearch";
+import { AddFile } from "../components/AddFile";
 import { FileMeta } from "../components/FileMeta";
 import { deletionRefusal } from "../components/MoveTo";
 import { isTrashKey, TrashButton, useTrash } from "../components/Trash";
 import { MarkIcons } from "../components/MarkIcons";
 import { useKeydown } from "../keyboard";
+import { readDragFiles, readDragItem, useDropTarget } from "../dnd";
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
@@ -190,81 +192,6 @@ function Fields({
   );
 }
 
-/** Search the index and choose a hit (``choose`` does what choosing means: attach the
- * file to an item, or put it in a tray; the file stays put either way). ``taken``: hits
- * to leave out. Esc closes it. */
-export function AddFile({
-  taken,
-  choose,
-  onDone,
-}: {
-  taken: string[];
-  choose: (hit: { drive_id: string; name: string }) => Promise<unknown>;
-  onDone: () => void;
-}) {
-  const id = useId();
-  const [query, setQuery] = useState("");
-  const search = useSearch(query.trim());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const hits = (search.hits ?? []).filter((h) => !taken.includes(h.drive_id));
-  const add = async (hit: { drive_id: string; name: string }) => {
-    setError(null);
-    setBusy(true);
-    try {
-      await choose(hit);
-      onDone();
-    } catch (e) {
-      setError(errorText(e));
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="add-file">
-      <label htmlFor={id}>Find a file</label>
-      <input
-        id={id}
-        type="search"
-        value={query}
-        autoFocus
-        spellCheck={false}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            onDone();
-          }
-        }}
-      />
-      {search.error && (
-        <p className="error" role="alert">
-          Search failed. {visible(search.error)}
-        </p>
-      )}
-      {query.trim() && search.hits !== null && hits.length === 0 && <p className="hint">No other files match.</p>}
-      {hits.length > 0 && (
-        <ul className="entries">
-          {hits.map((h) => (
-            <li key={h.drive_id}>
-              <button type="button" className="entry" disabled={busy} onClick={() => void add(h)}>
-                <span className="entry-name">Add {visible(h.name)}</span>
-                <MarkIcons marks={h.marks} />
-                <code className="entry-path">{visible(h.path)}</code>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {visible(error)}
-        </p>
-      )}
-    </div>
-  );
-}
-
 const TRAYS_LOADING = "The trays are still loading";
 
 const ADD_FILE_TIP =
@@ -340,6 +267,16 @@ function eventText(event: ItemEvent, tray: TrayDef | undefined, names: Map<strin
       return `File added: ${fileName()}`;
     case "file_removed":
       return `File removed: ${fileName()}`;
+    case "merged_in": {
+      const files = Array.isArray(data.files) ? data.files.length : 0;
+      const checks = typeof data.checks === "number" ? data.checks : 0;
+      const parts = [
+        files > 0 ? plural(files, "file") : null,
+        data.note === true ? "a note" : null,
+        checks > 0 ? plural(checks, "checklist entry", "checklist entries") : null,
+      ].filter(Boolean);
+      return `${String(data.title ?? "Another item")} merged in${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;
+    }
     case "moved":
       return `Moved from ${String(data.from_name ?? "another tray")} to ${String(data.to_name ?? "another tray")}`;
   }
@@ -528,6 +465,8 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const headingId = useId();
   const [tab, setTab] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [doneAnchor, setDoneAnchor] = useState<HTMLButtonElement | null>(null);
+  const [fileAnchor, setFileAnchor] = useState<HTMLButtonElement | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const moveItem = useMoveItem();
@@ -581,9 +520,11 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     }
   };
   /** Take a file off the item (DB only: the file stays where it is), with Undo: the
-   * link holds nothing but the two ids, so adding it back restores it. */
+   * link holds nothing but the two ids and its place, so adding it back at that place
+   * restores it. The item keeps at least one file (the server refuses otherwise). */
   const takeOff = async (f: ItemFile) => {
     setFileError(null);
+    const position = list.findIndex((x) => x.drive_id === f.drive_id);
     try {
       await change.mutateAsync({ id: item.id, driveId: f.drive_id, remove: true });
     } catch (e) {
@@ -592,11 +533,46 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     }
     const name = f.path ? visible(baseName(f.path)) : "the file";
     const putBack = () =>
-      change.mutateAsync({ id: item.id, driveId: f.drive_id }).catch((e: unknown) => {
+      change.mutateAsync({ id: item.id, driveId: f.drive_id, position: Math.max(0, position) }).catch((e: unknown) => {
         toast({ kind: "error", text: `Could not put ${name} back: ${visible(errorText(e))}` });
       });
     toast({ kind: "info", text: `Taken off the item: ${name}`, action: undoAction(() => void putBack()) });
   };
+  /** Files dropped on the item (dragged from Browse or the search results): attached in
+   * order, those it has already skipped; one Undo takes the new ones off again. */
+  const attach = async (ids: string[]) => {
+    const fresh = ids.filter((d) => !item.files.includes(d));
+    const added: string[] = [];
+    for (const driveId of fresh) {
+      try {
+        await change.mutateAsync({ id: item.id, driveId });
+        added.push(driveId);
+      } catch (e) {
+        toast({ kind: "error", text: `Could not add the file to ${visible(item.title)}: ${visible(errorText(e))}` });
+        break;
+      }
+    }
+    if (added.length === 0) return;
+    const undo = async () => {
+      for (const driveId of added) {
+        await change.mutateAsync({ id: item.id, driveId, remove: true }).catch((e: unknown) => {
+          toast({ kind: "error", text: `Could not take the file off: ${visible(errorText(e))}` });
+        });
+      }
+    };
+    toast({
+      kind: "info",
+      text: `Added ${plural(added.length, "file")} to ${visible(item.title)}`,
+      action: undoAction(() => void undo()),
+    });
+  };
+  // Dragging a file from Browse (or the search results) onto the open item attaches it.
+  // An item dragged here is no file drop: merging is done on the tray list.
+  const fileDrop = useDropTarget<string[]>({
+    read: (e) => (readDragItem(e) === null ? readDragFiles(e) : null),
+    accept: (ids) => (item.state !== "open" ? false : ids.every((d) => item.files.includes(d)) ? "Already on this item" : true),
+    onDrop: (ids) => void attach(ids),
+  });
 
   const tray = trays.get(item.tray_id);
   const kind = itemKind(tray);
@@ -641,24 +617,31 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     </button>
   );
 
+  // The confirm opens as a popover under the button that was pressed; pressing it again
+  // closes it. The buttons stay while it is open, so the focus has somewhere to return.
+  const toggleDone = (mode: DoneMode) => setDone(doneMode === mode ? null : mode);
   const doneButtons =
-    open && !doneMode ? (
+    open ? (
       <>
         <TipButton
+          ref={setDoneAnchor}
           className="primary"
           tip="Mark this item done; it moves to the Done list"
+          aria-expanded={doneMode === "done"}
           disabled={tray === undefined}
           disabledReason={TRAYS_LOADING}
-          onClick={() => setDone("done")}
+          onClick={() => toggleDone("done")}
         >
           {visible(doneText)}
         </TipButton>
         {anyInInbox && (
           <TipButton
+            ref={setFileAnchor}
             tip="Mark this item done, then open its file in the Inbox to file it"
+            aria-expanded={doneMode === "file"}
             disabled={tray === undefined}
             disabledReason={TRAYS_LOADING}
-            onClick={() => setDone("file")}
+            onClick={() => toggleDone("file")}
           >
             {visible(fileLabel)}
           </TipButton>
@@ -688,12 +671,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       {shown && (
         <span className="item-file-actions" role="group" aria-label="This file">
           {ask}
-          <IconButton
-            icon={<Unlink />}
-            label="Take this file off the item (the file stays where it is)"
-            disabled={change.isPending}
-            onClick={() => void takeOff(shown)}
-          />
           {/* the bin last, as everywhere */}
           {canTrash(shown) && (
             <TrashButton
@@ -731,7 +708,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   if (moveEntries.length === 0) moveEntries.push({ label: "No other trays", disabled: true, onSelect: () => {} });
 
   return (
-    <div className={`item-detail item-${kind}`}>
+    <div className={`item-detail item-${kind}`} {...fileDrop.props}>
       {removing && (
         <RemoveItemSheet
           item={item}
@@ -775,11 +752,24 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         <div className="item-files-line">
           <div className="tabs" role="tablist" aria-label="Files">
             {list.map((f, i) => (
-              <button key={f.drive_id} type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
-                {nameOf(f)}
-                <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
-                {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
-              </button>
+              <span key={f.drive_id} className="tab-wrap">
+                <button type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
+                  {nameOf(f)}
+                  <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
+                  {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
+                </button>
+                {/* shown on hover and focus, always reachable by keyboard */}
+                <button
+                  type="button"
+                  className="tab-close"
+                  aria-label={`Remove ${nameOf(f)} from this item`}
+                  data-tip="Take this file off the item (the file stays where it is)"
+                  disabled={change.isPending}
+                  onClick={() => void takeOff(f)}
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </span>
             ))}
           </div>
           {addButton}
@@ -797,6 +787,8 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       {adding && (
         <AddFile
           taken={item.files}
+          takenMode="mark"
+          takenLabel="already on this item"
           choose={(hit) => change.mutateAsync({ id: item.id, driveId: hit.drive_id })}
           onDone={() => setAdding(false)}
         />
@@ -819,8 +811,13 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           {item.done_fields && Object.keys(item.done_fields).length > 0 && ` · ${visible(doneFieldsText(item, tray))}`}{" "}
           <ReopenButton item={item} />
         </p>
-      ) : (
-        doneMode && (
+      ) : null}
+      {open && doneMode && (doneMode === "file" ? fileAnchor : doneAnchor) && (
+        <Popover
+          anchor={doneMode === "file" ? fileAnchor : doneAnchor}
+          label={doneMode === "file" ? fileLabel : doneText}
+          onClose={() => setDone(null)}
+        >
           <DoneForm
             item={item}
             label={doneText}
@@ -830,7 +827,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             onClose={() => setDone(null)}
             onDone={doneMode === "file" ? () => void fileIt() : undefined}
           />
-        )
+        </Popover>
       )}
       {/* not before the files are known: the action row is rebuilt when the shown file is first found */}
       <div className="item-files">

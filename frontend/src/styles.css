@@ -244,6 +244,11 @@ main { flex: 1; padding: var(--sp-4) var(--sp-5); min-width: 0; }
   border-bottom: 0.5px solid var(--separator);
   background: var(--panel);
 }
+.toolbar-stacked { flex-wrap: wrap; align-content: center; row-gap: var(--sp-1); padding-block: var(--sp-2); }
+.toolbar-stacked .toolbar-title { flex: 1 1 100%; }
+.toolbar-stacked .toolbar-title h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.toolbar-stacked .toolbar-subtitle { flex: none; }
+.toolbar-stacked .toolbar-actions { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; }
 .toolbar-title { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
 .toolbar-title h2 { margin: 0; font-size: var(--fs-lg); font-weight: 700; white-space: nowrap; }
 .toolbar-subtitle { color: var(--muted); font-size: var(--fs-sm); white-space: nowrap; }
@@ -1185,6 +1190,16 @@ button[data-tip] { position: relative; }
 .item-fields .field-input > input:not([type="checkbox"]):not([type="date"]) { min-width: 0; width: 100%; }
 .item-fields .hint, .item-fields .error { margin: 3px 0 0; }
 .save-state { color: var(--muted); font-size: var(--fs-xs); }
+.tab-wrap { position: relative; display: inline-flex; }
+.tab-wrap > [role="tab"] { padding-right: 24px; }
+.tab-close { position: absolute; top: 50%; right: 3px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; min-height: 0; padding: 0; border: none; border-radius: 50%; background: transparent; box-shadow: none; color: var(--muted); opacity: 0; }
+.tab-wrap:hover .tab-close, .tab-wrap:focus-within .tab-close, .tab-close:focus-visible { opacity: 1; }
+@media (hover: none) { .tab-close { opacity: 1; } }
+.tab-close:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.item-detail[data-drop="over"] { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: var(--r-lg); }
+.add-file-browse { align-self: flex-start; margin: var(--sp-1) 0; }
+.add-file-where { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-1) 0; }
+.add-file-where code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabs { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-1); }
 .file-list { list-style: none; margin: 0 0 var(--sp-1); padding: 0; }
 .file-list li { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-bottom: 2px; }
@@ -1408,6 +1423,8 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 .menu-separator { height: 0.5px; margin: 4px 8px; background: var(--separator); }
 .popover { right: 0; width: 320px; padding: var(--sp-3); }
 .popover p { margin: 0 0 var(--sp-2); }
+.popover-fixed { position: fixed; z-index: 60; width: auto; max-width: min(380px, calc(100vw - 16px)); padding: var(--sp-2); }
+.popover-fixed .done-form { margin: 0; padding: 0; background: transparent; max-width: none; }
 /* The filter button rows of Collections (Show) and the export (Format); the trays use a
  * Segmented control now. */
 .tray-filter { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-2); }

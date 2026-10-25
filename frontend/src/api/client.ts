@@ -969,8 +969,41 @@ export const useItemUpdate = () => {
 export const useItemFileChange = () => {
   const refresh = useRefreshTrays();
   return useMutation({
-    mutationFn: ({ id, driveId, remove }: { id: number; driveId: string; remove?: boolean }) =>
-      post<Item>(`/api/items/${id}/files${remove ? "/remove" : ""}`, { drive_id: driveId }),
+    mutationFn: ({
+      id,
+      driveId,
+      remove,
+      position,
+    }: {
+      id: number;
+      driveId: string;
+      remove?: boolean;
+      /** Adding: where in the item's files (an Undo's old place); default the end. */
+      position?: number;
+    }) =>
+      post<Item>(
+        `/api/items/${id}/files${remove ? "/remove" : ""}`,
+        position === undefined || remove ? { drive_id: driveId } : { drive_id: driveId, position },
+      ),
+    onSettled: refresh,
+  });
+};
+
+/** Merge the open item ``source`` into the open item ``id``: its files, note and checklist
+ * are added and it is removed (DB only). ``useUndoMergeItem`` brings both back. */
+export const useMergeItem = () => {
+  const refresh = useRefreshQuick();
+  return useMutation({
+    mutationFn: ({ id, source }: { id: number; source: number }) =>
+      post<Item>(`/api/items/${id}/merge`, { item_id: source }),
+    onSettled: refresh,
+  });
+};
+
+export const useUndoMergeItem = () => {
+  const refresh = useRefreshQuick();
+  return useMutation({
+    mutationFn: (id: number) => post<Item>(`/api/items/${id}/undo-merge`),
     onSettled: refresh,
   });
 };

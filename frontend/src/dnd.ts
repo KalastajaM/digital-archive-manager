@@ -20,6 +20,10 @@ import { CARD_DRAG_TYPE } from "./components/useCardLayout";
 export const DRAG_TYPE = "application/x-dam-files";
 export const COLLECTION_DRAG_TYPE = "application/x-dam-collection";
 export const FOLDER_DRAG_TYPE = "application/x-dam-folder";
+/** A tray item dragged in a list: it also carries its files as ``DRAG_TYPE`` (so a tray
+ * or folder in the sidebar takes it as before), and this adds who it is, so another item
+ * can take it in as a merge. */
+export const ITEM_DRAG_TYPE = "application/x-dam-item";
 
 type AnyDragEvent = DragEvent | ReactDragEvent;
 
@@ -28,6 +32,7 @@ let draggingLabel: string | null = null;
 let draggingPaths: string[] | null = null;
 let draggingCollection: number | null = null;
 let draggingFolder: string | null = null;
+let draggingItem: number | null = null;
 let listening = false;
 
 function forgetOnEnd() {
@@ -39,6 +44,7 @@ function forgetOnEnd() {
     draggingPaths = null;
     draggingCollection = null;
     draggingFolder = null;
+    draggingItem = null;
   };
   document.addEventListener("dragend", clear, true);
   document.addEventListener("drop", () => setTimeout(clear, 0), true);
@@ -69,12 +75,41 @@ export function setDragFiles(e: AnyDragEvent, ids: string[], label: string, path
   dragging = [...ids];
   draggingCollection = null;
   draggingFolder = null;
+  draggingItem = null;
   draggingLabel = label;
   draggingPaths = paths && paths.length === ids.length ? [...paths] : null;
   forgetOnEnd();
   if (typeof dt.setDragImage === "function") {
     dt.setDragImage(dragImage(ids.length === 1 ? label : `${ids.length} files`), 12, 12);
   }
+}
+
+/** Start a drag of the tray item ``id`` with its files: what ``setDragFiles`` carries,
+ * plus who the item is (for a merge onto another item). */
+export function setDragItem(e: AnyDragEvent, id: number, files: string[], label: string) {
+  setDragFiles(e, files, label);
+  const dt = e.dataTransfer;
+  if (!dt) return;
+  dt.setData(ITEM_DRAG_TYPE, JSON.stringify({ id }));
+  draggingItem = id;
+}
+
+/** The tray item a drag carries, or null when it is not an item drag. */
+export function readDragItem(e: AnyDragEvent): number | null {
+  const dt = e.dataTransfer;
+  if (!dt) return null;
+  const types = Array.from(dt.types ?? []);
+  if (!types.includes(ITEM_DRAG_TYPE)) return null;
+  const raw = dt.getData(ITEM_DRAG_TYPE);
+  if (raw) {
+    try {
+      const id = (JSON.parse(raw) as { id?: unknown })?.id;
+      return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
+    } catch {
+      return null; // not ours
+    }
+  }
+  return draggingItem;
 }
 
 /** The ids a list row drags: the whole selection when the row is part of it, else the

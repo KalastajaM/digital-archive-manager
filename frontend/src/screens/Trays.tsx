@@ -5,7 +5,22 @@
 import { ChevronRight, Inbox as InboxIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { archiveKey, errorText, type ItemState, type TrayDef, type TrayItem, useItems, useToday, useTrays } from "../api/client";
+import {
+  archiveKey,
+  errorText,
+  type ItemState,
+  type TrayDef,
+  type TrayItem,
+  useItemFileChange,
+  useItems,
+  useMergeItem,
+  useToday,
+  useTrays,
+  useUndoMergeItem,
+} from "../api/client";
+import { Sheet } from "../components/ui/Sheet";
+import { undoAction, useToast } from "../components/Toasts";
+import { plural } from "../format";
 import { ItemBadges } from "../components/ItemBadges";
 import { TrayDefaultsBanner } from "../components/TrayDefaults";
 import { deletionRefusal } from "../components/MoveTo";
@@ -25,10 +40,11 @@ import { RemoveItemSheet } from "../components/RemoveItemSheet";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { dayOf, formatField, formatMoney } from "../format";
 import { isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
-import { setDragFiles } from "../dnd";
+import { type DropTarget, readDragFiles, readDragItem, setDragItem, useDropTarget } from "../dnd";
 import { publishSelection } from "../selection";
 import { visible } from "../text";
-import ItemDetail, { AddFile, type DoneMode, doneFieldsText, itemKind, ReopenButton } from "./ItemDetail";
+import { AddFile } from "../components/AddFile";
+import ItemDetail, { type DoneMode, doneFieldsText, itemKind, ReopenButton } from "./ItemDetail";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { MarkIcons } from "../components/MarkIcons";
 
@@ -117,6 +133,61 @@ function Row({
         )}
       </div>
     </article>
+  );
+}
+
+/** What a drag over a list row carries: another tray item (to merge into this one), or
+ * files from Browse or the search results (to attach to it). */
+type RowDrag = { item: number } | { files: string[] };
+
+/** A list row with its drag source and its drop target. Dragging the row carries the
+ * item's files (a tray in the sidebar takes it as before) and who it is; dropped on
+ * another open item it asks to merge into it, and files dragged here are attached. */
+function TrayListItem({
+  item,
+  current,
+  list,
+  onMerge,
+  onAttach,
+  children,
+}: {
+  item: TrayItem;
+  current: boolean;
+  list: TrayItem[];
+  onMerge: (sourceId: number, target: TrayItem) => void;
+  onAttach: (target: TrayItem, ids: string[]) => void;
+  children: ReactNode;
+}) {
+  const drop: DropTarget = useDropTarget<RowDrag>({
+    read: (e) => {
+      const source = readDragItem(e);
+      if (source !== null) return { item: source };
+      const files = readDragFiles(e);
+      return files ? { files } : null;
+    },
+    accept: (drag) => {
+      if (item.state !== "open") return false;
+      if ("item" in drag) {
+        const source = list.find((i) => i.id === drag.item);
+        return source !== undefined && source.id !== item.id && source.state === "open";
+      }
+      return drag.files.every((d) => item.files.includes(d)) ? "Already on this item" : true;
+    },
+    onDrop: (drag) => {
+      if ("item" in drag) onMerge(drag.item, item);
+      else onAttach(item, drag.files);
+    },
+  });
+  return (
+    <li
+      data-quicklook
+      aria-current={current ? "true" : undefined}
+      draggable={item.files.length > 0 ? true : undefined}
+      onDragStart={item.files.length > 0 ? (e) => setDragItem(e, item.id, item.files, visible(item.title)) : undefined}
+      {...drop.props}
+    >
+      {children}
+    </li>
   );
 }
 
@@ -213,6 +284,12 @@ function TrayPage({ today: fixed }: { today?: string }) {
   const quickPut = useQuickPut();
   // ⌫ on the selected item asks before removing it from the tray
   const [removing, setRemoving] = useState<TrayItem | null>(null);
+  // an item dragged onto another one: asks before merging
+  const [merging, setMerging] = useState<{ source: TrayItem; target: TrayItem } | null>(null);
+  const mergeItem = useMergeItem();
+  const undoMerge = useUndoMergeItem();
+  const fileChange = useItemFileChange();
+  const toast = useToast();
   const listRef = useRef<HTMLUListElement>(null);
   const focusRow = useRef(false);
   // A done form belongs to the item it was opened on: another item closes it, so coming
@@ -331,6 +408,57 @@ function TrayPage({ today: fixed }: { today?: string }) {
     e.preventDefault();
   });
 
+  const askMerge = (sourceId: number, target: TrayItem) => {
+    const source = list.find((i) => i.id === sourceId);
+    if (source && source.id !== target.id) setMerging({ source, target });
+  };
+  const merge = async ({ source, target }: { source: TrayItem; target: TrayItem }) => {
+    try {
+      await mergeItem.mutateAsync({ id: target.id, source: source.id });
+    } catch (e) {
+      toast({ kind: "error", text: `Could not merge ${visible(source.title)}: ${visible(errorText(e))}` });
+      setMerging(null);
+      return;
+    }
+    setMerging(null);
+    // the merged item is gone: show the one it went into
+    if (opened === source.id) setSearch(query(state, target.id));
+    toast({
+      kind: "info",
+      text: `Merged ${visible(source.title)} into ${visible(target.title)}`,
+      action: undoAction(
+        () =>
+          void undoMerge.mutateAsync(target.id).catch((e: unknown) => {
+            toast({ kind: "error", text: `Could not undo the merge: ${visible(errorText(e))}` });
+          }),
+      ),
+    });
+  };
+  const attach = async (target: TrayItem, ids: string[]) => {
+    const added: string[] = [];
+    for (const driveId of ids.filter((d) => !target.files.includes(d))) {
+      try {
+        await fileChange.mutateAsync({ id: target.id, driveId });
+        added.push(driveId);
+      } catch (e) {
+        toast({ kind: "error", text: `Could not add the file to ${visible(target.title)}: ${visible(errorText(e))}` });
+        break;
+      }
+    }
+    if (added.length === 0) return;
+    toast({
+      kind: "info",
+      text: `Added ${plural(added.length, "file")} to ${visible(target.title)}`,
+      action: undoAction(() => {
+        for (const driveId of added) {
+          void fileChange.mutateAsync({ id: target.id, driveId, remove: true }).catch((e: unknown) => {
+            toast({ kind: "error", text: `Could not take the file off: ${visible(errorText(e))}` });
+          });
+        }
+      }),
+    });
+  };
+
   if (trays.isPending) return <p className="placeholder">Loading…</p>;
   if (trays.isError) {
     return (
@@ -361,12 +489,13 @@ function TrayPage({ today: fixed }: { today?: string }) {
     body = (
       <ul ref={listRef} className="tray-items" aria-label="Items">
         {list.map((item, i) => (
-          <li
+          <TrayListItem
             key={item.id}
-            data-quicklook
-            aria-current={picked && i === index ? "true" : undefined}
-            draggable={item.files.length > 0 ? true : undefined}
-            onDragStart={item.files.length > 0 ? (e) => setDragFiles(e, item.files, visible(item.title)) : undefined}
+            item={item}
+            current={picked && i === index}
+            list={list}
+            onMerge={askMerge}
+            onAttach={(target, ids) => void attach(target, ids)}
           >
             <Row
               item={item}
@@ -376,7 +505,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
               href={`?${query(state, item.id)}`}
               onOpen={() => setCursor({ view, index: i })}
             />
-          </li>
+          </TrayListItem>
         ))}
       </ul>
     );
@@ -391,6 +520,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
     <div className="trays" ref={split.hostRef} style={split.hostStyle}>
       <section className="trays-list" aria-label="Tray items">
         <Toolbar
+          stacked
           title={visible(tray?.name ?? trayId)}
           subtitle={subtitle}
           actions={
@@ -456,6 +586,28 @@ function TrayPage({ today: fixed }: { today?: string }) {
       </section>
       {quickLook.view}
       {trash.view}
+      {merging && (
+        <Sheet
+          open
+          title={`Merge “${visible(merging.source.title)}” into “${visible(merging.target.title)}”?`}
+          onClose={() => setMerging(null)}
+          footer={
+            <>
+              <button type="button" onClick={() => setMerging(null)}>
+                Cancel
+              </button>
+              <button type="button" className="primary" disabled={mergeItem.isPending} onClick={() => void merge(merging)}>
+                Merge
+              </button>
+            </>
+          }
+        >
+          <p>
+            Its files, notes and checklist are added to “{visible(merging.target.title)}”, and “
+            {visible(merging.source.title)}” is removed. You can undo it right after.
+          </p>
+        </Sheet>
+      )}
       {removing && (
         <RemoveItemSheet
           item={removing}

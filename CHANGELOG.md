@@ -8,6 +8,15 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- Files on an item: each file tab has a small **×** (on hover or focus) that takes the
+  file off the item, with an Undo that puts it back in the same place. It replaces the
+  icon in the action row. **Add another file…** now searches the whole archive as you type
+  (with each file's path) or lets you browse folders, with arrow keys and Enter, and shows
+  files that are already on the item instead of adding them twice.
+- Drag an item onto another in a tray list to merge them: after a question, its files,
+  notes and checklist are added to the other item and it is removed. Undo restores both.
+  You can also drag a file from Browse or the search results onto an item in the list or
+  onto the open item to attach it. No file is moved or renamed.
 - A rule can now add the document to collections. The rule sheet has an **Add to
   collection** field under Folder, with the same picker as the Inbox ("…" opens the
   collections as a tree). When the rule matches, the Inbox card starts with those
@@ -328,6 +337,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- Marking an item done (Mark done, Mark paid, and the "and file" button) now asks in a small
+  popover under the button you pressed, instead of in a box further down the page. Enter
+  confirms, Esc or a click outside cancels, and the focus goes back to the button.
+- The header of a tray list has two rows: the tray name with its count on the first, and
+  Add file with the Open / Done switch on the second, so the name and count are no longer
+  cut off.
 - The rule test explains why documents "could not be judged yet" instead of "Not
   checked yet": they are grouped by reason, and each group says what it means and what
   happens next (page 1 is read in the background, the address area does not say who the

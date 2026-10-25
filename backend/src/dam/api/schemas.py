@@ -106,6 +106,19 @@ class DriveIdBody(_In):
     drive_id: str
 
 
+class ItemFileAddBody(_In):
+    """Attach a file to an item: at the end, or at ``position`` (an Undo's old place)."""
+
+    drive_id: str
+    position: int | None = None
+
+
+class ItemMergeBody(_In):
+    """The item to merge into the one in the path."""
+
+    item_id: int
+
+
 class DriveIdsBody(_In):
     drive_ids: list[str]
 
@@ -991,7 +1004,9 @@ class TrayItemOut(ItemOut):
 class ItemEventOut(BaseModel):
     id: int
     at: float
-    kind: Literal["created", "edited", "done", "reopened", "file_added", "file_removed", "moved"]
+    kind: Literal[
+        "created", "edited", "done", "reopened", "file_added", "file_removed", "moved", "merged_in"
+    ]
     data: dict[str, Any]
 
 
