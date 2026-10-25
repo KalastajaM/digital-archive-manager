@@ -337,6 +337,8 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- The lock button next to a file name shows the file's state: a closed padlock while the
+  file is locked (click to unlock), an open one while it is not (click to lock).
 - Marking an item done (Mark done, Mark paid, and the "and file" button) now asks in a small
   popover under the button you pressed, instead of in a box further down the page. Enter
   confirms, Esc or a click outside cancels, and the focus goes back to the button.

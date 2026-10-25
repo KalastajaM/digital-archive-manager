@@ -30,9 +30,9 @@ export function LockControl({
           Unlocked until you leave this file
         </span>
         <IconButton
-          icon={<Lock />}
+          icon={<LockOpen />}
           label="Lock again"
-          tip="Lock this file again now"
+          tip="Unlocked for now. Click to lock this file again now"
           disabled={lock.busy}
           onClick={() => {
             setAsking(false);
@@ -71,12 +71,12 @@ export function LockControl({
           </>
         ) : (
           <IconButton
-            icon={<LockOpen />}
+            icon={<Lock />}
             label="Unlock"
             tip={
               lock.important
-                ? "An Important file is always locked. Unlock it for now: it locks again when you leave this file"
-                : "Unlock this file so it can be renamed or moved"
+                ? "Locked: an Important file is always locked. Click to unlock it for now; it locks again when you leave this file"
+                : "Locked. Click to unlock this file so it can be renamed or moved"
             }
             disabled={lock.busy}
             onClick={() => (lock.important ? unlockNow() : setAsking(true))}
@@ -93,9 +93,9 @@ export function LockControl({
   return (
     <span className="lock-control" role="group" aria-label="Lock">
       <IconButton
-        icon={<Lock />}
+        icon={<LockOpen />}
         label="Lock"
-        tip="Lock this file so it cannot be renamed or moved by mistake"
+        tip="Not locked. Click to lock this file so it cannot be renamed or moved by mistake"
         disabled={lock.busy}
         onClick={() => void lock.lock()}
       />
