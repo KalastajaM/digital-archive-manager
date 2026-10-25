@@ -94,6 +94,7 @@ describe("Sidebar", () => {
       ["Starred", "/starred"],
       ["Legal", "/collections/1"],
       ["Tax 2026", "/collections/2"],
+      ["Tags", "/tags"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
       ["Settings", "/settings"],

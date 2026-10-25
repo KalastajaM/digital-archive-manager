@@ -590,9 +590,11 @@ export const useBrowseFiles = (
 
 /** Full-text search; ``folder`` limits it to that subtree. Up to the API's 500 hits, so
  * sorting the results by a column sorts (nearly) every match, not just the best 50. */
-export const searchFiles = (q: string, folder?: string) => {
-  const folderParam = folder ? `&folder=${encodeURIComponent(folder)}` : "";
-  return get<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}${folderParam}&limit=500`);
+export const searchFiles = (q: string, folder?: string, tags: string[] = []) => {
+  const params = new URLSearchParams({ q, limit: "500" });
+  if (folder) params.set("folder", folder);
+  for (const tag of tags) params.append("tag", tag);
+  return get<SearchHit[]>(`/api/search?${params}`);
 };
 
 /** Moves into ``##. To Delete`` (mirrored path); a dry run only resolves the plan. */
@@ -900,7 +902,7 @@ export const usePage1Speed = () => {
  * suggestions; the previous list stays while the next one loads. */
 export const useTagSuggestions = (prefix: string, limit: number, enabled = true) =>
   useQuery({
-    queryKey: ["tag-suggestions", prefix, limit],
+    queryKey: ["tags", "suggestions", prefix, limit],
     queryFn: () => get<{ name: string; files: number }[]>(`/api/tags?${new URLSearchParams({ prefix, limit: String(limit) })}`),
     enabled,
     placeholderData: keepPreviousData,
@@ -916,9 +918,70 @@ export const usePutFileTags = () => {
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.file });
       void client.invalidateQueries({ queryKey: keys.browse });
-      void client.invalidateQueries({ queryKey: ["tag-suggestions"] });
+      void client.invalidateQueries({ queryKey: TAG_QUERIES });
     },
   });
+};
+
+// -- the Tags screen and the sidebar's tags --------------------------------------
+
+export type TagInfo = Schemas["TagInfoOut"];
+export type TagGroup = Schemas["TagGroupOut"];
+export type TagList = Schemas["TagListOut"];
+export type SidebarTag = Schemas["SidebarTagOut"];
+/** How to put a tag change back; sent unchanged to ``POST /api/tags/undo``. */
+export type TagUndo = Schemas["TagUndoModel"];
+export type TagChange = Schemas["TagChangeOut"];
+export type TagMergePlan = Schemas["TagMergePlanOut"];
+
+/** Every cached tag query (suggestions, the screen's list, the sidebar's tags). */
+const TAG_QUERIES = ["tags"] as const;
+
+/** Every tag (also those no file has yet) with its file count, pin and group. */
+export const useAllTags = (query = "") =>
+  useQuery({
+    queryKey: ["tags", "all", query],
+    queryFn: () => get<TagList>(`/api/tags/all?${new URLSearchParams({ query })}`),
+    placeholderData: keepPreviousData,
+  });
+
+/** The sidebar's tags: pinned first, then the most recently used (at most eight). */
+export const useSidebarTags = () =>
+  useQuery({ queryKey: ["tags", "sidebar"], queryFn: () => get<SidebarTag[]>("/api/tags/sidebar") });
+
+/** The calls that change tags; each tag change answers how to undo it. */
+export const useTagActions = () => {
+  const client = useQueryClient();
+  const settle = () => {
+    void client.invalidateQueries({ queryKey: TAG_QUERIES });
+    void client.invalidateQueries({ queryKey: keys.file });
+    void client.invalidateQueries({ queryKey: keys.browse });
+  };
+  const run = async <T,>(path: string, body: unknown) => {
+    try {
+      return await post<T>(path, body);
+    } finally {
+      settle();
+    }
+  };
+  return {
+    create: (name: string) => run<TagChange>("/api/tags", { name }),
+    rename: (name: string, newName: string) => run<TagChange>("/api/tags/rename", { name, new_name: newName }),
+    /** What a merge would do (changes nothing). */
+    previewMerge: (sources: string[], into: string) =>
+      post<TagMergePlan>("/api/tags/merge", { sources, into, dry_run: true }),
+    merge: (sources: string[], into: string) => run<TagMergePlan>("/api/tags/merge", { sources, into, dry_run: false }),
+    remove: (name: string) => run<TagChange>("/api/tags/delete", { name }),
+    pin: (names: string[], pinned: boolean) => run<TagChange>("/api/tags/pin", { names, pinned }),
+    setGroup: (names: string[], groupId: number | null) =>
+      run<TagChange>("/api/tags/group", { names, group_id: groupId }),
+    undo: (undo: TagUndo) => run<TagChange>("/api/tags/undo", undo),
+    createGroup: (name: string) => run<TagGroup>("/api/tags/groups", { name }),
+    renameGroup: (id: number, name: string) => run<TagGroup>(`/api/tags/groups/${id}/rename`, { name }),
+    deleteGroup: (id: number) =>
+      run<{ name: string; members: string[]; message: string }>(`/api/tags/groups/${id}/delete`, {}),
+    restoreGroup: (name: string, members: string[]) => run<TagGroup>("/api/tags/groups/restore", { name, members }),
+  };
 };
 
 export const useFileLinks = (driveId: string) =>

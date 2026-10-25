@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   archiveKey,
   ApiError,
@@ -25,6 +25,7 @@ import {
   useCollectionsWithMarked,
   useCreateFolder,
   useStatus,
+  useTagSuggestions,
 } from "../api/client";
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
@@ -69,6 +70,8 @@ import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { useSearch } from "./useSearch";
+import { splitTagQuery } from "../searchTags";
+import { TagChips, TagSuggestions } from "../components/TagSearch";
 
 /** One row of the folder listing or of the search results. */
 const KEYS: KeyHint[] = [
@@ -595,26 +598,39 @@ export default function Browse() {
     return out;
   };
 
-  const [query, setQuery] = useState("");
+  // The words come from ?q= (a link from Today's Search card) and the tag filters from
+  // ?tag= (repeated); typing `tag:name ` turns into a filter in the address too.
+  const [query, setQuery] = useState(() => params.get("q") ?? "");
+  const location = useLocation();
+  const urlQ = params.get("q");
+  useEffect(() => {
+    // a link to this screen with ?q= sets the words (an empty one clears them)
+    if (urlQ !== null) setQuery(urlQ);
+    // only when the address was navigated to
+  }, [location.key]);
+  const tags = params.getAll("tag");
+  const tagsKey = tags.join("\n");
+  const typed = splitTagQuery(query);
   const [scope, setScope] = useState<"folder" | "everywhere">("everywhere");
   // The search results' column order; null: best match first (the API's order).
   const [searchSort, setSearchSort] = useState<SortState | null>(null);
   const [searchPane, setSearchPane] = useState<PaneId>("left");
   const [reload, setReload] = useState(0);
-  const q = query.trim();
+  const q = typed.rest.trim();
+  const searching = q !== "" || tags.length > 0;
   const sp: PaneId = split ? searchPane : "left";
   const inFolder = scope === "folder" && !!paths[sp];
   const folder = inFolder ? paths[sp] : "";
-  const search = useSearch(q, folder, reload);
+  const search = useSearch(q, folder, reload, tags);
 
   const viewOf = (pane: PaneId) => {
-    if (q && pane === sp) return `search\n${q}\n${folder}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
+    if (searching && pane === sp) return `search\n${q}\n${tagsKey}\n${folder}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
     const { path, collection, view } = panes[pane];
     const sort = view === "files" ? `${sorts[pane].sort} ${sorts[pane].dir}` : "";
     return `browse\n${path}\n${collection ?? ""}\n${view}\n${sort}`;
   };
   const itemsOf = (pane: PaneId): Item[] =>
-    q && pane === sp
+    searching && pane === sp
       ? (() => {
           // SearchHit has no is_dir/is_link (the API does not say); hits are indexed files.
           const hits: Item[] = (search.hits ?? []).map((h) => ({ ...h, is_dir: false, is_link: false }));
@@ -639,6 +655,7 @@ export default function Browse() {
       search.hits,
       searchSort,
       q,
+      tagsKey,
       sp,
       split,
     ],
@@ -696,6 +713,9 @@ export default function Browse() {
       if (next.left.path) p.set("path", next.left.path);
       extra(next.left, PARAM.one);
     }
+    // the search stays while you move through folders
+    if (q) p.set("q", q);
+    for (const tag of tags) p.append("tag", tag);
     return p;
   };
   const withPath = (pane: PaneId, to: string) => ({ ...panes, [pane]: { ...panes[pane], path: to } });
@@ -825,7 +845,7 @@ export default function Browse() {
   // The folder just made: selected once the listing has it.
   const [madeFolder, setMadeFolder] = useState<{ pane: PaneId; path: string } | null>(null);
   const newFolderWhy = (pane: PaneId) =>
-    newFolderRefusal(panes[pane], !!q && pane === sp, specialFolders);
+    newFolderRefusal(panes[pane], searching && pane === sp, specialFolders);
   const startNewFolder = () => {
     if (naming) return;
     const why = newFolderWhy(act);
@@ -943,7 +963,7 @@ export default function Browse() {
     onDrop: (dragged) => startMove(dragged, item.path),
   });
   const paneDrop = (pane: PaneId): DropProps | null =>
-    q && pane === sp
+    searching && pane === sp
       ? null // search results are no folder
       : {
           accept: (dragged) =>
@@ -1115,7 +1135,7 @@ export default function Browse() {
 
   const bodyOf = (pane: PaneId): ReactNode => {
     const rows = items[pane];
-    if (q && pane === sp) {
+    if (searching && pane === sp) {
       if (search.error) return <p className="error" role="alert">Search failed. {visible(search.error)}</p>;
       if (search.hits === null) return <p className="placeholder">Searching…</p>;
       if (rows.length === 0) return <p className="placeholder">No matches.</p>;
@@ -1168,7 +1188,7 @@ export default function Browse() {
   const renderPane = (pane: PaneId) => {
     const rows = items[pane];
     const s = selOf(pane);
-    const isSearch = !!q && pane === sp;
+    const isSearch = searching && pane === sp;
     const flat = flatOf(pane) && !isSearch;
     // the Files view and search results have the folder, date and size columns
     const columns = flat || isSearch;
@@ -1336,8 +1356,42 @@ export default function Browse() {
     );
   };
 
+  // Tag filters live in the address (?tag=, repeated); a tag typed as tag:name becomes one.
+  const setTags = (next: string[]) => {
+    const p = new URLSearchParams(params);
+    p.delete("tag");
+    for (const t of next) p.append("tag", t);
+    setParams(p);
+  };
+  const addTags = (names: string[]) => {
+    const next = [...tags];
+    for (const name of names) if (!next.some((t) => t.toLowerCase() === name.toLowerCase())) next.push(name);
+    if (next.length !== tags.length) setTags(next);
+  };
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [onSuggestion, setOnSuggestion] = useState(-1); // the arrow keys' place in the list
+  // The word being typed: the name after "tag:", else the last word (two letters or more).
+  const word = typed.partial ?? (/\s$/.test(typed.rest) ? "" : (/\S+$/.exec(typed.rest)?.[0] ?? ""));
+  const wantSuggest = suggestOpen && (typed.partial !== null || word.length >= 2);
+  const suggested = useTagSuggestions(word, 8, wantSuggest);
+  const offered = (wantSuggest ? (suggested.data ?? []) : [])
+    .filter((t) => !tags.some((a) => a.toLowerCase() === t.name.toLowerCase()))
+    .slice(0, 6);
+  const pickTag = (name: string) => {
+    addTags([name]);
+    setQuery(typed.partial !== null ? typed.rest : typed.rest.replace(/\S+$/, ""));
+    setSuggestOpen(false);
+    inputRef.current?.focus();
+  };
+
   const searchBox = (
-    <div className="search">
+    <div
+      className="search"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setSuggestOpen(false);
+      }}
+    >
       {paths[sp] && (
         <Segmented<"folder" | "everywhere">
           ariaLabel="Search scope"
@@ -1353,18 +1407,44 @@ export default function Browse() {
       <label htmlFor={`${ids}-q`} className="visually-hidden">
         Search
       </label>
-      <input
-        id={`${ids}-q`}
-        type="search"
-        placeholder={inFolder ? `Search ${visible(paths[sp].split("/").at(-1) ?? "")}` : "Search the archive"}
-        title={inFolder ? `Searches ${visible(paths[sp])} and its subfolders` : undefined}
-        value={query}
-        spellCheck={false}
-        onChange={(e) => {
-          if (!q && e.target.value.trim()) setSearchPane(act);
-          setQuery(e.target.value);
-        }}
-      />
+      <TagChips tags={tags} onRemove={(name) => setTags(tags.filter((t) => t !== name))} />
+      <div className="search-field">
+        <input
+          id={`${ids}-q`}
+          ref={inputRef}
+          type="search"
+          placeholder={inFolder ? `Search ${visible(paths[sp].split("/").at(-1) ?? "")}` : "Search the archive"}
+          title={inFolder ? `Searches ${visible(paths[sp])} and its subfolders` : undefined}
+          value={query}
+          spellCheck={false}
+          onChange={(e) => {
+            if (!searching && e.target.value.trim()) setSearchPane(act);
+            // a finished tag:name becomes a filter chip and leaves the box
+            const t = splitTagQuery(e.target.value);
+            if (t.tags.length > 0) addTags(t.tags);
+            setQuery(t.kept);
+            setSuggestOpen(true);
+            setOnSuggestion(-1);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setSuggestOpen(false);
+            else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && offered.length > 0) {
+              e.preventDefault();
+              const by = e.key === "ArrowDown" ? 1 : -1;
+              setOnSuggestion((n) => Math.max(-1, Math.min(offered.length - 1, n + by)));
+            } else if (e.key === "Enter" && onSuggestion >= 0 && offered[onSuggestion]) {
+              e.preventDefault();
+              pickTag(offered[onSuggestion].name);
+            } else if (e.key === "Enter" && typed.partial) {
+              // Enter finishes the tag being typed: the suggestion it names, else the first
+              e.preventDefault();
+              const exact = offered.find((t) => t.name.toLowerCase() === typed.partial?.toLowerCase());
+              pickTag((exact ?? offered[0])?.name ?? typed.partial.trim());
+            }
+          }}
+        />
+        <TagSuggestions offered={offered} active={onSuggestion} onPick={pickTag} />
+      </div>
     </div>
   );
 

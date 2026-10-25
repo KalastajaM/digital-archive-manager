@@ -12,11 +12,13 @@ import {
   MessageCircleQuestion,
   ListTodo,
   type LucideIcon,
+  Pin,
   Settings,
   Sun,
+  Tag as TagIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   archiveKey,
   type CollectionRow,
@@ -25,6 +27,7 @@ import {
   useBuiltin,
   useCollectionMembers,
   useCollections,
+  useSidebarTags,
   useStatus,
   useToday,
   useTodayFollowsInbox,
@@ -408,6 +411,45 @@ function StarredRow() {
   );
 }
 
+/** The Tags section: its caption opens the Tags screen; below it the pinned tags, then the
+ * most recently used ones (eight in all), each opening its files in Browse. */
+function TagsSection({ sections }: { sections: SectionFolds }) {
+  const tags = useSidebarTags();
+  const location = useLocation();
+  const shown = tags.data ?? [];
+  // the tag whose filter Browse shows now (the only one)
+  const current =
+    location.pathname === "/browse" ? new URLSearchParams(location.search).getAll("tag") : [];
+  return (
+    <Section
+      title="Tags"
+      to="/tags"
+      folded={sections.folded.has("tags")}
+      onFold={() => sections.toggle("tags")}
+    >
+      {shown.map((t) => {
+        const name = visible(t.name);
+        const Icon = t.pinned ? Pin : TagIcon;
+        return (
+          <li key={t.name}>
+            <NavLink
+              to={`/browse?${new URLSearchParams({ tag: t.name, q: "" })}`}
+              className="sidebar-row"
+              aria-label={`${name} (${t.files})`}
+              aria-current={current.length === 1 && current[0] === t.name ? "page" : undefined}
+              title={t.pinned ? `${name} (pinned)` : name}
+            >
+              <Icon className="sidebar-icon" {...ICON} />
+              <span className="sidebar-label">{name}</span>
+              {t.files > 0 && <span className="sidebar-count">{t.files}</span>}
+            </NavLink>
+          </li>
+        );
+      })}
+    </Section>
+  );
+}
+
 export function trayIcon(tray: TrayDef): LucideIcon {
   const key = `${tray.id} ${tray.name}`.toLowerCase();
   if (/follow|waiting|odota|seuranta/.test(key)) return Hourglass;
@@ -475,6 +517,7 @@ export function Sidebar({ footer }: Props) {
             ))}
           </Section>
           <CollectionsSection list={collections.data ?? []} sections={sections} />
+          <TagsSection sections={sections} />
           <Section title="Archive" folded={sections.folded.has("archive")} onFold={() => sections.toggle("archive")}>
             <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
             <Row to="/activity" icon={History} label="Activity" />
