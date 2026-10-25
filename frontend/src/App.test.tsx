@@ -108,6 +108,7 @@ describe("App shell", () => {
       ["Tags", "/tags"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
+      ["Maintenance", "/maintenance"],
       ["Settings", "/settings"],
       ["Help", "/help"],
     ]);

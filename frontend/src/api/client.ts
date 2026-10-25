@@ -1674,6 +1674,59 @@ export const useSaveFilingCodes = () => {
   });
 };
 
+// -- maintenance ---------------------------------------------------------------
+
+/** A maintenance check running (or finished): progress, and the result of its kind. */
+export type MaintenanceJob = Schemas["MaintenanceJobOut"];
+export type MaintenanceKind = Schemas["MaintenanceStartIn"]["kind"];
+export type DuplicatesResult = Schemas["DuplicatesOut"];
+export type DupGroup = Schemas["DupGroupOut"];
+export type DupFile = Schemas["DupFileOut"];
+export type DuplicateEstimate = Schemas["DuplicateEstimateOut"];
+export type DuplicateResolveBody = Schemas["DuplicateResolveIn"];
+export type DuplicateResolveResult = Schemas["DuplicateResolveOut"];
+export type CarryOver = Schemas["CarryOverOut"];
+
+/** What the duplicate check would read, from the index alone (nothing is opened). */
+export const useDuplicateEstimate = () =>
+  useQuery({
+    queryKey: ["maintenance", "estimate"],
+    queryFn: () => get<DuplicateEstimate>("/api/maintenance/duplicates/estimate"),
+    gcTime: 0,
+  });
+
+export const startMaintenanceJob = (kind: MaintenanceKind, days?: number) =>
+  post<MaintenanceJob>("/api/maintenance/jobs", { kind, days: days ?? null });
+export const getMaintenanceJob = (id: string) => get<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}`);
+export const latestMaintenanceJob = (kind: MaintenanceKind) =>
+  get<MaintenanceJob | null>(`/api/maintenance/jobs/latest/${enc(kind)}`);
+export const stopMaintenanceJob = (id: string) => post<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}/stop`);
+
+/** Move the chosen copies to To Delete, or replace them with a link to the copy kept
+ * (one batch); a dry run lists the operations and what is carried over. */
+export const useResolveDuplicates = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: DuplicateResolveBody) =>
+      post<DuplicateResolveResult>("/api/maintenance/duplicates/resolve", body),
+    onSettled: (_data, _error, body) => {
+      if (!body.dry_run) refresh();
+    },
+  });
+};
+
+/** Remove broken links inside ##. Ongoing / ##. Important (a dry run shows the plan). */
+export const useRemoveBrokenLinks = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: { drive_ids: string[]; dry_run: boolean }) =>
+      post<BatchResult>("/api/maintenance/links/remove", body),
+    onSettled: (_data, _error, body) => {
+      if (!body.dry_run) refresh();
+    },
+  });
+};
+
 // -- learned filing rules -----------------------------------------------------
 
 /** The rules in order, the files that were skipped (``errors``) and the offer state. */

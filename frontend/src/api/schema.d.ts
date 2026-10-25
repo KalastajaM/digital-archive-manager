@@ -628,6 +628,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/maintenance/duplicates/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estimate
+         * @description How many files the duplicate check would read and how big they are (the files
+         *     that share a size with another and have no stored hash). Reading a file kept
+         *     online-only in Google Drive downloads it. Reads the index only.
+         */
+        get: operations["estimate_api_maintenance_duplicates_estimate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start
+         * @description Start a check. An earlier job of the same kind is ended. Poll it with
+         *     ``GET /api/maintenance/jobs/{job_id}``; stop it with ``POST .../stop``.
+         */
+        post: operations["start_api_maintenance_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/jobs/latest/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Latest
+         * @description The latest job of ``kind`` of this run (finished ones too), else null.
+         */
+        get: operations["latest_api_maintenance_jobs_latest__kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job
+         * @description Progress, and once the check is over (done or stopped) its result.
+         */
+        get: operations["get_job_api_maintenance_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/jobs/{job_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Job
+         * @description End a check where it is; what it found so far stays. Idempotent.
+         */
+        post: operations["stop_job_api_maintenance_jobs__job_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/duplicates/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Duplicates
+         * @description Move the chosen copies to To Delete, or replace them with a link to the copy kept,
+         *     as one batch (one Undo). ``dry_run`` lists every operation and what would be added to
+         *     the kept copy; nothing changes. 400: a copy that is Important or locked, files not
+         *     known to be the same, or changed since they were scanned.
+         */
+        post: operations["resolve_duplicates_api_maintenance_duplicates_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/links/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Links
+         * @description Remove broken links inside ``##. Ongoing`` / ``##. Important`` (the one removal
+         *     allowed there); Undo makes them again. ``dry_run`` shows the plan.
+         */
+        post: operations["remove_links_api_maintenance_links_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browse": {
         parameters: {
             query?: never;
@@ -3643,6 +3790,53 @@ export interface components {
             /** Note Excerpt */
             note_excerpt: string | null;
         };
+        /** BadNameOut */
+        BadNameOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+            /** Folder */
+            folder: string;
+            /** Suggestion */
+            suggestion: string | null;
+        };
+        /** BadNamesOut */
+        BadNamesOut: {
+            /** Items */
+            items: components["schemas"]["BadNameOut"][];
+            /** Total */
+            total: number;
+        };
+        /** BadReferenceOut */
+        BadReferenceOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "collection" | "tray";
+            /** Owner Id */
+            owner_id: string;
+            /** Owner Name */
+            owner_name: string;
+            /** Item Id */
+            item_id: number | null;
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string | null;
+            /** Reason */
+            reason: string;
+        };
+        /** BadReferencesOut */
+        BadReferencesOut: {
+            /** Items */
+            items: components["schemas"]["BadReferenceOut"][];
+            /** Total */
+            total: number;
+        };
         /** BatchResultOut */
         BatchResultOut: {
             /** Batch Id */
@@ -3703,6 +3897,45 @@ export interface components {
             undo_of?: string | null;
             /** Undoes Label */
             undoes_label?: string | null;
+        };
+        /** BrokenLinkOut */
+        BrokenLinkOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+            /** Target */
+            target: string | null;
+            /** Inside */
+            inside: string | null;
+        };
+        /** BrokenLinksOut */
+        BrokenLinksOut: {
+            /** Items */
+            items: components["schemas"]["BrokenLinkOut"][];
+            /** Total */
+            total: number;
+        };
+        /** CarryOverOut */
+        CarryOverOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Name */
+            name: string;
+            /** Tags */
+            tags: string[];
+            /** Collections */
+            collections: string[];
+            /** Notes */
+            notes: string[];
+            /** Checklist */
+            checklist: string[];
+            /** Items */
+            items: string[];
+            /** Sender */
+            sender: string | null;
+            /** Person */
+            person: string | null;
         };
         /** CheckAddBody */
         CheckAddBody: {
@@ -4055,6 +4288,140 @@ export interface components {
         DriveIdsBody: {
             /** Drive Ids */
             drive_ids: string[];
+        };
+        /** DupFileOut */
+        DupFileOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+            /** Size */
+            size: number;
+            /** Mtime */
+            mtime: number | null;
+            /**
+             * Place
+             * @enum {string}
+             */
+            place: "numbered" | "inbox" | "other";
+            /** Locked */
+            locked: ("important" | "file") | null;
+            /** Why */
+            why: string | null;
+        };
+        /** DupGroupOut */
+        DupGroupOut: {
+            /** Sha256 */
+            sha256: string;
+            /** Size */
+            size: number;
+            /** Files */
+            files: components["schemas"]["DupFileOut"][];
+            /** Keep */
+            keep: string;
+        };
+        /** DuplicateChoiceIn */
+        DuplicateChoiceIn: {
+            /** Keep */
+            keep: string;
+            /** Others */
+            others: string[];
+        };
+        /**
+         * DuplicateEstimateOut
+         * @description What the duplicate check would read, from the index alone.
+         */
+        DuplicateEstimateOut: {
+            /** Files */
+            files: number;
+            /** Candidates */
+            candidates: number;
+            /** Known */
+            known: number;
+            /** To Read Files */
+            to_read_files: number;
+            /** To Read Bytes */
+            to_read_bytes: number;
+        };
+        /**
+         * DuplicateResolveIn
+         * @description What to do with the copies of one or more duplicate groups: ``quarantine`` moves
+         *     each copy in ``others`` to To Delete, ``link`` also leaves a link to ``keep`` where it
+         *     was. ``carry_over`` adds what the removed copies had to the kept one.
+         */
+        DuplicateResolveIn: {
+            /** Groups */
+            groups: components["schemas"]["DuplicateChoiceIn"][];
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "quarantine" | "link";
+            /**
+             * Carry Over
+             * @default true
+             */
+            carry_over: boolean;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /** DuplicateResolveOut */
+        DuplicateResolveOut: {
+            /** Batch Id */
+            batch_id: string;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Done */
+            done: components["schemas"]["ResolvedOpOut"][];
+            failed: components["schemas"]["ResolvedOpOut"] | null;
+            /** Error */
+            error: string | null;
+            /** Index Error */
+            index_error: string | null;
+            /** Carry Over */
+            carry_over: components["schemas"]["CarryOverOut"][];
+            /** Carry Errors */
+            carry_errors: string[];
+        };
+        /** DuplicatesOut */
+        DuplicatesOut: {
+            /** Groups */
+            groups: components["schemas"]["DupGroupOut"][];
+            /** Groups Total */
+            groups_total: number;
+            /** Name Groups */
+            name_groups: components["schemas"]["NameGroupOut"][];
+            /** Name Groups Total */
+            name_groups_total: number;
+            /** Unreadable */
+            unreadable: components["schemas"]["UnreadableOut"][];
+            /** Changed */
+            changed: number;
+            /** Read Files */
+            read_files: number;
+            /** Reused */
+            reused: number;
+            /** Complete */
+            complete: boolean;
+        };
+        /** EmptyFolderOut */
+        EmptyFolderOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+        };
+        /** EmptyFoldersOut */
+        EmptyFoldersOut: {
+            /** Items */
+            items: components["schemas"]["EmptyFolderOut"][];
+            /** Total */
+            total: number;
         };
         /** EntryItemOut */
         EntryItemOut: {
@@ -4937,6 +5304,16 @@ export interface components {
             /** Special Folders */
             special_folders: components["schemas"]["SetupFolderOut"][];
         };
+        /** LinkRemoveIn */
+        LinkRemoveIn: {
+            /** Drive Ids */
+            drive_ids: string[];
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
         /**
          * LockStateOut
          * @description A file's lock. ``locked``: it is locked whatever this request carries; ``reason``
@@ -4980,6 +5357,54 @@ export interface components {
             files: components["schemas"]["LockedFileOut"][];
             /** Folders */
             folders: string[];
+        };
+        /**
+         * MaintenanceJobOut
+         * @description A check running (or finished): its progress and, once it has something, its result
+         *     (only the field of its kind is set).
+         */
+        MaintenanceJobOut: {
+            /** Job Id */
+            job_id: string;
+            /** Kind */
+            kind: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "done" | "stopped" | "error";
+            /** Version */
+            version: number;
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+            /** Bytes Done */
+            bytes_done: number;
+            /** Bytes Total */
+            bytes_total: number;
+            /** Current */
+            current: string | null;
+            /** Elapsed S */
+            elapsed_s: number;
+            /** Error */
+            error: string | null;
+            duplicates?: components["schemas"]["DuplicatesOut"] | null;
+            empty_folders?: components["schemas"]["EmptyFoldersOut"] | null;
+            broken_links?: components["schemas"]["BrokenLinksOut"] | null;
+            references?: components["schemas"]["BadReferencesOut"] | null;
+            names?: components["schemas"]["BadNamesOut"] | null;
+            waiting?: components["schemas"]["WaitingOut"] | null;
+        };
+        /** MaintenanceStartIn */
+        MaintenanceStartIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting";
+            /** Days */
+            days?: number | null;
         };
         /**
          * MarkBody
@@ -5104,6 +5529,13 @@ export interface components {
         NameBody: {
             /** Name */
             name: string;
+        };
+        /** NameGroupOut */
+        NameGroupOut: {
+            /** Name */
+            name: string;
+            /** Files */
+            files: components["schemas"]["DupFileOut"][];
         };
         /**
          * NewFolderIn
@@ -6660,6 +7092,13 @@ export interface components {
              */
             mode: "now" | "for_good";
         };
+        /** UnreadableOut */
+        UnreadableOut: {
+            /** Path */
+            path: string;
+            /** Reason */
+            reason: string;
+        };
         /**
          * UnusedPicturesIn
          * @description Move these unused rule pictures (names of files in ``config/rules/areas``) into the
@@ -6673,6 +7112,36 @@ export interface components {
              * @default false
              */
             dry_run: boolean;
+        };
+        /** WaitingFileOut */
+        WaitingFileOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /** Since */
+            since: number;
+            /** Days */
+            days: number;
+            /** Approximate */
+            approximate: boolean;
+        };
+        /** WaitingOut */
+        WaitingOut: {
+            /** Days */
+            days: number;
+            /** Items */
+            items: components["schemas"]["WaitingFileOut"][];
+            /** Total */
+            total: number;
+            /** Total Size */
+            total_size: number;
+            /** In To Delete */
+            in_to_delete: number;
+            /** In To Delete Size */
+            in_to_delete_size: number;
         };
         /**
          * ZoneDraftAreaOut
@@ -9983,6 +10452,668 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LockStateOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    estimate_api_maintenance_duplicates_estimate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateEstimateOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    start_api_maintenance_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaintenanceStartIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    latest_api_maintenance_jobs_latest__kind__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceJobOut"] | null;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_job_api_maintenance_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    stop_job_api_maintenance_jobs__job_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    resolve_duplicates_api_maintenance_duplicates_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateResolveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateResolveOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_links_api_maintenance_links_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkRemoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResultOut"];
                 };
             };
             /** @description Bad Request */
