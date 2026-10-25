@@ -68,6 +68,11 @@ STATIC_HEADERS = {
         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
     ),
 }
+# The start page and the other files with fixed names are checked with the server on every
+# load, so a normal refresh after an update shows the new version. The bundles in assets/
+# have a content hash in their name and never change, so they are cached for good.
+NO_CACHE = {**STATIC_HEADERS, "Cache-Control": "no-cache"}
+CACHED_FOR_GOOD = {**STATIC_HEADERS, "Cache-Control": "public, max-age=31536000, immutable"}
 
 _ERROR = {"model": ErrorBody}
 ERROR_RESPONSES = {
@@ -125,8 +130,9 @@ def _mount_frontend(api: FastAPI, static_dir: Path) -> None:
             raise StarletteHTTPException(404, "Not Found")
         candidate = (root / full_path).resolve()
         if full_path and candidate.is_relative_to(root) and candidate.is_file():
-            return FileResponse(candidate, headers=STATIC_HEADERS)
-        return FileResponse(index, headers=STATIC_HEADERS)
+            hashed = candidate.is_relative_to(root / "assets")
+            return FileResponse(candidate, headers=CACHED_FOR_GOOD if hashed else NO_CACHE)
+        return FileResponse(index, headers=NO_CACHE)
 
 
 def create_api(
