@@ -863,7 +863,8 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .tag-suggest li.active .tag-suggest-count { color: inherit; opacity: 0.8; }
 .tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px 6px; border: 0.5px solid var(--hairline); border-radius: var(--r-md); background: var(--panel); }
 .tag-field:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
-.tag-field.disabled { opacity: 0.6; }
+.tag-field.disabled { opacity: 0.5; cursor: not-allowed; }
+.tag-field.disabled input { cursor: not-allowed; }
 .tag-field input { flex: 1; min-width: 6rem; border: none; background: transparent; box-shadow: none; outline: none; padding: 2px 2px; }
 .tag-token { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--text); font-size: var(--fs-sm); }
 .tag-token button { border: none; background: transparent; box-shadow: none; padding: 0 4px; min-height: 0; line-height: 1; color: var(--muted); cursor: pointer; }

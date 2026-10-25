@@ -46,6 +46,7 @@ export function CollectionInput({
   text: givenText,
   onTextChange,
   disabled = false,
+  disabledReason,
   autoFocus = false,
   onEscape,
 }: {
@@ -65,6 +66,8 @@ export function CollectionInput({
   text?: string;
   onTextChange?: (text: string) => void;
   disabled?: boolean;
+  /** Why the field is off, shown on hover (the disabled input itself shows no tip). */
+  disabledReason?: string | null;
   autoFocus?: boolean;
   /** Esc in the field when its list is closed. */
   onEscape?: () => void;
@@ -178,7 +181,7 @@ export function CollectionInput({
   const field = (
     <div className="collection-input-row">
       <div className="tag-field-wrap">
-        <div className={disabled ? "tag-field disabled" : "tag-field"}>
+        <div className={disabled ? "tag-field disabled" : "tag-field"} title={disabled ? (disabledReason ?? undefined) : undefined}>
           {chips.map((c) => (
             <span key={c.key} className="tag-token">
               {c.to ? (

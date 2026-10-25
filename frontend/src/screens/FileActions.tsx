@@ -226,6 +226,7 @@ function CollectionsField({ driveId, refusal = null }: { driveId: string; refusa
       value={chips}
       removeLabel={(name) => `Remove from ${name}`}
       disabled={refusal !== null}
+      disabledReason={refusal}
       onAdd={add}
       onRemove={(chip) => {
         const c = all.find((x) => String(x.id) === chip.key);

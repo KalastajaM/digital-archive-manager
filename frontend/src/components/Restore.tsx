@@ -112,7 +112,7 @@ export function useRestoreFlow({ onRestored }: { onRestored?: (result: BatchResu
       intro={
         <p>
           {confirm.ids.length === 1 ? "It moves" : `These ${confirm.ids.length} move`} out of To Delete{" "}
-          {confirm.to === "inbox" ? "into the inbox" : "back to where they were marked"}. A folder that is gone is made
+          {confirm.to === "inbox" ? "into the inbox" : confirm.ids.length === 1 ? "back to where it was" : "back to where they were"}. A folder that is gone is made
           again and a name that is taken gets a number; both are shown below. Nothing is deleted: Undo puts{" "}
           {confirm.ids.length === 1 ? "it" : "them"} back in To Delete.
         </p>
