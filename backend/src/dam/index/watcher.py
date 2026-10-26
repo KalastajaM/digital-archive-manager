@@ -1,4 +1,4 @@
-"""Filesystem watcher: debounced subtree scans plus a periodic full reconcile."""
+"""Filesystem watcher: debounced scans of what changed plus a periodic full reconcile."""
 
 import logging
 import os
@@ -12,6 +12,7 @@ from watchdog.observers import Observer
 from watchdog.observers.api import ObservedWatch
 
 from dam.core.paths import ArchivePaths, OutsideArchiveError
+from dam.index.own_changes import OwnChanges
 from dam.index.repo import FileRepo
 from dam.index.scanner import ScanReport, is_ignored, scan
 
@@ -22,6 +23,7 @@ _MAX_BACKOFF_S = 300.0
 _FOLDER_CHECK_S = 30.0
 _MAX_WATCH_BACKOFF_S = 1800.0  # a folder that cannot be watched is tried again this rarely
 _NOISE_EVENTS = {"opened", "closed_no_write"}
+_MAX_SCOPES = 50  # more changed paths than this in one batch: one scan per folder instead
 
 
 def _scope(rels: list[str]) -> str:
@@ -38,6 +40,33 @@ def _scope(rels: list[str]) -> str:
     return "/".join(common)
 
 
+def _scopes(rels: list[str], label_of: Callable[[str], str], cap: int = _MAX_SCOPES) -> list[str]:
+    """What to scan for one batch of changed paths: each path itself, leaving out a path
+    inside another one (its scan covers it). Above ``cap`` paths, each archive folder
+    (``label_of``) gets the deepest folder holding its changed paths instead; for the main
+    folder that is never the whole archive but at most each changed top-level entry, so a
+    batch never walks every folder (slow disks included)."""
+    unique = set(rels)
+    kept = [
+        rel
+        for rel in sorted(unique)
+        if not any(p.as_posix() in unique for p in PurePosixPath(rel).parents)
+    ]
+    if len(kept) <= cap:
+        return kept
+    by_folder: dict[str, list[str]] = {}
+    for rel in kept:
+        by_folder.setdefault(label_of(rel), []).append(rel)
+    scopes: set[str] = set()
+    for group in by_folder.values():
+        common = _scope(group)
+        if common:
+            scopes.add(common)
+        else:  # spread over the main folder's top level
+            scopes.update(PurePosixPath(r).parts[0] for r in group)
+    return sorted(scopes)
+
+
 class _Handler(FileSystemEventHandler):
     def __init__(self, watcher: "Watcher") -> None:
         self._watcher = watcher
@@ -45,9 +74,11 @@ class _Handler(FileSystemEventHandler):
     def on_any_event(self, event: FileSystemEvent) -> None:
         if event.event_type in _NOISE_EVENTS:
             return
+        # only a folder's listing changed: the echo of a change to one of its entries
+        listing = event.event_type == "modified" and event.is_directory
         for raw in (event.src_path, getattr(event, "dest_path", "")):
             if raw:
-                self._watcher._note(os.fsdecode(raw))
+                self._watcher._note(os.fsdecode(raw), dir_modified=listing)
 
 
 class Watcher:
@@ -56,6 +87,9 @@ class Watcher:
     ``on_change`` is called after every successful scan, from the debounce thread (event
     scans) and from the reconcile thread (full scans), so it may run concurrently with
     itself and must be thread-safe.
+
+    ``own_changes``: the paths the executor just moved and indexed itself; their events
+    are dropped instead of scanned.
     """
 
     def __init__(
@@ -67,15 +101,18 @@ class Watcher:
         reconcile_every_s: float = 900,
         folder_check_s: float = _FOLDER_CHECK_S,
         max_wait_s: float | None = None,
+        own_changes: OwnChanges | None = None,
     ) -> None:
         self.paths = paths
+        self.own_changes = own_changes
         self.repo = repo
         self.on_change = on_change
         self.debounce_s = debounce_s
         self.reconcile_every_s = reconcile_every_s
         self.folder_check_s = folder_check_s
         self.max_wait_s = max(10 * debounce_s, 30.0) if max_wait_s is None else max_wait_s
-        self._pending: set[str] = set()
+        # changed path -> True while every event for it only said its listing changed
+        self._pending: dict[str, bool] = {}
         self._first_pending: float | None = None  # monotonic time pending went non-empty
         self._backoff = 0.0
         self._lock = threading.Lock()
@@ -183,7 +220,7 @@ class Watcher:
 
     # -- event intake -------------------------------------------------------
 
-    def _note(self, abs_path: str) -> None:
+    def _note(self, abs_path: str, dir_modified: bool = False) -> None:
         try:
             rel = self.paths.rel(Path(abs_path))
         except (OutsideArchiveError, OSError):
@@ -192,11 +229,28 @@ class Watcher:
             return
         if any(is_ignored(part) for part in PurePosixPath(rel).parts):
             return
+        if self._own(rel, dir_modified):
+            return
         with self._lock:
             if not self._pending:
                 self._first_pending = time.monotonic()
-            self._pending.add(rel)
+            self._pending[rel] = self._pending.get(rel, True) and dir_modified
         self._wake.set()
+
+    def _own(self, rel: str, dir_modified: bool) -> bool:
+        return self.own_changes is not None and self.own_changes.covers(rel, dir_modified)
+
+    def _ordered(self, scopes: list[str]) -> list[str]:
+        """Scopes still on disk first: a moved file's row is re-pathed at its new path
+        before the scan of its old path could mark it missing."""
+
+        def gone(scope: str) -> bool:
+            try:
+                return not os.path.lexists(self.paths.join(scope))
+            except (OSError, ValueError, StopIteration):
+                return True
+
+        return sorted(scopes, key=gone)
 
     # -- worker threads -----------------------------------------------------
 
@@ -217,17 +271,21 @@ class Watcher:
             if self._stop.is_set():
                 return
             with self._lock:
-                rels, self._pending = sorted(self._pending), set()
+                pending, self._pending = self._pending, {}
                 self._first_pending = None
+            # again here: an event can arrive before the executor registered its move
+            rels = sorted(r for r, listing in pending.items() if not self._own(r, listing))
             if not rels:
                 continue
+            scopes = self._ordered(_scopes(rels, self.paths.label_of))
             try:
-                report = scan(self.paths, self.repo, subtree=_scope(rels))
+                reports = [scan(self.paths, self.repo, subtree=scope) for scope in scopes]
             except Exception as e:
                 self._retry_later(rels, e)
                 continue
             self._backoff = 0.0
-            if self._aborted(report):
+            # each scope on its own: one on a folder that went away does not hold up the rest
+            if all([self._aborted(report) for report in reports]):
                 continue  # the next reconcile catches up once the archive is back
             self._call_on_change()
 
@@ -240,7 +298,8 @@ class Watcher:
         else:
             log.warning("watcher scan still failing (%s); retrying in %.1fs", error, self._backoff)
         with self._lock:
-            self._pending.update(rels)
+            for rel in rels:
+                self._pending[rel] = False
             if self._first_pending is None:
                 self._first_pending = time.monotonic()
         if not self._stop.wait(self._backoff):

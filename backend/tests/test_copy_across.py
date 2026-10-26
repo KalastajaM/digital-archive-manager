@@ -193,3 +193,16 @@ def test_undo_refused_while_a_copy_job_runs(across):
         across.executor.undo(result.batch_id)
     with pytest.raises(Conflict):
         across.executor.preview_undo(result.batch_id)
+
+
+def test_a_move_across_registers_the_copy_and_the_original_as_own_changes(across):
+    """The watcher skips the echo of both steps: the copy's final rename into place and the
+    original's move to To Delete (both indexed by the executor), nothing else nearby."""
+    own = across.executor.own_changes
+    assert _move(across, "a.pdf").failed is None
+    assert own.covers("Old years/2010/a.pdf")
+    assert own.covers(f"{BANKS}/a.pdf")
+    assert own.covers(f"{QUAR}/{BANKS}/a.pdf")
+    assert own.covers("Old years/2010", dir_modified=True)
+    assert not own.covers("Old years/2010/b.pdf")
+    assert not own.covers(f"{BANKS}/b.pdf")
