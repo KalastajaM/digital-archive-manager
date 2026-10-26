@@ -159,6 +159,9 @@ def different_disks_message(a: str, b: str) -> str:
 
 PICTURE_RENAME = "rename"
 PICTURE_COPY = "copy"
+# COPY_ACROSS of a folder move: the destination already holds the file (same size and
+# mtime, planned); at act time both hashes are compared and nothing is written
+PRESENT = "present"
 
 
 def move_between_folders(src: Path, dst: Path) -> None:

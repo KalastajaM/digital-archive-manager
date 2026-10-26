@@ -30,7 +30,14 @@ from dam.ops.guards import (
     validate,
 )
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpFailed, OpKind, Plan, ResolvedOp
-from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME, different_disks_message
+from dam.ops.primitives import (
+    DS_STORE,
+    PICTURE_COPY,
+    PICTURE_RENAME,
+    PRESENT,
+    TEMP_COPY_PREFIX,
+    different_disks_message,
+)
 
 if TYPE_CHECKING:
     from dam.locks import LockService
@@ -55,6 +62,7 @@ COPY_NOTE = "copied, then removed from dam's settings folder"
 COPY_BACK_NOTE = "copied back; the copy in To Delete stays"
 ORIGINAL_STAYS_NOTE = "the original stays in To Delete"
 MKDIR_NOTE = "create missing folder"
+PRESENT_NOTE = "already at the destination; checked, not copied again"
 
 
 _UNREAD = object()
@@ -62,6 +70,11 @@ _UNREAD = object()
 
 def _same(a: str, b: str) -> bool:
     return fold_parts(a) == fold_parts(b)
+
+
+def _below(folder: str, parts: tuple[str, ...]) -> str:
+    """``folder`` joined with the path ``parts`` (none: ``folder`` itself)."""
+    return "/".join((folder, *parts)) if folder else "/".join(parts)
 
 
 def _add_note(note: str | None, extra: str) -> str:
@@ -359,7 +372,11 @@ class Planner:
         return kind
 
     def _ensure_folder(
-        self, folder: str, allow_top_level: bool, quarantine_root: bool = False
+        self,
+        folder: str,
+        allow_top_level: bool,
+        quarantine_root: bool = False,
+        made: bool | None = None,
     ) -> None:
         """Plan MKDIRs for the missing components of ``folder``.
 
@@ -367,7 +384,9 @@ class Planner:
         (``quarantine_root``, set only for QUARANTINE ops): the configured quarantine
         folder itself may be created, so marking for deletion works before it exists.
         (An extra folder's To Delete sits one level down, so it needs no exception.)
+        ``made``: flag the MKDIRs as made (default: the plan's ``new_folders``).
         """
+        made = self.made if made is None else made
         parts = PurePosixPath(folder).parts
         for i in range(1, len(parts) + 1):
             sub = PurePosixPath(*parts[:i]).as_posix()
@@ -379,7 +398,7 @@ class Planner:
             is_quarantine_root = quarantine_root and _same(sub, self.paths.quarantine)
             if self.paths.is_top_level(sub) and not (allow_top_level or is_quarantine_root):
                 raise GuardError(f"would create top-level folder {sub!r} (needs allow_top_level)")
-            self.out.append(ResolvedOp(OpKind.MKDIR, None, sub, None, MKDIR_NOTE, made=self.made))
+            self.out.append(ResolvedOp(OpKind.MKDIR, None, sub, None, MKDIR_NOTE, made=made))
             self.sim.events.append(("create", sub, "dir"))
 
     def _free_or_exact(self, op: Op, folder: str, wanted: str, src: str | None) -> str:
@@ -426,6 +445,15 @@ class Planner:
         if not self._same_disk(src, folder):
             if op.kind is OpKind.MOVE and self._copy_plan and kind == "file":
                 self._copy_across(op, folder)
+                return
+            # a folder in To Delete is never copied back across disks
+            if (
+                op.kind is OpKind.MOVE
+                and self._copy_plan
+                and kind == "dir"
+                and not self.paths.is_quarantined(src)
+            ):
+                self._copy_folder(op, folder)
                 return
             a, b = self.paths.folder_of(src), self.paths.folder_of(folder)
             raise OpFailed(different_disks_message(a.label, b.label))
@@ -478,37 +506,173 @@ class Planner:
         if not original_stays:  # made first, so the move to To Delete follows the copy
             aside = self.sim.spell(self._quarantine_folder(src))
             self._ensure_folder(aside, False, quarantine_root=True)
-        wanted = op.name or name
-        free = self._free_or_exact(op, folder, wanted, src)
+        copy = self._plan_copy(src, folder, op.name or name)
+        if original_stays:
+            copy.note = _add_note(copy.note, ORIGINAL_STAYS_NOTE)
+            return
+        self._relocate(Op(OpKind.QUARANTINE, src, None), self._quarantine_folder(src))
+        self.out[-1].note = _add_note(self.out[-1].note, f"copied to {copy.dst}")
+
+    def _plan_copy(self, src: str, dst_folder: str, wanted: str) -> ResolvedOp:
+        """A COPY_ACROSS of the file ``src`` into ``dst_folder`` (spelled, existing in the
+        simulation) under a free variant of ``wanted``; appended, and its size counted
+        for ``_check_space``."""
+        free = self.sim.free_name(dst_folder, wanted)
         if over := primitives.temp_copy_too_long(free):
             raise GuardError(
                 f"{free} is too long a name to copy across disks: the copy is first written"
                 f" under a longer temporary name. Shorten it by {over} characters and try again."
             )
-        dst = join(folder, free)
+        dst = join(dst_folder, free)
         if free != wanted:
-            self.aliases.append((join(folder, wanted), dst))
+            self.aliases.append((join(dst_folder, wanted), dst))
         disk = self.sim.disk_path(src)
         size = os.lstat(disk).st_size
         label = self.paths.label_of(dst)
         self._copy_bytes[label] = self._copy_bytes.get(label, 0) + size
-        self.out.append(
-            ResolvedOp(
-                OpKind.COPY_ACROSS,
-                src,
-                dst,
-                self._drive_id(src),
-                COLLISION_NOTE if free != wanted else None,
-                size=size,
-                cloud_only=primitives.is_dataless(disk),
-            )
+        rop = ResolvedOp(
+            OpKind.COPY_ACROSS,
+            src,
+            dst,
+            self._drive_id(src),
+            COLLISION_NOTE if free != wanted else None,
+            size=size,
+            cloud_only=primitives.is_dataless(disk),
         )
+        self.out.append(rop)
         self.sim.events.append(("create", dst, "file"))
-        if original_stays:
-            self.out[-1].note = _add_note(self.out[-1].note, ORIGINAL_STAYS_NOTE)
-            return
+        return rop
+
+    def _list_tree(self, src: str) -> list[tuple[tuple[str, ...], str, os.stat_result]]:
+        """Everything inside the folder ``src`` on disk, links not followed, as (path parts
+        relative to ``src``, kind, lstat), parents before children, each folder's entries
+        sorted by folded name. ``.DS_Store`` files are left out; an unfinished copy
+        (``.dam-copy-*``) or anything that is not a file, folder or link refuses."""
+        root = self.sim.disk_path(src)
+        if root is None:
+            raise GuardError(f"{src!r} was made in this batch, so it is not copied across disks.")
+        out: list[tuple[tuple[str, ...], str, os.stat_result]] = []
+
+        def walk(folder: Path, rel: tuple[str, ...]) -> None:
+            with os.scandir(folder) as it:
+                entries = sorted(it, key=lambda e: fold_parts(e.name))
+            for entry in entries:
+                st = entry.stat(follow_symlinks=False)
+                if entry.name.startswith(TEMP_COPY_PREFIX):
+                    raise GuardError(f"Remove the unfinished copy {entry.name} first.")
+                if stat.S_ISLNK(st.st_mode):
+                    kind = "link"
+                elif stat.S_ISDIR(st.st_mode):
+                    kind = "dir"
+                elif stat.S_ISREG(st.st_mode):
+                    if entry.name == DS_STORE:
+                        continue  # Finder makes it again; the original goes with the folder
+                    kind = "file"
+                else:
+                    raise GuardError(
+                        f"{entry.name} is not a file, folder or link, so"
+                        f" {PurePosixPath(src).name} is not copied across disks."
+                    )
+                out.append(((*rel, entry.name), kind, st))
+                if kind == "dir":
+                    walk(Path(entry.path), (*rel, entry.name))
+
+        walk(root, ())
+        return out
+
+    def _present(self, src_st: os.stat_result, dst: str) -> bool:
+        """``dst`` (on disk before this batch) is a regular file with the size and the
+        whole seconds of mtime of the source (exFAT and FAT keep coarser times than
+        APFS); the hashes are compared at act time."""
+        disk = self.sim.disk_path(dst)
+        if disk is None:
+            return False
+        try:
+            st = os.lstat(disk)
+        except OSError:
+            return False
+        return (
+            stat.S_ISREG(st.st_mode)
+            and st.st_size == src_st.st_size
+            and st.st_mtime_ns // 1_000_000_000 == src_st.st_mtime_ns // 1_000_000_000
+        )
+
+    def _copy_folder(self, op: Op, folder: str) -> None:
+        """A MOVE of the folder ``op.src`` into ``folder`` in an archive folder on another
+        disk: MKDIR (made) of the missing folders of the mirrored tree, parents first; a
+        COPY_ACROSS per file in tree order (``present`` when the destination already
+        holds it); then one QUARANTINE of the whole source into its own folder's To
+        Delete, carrying the destination (``copied_to``) and the planned ``tree``.
+
+        A destination folder of that name is merged into (a second move after a stopped
+        one); one taken by a file or link gives ``_N``. Links inside are not copied: they
+        go to To Delete with the folder. A protected entry anywhere refuses the move."""
+        src = op.src
+        name = PurePosixPath(src).name
+        if self._is_protected_origin(src):
+            if self.paths.is_protected(src):
+                raise GuardError(f"{name} is protected, so it is not copied across disks.")
+            raise GuardError(f"{name} holds a protected entry, so it is not copied across disks.")
+        listed = self._list_tree(src)
+        folder = self.sim.spell(folder)
+        self._ensure_folder(folder, op.allow_top_level)
+        wanted = op.name or name
+        root = self.sim.spell(join(folder, wanted))
+        root_note = None
+        if self.sim.kind(root) not in (None, "dir"):
+            free = self._free_or_exact(op, folder, wanted, src)
+            root = join(folder, free)
+            self.aliases.append((join(folder, wanted), root))
+            root_note = COLLISION_NOTE
+        first = len(self.out)
+        self._ensure_folder(root, op.allow_top_level, made=True)
+        if root_note is not None and len(self.out) > first:
+            self.out[first].note = _add_note(self.out[first].note, root_note)
+        for parts, kind, _ in listed:
+            if kind == "dir":
+                self._ensure_folder(self.sim.spell(_below(root, parts)), False, made=True)
+        links = 0
+        for parts, kind, st in listed:
+            if kind == "link":
+                links += 1
+                continue
+            if kind != "file":
+                continue
+            file_src = _below(src, parts)
+            dst_folder = self.sim.spell(_below(root, parts[:-1]))
+            there = self.sim.spell(join(dst_folder, parts[-1]))
+            if self.sim.kind(there) == "file" and self._present(st, there):
+                self.out.append(
+                    ResolvedOp(
+                        OpKind.COPY_ACROSS,
+                        file_src,
+                        there,
+                        self._drive_id(file_src),
+                        PRESENT_NOTE,
+                        size=st.st_size,
+                        method=PRESENT,
+                    )
+                )
+                continue
+            self._plan_copy(file_src, dst_folder, parts[-1])
+        tree = {
+            "/".join(fold_parts("/".join(parts))): (
+                (kind, st.st_size, st.st_mtime) if kind == "file" else (kind, None, None)
+            )
+            for parts, kind, st in listed
+        }
         self._relocate(Op(OpKind.QUARANTINE, src, None), self._quarantine_folder(src))
-        self.out[-1].note = _add_note(self.out[-1].note, f"copied to {dst}")
+        quarantine = self.out[-1]
+        quarantine.copied_to = root
+        quarantine.tree = tree
+        quarantine.note = _add_note(quarantine.note, f"copied to {root}")
+        if links:
+            quarantine.note = _add_note(
+                quarantine.note,
+                "1 link is not copied; it goes to To Delete with the folder"
+                if links == 1
+                else f"{links} links are not copied; they go to To Delete with the folder",
+            )
 
     def _check_space(self) -> None:
         """Every archive folder that files are copied into has room for all of them (and

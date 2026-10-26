@@ -72,9 +72,14 @@ def check_disk_identity(
     - Always: the source is a regular file on disk (lstat: not a folder, not a link), or
       a folder on disk when the indexed row is a folder.
 
+    A folder moved across disks is many ops (made folders, a copy per file); the op
+    checked for it is its final QUARANTINE (the one carrying the planned ``tree``), whose
+    source is the folder itself.
+
     Catches a stale index (the file was replaced since the last scan). Pass it as
     ``Executor.apply(check=...)`` so the ops checked are the ops run."""
-    relocations = [r for r in resolved if r.kind in kinds]
+    folder_copies = [r for r in resolved if r.kind is OpKind.QUARANTINE and r.tree is not None]
+    relocations = folder_copies or [r for r in resolved if r.kind in kinds]
     if len(relocations) != len(ids):
         raise InvalidRequest("The files have changed since this was planned. Scan and try again.")
     for drive_id, rop in zip(ids, relocations, strict=True):

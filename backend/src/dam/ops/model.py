@@ -133,7 +133,8 @@ class ResolvedOp:
     # act). REMOVE_EMPTY_DIR: removing such a folder (undo only).
     made: bool = False
     # PICTURE_TO_QUARANTINE / PICTURE_BACK: "rename" (one disk) or "copy" (two disks), as
-    # decided when planned
+    # decided when planned. COPY_ACROSS of a folder move: "present" (``primitives.PRESENT``)
+    # when the destination already holds the file (same size and mtime when planned)
     method: str | None = None
     # the sha256 of that picture, read and journaled just before acting (set by the executor)
     content_hash: str | None = None
@@ -146,6 +147,12 @@ class ResolvedOp:
     # QUARANTINE of a copy, by the undo of a COPY_ACROSS: (the original's path, its
     # drive id); the index row goes back to describing the original
     restore_row: tuple[str, str | None] | None = None
+    # The final QUARANTINE of a folder moved across disks: the destination folder its files
+    # were copied into, and the source tree as listed when planned: folded path relative to
+    # the source folder ("/"-joined, as ``fold_parts``) -> (kind "file" | "dir" | "link",
+    # size, mtime); sizes and mtimes of files only. ``.DS_Store`` files are left out.
+    copied_to: str | None = None
+    tree: dict[str, tuple[str, int | None, float | None]] | None = None
 
 
 @dataclass
