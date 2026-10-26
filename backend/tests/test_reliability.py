@@ -1,6 +1,7 @@
 """Smaller reliability fixes: name spelling on case-sensitive volumes, a journal write
 that fails after the change, directory fsyncs, Windows-safe target names."""
 
+import sys
 import unicodedata
 from pathlib import Path
 
@@ -219,7 +220,19 @@ def test_plain_names_still_pass(paths):
     validate(Op(OpKind.MOVE, src, "10. Financial", name="Console.pdf"), paths)
 
 
-@pytest.mark.parametrize("name", ["CON.pdf", "a:b.pdf", "report."])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "CON.pdf",
+        pytest.param(
+            "a:b.pdf",
+            marks=pytest.mark.skipif(
+                sys.platform == "win32", reason="a name with : cannot exist on Windows"
+            ),
+        ),
+        "report.",
+    ],
+)
 def test_existing_names_are_left_alone(paths, name):
     # a file that already has such a name still moves and copies under it
     src = f"10. Financial/Banks/{name}"
