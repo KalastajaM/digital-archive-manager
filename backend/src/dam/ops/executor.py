@@ -103,6 +103,7 @@ class Executor:
         check: Callable[[list[ResolvedOp]], None] | None = None,
         should_stop: Callable[[], bool] | None = None,
         progress: Callable[[ResolvedOp, int, int], None] | None = None,
+        copied: Callable[[ResolvedOp, int], None] | None = None,
     ) -> BatchResult:
         """Run ``plan``; stops at the first failure. Dry run: ``done`` lists what would run.
 
@@ -114,7 +115,8 @@ class Executor:
         ``should_stop`` (a background move) is asked before each op; true ends the batch
         there (``BatchResult.stopped``), except between a copy across disks and the move
         of its original to To Delete, which always run together. ``progress`` is called
-        with each op that completed, its index and the number of ops.
+        with each op that completed, its index and the number of ops; ``copied`` while a
+        copy across disks runs, with that op and the bytes copied so far.
         """
         resolved = self.preview(plan)
         if check is not None:
@@ -125,7 +127,7 @@ class Executor:
             return result
         return self._run_resolved(
             plan.origin, resolved, result, label=plan.label, should_stop=should_stop,
-            progress=progress,
+            progress=progress, copied=copied,
         )
 
     # --- undo and recovery (see dam.ops.undo) --------------------------------
@@ -167,9 +169,10 @@ class Executor:
         label: str | None = None,
         should_stop: Callable[[], bool] | None = None,
         progress: Callable[[ResolvedOp, int, int], None] | None = None,
+        copied: Callable[[ResolvedOp, int], None] | None = None,
     ) -> BatchResult:
         """Journal and carry out ``resolved`` in order; ``undo_of``: the batch reverted.
-        ``should_stop`` and ``progress``: see ``apply``.
+        ``should_stop``, ``progress`` and ``copied``: see ``apply``.
 
         The throttle (spacing out changes Drive must sync) applies only to ops outside
         the publish roots: creating or removing links and folders inside ``##. Ongoing``
@@ -190,7 +193,7 @@ class Executor:
             if seq and self.throttle_ms and not pair and not self._in_publish_root(rop):
                 time.sleep(self.throttle_ms / 1000)  # outside the lock
             with INDEX_LOCK:
-                if self._run_op(seq, rop, origin, result, undo_of, label):
+                if self._run_op(seq, rop, origin, result, undo_of, label, copied):
                     return result
             if progress is not None:
                 progress(rop, seq, len(resolved))
@@ -219,6 +222,7 @@ class Executor:
         result: BatchResult,
         undo_of: str | None,
         label: str | None = None,
+        copied: Callable[[ResolvedOp, int], None] | None = None,
     ) -> bool:
         """Journal, act, verify and index one op; True when the batch must stop."""
         try:
@@ -232,7 +236,7 @@ class Executor:
             return True
         try:
             self._precheck(rop)
-            self._act(rop)
+            self._act(rop, copied)
         except _FAILURES as e:
             self._stop(result, op_id, rop, "failed", str(e))
             return True
@@ -603,7 +607,9 @@ class Executor:
         if not dst.parent.is_dir() or dst.parent.is_symlink():
             raise OpFailed(f"The folder for {rop.dst} is missing.")
 
-    def _act(self, rop: ResolvedOp) -> None:
+    def _act(
+        self, rop: ResolvedOp, copied: Callable[[ResolvedOp, int], None] | None = None
+    ) -> None:
         if rop.kind is OpKind.PICTURE_TO_QUARANTINE:
             source, dst = Path(rop.src[len(ABS_TARGET) :]), self.paths.abs(rop.dst)
             if rop.method == primitives.PICTURE_COPY:
@@ -639,7 +645,11 @@ class Executor:
                 )
             case OpKind.COPY_ACROSS:
                 primitives.copy_across(
-                    self.paths.abs(rop.src), dst, rop.content_hash, stop=self.cancel_copies.is_set
+                    self.paths.abs(rop.src),
+                    dst,
+                    rop.content_hash,
+                    stop=self.cancel_copies.is_set,
+                    on_bytes=None if copied is None else lambda n: copied(rop, n),
                 )
             case OpKind.COPY:
                 if _outside_copy(rop):

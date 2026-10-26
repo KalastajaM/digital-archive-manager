@@ -1292,6 +1292,11 @@ reminder. Ignoring changes nothing in the archive.
   To Delete: when you are sure, empty it yourself in Finder (or File Explorer). How long a
   file has waited comes from the Activity journal; for a file put there some other way it
   is the time the file last changed place, marked "about".
+- **Unfinished copies**: copies a move to another disk left half done when it failed, was
+  stopped or the app was closed. Their names start with `.dam-copy-`, which Finder and File
+  Explorer hide until you show hidden files. The original was never moved for them, so
+  each is a spare copy you can remove yourself; dam never deletes. A copy shows up here
+  after the next scan.
 
 ## Settings
 
@@ -1469,14 +1474,19 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
     the file being copied; **Hide** leaves a line at the bottom of the window, and you can
     keep working. Closing the window does not stop the move. **Stop** lets the file being
     copied finish (its original goes to To Delete too) and ends there, so every file is
-    either moved or untouched; move the rest later. While a large file is being copied,
+    either moved or untouched; move the rest later. The amount copied moves along within
+    a large file too. While a large file is being copied,
     other changes (another move, a rename, an undo) wait until that file is done, and
     Undo waits until the whole move has finished.
   - **Undo** (in the toast or Activity) moves the originals back from To Delete and the
     copies to the To Delete of the other disk.
   - If a copy does not match, or the app is closed during a copy, the move stops there
     and the message names the unfinished copy (its name starts with `.dam-copy-`). The
-    original is untouched; remove the unfinished copy yourself.
+    original is untouched; remove the unfinished copy yourself. Maintenance lists any
+    that are left under **Unfinished copies**.
+  - A name that is within 19 characters of the longest name a disk takes (255 bytes) is
+    refused in the preview, because the copy is first written under a longer temporary
+    name. Shorten it and move it again.
   - Only files move this way for now; a folder cannot be moved to another disk yet, and
     a protected file is not copied across.
 - **A folder that is not connected** (unplugged disk, cloud drive not signed in) gets a "Not

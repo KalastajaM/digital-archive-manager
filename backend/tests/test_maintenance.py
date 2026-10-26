@@ -17,6 +17,7 @@ from dam.db.tables import files, operations
 from dam.maintenance import duplicates
 from dam.maintenance.checks import suggest_name
 from dam.ops.model import GuardError, OpKind
+from dam.ops.primitives import TEMP_COPY_PREFIX
 from dam.services.errors import InvalidRequest
 from dam.trays.model import load_trays
 
@@ -875,3 +876,27 @@ def test_api_ignore_list_and_stop_ignoring(client, app, fake_archive):
         client.delete(f"/api/maintenance/ignored/{added.json()['id']}", headers=H).status_code
         == 404
     )
+
+
+def test_unfinished_copies_check(extra_folder, app, fake_archive):
+    assert run(app, "unfinished_copies").result.items == []
+    left = extra_folder.add(f"2010/{TEMP_COPY_PREFIX}abcd1234-a.pdf", b"half")
+    fake_archive.add(f"10. Financial/{TEMP_COPY_PREFIX}0011aabb-b.pdf", b"partial")
+    fake_archive.add("10. Financial/dam-copy-not-ours.pdf", b"x")  # no leading dot
+    app.scan()
+    result = run(app, "unfinished_copies").result
+    assert [(i.path, i.size) for i in result.items] == [
+        (f"10. Financial/{TEMP_COPY_PREFIX}0011aabb-b.pdf", 7),
+        (f"Old years/2010/{TEMP_COPY_PREFIX}abcd1234-a.pdf", 4),
+    ]
+    assert (result.total, result.total_size) == (2, 11)
+    with TestClient(create_api(app, None), base_url=BASE) as c:
+        job = c.post("/api/maintenance/jobs", json={"kind": "unfinished_copies"}, headers=H)
+        assert job.status_code == 200, job.text
+        job_id = job.json()["job_id"]
+        assert poll(c, job_id)["unfinished_copies"]["total"] == 2
+        os.rename(left, left.with_name("kept.pdf"))  # the owner dealt with it
+        app.scan()
+        body = c.get(f"/api/maintenance/jobs/{job_id}").json()
+    assert body["unfinished_copies"]["total"] == 1
+    assert body["unfinished_copies"]["total_size"] == 7

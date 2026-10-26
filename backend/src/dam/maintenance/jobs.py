@@ -83,6 +83,9 @@ class Job:
     # ends by itself when nobody has asked about it for ``ABANDONED_S`` (a check); a
     # move across disks does not (closing the window must not stop it half way)
     abandon: bool = True
+    # what the error says when the work raises (a move keeps its reason); None: a check's
+    # generic text
+    describe: Callable[[Exception], str] | None = None
     _stop: threading.Event = field(default_factory=threading.Event)
     _thread: threading.Thread | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -143,7 +146,11 @@ class Job:
             log.exception("maintenance check %s failed", self.kind)
             with self._lock:
                 self.state = ERROR
-                self.error = f"{type(exc).__name__}: the check could not be completed"
+                self.error = (
+                    f"{type(exc).__name__}: the check could not be completed"
+                    if self.describe is None
+                    else self.describe(exc)
+                )
         finally:
             with self._lock:
                 self.finished = time.monotonic()
@@ -158,10 +165,16 @@ class MaintenanceJobs:
         self._latest: dict[str, str] = {}
         self._lock = threading.Lock()
 
-    def start(self, kind: str, work: Callable[[JobContext], Any], abandon: bool = True) -> Job:
+    def start(
+        self,
+        kind: str,
+        work: Callable[[JobContext], Any],
+        abandon: bool = True,
+        describe: Callable[[Exception], str] | None = None,
+    ) -> Job:
         """Start a job of ``kind``; an earlier live job of the same kind is ended.
-        ``abandon``: see ``Job.abandon``."""
-        job = Job(secrets.token_hex(8), kind, work, abandon=abandon)
+        ``abandon`` and ``describe``: see ``Job``."""
+        job = Job(secrets.token_hex(8), kind, work, abandon=abandon, describe=describe)
         doomed: list[Job] = []
         with self._lock:
             earlier = self._jobs.get(self._latest.get(kind, ""))

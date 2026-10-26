@@ -5948,6 +5948,7 @@ export interface components {
             names?: components["schemas"]["BadNamesOut"] | null;
             waiting?: components["schemas"]["WaitingOut"] | null;
             label_clashes?: components["schemas"]["LabelClashesOut"] | null;
+            unfinished_copies?: components["schemas"]["UnfinishedCopiesOut"] | null;
         };
         /** MaintenanceStartIn */
         MaintenanceStartIn: {
@@ -5955,7 +5956,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes";
+            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies";
             /** Days */
             days?: number | null;
         };
@@ -7745,6 +7746,28 @@ export interface components {
              * @default []
              */
             kept: string[];
+        };
+        /**
+         * UnfinishedCopiesOut
+         * @description Temporary copies a move across disks left (``.dam-copy-*``); the owner removes
+         *     them.
+         */
+        UnfinishedCopiesOut: {
+            /** Items */
+            items: components["schemas"]["UnfinishedCopyOut"][];
+            /** Total */
+            total: number;
+            /** Total Size */
+            total_size: number;
+        };
+        /** UnfinishedCopyOut */
+        UnfinishedCopyOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
         };
         /**
          * UnlockIn
@@ -11388,7 +11411,7 @@ export interface operations {
     forget_api_maintenance_jobs_delete: {
         parameters: {
             query?: {
-                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes") | null;
+                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies") | null;
             };
             header?: never;
             path?: never;

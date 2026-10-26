@@ -48,6 +48,7 @@ KINDS = (
     "names",
     "waiting",
     "label_clashes",
+    "unfinished_copies",
 )
 ACTIONS = ("quarantine", "link")
 LINK_UNAVAILABLE = (
@@ -174,6 +175,8 @@ class MaintenanceService:
                 work = lambda ctx: checks.bad_names(ctx, repo, paths, engine)  # noqa: E731
             case "label_clashes":
                 work = lambda ctx: checks.label_clashes(ctx, repo, paths, engine)  # noqa: E731
+            case "unfinished_copies":
+                work = lambda ctx: checks.unfinished_copies(ctx, repo, paths, engine)  # noqa: E731
             case _:
                 limit = checks.DEFAULT_DAYS if days is None else days
                 work = lambda ctx: checks.waiting_in_to_delete(  # noqa: E731
@@ -192,6 +195,8 @@ class MaintenanceService:
             result = duplicates.refresh(result, self.repo, self.paths, self.locks)
         elif job.kind in ("empty_folders", "broken_links", "names"):
             result = self._still_there(result)
+        elif job.kind == "unfinished_copies":
+            result = self._still_there(result, sized=True)
         elif job.kind == "waiting":
             result = self._still_there(result, waiting=True)
         return job.kind, self._not_ignored(job.kind, result)
@@ -225,7 +230,7 @@ class MaintenanceService:
             return result
         return dataclasses.replace(result, items=items, total=max(0, result.total - n))
 
-    def _still_there(self, result, waiting: bool = False):
+    def _still_there(self, result, waiting: bool = False, sized: bool = False):
         """A copy of a list result without the entries whose file is gone from where it
         was listed (moved, renamed, marked for deletion), with the totals lowered."""
         kept = []
@@ -237,6 +242,8 @@ class MaintenanceService:
         if not gone:
             return result
         out = dataclasses.replace(result, items=kept, total=max(0, result.total - len(gone)))
+        if sized:
+            out.total_size = max(0, result.total_size - sum(i.size for i in gone))
         if waiting:
             size = sum(i.size for i in gone)
             out.total_size = max(0, result.total_size - size)

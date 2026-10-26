@@ -35,8 +35,8 @@ def test_scan_between_rename_and_index_update_does_not_orphan(fake_archive, engi
     scans: list[threading.Thread] = []
     real_act = executor._act
 
-    def act_then_scan(rop):
-        real_act(rop)  # the rename is on disk, the index still says the old path
+    def act_then_scan(rop, *args):
+        real_act(rop, *args)  # the rename is on disk, the index still says the old path
         t = threading.Thread(target=scan, args=(paths, repo, "10. Financial/Banks"))
         t.start()
         scans.append(t)

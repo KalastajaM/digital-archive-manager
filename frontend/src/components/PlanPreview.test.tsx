@@ -314,6 +314,19 @@ describe("a move across disks", () => {
     expect(screen.getAllByText("Copy to other disk")).toHaveLength(2);
   });
 
+  it("says a restore across disks leaves the originals in To Delete", () => {
+    render(
+      <PlanList
+        ops={[
+          op("copy_across", "##. To Delete/Banks/a.pdf", "Old years/2010/a.pdf", 1024 * 1024),
+          op("copy_across", "##. To Delete/Banks/b.pdf", "Old years/2010/b.pdf", 1024 * 1024),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Copies 2 files (2,0 MB) to another disk. The originals stay in To Delete.")).toBeInTheDocument();
+    expect(screen.queryByText(/go to To Delete/)).toBeNull();
+  });
+
   it("says nothing extra for an ordinary move", () => {
     render(<PlanList ops={[{ kind: "move", src: "A/a.pdf", dst: "B/a.pdf", drive_id: "d", note: null }]} />);
     expect(screen.queryByText(/another disk/)).toBeNull();

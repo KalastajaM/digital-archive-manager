@@ -2291,6 +2291,7 @@ MaintenanceKindIn = Literal[
     "names",
     "waiting",
     "label_clashes",
+    "unfinished_copies",
 ]
 
 
@@ -2442,6 +2443,21 @@ class LabelClashesOut(BaseModel):
     total: int
 
 
+class UnfinishedCopyOut(BaseModel):
+    drive_id: str
+    path: str
+    size: int
+
+
+class UnfinishedCopiesOut(BaseModel):
+    """Temporary copies a move across disks left (``.dam-copy-*``); the owner removes
+    them."""
+
+    items: list[UnfinishedCopyOut]
+    total: int
+    total_size: int
+
+
 class CopyJobOut(BaseModel):
     """A move across disks running in the background (or finished): files and bytes
     copied so far, the file being copied, and once it is over the batch (with its
@@ -2482,6 +2498,7 @@ class MaintenanceJobOut(BaseModel):
     names: BadNamesOut | None = None
     waiting: WaitingOut | None = None
     label_clashes: LabelClashesOut | None = None
+    unfinished_copies: UnfinishedCopiesOut | None = None
 
 
 class DuplicateChoiceIn(_In):

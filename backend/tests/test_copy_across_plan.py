@@ -148,3 +148,21 @@ def test_undo_never_copies(across):
     plan = _plan(Op(OpKind.MOVE, f"{BANKS}/a.pdf", "Old years/2010"))
     with pytest.raises(OpFailed):
         Planner(across.executor.paths).resolve(plan, restore=True)
+
+
+def test_name_too_long_for_the_temporary_copy_refused_in_the_preview(across, fake_archive):
+    room = primitives.NAME_MAX_BYTES - primitives.TEMP_COPY_EXTRA
+    long = "l" * (room - 2) + ".pdf"  # 2 bytes over once the temporary prefix is added
+    fake_archive.add(f"{BANKS}/{long}", b"l", drive_id="id-long")
+    fake_archive.add(f"{BANKS}/{long[3:]}", b"s", drive_id="id-short")
+    across.scan()
+    with pytest.raises(GuardError) as e:
+        across.executor.preview(_plan(Op(OpKind.MOVE, f"{BANKS}/{long}", "Old years/2010")))
+    assert str(e.value) == (
+        f"{long} is too long a name to copy across disks: the copy is first written under a"
+        " longer temporary name. Shorten it by 2 characters and try again."
+    )
+    resolved = across.executor.preview(
+        _plan(Op(OpKind.MOVE, f"{BANKS}/{long[3:]}", "Old years/2010"))
+    )
+    assert [r.kind for r in _work(resolved)] == [OpKind.COPY_ACROSS, OpKind.QUARANTINE]

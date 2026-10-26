@@ -843,10 +843,10 @@ def test_sync_between_the_undos_in_ongoing_ops_waits(app, demo, monkeypatch):
     real_run = app.executor._run_op
     started: list = []
 
-    def run_op(seq, rop, origin, res, undo_of, label=None):
+    def run_op(seq, rop, origin, res, undo_of, *args):
         if undo_of and seq == 1 and not started:
             _start_sync(app, started)
-        return real_run(seq, rop, origin, res, undo_of, label)
+        return real_run(seq, rop, origin, res, undo_of, *args)
 
     monkeypatch.setattr(app.executor, "_run_op", run_op)
     outcome = app.activity.undo(result.batch.batch_id)

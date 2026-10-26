@@ -8,9 +8,11 @@ from fastapi.testclient import TestClient
 
 import dam.serve as serve_mod
 from conftest import FakeArchive
+from dam import archive_folders
 from dam.api import create_api
 from dam.app import JOBS_RUNNING, App
 from dam.config import load_settings
+from dam.ops.jobs import COPY_HELD
 from dam.profiles import ProfileStore, ServeLock
 from dam.serve import Host, Switchboard
 from dam.services.errors import Conflict
@@ -491,3 +493,41 @@ def test_relabel_409_while_job_runs(extra_folder, served, monkeypatch):
 def test_relabel_needs_the_server(xclient):
     r = post(xclient, "/api/archive-folders/Old years/relabel", {"label": "X"})
     assert r.status_code == 409 and "dam serve" in r.json()["error"]
+
+
+def test_no_move_across_disks_starts_during_a_folder_change(xapp, xclient, tmp_path, monkeypatch):
+    """The check that no job runs holds until the change is done: a move across disks
+    started meanwhile is refused instead of being ended by the reopen."""
+    seen = []
+    real = archive_folders.add_folder
+
+    def add_and_try_a_move(*args, **kwargs):
+        with pytest.raises(Conflict) as e:
+            xapp.copy_jobs.start(lambda ctx: None)
+        seen.append(str(e.value))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(archive_folders, "add_folder", add_and_try_a_move)
+    more = FakeArchive(tmp_path / "more" / "More")
+    r = post(xclient, "/api/archive-folders", {"label": "More", "path": str(more.root)})
+    assert r.status_code == 200, r.text
+    assert seen == [COPY_HELD]
+    job = xapp.copy_jobs.start(lambda ctx: None)  # free again once the change is done
+    job.join(5)
+
+
+def test_host_reopen_holds_moves_until_done(served, events, monkeypatch):
+    host, _ = served
+    first = host.current.app
+    seen = []
+    real = serve_mod.App.create
+
+    def create_and_try_a_move(data_dir):
+        with pytest.raises(Conflict) as e:
+            first.copy_jobs.start(lambda ctx: None)
+        seen.append(str(e.value))
+        return real(data_dir)
+
+    monkeypatch.setattr(serve_mod.App, "create", create_and_try_a_move)
+    host.reopen()
+    assert seen == [COPY_HELD]

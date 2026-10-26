@@ -11,7 +11,8 @@ from dam.api import create_api
 from dam.db.tables import operations
 from dam.maintenance import jobs as maintenance_jobs
 from dam.ops import primitives
-from dam.ops.jobs import COPY_RUNNING, CopyJobs
+from dam.ops.jobs import COPY_HELD, COPY_RUNNING, CopyJobs, reason
+from dam.ops.model import GuardError, OpFailed
 from dam.services.errors import Conflict
 
 BANKS = "10. Financial/Banks"
@@ -156,3 +157,57 @@ def test_api_move_returns_job_and_polls(client, across):
 
 def test_api_latest_is_null_without_jobs(client):
     assert client.get("/api/browse/move/jobs/latest").json() is None
+
+
+def test_progress_moves_within_a_large_file(across, monkeypatch):
+    monkeypatch.setattr(primitives, "_COPY_CHUNK", 1)
+    seen = []
+    real = maintenance_jobs.Job.set_progress
+
+    def record(self, done, total, bytes_done, bytes_total, current):
+        seen.append((done, bytes_done, current))
+        real(self, done, total, bytes_done, bytes_total, current)
+
+    monkeypatch.setattr(maintenance_jobs.Job, "set_progress", record)
+    result = across.browse.move(["id-a", "id-b"], "Old years/2010", origin="ui")
+    job = _wait(across.copy_jobs.get(result.job_id))
+    assert job.state == "done"
+    # a.pdf (4 bytes) byte by byte while 0 files are done, then b.pdf on top of it
+    assert [s for s in seen if s[0] == 0 and s[2] == "a.pdf"][1:] == [
+        (0, 1, "a.pdf"), (0, 2, "a.pdf"), (0, 3, "a.pdf"), (0, 4, "a.pdf")
+    ]
+    assert (1, 5, "b.pdf") in seen and seen[-1][:2] == (2, 6)
+
+
+def test_a_failed_job_keeps_its_reason(across, monkeypatch):
+    real = across.executor.apply
+
+    def refuse_in_the_job(plan, **kw):
+        if kw.get("should_stop") is None:  # the request's own planning
+            return real(plan, **kw)
+        raise GuardError("a.pdf changed since the preview")
+
+    monkeypatch.setattr(across.executor, "apply", refuse_in_the_job)
+    result = across.browse.move(["id-a"], "Old years/2010", origin="ui")
+    job = _wait(across.copy_jobs.get(result.job_id))
+    assert (job.state, job.error) == ("error", "a.pdf changed since the preview")
+
+
+def test_an_unexpected_failure_names_its_type_only():
+    assert reason(RuntimeError("internal detail")) == (
+        "RuntimeError: the move could not be completed"
+    )
+    assert reason(OpFailed("There is not enough free space.")) == (
+        "There is not enough free space."
+    )
+
+
+def test_no_move_starts_while_held():
+    jobs = CopyJobs()
+    with jobs.held():
+        with jobs.held():  # nested
+            pass
+        with pytest.raises(Conflict) as e:
+            jobs.start(lambda ctx: None)
+        assert str(e.value) == COPY_HELD
+    _wait(jobs.start(lambda ctx: None))
