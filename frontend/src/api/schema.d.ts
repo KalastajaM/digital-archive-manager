@@ -3032,8 +3032,10 @@ export interface paths {
         put?: never;
         /**
          * Detach Folder
-         * @description Take the folder out of the archive (it stays listed, detached). Its index rows
-         *     are marked missing, or with ``forget`` removed; ``files`` says how many.
+         * @description Take the folder out of the archive; it stays listed, detached, and its index rows
+         *     are marked missing. With ``forget`` the rows are removed and the folder leaves the
+         *     list. ``files`` says how many. The archive is reopened before the index changes (see
+         *     ``archive_folders.detach_folder``).
          */
         post: operations["detach_folder_api_archive_folders__label__detach_post"];
         delete?: never;

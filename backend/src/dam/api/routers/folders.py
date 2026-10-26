@@ -72,9 +72,9 @@ def add_folder(app: AppDep, archives: ArchivesDep, body: ArchiveFolderAddIn) -> 
 def detach_folder(
     app: AppDep, archives: ArchivesDep, label: str, body: ArchiveFolderDetachIn
 ) -> dict:
-    """Take the folder out of the archive (it stays listed, detached). Its index rows
-    are marked missing; with ``forget`` they are removed and the folder leaves the list.
-    ``files`` says how many. The archive is reopened before the index changes (see
+    """Take the folder out of the archive; it stays listed, detached, and its index rows
+    are marked missing. With ``forget`` the rows are removed and the folder leaves the
+    list. ``files`` says how many. The archive is reopened before the index changes (see
     ``archive_folders.detach_folder``)."""
     _not_busy(app)
     change = archive_folders.detach_folder(
