@@ -213,7 +213,7 @@ describe("Quick Look in the inbox", () => {
       "POST /api/inbox/file": () => held.promise,
     });
     await user.click(screen.getByRole("button", { name: "File it" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "File it" })).toBeDisabled());
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "File it" })[0]).toBeDisabled());
     (document.activeElement as HTMLElement | null)?.blur();
     await user.keyboard(" ");
     expect(quickLook()).not.toBeInTheDocument();

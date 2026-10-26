@@ -282,3 +282,22 @@ def test_open_file_in_disconnected_folder_says_so(extra_folder, app, client, cal
     want = f"'Old years' is not connected ({extra_folder.root.resolve()}). Connect it"
     assert want in r.json()["error"]
     assert calls == []
+
+
+def test_open_link_into_a_main_entry_named_like_a_label_says_so(
+    extra_folder, app, client, calls, fake_archive
+):
+    """A main-folder entry named like an archive folder is left out of the archive, so a
+    link into it is refused with a plain message (not a path outside the archive)."""
+    from dam.index.repo import FileRecord
+
+    target = fake_archive.add("Old years/b.pdf")
+    link = fake_archive.root / "link.pdf"
+    link.symlink_to(target)
+    app.repo.upsert(FileRecord(drive_id="l1", path="link.pdf", name="link.pdf"))
+    r = post(client, "/api/files/l1/open")
+    assert r.status_code == 409
+    assert r.json()["error"].startswith(
+        "link.pdf leads into a folder of the main folder that has the same name as an archive"
+    )
+    assert calls == []

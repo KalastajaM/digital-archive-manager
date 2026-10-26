@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Quick Look in Duplicates.** The eye button on each copy, and on each same-name
+  file, shows it in Quick Look without leaving Maintenance; ← and → move through the
+  other files listed.
+- **Give an inbox file a filing code in the app**, as if it had a sticker. Press **c** in
+  the Inbox (or click the QR button), pick a code, and the selected files fill in from it
+  and join File N marked. Nothing is written into the files; × on the form or Undo takes
+  the code off. A code you assign wins over a folder or sticker code on the same file.
 - **Diagrams in Help.** Under **How dam works**, Help now shows how a document goes from
   paper to its folder, where a filed document ends up, when each tray reminds you, how
   every change is previewed and can be undone, and what stays on your computer. They
@@ -121,6 +128,17 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
+  folder's name under the file's name; it names only a folder inside the inbox (such
+  as a code's folder). In Maintenance, **Show in Browse** is an icon button (the
+  Browse icon, with a tooltip), and a group's **Apply…** button lines up with the text
+  beside it.
+- **The Inbox list shows each file's own name.** The name dam suggests is on the line
+  under it, marked "Suggested:", so a file no longer looks renamed before it is filed.
+- **Planned changes** (the Inbox's Preview) has a border, an × to close it and its own
+  **File it** button.
+- **Messages with buttons** (such as "Filed as …" with Undo and Make a rule…) put the
+  text on top, at full width, and the buttons under it, so a long path stays readable.
 - **Snapshots** have tooltips on Import, Export and Restore (a snapshot that cannot be
   restored says why), and the help says that Export only copies the file, so copying it
   from the snapshots folder yourself works too.
@@ -517,6 +535,22 @@ All notable changes are listed here. The format follows
 - **A file that gets its Google Drive id keeps its notes.** When Drive uploaded a file and
   dam picked up its id, the file kept its tags but lost its notes, checklist, collection
   and tray item places, lock, summary and fields. They now stay with it.
+- **Forgetting an archive folder** now says how many files it forgets, counting those no
+  longer on the disk (a detached folder used to show 0). Files of a main-folder entry with
+  the same name as the forgotten label no longer drop out of the index until the next full
+  scan, and detaching or forgetting waits at most about 10 seconds for background work to
+  stop, instead of up to 30.
+- When an extra folder is plugged in again, files dam could not read while it was away are
+  read again at once, instead of after a wait of up to an hour.
+- Opening a link that leads into a main-folder entry named like an archive folder now says
+  why it is refused, instead of showing a path outside the archive.
+- On Linux, an extra folder too big to watch (no inotify watches left) is tried again less
+  and less often, instead of with a full recursive watch every 30 seconds.
+- **A duplicate copied from an Important file can be linked or moved to To Delete.** A
+  copy made from a file keeps that file's Google Drive id, so dam took the unlocked copy
+  for the locked original and refused with "This file is locked". The lock check now
+  goes by the file dam has indexed at that path.
+
 - **A copy of a Google Drive file can be moved again.** Copying a file also copies its
   Drive id, and dam refused to move such a copy ("now has Drive id …, so it is not the
   file indexed there; scan and try again"), which a scan never cleared. This blocked

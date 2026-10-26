@@ -83,24 +83,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => {
           const Icon = ICON[t.kind];
+          const actions = [...(t.action ? [t.action] : []), ...(t.actions ?? [])];
           return (
             <div key={t.id} className={`toast toast-${t.kind}`}>
               <Icon className="toast-icon" size={16} aria-hidden="true" />
               <span className="toast-text">{visible(t.text)}</span>
-              {[...(t.action ? [t.action] : []), ...(t.actions ?? [])].map((a, i) => (
-                <button
-                  key={`${t.id}-${i}`}
-                  type="button"
-                  className="toast-action"
-                  disabled={blocked}
-                  onClick={() => {
-                    dismiss(t.id);
-                    a.run();
-                  }}
-                >
-                  {a.label}
-                </button>
-              ))}
+              {/* the buttons on their own row under the text, which keeps the full width */}
+              {actions.length > 0 && (
+                <div className="toast-actions">
+                  {actions.map((a, i) => (
+                    <button
+                      key={`${t.id}-${i}`}
+                      type="button"
+                      className="toast-action"
+                      disabled={blocked}
+                      onClick={() => {
+                        dismiss(t.id);
+                        a.run();
+                      }}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <IconButton
                 icon={<X size={14} />}
                 label="Dismiss"

@@ -116,6 +116,19 @@ class LockService:
                 out.append(Locked(r.drive_id, nfc(r.path_nfc), bool(r.is_dir), LOCKED))
         return out
 
+    def indexed_id(self, rel: str) -> str | None:
+        """The id the index gives the live entry at ``rel``, or None. A copy keeps its
+        original's Drive xattr, but the scan gives it an id of its own: locks follow that
+        one, never the xattr."""
+        with self.engine.connect() as conn:
+            return conn.execute(
+                select(files.c.drive_id).where(
+                    files.c.path_nfc == nfc(rel),
+                    files.c.missing.is_not(True),
+                    files.c.parked_at.is_(None),
+                )
+            ).scalar()
+
     def reason(self, drive_id: str, path_nfc: str) -> str | None:
         """Why the entry is locked: ``important`` (marked, or inside a marked folder),
         ``file`` (a stored lock) or None."""

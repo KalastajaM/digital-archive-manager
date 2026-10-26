@@ -17,6 +17,7 @@ from dam.db.engine import write_tx
 from dam.db.tables import (
     checklist_items,
     collection_members,
+    file_assigned_codes,
     file_assignments,
     file_barcodes,
     file_fields,
@@ -495,6 +496,36 @@ class FileRepo:
             )
         return True
 
+    def assigned_code(self, drive_id: str) -> str | None:
+        """The filing code the owner gave the file in the app, else None (also for a
+        file outside the inbox: the caller decides when it counts)."""
+        with self._conn() as conn:
+            return conn.execute(
+                select(file_assigned_codes.c.code).where(file_assigned_codes.c.drive_id == drive_id)
+            ).scalar()
+
+    def set_assigned_code(self, drive_ids: Sequence[str], code: str | None) -> None:
+        """Give each file ``code`` (upper case), replacing the one it had; None removes
+        it. The caller checks the code and the files."""
+        with self._conn(write=True) as conn:
+            for drive_id in drive_ids:
+                if code is None:
+                    conn.execute(
+                        file_assigned_codes.delete().where(
+                            file_assigned_codes.c.drive_id == drive_id
+                        )
+                    )
+                    continue
+                stmt = sqlite_insert(file_assigned_codes).values(
+                    drive_id=drive_id, code=code.upper(), assigned_at=time.time()
+                )
+                conn.execute(
+                    stmt.on_conflict_do_update(
+                        index_elements=["drive_id"],
+                        set_={c: stmt.excluded[c] for c in ("code", "assigned_at")},
+                    )
+                )
+
     def next_for_barcodes(
         self, limit: int, tray_ids: Collection[str], skip: Collection[str] = ()
     ) -> list[FileRecord]:
@@ -744,6 +775,9 @@ class FileRepo:
             conn.execute(file_tags.delete().where(file_tags.c.drive_id == drive_id))
             conn.execute(file_barcodes.delete().where(file_barcodes.c.drive_id == drive_id))
             conn.execute(file_qr_codes.delete().where(file_qr_codes.c.drive_id == drive_id))
+            conn.execute(
+                file_assigned_codes.delete().where(file_assigned_codes.c.drive_id == drive_id)
+            )
             conn.execute(file_layouts.delete().where(file_layouts.c.drive_id == drive_id))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
@@ -821,12 +855,6 @@ class FileRepo:
                     return True
         return False
 
-    def drop_rows(self, drive_ids: list[str]) -> None:
-        """Remove the index rows ``drive_ids`` with their text, fts, tags and codes reads
-        (database only; nothing on disk is touched)."""
-        with self._conn(write=True) as conn:
-            self._delete_rows(conn, list(drive_ids))
-
     def purge_parked(self) -> None:
         """Delete rows still parked (with their text, fts and tags). DB rows only."""
         with self._conn(write=True) as conn:
@@ -842,7 +870,7 @@ class FileRepo:
         one, or a file copied across disks), carrying along everything that names the file
         by its id: text, fts, tags, the barcode, QR sticker and page-1 layout reads, notes
         and checklists, collection and tray item places, summaries, fields, sender and
-        person, locks and rule outcomes."""
+        person, locks, rule outcomes and the filing code given in the app."""
         with self._conn(write=True) as conn:
             conn.exec_driver_sql("PRAGMA defer_foreign_keys = ON")
             for table in (
@@ -859,6 +887,7 @@ class FileRepo:
                 file_summaries,
                 file_fields,
                 rule_outcomes,
+                file_assigned_codes,
                 files,
             ):
                 conn.execute(
@@ -946,15 +975,26 @@ class FileRepo:
                 select(func.count()).select_from(files).where(files.c.missing.is_not(True))
             ).scalar_one()
 
-    def forget_subtree(self, rel: str) -> int:
-        """Remove the index rows at or under ``rel`` with everything the owner gave those
-        files: tags, notes, checklists, collection and item places, summaries, fields,
-        sender and person, locks (the collections and items themselves stay). Returns how
-        many rows. Database only: nothing on disk is touched."""
-        with self._conn(write=True) as conn:
-            ids = list(
+    def subtree_ids(self, rel: str) -> list[str]:
+        """The drive ids of the rows at or under ``rel``."""
+        with self._conn() as conn:
+            return list(
                 conn.execute(select(files.c.drive_id).where(self._subtree_cond(rel))).scalars()
             )
+
+    def forget_rows(self, drive_ids: Collection[str]) -> int:
+        """Remove the index rows ``drive_ids`` with everything the owner gave those
+        files: tags, notes, checklists, collection and item places, summaries, fields,
+        sender and person, locks (the collections and items themselves stay). Returns how
+        many rows there were. Database only: nothing on disk is touched."""
+        with self._conn(write=True) as conn:
+            wanted = list(dict.fromkeys(drive_ids))
+            ids = []
+            for i in range(0, len(wanted), 500):
+                chunk = wanted[i : i + 500]
+                ids += conn.execute(
+                    select(files.c.drive_id).where(files.c.drive_id.in_(chunk))
+                ).scalars()
             for i in range(0, len(ids), 500):
                 chunk = ids[i : i + 500]
                 for table in (notes, checklist_items):
@@ -1093,6 +1133,17 @@ class FileRepo:
                 )
                 queued += result.rowcount
         return queued
+
+    def retry_now_under(self, rel: str) -> int:
+        """Let the files at or under ``rel`` that wait to be read again (``retry_at``
+        set: a cloud file not downloaded, a disk that went away) be read at once, with
+        their attempts counted from zero; returns how many."""
+        with self._conn(write=True) as conn:
+            return conn.execute(
+                update(files)
+                .where(self._subtree_cond(rel), files.c.retry_at.is_not(None))
+                .values(retry_at=None, attempts=0)
+            ).rowcount
 
     def set_index_state(
         self,

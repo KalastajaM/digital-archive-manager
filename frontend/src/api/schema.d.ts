@@ -2554,6 +2554,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/filing-codes/assigned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assigned
+         * @description Give inbox files a filing code, as if a sticker were on them (``code`` null: take
+         *     it away). Only dam's index changes; 400 for an unknown code or a file outside the
+         *     inbox, 404 for an unknown file.
+         */
+        put: operations["assigned_api_filing_codes_assigned_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/filing-codes/sheets": {
         parameters: {
             query?: never;
@@ -4120,6 +4142,20 @@ export interface components {
             /** Areas */
             areas: components["schemas"]["AreaOut"][];
         };
+        /** AssignCodeIn */
+        AssignCodeIn: {
+            /** Drive Ids */
+            drive_ids: string[];
+            /** Code */
+            code: string | null;
+        };
+        /** AssignCodeOut */
+        AssignCodeOut: {
+            /** Drive Ids */
+            drive_ids: string[];
+            /** Code */
+            code: string | null;
+        };
         /**
          * AssignmentOut
          * @description Who a document is from (``sender``) and for (``person``), as set by the owner
@@ -4359,8 +4395,10 @@ export interface components {
         };
         /**
          * CodeHitOut
-         * @description A filing code found for a file: by its inbox folder, a pen mark or a QR sticker.
-         *     ``raw``: what was read (pen, QR); ``unclear``: the reading is uncertain.
+         * @description A filing code found for a file: by its inbox folder, a pen mark, a QR sticker, or
+         *     given by the owner in the app (``assigned``). ``raw``: what was read (pen, QR);
+         *     ``unclear``: the reading is uncertain; ``overridden``: an assigned code replaces it,
+         *     so it sets nothing.
          */
         CodeHitOut: {
             /** Code */
@@ -4369,11 +4407,13 @@ export interface components {
              * Via
              * @enum {string}
              */
-            via: "folder" | "pen" | "qr";
+            via: "folder" | "pen" | "qr" | "assigned";
             /** Raw */
             raw: string | null;
             /** Unclear */
             unclear: boolean;
+            /** Overridden */
+            overridden: boolean;
         };
         /** CodeProblemOut */
         CodeProblemOut: {
@@ -21480,6 +21520,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchRowOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    assigned_api_filing_codes_assigned_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignCodeOut"];
                 };
             };
             /** @description Bad Request */

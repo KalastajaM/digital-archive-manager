@@ -7,6 +7,7 @@ from dam.db.tables import (
     checklist_items,
     collection_members,
     collections,
+    file_assigned_codes,
     file_assignments,
     file_fields,
     file_locks,
@@ -35,6 +36,7 @@ _BY_FILE = {
     file_summaries: file_summaries.c.drive_id,
     file_fields: file_fields.c.drive_id,
     rule_outcomes: rule_outcomes.c.drive_id,
+    file_assigned_codes: file_assigned_codes.c.drive_id,
 }
 
 
@@ -69,6 +71,9 @@ def _attach_everything(engine, drive_id: str) -> None:
             )
         )
         conn.execute(insert(file_fields).values(drive_id=drive_id, fields="{}", updated=1.0))
+        conn.execute(
+            insert(file_assigned_codes).values(drive_id=drive_id, code="A", assigned_at=1.0)
+        )
         conn.execute(
             insert(rule_outcomes).values(
                 batch_id="b", drive_id=drive_id, rule_id="r", field="folder", kept=True, created=1

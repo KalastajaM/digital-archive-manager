@@ -1,4 +1,6 @@
 import { Fragment, type KeyboardEvent, type ReactNode, useEffect, useId, useRef } from "react";
+import { X } from "lucide-react";
+import { IconButton } from "./ui/IconButton";
 import { Sheet } from "./ui/Sheet";
 import type { ResolvedOp } from "../api/client";
 import { noKeysHeld } from "../keyboard";
@@ -239,13 +241,18 @@ export function PlanList({ ops, tags, followUps }: ListProps) {
   );
 }
 
-/** Inline result of "Preview". */
-export function PlanPreview(props: ListProps) {
+/** Inline result of "Preview": ``onClose`` puts an × in its corner, ``action`` (the
+ * screen's own step, such as File it) goes under the plan. */
+export function PlanPreview({ onClose, action, ...props }: ListProps & { onClose?: () => void; action?: ReactNode }) {
   const headingId = useId();
   return (
     <section className="plan-preview" aria-labelledby={headingId}>
-      <h3 id={headingId}>Planned changes</h3>
+      <div className="plan-preview-head">
+        <h3 id={headingId}>Planned changes</h3>
+        {onClose && <IconButton icon={<X size={14} />} label="Close the preview" className="tip-end" onClick={onClose} />}
+      </div>
       <PlanList {...props} />
+      {action && <div className="plan-preview-action">{action}</div>}
     </section>
   );
 }

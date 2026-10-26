@@ -1,5 +1,5 @@
 import { CircleAlert, FileQuestion } from "lucide-react";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { errorText, type Status, useConfigured, useStatus } from "./api/client";
 import { useIndexErrorsSheet } from "./components/IndexErrors";
@@ -7,26 +7,28 @@ import { RecoveryPanel } from "./components/Recovery";
 import { hasBand } from "./components/archivePalette";
 import { EmptyState } from "./components/ui/EmptyState";
 import { Sidebar } from "./components/ui/Sidebar";
-import Activity from "./screens/Activity";
-import SettingsScreen from "./screens/Settings";
-import Ask from "./screens/Ask";
-import Browse from "./screens/Browse";
-import FirstRun from "./screens/FirstRun";
-import Help from "./screens/Help";
-import Collections from "./screens/Collections";
-import ConvertImportant from "./screens/ConvertImportant";
-import ConvertOngoing from "./screens/ConvertOngoing";
-import Important from "./screens/Important";
-import Starred from "./screens/Starred";
-import Inbox from "./screens/Inbox";
-import Maintenance from "./screens/Maintenance";
-import Today from "./screens/Today";
-import Viewer from "./screens/Viewer";
-import Tags from "./screens/Tags";
-import Trays from "./screens/Trays";
 import { CopyJobProgress } from "./components/CopyJobProgress";
 import { groupDigits, plural } from "./format";
 import { visible } from "./text";
+
+// Each screen loads when first opened, so the start-up bundle stays small.
+const Activity = lazy(() => import("./screens/Activity"));
+const SettingsScreen = lazy(() => import("./screens/Settings"));
+const Ask = lazy(() => import("./screens/Ask"));
+const Browse = lazy(() => import("./screens/Browse"));
+const FirstRun = lazy(() => import("./screens/FirstRun"));
+const Help = lazy(() => import("./screens/Help"));
+const Collections = lazy(() => import("./screens/Collections"));
+const ConvertImportant = lazy(() => import("./screens/ConvertImportant"));
+const ConvertOngoing = lazy(() => import("./screens/ConvertOngoing"));
+const Important = lazy(() => import("./screens/Important"));
+const Starred = lazy(() => import("./screens/Starred"));
+const Inbox = lazy(() => import("./screens/Inbox"));
+const Maintenance = lazy(() => import("./screens/Maintenance"));
+const Today = lazy(() => import("./screens/Today"));
+const Viewer = lazy(() => import("./screens/Viewer"));
+const Tags = lazy(() => import("./screens/Tags"));
+const Trays = lazy(() => import("./screens/Trays"));
 
 /** The status line at the sidebar's foot; problems are listed in its tooltip. The whole
  * line is a button: it opens the Index sheet (totals, files that could not be read). */
@@ -86,9 +88,11 @@ export default function App() {
   const viewer = useLocation().pathname.startsWith("/viewer/");
   if (viewer) {
     return (
-      <Routes>
-        <Route path="/viewer/:driveId" element={<Viewer />} />
-      </Routes>
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="/viewer/:driveId" element={<Viewer />} />
+        </Routes>
+      </Suspense>
     );
   }
   return <SetupGate />;
@@ -98,7 +102,13 @@ export default function App() {
  * window skips this: it makes no status requests.) */
 function SetupGate() {
   const configured = useConfigured();
-  if (configured.data?.configured === false) return <FirstRun />;
+  if (configured.data?.configured === false) {
+    return (
+      <Suspense fallback={null}>
+        <FirstRun />
+      </Suspense>
+    );
+  }
   if (configured.isPending) return null; // one quick request; the app (or setup) is next
   return <Shell />;
 }
@@ -133,24 +143,26 @@ function Shell() {
         {status.data?.archive_available === false && <ArchiveUnavailableBanner />}
         {!onActivity && <RecoveryPanel count={status.data?.recovery_pending ?? 0} />}
         <main>
-          <Routes>
-            <Route path="/" element={<Today />} />
-            <Route path="/inbox" element={<Inbox />} />
-            <Route path="/trays/:trayId?" element={<Trays />} />
-            <Route path="/collections/:id?" element={<Collections />} />
-            <Route path="/ongoing" element={<ConvertOngoing />} />
-            <Route path="/starred" element={<Starred />} />
-            <Route path="/important" element={<Important />} />
-            <Route path="/important/convert" element={<ConvertImportant />} />
-            <Route path="/browse" element={<Browse />} />
-            <Route path="/tags" element={<Tags />} />
-            <Route path="/ask" element={<Ask />} />
-            <Route path="/activity" element={<Activity />} />
-            <Route path="/maintenance" element={<Maintenance />} />
-            <Route path="/settings/:section?" element={<SettingsScreen />} />
-            <Route path="/help" element={<Help />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={null}>
+            <Routes>
+              <Route path="/" element={<Today />} />
+              <Route path="/inbox" element={<Inbox />} />
+              <Route path="/trays/:trayId?" element={<Trays />} />
+              <Route path="/collections/:id?" element={<Collections />} />
+              <Route path="/ongoing" element={<ConvertOngoing />} />
+              <Route path="/starred" element={<Starred />} />
+              <Route path="/important" element={<Important />} />
+              <Route path="/important/convert" element={<ConvertImportant />} />
+              <Route path="/browse" element={<Browse />} />
+              <Route path="/tags" element={<Tags />} />
+              <Route path="/ask" element={<Ask />} />
+              <Route path="/activity" element={<Activity />} />
+              <Route path="/maintenance" element={<Maintenance />} />
+              <Route path="/settings/:section?" element={<SettingsScreen />} />
+              <Route path="/help" element={<Help />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

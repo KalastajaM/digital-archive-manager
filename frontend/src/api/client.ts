@@ -483,9 +483,9 @@ export const addArchiveFolder = (label: string, path: string, dry_run: boolean) 
   post<FolderChange>("/api/archive-folders", { label, path, dry_run });
 
 /** Take a folder out of the archive (nothing on the disk changes); ``forget`` also drops
- * the tags, notes and collection places of its files. */
-export const detachArchiveFolder = (label: string, forget: boolean) =>
-  post<FolderChange>(`/api/archive-folders/${enc(label)}/detach`, { forget, dry_run: false });
+ * the tags, notes and collection places of its files. ``dry_run``: only count them. */
+export const detachArchiveFolder = (label: string, forget: boolean, dry_run = false) =>
+  post<FolderChange>(`/api/archive-folders/${enc(label)}/detach`, { forget, dry_run });
 
 export const attachArchiveFolder = (label: string) =>
   post<FolderChange>(`/api/archive-folders/${enc(label)}/attach`, { dry_run: false });
@@ -1748,6 +1748,21 @@ export const useMarkedBatch = () =>
  * codes that look like each other (``warnings``). */
 export const useFilingCodes = () =>
   useQuery({ queryKey: keys.filingCodes, queryFn: () => get<FilingCodes>("/api/filing-codes") });
+
+/** Give inbox files a filing code, as if a sticker were on them (``code`` null: take it
+ * away). Only dam's index changes, so there is no preview and no journal entry. */
+export const useAssignCode = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveIds, code }: { driveIds: string[]; code: string | null }) =>
+      put<{ drive_ids: string[]; code: string | null }>("/api/filing-codes/assigned", { drive_ids: driveIds, code }),
+    onSettled: () => {
+      // the rows' suggestions, the marked batch below them, and Today's count
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: keys.today });
+    },
+  });
+};
 
 /** Replace the whole table (the old file is kept as a backup); a 400 says why not. */
 export const useSaveFilingCodes = () => {

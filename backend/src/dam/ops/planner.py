@@ -279,7 +279,8 @@ class Planner:
         if disk is None:  # made earlier in this batch: nothing locked about it
             return
         entries, granted = self._locked_state
-        if self.locks.refused(disk, self._drive_id(src), entries, granted):
+        drive_id = self.locks.indexed_id(disk) or self._drive_id(src)
+        if self.locks.refused(disk, drive_id, entries, granted):
             self.locked_names.append(PurePosixPath(src).name)
 
     def _locked_message(self, ops: int) -> str:

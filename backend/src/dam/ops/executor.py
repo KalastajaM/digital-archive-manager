@@ -315,7 +315,7 @@ class Executor:
             # the owner's row still describes the original (the copy's index step never
             # ran): it stays, and the copy's own row stays with the copy
             return
-        self.repo.drop_rows(others)
+        self.repo.forget_rows(others)
         self.repo.update_path(rop.dst, original)
         if original_id is not None and original_id != rec.drive_id:
             self.repo.rekey(rec.drive_id, original_id)

@@ -228,12 +228,15 @@ def detach_folder(
             ],
         )
     changed = forget or target.attached
+    # chosen before the reopen: the new app's first scan may index a main-folder entry
+    # of the same name (the label is free now) at these paths, and those rows stay
+    forgotten = repo.subtree_ids(target.label) if forget else []
     restart_needed = False
     if changed and reopen is not None:
         restart_needed = not reopen()
     with _index_repo(app_paths, repo, fresh=changed and reopen is not None) as index:
         if forget:
-            files = index.forget_subtree(target.label)
+            files = index.forget_rows(forgotten)
         else:
             files = index.mark_missing(math.inf, subtree=target.label)
     return FolderChange(
