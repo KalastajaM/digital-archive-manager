@@ -105,6 +105,10 @@ What is copied:
 - Links: not copied (see 7).
 - A protected entry anywhere inside refuses the move (its original could not go to To
   Delete), as for files.
+- Two names in one folder anywhere in the tree that differ only in case or normalization
+  (`a.pdf` and `A.pdf` on a case-sensitive disk) refuse the move: "<folder> holds <a> and
+  <b>, which differ only in case or accents. Rename one of them first." The tree is keyed
+  by folded names, so it would hold only one of them.
 - Free space: the whole tree's size, checked in the preview (`_check_space`) and per
   file by `copy_file`.
 
@@ -193,8 +197,13 @@ already has on the other disk): the files are added to it. **Open: see question 
 - Undo: the QUARANTINE's inverse (MOVE back from To Delete) gets a matching step that
   re-points each folder row back to its source path and journaled id. Then the copies go
   to the other disk's To Delete (PR 1), then the made folders are removed while empty.
-- Crash recovery: a done QUARANTINE whose rows did not follow runs the follow step, as
-  `recover()` runs `_repoint_copy` for a COPY_ACROSS.
+- Journal: the planned follow step is written to `operations.followed` before any row
+  moves, as `{"rows": [[old_id, new_id, old_path, new_path], ...], "applied": false}`;
+  `applied` turns true once the rows and the QUARANTINE's own index step are done.
+- Crash recovery: a done QUARANTINE whose rows did not follow (`followed` missing, or not
+  `applied`) runs the follow step, as `recover()` runs `_repoint_copy` for a COPY_ACROSS,
+  then marks it applied. An applied step never runs again, so an original the owner put
+  back from To Delete keeps its row.
 
 ## Undo, summarised
 
@@ -203,7 +212,9 @@ already has on the other disk): the files are added to it. **Open: see question 
   copy to the destination's To Delete (rows go back to the originals), each made folder
   removed while still empty and the folder made; a non-empty one stays and the result
   lists it, as for a New folder undo.
-- A stopped batch undoes the same way, without the first step.
+- A stopped batch undoes the same way, without the first step. While a later move of the
+  same folder that found its copies present is done and not undone, that undo is refused
+  ("Undo the later move of <folder> first."): those copies are the only live ones.
 - Undo of a big batch is renames only and stays synchronous (PR 1).
 
 ## Messages and Activity

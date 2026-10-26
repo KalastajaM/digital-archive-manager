@@ -983,7 +983,10 @@ collision").
 2. One `copy_across` per file, in tree order, each into its mirrored place (no
    `quarantine` after each one). Dot files are copied, `.DS_Store` is not. A
    `.dam-copy-*` file in the source refuses the move ("Remove the unfinished copy <name>
-   first."), and so does a protected entry anywhere inside. Links are not copied.
+   first."), and so does a protected entry anywhere inside, or a folder anywhere inside
+   holding two names that differ only in case or normalization ("<folder> holds <a> and
+   <b>, which differ only in case or accents. Rename one of them first."). Links are not
+   copied.
 3. One `quarantine` of the whole source folder into its own archive folder's To Delete,
    with the note `copied to <dst>` and a note counting the links that are not copied. It
    carries the planned tree and `copied_to`.
@@ -1013,21 +1016,29 @@ else kept) and re-pathed to its mirrored folder, so a folder's collections and n
 follow it; a row the scanner already made for a destination folder is dropped first unless
 it has attachments. The journal records this in two columns added by migration
 `0036_operation_copied_to`: `operations.copied_to` (where the copy of a folder went) and
-`operations.followed` (JSON `[[old_id, new_id, old_path, new_path], ...]`, the folder rows
-that followed). `dam recover` runs the follow step for a done `quarantine` whose rows
-did not follow. Relabel rewrites both columns.
+`operations.followed` (JSON `{"rows": [[old_id, new_id, old_path, new_path], ...],
+"applied": false}`, the folder rows that follow, written before any of them moves; `applied`
+turns `true` once they and the rows under the source have followed). `dam recover` runs the
+follow step again only for a done `quarantine` whose `followed` is missing or not
+`applied`, then sets `applied`; a finished one is never followed again, so an original put
+back from To Delete keeps its row. Relabel rewrites both columns (the paths in `rows`).
 
 **Undo**, newest first: the folder comes back from To Delete (its rows follow back from
 `followed`), each copy goes to the destination's To Delete (rows go back to the originals),
 then each made folder is removed while it is still the folder the batch made and empty. A
 made folder that is not empty stays and the result lists it. A stopped batch undoes the
-same way without the first step.
+same way without the first step. While a later move of the same folder that used its
+copies (`present`) is done and not undone, undo of the stopped batch (and its preview) is
+a 409 "Undo the later move of <folder> first.", since those copies are then the only live
+ones.
 
 **Preview and job.** The preview carries no new fields: the folder summary is built from
 the ops (folders made, files copied and their size, files `present`, where the folder goes
-and which To Delete it ends in), and warns about links outside the folder that point into it
-("N links elsewhere point into this folder and will point to nothing", names listed up to
-five). On a Stop the job result is "Copied N of M files; <folder> stays in place until all
+and which To Delete it ends in). For any folder move, on one disk or across, it warns about
+links outside `##. Ongoing` and `##. Important` that point into the folder: "N links
+elsewhere point into this folder and will point to nothing" and, on one disk, "N links
+inside this folder point into it and will point to nothing" (across disks those are in the
+"not copied" note), names listed up to five. On a Stop the job result is "Copied N of M files; <folder> stays in place until all
 are copied"; when it finishes, "Moved folder <name> (M files) to <place>". Activity says
 "Moved folder <name> to <folder>" on one disk. Stop for a folder move ends the batch after
 the file in hand; unlike a file move, no `quarantine` follows each copy, so the source
