@@ -14,6 +14,7 @@ import {
   type TrayDef,
   useFileLinks,
   useFileLock,
+  useAssignCode,
   useFilingCodes,
   useRules,
   useTrays,
@@ -38,6 +39,7 @@ import {
   TrayPicker,
   type TrayValues,
 } from "../components/TrayPicker";
+import { useToast } from "../components/Toasts";
 import { Toolbar } from "../components/ui/Toolbar";
 import { fieldWord } from "../format";
 import { dialogOpen, isCmdEnter, isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
@@ -151,9 +153,43 @@ export function useCodeLabel(hits: CodeHit[]): CodeLabel {
     if (!hit) return `code \`${code}\``;
     if (hit.via === "pen") return `from pen mark \`${code}\``;
     if (hit.via === "qr") return `from sticker \`${code}\``;
+    if (hit.via === "assigned") return `from code \`${code}\` you assigned`;
     const folder = codes.data?.codes.find((c) => c.code === code)?.inbox_folder;
     return folder ? `from folder ${folder}` : `code \`${code}\``;
   };
+}
+
+/** The code the owner assigned to the file, with × to take it away (the form refills
+ * from the codes found otherwise: the Inbox keys the form by the assigned code). */
+function AssignedCode({ entry, disabled }: { entry: InboxEntry; disabled: boolean }) {
+  const codes = useFilingCodes();
+  const assign = useAssignCode();
+  const toast = useToast();
+  const hit = entry.suggestion.codes.find((h) => h.via === "assigned");
+  if (!hit) return null;
+  const fc = codes.data?.codes.find((c) => c.code === hit.code);
+  const label = fc ? `${hit.code} · ${fc.label}` : hit.code;
+  return (
+    <p className="assigned-code">
+      <span className={fc ? "tag-token" : "tag-token code-overridden"}>
+        Filing code {visible(label)}
+        <button
+          type="button"
+          aria-label={`Take filing code ${hit.code} off`}
+          disabled={disabled || assign.isPending}
+          onClick={() =>
+            assign.mutate(
+              { driveIds: [entry.record.drive_id], code: null },
+              { onError: (e) => toast({ kind: "error", text: `Could not take the code off: ${errorText(e)}` }) },
+            )
+          }
+        >
+          ×
+        </button>
+      </span>
+      {!fc && <span className="hint"> not in your codes, so it sets nothing</span>}
+    </p>
+  );
 }
 
 /** In place of the tray fields when the file already has an open item in that tray:
@@ -493,6 +529,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               These filing codes disagree; pick the values here.
             </p>
           )}
+          <AssignedCode entry={entry} disabled={filing.busy} />
           <AIHint what="for filing suggestions" />
           {ai.sheet}
           <LinkBadges driveId={entry.record.drive_id} />

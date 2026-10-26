@@ -1946,7 +1946,7 @@ describe("Filing codes in the form", () => {
     folder_source: "code:P",
     collections: ["Legal"],
     collection_sources: { Legal: "code:P" },
-    codes: [{ code: "P", via: "folder" as const, raw: null, unclear: false }],
+    codes: [{ code: "P", via: "folder" as const, raw: null, unclear: false, overridden: false }],
   };
   const route = (suggestion: Partial<InboxEntry["suggestion"]>) => ({
     "GET /api/inbox": { body: coded(suggestion) },
@@ -1977,7 +1977,7 @@ describe("Filing codes in the form", () => {
   });
 
   it("starts with no tray for a file as suggested code", async () => {
-    await setup(route({ tray: null, tray_source: "code:D", codes: [{ code: "D", via: "folder", raw: null, unclear: false }] }));
+    await setup(route({ tray: null, tray_source: "code:D", codes: [{ code: "D", via: "folder", raw: null, unclear: false, overridden: false }] }));
     const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
     expect(within(trayGroup).getByRole("button", { name: "Nothing (just file)" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -1989,13 +1989,13 @@ describe("Filing codes in the form", () => {
   });
 
   it("preselects a rule's tray on a coded file, as File N marked files it", async () => {
-    const codes = [{ code: "X", via: "qr" as const, raw: "dam:1:X:x:0", unclear: false }];
+    const codes = [{ code: "X", via: "qr" as const, raw: "dam:1:X:x:0", unclear: false, overridden: false }];
     await setup(route({ tray: "to-pay", tray_source: "rule:x", codes }));
     const trayGroup = await screen.findByRole("group", { name: "Then put it in" });
     await waitFor(() => expect(within(trayGroup).getByRole("button", { name: "To pay" })).toHaveAttribute("aria-pressed", "true"));
   });
 
-  const STICKER = { ...FROM_P, tray: null, tray_source: null, codes: [{ code: "P", via: "qr" as const, raw: "dam:1:P:x:0", unclear: false }] };
+  const STICKER = { ...FROM_P, tray: null, tray_source: null, codes: [{ code: "P", via: "qr" as const, raw: "dam:1:P:x:0", unclear: false, overridden: false }] };
 
   it("labels a sticker's chip with the code", async () => {
     const { user } = await setup(route(STICKER));
@@ -2064,6 +2064,56 @@ describe("Filing codes in the form", () => {
     expect(screen.getByText("These filing codes disagree; pick the values here.")).toBeInTheDocument();
     const row = document.querySelector("[data-inbox-entry]") as HTMLElement;
     expect(within(row).getByText("P")).toBeInTheDocument();
+  });
+
+  const puts = (calls: Call[]) => calls.filter((c) => c.method === "PUT" && c.url === "/api/filing-codes/assigned");
+  const ASSIGNED = { "PUT /api/filing-codes/assigned": { body: { drive_ids: ["d1"], code: "D" } } };
+
+  it("assigns a code with c: type it and press Enter", async () => {
+    const { calls, user } = await setup({ ...route({}), ...ASSIGNED });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Assign a filing code…" })).toBeEnabled());
+    await user.keyboard("c");
+    const field = await screen.findByRole("combobox", { name: "Filing code" });
+    expect(screen.getByRole("option", { name: "P: To pay" })).toBeInTheDocument();
+    await user.type(field, "d{Enter}");
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    expect(puts(calls)[0].body).toEqual({ drive_ids: ["d1"], code: "D" });
+    expect(await screen.findByText(/filing code D\./)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Filing code" })).not.toBeInTheDocument();
+  });
+
+  it("assigns a code from the toolbar button with a click, and filters by label", async () => {
+    const { calls, user } = await setup({ ...route({}), ...ASSIGNED });
+    const button = screen.getByRole("button", { name: "Assign a filing code…" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    await user.type(await screen.findByRole("combobox", { name: "Filing code" }), "sugg");
+    expect(screen.queryByRole("option", { name: "P: To pay" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "D: File as suggested" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    expect(puts(calls)[0].body).toEqual({ drive_ids: ["d1"], code: "D" });
+  });
+
+  it("shows an assigned code with × to take it off, and leaves out what it overrides", async () => {
+    const codes = [
+      { code: "D", via: "assigned" as const, raw: null, unclear: false, overridden: false },
+      { code: "P", via: "folder" as const, raw: null, unclear: false, overridden: true },
+    ];
+    const { calls, user } = await setup({
+      ...route({ ...FROM_P, tray: null, tray_source: "code:D", folder_source: "code:D", codes }),
+      ...ASSIGNED,
+    });
+    const row = document.querySelector("[data-inbox-entry]") as HTMLElement;
+    expect(within(row).getByText("D")).toBeInTheDocument();
+    expect(within(row).queryByText(/P/)).not.toBeInTheDocument();
+    expect(await screen.findByText(/Filing code D · File as suggested/)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Folder"));
+    expect(
+      await screen.findByRole("group", { name: "Suggested Folder: Bills/2026 (from code `D` you assigned)" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Take filing code D off" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    expect(puts(calls)[0].body).toEqual({ drive_ids: ["d1"], code: null });
   });
 });
 

@@ -11,7 +11,10 @@ All notable changes are listed here. The format follows
 - **Quick Look in Duplicates.** The eye button on each copy, and on each same-name
   file, shows it in Quick Look without leaving Maintenance; ← and → move through the
   other files listed.
-
+- **Give an inbox file a filing code in the app**, as if it had a sticker. Press **c** in
+  the Inbox (or click the QR button), pick a code, and the selected files fill in from it
+  and join File N marked. Nothing is written into the files; × on the form or Undo takes
+  the code off. A code you assign wins over a folder or sticker code on the same file.
 - **Diagrams in Help.** Under **How dam works**, Help now shows how a document goes from
   paper to its folder, where a filed document ends up, when each tray reminds you, how
   every change is previewed and can be undone, and what stays on your computer. They

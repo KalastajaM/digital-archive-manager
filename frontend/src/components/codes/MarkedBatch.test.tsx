@@ -111,7 +111,7 @@ const LETTER = {
 const ROWS = [
   {
     drive_id: "d1",
-    codes: [{ code: "P", via: "folder", raw: null, unclear: false }],
+    codes: [{ code: "P", via: "folder", raw: null, unclear: false, overridden: false }],
     request: BILL,
     tray_fields: { due_date: "2026-10-15", amount: "84.20" },
     flag: null,
@@ -120,8 +120,8 @@ const ROWS = [
   {
     drive_id: "d2",
     codes: [
-      { code: "P", via: "folder", raw: null, unclear: false },
-      { code: "A", via: "qr", raw: "A", unclear: false },
+      { code: "P", via: "folder", raw: null, unclear: false, overridden: false },
+      { code: "A", via: "qr", raw: "A", unclear: false, overridden: false },
     ],
     request: WATER,
     tray_fields: { due_date: "", amount: "40.00" },
@@ -130,7 +130,7 @@ const ROWS = [
   },
   {
     drive_id: "d3",
-    codes: [{ code: "D", via: "folder", raw: null, unclear: false }],
+    codes: [{ code: "D", via: "folder", raw: null, unclear: false, overridden: false }],
     request: LETTER,
     tray_fields: {},
     flag: null,
@@ -231,7 +231,7 @@ describe("File N marked", () => {
       "GET /api/filing-codes/batch": {
         body: [
           { ...ROWS[0], flag: "conflict", problem: null },
-          { ...ROWS[2], codes: [{ code: "D", via: "pen", raw: "0", unclear: true }], flag: "unclear", problem: "D or 0" },
+          { ...ROWS[2], codes: [{ code: "D", via: "pen", raw: "0", unclear: true, overridden: false }], flag: "unclear", problem: "D or 0" },
         ],
       },
     });
@@ -353,7 +353,7 @@ describe("File N marked", () => {
     const starred = { ...ROWS[0], request: { ...BILL, star: true, important: true } };
     const unclear = {
       ...ROWS[2],
-      codes: [{ code: "D", via: "qr", raw: "dam:1:D:?:0", unclear: false }],
+      codes: [{ code: "D", via: "qr", raw: "dam:1:D:?:0", unclear: false, overridden: false }],
       request: { ...LETTER, star: false, important: false },
       flag: "unclear",
       problem: "Tick box unclear: star",

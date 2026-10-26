@@ -17,6 +17,7 @@ from dam.db.engine import write_tx
 from dam.db.tables import (
     checklist_items,
     collection_members,
+    file_assigned_codes,
     file_assignments,
     file_barcodes,
     file_fields,
@@ -494,6 +495,36 @@ class FileRepo:
             )
         return True
 
+    def assigned_code(self, drive_id: str) -> str | None:
+        """The filing code the owner gave the file in the app, else None (also for a
+        file outside the inbox: the caller decides when it counts)."""
+        with self._conn() as conn:
+            return conn.execute(
+                select(file_assigned_codes.c.code).where(file_assigned_codes.c.drive_id == drive_id)
+            ).scalar()
+
+    def set_assigned_code(self, drive_ids: Sequence[str], code: str | None) -> None:
+        """Give each file ``code`` (upper case), replacing the one it had; None removes
+        it. The caller checks the code and the files."""
+        with self._conn(write=True) as conn:
+            for drive_id in drive_ids:
+                if code is None:
+                    conn.execute(
+                        file_assigned_codes.delete().where(
+                            file_assigned_codes.c.drive_id == drive_id
+                        )
+                    )
+                    continue
+                stmt = sqlite_insert(file_assigned_codes).values(
+                    drive_id=drive_id, code=code.upper(), assigned_at=time.time()
+                )
+                conn.execute(
+                    stmt.on_conflict_do_update(
+                        index_elements=["drive_id"],
+                        set_={c: stmt.excluded[c] for c in ("code", "assigned_at")},
+                    )
+                )
+
     def next_for_barcodes(
         self, limit: int, tray_ids: Collection[str], skip: Collection[str] = ()
     ) -> list[FileRecord]:
@@ -743,6 +774,9 @@ class FileRepo:
             conn.execute(file_tags.delete().where(file_tags.c.drive_id == drive_id))
             conn.execute(file_barcodes.delete().where(file_barcodes.c.drive_id == drive_id))
             conn.execute(file_qr_codes.delete().where(file_qr_codes.c.drive_id == drive_id))
+            conn.execute(
+                file_assigned_codes.delete().where(file_assigned_codes.c.drive_id == drive_id)
+            )
             conn.execute(file_layouts.delete().where(file_layouts.c.drive_id == drive_id))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
