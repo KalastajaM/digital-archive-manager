@@ -600,3 +600,148 @@ def test_empty_root_with_indexed_rows_aborts(fake_archive, engine, tmp_path):
     for child in list(away.iterdir()):
         os.rename(child, fake_archive.root / child.name)
     assert scan(paths, repo).aborted is False
+
+
+# --- extra archive folders ----------------------------------------------------
+
+
+def setup_extra(fake_archive, engine, tmp_path, attached=True):
+    from dam.config import ExtraFolder
+
+    extra = tmp_path / "disk" / "Archive 2000-2015"
+    (extra / "2009").mkdir(parents=True)
+    for rel, drive_id in (("2009/a.pdf", "x-a"), ("b.pdf", "x-b")):
+        (extra / rel).write_bytes(b"x")
+        xattr.setxattr(extra / rel, DRIVE_ID_XATTR, drive_id.encode("utf-8"))
+    settings = Settings(
+        archive_root=fake_archive.root,
+        extra_folders=[ExtraFolder(label="Old years", path=extra, attached=attached)],
+    )
+    paths = ArchivePaths(fake_archive.root, settings)
+    return paths, FileRepo(engine, inbox=paths.inbox), extra
+
+
+def _rows_under(engine, label):
+    with engine.connect() as conn:
+        rows = conn.execute(select(files.c.path, files.c.missing, files.c.drive_id)).all()
+    return {r.path: r for r in rows if r.path == label or r.path.startswith(label + "/")}
+
+
+def test_full_scan_indexes_extra_folder(fake_archive, engine, tmp_path):
+    paths, repo, _ = setup_extra(fake_archive, engine, tmp_path)
+    rep = scan(paths, repo)
+    assert rep.aborted is False and rep.offline == [] and rep.clashes == []
+    root = repo.by_path("Old years")
+    assert root is not None and root.is_dir
+    assert repo.by_path("Old years/2009").is_dir
+    assert repo.by_path("Old years/2009/a.pdf").drive_id == "x-a"
+    assert repo.by_path("Old years/b.pdf").drive_id == "x-b"
+    again = scan(paths, repo)
+    assert (again.added, again.moved, again.updated, again.missing) == (0, 0, 0, 0)
+
+
+def test_offline_extra_marks_nothing_missing(fake_archive, engine, tmp_path):
+    fake_archive.add("##. Organize/a.pdf", drive_id="id-a")
+    paths, repo, extra = setup_extra(fake_archive, engine, tmp_path)
+    scan(paths, repo)
+    os.rename(extra, extra.with_name("unplugged"))
+    (fake_archive.root / "##. Organize" / "a.pdf").unlink()
+    rep = scan(paths, repo)
+    assert rep.aborted is False and rep.offline == ["Old years"]
+    under = _rows_under(engine, "Old years")
+    assert len(under) == 4 and not any(r.missing for r in under.values())
+    assert repo.get("id-a").missing is True
+    assert rep.missing == 1
+
+
+def test_empty_mount_counts_as_offline(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_extra(fake_archive, engine, tmp_path)
+    scan(paths, repo)
+    away = tmp_path / "stash"
+    away.mkdir()
+    for child in list(extra.iterdir()):
+        os.rename(child, away / child.name)  # the mount point is there but lists nothing
+    rep = scan(paths, repo)
+    assert rep.aborted is False and rep.offline == ["Old years"]
+    assert not any(r.missing for r in _rows_under(engine, "Old years").values())
+    assert rep.missing == 0
+
+
+def test_extra_gone_during_walk_marks_nothing(fake_archive, engine, tmp_path, monkeypatch):
+    from dam.index import scanner as scanner_mod
+
+    paths, repo, extra = setup_extra(fake_archive, engine, tmp_path)
+    scan(paths, repo)
+    (extra / "b.pdf").unlink()  # would be marked missing if the folder looked connected
+    real = scanner_mod.listable
+    calls = []
+
+    def flaky(p):
+        if p == paths.folders[1].root:
+            calls.append(p)
+            if len(calls) == 2:
+                return False
+        return real(p)
+
+    monkeypatch.setattr(scanner_mod, "listable", flaky)
+    rep = scan(paths, repo)
+    assert len(calls) == 2
+    assert rep.aborted is False and rep.offline == ["Old years"]
+    assert not any(r.missing for r in _rows_under(engine, "Old years").values())
+    assert rep.missing == 0
+
+
+def test_reconnect_unmarks(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_extra(fake_archive, engine, tmp_path)
+    scan(paths, repo)
+    before = {p: r.drive_id for p, r in _rows_under(engine, "Old years").items()}
+    away = extra.with_name("unplugged")
+    os.rename(extra, away)
+    with engine.begin() as conn:  # as if an earlier scan had marked them
+        conn.execute(files.update().where(files.c.path.like("Old years%")).values(missing=True))
+    assert scan(paths, repo).offline == ["Old years"]
+    os.rename(away, extra)
+    rep = scan(paths, repo)
+    assert rep.offline == [] and rep.added == 0
+    after = _rows_under(engine, "Old years")
+    assert {p: r.drive_id for p, r in after.items()} == before
+    assert not any(r.missing for r in after.values())
+
+
+def test_clash_reported_and_not_indexed(fake_archive, engine, tmp_path):
+    paths, repo, _ = setup_extra(fake_archive, engine, tmp_path)
+    fake_archive.add("old years/stray.pdf", drive_id="stray")  # made outside dam
+    rep = scan(paths, repo)
+    assert rep.clashes == ["old years"]
+    assert repo.get("stray") is None
+    assert repo.by_path("old years/stray.pdf") is None
+    assert repo.by_path("Old years/b.pdf").drive_id == "x-b"
+    assert scan(paths, repo).missing == 0
+
+
+def test_detached_label_left_alone(fake_archive, engine, tmp_path):
+    from dam.index.repo import FileRecord
+
+    paths, repo, _ = setup_extra(fake_archive, engine, tmp_path, attached=False)
+    repo.upsert(FileRecord(drive_id="x-a", path="Old years/2009/a.pdf", missing=True))
+    fake_archive.add("Old years/stray.pdf", drive_id="stray")  # a main entry on its label
+    rep = scan(paths, repo)
+    assert rep.clashes == ["Old years"] and rep.offline == []
+    assert repo.get("stray") is None
+    assert repo.get("x-a").path == "Old years/2009/a.pdf"
+    sub = scan(paths, repo, "Old years")
+    assert sub.aborted is True and repo.get("stray") is None
+
+
+def test_subtree_scan_inside_extra(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_extra(fake_archive, engine, tmp_path)
+    scan(paths, repo)
+    (extra / "2009" / "c.pdf").write_bytes(b"x")
+    (extra / "2009" / "a.pdf").unlink()
+    rep = scan(paths, repo, "old years/2009")
+    assert rep.aborted is False and rep.added == 1 and rep.missing == 1
+    assert repo.by_path("Old years/2009/c.pdf") is not None
+    assert repo.by_path("Old years/b.pdf").missing is False
+    os.rename(extra, extra.with_name("unplugged"))
+    rep = scan(paths, repo, "Old years/2009")
+    assert rep.aborted is True and rep.offline == ["Old years"] and rep.missing == 0

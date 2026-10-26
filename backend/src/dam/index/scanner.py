@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 
 from dam.core.fs import listable, readlink  # noqa: F401 (listable is re-exported)
 from dam.core.naming import parse_doc_date
-from dam.core.paths import ArchivePaths, nfc
+from dam.core.paths import ArchiveFolder, ArchivePaths, _fold, nfc
 from dam.index.driveid import read_drive_id
 from dam.index.locks import INDEX_LOCK
 from dam.index.repo import FileRecord, FileRepo, ext_of
@@ -36,12 +36,18 @@ class ScanReport:
     updated: int = 0
     missing: int = 0
     rekeyed: int = 0
-    # The archive root (or the subtree's folder) could not be listed: nothing was
+    # The main folder (or the subtree's folder) could not be listed: nothing was
     # marked missing or purged, so an unmounted Drive never blanks the index.
     aborted: bool = False
     # Archive rels (on-disk spelling) the walk could not list or stat: their rows are
     # neither updated nor marked missing, so unreadable files are never hidden.
     skipped: list[str] = field(default_factory=list)
+    # Labels of extra folders left out because they are not connected (unplugged,
+    # unmounted, or listing nothing while the index has rows): their rows are kept.
+    offline: list[str] = field(default_factory=list)
+    # Top-level main-folder entries (on-disk names) that fold to an archive folder's
+    # label: never indexed, since their rows would land on that folder's.
+    clashes: list[str] = field(default_factory=list)
 
 
 def is_ignored(name: str) -> bool:
@@ -84,12 +90,18 @@ def _link_target(paths: ArchivePaths, abs_path: Path) -> str | None:
 
 
 def _disk_spelling(paths: ArchivePaths, rel: str) -> str:
-    """Spell each component of ``rel`` the way the folder listing does (NFC/NFD safe)."""
+    """Spell each component of ``rel`` the way the folder listing does (NFC/NFD safe).
+    The label of an extra folder is kept as the settings spell it."""
     if not rel:
         return ""
-    current = paths.root
+    folder = paths.folder_of(rel)
+    current = folder.root
+    comps = PurePosixPath(rel).parts
     parts: list[str] = []
-    for comp in PurePosixPath(rel).parts:
+    if folder.label:
+        parts.append(folder.label)
+        comps = comps[1:]
+    for comp in comps:
         match = comp
         try:
             with os.scandir(current) as it:
@@ -241,47 +253,39 @@ def _root_looks_empty(root: Path) -> bool:
         return False
 
 
-def _scan(paths: ArchivePaths, repo: FileRepo, subtree: str) -> ScanReport:
-    now = time.time()
-    s = _Scan(paths, repo, now)
-    if not listable(paths.root):
-        s.report.aborted = True
-        return s.report
-    wanted = nfc(subtree).strip("/")
-    start_rel = _disk_spelling(paths, wanted)  # on-disk spelling for walking and storing
-    start = paths.abs(start_rel)
+def _connected(repo: FileRepo, folder: ArchiveFolder) -> bool:
+    """The extra folder can be listed, and does not list nothing while it has rows."""
+    if not listable(folder.root):
+        return False
+    return not (repo.list_dir(folder.label) and _root_looks_empty(folder.root))
 
-    if not wanted and repo.list_dir("") and _root_looks_empty(paths.root):
-        # A mount that lists nothing while the index has top-level rows is not "all deleted".
-        s.report.aborted = True
-        return s.report
 
-    if start_rel:
-        try:
-            st = os.lstat(start)
-        except (FileNotFoundError, NotADirectoryError):
-            st = None  # the subtree is really gone
-        except OSError:  # e.g. PermissionError: unknown, so never conclude "gone"
-            s.report.aborted = True
-            return s.report
-        if st is not None:
-            seen: list[str] = []
-            is_link = os.path.islink(start)
-            is_dir = not is_link and os.path.isdir(start)
-            with INDEX_LOCK:
-                item = s.gather(paths.rel(start), start, st, is_dir, is_link)
-                with repo.transaction() as tx:
-                    s.entry(tx, item, seen)
-                    tx.touch_seen(seen, now)
-            if not is_dir:
-                start = None
-        else:
-            start = None
+def _index_start(s: _Scan, start: Path) -> bool | None:
+    """Index the entry at ``start`` itself. True: a folder to walk; False: a file, or
+    really gone; None: it cannot be read, so nothing may be concluded."""
+    try:
+        st = os.lstat(start)
+    except (FileNotFoundError, NotADirectoryError):
+        return False  # really gone
+    except OSError:  # e.g. PermissionError: unknown, so never conclude "gone"
+        return None
+    seen: list[str] = []
+    is_link = os.path.islink(start)
+    is_dir = not is_link and os.path.isdir(start)
+    with INDEX_LOCK:
+        item = s.gather(s.paths.rel(start), start, st, is_dir, is_link)
+        with s.repo.transaction() as tx:
+            s.entry(tx, item, seen)
+            tx.touch_seen(seen, s.now)
+    return is_dir
 
-    stack: list[Path] = (
-        [start] if start is not None and (start.is_dir() and not start.is_symlink()) else []
-    )
-    first = start
+
+def _walk(s: _Scan, start: Path, clash_folds: frozenset[str] = frozenset()) -> bool:
+    """Walk the folder ``start`` and everything below it. False when ``start`` itself
+    cannot be listed. Entries of ``start`` whose name folds into ``clash_folds`` are
+    left out and recorded as clashes."""
+    paths, repo, now = s.paths, s.repo, s.now
+    stack = [start]
     while stack:
         directory = stack.pop()
         dir_rel = paths.rel(directory)
@@ -292,14 +296,16 @@ def _scan(paths: ArchivePaths, repo: FileRepo, subtree: str) -> ScanReport:
             try:
                 entries = sorted(os.scandir(directory), key=lambda e: e.name)
             except OSError:
-                if directory == first:  # the folder being scanned cannot be read
-                    s.report.aborted = True
-                    return s.report
+                if directory == start:  # the folder being scanned cannot be read
+                    return False
                 s.report.skipped.append(dir_rel)
                 continue
             items: list[_Item] = []
             for e in entries:
                 if is_ignored(e.name):
+                    continue
+                if directory == start and _fold(e.name) in clash_folds:
+                    s.report.clashes.append(e.name)
                     continue
                 rel = f"{dir_rel}/{e.name}" if dir_rel else e.name
                 try:
@@ -318,11 +324,87 @@ def _scan(paths: ArchivePaths, repo: FileRepo, subtree: str) -> ScanReport:
                     s.entry(tx, item, seen)
                 tx.touch_seen(seen, now)
         stack.extend(reversed(subdirs))
+    return True
 
-    if not listable(paths.root):  # the archive went away during the walk
+
+def _scan(paths: ArchivePaths, repo: FileRepo, subtree: str) -> ScanReport:
+    s = _Scan(paths, repo, time.time())
+    if not listable(paths.root):
         s.report.aborted = True
         return s.report
-    if not wanted:  # subtree scans leave tombstones for the next full scan
-        repo.purge_parked()
-    s.report.missing = repo.mark_missing(now, wanted, s.report.skipped)
-    return s.report
+    wanted = nfc(subtree).strip("/")
+    if wanted:
+        return _scan_subtree(s, wanted)
+    return _scan_all(s)
+
+
+def _scan_all(s: _Scan) -> ScanReport:
+    """Each folder on its own: one that is not connected is left out completely, so an
+    unplugged disk never looks like deleted files."""
+    paths, repo, report = s.paths, s.repo, s.report
+    if repo.list_dir("") and _root_looks_empty(paths.root):
+        # A mount that lists nothing while the index has top-level rows is not "all deleted".
+        report.aborted = True
+        return report
+    # A detached folder's rows stay under its label, so a main entry there is a clash too.
+    labels = frozenset(_fold(extra.label) for extra in paths.settings.extra_folders)
+    if not _walk(s, paths.root, labels):
+        report.aborted = True
+        return report
+    walked: list[ArchiveFolder] = []
+    for folder in paths.folders[1:]:
+        if _connected(repo, folder) and _index_start(s, folder.root) and _walk(s, folder.root):
+            walked.append(folder)
+        else:
+            report.offline.append(folder.label)
+            report.skipped.append(folder.label)
+    if not listable(paths.root):  # the main folder went away during the walk
+        report.aborted = True
+        return report
+    for folder in walked:
+        if not listable(folder.root):  # this folder went away during the walk
+            report.offline.append(folder.label)
+            report.skipped.append(folder.label)
+    attached = {_fold(label) for label in paths.extra_labels}
+    report.skipped.extend(
+        extra.label
+        for extra in paths.settings.extra_folders
+        if _fold(extra.label) not in attached  # detached: its rows are already missing
+    )
+    repo.purge_parked()
+    report.missing = repo.mark_missing(s.now, "", report.skipped)
+    return report
+
+
+def _scan_subtree(s: _Scan, wanted: str) -> ScanReport:
+    """Only ``wanted`` (a file or folder); leaves tombstones for the next full scan."""
+    paths, repo, report = s.paths, s.repo, s.report
+    parts = PurePosixPath(wanted).parts
+    attached = {_fold(label) for label in paths.extra_labels}
+    if any(
+        _fold(extra.label) == _fold(parts[0]) and _fold(extra.label) not in attached
+        for extra in paths.settings.extra_folders
+    ):  # a detached folder: on disk this would be a clashing main-folder entry
+        report.aborted = True
+        return report
+    folder = paths.folder_of(wanted)
+    if folder.label:
+        if not _connected(repo, folder):
+            report.offline.append(folder.label)
+            report.aborted = True
+            return report
+        wanted = "/".join((folder.label, *parts[1:]))  # stored under the settings spelling
+    start = paths.abs(_disk_spelling(paths, wanted))  # on-disk spelling for walking
+    is_dir = _index_start(s, start)
+    if is_dir is None or (is_dir and not _walk(s, start)):
+        report.aborted = True
+        return report
+    if not listable(paths.root):  # the main folder went away during the walk
+        report.aborted = True
+        return report
+    if folder.label and not listable(folder.root):
+        report.offline.append(folder.label)
+        report.aborted = True
+        return report
+    report.missing = repo.mark_missing(s.now, wanted, report.skipped)
+    return report
