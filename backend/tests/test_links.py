@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from dam.api import create_api
+from dam.core.fs import readlink
 from pdfs import make_text_pdf
 from test_preview_service import PNG, FakeQl
 
@@ -351,7 +352,7 @@ def test_link_drop_from_extra_folder(extra_folder, app, fake_archive):
     assert result.failed is None and result.error is None
     link = fake_archive.root / "10. Financial" / "Banks" / "a.pdf"
     assert link.is_symlink()
-    assert Path(os.readlink(link)) == src.resolve()
+    assert readlink(link) == str(src.resolve())
 
 
 def test_a_link_into_a_main_entry_named_like_a_label_is_not_the_extra_file(

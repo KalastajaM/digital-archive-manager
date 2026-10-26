@@ -2041,6 +2041,13 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 @media (max-width: 900px) { .settings-body, .app:has(.settings) .content { overflow: visible; } }
 .settings-body > section { max-width: 960px; margin: 0 0 var(--sp-4); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--panel-2); }
 .settings-body h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.snapshot-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: 0 0 var(--sp-3); }
+.snapshot-note { margin: 0 0 var(--sp-2); color: var(--accent); }
+.snapshot-list { list-style: none; margin: var(--sp-3) 0 0; padding: 0; border-radius: var(--r-md); background: var(--panel); box-shadow: var(--shadow-card); }
+.snapshot-list > li + li { border-top: 0.5px solid var(--hairline); }
+.snapshot-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3); }
+.snapshot-row .hint { margin: 0; }
+.snapshot-row-actions { display: flex; flex: none; gap: var(--sp-2); }
 .filing-codes-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: flex; flex-direction: column; border-radius: var(--r-md); background: var(--panel); box-shadow: var(--shadow-card); }
 .filing-codes-list > li + li { border-top: 0.5px solid var(--hairline); }
 /* A closed code: one line, the whole of it a button that opens the editor. */
@@ -2366,3 +2373,12 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .carry-list { margin: var(--sp-1) 0 var(--sp-2); padding-left: var(--sp-5); }
 .carry-list ul { margin: 0; padding-left: var(--sp-4); }
 .entry-offline { flex: none; margin-left: var(--sp-2); font-size: 0.85em; color: var(--muted); }
+
+/* Print (the preview's Print button): only the sheet of page images prints, one page per sheet of paper. */
+.print-sheet { display: none; }
+@media print {
+  body > :not(.print-sheet) { display: none !important; }
+  .print-sheet { display: block; }
+  .print-sheet img { display: block; width: 100%; height: auto; max-height: 98vh; object-fit: contain; break-after: page; }
+  .print-sheet img:last-child { break-after: auto; }
+}

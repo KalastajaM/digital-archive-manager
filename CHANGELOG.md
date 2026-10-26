@@ -12,6 +12,17 @@ All notable changes are listed here. The format follows
   paper to its folder, where a filed document ends up, when each tray reminds you, how
   every change is previewed and can be undone, and what stays on your computer. They
   follow the Light and Dark appearance.
+- **Print a document from its preview.** The printer button next to the zoom buttons (in
+  the file view, Quick Look and the viewer window) prints a PDF, every page of it, or an
+  image through the browser's print dialog.
+- **Snapshots** (Settings, Snapshots): take a snapshot of an archive's database and
+  settings while dam runs, and restore one. Before a restore dam asks whether to take a
+  snapshot of the current state first. **Export** saves a snapshot through the browser so
+  you can keep it on another disk or in the cloud, and **Import…** adds one back (checked
+  in full first), also on another computer, where the archive folder may have another
+  path: after you confirm, that snapshot is restored with this archive's own folders. The
+  replaced settings are moved aside, never deleted, and a snapshot from an older version
+  of dam is updated when it is restored. Your documents are not part of a snapshot.
 - **One archive can now span several folders.** In Settings, **Archive folders**, **Add
   folder** joins a further folder (for example on an external disk or a cloud drive) under
   a label you choose. Browse, search, tags, collections and Maintenance see one combined
