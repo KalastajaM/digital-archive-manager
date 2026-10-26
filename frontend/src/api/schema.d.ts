@@ -3913,6 +3913,11 @@ export interface components {
             target: string | null;
             /** Inside */
             inside: string | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "broken" | "folder_not_connected" | "folder_detached";
         };
         /** BrokenLinksOut */
         BrokenLinksOut: {
@@ -5207,6 +5212,16 @@ export interface components {
              */
             marks: ("starred" | "important")[];
         };
+        /**
+         * LabelClashesOut
+         * @description The archive folders whose label a top-level entry of the main folder also has.
+         */
+        LabelClashesOut: {
+            /** Items */
+            items: string[];
+            /** Total */
+            total: number;
+        };
         /** LayoutFolderOut */
         LayoutFolderOut: {
             /** Path */
@@ -5405,6 +5420,7 @@ export interface components {
             references?: components["schemas"]["BadReferencesOut"] | null;
             names?: components["schemas"]["BadNamesOut"] | null;
             waiting?: components["schemas"]["WaitingOut"] | null;
+            label_clashes?: components["schemas"]["LabelClashesOut"] | null;
         };
         /** MaintenanceStartIn */
         MaintenanceStartIn: {
@@ -5412,7 +5428,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting";
+            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes";
             /** Days */
             days?: number | null;
         };
@@ -7137,6 +7153,8 @@ export interface components {
             days: number;
             /** Approximate */
             approximate: boolean;
+            /** Folder */
+            folder: string | null;
         };
         /** WaitingOut */
         WaitingOut: {
@@ -10729,7 +10747,7 @@ export interface operations {
     forget_api_maintenance_jobs_delete: {
         parameters: {
             query?: {
-                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting") | null;
+                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes") | null;
             };
             header?: never;
             path?: never;

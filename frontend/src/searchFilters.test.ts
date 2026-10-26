@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FILTER_HELP, type FilterName, filterToken, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
+import { FILTER_HELP, type FilterName, IS_VALUES, filterToken, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
 
 const f = (name: FilterName, value: string, negated = false) => ({ name, value, negated });
 
@@ -66,5 +66,14 @@ describe("is:locked", () => {
     expect(splitSearch("is:locked ")).toMatchObject({ filters: [f("is", "locked")] });
     const help = FILTER_HELP.find((h) => h.name === "is");
     expect(help?.text).toContain("locked (a lock you set; Important files are found with is:important)");
+  });
+});
+
+describe("is:disconnected", () => {
+  it("is a filter value, and the help says what it finds", () => {
+    expect(IS_VALUES).toContain("disconnected");
+    expect(splitSearch("-is:disconnected ")).toMatchObject({ filters: [f("is", "disconnected", true)] });
+    const help = FILTER_HELP.find((h) => h.name === "is");
+    expect(help?.text).toContain("disconnected (files in an archive folder that is not connected now)");
   });
 });

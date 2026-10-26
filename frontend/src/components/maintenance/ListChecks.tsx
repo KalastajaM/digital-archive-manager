@@ -1,8 +1,8 @@
 /** The small checks: each a button that starts a check, a list, and the existing flow that
  * acts on it (Move to To Delete, the previewed rename, a previewed link removal). Nothing
  * runs until its button is clicked. */
-import { Folder, Link2Off, ListX, RotateCcw, Trash2, Type } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { Folder, FolderX, Link2Off, ListX, RotateCcw, Trash2, Type } from "lucide-react";
+import { Fragment, type ReactNode, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ApiError,
@@ -232,9 +232,11 @@ export function BrokenLinks() {
   const inFlight = useRef(false);
   useBlockToastActions(busy || plan !== null);
   const items = check.job?.broken_links?.items ?? [];
-  const ticks = useTicks(items.map((i) => i.drive_id));
-  const outside = items.filter((i) => !i.inside && ticks.has(i.drive_id)).map((i) => i.drive_id);
-  const inside = items.filter((i) => i.inside && ticks.has(i.drive_id)).map((i) => i.drive_id);
+  // a link into an unplugged folder is not broken: nothing is offered for it
+  const actionable = items.filter((i) => i.reason !== "folder_not_connected");
+  const ticks = useTicks(actionable.map((i) => i.drive_id));
+  const outside = actionable.filter((i) => !i.inside && ticks.has(i.drive_id)).map((i) => i.drive_id);
+  const inside = actionable.filter((i) => i.inside && ticks.has(i.drive_id)).map((i) => i.drive_id);
 
   const guarded = async (work: () => Promise<void>) => {
     if (inFlight.current) return;
@@ -287,7 +289,7 @@ export function BrokenLinks() {
       title="Broken links"
       icon={<Link2Off />}
       kind="broken_links"
-      intro="Links whose target is gone. In Ongoing and Important the app may remove a broken link; anywhere else a link is moved to To Delete like a file, and you decide."
+      intro="Links whose target is gone. In Ongoing and Important the app may remove a broken link; anywhere else a link is moved to To Delete like a file, and you decide. A link into an archive folder that is not connected is only listed: it works again once the folder is back."
       check={check}
       empty="No broken links."
       found={items.length > 0}
@@ -302,18 +304,30 @@ export function BrokenLinks() {
             what="links"
           />
           <ul className="check-list">
-            {items.map((l) => (
-              <li key={l.drive_id}>
-                <label className="check">
-                  <input type="checkbox" checked={ticks.has(l.drive_id)} onChange={() => ticks.toggle(l.drive_id)} />
-                  <span>
-                    <code>{visible(l.path)}</code> <span className="hint">points to</span>{" "}
-                    <code>{visible(l.target ?? "nothing")}</code>
+            {items.map((l) => {
+              const where = (
+                <span>
+                  <code>{visible(l.path)}</code> <span className="hint">points to</span>{" "}
+                  <code>{visible(l.target ?? "nothing")}</code>
+                </span>
+              );
+              return (
+                <li key={l.drive_id}>
+                  {l.reason === "folder_not_connected" ? (
+                    <span className="check">{where}</span>
+                  ) : (
+                    <label className="check">
+                      <input type="checkbox" checked={ticks.has(l.drive_id)} onChange={() => ticks.toggle(l.drive_id)} />
+                      {where}
+                    </label>
+                  )}
+                  <span className="dup-actions">
+                    <LinkReason reason={l.reason} />
+                    {l.inside && <Tag tone="grey">kept by the app</Tag>}
                   </span>
-                </label>
-                {l.inside && <Tag tone="grey">kept by the app</Tag>}
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
           <Capped shown={items.length} total={check.job?.broken_links?.total ?? 0} />
           <div className="check-actions">
@@ -349,6 +363,14 @@ export function BrokenLinks() {
       )}
     </CheckCard>
   );
+}
+
+/** Why a link is listed: its target is gone, or lies in an archive folder that is not
+ * connected now or is detached. */
+function LinkReason({ reason }: { reason: "broken" | "folder_not_connected" | "folder_detached" }) {
+  if (reason === "folder_not_connected") return <Tag tone="orange">Folder not connected</Tag>;
+  if (reason === "folder_detached") return <Tag tone="grey">Folder detached</Tag>;
+  return <Tag tone="red">Missing</Tag>;
 }
 
 // -- collection members and tray items without a file -----------------------------------------------
@@ -576,21 +598,31 @@ export function Waiting() {
               In all, To Delete holds {plural(result.in_to_delete, "file")} ({formatSize(result.in_to_delete_size)}).
             </span>
           </p>
-          {result.items.length > 0 && (
-            <ul className="check-list">
-              {result.items.map((f) => (
-                <li key={f.drive_id}>
-                  <span>
-                    <code>{visible(f.path)}</code>{" "}
-                    <span className="hint">
-                      {formatSize(f.size)}, {f.approximate ? "about " : ""}
-                      {plural(f.days, "day")} ({shortDate(f.since)})
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          {byFolder(result.items).map(([folder, files], _, groups) => {
+            const name = folder ?? "The main folder";
+            return (
+              <Fragment key={folder ?? ""}>
+                {groups.length > 1 && (
+                  <p className="check-head">
+                    <strong>{visible(name)}</strong>
+                  </p>
+                )}
+                <ul className="check-list" aria-label={name}>
+                  {files.map((f) => (
+                    <li key={f.drive_id}>
+                      <span>
+                        <code>{visible(f.path)}</code>{" "}
+                        <span className="hint">
+                          {formatSize(f.size)}, {f.approximate ? "about " : ""}
+                          {plural(f.days, "day")} ({shortDate(f.since)})
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Fragment>
+            );
+          })}
           <Capped shown={result.items.length} total={result.total} />
           <p>
             <Link to={`/browse?${new URLSearchParams({ path: quarantine })}`} className="card-link">
@@ -598,6 +630,47 @@ export function Waiting() {
             </Link>
           </p>
         </>
+      )}
+    </CheckCard>
+  );
+}
+
+/** The waiting files by the folder whose To Delete they are in (the main folder first,
+ * then the archive folders in the order they first appear), each oldest first. */
+function byFolder<T extends { folder: string | null }>(items: T[]): [string | null, T[]][] {
+  const groups = new Map<string | null, T[]>();
+  if (items.some((f) => f.folder === null)) groups.set(null, []);
+  for (const f of items) groups.set(f.folder, [...(groups.get(f.folder) ?? []), f]);
+  return [...groups];
+}
+
+// -- main-folder entries named like an archive folder -------------------------------------------------------
+
+export function LabelClashes() {
+  const check = useMaintenanceJob("label_clashes");
+  const labels = check.job?.label_clashes?.items ?? [];
+  return (
+    <CheckCard
+      title="Archive folder names"
+      icon={<FolderX />}
+      kind="label_clashes"
+      intro="Folders at the top of the main folder that have the same name as one of the archive folders. The archive folder wins, so the folder in the main folder is left out of the index and search until one of the two is renamed."
+      check={check}
+      empty="No folder in the main folder has the name of an archive folder."
+      found={labels.length > 0}
+      summary={plural(check.job?.label_clashes?.total ?? 0, "name clash", "name clashes")}
+    >
+      {labels.length > 0 && (
+        <ul className="check-list">
+          {labels.map((label) => (
+            <li key={label}>
+              <span>
+                A folder in the main folder has the same name as the archive folder &apos;{visible(label)}&apos;. Rename it or
+                the archive folder.
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </CheckCard>
   );
