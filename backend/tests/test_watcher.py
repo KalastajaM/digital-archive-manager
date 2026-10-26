@@ -298,3 +298,75 @@ def test_change_in_extra_folder_is_noted(fake_archive, engine, tmp_path):
     w = Watcher(paths, repo)
     w._note(str(extra.resolve() / "2009" / "a.pdf"))
     assert w._pending == {"Old years/2009/a.pdf"}
+
+
+def test_refresh_watches_survives_events_while_toggling(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo, debounce_s=0.05, reconcile_every_s=3600, folder_check_s=3600)
+    w.start()
+    stop = threading.Event()
+
+    def writer():
+        i = 0
+        while not stop.is_set():
+            (fake_archive.root / "##. Organize").mkdir(exist_ok=True)
+            (fake_archive.root / "##. Organize" / f"f{i}.txt").write_bytes(b"x")
+            i += 1
+
+    def toggle():
+        gone = extra.with_name("away")
+        for _ in range(15):
+            os.rename(extra, gone)
+            w.refresh_watches()
+            os.rename(gone, extra)
+            w.refresh_watches()
+
+    t = threading.Thread(target=writer, daemon=True)
+    worker = threading.Thread(target=toggle, daemon=True)
+    t.start()
+    worker.start()
+    worker.join(30)
+    stop.set()
+    t.join(5)
+    hung = worker.is_alive()
+    w.stop()
+    assert not hung, "refresh_watches deadlocked against event delivery"
+
+
+def test_unschedule_failure_does_not_abort_or_leak(fake_archive, engine, tmp_path, monkeypatch):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo)
+    w.refresh_watches()
+
+    def boom(watch):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(w._observer, "unschedule", boom)
+    gone = extra.with_name("away")
+    os.rename(extra, gone)
+    assert w.refresh_watches() == []
+    assert "Old years" not in w._watches
+
+
+def test_folders_loop_rescans_a_folder_that_comes_back(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    changed = threading.Event()
+    w = Watcher(
+        paths,
+        repo,
+        on_change=changed.set,
+        debounce_s=0.1,
+        reconcile_every_s=3600,
+        folder_check_s=0.1,
+    )
+    w.start()
+    try:
+        gone = extra.with_name("away")
+        os.rename(extra, gone)
+        assert wait_for(lambda: "Old years" not in w._watches, 5)
+        (gone / "2009" / "a.pdf").write_bytes(b"x")
+        os.rename(gone, extra)
+        assert wait_for(lambda: repo.by_path("Old years/2009/a.pdf") is not None, 5)
+        assert changed.wait(5)
+    finally:
+        w.stop()
