@@ -213,6 +213,7 @@ class App:
             rescan=self.scan,
         )
         self.browse.copy_jobs = self.copy_jobs
+        self.executor.copying = self.copy_jobs.running
         self.maintenance = MaintenanceService(
             self.paths,
             self.repo,

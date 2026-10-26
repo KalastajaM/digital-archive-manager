@@ -117,6 +117,8 @@ def _rule_change(old: str, new: str) -> Callable:
 def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
     """Rewrite (or, without ``write``, count) the stored paths under ``old``."""
     counts = {"files": 0, "operations": 0, "made_folders": 0, "maintenance_ignored": 0}
+    # the search rows by their rowid (drive_id is not indexed there: one scan, not one each)
+    fts = dict(conn.execute(text("SELECT drive_id, rowid FROM file_fts")).all()) if write else {}
     for drive_id, path in conn.execute(select(files.c.drive_id, files.c.path)).all():
         moved = swap(path, old, new)
         if moved is None:
@@ -129,14 +131,15 @@ def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
         if top:
             values["name"] = moved
         conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
-        conn.execute(
-            text(
-                "UPDATE file_fts SET path = :p"
-                + (", name = :p" if top else "")
-                + " WHERE drive_id = :id"
-            ),
-            {"p": moved, "id": drive_id},
-        )
+        if drive_id in fts:
+            conn.execute(
+                text(
+                    "UPDATE file_fts SET path = :p"
+                    + (", name = :p" if top else "")
+                    + " WHERE rowid = :r"
+                ),
+                {"p": values["path_nfc"], "r": fts[drive_id]},
+            )
     journal = (operations.c.id, operations.c.kind, operations.c.src, operations.c.dst)
     rows = conn.execute(select(*journal))
     for op_id, kind, src, dst in rows.all():
@@ -190,6 +193,8 @@ def plan(app_paths: AppPaths, engine: Engine, old: str, new: str) -> RelabelPlan
         out = RelabelPlan(old, new, counts=_db(conn, old, new, write=False))
     edits = [_edit(app_paths.config_dir / "settings.yaml", _settings_change(old, new))]
     edits += [_edit(p, _rule_change(old, new)) for p in rule_files(app_paths.config_dir / "rules")]
+    if app_paths.filing_codes_path.is_file():  # each code's ``folder``, as in the rules
+        edits.append(_edit(app_paths.filing_codes_path, _rule_change(old, new)))
     out.files = [e for e in edits if e is not None]
     root = load_settings(app_paths).archive_root
     try:
@@ -209,6 +214,8 @@ def _verify(change: FileChange, app_paths: AppPaths) -> Callable[[], bool]:
         try:
             if change.path.name == "settings.yaml":
                 load_settings(app_paths)
+            elif change.path == app_paths.filing_codes_path:
+                yaml.safe_load(change.path.read_text(encoding="utf-8"))
             else:
                 load_rule_file(change.path)
             return change.path.read_bytes().decode("utf-8") == change.text

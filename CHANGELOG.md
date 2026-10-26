@@ -49,7 +49,7 @@ All notable changes are listed here. The format follows
   - **Change label** (Settings, Archive folders) renames an extra folder's label. Every
     path dam keeps under it changes with it: the index, the history (earlier changes can
     still be undone), protected folders, folders kept from AI and the `folder` values in
-    your rules, which are edited in place so your comments stay. Nothing on the disk
+    your rules and filing codes, which are edited in place so your comments stay. Nothing on the disk
     changes, and a snapshot is taken first.
   - Maintenance marks links into an unplugged or detached folder ("Folder not connected",
     "Folder detached") and lists a folder in the main folder that has the same name as an

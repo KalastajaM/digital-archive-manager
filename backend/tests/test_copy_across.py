@@ -116,7 +116,7 @@ def test_change_during_copy_stops_the_batch(across, fake_archive, monkeypatch):
     real = primitives.file_sha256
     calls = []
 
-    def changing(path):  # the snapshot reads one hash, the copy step another
+    def changing(path, stop=None):  # the snapshot reads one hash, the copy another
         calls.append(path)
         return real(path) if len(calls) == 1 else "0" * 64
 
@@ -156,3 +156,44 @@ def test_cancel_mid_copy_leaves_temp(across, fake_archive, extra_folder):
     assert result.failed is not None and TEMP_COPY_PREFIX in result.error
     assert (fake_archive.root / BANKS / "a.pdf").exists()
     assert not (extra_folder.root / "2010" / "a.pdf").exists()
+
+
+def test_stop_works_during_a_restore_across(across, fake_archive, extra_folder):
+    """A restore across disks plans copies only (the originals stay in To Delete): Stop
+    must still end it between files."""
+    b = _id_at(across, f"{BANKS}/b.pdf")
+    assert across.browse.quarantine(["id-a", b], origin="ui").failed is None
+    ops = [
+        Op(OpKind.MOVE, f"{QUAR}/{BANKS}/{n}", "Old years/2010") for n in ("a.pdf", "b.pdf")
+    ]
+
+    def after_first_copy() -> bool:
+        return any(j == ("copy_across", "done") for j in _journal(across))
+
+    result = across.executor.apply(
+        Plan(ops, origin="ui", copy_across=True), should_stop=after_first_copy
+    )
+    assert result.stopped
+    assert [str(r.kind) for r in result.done if r.kind is not OpKind.MKDIR] == ["copy_across"]
+    assert not (extra_folder.root / "2010" / "b.pdf").exists()
+
+
+def test_no_throttle_between_copy_and_its_original(across, monkeypatch):
+    slept = []
+    across.executor.throttle_ms = 5
+    monkeypatch.setattr(executor_module.time, "sleep", lambda s: slept.append(s))
+    result = _move(across, "a.pdf")
+    kinds = [str(r.kind) for r in result.done]
+    # one sleep before each op but the first and the move of the original
+    assert len(slept) == len(kinds) - 2
+
+
+def test_undo_refused_while_a_copy_job_runs(across):
+    from dam.services.errors import Conflict
+
+    result = _move(across, "a.pdf")
+    across.executor.copying = lambda: True
+    with pytest.raises(Conflict):
+        across.executor.undo(result.batch_id)
+    with pytest.raises(Conflict):
+        across.executor.preview_undo(result.batch_id)

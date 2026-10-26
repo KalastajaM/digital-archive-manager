@@ -1448,7 +1448,9 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
     the file being copied; **Hide** leaves a line at the bottom of the window, and you can
     keep working. Closing the window does not stop the move. **Stop** lets the file being
     copied finish (its original goes to To Delete too) and ends there, so every file is
-    either moved or untouched; move the rest later.
+    either moved or untouched; move the rest later. While a large file is being copied,
+    other changes (another move, a rename, an undo) wait until that file is done, and
+    Undo waits until the whole move has finished.
   - **Undo** (in the toast or Activity) moves the originals back from To Delete and the
     copies to the To Delete of the other disk.
   - If a copy does not match, or the app is closed during a copy, the move stops there
@@ -1480,8 +1482,8 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   a new label. **Preview** says how many index and history entries change and which
   settings and rule files are edited; **Change label** then does it. Nothing on the disk
   changes, the folder keeps its files, tags and notes, earlier changes can still be undone,
-  and protected folders, folders kept from AI and the `folder` and `folder_is` values in
-  your rules follow the new label. The rule files are edited value by value, so your
+  and protected folders, folders kept from AI, the `folder` and `folder_is` values in
+  your rules and the folders of your filing codes follow the new label. The rule files are edited value by value, so your
   comments and layout stay; a value written over several lines is refused with its file
   and line, for you to change by hand. dam takes a snapshot first (Settings, Snapshots,
   marked "before a label change") and reopens the archive.

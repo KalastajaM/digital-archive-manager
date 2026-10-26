@@ -166,3 +166,17 @@ def test_settings_write_untouched_keys(app_paths, engine, archive):
     after = load_settings(app_paths)
     assert after.archive_root == before.archive_root
     assert after.special_folders == before.special_folders
+
+
+def test_filing_codes_follow_the_label(app_paths, engine, archive):
+    codes = app_paths.filing_codes_path
+    before = codes.read_text(encoding="utf-8") if codes.exists() else ""
+    codes.write_text(
+        before + "\n# old papers\n- code: OLD\n  folder: Old years/{doc_date:%Y}  # by year\n",
+        encoding="utf-8",
+    )
+    plan = relabel.plan(app_paths, engine, "Old years", "Archive disk")
+    assert codes.name in [f.path.name for f in plan.files]
+    relabel.apply(app_paths, engine, plan)
+    text_after = codes.read_text(encoding="utf-8")
+    assert "  folder: Archive disk/{doc_date:%Y}  # by year\n" in text_after

@@ -36,6 +36,7 @@ from dam.ops.model import (
 from dam.ops.planner import Planner
 from dam.ops.undo import JournalEntry, RecoveryResult
 from dam.services import LOCAL_ID_PREFIX
+from dam.services.errors import Conflict
 
 if TYPE_CHECKING:
     from dam.locks import LockService
@@ -43,6 +44,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 __all__ = ["Executor", "JournalEntry", "RecoveryResult"]
+
+UNDO_WAITS = "A move across disks is running. Undo when it has finished."
 
 _RELOCATE = _undo.RELOCATE
 _FAILURES = (OSError, OpFailed, GuardError, OutsideArchiveError)
@@ -79,6 +82,9 @@ class Executor:
         # set when the app closes: a copy across disks in progress ends at its next
         # chunk (its unfinished temporary file stays, and the op fails saying so)
         self.cancel_copies = threading.Event()
+        # a move across disks runs in the background (``dam.ops.jobs``; set by the App):
+        # undo waits for it, so it never lands between a copy and the move of its original
+        self.copying: Callable[[], bool] = lambda: False
 
     def preview(self, plan: Plan) -> list[ResolvedOp]:
         """Validate and resolve ``plan`` without touching the disk or the journal.
@@ -126,7 +132,12 @@ class Executor:
 
     def undo(self, batch_id: str) -> BatchResult:
         """Revert batch ``batch_id`` exactly (see ``dam.ops.undo.undo``)."""
+        self._refuse_while_copying()
         return _undo.undo(self, batch_id)
+
+    def _refuse_while_copying(self) -> None:
+        if self.copying():
+            raise Conflict(UNDO_WAITS)
 
     def preview_undo(self, batch_id: str) -> list[ResolvedOp]:
         """The plan ``undo(batch_id)`` would run, read only (see ``dam.ops.undo``).
@@ -134,6 +145,7 @@ class Executor:
         Not ``preview()``: that refuses origin "undo" and resolves without the
         restore-only guard exceptions, so it would refuse exact restores that undo
         accepts. This is the very planning ``undo()`` runs before it acts."""
+        self._refuse_while_copying()
         return _undo.plan_undo(self, batch_id)
 
     def pending(self) -> list[JournalEntry]:
@@ -164,11 +176,18 @@ class Executor:
         or ``##. Important`` never waits, also in a batch that mixes both (an Ongoing
         conversion)."""
         for seq, rop in enumerate(resolved):
-            pair = seq and resolved[seq - 1].kind is OpKind.COPY_ACROSS
+            # the move of an original to To Delete right after its copy: always runs, and
+            # at once (a restore has copies only, so Stop works between those)
+            pair = (
+                seq > 0
+                and resolved[seq - 1].kind is OpKind.COPY_ACROSS
+                and rop.kind is OpKind.QUARANTINE
+                and fold_parts(rop.src) == fold_parts(resolved[seq - 1].src)
+            )
             if should_stop is not None and not pair and should_stop():
                 result.stopped = True
                 return result
-            if seq and self.throttle_ms and not self._in_publish_root(rop):
+            if seq and self.throttle_ms and not pair and not self._in_publish_root(rop):
                 time.sleep(self.throttle_ms / 1000)  # outside the lock
             with INDEX_LOCK:
                 if self._run_op(seq, rop, origin, result, undo_of, label):
@@ -291,7 +310,12 @@ class Executor:
         others = [r.drive_id for r in (self.repo.by_path(original),) if r is not None]
         if original_id is not None and self.repo.get(original_id) is not None:
             others.append(original_id)
-        self.repo.drop_rows([d for d in dict.fromkeys(others) if d != rec.drive_id])
+        others = [d for d in dict.fromkeys(others) if d != rec.drive_id]
+        if any(self.repo.has_attachments(d) for d in others):
+            # the owner's row still describes the original (the copy's index step never
+            # ran): it stays, and the copy's own row stays with the copy
+            return
+        self.repo.drop_rows(others)
         self.repo.update_path(rop.dst, original)
         if original_id is not None and original_id != rec.drive_id:
             self.repo.rekey(rec.drive_id, original_id)
@@ -674,12 +698,11 @@ class Executor:
             case OpKind.COPY:
                 st = os.lstat(dst)
                 ok = stat.S_ISREG(st.st_mode) and st.st_size == snap["size"]
-            case OpKind.COPY_ACROSS:
+            case OpKind.COPY_ACROSS:  # its content was checked by ``copy_across`` itself
                 st = os.lstat(dst)
                 ok = (
                     stat.S_ISREG(st.st_mode)
                     and st.st_size == snap["size"]
-                    and primitives.file_sha256(dst) == snap["content_hash"]
                     and os.path.lexists(self.paths.abs(rop.src))
                 )
             case _:

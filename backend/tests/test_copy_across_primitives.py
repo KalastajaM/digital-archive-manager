@@ -69,3 +69,9 @@ def test_copy_file_stop_between_chunks(tmp_path):
     assert dst.name in str(e.value)
     assert dst.exists()  # the partial file stays: dam never deletes
     assert src.stat().st_size == 3 * 1024 * 1024
+
+
+def test_hashing_stops_between_chunks(tmp_path):
+    src = _source(tmp_path, b"x" * (3 * 1024 * 1024))
+    with pytest.raises(OpFailed):
+        file_sha256(src, stop=lambda: True)

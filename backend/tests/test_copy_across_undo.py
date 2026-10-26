@@ -148,3 +148,30 @@ def test_recover_only_temp_needs_manual_check(across, fake_archive, extra_folder
     os.rename(extra_folder.root / "2010" / "a.pdf", temp)
     assert _recovered(across) == ("failed", MANUAL_CHECK)
     assert temp.exists() and (fake_archive.root / BANKS / "a.pdf").exists()
+
+
+def test_undo_keeps_the_tagged_row_when_the_copy_was_never_repointed(
+    across, fake_archive, extra_folder, monkeypatch
+):
+    """The index step after a copy failed (the row still describes the original); the scan
+    then gave the copy a row of its own. Undo must not drop the owner's row."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from dam.ops import executor as executor_module
+
+    across.tags.add("id-a", ["bank"])
+    across.notes.set("file", "id-a", "closed")
+
+    def broken(self, rop):
+        raise SQLAlchemyError("disk I/O error")
+
+    monkeypatch.setattr(executor_module.Executor, "_repoint_copy", broken)
+    ops = [Op(OpKind.MOVE, f"{BANKS}/a.pdf", "Old years/2010")]
+    result = across.executor.apply(Plan(ops, origin="ui", copy_across=True))
+    assert result.index_error is not None  # stopped before the original moved
+    monkeypatch.undo()
+    across.scan()
+    assert across.executor.undo(result.batch_id).failed is None
+    assert across.repo.by_path(f"{BANKS}/a.pdf").drive_id == "id-a"
+    assert across.tags.for_file("id-a") == ["bank"]
+    assert across.notes.get("file", "id-a") == "closed"

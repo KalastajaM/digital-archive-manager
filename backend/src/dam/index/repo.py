@@ -799,6 +799,28 @@ class FileRepo:
                     text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": drive_id}
                 )
 
+    def has_attachments(self, drive_id: str) -> bool:
+        """The owner gave the file something: a tag, a note or checklist entry, a place in
+        a collection or a tray item, or a lock."""
+        with self._conn() as conn:
+            for column in (
+                file_tags.c.drive_id,
+                collection_members.c.drive_id,
+                item_files.c.drive_id,
+                file_locks.c.drive_id,
+            ):
+                if conn.execute(select(column).where(column == drive_id).limit(1)).first():
+                    return True
+            for table in (notes, checklist_items):
+                found = conn.execute(
+                    select(table.c.id)
+                    .where(table.c.target_kind == "file", table.c.target_id == drive_id)
+                    .limit(1)
+                ).first()
+                if found:
+                    return True
+        return False
+
     def drop_rows(self, drive_ids: list[str]) -> None:
         """Remove the index rows ``drive_ids`` with their text, fts, tags and codes reads
         (database only; nothing on disk is touched)."""

@@ -322,8 +322,8 @@ the new label: `files.path`, `path_nfc` and the folder's own top row's `name`, t
 maintenance entries set aside (except duplicate and version groups). In `settings.yaml`:
 the folder's `extra_folders` label, and `protected_paths` and `ai.exclude_folders` entries
 under it. In `config/rules/*.yaml`: every `folder` and `folder_is` value under it (a
-template whose first part is a placeholder, like `{payee}/x`, is left alone). Tray files
-name no folders. The YAML files are edited value by value (`dam.core.yamledit`: only the
+template whose first part is a placeholder, like `{payee}/x`, is left alone), and the
+same for each code's `folder` in `config/filing_codes.yaml`. Tray files name no folders. The YAML files are edited value by value (`dam.core.yamledit`: only the
 characters of each value change, in the quoting it had; a plain value that would read
 differently is written in double quotes), each new file is loaded again and compared with
 the old one with only those values changed, and a value that is folded, literal, spread
@@ -930,7 +930,12 @@ original is undone by moving it back; the `copy_across` by a `quarantine` of the
 the destination folder's own To Delete, after which the index row describes the original
 again (its path and journaled id; a row the scanner gave the original in To Delete
 meanwhile is dropped from the index first). Undo checks that the copy still has the
-journaled size and hash, and waits until both folders are connected.
+journaled size and hash, and waits until both folders are connected. While a move across
+disks runs, undo (and its preview) is 409, so it can never land between a copy and the move
+of its original. If the index step after a copy never ran (the row still describes the
+original, and a scan gave the copy a row of its own), undo leaves both rows as they are
+when the original's row carries anything of the owner's (tags, notes, collection or tray
+places, a lock).
 
 **Recovery** settles a `planned` `copy_across` from the disk: no copy and no `.dam-copy-`
 file means it never started; a copy with the journaled size and hash, with the source

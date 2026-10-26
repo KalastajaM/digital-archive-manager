@@ -136,14 +136,17 @@ def move_between_folders(src: Path, dst: Path) -> None:
         raise
 
 
-def file_sha256(path: Path) -> str:
-    """The sha256 of the regular file ``path`` (a link is refused, not followed)."""
+def file_sha256(path: Path, stop: Callable[[], bool] | None = None) -> str:
+    """The sha256 of the regular file ``path`` (a link is refused, not followed).
+    ``stop`` (looked at between chunks) true ends the reading, as a failure."""
     if not stat.S_ISREG(os.lstat(path).st_mode):
         raise OpFailed(f"{path.name} is not a plain file.")
     digest = hashlib.sha256()
     with open(path, "rb") as f:
         while chunk := f.read(_COPY_CHUNK):
             digest.update(chunk)
+            if stop is not None and stop():
+                raise OpFailed("stopped")
     return digest.hexdigest()
 
 
@@ -153,15 +156,18 @@ def copy_verified(
     sha256: str,
     limit: int | None = MAX_COPY_BYTES,
     stop: Callable[[], bool] | None = None,
+    hash_source: bool = True,
 ) -> None:
     """Copy ``src`` to the new file ``dst`` (exclusive create, fsync, ``copy_file``),
     then check that ``dst`` has the size and sha256 of ``src`` and that both are
     ``sha256`` (the hash journaled before). ``src`` is only read. On any failure nothing
-    is removed: ``dst`` may remain, ``src`` stays."""
-    if file_sha256(src) != sha256:
+    is removed: ``dst`` may remain, ``src`` stays. ``hash_source`` False: ``sha256`` was
+    read from ``src`` just before (a copy across disks), so ``src`` is not read a second
+    time; a change while copying still shows, as a copy that does not match."""
+    if hash_source and file_sha256(src, stop) != sha256:
         raise OpFailed(f"{src.name} changed since it was planned, so it is not copied.")
     size = copy_file(src, dst, limit=limit, stop=stop)
-    if os.lstat(dst).st_size != size or file_sha256(dst) != sha256:
+    if os.lstat(dst).st_size != size or file_sha256(dst, stop) != sha256:
         raise OpFailed(
             f"The copy {dst.name} does not match {src.name}. Both files stay where they are;"
             " dam never deletes: remove the copy yourself."
@@ -184,7 +190,7 @@ def copy_across(
     that may remain."""
     temp = dst.parent / f"{TEMP_COPY_PREFIX}{secrets.token_hex(4)}-{dst.name}"
     try:
-        copy_verified(src, temp, sha256, limit=None, stop=stop)
+        copy_verified(src, temp, sha256, limit=None, stop=stop, hash_source=False)
         st = os.stat(src)
         os.utime(temp, ns=(st.st_atime_ns, st.st_mtime_ns))
         rename_excl(temp, dst)
