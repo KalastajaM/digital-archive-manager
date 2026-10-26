@@ -370,3 +370,14 @@ def test_folders_loop_rescans_a_folder_that_comes_back(fake_archive, engine, tmp
         assert changed.wait(5)
     finally:
         w.stop()
+
+
+def test_a_stopped_watcher_calls_no_on_change(fake_archive, engine):
+    paths, repo = setup(fake_archive, engine)
+    calls = []
+    w = Watcher(paths, repo, on_change=lambda: calls.append(1))
+    w._call_on_change()
+    assert calls == [1]
+    w.stop()
+    w._call_on_change()  # a scan that finished after stop(), as after a reopen
+    assert calls == [1]

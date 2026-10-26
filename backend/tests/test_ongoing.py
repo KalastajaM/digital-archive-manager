@@ -818,6 +818,23 @@ def test_initial_scan_with_archive_gone_does_not_sync(app, fake_archive, tmp_pat
     assert wake.is_set() and calls == []
 
 
+def test_a_stopped_background_scans_and_syncs_nothing(app, monkeypatch):
+    """After a reopen the old App's background must not sync ##. Ongoing next to the new
+    one's: its stop flag is checked before the scan and before each sync."""
+    from dam.serve import _after_watcher_scan, _initial_scan
+
+    calls = []
+    monkeypatch.setattr(app, "sync_publishers", lambda: calls.append("sync"))
+    monkeypatch.setattr(app, "scan", lambda: calls.append("scan"))
+    stop, wake = threading.Event(), threading.Event()
+    stop.set()
+    _initial_scan(app, wake, stop)
+    assert wake.is_set() and calls == []
+    wake = threading.Event()
+    _after_watcher_scan(app, wake, stop)
+    assert calls == []
+
+
 def test_background_sync_errors_are_logged_never_raised(app, monkeypatch, caplog):
     from dam.serve import _after_watcher_scan, _initial_scan
 

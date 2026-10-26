@@ -1,5 +1,6 @@
 """Read-only archive walker that keeps the SQLite index in sync with the disk."""
 
+import math
 import os
 import threading
 import time
@@ -367,11 +368,12 @@ def _scan_all(s: _Scan) -> ScanReport:
             report.offline.append(folder.label)
             report.skipped.append(folder.label)
     attached = {_fold(label) for label in paths.extra_labels}
-    report.skipped.extend(
-        extra.label
-        for extra in paths.settings.extra_folders
-        if _fold(extra.label) not in attached  # detached: its rows are already missing
-    )
+    detached = [e.label for e in paths.settings.extra_folders if _fold(e.label) not in attached]
+    for label in detached:
+        # Kept out of the walk, and its rows marked missing again: a scan that still ran
+        # with the folder attached (the App before a reopen) may have marked them seen.
+        repo.mark_missing(math.inf, subtree=label)
+    report.skipped.extend(detached)
     if not report.offline:
         # A parked row may belong to a file moved onto a folder that was not walked:
         # tombstones wait for the next scan that sees every folder.

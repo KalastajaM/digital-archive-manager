@@ -120,11 +120,19 @@ def _prune_pictures(app: App) -> None:
         log.exception("pruning the page-1 picture cache failed (it is tried again at restart)")
 
 
-def _initial_scan(app: App, wake: threading.Event) -> None:
+def _initial_scan(app: App, wake: threading.Event, stop: threading.Event | None = None) -> None:
+    """The first full scan, then the Ongoing sync. With ``stop`` set (the background was
+    stopped, as by a reopen) nothing more is scanned or synced: the new App's background
+    does that, and two publishers must never sync the same ##. Ongoing at once."""
     # the log names the main folder: extra folders get their own report with the scan
+    stopped = stop.is_set if stop is not None else lambda: False
     synced = False
     try:
+        if stopped():
+            return
         report = app.scan()
+        if stopped():
+            return
         if report.aborted:
             log.warning(
                 "archive folder %s is not available; initial scan skipped, index kept",
@@ -143,9 +151,12 @@ def _initial_scan(app: App, wake: threading.Event) -> None:
             wake.set()  # let the indexer pick up what the scan found
 
 
-def _after_watcher_scan(app: App, wake: threading.Event) -> None:
+def _after_watcher_scan(
+    app: App, wake: threading.Event, stop: threading.Event | None = None
+) -> None:
     wake.set()
-    _sync_ongoing(app)
+    if stop is None or not stop.is_set():
+        _sync_ongoing(app)
 
 
 def _remind_once(app: App) -> None:
@@ -185,7 +196,7 @@ def start_background(app: App) -> Background:
     stop, wake = threading.Event(), threading.Event()
     app.wake_indexer = wake.set  # e.g. after files are queued for indexing again
     scan_thread = threading.Thread(
-        target=_initial_scan, args=(app, wake), name="dam-initial-scan", daemon=True
+        target=_initial_scan, args=(app, wake, stop), name="dam-initial-scan", daemon=True
     )
     indexer_thread = threading.Thread(
         target=app.content.run_forever, args=(stop, wake), name="dam-indexer", daemon=True
@@ -193,7 +204,7 @@ def start_background(app: App) -> Background:
     reminders_thread = threading.Thread(
         target=_reminders_loop, args=(app, stop), name="dam-reminders", daemon=True
     )
-    watcher = Watcher(app.paths, app.repo, on_change=lambda: _after_watcher_scan(app, wake))
+    watcher = Watcher(app.paths, app.repo, on_change=lambda: _after_watcher_scan(app, wake, stop))
     threads = [scan_thread, indexer_thread, reminders_thread]
     try:
         scan_thread.start()

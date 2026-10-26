@@ -804,3 +804,24 @@ def test_main_with_only_extra_rows_is_judged_on_its_own(engine, tmp_path):
     rep = scan(paths, repo)
     assert rep.aborted is False and rep.missing == 0
     assert repo.by_path("Old years/b.pdf").missing is False
+
+
+def test_a_late_scan_with_the_old_paths_is_undone_by_the_next_full_scan(
+    fake_archive, engine, tmp_path
+):
+    import math
+
+    from dam.config import ExtraFolder
+
+    old_paths, repo, extra = setup_extra(fake_archive, engine, tmp_path)
+    scan(old_paths, repo)
+    repo.mark_missing(math.inf, subtree="Old years")  # the folder is detached
+    scan(old_paths, repo)  # the old App's scan, still running with the folder attached
+    assert not repo.get("x-a").missing
+    settings = Settings(
+        archive_root=fake_archive.root,
+        extra_folders=[ExtraFolder(label="Old years", path=extra, attached=False)],
+    )
+    scan(ArchivePaths(fake_archive.root, settings), repo)
+    under = _rows_under(engine, "Old years")
+    assert len(under) == 4 and all(r.missing for r in under.values())

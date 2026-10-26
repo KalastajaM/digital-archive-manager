@@ -229,7 +229,9 @@ class Watcher:
         return True
 
     def _call_on_change(self) -> None:
-        if self.on_change is None:
+        # A scan can outlive stop() (it is not interrupted): after a reopen the new App's
+        # watcher owns the follow-up work, so this one never syncs next to it.
+        if self.on_change is None or self._stop.is_set():
             return
         try:
             self.on_change()
@@ -251,6 +253,8 @@ class Watcher:
             try:
                 reconnected = self.refresh_watches()
                 for label in reconnected:
+                    if self._stop.is_set():
+                        return
                     # Changes made while the folder was away were never seen as events.
                     report = scan(self.paths, self.repo, subtree=label)
                     if not self._aborted(report):
