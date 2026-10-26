@@ -1,6 +1,6 @@
 # Multiple archive folders: design
 
-Status: proposed (2026-10-26), not built.
+Status: step 1 built (2026-10-26); step 2 (copy across, relabel) not built.
 
 ## Intent
 
