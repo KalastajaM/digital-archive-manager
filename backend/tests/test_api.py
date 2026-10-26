@@ -613,6 +613,45 @@ def test_undo_endpoint(client, app, fake_archive, inbox_file):
     assert post(client, "/api/activity/nope/undo").status_code == 404
 
 
+def test_undo_and_recovery_leave_a_running_batch_alone(client, app, fake_archive, monkeypatch):
+    """Another tab asks while a batch runs: undo and its preview refuse it (between two
+    ops), and an op in flight is not offered for recovery."""
+    import types
+
+    import dam.ops.executor as executor_mod
+    from dam.ops.model import Op, OpKind, Plan
+
+    for i in range(2):
+        fake_archive.add(f"{INBOX}/f{i}.pdf", drive_id=f"id-{i}")
+    app.scan()
+    app.executor.throttle_ms = 1
+    answers, pending = [], []
+    real_act = app.executor._act
+
+    def in_flight(rop, copied=None):
+        pending.append(client.get("/api/status").json()["recovery_pending"])
+        real_act(rop, copied)
+
+    def mid_batch(_seconds):  # between the two ops: the batch is still running
+        with app.engine.connect() as conn:
+            batch_id = conn.execute(select(operations.c.batch_id)).first()[0]
+        for url in (f"/api/activity/{batch_id}/undo/preview", f"/api/activity/{batch_id}/undo"):
+            r = post(client, url)
+            answers.append((r.status_code, r.json()["error"]))
+
+    monkeypatch.setattr(app.executor, "_act", in_flight)
+    monkeypatch.setattr(
+        executor_mod, "time", types.SimpleNamespace(sleep=mid_batch, time=time.time)
+    )
+    ops = [Op(OpKind.MOVE, f"{INBOX}/f{i}.pdf", BANKS) for i in range(2)]
+    done = app.executor.apply(Plan(ops, origin="cli"))
+    assert done.failed is None and len(done.done) == 2
+    message = "This change is still being carried out. Undo it when it has finished."
+    assert answers == [(409, message), (409, message)]
+    assert pending == [0, 0]
+    assert (fake_archive.root / BANKS / "f0.pdf").exists()
+
+
 def _journal_count(app) -> int:
     with app.engine.connect() as conn:
         return len(conn.execute(select(operations.c.id)).all())

@@ -51,6 +51,7 @@ INTERRUPTED = "interrupted before execution"
 SYNC_ORIGIN = "workflow"
 SYNC_UNDO_REFUSED = "This was an automatic Ongoing update. Undo the collection change instead."
 MANUAL_CHECK = "needs manual check"
+STILL_RUNNING = "This change is still being carried out. Undo it when it has finished."
 FOLDER_NOT_EMPTY = (
     " — undo the later changes to this collection first (or move out what was added to the folder)"
 )
@@ -168,6 +169,11 @@ def made_folders_kept(ex: Executor, batch_id: str) -> list[str]:
 
 
 def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]]:
+    # Between two ops of a running batch none of its rows is ``planned``. A batch is
+    # registered before its first row is journaled, so one whose rows are read here
+    # either still runs (refused) or has finished.
+    if ex.batches.running(batch_id):
+        raise OpFailed(STILL_RUNNING)
     rows = entries(ex, operations.c.batch_id == batch_id)
     if not rows:
         raise OpFailed("That change could not be found.")
@@ -567,8 +573,11 @@ def mark_reverted(
 
 
 def pending(ex: Executor) -> list[JournalEntry]:
-    """Rows still ``planned``: the process stopped between journaling and finishing."""
-    return entries(ex, operations.c.state == "planned")
+    """Rows still ``planned``: the process stopped between journaling and finishing.
+    The row of an op in flight (a running batch's) is not one of them."""
+    with ex.batches.frozen() as running:  # no batch starts or ends while rows are read
+        rows = entries(ex, operations.c.state == "planned")
+    return [e for e in rows if e.batch_id not in running]
 
 
 def recover(ex: Executor) -> RecoveryResult:
@@ -586,20 +595,25 @@ def recover(ex: Executor) -> RecoveryResult:
     result = RecoveryResult()
     settled: set[int] = set()
     for e in pending(ex):
-        state, error = _classify(ex, e)
-        now = time.time()
-        with write_tx(ex.engine) as conn:
-            conn.execute(
-                update(operations)
-                .where(operations.c.id == e.id)
-                .values(state=state, error=error, finished=now)
-            )
-            if state == "done" and e.undo_of is not None:
-                mark_reverted(conn, e.undo_of, OpKind(e.kind), e.src, e.dst)
-        if state == "done" and OpKind(e.kind) in (*RELOCATE, OpKind.COPY_ACROSS):
-            settled.add(e.id)
-            try:
-                with INDEX_LOCK:
+        # The executor holds INDEX_LOCK for one whole op, journal row to finish: under
+        # it no op is half-way, so a row still planned (read again) was interrupted.
+        with INDEX_LOCK:
+            again = entries(ex, operations.c.id == e.id, operations.c.state == "planned")
+            if not again or ex.batches.running(e.batch_id):
+                continue
+            state, error = _classify(ex, e)
+            now = time.time()
+            with write_tx(ex.engine) as conn:
+                conn.execute(
+                    update(operations)
+                    .where(operations.c.id == e.id)
+                    .values(state=state, error=error, finished=now)
+                )
+                if state == "done" and e.undo_of is not None:
+                    mark_reverted(conn, e.undo_of, OpKind(e.kind), e.src, e.dst)
+            if state == "done" and OpKind(e.kind) in (*RELOCATE, OpKind.COPY_ACROSS):
+                settled.add(e.id)
+                try:
                     if OpKind(e.kind) is OpKind.COPY_ACROSS:
                         rop = ResolvedOp(OpKind.COPY_ACROSS, e.src, e.dst, method=e.method)
                         ex._repoint_copy(rop)
@@ -607,8 +621,8 @@ def recover(ex: Executor) -> RecoveryResult:
                         ex._recover_followed(e)
                     else:
                         ex.repo.update_path(e.src, e.dst)
-            except SQLAlchemyError as err:
-                result.index_errors.append(f"index update failed for {e.dst}: {err}")
+                except SQLAlchemyError as err:
+                    result.index_errors.append(f"index update failed for {e.dst}: {err}")
         result.entries.append(dataclasses.replace(e, state=state, error=error, finished=now))
     # a folder moved across disks whose index step stopped part way (its row was done
     # already): its folder rows follow now

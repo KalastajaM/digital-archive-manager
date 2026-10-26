@@ -33,7 +33,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from dam import setup
-from dam.app import JOBS_RUNNING, App
+from dam.app import App
 from dam.config import AppPaths
 from dam.extract.picture import prune_page1_pictures
 from dam.index.watcher import Watcher
@@ -426,9 +426,7 @@ class Host:
             old = self.current
             if self.board is None or old is None or old.app is None:
                 raise Conflict("The archive is not open yet.")
-            held.enter_context(old.app.copy_jobs.held())  # no move starts until done
-            if old.app.jobs_running():
-                raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
+            held.enter_context(old.app.held())  # no move or batch starts until done
             paths = old.paths or old.app.app_paths
             app = App.create(paths.data_dir)
             try:
@@ -465,9 +463,7 @@ class Host:
             old = self.current
             if old.profile_id is None or old.app is None:
                 raise Conflict("The archive is not open yet.")
-            held.enter_context(old.app.copy_jobs.held())  # no move starts until done
-            if old.app.jobs_running():
-                raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
+            held.enter_context(old.app.held())  # no move or batch starts until done
             profile = self.store.find(old.profile_id)
             if old.background is not None:
                 old.background.stop()

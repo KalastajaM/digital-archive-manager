@@ -2,7 +2,8 @@
 
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -42,7 +43,13 @@ from dam.services.activity import ActivityService
 from dam.services.area_pictures import AreaPictures
 from dam.services.assignments import AssignmentService
 from dam.services.browse import BrowseService
-from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotConfigured, NotFound
+from dam.services.errors import (
+    ArchiveUnavailable,
+    Conflict,
+    InvalidRequest,
+    NotConfigured,
+    NotFound,
+)
 from dam.services.inbox import InboxService
 from dam.services.intake import IntakeService
 from dam.services.launch import LaunchService
@@ -66,6 +73,9 @@ JOBS_RUNNING = (
     "A maintenance check, rule replay or move across disks is running. Try again when it"
     " has finished."
 )
+# why the archive cannot be closed or its database replaced now: a batch of changes
+# (filing, undo, a sync) is still journaling
+BATCH_RUNNING = "A change is still being carried out. Try again when it has finished."
 
 
 @dataclass(eq=False)
@@ -631,6 +641,18 @@ class App:
             or self.replay_jobs.running()
             or self.copy_jobs.running()
         )
+
+    @contextmanager
+    def held(self) -> Iterator[None]:
+        """Around a change that closes the archive or replaces its database (a reopen,
+        a restore, a change of archive folders): ``Conflict`` when a job or a batch of
+        changes runs now, and none starts until the change is done."""
+        with self.copy_jobs.held(), self.executor.batches.held():
+            if self.jobs_running():
+                raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
+            if self.executor.batches.running():
+                raise Conflict(BATCH_RUNNING)  # it would journal into the closed database
+            yield
 
     def close(self) -> None:
         self.executor.cancel_copies.set()  # a copy in progress ends at its next chunk

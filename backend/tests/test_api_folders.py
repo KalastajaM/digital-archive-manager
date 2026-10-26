@@ -10,7 +10,7 @@ import dam.serve as serve_mod
 from conftest import FakeArchive
 from dam import archive_folders
 from dam.api import create_api
-from dam.app import JOBS_RUNNING, App
+from dam.app import BATCH_RUNNING, JOBS_RUNNING, App
 from dam.config import load_settings
 from dam.ops.jobs import COPY_HELD
 from dam.profiles import ProfileStore, ServeLock
@@ -443,6 +443,29 @@ def test_host_reopen_refuses_while_a_job_runs(served, events, monkeypatch):
     with pytest.raises(Conflict, match="rule replay or move across disks is running"):
         host.reopen()
     assert host.current.app is first and events == [("start", id(first))]
+
+
+def test_no_folder_change_while_a_batch_runs(served, events, extra_folder, app_paths):
+    """A batch of changes carried out in another request: the archive is not closed
+    (nor its database rewritten) under it."""
+    host, client = served
+    first = host.current.app
+    first.executor.batches.begin("running-batch")
+    before = settings_bytes(app_paths)
+    for url, body in (
+        ("/api/archive-folders/Old years/detach", {}),
+        ("/api/archive-folders/Old years/detach", {"forget": True}),
+        ("/api/archive-folders/Old years/relabel", {"label": "Archive disk"}),
+    ):
+        r = post(client, url, body)
+        assert r.status_code == 409, (url, r.text)
+        assert r.json()["error"] == BATCH_RUNNING
+    with pytest.raises(Conflict, match="still being carried out"):
+        host.reopen()
+    assert settings_bytes(app_paths) == before and host.current.app is first
+    first.executor.batches.end("running-batch")
+    r = post(client, "/api/archive-folders/Old years/relabel", {"label": "Archive disk"})
+    assert r.status_code == 200, r.text
 
 
 # -- changing a label -----------------------------------------------------------------------

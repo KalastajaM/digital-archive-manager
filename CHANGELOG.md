@@ -558,6 +558,12 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A change still being carried out is left alone.** Undo (from another tab, say) is
+  refused until the change has finished, instead of reverting its first files while the
+  rest still moved. The Recovery banner no longer shows for a file being moved right now
+  (a long copy across disks), so Recover cannot mark it as needing a manual check. A
+  snapshot restore, a new label for an archive folder, and detaching or forgetting one
+  wait until the change has finished, so its history is not lost.
 - **A file that gets its Google Drive id keeps its notes.** When Drive uploaded a file and
   dam picked up its id, the file kept its tags but lost its notes, checklist, collection
   and tray item places, lock, summary and fields. They now stay with it.
