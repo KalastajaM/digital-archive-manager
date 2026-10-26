@@ -153,6 +153,9 @@ class ResolvedOp:
     # size, mtime); sizes and mtimes of files only. ``.DS_Store`` files are left out.
     copied_to: str | None = None
     tree: dict[str, tuple[str, int | None, float | None]] | None = None
+    # MOVE of an undo that brings such a folder back from To Delete: the undone row's
+    # ``followed`` (old id, new id, old path, new path); each folder row goes back
+    follow_back: list[tuple[str, str, str, str]] | None = None
 
 
 @dataclass

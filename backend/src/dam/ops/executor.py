@@ -96,6 +96,14 @@ class _FolderRun:
         self.final.tree[self.key(rop.src)] = ("file", snap["size"], snap["mtime"])
 
 
+def _backwards(followed) -> list[list[str]]:
+    """A ``followed`` plan turned round, for undo: each folder row at its new path, with
+    its new id, goes back to its old path and old id. ``_apply_followed`` then drops a
+    scanner row at the old path (unless the owner gave it something), and leaves an entry
+    whose row is not at its new path (the forward step skipped it, or a scan moved it)."""
+    return [[new_id, old_id, new_path, old_path] for old_id, new_id, old_path, new_path in followed]
+
+
 def _outside_copy(rop: ResolvedOp) -> bool:
     """A COPY of a file elsewhere on this computer (``abs:``), not one already in the
     archive."""
@@ -336,6 +344,8 @@ class Executor:
                     self._journal_followed(op_id, followed)
                     self._apply_followed(followed)
                 self.repo.update_path(rop.src, rop.dst)
+                if rop.follow_back:  # after the rows the scanner gave To Delete came back
+                    self._apply_followed(_backwards(rop.follow_back))
                 if rop.restore_row is not None:
                     self._restore_row(rop)
             except SQLAlchemyError as e:
@@ -423,6 +433,19 @@ class Executor:
             if rec.drive_id != new_id:
                 self.repo.rekey(rec.drive_id, new_id)
             self.repo.update_path(rec.path, new_path, recursive=False)
+
+    def _recover_followed(self, e: JournalEntry) -> None:
+        """Recovery of a done final QUARANTINE of a folder moved across disks (``e``):
+        without a journaled ``followed`` its index step never started, so it runs now
+        (plan, journal, apply, then the rows left under the source); with one, the plan
+        is carried out again (each entry is idempotent)."""
+        if e.followed is None:
+            followed = self._follow_folder_rows(e.src, e.copied_to)
+            self._journal_followed(e.id, followed)
+            self._apply_followed(followed)
+            self.repo.update_path(e.src, e.dst)
+        else:
+            self._apply_followed(json.loads(e.followed))
 
     def _journal_followed(self, op_id: int, followed: list[list[str]]) -> None:
         with write_tx(self.engine) as conn:

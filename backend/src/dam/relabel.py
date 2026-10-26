@@ -12,6 +12,7 @@ The archive must be closed while this runs (``Host.close_and_reopen``), or the s
 would write paths under the old label back.
 """
 
+import json
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -114,6 +115,21 @@ def _rule_change(old: str, new: str) -> Callable:
     return change
 
 
+def _swap_followed(followed: str | None, old: str, new: str) -> str | None:
+    """A journaled ``followed`` list (JSON ``[[old_id, new_id, old_path, new_path], ...]``)
+    with both paths of each entry rewritten, or None when no path starts with ``old``."""
+    if not followed:
+        return None
+    entries = json.loads(followed)
+    changed = False
+    for entry in entries:
+        for i in (2, 3):
+            moved = swap(entry[i], old, new)
+            if moved is not None:
+                entry[i], changed = moved, True
+    return json.dumps(entries) if changed else None
+
+
 def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
     """Rewrite (or, without ``write``, count) the stored paths under ``old``."""
     counts = {"files": 0, "operations": 0, "made_folders": 0, "maintenance_ignored": 0}
@@ -140,20 +156,32 @@ def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
                 ),
                 {"p": values["path_nfc"], "r": fts[drive_id]},
             )
-    journal = (operations.c.id, operations.c.kind, operations.c.src, operations.c.dst)
+    journal = (
+        operations.c.id,
+        operations.c.kind,
+        operations.c.src,
+        operations.c.dst,
+        operations.c.copied_to,
+        operations.c.followed,
+    )
     rows = conn.execute(select(*journal))
-    for op_id, kind, src, dst in rows.all():
+    for op_id, kind, src, dst, copied_to, followed in rows.all():
+        values = {}
         new_src = None if kind in _NAME_ONLY_SRC and "/" not in (src or "") else swap(src, old, new)
+        if new_src is not None:
+            values["src"] = new_src
         new_dst = None if kind in _NAME_ONLY_DST else swap(dst, old, new)
-        if new_src is None and new_dst is None:
+        if new_dst is not None:
+            values["dst"] = new_dst
+        # a folder moved across disks: where it was copied to, and its folder rows' paths
+        if (new_copied_to := swap(copied_to, old, new)) is not None:
+            values["copied_to"] = new_copied_to
+        if (new_followed := _swap_followed(followed, old, new)) is not None:
+            values["followed"] = new_followed
+        if not values:
             continue
         counts["operations"] += 1
         if write:
-            values = {}
-            if new_src is not None:
-                values["src"] = new_src
-            if new_dst is not None:
-                values["dst"] = new_dst
             conn.execute(update(operations).where(operations.c.id == op_id).values(**values))
     for row_id, rel in conn.execute(select(made_folders.c.id, made_folders.c.rel)).all():
         moved = swap(rel, old, new)
