@@ -17,6 +17,7 @@ from dam.ops import primitives
 from dam.ops.guards import (
     canonical,
     check_areas_source,
+    check_connected,
     fold_parts,
     is_abs_target,
     is_under,
@@ -27,8 +28,8 @@ from dam.ops.guards import (
     touches_protected,
     validate,
 )
-from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind, Plan, ResolvedOp
-from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME
+from dam.ops.model import ABS_TARGET, GuardError, Op, OpFailed, OpKind, Plan, ResolvedOp
+from dam.ops.primitives import DIFFERENT_DISKS, DS_STORE, PICTURE_COPY, PICTURE_RENAME
 
 if TYPE_CHECKING:
     from dam.locks import LockService
@@ -215,6 +216,10 @@ class Planner:
         self.made = plan.new_folders  # MKDIRs of a New folder / layout batch are "made"
         ops = self._new_folder_ops(plan) if plan.new_folders else plan.ops
         for op in ops:
+            # not a place that changes: a RENAME's or PICTURE_BACK's dst is a name, an
+            # UNLINK_SYMLINK's the target the link is only compared with
+            other_dst = op.kind in (OpKind.RENAME, OpKind.PICTURE_BACK, OpKind.UNLINK_SYMLINK)
+            check_connected(self.paths, op.src, None if other_dst else op.dst)
             validate(op, self.paths, restore=restore)
             redirect = None
             if not _outside(op) and op.src is not None and not is_abs_target(op):
@@ -297,7 +302,8 @@ class Planner:
             inbox_child = plan.inbox_folders and fold_parts(parent(folder)) == fold_parts(
                 special.inbox
             )
-            for area in names:
+            # the special folders, and the extra folders' To Delete
+            for area in (*names, *self.paths.quarantines[1:]):
                 if is_under(folder, area, strict=True) and not (
                     inbox_child and area == special.inbox
                 ):
@@ -346,6 +352,7 @@ class Planner:
         A new top-level folder needs ``allow_top_level``. The one exception
         (``quarantine_root``, set only for QUARANTINE ops): the configured quarantine
         folder itself may be created, so marking for deletion works before it exists.
+        (An extra folder's To Delete sits one level down, so it needs no exception.)
         """
         parts = PurePosixPath(folder).parts
         for i in range(1, len(parts) + 1):
@@ -402,7 +409,8 @@ class Planner:
         src = op.src
         self._require_src(src)
         self._check_locked(src)
-        into_quarantine = is_under(folder, self.paths.quarantine)
+        self._check_same_disk(src, folder)
+        into_quarantine = self.paths.is_quarantined(folder)
         if into_quarantine and self._is_protected_origin(src):
             raise GuardError(f"{src!r} comes from a protected path and cannot be quarantined")
         folder = self.sim.spell(folder)
@@ -421,6 +429,20 @@ class Planner:
         self.out.append(ResolvedOp(op.kind, src, dst, self._drive_id(src), note))
         self.sim.events.append(("move", src, dst))
         self._track_protected(src, dst)
+
+    def _check_same_disk(self, src: str, folder: str) -> None:
+        """A move between two archive folders is a rename, so it works only when both
+        are on one disk: refused here, in the dry run, rather than half way."""
+        a, b = self.paths.folder_of(src), self.paths.folder_of(folder)
+        if a.label != b.label and not primitives.same_disk(a.root, b.root):
+            raise OpFailed(DIFFERENT_DISKS)
+
+    def _quarantine_folder(self, src: str) -> str:
+        """Where QUARANTINE puts ``src``: its own folder's To Delete, keeping the path
+        inside that folder (``Old years/2009/a.pdf`` -> ``Old years/##. To Delete/2009``)."""
+        parts = PurePosixPath(src).parts
+        inner = parts[1:] if self.paths.label_of(src) else parts
+        return PurePosixPath(self.paths.quarantine_for(src), *inner).parent.as_posix()
 
     def _areas(self) -> Path:
         if self.areas_dir is None:
@@ -495,7 +517,7 @@ class Planner:
             case OpKind.MOVE:
                 self._relocate(op, canonical(op.dst, paths))
             case OpKind.QUARANTINE:
-                self._relocate(op, join(paths.quarantine, parent(op.src)))
+                self._relocate(op, self._quarantine_folder(op.src))
             case OpKind.MKDIR:
                 folder = self.sim.spell(canonical(op.dst, paths))
                 if op.exact and self.sim.kind(folder) is not None:

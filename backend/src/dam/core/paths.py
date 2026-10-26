@@ -36,6 +36,11 @@ class ArchiveFolder:
     root: Path
 
 
+def not_connected_message(folder: ArchiveFolder) -> str:
+    """What the owner reads when ``folder`` (an extra folder) is needed but unplugged."""
+    return f"'{folder.label}' is not connected ({folder.root}). Connect it and try again."
+
+
 class ArchivePaths:
     def __init__(self, root: Path, settings: Settings) -> None:
         self.root = resolve(root)
@@ -96,6 +101,28 @@ class ArchivePaths:
     @property
     def quarantine(self) -> str:
         return self.settings.special_folders.quarantine
+
+    def quarantine_for(self, rel: str) -> str:
+        """The ``##. To Delete`` that ``rel`` goes into: its own folder's (a rename never
+        crosses disks), so ``Old years/##. To Delete`` for a path under ``Old years``."""
+        label = self.label_of(rel)
+        return f"{label}/{self.quarantine}" if label else self.quarantine
+
+    @property
+    def quarantines(self) -> tuple[str, ...]:
+        """Every folder's ``##. To Delete``: the main folder's first, then one per
+        attached extra folder."""
+        return (self.quarantine, *(f"{label}/{self.quarantine}" for label in self.extra_labels))
+
+    def is_quarantined(self, rel: str, strict: bool = False) -> bool:
+        """``rel`` is one of the ``##. To Delete`` folders or inside one (``strict``:
+        inside only)."""
+        parts = PurePosixPath(_fold(rel)).parts
+        for q in self.quarantines:
+            qp = PurePosixPath(_fold(q)).parts
+            if parts[: len(qp)] == qp and not (strict and len(parts) == len(qp)):
+                return True
+        return False
 
     @property
     def publish_roots(self) -> tuple[str, str]:

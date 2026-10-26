@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import PurePosixPath
 
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, or_, select
 
 from dam.core.naming import matches_convention, parse_doc_date
 from dam.core.paths import ArchivePaths, nfc
@@ -194,7 +194,7 @@ def broken_links(
             break
         ctx.progress(i, len(rows), current=row.path)
         rec = repo.record_from_row(row)
-        if is_under(rec.path, paths.quarantine):
+        if paths.is_quarantined(rec.path):
             continue
         try:
             os.stat(paths.abs(rec.path))  # follows the link; a placeholder is not opened
@@ -224,12 +224,11 @@ def bad_references(
     """Collection members and files of open tray items whose file is gone from the index
     or lies in ``##. To Delete``. A missing file is shown at the path it was last seen:
     its index row's, else the last one the journal has for it."""
-    quarantine = nfc(paths.quarantine)
 
     def problem(row) -> tuple[str | None, str | None]:
         if row.f_id is None or row.missing or row.parked_at is not None:
             return row.f_path, "missing"
-        if is_under(row.f_path_nfc, quarantine):
+        if paths.is_quarantined(row.f_path_nfc):
             return row.f_path, "in To Delete"
         return None, None
 
@@ -404,8 +403,18 @@ def bad_names(ctx: JobContext, repo: FileRepo, paths: ArchivePaths, engine: Engi
 # --- what has waited in To Delete ---------------------------------------------------------------
 
 
-def _moved_in(engine: Engine, quarantine: str) -> dict[str, float]:
-    """When the app put each path into the quarantine folder: the newest finished MOVE or
+def _inside(column, folders: tuple[str, ...]):
+    """``column`` lies inside one of ``folders`` (a LIKE per folder)."""
+    return or_(
+        *(
+            column.like(f.replace("%", r"\%").replace("_", r"\_") + "/%", escape="\\")
+            for f in folders
+        )
+    )
+
+
+def _moved_in(engine: Engine, quarantines: tuple[str, ...]) -> dict[str, float]:
+    """When the app put each path into a quarantine folder: the newest finished MOVE or
     QUARANTINE journal row that ended there (a folder's row covers what is inside it)."""
     with engine.connect() as conn:
         rows = conn.execute(
@@ -415,9 +424,7 @@ def _moved_in(engine: Engine, quarantine: str) -> dict[str, float]:
                 operations.c.state.in_(["done", "unverified"]),
                 operations.c.undo_of.is_(None),
                 operations.c.finished.is_not(None),
-                operations.c.dst.like(
-                    quarantine.replace("%", r"\%").replace("_", r"\_") + "/%", escape="\\"
-                ),
+                _inside(operations.c.dst, quarantines),
             )
             .group_by(operations.c.dst)
         ).all()
@@ -436,17 +443,13 @@ def waiting_in_to_delete(
     first, with their total size. How long is from the app's journal; for a file put there
     some other way, from the time the file last changed place on disk (approximate)."""
     now = time.time() if now is None else now
-    quarantine = nfc(paths.quarantine)
-    moved = _moved_in(engine, quarantine)
+    quarantines = tuple(nfc(q) for q in paths.quarantines)  # every folder's To Delete
+    moved = _moved_in(engine, quarantines)
     with engine.connect() as conn:
         rows = conn.execute(
             select(files)
             .where(*_live(files.c.is_dir.is_not(True)))
-            .where(
-                files.c.path_nfc.like(
-                    quarantine.replace("%", r"\%").replace("_", r"\_") + "/%", escape="\\"
-                )
-            )
+            .where(_inside(files.c.path_nfc, quarantines))
             .order_by(files.c.path)
         ).all()
     out = Waiting(days=days)
@@ -459,7 +462,7 @@ def waiting_in_to_delete(
         size = rec.size or 0
         out.in_to_delete += 1
         out.in_to_delete_size += size
-        since, approx = _since(rec, moved, paths, quarantine)
+        since, approx = _since(rec, moved, paths)
         if since is None:
             continue
         age = int((now - since) // 86400)
@@ -474,7 +477,7 @@ def waiting_in_to_delete(
 
 
 def _since(
-    rec: FileRecord, moved: dict[str, float], paths: ArchivePaths, quarantine: str
+    rec: FileRecord, moved: dict[str, float], paths: ArchivePaths
 ) -> tuple[float | None, bool]:
     path = PurePosixPath(rec.path_nfc)
     times = [moved[p] for p in [path.as_posix(), *map(str, path.parents)] if p in moved]

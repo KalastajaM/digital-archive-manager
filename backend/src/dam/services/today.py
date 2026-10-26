@@ -147,7 +147,7 @@ class TodayService:
         notes: NotesService,
         inbox_count: Callable[[], int],
         repo: FileRepo,
-        quarantine: str,
+        quarantines: tuple[str, ...],
         unmanaged_count: Callable[[], int],
         inbox_entries: Callable[[], list[InboxEntry]] = lambda: [],
         unmanaged_important_count: Callable[[], int] = lambda: 0,
@@ -158,7 +158,7 @@ class TodayService:
         self.notes = notes
         self._inbox_count = inbox_count
         self.repo = repo
-        self._quarantine = nfc(quarantine)
+        self._quarantines = tuple(nfc(q) for q in quarantines)
         self._unmanaged_count = unmanaged_count
         self._unmanaged_important_count = unmanaged_important_count
         # the inbox files with their suggestions (InboxService.list: one directory
@@ -173,7 +173,7 @@ class TodayService:
             rec = self.repo.get(drive_id)
             if rec is None or rec.missing or rec.parked_at is not None:
                 out.append((rec, "missing"))
-            elif is_under(rec.path_nfc, self._quarantine):
+            elif any(is_under(rec.path_nfc, q) for q in self._quarantines):
                 out.append((rec, "to_delete"))
             else:
                 out.append((rec, "ok"))

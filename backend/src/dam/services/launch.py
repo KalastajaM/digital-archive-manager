@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from dam.core.fs import resolve
-from dam.core.paths import ArchiveFolder, ArchivePaths, OutsideArchiveError
+from dam.core.paths import ArchiveFolder, ArchivePaths, OutsideArchiveError, not_connected_message
 from dam.index.repo import FileRecord
 from dam.services.errors import Conflict, NotFound, NotSupported
 
@@ -93,9 +93,7 @@ def run_open(args: list[str]) -> int:
 
 def _require_connected(paths: ArchivePaths, folder: ArchiveFolder) -> None:
     if folder.label and not paths.is_connected(folder.label):
-        raise Conflict(
-            f"'{folder.label}' is not connected ({folder.root}). Connect it and try again."
-        )
+        raise Conflict(not_connected_message(folder))
 
 
 def resolve_inside(paths: ArchivePaths, rec: FileRecord) -> Path:

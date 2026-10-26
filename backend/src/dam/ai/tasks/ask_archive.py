@@ -20,7 +20,7 @@ from dam.ai import guard
 from dam.ai.tasks import Built, register
 from dam.ai.tasks._common import digest, language, rules_point_excluded, shorten
 from dam.core.paths import nfc
-from dam.ops.guards import is_under, parent
+from dam.ops.guards import parent
 from dam.search import ranked
 from dam.services.errors import InvalidRequest
 
@@ -213,12 +213,11 @@ def retrieve(app: "App", question: str) -> list[dict]:
     words = terms(question)
     match = ask_query(question)
     exclude = app.settings.ai.exclude_folders
-    quarantine = app.settings.special_folders.quarantine
     out: list[dict] = []
     with closing(ranked(app.engine, match, exclude)) as candidates:
         for cand in candidates:
             # always checked here too: SQL folds ASCII case only
-            if guard.is_excluded(cand.path, exclude) or is_under(cand.path, quarantine):
+            if guard.is_excluded(cand.path, exclude) or app.paths.is_quarantined(cand.path):
                 continue
             rec = app.repo.get(cand.drive_id)
             if rec is None or rec.path != cand.path or guard.is_excluded(rec.path, exclude):

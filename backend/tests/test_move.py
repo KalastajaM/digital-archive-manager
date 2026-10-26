@@ -491,3 +491,52 @@ def test_move_within_extra_folder(extra_folder, app):
     assert outcome.batch.failed is None and outcome.batch.error is None
     assert src.read_bytes() == b"a"
     assert not (extra_folder.root / "2010" / "a.pdf").exists()
+
+
+def _offline(folder_root):
+    """Unplug the extra folder: its root cannot be listed any more."""
+    gone = folder_root.with_name("away")
+    os.rename(folder_root, gone)
+    return gone
+
+
+def test_move_refused_while_folder_offline(extra_folder, app, fake_archive):
+    from dam.ops.model import GuardError
+
+    fake_archive.add(f"{BANKS}/m.pdf", b"m", drive_id="id-m")
+    extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    app.scan()
+    root = extra_folder.root.resolve()
+    gone = _offline(extra_folder.root)
+    message = f"'Old years' is not connected ({root}). Connect it and try again."
+    with pytest.raises(GuardError) as e:
+        app.browse.move(["x1"], "Old years/2010", origin="ui", dry_run=True)
+    assert str(e.value) == message
+    with pytest.raises(GuardError) as e:  # into it, from the main folder
+        app.browse.move(["id-m"], "Old years/2010", origin="ui")
+    assert str(e.value) == message
+    with pytest.raises(GuardError) as e:
+        app.browse.quarantine(["x1"], origin="ui")
+    assert str(e.value) == message
+    assert (fake_archive.root / BANKS / "m.pdf").read_bytes() == b"m"
+    assert (gone / "2009" / "a.pdf").read_bytes() == b"a"
+    assert not (gone / "2010").exists()
+    assert journal(app) == []
+
+
+def test_cross_disk_move_refused_in_dry_run(extra_folder, app, fake_archive, monkeypatch):
+    from dam.ops import primitives
+    from dam.ops.model import OpFailed
+
+    fake_archive.add(f"{BANKS}/m.pdf", b"m", drive_id="id-m")
+    extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    app.scan()
+    monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
+    for drive_id, folder in (("id-m", "Old years/2009"), ("x1", TAXES)):
+        with pytest.raises(OpFailed) as e:
+            app.browse.move([drive_id], folder, origin="ui", dry_run=True)
+        assert str(e.value) == primitives.DIFFERENT_DISKS
+    # within one folder the disks are never compared
+    result = app.browse.move(["x1"], "Old years/2010", origin="ui", dry_run=True)
+    assert [r.dst for r in result.done][-1] == "Old years/2010/a.pdf"
+    assert journal(app) == []

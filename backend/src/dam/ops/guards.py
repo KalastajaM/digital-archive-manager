@@ -5,7 +5,7 @@ import stat
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
-from dam.core.paths import ArchivePaths, OutsideArchiveError, _fold, nfc
+from dam.core.paths import ArchivePaths, OutsideArchiveError, _fold, nfc, not_connected_message
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind
 from dam.ops.primitives import DS_STORE
 
@@ -115,7 +115,7 @@ def _check_copy_within(op: Op, paths: ArchivePaths) -> None:
     src = canonical(op.src, paths)
     if paths.is_root(src) or paths.is_top_level(src):
         raise GuardError("Only a file inside a folder can be copied.")
-    if any(is_under(src, area) for area in (*paths.publish_roots, paths.quarantine)):
+    if paths.is_quarantined(src) or any(is_under(src, area) for area in paths.publish_roots):
         raise GuardError(f"{src!r} is in one of the app's own folders and cannot be copied")
     name = op.name if op.name is not None else PurePosixPath(src).name
     _check_name(name)
@@ -125,7 +125,7 @@ def _check_copy_within(op: Op, paths: ArchivePaths) -> None:
     folder = canonical(op.dst, paths)
     if paths.is_root(folder):
         raise GuardError("Files cannot go directly in the archive folder.")
-    if any(is_under(folder, area) for area in (*paths.publish_roots, paths.quarantine)):
+    if paths.is_quarantined(folder) or any(is_under(folder, a) for a in paths.publish_roots):
         raise GuardError(f"Files are not copied into {folder!r}: the app keeps that folder")
     if touches_protected(join(folder, name), paths):
         raise GuardError(f"{folder!r} is protected: nothing is copied into it")
@@ -185,6 +185,7 @@ def _check_picture_to_quarantine(op: Op, paths: ArchivePaths) -> None:
     _check_picture_name(op.name, "The name")
     _check_picture_name(Path(source).name, "The file")
     folder = canonical(op.dst, paths)
+    # the main folder's To Delete only: the rules' pictures belong to the main folder
     if fold_parts(folder) != fold_parts(paths.quarantine):
         raise GuardError(f"Pictures are only moved into {paths.quarantine!r}.")
 
@@ -199,7 +200,7 @@ def _check_picture_back(op: Op, paths: ArchivePaths, restore: bool) -> None:
     if op.src is None:
         raise GuardError(f"{op.kind} needs a source")
     src = canonical(op.src, paths)
-    if not is_under(src, paths.quarantine, strict=True):
+    if not is_under(src, paths.quarantine, strict=True):  # where PICTURE_TO_QUARANTINE put it
         raise GuardError(f"{src!r} is not in the quarantine folder")
     _check_picture_name(PurePosixPath(src).name, "The file")
     _check_picture_name(op.dst, "The name")
@@ -248,6 +249,18 @@ def check_not_label(paths: ArchivePaths, rel: str) -> None:
     reserved = {_fold(e.label) for e in paths.settings.extra_folders}
     if len(parts) == 1 and _fold(parts[0]) in reserved:
         raise GuardError(f"'{parts[0]}' is the name of an archive folder. Choose another name.")
+
+
+def check_connected(paths: ArchivePaths, *rels: str | None) -> None:
+    """Refuse a change to a folder that is not connected (an unplugged disk): the first
+    archive path in ``rels`` whose extra folder cannot be listed now. ``None`` and
+    ``abs:`` paths (outside the archive) are skipped."""
+    for rel in rels:
+        if not isinstance(rel, str) or rel.startswith(ABS_TARGET):
+            continue
+        folder = paths.folder_of(rel)
+        if folder.label and not paths.is_connected(folder.label):
+            raise GuardError(not_connected_message(folder))
 
 
 def _check_not_top(rel: str, op: Op, paths: ArchivePaths, what: str) -> None:
@@ -299,7 +312,7 @@ def _check_undo_link(op: Op, src: str, paths: ArchivePaths, restore: bool) -> No
             f"only links inside {paths.ongoing!r} or {paths.important!r} can be removed"
             " (or, by an undo, a link the app made)"
         )
-    if touches_protected(src, paths) or is_under(src, paths.quarantine):
+    if touches_protected(src, paths) or paths.is_quarantined(src):
         raise GuardError(f"{src!r} is protected and cannot be removed")
 
 
@@ -369,7 +382,7 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
             _check_not_top(final, op, paths, "destination")
             if is_under(folder, src):
                 raise GuardError(f"{src!r} cannot be moved into itself.")
-            if is_under(folder, paths.quarantine) and touches_protected(src, paths):
+            if paths.is_quarantined(folder) and touches_protected(src, paths):
                 raise GuardError(f"{src!r} is protected and cannot be quarantined")
         case OpKind.MKDIR:
             if paths.is_root(canonical(op.dst, paths)):
@@ -387,7 +400,7 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
         case OpKind.QUARANTINE:
             if touches_protected(src, paths):
                 raise GuardError(f"{src!r} is protected and cannot be quarantined")
-            if is_under(src, paths.quarantine):
+            if paths.is_quarantined(src):
                 raise GuardError(f"{src!r} is already in quarantine")
         case OpKind.REMOVE_EMPTY_DIR:
             # The one folder removal: strictly inside a publish root (``##. Ongoing``
@@ -404,7 +417,7 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
                 # protection of ##. Important itself does not keep its own empty folder
                 if (
                     paths.in_publish_root(src) is not None
-                    or is_under(src, paths.quarantine, strict=True)
+                    or paths.is_quarantined(src, strict=True)
                     or removal_protected(src, paths)
                 ):
                     raise GuardError(f"{src!r} cannot be removed here")

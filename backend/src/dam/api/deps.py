@@ -7,7 +7,6 @@ from fastapi import Depends, Request
 from dam.api.setup_ctl import SetupMode
 from dam.app import App
 from dam.index.repo import FileRecord
-from dam.ops.guards import is_under
 from dam.services.archives import ArchiveService, solo
 from dam.services.errors import Conflict, InvalidRequest, NotFound
 
@@ -41,7 +40,7 @@ def require_editable(app: App, drive_ids: list[str]) -> None:
         rec = app.repo.get(drive_id)
         if rec is None or rec.missing or rec.parked_at is not None:
             continue
-        if is_under(rec.path_nfc, app.paths.quarantine):
+        if app.paths.is_quarantined(rec.path_nfc):
             raise InvalidRequest(f"{TO_DELETE_READ_ONLY}: {rec.path}")
 
 

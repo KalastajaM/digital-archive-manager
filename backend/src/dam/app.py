@@ -125,7 +125,9 @@ class App:
         )
         self.notes = NotesService(self.engine)
         self.publishers = PublisherRegistry()
-        self.collections = CollectionService(self.engine, self.repo, self.publishers, special)
+        self.collections = CollectionService(
+            self.engine, self.repo, self.publishers, special, quarantines=self.paths.quarantines
+        )
         self.marks = MarkService(self.collections)
         # a locked file (Important, or locked by the owner) is not changed on disk
         self.locks = LockService(self.engine, self.marks.important_paths)
@@ -232,7 +234,7 @@ class App:
             self.notes,
             lambda: self.repo.counts()["inbox"],
             self.repo,
-            special.quarantine,
+            self.paths.quarantines,
             self.convert.unmanaged_count,
             self.inbox.list,
             self.convert_important.unmanaged_count,

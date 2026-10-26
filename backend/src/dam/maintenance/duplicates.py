@@ -116,7 +116,7 @@ class LockIndex:
 
 def own_folders(paths: ArchivePaths) -> list[str]:
     """The folders the app keeps (links, files marked for deletion): never looked into."""
-    return [paths.quarantine, *paths.publish_roots]
+    return [*paths.quarantines, *paths.publish_roots]
 
 
 def place_of(path: str, paths: ArchivePaths) -> str:

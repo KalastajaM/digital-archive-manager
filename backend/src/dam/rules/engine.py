@@ -4,6 +4,7 @@ import re
 import string
 import time
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import PurePosixPath
@@ -490,13 +491,16 @@ def _render_folder(
     stem: str,
     special: SpecialFolders,
     person: str | None = None,
+    quarantines: Sequence[str] = (),
 ) -> str:
+    """``quarantines``: every archive folder's To Delete (``ArchivePaths.quarantines``),
+    none of which a rule may file into; empty for the main folder's only."""
     folder = render(template, doc_date, stem, person)
     parts = folder.split("/")
     if folder.startswith("/") or any(p in ("", ".", "..") for p in parts) or "\0" in folder:
         raise TemplateError(f"invalid folder {folder!r}")
     folded = nfc(folder).casefold()
-    for reserved in (special.inbox, special.quarantine):
+    for reserved in (special.inbox, *(quarantines or (special.quarantine,))):
         r = nfc(reserved).strip("/").casefold()
         if folded == r or folded.startswith(r + "/"):
             raise TemplateError(f"folder {folder!r} is a special folder")
@@ -540,13 +544,15 @@ def suggest(
     layout: Page1Layout | None = None,
     people: PeopleContext | None = None,
     pictures: Pictures | None = None,
+    quarantines: Sequence[str] = (),
 ) -> Suggestion:
     """``inbox_alias``: for a file directly in a filing code's inbox folder, the inbox,
     so a rule whose ``folder_is`` is the inbox matches it as well (a rule naming the
     code's folder itself still matches only that folder). ``layout``: page 1's lines,
     for rules with ``zones``. ``people``: the people list, the address zone and the
     document's assigned person, for ``{person}`` and ``when.person``. ``pictures``: the
-    page-1 pictures, for rules with picture areas."""
+    page-1 pictures, for rules with picture areas. ``quarantines``: the To Delete folders
+    no rule may file into (``_render_folder``)."""
     special = special or SpecialFolders()
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
@@ -601,7 +607,9 @@ def suggest(
                 waiting = True  # who the letter is for is on page 1, not read yet
         if folder is None and rule.then.folder is not None:
             try:
-                folder = _render_folder(rule.then.folder, doc_date, stem, special, mine.name)
+                folder = _render_folder(
+                    rule.then.folder, doc_date, stem, special, mine.name, quarantines
+                )
                 folder_rule = rule
                 if template_uses_person(rule.then.folder) and rule.person_zone:
                     person_rule = rule
