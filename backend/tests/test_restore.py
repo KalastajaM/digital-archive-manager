@@ -268,7 +268,7 @@ def test_restore_to_inbox_from_extra_folder_needs_one_disk(extra_folder, app, mo
     with pytest.raises(OpFailed) as e:
         app.browse.restore(["x1"], to="inbox", origin="ui", dry_run=True)
     assert str(e.value) == (
-        "'Old years' and the main folder are on different disks, so files cannot be moved"
-        " between them yet."
+        "'Old years' and the main folder are on different disks, so this cannot be moved"
+        " between them here."
     )
     assert (extra_folder.root / QUAR / "2009" / "a.pdf").exists()

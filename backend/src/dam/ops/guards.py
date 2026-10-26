@@ -335,6 +335,8 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
     target, and a MOVE of a top-level item back into the root (``allow_top_level``
     still required).
     """
+    if op.kind is OpKind.COPY_ACROSS:
+        raise GuardError("A copy across disks is planned from a move, never asked for directly.")
     if op.kind is OpKind.REMOVE_EMPTY_DIR and (
         op.dst is not None or op.name is not None or op.exact or op.allow_top_level
     ):

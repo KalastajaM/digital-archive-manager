@@ -108,10 +108,12 @@ DIFFERENT_DISKS = (
 
 def different_disks_message(a: str, b: str) -> str:
     """Why a move between the archive folders labelled ``a`` and ``b`` (``""``: the main
-    folder) is refused: they are on different disks, and a move is only a rename."""
+    folder) is refused: they are on different disks, and outside a move the owner makes
+    by hand (``Plan.copy_across``) a move is only a rename."""
     first, second = ("the main folder" if not x else f"'{x}'" for x in (a, b))
     text = (
-        f"{first} and {second} are on different disks, so files cannot be moved between them yet."
+        f"{first} and {second} are on different disks, so this cannot be moved between them"
+        " here."
     )
     return text[0].upper() + text[1:]
 

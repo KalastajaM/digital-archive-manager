@@ -578,7 +578,7 @@ def test_cross_disk_move_refused_in_dry_run(extra_folder, app, fake_archive, mon
         with pytest.raises(OpFailed) as e:
             app.browse.move([drive_id], folder, origin="ui", dry_run=True)
         assert str(e.value) == (
-            f"{both} are on different disks, so files cannot be moved between them yet."
+            f"{both} are on different disks, so this cannot be moved between them here."
         )
     # within one folder the disks are never compared
     result = app.browse.move(["x1"], "Old years/2010", origin="ui", dry_run=True)

@@ -17,6 +17,7 @@ class OpKind(StrEnum):
     COPY = auto()
     PICTURE_TO_QUARANTINE = auto()
     PICTURE_BACK = auto()
+    COPY_ACROSS = auto()
 
 
 class GuardError(ValueError):
@@ -63,6 +64,8 @@ class Op:
     (``restore`` and ``exact``): ``dst`` is then the target the app made the link with,
     and the link is removed only while it is still a symbolic link pointing there.
     ``name`` (MOVE and COPY): move *and* rename in one op, landing at ``dst/name``.
+    COPY_ACROSS is never requested: the planner makes it from a MOVE of a file between
+    archive folders on different disks in a ``Plan.copy_across`` plan (``ResolvedOp``).
     ``exact`` (used by undo, which restores entries to where they were): the final
     path must be free, so a collision is a ``GuardError`` instead of a ``_N`` suffix.
     With ``exact``, a SYMLINK target may also be the journal's ``"abs:<path>"`` form
@@ -100,6 +103,11 @@ class Plan:
     # an MKDIR may also make a folder directly inside the inbox (its parent is exactly
     # the inbox), nothing deeper and nothing in the other special folders.
     inbox_folders: bool = False
+    # A move the owner asked for by hand (Browse, Restore): a MOVE of a file between
+    # archive folders on different disks becomes COPY_ACROSS (a verified copy) followed
+    # by a QUARANTINE of the original in its own folder. Without it such a move is
+    # refused, and undo plans never set it (an undo is renames only).
+    copy_across: bool = False
 
 
 @dataclass
@@ -111,7 +119,8 @@ class ResolvedOp:
     PICTURE_TO_QUARANTINE, ``src`` is ``"abs:<file>"``; for PICTURE_BACK, ``dst`` is
     ``"abs:<file>"`` (the journal keeps only the plain names). For
     REMOVE_EMPTY_DIR, ``dst`` is the removed folder itself (as is the journal's), and
-    ``identity`` the identity it must still have at act time (if given).
+    ``identity`` the identity it must still have at act time (if given). For
+    COPY_ACROSS, ``src`` is the file and ``dst`` the copy's path in the other folder.
     """
 
     kind: OpKind
@@ -131,6 +140,9 @@ class ResolvedOp:
     # UNLINK_SYMLINK of an undo: the target (journal form, archive-relative or ``abs:``) the
     # app made the link with; the link is removed only while it still points there
     expect_target: str | None = None
+    # COPY_ACROSS: the file's size, and whether it is in the cloud only (downloaded first)
+    size: int | None = None
+    cloud_only: bool = False
 
 
 @dataclass
