@@ -1364,9 +1364,10 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
 
 - **Add a folder**: Settings, **Archive folders**, **Add folder**. Give it a label and its
   path. The label is the name the folder has at the top of Browse and in paths, and it
-  cannot be changed later yet. dam checks the folder first and says why it refuses one: it
-  is, contains or sits inside another folder of this or any other archive, the label is
-  taken or looks like one of the special folders, or the folder cannot be read. Adding
+  cannot be changed later yet. A label cannot be empty, cannot start with `##.`, and cannot
+  be the name of a folder already in the main folder or the label of another archive
+  folder (case is ignored). dam also refuses a folder that is, contains or sits inside
+  another folder of this or any other archive, or that cannot be read, and says why. Adding
   changes nothing on disk; dam then indexes the folder like the main one.
 - **The main folder stays special.** The Inbox, `##. Ongoing` and `##. Important` live only
   in the main folder. A folder with one of those names inside an extra folder is an
@@ -1378,18 +1379,19 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
 - **Moving between folders**: allowed when both are on the same disk. On different disks
   the preview refuses with a message naming both folders. Copying across disks is not
   built yet.
-- **A folder that is not connected** (unplugged disk, cloud drive not signed in) shows "Not
-  connected" with its path in Browse and in the file view. Its files stay in the index,
-  search and collections and are not marked missing; **opening or previewing them is off**
-  until the folder is back. `is:disconnected` finds them, and `-is:disconnected` leaves
-  them out. Changes that involve the folder are refused until it is back. dam looks about
-  every 30 seconds and picks the folder up by itself; nothing needs restarting. Links in
-  `##. Ongoing` and `##. Important` that lead into it are left alone.
+- **A folder that is not connected** (unplugged disk, cloud drive not signed in) gets a "Not
+  connected" mark on its row in Browse. Its files stay in the index, search and
+  collections and are not marked missing; the file view says the folder is not connected
+  and turns off Open and Show in Finder until it is back. `is:disconnected` finds them,
+  and `-is:disconnected` leaves them out. Changes that involve the folder are refused
+  until it is back. dam looks about every 30 seconds and picks the folder up by itself;
+  nothing needs restarting. Links in `##. Ongoing` and `##. Important` that lead into it
+  are left alone.
 - **Detach** takes a folder out of the archive; it changes nothing on the disk. Its files
   leave Browse and search, but their tags, notes and collection memberships are kept, and
-  **Attach again** brings everything back. Tick **Also forget their tags, notes and collection places** to drop them
-  as well (the confirmation says how many files). Links that lead into a detached folder
-  are left alone.
+  **Attach again** brings everything back. Tick **Also forget their tags, notes and
+  collection places** to drop them as well (the confirmation says how many files). Links
+  that lead into a detached folder are left alone.
 - **Maintenance** marks links and files in an unplugged or detached folder as "Folder not
   connected" or "Folder detached" instead of broken, and **Archive folder names** lists a
   folder at the top of the main folder that has the same name as an archive folder (the
