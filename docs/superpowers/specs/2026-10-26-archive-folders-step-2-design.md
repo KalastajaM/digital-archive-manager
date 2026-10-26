@@ -1,6 +1,6 @@
 # Multiple archive folders, build step 2: copy across and relabel
 
-Status: design agreed 2026-10-26, not built. Built in two pull requests: **PR 1** copy
+Status: design agreed 2026-10-26; PR 1 (copy across for files, relabel) built 2026-10-26. Built in two pull requests: **PR 1** copy
 across for files (with the background job) and relabel; **PR 2** folder moves, on one
 disk (a rename) and across disks, designed separately before it is built (see "PR 2:
 folder moves" at the end). Browse cannot move folders at all today

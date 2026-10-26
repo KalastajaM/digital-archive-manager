@@ -1422,8 +1422,8 @@ papers and an external disk for the old years. Search, Browse, tags, collections
 Maintenance treat them as one archive. (Several *archives* are separate; see above.)
 
 - **Add a folder**: Settings, **Archive folders**, **Add folder**. Give it a label and its
-  path. The label is the name the folder has at the top of Browse and in paths, and it
-  cannot be changed later yet. A label cannot be empty, cannot start with `##.`, and cannot
+  path. The label is the name the folder has at the top of Browse and in paths (you can
+  change it later, see below). A label cannot be empty, cannot start with `##.`, and cannot
   be the name of a folder already in the main folder or the label of another archive
   folder (case is ignored). dam also refuses a folder that is, contains or sits inside
   another folder of this or any other archive, or that cannot be read, and says why. Adding
@@ -1435,9 +1435,27 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   Moving a file to To Delete is a rename, which cannot cross disks, so a file goes to the
   To Delete of the folder it is in, and Restore brings it back there. The To Delete views
   list them all. You empty them yourself, as always.
-- **Moving between folders**: allowed when both are on the same disk. On different disks
-  the preview refuses with a message naming both folders. Copying across disks is not
-  built yet.
+- **Moving between folders**: on the same disk a move is a rename, as anywhere else. To a
+  folder on another disk (drag, Move to…, or Restore to a folder there), dam copies each
+  file, checks the copy against the original (its size and its content), keeps the file's
+  modification date, and only then moves the original to the To Delete of the folder it
+  came from. Nothing is deleted: you empty To Delete yourself once you are happy with the
+  copies. Tags, notes, collections, tray items and locks move with the file.
+  - The preview says how many files are copied, how big they are, and how many are in the
+    cloud only: those are downloaded first, which takes longer. It also checks that the
+    other disk has room for all of them.
+  - The move runs in the background. A dialog shows the files and the amount copied and
+    the file being copied; **Hide** leaves a line at the bottom of the window, and you can
+    keep working. Closing the window does not stop the move. **Stop** lets the file being
+    copied finish (its original goes to To Delete too) and ends there, so every file is
+    either moved or untouched; move the rest later.
+  - **Undo** (in the toast or Activity) moves the originals back from To Delete and the
+    copies to the To Delete of the other disk.
+  - If a copy does not match, or the app is closed during a copy, the move stops there
+    and the message names the unfinished copy (its name starts with `.dam-copy-`). The
+    original is untouched; remove the unfinished copy yourself.
+  - Only files move this way for now; a folder cannot be moved to another disk yet, and
+    a protected file is not copied across.
 - **A folder that is not connected** (unplugged disk, cloud drive not signed in) gets a "Not
   connected" mark on its row in Browse. Its files stay in the index, search and
   collections, where they carry the same mark, and are not marked missing; the file view says the folder is not connected
@@ -1458,8 +1476,17 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   folder at the top of the main folder that has the same name as an archive folder. The
   archive folder wins: rename the folder in the main folder, or detach the archive folder
   with Also forget.
-- While a Maintenance check or a rule replay runs, adding, detaching and attaching are
-  refused until it has finished.
+- **Change label**: on an extra folder's row in Settings, **Change label** gives the folder
+  a new label. **Preview** says how many index and history entries change and which
+  settings and rule files are edited; **Change label** then does it. Nothing on the disk
+  changes, the folder keeps its files, tags and notes, earlier changes can still be undone,
+  and protected folders, folders kept from AI and the `folder` and `folder_is` values in
+  your rules follow the new label. The rule files are edited value by value, so your
+  comments and layout stay; a value written over several lines is refused with its file
+  and line, for you to change by hand. dam takes a snapshot first (Settings, Snapshots,
+  marked "before a label change") and reopens the archive.
+- While a Maintenance check, a rule replay or a move to another disk runs, adding,
+  detaching, attaching and changing a label are refused until it has finished.
 
 ## Keyboard shortcuts
 
