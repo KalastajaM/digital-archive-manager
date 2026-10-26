@@ -351,7 +351,9 @@ describe("ReviewCard", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(posts(calls, "/api/inbox/file")).toHaveLength(0);
 
-    await user.click(screen.getByRole("button", { name: "File it" }));
+    // the shown plan has File it of its own, and × closes it
+    const shown = screen.getByRole("region", { name: "Planned changes" });
+    await user.click(within(shown).getByRole("button", { name: "File it" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "File" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
     const previewed = posts(calls, "/api/inbox/preview").at(-1)!.body;
@@ -662,8 +664,9 @@ describe("ReviewCard", () => {
         <Inbox />
       </MemoryRouter>,
     );
-    expect(await screen.findByText("in⟨U+202E⟩fdp.exe")).toBeInTheDocument();
-    expect(screen.getByText("x⟨U+200B⟩y.pdf")).toBeInTheDocument();
+    // the list shows the file's own name, the suggestion marked as one
+    expect((await screen.findAllByText("in⟨U+202E⟩fdp.exe")).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Suggested: x⟨U\+200B⟩y\.pdf/)).toBeInTheDocument();
   });
 
   it("ignores auto-repeated keydowns", async () => {
@@ -2201,5 +2204,29 @@ describe("Filing says where it came from and offers a rule", () => {
     await user.click(await screen.findByRole("button", { name: "Not for these" }));
     await waitFor(() => expect(posts(calls, "/api/rules/state/decline")).toHaveLength(1));
     expect(posts(calls, "/api/rules/state/decline")[0].body).toEqual({ words: ["kotihoito"] });
+  });
+});
+
+describe("review card header", () => {
+  it("names no folder for a file directly in the inbox, and the folder inside it otherwise", async () => {
+    const inCode = { ...ENTRIES[1], record: { ...ENTRIES[1].record, path: "##. Organize/To pay/scan002.pdf" } };
+    const { user } = await setup({
+      "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
+      "GET /api/inbox": { body: [ENTRIES[0], inCode] },
+    });
+    const card = () => screen.getByRole("article");
+    await waitFor(() => expect(card().querySelector(".toolbar-subtitle")).toBeNull());
+    await user.click(screen.getAllByRole("button", { name: /scan002\.pdf/ })[0]);
+    await waitFor(() => expect(card().querySelector(".toolbar-subtitle")).toHaveTextContent(/^To pay$/));
+  });
+});
+
+describe("the inline plan", () => {
+  it("closes with its ×", async () => {
+    const { user } = await setup({ "POST /api/inbox/preview": { body: SIMPLE_MOVE } });
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    const shown = await screen.findByRole("region", { name: "Planned changes" });
+    await user.click(within(shown).getByRole("button", { name: "Close the preview" }));
+    expect(screen.queryByRole("region", { name: "Planned changes" })).not.toBeInTheDocument();
   });
 });

@@ -29,6 +29,7 @@ import { IconButton } from "../ui/IconButton";
 import { Tag } from "../ui/Tag";
 import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
+import { ShowInBrowse } from "./ShowInBrowse";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
 import { useFold } from "./view";
 
@@ -203,9 +204,7 @@ export function EmptyFolders() {
                     disabled={ignore.busy}
                     onClick={() => void ignore.ignore({ kind: "empty_folders", key: f.drive_id, label: f.path })}
                   />
-                  <Link to={`/browse?${new URLSearchParams({ path: f.path })}`} className="card-link">
-                    Show in Browse
-                  </Link>
+                  <ShowInBrowse to={`/browse?${new URLSearchParams({ path: f.path })}`} />
                 </span>
               </li>
             ))}
@@ -558,9 +557,7 @@ export function Names() {
                     disabled={ignore.busy}
                     onClick={() => void ignore.ignore({ kind: "names", key: r.drive_id, label: r.path })}
                   />
-                  <Link to={browseTo(r.path, r.drive_id)} className="card-link">
-                    Show in Browse
-                  </Link>
+                  <ShowInBrowse to={browseTo(r.path, r.drive_id)} />
                 </span>
               </li>
             ))}

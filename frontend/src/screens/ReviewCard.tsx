@@ -45,6 +45,7 @@ import { visible } from "../text";
 import { LinkBadges } from "./FileActions";
 import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFiling";
 import { LockControl } from "../components/LockControl";
+import { useInboxFolder } from "../components/MoveTo";
 import { MarkToggles } from "../components/MarkToggles";
 import { TrashButton } from "../components/Trash";
 import {
@@ -241,6 +242,7 @@ type Props = { entry: InboxEntry; filing: Filing; trash?: CardTrash };
 export default function ReviewCard({ entry, filing, trash }: Props) {
   const ids = useId();
   const [name, setName] = useState(entry.suggestion.name);
+  const inbox = useInboxFolder();
   const [folder, setFolder] = useState(entry.suggestion.folder ?? "");
   const [tags, setTags] = useState(entry.suggestion.tags.join(", "));
   // A file with a filing code starts with the suggested tray, as File N marked files it (a
@@ -423,11 +425,14 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   useCardKeys({ preview, fileIt }, { folder: folderRef, name: nameRef });
 
   const fileName = entry.record.name ?? entry.record.path;
+  // every file here is in the inbox: name only a folder inside it (such as a code's folder)
+  const inFolder = folderOf(entry.record.path);
+  const inboxSubfolder = inbox && inFolder.startsWith(`${inbox}/`) ? inFolder.slice(inbox.length + 1) : inbox ? null : inFolder;
   return (
     <article className="review-card" aria-label={`Review ${fileName}`}>
       <Toolbar
         title={visible(fileName)}
-        subtitle={visible(folderOf(entry.record.path))}
+        subtitle={inboxSubfolder && visible(inboxSubfolder)}
         actions={
           <>
             {/* the app's one order: view, marks, Ask AI, the bin last; then this card's own steps */}
@@ -590,6 +595,12 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
                 ops={plan.ops}
                 tags={parseTags(tags)}
                 followUps={followUpLines(plan.requests, trays.list, entry.prefill)}
+                onClose={filing.clearPlan}
+                action={
+                  <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || lock.blocked}>
+                    File it
+                  </button>
+                }
               />
             </div>
           )}

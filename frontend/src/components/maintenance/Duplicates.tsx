@@ -24,12 +24,14 @@ import { visible } from "../../text";
 import { ConfirmPlan, PlanList, snapshotKey } from "../PlanPreview";
 import { undoAction, useBlockToastActions, useToast } from "../Toasts";
 import { useUndoConfirm } from "../UndoConfirm";
+import { type QLFile, useQuickLook } from "../useQuickLook";
 import { Card } from "../ui/Card";
 import { Segmented } from "../ui/Segmented";
 import { Tag } from "../ui/Tag";
 import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
 import { foldedLine, ResetButton } from "./ListChecks";
+import { QuickLookButton, ShowInBrowse } from "./ShowInBrowse";
 import { useMaintenanceJob } from "./useMaintenanceJob";
 import { useFold } from "./view";
 
@@ -39,6 +41,12 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const browseTo = (file: DupFile) =>
   `/browse?${new URLSearchParams({ path: folderOf(file.path), select: file.drive_id })}`;
+
+const qlFile = (f: DupFile): QLFile => ({ drive_id: f.drive_id, name: null, path: f.path, ext: extOf(f.path) });
+const extOf = (path: string) => {
+  const name = baseName(path);
+  return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null;
+};
 
 const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
 
@@ -128,6 +136,7 @@ function FileRow({
   choice,
   onKeep,
   onChoose,
+  onLook,
 }: {
   file: DupFile;
   groupName: string;
@@ -136,6 +145,7 @@ function FileRow({
   choice: Choice;
   onKeep: () => void;
   onChoose: (choice: Choice) => void;
+  onLook: () => void;
 }) {
   const place = PLACE_LABEL[file.place];
   return (
@@ -179,9 +189,8 @@ function FileRow({
             onChange={onChoose}
           />
         )}
-        <Link to={browseTo(file)} className="card-link">
-          Show in Browse
-        </Link>
+        <QuickLookButton onClick={onLook} />
+        <ShowInBrowse to={browseTo(file)} />
       </span>
       {file.why && !keep && <span className="hint dup-why">{visible(file.why)}</span>}
     </li>
@@ -199,6 +208,7 @@ function Group({
   onInclude,
   onApply,
   onIgnore,
+  onLook,
 }: {
   group: DupGroup;
   keep: string;
@@ -210,6 +220,7 @@ function Group({
   onInclude: () => void;
   onApply: () => void;
   onIgnore: () => void;
+  onLook: (id: string) => void;
 }) {
   const { others, links } = changesOf(group, keep, choices);
   const why = others.length === 0 ? "Every copy is left where it is" : undefined;
@@ -237,6 +248,7 @@ function Group({
             choice={choices[f.drive_id] ?? "quarantine"}
             onKeep={() => onKeep(f.drive_id)}
             onChoose={(c) => onChoose(f.drive_id, c)}
+            onLook={() => onLook(f.drive_id)}
           />
         ))}
       </ul>
@@ -360,6 +372,20 @@ export function Duplicates() {
   };
 
   const groups = result?.groups ?? [];
+  // Quick Look moves through every file shown, identical copies first, then same-name files
+  const lookable = [...groups.flatMap((g) => g.files), ...(result?.name_groups ?? []).flatMap((g) => g.files)];
+  const [lookAt, setLookAt] = useState(0);
+  // opened by a row's button only: a Space on the page keeps scrolling it
+  const byButton = useRef(false);
+  const quickLook = useQuickLook(lookable.map(qlFile), lookAt, setLookAt, { canOpen: () => byButton.current });
+  const look = (id: string) => {
+    const i = lookable.findIndex((f) => f.drive_id === id);
+    if (i < 0) return;
+    setLookAt(i);
+    byButton.current = true;
+    quickLook.open();
+    byButton.current = false;
+  };
   const includedGroups = groups.filter((g) => !excluded.has(g.sha256));
   const bulkCopies = includedGroups.reduce((n, g) => n + changesIn(g).others.length, 0);
   /** Every copy that can go in the ticked groups set to one choice. */
@@ -568,6 +594,7 @@ export function Duplicates() {
                       })
                     }
                     onApply={() => begin([g])}
+                    onLook={look}
                     onIgnore={() =>
                       void ignore.ignore({
                         kind: "duplicates",
@@ -595,6 +622,7 @@ export function Duplicates() {
                   name={g.name}
                   files={g.files}
                   busy={ignore.busy}
+                  onLook={look}
                   onIgnore={() =>
                     void ignore.ignore({ kind: "versions", key: g.name, label: g.name, members: g.files.map((f) => f.drive_id) })
                   }
@@ -611,6 +639,7 @@ export function Duplicates() {
       )}
       {!check.running && <IgnoredList kinds={["duplicates", "versions"]} onChange={check.reload} />}
       {confirmView}
+      {quickLook.view}
     </Card>
   );
 }
@@ -620,11 +649,13 @@ function NameGroup({
   files,
   busy,
   onIgnore,
+  onLook,
 }: {
   name: string;
   files: DupFile[];
   busy: boolean;
   onIgnore: () => void;
+  onLook: (id: string) => void;
 }) {
   const [a, b] = files;
   const sideBySide =
@@ -655,9 +686,8 @@ function NameGroup({
               </span>
             </span>
             <span className="dup-actions">
-              <Link to={browseTo(f)} className="card-link">
-                Show in Browse
-              </Link>
+              <QuickLookButton onClick={() => onLook(f.drive_id)} />
+              <ShowInBrowse to={browseTo(f)} />
             </span>
           </li>
         ))}

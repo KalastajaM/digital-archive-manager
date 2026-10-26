@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Quick Look in Duplicates.** The eye button on each copy, and on each same-name
+  file, shows it in Quick Look without leaving Maintenance; ← and → move through the
+  other files listed.
+
 - **Diagrams in Help.** Under **How dam works**, Help now shows how a document goes from
   paper to its folder, where a filed document ends up, when each tray reminds you, how
   every change is previewed and can be undone, and what stays on your computer. They
@@ -108,6 +112,18 @@ All notable changes are listed here. The format follows
   Undo, which puts them back in To Delete.
 
 ### Changed
+
+- **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
+  folder's name under the file's name; it names only a folder inside the inbox (such
+  as a code's folder). In Maintenance, **Show in Browse** is an icon button (the
+  Browse icon, with a tooltip), and a group's **Apply…** button lines up with the text
+  beside it.
+- **The Inbox list shows each file's own name.** The name dam suggests is on the line
+  under it, marked "Suggested:", so a file no longer looks renamed before it is filed.
+- **Planned changes** (the Inbox's Preview) has a border, an × to close it and its own
+  **File it** button.
+- **Messages with buttons** (such as "Filed as …" with Undo and Make a rule…) put the
+  text on top, at full width, and the buttons under it, so a long path stays readable.
 
 - **Previews list a new folder structure as one step.** When a change needs several
   missing folders, one inside the other (such as the same folder path in To Delete), the
@@ -498,6 +514,11 @@ All notable changes are listed here. The format follows
   remembered per browser; a search shows them open.
 
 ### Fixed
+
+- **A duplicate copied from an Important file can be linked or moved to To Delete.** A
+  copy made from a file keeps that file's Google Drive id, so dam took the unlocked copy
+  for the locked original and refused with "This file is locked". The lock check now
+  goes by the file dam has indexed at that path.
 
 - **A copy of a Google Drive file can be moved again.** Copying a file also copies its
   Drive id, and dam refused to move such a copy ("now has Drive id …, so it is not the
