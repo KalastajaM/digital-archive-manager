@@ -1574,36 +1574,41 @@ class ArchiveRevealIn(_In):
     what: Literal["data", "archive"]
 
 
-# -- backups ------------------------------------------------------------------
+# -- snapshots ----------------------------------------------------------------
 
 
-class BackupOut(BaseModel):
+class SnapshotOut(BaseModel):
     name: str
     created_at: str  # ISO 8601 with the offset
     size: int  # bytes
     kind: Literal["manual", "before-restore"]
-    revision: str | None  # the database's migration revision when it was made
+    imported: bool  # added with Import
+    revision: str | None  # the database's migration revision when it was taken
     app_version: str | None
     archive_root: str | None
+    # taken for another archive folder: a restore keeps this archive's folders
+    other_folder: bool
     problem: str | None  # why it cannot be restored here; None when it can
 
 
-class BackupsOut(BaseModel):
-    folder: str  # <data dir>/backups
-    backups: list[BackupOut]  # newest first
+class SnapshotsOut(BaseModel):
+    folder: str  # <data dir>/snapshots
+    snapshots: list[SnapshotOut]  # newest first
     can_restore: bool  # False: this window cannot close and reopen the archive
 
 
-class BackupRestoreIn(_In):
-    # required: the user was asked whether to back up the current state first
-    backup_current: bool
+class SnapshotRestoreIn(_In):
+    # required: the user was asked whether to keep the current state as a snapshot first
+    snapshot_current: bool
+    # the user confirmed restoring a snapshot of another archive folder
+    other_folder_ok: bool = False
 
 
-class BackupRestoreOut(BaseModel):
+class SnapshotRestoreOut(BaseModel):
     restored: str
-    safety_backup: BackupOut | None  # the backup of the state before the restore
+    safety_snapshot: SnapshotOut | None  # the snapshot of the state before the restore
     replaced_folder: str  # where the replaced settings were moved (nothing is deleted)
-# -- archive folders (the main folder and the extra ones) ------------------------------
+    kept_folders: bool  # the snapshot's folder settings were replaced by this archive's
 
 
 class ArchiveFolderOut(BaseModel):

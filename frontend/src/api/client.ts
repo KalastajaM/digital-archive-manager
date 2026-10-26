@@ -75,10 +75,10 @@ export type Archive = Schemas["ArchiveOut"];
 export type Archives = Schemas["ArchivesOut"];
 export type ArchiveForgotten = Schemas["ArchiveForgetOut"];
 export type ArchiveSwitched = Schemas["ArchiveSwitchOut"];
-// backups of this archive's database and settings
-export type Backup = Schemas["BackupOut"];
-export type Backups = Schemas["BackupsOut"];
-export type BackupRestored = Schemas["BackupRestoreOut"];
+// snapshots of this archive's database and settings
+export type Snapshot = Schemas["SnapshotOut"];
+export type Snapshots = Schemas["SnapshotsOut"];
+export type SnapshotRestored = Schemas["SnapshotRestoreOut"];
 // archive folders (extra folders attached to one archive)
 export type ArchiveFolder = Schemas["ArchiveFolderOut"];
 export type FolderChange = Schemas["FolderChangeOut"];
@@ -424,29 +424,55 @@ export const forgetArchive = (id: string, switch_to?: string) =>
 export const revealArchive = (id: string, what: "data" | "archive") =>
   post<void>(`/api/archives/${enc(id)}/reveal`, { what });
 
-// -- backups --------------------------------------------------------------------
+// -- snapshots ------------------------------------------------------------------
 
-const backupsKey = ["backups"] as const;
+const snapshotsKey = ["snapshots"] as const;
 
-/** This archive's backups (newest first) and the folder they are in. */
-export const useBackups = () => useQuery({ queryKey: backupsKey, queryFn: () => get<Backups>("/api/backups") });
+/** This archive's snapshots (newest first) and the folder they are in. */
+export const useSnapshots = () => useQuery({ queryKey: snapshotsKey, queryFn: () => get<Snapshots>("/api/snapshots") });
 
-/** Back up the database and settings now. */
-export const useCreateBackup = () => {
+/** Take a snapshot of the database and settings now. */
+export const useCreateSnapshot = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: () => post<Backup>("/api/backups"),
-    onSettled: () => client.invalidateQueries({ queryKey: backupsKey }),
+    mutationFn: () => post<Snapshot>("/api/snapshots"),
+    onSettled: () => client.invalidateQueries({ queryKey: snapshotsKey }),
   });
 };
 
-/** Replace the database and settings with a backup; ``backup_current``: back up the
- * current state first. The archive closes and opens again, so the page reloads after. */
-export const restoreBackup = (name: string, backup_current: boolean) =>
-  post<BackupRestored>(`/api/backups/${enc(name)}/restore`, { backup_current });
+/** The snapshot zip as a download (Export): a plain link, the browser saves it. */
+export const snapshotDownloadUrl = (name: string) => `/api/snapshots/${enc(name)}/download`;
 
-/** Show the backups folder in Finder / Explorer. */
-export const revealBackups = () => post<void>("/api/backups/reveal");
+/** Add a snapshot zip saved elsewhere (Import). It is checked in full; nothing is restored.
+ * Not JSON: the file itself is the body. */
+export async function importSnapshot(file: File): Promise<Snapshot> {
+  const response = await fetch("/api/snapshots/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", Accept: "application/json" },
+    credentials: "same-origin",
+    body: file,
+  });
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as Snapshot;
+}
+
+export const useImportSnapshot = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: importSnapshot,
+    onSettled: () => client.invalidateQueries({ queryKey: snapshotsKey }),
+  });
+};
+
+/** Replace the database and settings with a snapshot; ``snapshot_current``: keep the
+ * current state as a snapshot first; ``other_folder_ok``: the user confirmed a snapshot of
+ * another archive folder (this archive's folders are kept). The archive closes and opens
+ * again, so the page reloads after. */
+export const restoreSnapshot = (name: string, snapshot_current: boolean, other_folder_ok: boolean) =>
+  post<SnapshotRestored>(`/api/snapshots/${enc(name)}/restore`, { snapshot_current, other_folder_ok });
+
+/** Show the snapshots folder in Finder / Explorer. */
+export const revealSnapshots = () => post<void>("/api/snapshots/reveal");
 
 export const archiveFoldersKey = ["archive-folders"] as const;
 export const useArchiveFolders = () =>

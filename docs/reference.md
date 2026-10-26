@@ -15,7 +15,7 @@ the app's sidebar).
 - [Command line](#command-line)
 - [Several archives](#several-archives)
 - [Several archive folders](#several-archive-folders)
-- [Backups](#backups)
+- [Snapshots](#snapshots)
 - [Config and rules](#config-and-rules)
 - [Tray files](#tray-files)
 - [Reminders setup](#reminders-setup)
@@ -319,11 +319,12 @@ publisher leaves Ongoing and Important links into an unplugged or detached folde
 Maintenance shows them as "Folder not connected" or "Folder detached", and its **Archive
 folder names** check lists main-folder entries that share a folder's label.
 
-## Backups
+## Snapshots
 
-A backup is one zip per archive in `<data folder>/backups/`, named
-`dam-backup-YYYYMMDD-HHMMSS.zip` (`…-before-restore.zip` for the one made just before a
-restore). It holds:
+A snapshot is one zip per archive in `<data folder>/snapshots/`, named
+`dam-snapshot-YYYYMMDD-HHMMSS.zip` (`…-before-restore.zip` for the one taken just before
+a restore, `…-imported.zip` for one added with Import, named by when it was taken). It
+holds:
 
 - `dam.sqlite`, copied with SQLite's online backup API, so it is consistent while the
   app runs (the WAL is included);
@@ -336,29 +337,40 @@ restore). It holds:
 
 Left out: `cache/` (thumbnails, page-1 pictures, exports; rebuilt), `logs/`, the lock and
 server files, `archives.yaml` and the other archives' data folders, the archive's own
-files, and the Keychain entries. The zip is built in a temporary folder inside `backups/`
-and moved into place in one step. dam never removes a backup.
+files, and the Keychain entries. The zip is built in a temporary folder inside
+`snapshots/` and moved into place in one step. dam never removes a snapshot.
 
-**Restore** (`POST /api/backups/{name}/restore {backup_current}`; `backup_current` is
-required) only takes a backup by name from this archive's `backups/` folder. Before
-anything changes it unpacks the zip into a temporary folder and checks it: only the
-expected entries (no absolute paths, `..` or links), the manifest format, `PRAGMA
-integrity_check`, a readable `settings.yaml`, a migration revision this version of dam
-knows (a newer or unknown one, such as one from another branch of dam, is refused) and
-the same archive folder as the open archive. The unpacked database is then migrated to
-the current revision. It is refused while an interrupted operation waits for
-`dam recover`. With `backup_current` a `before-restore` backup is made next. Then the
-server closes the archive (`Host.reopen`: background work stopped, App closed), writes
-the unpacked database into the live `dam.sqlite` with the backup API (one transaction,
-no file is renamed or removed), moves the current `config/` and state files to
-`backups/replaced-YYYYMMDD-HHMMSS/` and moves the backup's into place (exclusive
+**Export** is `GET /api/snapshots/{name}/download`: the zip as it is, as a download.
+**Import** is `POST /api/snapshots/import` with the zip as the body
+(`application/octet-stream`, up to 2 GB; besides the inbox upload it is the only route
+that takes a non-JSON body). The file is unpacked into a temporary folder and checked as
+for a restore (below, apart from the archive folder and the migration); then it is copied
+in as `…-imported.zip`. A taken name gets `-2`; nothing is overwritten.
+
+**Restore** (`POST /api/snapshots/{name}/restore {snapshot_current, other_folder_ok}`;
+`snapshot_current` is required) only takes a snapshot by name from this archive's
+`snapshots/` folder. Before anything changes it unpacks the zip into a temporary folder
+and checks it: only the expected entries (no absolute paths, `..` or links), the
+manifest format, `PRAGMA integrity_check`, a readable `settings.yaml` and a migration
+revision this version of dam knows (a newer or unknown one, such as one from another
+branch of dam, is refused). A snapshot whose `archive_root` differs from the open
+archive's is a 409 unless `other_folder_ok` is true; then `archive_root` and
+`extra_folders` in the unpacked `settings.yaml` are set to the open archive's (the index
+stores paths relative to the archive folders, so the rest still fits). The unpacked
+database is then migrated to the current revision. It is refused while an interrupted
+operation waits for `dam recover`, and while a maintenance check or rule replay runs.
+With `snapshot_current` a `before-restore` snapshot is taken next. Then the server closes
+the archive (`Host.close_and_reopen`: background work stopped, App closed), writes the
+unpacked database into the live `dam.sqlite` with the backup API (one transaction, no file
+is renamed or removed), moves the current `config/` and state files to
+`snapshots/replaced-YYYYMMDD-HHMMSS/` and moves the snapshot's into place (exclusive
 renames), and opens the archive again, which starts its background scan. Nothing is
 deleted, and `tests/test_no_delete.py` is unchanged. A restore needs `dam serve`; an API
 used on its own refuses it.
 
-Other routes: `GET /api/backups` (the list, newest first, each with `problem` when it
-cannot be restored here), `POST /api/backups` (back up now) and `POST /api/backups/reveal`
-(show the folder).
+Other routes: `GET /api/snapshots` (the list, newest first, each with `other_folder` and
+with `problem` when it cannot be restored here), `POST /api/snapshots` (take one now) and
+`POST /api/snapshots/reveal` (show the folder).
 
 ## Config and rules
 
@@ -1005,9 +1017,10 @@ The user guide's "What dam never does" gives the short version. The details:
 - **Local-only API.** The server binds `127.0.0.1`, checks the `Host` header (DNS
   rebinding), refuses `Sec-Fetch-Site: cross-site`, and requires mutating requests to
   carry a local `Origin` (or, without `Origin`, `Sec-Fetch-Site` of `same-origin` or
-  `none`). POST requests must be JSON (`Content-Type: application/json`), except the one
-  file upload of "Choose files…" (`POST /api/inbox/upload`, `application/octet-stream`),
-  which passes the same host and origin checks. The UI is served with a strict CSP. Other
+  `none`). POST requests must be JSON (`Content-Type: application/json`), except the two
+  file uploads, "Choose files…" (`POST /api/inbox/upload`) and snapshot Import
+  (`POST /api/snapshots/import`), which take `application/octet-stream` and pass the same
+  host and origin checks. The UI is served with a strict CSP. Other
   web pages cannot read or change your archive.
 - **The database only.** Trays, items, notes, checklists, reminders, collections, stars,
   locks and tags live in `dam.sqlite` in the data folder. Nothing about them is written into the

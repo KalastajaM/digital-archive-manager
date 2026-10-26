@@ -45,7 +45,7 @@ describe("Settings", () => {
       "/settings/filing-rules",
       "/settings/folders",
       "/settings/indexing",
-      "/settings/backups",
+      "/settings/snapshots",
       "/settings/appearance",
     ]);
   });
@@ -76,45 +76,99 @@ describe("Settings", () => {
     expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-backfill")?.body).toEqual({ enabled: false });
   });
 
-  it("Backups lists the backups and makes one", async () => {
+  it("Snapshots lists the snapshots, takes one, and offers each for export", async () => {
     const calls = mockFetch({
-      "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true } },
-      "GET /api/backups": { body: backupsBody },
-      "POST /api/backups": { body: { ...backupsBody.backups[0], name: "dam-backup-20261026-130000.zip" } },
+      "GET /api/archives": { body: archivesBody },
+      "GET /api/snapshots": { body: snapshotsBody },
+      "POST /api/snapshots": { body: { ...snapshotsBody.snapshots[0], name: "dam-snapshot-20261026-130000.zip" } },
     });
-    const user = renderBackups();
-    const section = await screen.findByRole("region", { name: "Backups" });
+    const user = renderSnapshots();
+    const section = await screen.findByRole("region", { name: "Snapshots" });
     const rows = await within(section).findAllByRole("listitem");
-    expect(rows).toHaveLength(2);
-    expect(within(rows[1]).getByText(/database version 0001/)).toBeInTheDocument();
-    expect(within(rows[1]).getByText(/newer or different version/)).toBeInTheDocument();
-    expect(within(rows[1]).getByRole("button", { name: "Restore…" })).toBeDisabled();
-    await user.click(within(section).getByRole("button", { name: "Back up now" }));
-    expect(await within(section).findByText(/Backed up as dam-backup-20261026-130000.zip/)).toBeInTheDocument();
-    expect(calls.filter((c) => c.method === "POST" && c.url === "/api/backups")).toHaveLength(1);
+    expect(rows).toHaveLength(3);
+    expect(within(rows[0]).getByRole("link", { name: "Export" })).toHaveAttribute(
+      "href",
+      "/api/snapshots/dam-snapshot-20261026-120000.zip/download",
+    );
+    expect(within(rows[1]).getByText(/imported/)).toBeInTheDocument();
+    expect(within(rows[1]).getByText(/Of another archive folder: \/old\/Archive/)).toBeInTheDocument();
+    expect(within(rows[2]).getByText(/newer or different version/)).toBeInTheDocument();
+    expect(within(rows[2]).getByRole("button", { name: "Restore…" })).toBeDisabled();
+    await user.click(within(section).getByRole("button", { name: "Take snapshot" }));
+    expect(await within(section).findByText(/Snapshot taken: dam-snapshot-20261026-130000.zip/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "POST" && c.url === "/api/snapshots")).toHaveLength(1);
+  });
+
+  it("Import sends the picked file as it is", async () => {
+    const calls = mockFetch({
+      "GET /api/archives": { body: archivesBody },
+      "GET /api/snapshots": { body: snapshotsBody },
+      "POST /api/snapshots/import": { body: snapshotsBody.snapshots[1] },
+    });
+    const user = renderSnapshots();
+    const section = await screen.findByRole("region", { name: "Snapshots" });
+    const file = new File(["PK"], "dam-snapshot-20261020-090000.zip", { type: "application/zip" });
+    await user.upload(within(section).getByLabelText("Snapshot file to import"), file);
+    expect(await within(section).findByText(/Imported the snapshot from/)).toBeInTheDocument();
+    const sent = calls.find((c) => c.url === "/api/snapshots/import");
+    expect(sent?.method).toBe("POST");
   });
 
   it.each([
-    ["Back up and restore", true],
-    ["Restore without backup", false],
-  ])("Restore asks whether to back up first: %s", async (choice, backupCurrent) => {
+    ["Take snapshot and restore", true],
+    ["Restore without snapshot", false],
+  ])("Restore asks whether to take a snapshot first: %s", async (choice, snapshotCurrent) => {
     const leave = vi.spyOn(navigation, "leave").mockImplementation(() => {});
-    const name = backupsBody.backups[0].name;
+    const name = snapshotsBody.snapshots[0].name;
     const calls = mockFetch({
-      "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true } },
-      "GET /api/backups": { body: backupsBody },
-      [`POST /api/backups/${name}/restore`]: { body: { restored: name, safety_backup: null, replaced_folder: "/d/backups/replaced-x" } },
+      "GET /api/archives": { body: archivesBody },
+      "GET /api/snapshots": { body: snapshotsBody },
+      [`POST /api/snapshots/${name}/restore`]: {
+        body: { restored: name, safety_snapshot: null, replaced_folder: "/d/snapshots/replaced-x", kept_folders: false },
+      },
     });
-    const user = renderBackups();
-    const section = await screen.findByRole("region", { name: "Backups" });
+    const user = renderSnapshots();
+    const section = await screen.findByRole("region", { name: "Snapshots" });
     const [first] = await within(section).findAllByRole("listitem");
     await user.click(within(first).getByRole("button", { name: "Restore…" }));
-    const sheet = await screen.findByRole("dialog", { name: "Restore backup" });
-    expect(within(sheet).getByText("Back up the current state first?")).toBeInTheDocument();
+    const sheet = await screen.findByRole("dialog", { name: "Restore snapshot" });
+    expect(within(sheet).getByText("Take a snapshot of the current state first?")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("checkbox")).toBeNull();
     expect(calls.filter((c) => c.url.endsWith("/restore"))).toHaveLength(0); // nothing before the answer
     await user.click(within(sheet).getByRole("button", { name: choice }));
     await vi.waitFor(() => expect(leave).toHaveBeenCalled());
-    expect(calls.find((c) => c.url === `/api/backups/${name}/restore`)?.body).toEqual({ backup_current: backupCurrent });
+    expect(calls.find((c) => c.url === `/api/snapshots/${name}/restore`)?.body).toEqual({
+      snapshot_current: snapshotCurrent,
+      other_folder_ok: false,
+    });
+    leave.mockRestore();
+  });
+
+  it("a snapshot of another archive folder is restored only once that is confirmed", async () => {
+    const leave = vi.spyOn(navigation, "leave").mockImplementation(() => {});
+    const name = snapshotsBody.snapshots[1].name;
+    const calls = mockFetch({
+      "GET /api/archives": { body: archivesBody },
+      "GET /api/snapshots": { body: snapshotsBody },
+      [`POST /api/snapshots/${name}/restore`]: {
+        body: { restored: name, safety_snapshot: null, replaced_folder: "/d/snapshots/replaced-x", kept_folders: true },
+      },
+    });
+    const user = renderSnapshots();
+    const section = await screen.findByRole("region", { name: "Snapshots" });
+    const rows = await within(section).findAllByRole("listitem");
+    await user.click(within(rows[1]).getByRole("button", { name: "Restore…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Restore snapshot" });
+    const restore = within(sheet).getByRole("button", { name: "Take snapshot and restore" });
+    expect(restore).toBeDisabled();
+    expect(within(sheet).getByRole("button", { name: "Restore without snapshot" })).toBeDisabled();
+    await user.click(within(sheet).getByRole("checkbox", { name: /another archive folder/ }));
+    await user.click(restore);
+    await vi.waitFor(() => expect(leave).toHaveBeenCalled());
+    expect(calls.find((c) => c.url === `/api/snapshots/${name}/restore`)?.body).toEqual({
+      snapshot_current: true,
+      other_folder_ok: true,
+    });
     leave.mockRestore();
   });
 
@@ -152,36 +206,45 @@ describe("Settings", () => {
   });
 });
 
-const backupsBody = {
-  folder: "/d/backups",
+const archivesBody = { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true };
+
+const snapshot = {
+  size: 2048,
+  kind: "manual",
+  imported: false,
+  revision: "0034",
+  app_version: "0.1.0",
+  archive_root: "/a",
+  other_folder: false,
+  problem: null,
+};
+
+const snapshotsBody = {
+  folder: "/d/snapshots",
   can_restore: true,
-  backups: [
+  snapshots: [
+    { ...snapshot, name: "dam-snapshot-20261026-120000.zip", created_at: "2026-10-26T12:00:00+02:00" },
     {
-      name: "dam-backup-20261026-120000.zip",
-      created_at: "2026-10-26T12:00:00+02:00",
-      size: 2048,
-      kind: "manual",
-      revision: "0034",
-      app_version: "0.1.0",
-      archive_root: "/a",
-      problem: null,
+      ...snapshot,
+      name: "dam-snapshot-20261020-090000-imported.zip",
+      created_at: "2026-10-20T09:00:00+02:00",
+      imported: true,
+      archive_root: "/old/Archive",
+      other_folder: true,
     },
     {
-      name: "dam-backup-20261020-090000.zip",
-      created_at: "2026-10-20T09:00:00+02:00",
-      size: 1024,
-      kind: "manual",
-      revision: "0001",
-      app_version: "0.1.0",
-      archive_root: "/a",
-      problem: "The backup was made by a newer or different version of dam.",
+      ...snapshot,
+      name: "dam-snapshot-20261001-090000.zip",
+      created_at: "2026-10-01T09:00:00+02:00",
+      revision: "9999",
+      problem: "The snapshot was made by a newer or different version of dam.",
     },
   ],
 };
 
-function renderBackups() {
+function renderSnapshots() {
   renderWithProviders(
-    <MemoryRouter initialEntries={["/settings/backups"]}>
+    <MemoryRouter initialEntries={["/settings/snapshots"]}>
       <Routes>
         <Route path="/settings/:section?" element={<Settings />} />
       </Routes>

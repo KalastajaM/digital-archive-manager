@@ -8,10 +8,14 @@ All notable changes are listed here. The format follows
 
 ### Added
 
-- **Backups** (Settings, Backups): back up an archive's database and settings while dam
-  runs, and restore one. Before a restore dam asks whether to back up the current state
-  first. The replaced settings are moved aside, never deleted, and a backup from an older
-  version of dam is updated when it is restored. Your documents are not part of a backup.
+- **Snapshots** (Settings, Snapshots): take a snapshot of an archive's database and
+  settings while dam runs, and restore one. Before a restore dam asks whether to take a
+  snapshot of the current state first. **Export** saves a snapshot through the browser so
+  you can keep it on another disk or in the cloud, and **Import…** adds one back (checked
+  in full first), also on another computer, where the archive folder may have another
+  path: after you confirm, that snapshot is restored with this archive's own folders. The
+  replaced settings are moved aside, never deleted, and a snapshot from an older version
+  of dam is updated when it is restored. Your documents are not part of a snapshot.
 - **One archive can now span several folders.** In Settings, **Archive folders**, **Add
   folder** joins a further folder (for example on an external disk or a cloud drive) under
   a label you choose. Browse, search, tags, collections and Maintenance see one combined

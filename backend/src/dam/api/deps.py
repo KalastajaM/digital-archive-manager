@@ -8,8 +8,8 @@ from dam.api.setup_ctl import SetupMode
 from dam.app import App
 from dam.index.repo import FileRecord
 from dam.services.archives import ArchiveService, solo
-from dam.services.backups import BackupService
 from dam.services.errors import Conflict, InvalidRequest, NotFound
+from dam.services.snapshots import SnapshotService
 
 UI_ORIGIN = "ui"  # every change made through the API is journaled as coming from the UI
 
@@ -86,9 +86,9 @@ def get_archives(request: Request) -> ArchiveService:
 ArchivesDep = Annotated[ArchiveService, Depends(get_archives)]
 
 
-def get_backups(request: Request) -> BackupService:
-    """The backups service of this API (made with it in ``create_api``)."""
-    return request.app.state.backups
+def get_snapshots(request: Request) -> SnapshotService:
+    """The snapshots service of this API (made with it in ``create_api``)."""
+    return request.app.state.snapshots
 
 
-BackupsDep = Annotated[BackupService, Depends(get_backups)]
+SnapshotsDep = Annotated[SnapshotService, Depends(get_snapshots)]
