@@ -124,10 +124,12 @@ def stop_job(app: AppDep, job_id: str) -> dict:
 def resolve_duplicates(app: AppDep, body: DuplicateResolveIn):
     """Move the chosen copies to To Delete, or replace them with a link to the copy kept,
     as one batch (one Undo). ``dry_run`` lists every operation and what would be added to
-    the kept copy; nothing changes. 400: a copy that is Important or locked, files not
-    known to be the same, or changed since they were scanned."""
+    the kept copy; nothing changes. A group with ``same: name`` holds versions of one
+    document (same name, other content). 400: a copy that is Important or locked, files
+    not known to be the same (or, for versions, not of the same name), or changed since
+    they were scanned."""
     result = app.maintenance.resolve(
-        [(g.keep, g.others) for g in body.groups],
+        [(g.keep, g.others, g.same) for g in body.groups],
         body.action,
         carry_over=body.carry_over,
         origin=UI_ORIGIN,

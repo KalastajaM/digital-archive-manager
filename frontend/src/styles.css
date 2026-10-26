@@ -2391,6 +2391,20 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .ignored { margin-top: var(--sp-2); font-size: var(--fs-sm); }
 .ignored .check-list { margin-top: var(--sp-1); }
 .dup-group-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+/* Compare: two previews side by side in Quick Look's frame (stacked when narrow) */
+.compare-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.compare-side { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.compare-side + .compare-side { border-left: 0.5px solid var(--separator); }
+.compare-side .quicklook-preview { flex: 1; }
+.compare-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-bottom: 0.5px solid var(--separator); }
+.compare-head code { overflow-wrap: anywhere; }
+.compare-head select { max-width: 100%; }
+.compare-head > :last-child { margin-left: auto; font-size: var(--fs-sm); }
+.compare-kept { color: var(--muted); }
+@media (max-width: 900px) {
+  .compare-body { grid-template-columns: 1fr; grid-auto-rows: minmax(0, 1fr); }
+  .compare-side + .compare-side { border-left: none; border-top: 0.5px solid var(--separator); }
+}
 .carry-list { margin: var(--sp-1) 0 var(--sp-2); padding-left: var(--sp-5); }
 .carry-list ul { margin: 0; padding-left: var(--sp-4); }
 .entry-offline { flex: none; margin-left: var(--sp-2); font-size: 0.85em; color: var(--muted); }

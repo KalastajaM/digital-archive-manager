@@ -794,8 +794,10 @@ export interface paths {
          * Resolve Duplicates
          * @description Move the chosen copies to To Delete, or replace them with a link to the copy kept,
          *     as one batch (one Undo). ``dry_run`` lists every operation and what would be added to
-         *     the kept copy; nothing changes. 400: a copy that is Important or locked, files not
-         *     known to be the same, or changed since they were scanned.
+         *     the kept copy; nothing changes. A group with ``same: name`` holds versions of one
+         *     document (same name, other content). 400: a copy that is Important or locked, files
+         *     not known to be the same (or, for versions, not of the same name), or changed since
+         *     they were scanned.
          */
         post: operations["resolve_duplicates_api_maintenance_duplicates_resolve_post"];
         delete?: never;
@@ -4801,6 +4803,12 @@ export interface components {
             others: string[];
             /** Links */
             links?: string[];
+            /**
+             * Same
+             * @default content
+             * @enum {string}
+             */
+            same: "content" | "name";
         };
         /**
          * DuplicateEstimateOut
