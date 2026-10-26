@@ -206,3 +206,46 @@ def test_no_warning_for_a_file_move(tree, fake_archive):
     app.scan()
     ops = app.browse.move_preview(["id-a"], MISC)
     assert all(not o.note or "link" not in o.note for o in ops)
+
+
+def test_inside_link_has_its_own_sentence(tree, fake_archive):
+    app = tree
+    fake_archive.link(f"{FOLDER}/sub/in.pdf", f"{FOLDER}/a.pdf")
+    app.scan()
+    ops = app.browse.move_preview([fid(app, FOLDER)], MISC)
+    move = next(o for o in ops if o.kind is OpKind.MOVE)
+    assert move.note == (
+        "1 link inside this folder points into it and will point to nothing: in.pdf"
+    )
+    assert "elsewhere" not in move.note
+
+
+def test_across_disks_note_and_inside_link(extra_folder, tree, fake_archive, monkeypatch):
+    from dam.ops import primitives
+
+    app = tree
+    fake_archive.link("30. Work/to-a.pdf", f"{FOLDER}/a.pdf")
+    fake_archive.link(f"{FOLDER}/sub/in.pdf", f"{FOLDER}/a.pdf")
+    extra_folder.add("keep.pdf", b"k", drive_id="x1")
+    app.scan()
+    monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
+    ops = app.browse.move_preview([fid(app, FOLDER)], "Old years")
+    final = next(o for o in ops if o.copied_to is not None)
+    assert final.kind is OpKind.QUARANTINE
+    assert "1 link elsewhere points into this folder and will point to nothing: to-a.pdf" in (
+        final.note
+    )
+    assert "inside this folder" not in final.note
+
+
+def test_note_added_once(tree, fake_archive):
+    app = tree
+    fake_archive.link("30. Work/to-a.pdf", f"{FOLDER}/a.pdf")
+    app.scan()
+    folder_id = fid(app, FOLDER)
+    move = app.browse._drop([folder_id], MISC, "ui", "move")
+    ops = app.executor.preview(move.plan)
+    app.browse._warn_links_elsewhere(move, ops, "move")
+    app.browse._warn_links_elsewhere(move, ops, "move")
+    folder_op = next(o for o in ops if o.kind is OpKind.MOVE)
+    assert folder_op.note.count("will point to nothing") == 1

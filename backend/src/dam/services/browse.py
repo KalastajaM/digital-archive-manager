@@ -524,23 +524,38 @@ class BrowseService:
         )
         if op is None:
             return
+        if op.note and "will point to nothing" in op.note:
+            return  # the check ran before on these ops
         folder = nfc(rec.path)
-        names: list[str] = []
+        across = op.kind is not OpKind.MOVE
+        elsewhere: list[str] = []
+        inside: list[str] = []
         for link in self.repo.live_links():
             if any(is_under(link.path, a) for a in (self.special.ongoing, self.special.important)):
                 continue
             target = link_target(self.executor.paths, self.repo, link)
-            if target is not None and _under(nfc(target.path), folder):
-                names.append(link.name)
-        if not names:
-            return
-        if len(names) == 1:
-            note = f"1 link elsewhere points into this folder and will point to nothing: {names[0]}"
-        else:
-            note = f"{len(names)} links elsewhere point into this folder and will point to nothing"
+            if target is None or not _under(nfc(target.path), folder):
+                continue
+            if _under(nfc(link.path), folder):
+                # across disks it is already in the "not copied" note
+                if not across:
+                    inside.append(link.name)
+            else:
+                elsewhere.append(link.name)
+        for names, where in ((elsewhere, "elsewhere"), (inside, "inside")):
+            if not names:
+                continue
+            if where == "elsewhere":
+                head = "link elsewhere points" if len(names) == 1 else "links elsewhere point"
+                text = f"{len(names)} {head} into this folder and will point to nothing"
+            else:
+                head = "link inside this folder points" if len(names) == 1 else (
+                    "links inside this folder point"
+                )
+                text = f"{len(names)} {head} into it and will point to nothing"
             if len(names) <= 5:
-                note += ": " + ", ".join(names)
-        op.note = _add_note(op.note, note)
+                text += ": " + ", ".join(names)
+            op.note = _add_note(op.note, text)
 
     def move(
         self,
