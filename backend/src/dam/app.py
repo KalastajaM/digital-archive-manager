@@ -9,6 +9,7 @@ from pathlib import Path
 
 from sqlalchemy import Engine, func, select
 
+from dam import relabel
 from dam.ai.service import AIService
 from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
 from dam.codes.model import save_codes as write_codes
@@ -465,6 +466,7 @@ class App:
         """
         app_paths = AppPaths(data_dir)
         app_paths.ensure()
+        relabel.finish_interrupted(app_paths)  # before the settings are read
         settings = load_settings(app_paths)
         if settings.archive_root is None:
             if require_archive:

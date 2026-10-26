@@ -391,7 +391,13 @@ the old one with only those values changed, and a value that is folded, literal,
 over lines or an alias refuses the whole change with its file and line. Applying takes a
 snapshot (kind `before-relabel`), rewrites the database in one transaction, then writes
 the files (each with its `.bak-<time>`); if a file cannot be written, the files already
-written get their old content back and the database is rewritten back. It runs inside
+written get their old content back and the database is rewritten back. Before the
+database changes, `relabel.json` in the data folder is written (`{old, new, state}`,
+fsynced) with state `pending`; it is overwritten with `done` or `rolled_back` at the end,
+never removed. `App.create` reads it before the settings: a `pending` change (the process
+was killed or the power went between the commit and the last file) is finished by running
+the database rewrite and the file edits again, which only touch what still names the old
+label, and logged. An unreadable marker is logged and left. It runs inside
 `Host.close_and_reopen` (the archive is closed, so no scan writes old paths back); the API
 without `dam serve` answers 409.
 
