@@ -93,7 +93,10 @@ describe("Settings", () => {
     expect(within(rows[1]).getByText(/imported/)).toBeInTheDocument();
     expect(within(rows[1]).getByText(/Of another archive folder: \/old\/Archive/)).toBeInTheDocument();
     expect(within(rows[2]).getByText(/newer or different version/)).toBeInTheDocument();
-    expect(within(rows[2]).getByRole("button", { name: "Restore…" })).toBeDisabled();
+    const blocked = within(rows[2]).getByRole("button", { name: "Restore…" });
+    expect(blocked).toBeDisabled();
+    expect(blocked.parentElement).toHaveAttribute("data-tip", expect.stringMatching(/newer or different version/));
+    expect(within(rows[0]).getByRole("link", { name: "Export" })).toHaveAttribute("data-tip", expect.stringMatching(/same as copying it/));
     await user.click(within(section).getByRole("button", { name: "Take snapshot" }));
     expect(await within(section).findByText(/Snapshot taken: dam-snapshot-20261026-130000.zip/)).toBeInTheDocument();
     expect(calls.filter((c) => c.method === "POST" && c.url === "/api/snapshots")).toHaveLength(1);

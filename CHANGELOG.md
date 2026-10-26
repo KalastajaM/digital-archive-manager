@@ -124,7 +124,9 @@ All notable changes are listed here. The format follows
   **File it** button.
 - **Messages with buttons** (such as "Filed as …" with Undo and Make a rule…) put the
   text on top, at full width, and the buttons under it, so a long path stays readable.
-
+- **Snapshots** have tooltips on Import, Export and Restore (a snapshot that cannot be
+  restored says why), and the help says that Export only copies the file, so copying it
+  from the snapshots folder yourself works too.
 - **Previews list a new folder structure as one step.** When a change needs several
   missing folders, one inside the other (such as the same folder path in To Delete), the
   preview shows one "New folders" line with the deepest folder and how many are made,
