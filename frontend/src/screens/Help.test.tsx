@@ -1,13 +1,13 @@
 /** Help renders docs/guide.md with its contents beside it. The second half keeps the
  * guide from drifting: every screen has a section, and every link lands on a heading. */
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import app from "../App.tsx?raw";
 import guide from "../../../docs/guide.md?raw";
 import reference from "../../../docs/reference.md?raw";
-import Help, { headings, helpMarkdown, slug } from "./Help";
+import Help, { DIAGRAMS_SECTION, headings, helpMarkdown, slug } from "./Help";
 
 function renderHelp(at = "/help") {
   return render(
@@ -52,6 +52,27 @@ describe("Help", () => {
     const link = screen.getAllByRole("link", { name: "technical reference" })[0];
     expect(link).toHaveAttribute("href", expect.stringMatching(/^https:\/\/github\.com\/.+\/docs\/reference\.md$/));
     expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("shows the diagrams of how dam works right under that section's heading", () => {
+    renderHelp();
+    const heading = screen.getByRole("heading", { level: 2, name: "How dam works" });
+    expect(heading).toHaveAttribute("id", DIAGRAMS_SECTION);
+    const diagrams = heading.nextElementSibling as HTMLElement;
+    const figures = within(diagrams).getAllByRole("figure");
+    expect(figures.map((f) => f.querySelector("figcaption strong")?.textContent)).toEqual([
+      "The filing flow",
+      "Where a filed document lands",
+      "When the trays remind you",
+      "The safety loop",
+      "“Delete” is a move",
+      "What stays on your computer",
+    ]);
+    // each diagram is described for a screen reader
+    for (const figure of figures) expect(within(figure).getByRole("img")).toHaveAccessibleName();
+    // the arrowheads are this instance's own, so every arrow finds one
+    const heads = new Set([...diagrams.querySelectorAll("marker")].map((m) => `url(#${m.id})`));
+    for (const path of diagrams.querySelectorAll("[marker-end]")) expect(heads).toContain(path.getAttribute("marker-end"));
   });
 
   it("slugs headings the way GitHub does", () => {

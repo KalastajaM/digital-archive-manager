@@ -941,6 +941,51 @@ main:has(> .help) { padding: 0; min-height: 0; display: flex; }
   .help-toc { max-height: 30vh; border-right: none; border-bottom: 0.5px solid var(--hairline); }
 }
 
+/* ---- Help: the How dam works diagrams (components/HowDamWorks.tsx). Wider than the text
+ * column; a wide diagram scrolls sideways rather than shrink its labels. ---- */
+.help-article > .hdw { max-width: 70rem; display: grid; gap: var(--sp-4); margin: var(--sp-3) 0 var(--sp-5); }
+.hdw-defs { position: absolute; }
+.hdw-fig { margin: 0; min-width: 0; padding: var(--sp-3) var(--sp-4) var(--sp-4); border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow-card); }
+.hdw-fig figcaption { margin-bottom: var(--sp-2); font-size: var(--fs-md); }
+.hdw-fig figcaption span { color: var(--muted); }
+.hdw-scroll { overflow-x: auto; }
+.hdw-scroll svg { display: block; width: 100%; height: auto; }
+.hdw-wide svg { min-width: 680px; }
+.hdw-pair { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--sp-4); }
+@media (max-width: 1100px) { .hdw-pair { grid-template-columns: minmax(0, 1fr); } }
+.hdw text { font-family: var(--font); }
+.hdw-t { font-size: 17px; font-weight: 600; fill: var(--text); }
+.hdw-lane { font-size: 15px; }
+.hdw-s { font-size: 12.5px; fill: var(--muted); }
+.hdw text.hdw-m { font-family: var(--font-mono); font-size: 12px; fill: var(--muted); }
+.hdw-strong { font-weight: 600; }
+.hdw text.hdw-small { font-size: 10.5px; }
+.hdw-base { fill: var(--panel); }
+.hdw-box { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; }
+.hdw-doc { stroke-linejoin: round; }
+.hdw-box.accent { fill: var(--blue-bg); stroke: var(--accent); }
+.hdw-box.safe { fill: var(--green-bg); stroke: var(--green-text); }
+.hdw-box.tray { fill: var(--orange-bg); stroke: var(--orange-text); }
+.hdw-box.warn { fill: var(--red-bg); stroke: var(--red-text); }
+.hdw-t.accent, .hdw-s.accent, .hdw-m.accent, .hdw-fill.accent { fill: var(--accent); }
+.hdw-t.safe, .hdw-s.safe, .hdw-m.safe, .hdw-fill.safe { fill: var(--green-text); }
+.hdw-t.tray, .hdw-s.tray, .hdw-m.tray, .hdw-fill.tray { fill: var(--orange-text); }
+.hdw-t.warn, .hdw-s.warn, .hdw-m.warn, .hdw-fill.warn { fill: var(--red-text); }
+.hdw-s.ink, .hdw-m.ink { fill: var(--text); }
+.hdw-fill.plain { fill: var(--muted); }
+.hdw-ln { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+.hdw-ln.accent { stroke: var(--accent); stroke-width: 2.2; }
+.hdw-ln.safe { stroke: var(--green-text); stroke-width: 2; }
+.hdw-ln.tray { stroke: var(--orange-text); stroke-width: 1.6; }
+.hdw-ln.warn { stroke: var(--red-text); stroke-width: 2; }
+.hdw-thin { stroke-width: 1.5; }
+.hdw-dash { stroke-dasharray: 6 5; }
+.hdw-faint { fill: none; stroke: var(--separator); stroke-width: 1; }
+.hdw-thick { stroke-width: 2; }
+.hdw-edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.hdw-dot { fill: var(--orange); stroke: var(--panel); stroke-width: 2; }
+.hdw-ban { fill: none; stroke: var(--red-text); stroke-width: 3; }
+
 .activity .toolbar-search { width: 220px; }
 /* The toolbar's and filter bar's lines run full width; their content ends where the
  * 880px timeline ends (as on the Collections index). */

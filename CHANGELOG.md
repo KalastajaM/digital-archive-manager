@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Diagrams in Help.** Under **How dam works**, Help now shows how a document goes from
+  paper to its folder, where a filed document ends up, when each tray reminds you, how
+  every change is previewed and can be undone, and what stays on your computer. They
+  follow the Light and Dark appearance.
 - **One archive can now span several folders.** In Settings, **Archive folders**, **Add
   folder** joins a further folder (for example on an external disk or a cloud drive) under
   a label you choose. Browse, search, tags, collections and Maintenance see one combined
