@@ -7,6 +7,7 @@ import { Navigate, NavLink, useParams } from "react-router-dom";
 import { useArchives } from "../api/client";
 import { ArchiveFoldersSettings } from "../components/ArchiveFoldersSettings";
 import { AppearanceSettings } from "../components/AppearanceSettings";
+import { SnapshotSettings } from "../components/SnapshotSettings";
 import { FilingCodes } from "../components/codes/FilingCodes";
 import { IndexingSettings } from "../components/IndexingSettings";
 import { FilingRules } from "../components/rules/FilingRules";
@@ -20,6 +21,7 @@ export const SECTIONS: Section[] = [
   { id: "filing-rules", label: "Filing rules", scope: "archive", render: () => <FilingRules /> },
   { id: "folders", label: "Archive folders", scope: "archive", render: () => <ArchiveFoldersSettings /> },
   { id: "indexing", label: "Indexing", scope: "archive", render: () => <IndexingSettings /> },
+  { id: "snapshots", label: "Snapshots", scope: "archive", render: () => <SnapshotSettings /> },
   { id: "appearance", label: "Appearance", scope: "browser", render: () => <AppearanceSettings /> },
 ];
 

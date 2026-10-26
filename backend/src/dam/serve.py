@@ -447,6 +447,35 @@ class Host:
                 raise
             old.app.close()
 
+    def close_and_reopen[T](self, change: Callable[[], T]) -> T:
+        """Close the open archive, run ``change`` (a restore swaps its database and
+        settings, which needs the database closed), then open the same archive again with
+        the same lock. It is opened again even when ``change`` fails, so the server never
+        stays on a closed archive."""
+        if self.store is None or self.board is None or self.current is None:
+            raise Conflict("This server cannot reopen the archive; start it with `dam serve`.")
+        with self.lock:
+            if self.stopping:
+                raise Conflict("The server is stopping.")
+            old = self.current
+            if old.profile_id is None or old.app is None:
+                raise Conflict("The archive is not open yet.")
+            if old.app.jobs_running():
+                raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
+            profile = self.store.find(old.profile_id)
+            if old.background is not None:
+                old.background.stop()
+                old.background = None
+            old.app.close()
+            try:
+                return change()
+            finally:
+                new = self._open(profile, old.lock)  # type: ignore[arg-type]
+                self.board.target = new.api
+                self.current = new
+                if self.running and new.app is not None:
+                    new.background = start_background(new.app)
+
     def _rollback(
         self,
         old: Opened,

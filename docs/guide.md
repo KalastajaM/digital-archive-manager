@@ -53,6 +53,7 @@
   - [Duplicates](#duplicates)
   - [The other checks](#the-other-checks)
 - [Settings](#settings)
+  - [Snapshots](#snapshots)
 - [Notes and checklists](#notes-and-checklists)
 - [Reminders](#reminders)
 - [AI (optional)](#ai-optional)
@@ -1293,9 +1294,44 @@ each area, grouped by what it applies to; one section shows at a time.
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
     [Reading page 1](#reading-page-1).
+  - **Snapshots**: take a snapshot of this archive's database and settings, export or
+    import one, and restore one. See [Snapshots](#snapshots).
 - **This browser** (every archive alike):
   - **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at
     once, and is remembered by this browser (another browser starts on Auto).
+
+### Snapshots
+
+**Settings, Snapshots** keeps snapshots of what dam knows about this archive: the
+database (the index, tags, collections, notes, checklists, tray items, activity and
+Undo) and the settings (rules, trays, filing codes, people, archive folders, the AI
+on/off switch). Your documents are not in a snapshot; back those up with your cloud
+drive or your usual backup. The AI key and the e-mail password stay in the Keychain
+and are not in a snapshot either.
+
+- **Take snapshot** takes one while dam keeps running. Snapshots are kept in a
+  `snapshots` folder inside the archive's data folder; **Show folder** opens it.
+- A snapshot in the data folder is on the same disk as dam, so it helps when a change
+  goes wrong but not when the disk or the computer fails. **Export** on a snapshot
+  saves the zip through your browser: keep it on another disk, a NAS or a cloud folder.
+- **Import…** adds a snapshot zip you saved earlier (on this computer or another one).
+  dam checks the whole file first and adds it to the list marked "imported"; nothing is
+  restored until you choose **Restore…**.
+- dam never removes a snapshot. Remove old ones from the folder yourself.
+- **Restore…** first asks **Take a snapshot of the current state first?** **Take
+  snapshot and restore** keeps the state you have now as a snapshot (listed as "taken
+  before a restore") and then restores; **Restore without snapshot** restores straight
+  away; **Cancel** changes nothing. The archive then closes and opens again, and the
+  window reloads.
+- A snapshot of another archive folder (for example from your old computer, where the
+  folder had another path) is marked "Of another archive folder". To restore it, tick
+  the box in the restore sheet: dam then restores it but keeps this archive's own
+  folders in the settings. Do this only for the same documents.
+- After a restore, Activity and Undo go back to the moment of the snapshot. Files moved
+  since then are found again when dam scans the archive. The settings that were
+  replaced are moved to a `replaced-…` folder beside the snapshots, not deleted.
+- A snapshot taken by an older version of dam is updated when it is restored. One from a
+  newer version cannot be restored or imported; the list says why.
 
 ## Notes and checklists
 

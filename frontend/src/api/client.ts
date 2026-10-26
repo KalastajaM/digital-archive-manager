@@ -75,6 +75,10 @@ export type Archive = Schemas["ArchiveOut"];
 export type Archives = Schemas["ArchivesOut"];
 export type ArchiveForgotten = Schemas["ArchiveForgetOut"];
 export type ArchiveSwitched = Schemas["ArchiveSwitchOut"];
+// snapshots of this archive's database and settings
+export type Snapshot = Schemas["SnapshotOut"];
+export type Snapshots = Schemas["SnapshotsOut"];
+export type SnapshotRestored = Schemas["SnapshotRestoreOut"];
 // archive folders (extra folders attached to one archive)
 export type ArchiveFolder = Schemas["ArchiveFolderOut"];
 export type FolderChange = Schemas["FolderChangeOut"];
@@ -419,6 +423,56 @@ export const forgetArchive = (id: string, switch_to?: string) =>
 /** Show the archive's data folder or archive folder in Finder / Explorer. */
 export const revealArchive = (id: string, what: "data" | "archive") =>
   post<void>(`/api/archives/${enc(id)}/reveal`, { what });
+
+// -- snapshots ------------------------------------------------------------------
+
+const snapshotsKey = ["snapshots"] as const;
+
+/** This archive's snapshots (newest first) and the folder they are in. */
+export const useSnapshots = () => useQuery({ queryKey: snapshotsKey, queryFn: () => get<Snapshots>("/api/snapshots") });
+
+/** Take a snapshot of the database and settings now. */
+export const useCreateSnapshot = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => post<Snapshot>("/api/snapshots"),
+    onSettled: () => client.invalidateQueries({ queryKey: snapshotsKey }),
+  });
+};
+
+/** The snapshot zip as a download (Export): a plain link, the browser saves it. */
+export const snapshotDownloadUrl = (name: string) => `/api/snapshots/${enc(name)}/download`;
+
+/** Add a snapshot zip saved elsewhere (Import). It is checked in full; nothing is restored.
+ * Not JSON: the file itself is the body. */
+export async function importSnapshot(file: File): Promise<Snapshot> {
+  const response = await fetch("/api/snapshots/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", Accept: "application/json" },
+    credentials: "same-origin",
+    body: file,
+  });
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as Snapshot;
+}
+
+export const useImportSnapshot = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: importSnapshot,
+    onSettled: () => client.invalidateQueries({ queryKey: snapshotsKey }),
+  });
+};
+
+/** Replace the database and settings with a snapshot; ``snapshot_current``: keep the
+ * current state as a snapshot first; ``other_folder_ok``: the user confirmed a snapshot of
+ * another archive folder (this archive's folders are kept). The archive closes and opens
+ * again, so the page reloads after. */
+export const restoreSnapshot = (name: string, snapshot_current: boolean, other_folder_ok: boolean) =>
+  post<SnapshotRestored>(`/api/snapshots/${enc(name)}/restore`, { snapshot_current, other_folder_ok });
+
+/** Show the snapshots folder in Finder / Explorer. */
+export const revealSnapshots = () => post<void>("/api/snapshots/reveal");
 
 export const archiveFoldersKey = ["archive-folders"] as const;
 export const useArchiveFolders = () =>
