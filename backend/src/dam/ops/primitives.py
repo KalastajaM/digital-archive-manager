@@ -208,19 +208,14 @@ def copy_verified(
     sha256: str,
     limit: int | None = MAX_COPY_BYTES,
     stop: Callable[[], bool] | None = None,
-    hash_source: bool = True,
-    on_bytes: Callable[[int], None] | None = None,
 ) -> None:
     """Copy ``src`` to the new file ``dst`` (exclusive create, fsync, ``copy_file``),
     then check that ``dst`` has the size and sha256 of ``src`` and that both are
     ``sha256`` (the hash journaled before). ``src`` is only read. On any failure nothing
-    is removed: ``dst`` may remain, ``src`` stays. ``hash_source`` False: ``sha256`` was
-    read from ``src`` just before (a copy across disks), so ``src`` is not read a second
-    time; a change while copying still shows, as a copy that does not match.
-    ``on_bytes``: see ``copy_file``."""
-    if hash_source and file_sha256(src, stop) != sha256:
+    is removed: ``dst`` may remain, ``src`` stays."""
+    if file_sha256(src, stop) != sha256:
         raise OpFailed(f"{src.name} changed since it was planned, so it is not copied.")
-    size = copy_file(src, dst, limit=limit, stop=stop, on_bytes=on_bytes)
+    size = copy_file(src, dst, limit=limit, stop=stop)
     if os.lstat(dst).st_size != size or file_sha256(dst, stop) != sha256:
         raise OpFailed(
             f"The copy {dst.name} does not match {src.name}. Both files stay where they are;"
@@ -246,30 +241,71 @@ def temp_copy_too_long(name: str) -> int:
     return max(0, len(name.encode("utf-8")) + TEMP_COPY_EXTRA - NAME_MAX_BYTES)
 
 
-def copy_across(
+def temp_copy_path(dst: Path) -> Path:
+    """Where a copy across disks to ``dst`` is written before it is named ``dst``."""
+    return dst.parent / temp_copy_name(dst.name)
+
+
+def not_copied(src: Path, dst: Path, temp: Path, why: object) -> str:
+    """What a copy across disks that failed says: the reason, and the unfinished copy
+    ``temp`` if it is there (the owner removes it; dam never deletes)."""
+    left = f" The unfinished copy {temp.name} may remain." if os.path.lexists(temp) else ""
+    return f"{src.name} was not copied to {dst.name} ({why}).{left}"
+
+
+def copy_to_temp(
     src: Path,
-    dst: Path,
-    sha256: str,
+    temp: Path,
     stop: Callable[[], bool] | None = None,
     on_bytes: Callable[[int], None] | None = None,
-) -> None:
-    """Copy the archive file ``src`` to the new file ``dst`` in a folder on another disk:
-    written under a temporary name next to ``dst`` (``TEMP_COPY_PREFIX``), verified by
-    size and sha256 (``copy_verified``, no size cap), given the source's access and
-    modification times, and only then renamed to ``dst`` without overwriting. ``src`` is
-    only read. On any failure nothing is removed and the error names the temporary file
-    that may remain. ``on_bytes``: see ``copy_file``."""
-    temp = dst.parent / temp_copy_name(dst.name)
+) -> str:
+    """The long part of a copy across disks: the archive file ``src`` copied to the new
+    file ``temp`` (``temp_copy_path``; exclusive create, fsync, no size cap) in one read
+    that also hashes it, then ``temp`` read back and checked to have that size and
+    sha256. Returns the sha256. ``src`` is only read; on any failure nothing is removed,
+    and the error names ``temp`` if it remains. ``stop`` and ``on_bytes``: see
+    ``copy_file``."""
+    digest = hashlib.sha256()
     try:
-        copy_verified(
-            src, temp, sha256, limit=None, stop=stop, hash_source=False, on_bytes=on_bytes
-        )
+        size = copy_file(src, temp, limit=None, stop=stop, on_bytes=on_bytes, digest=digest)
+        sha256 = digest.hexdigest()
+        if os.lstat(temp).st_size != size or file_sha256(temp, stop) != sha256:
+            raise OpFailed(f"the copy does not match {src.name}")
+    except (OSError, OpFailed) as e:
+        dst = temp.with_name(temp.name[TEMP_COPY_EXTRA:])  # the name it was to get
+        raise OpFailed(not_copied(src, dst, temp, e)) from None
+    return sha256
+
+
+def place_copy(src: Path, temp: Path, dst: Path) -> None:
+    """The verified copy ``temp`` of ``src`` gets the source's access and modification
+    times and is renamed to ``dst`` without overwriting. On failure ``temp`` stays and
+    the error names it."""
+    try:
         st = os.stat(src)
         os.utime(temp, ns=(st.st_atime_ns, st.st_mtime_ns))
         rename_excl(temp, dst)
-    except (OSError, OpFailed) as e:
-        left = f" The unfinished copy {temp.name} may remain." if os.path.lexists(temp) else ""
-        raise OpFailed(f"{src.name} was not copied to {dst.name} ({e}).{left}") from None
+    except OSError as e:
+        raise OpFailed(not_copied(src, dst, temp, e)) from None
+
+
+def copy_across(
+    src: Path,
+    dst: Path,
+    sha256: str | None = None,
+    stop: Callable[[], bool] | None = None,
+    on_bytes: Callable[[int], None] | None = None,
+) -> None:
+    """Copy the archive file ``src`` to the new file ``dst`` in a folder on another disk,
+    in one go: ``copy_to_temp`` (verified by size and sha256, which must also be
+    ``sha256`` when given), then ``place_copy``. The executor runs the two halves itself,
+    the first without ``INDEX_LOCK``. ``src`` is only read. On any failure nothing is
+    removed and the error names the temporary file that may remain."""
+    temp = temp_copy_path(dst)
+    read = copy_to_temp(src, temp, stop=stop, on_bytes=on_bytes)
+    if sha256 is not None and read != sha256:
+        raise OpFailed(not_copied(src, dst, temp, f"{src.name} changed since it was planned"))
+    place_copy(src, temp, dst)
 
 
 SF_DATALESS = 0x40000000  # macOS: a cloud file whose content is not on this computer
@@ -326,6 +362,7 @@ def copy_file(
     limit: int | None = MAX_COPY_BYTES,
     stop: Callable[[], bool] | None = None,
     on_bytes: Callable[[int], None] | None = None,
+    digest: "hashlib._Hash | None" = None,
 ) -> int:
     """Copy the regular file ``src`` to the new file ``dst`` (created exclusively: an
     existing name, also a link, is an error, so nothing is ever overwritten); returns
@@ -333,7 +370,8 @@ def copy_file(
     without room for it, is refused before ``dst`` is created. ``limit`` None: no cap,
     only the free-space check. ``stop`` (looked at between chunks) true ends the copy
     there, as a failure. ``on_bytes`` is called after each chunk with the bytes written
-    so far (the progress of a large file).
+    so far (the progress of a large file). ``digest`` (a ``hashlib`` hash) is updated
+    with every chunk read, so the source is hashed in the same read.
 
     If the copy is cut short after ``dst`` was created (the disk filled up, the source
     shrank), a partial file stays: the app never deletes, so the error says so."""
@@ -353,6 +391,8 @@ def copy_file(
                     if limit is not None and copied > limit:
                         raise OpFailed(f"{src.name} is larger than {limit // (1024 * 1024)} MB.")
                     target.write(chunk)
+                    if digest is not None:
+                        digest.update(chunk)
                     if on_bytes is not None:
                         on_bytes(copied)
                     if stop is not None and stop():

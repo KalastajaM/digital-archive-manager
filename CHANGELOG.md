@@ -564,6 +564,15 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A large file moved to another disk no longer holds up the app.** While a move across
+  disks copied a big file (to a USB or network disk, or a cloud-only file being
+  downloaded), filing, other moves, undo and the folder watcher waited until that file was
+  done, for minutes. They now go on while it is copied. The file is read once instead of
+  twice, the progress bar moves from the start of the file, and closing the app ends the
+  copy right away instead of after the file was first read through. If the file is
+  changed or replaced while it is being copied, the copy is not given its name, the
+  original stays where it was, and the unfinished copy is listed in Maintenance as
+  before.
 - **A `dam` command no longer changes an archive the app has open.** Commands that
   change the archive, its index or its settings (`dam scan`, `index`, `file`, `move`,
   `quarantine`, `add`, `undo`, `recover`, `init`, the stars and Important marks,

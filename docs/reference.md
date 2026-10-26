@@ -912,11 +912,17 @@ folder roots) is planned as two operations, always next to each other:
 
 1. `copy_across` (`src` the file, `dst` its path in the other folder; a taken name gets
    `_N`). The preview's op carries `size` and `cloud_only` (macOS `SF_DATALESS`: reading it
-   downloads it first). The journal row gets the source's sha256 (`content_hash`) before
-   anything is copied. The copy is written under `.dam-copy-<8 hex>-<name>` next to the
-   destination (exclusive create, fsync, no size cap, only the free-space check), checked
-   against the journaled size and hash, given the source's access and modification time,
-   and only then renamed to its name without overwriting. The file's index row then
+   downloads it first). The journal row is written (`planned`) before anything is copied.
+   The copy is written under `.dam-copy-<8 hex>-<name>` next to the destination
+   (exclusive create, fsync, no size cap, only the free-space check) in one read of the
+   source that also hashes it, then read back and checked to have that size and hash.
+   This part runs without `INDEX_LOCK`, so scans and other changes go on meanwhile (a
+   scan leaves the copy in progress out of the index). Then, under the lock again, the
+   source must still be the file the journal row saw (same file, size and modification
+   time) and the name still free, else the op fails naming the `.dam-copy-` file, which
+   stays. The sha256 goes into the row (`content_hash`), the copy gets the source's
+   access and modification time and only then is renamed to its name without
+   overwriting. The file's index row then
    describes the copy, so tags, notes, checklists, collection and tray item places, locks,
    summaries, fields and rule outcomes follow; it takes the copy's own Drive id if it has
    one, else a fresh `local:` id when the original's was a Drive id (the original keeps

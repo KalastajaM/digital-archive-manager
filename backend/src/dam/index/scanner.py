@@ -13,7 +13,7 @@ from dam.core.fs import is_ignored, listable, lists_nothing, readlink  # noqa: F
 from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchiveFolder, ArchivePaths, _fold, folder_connected, nfc
 from dam.index.driveid import read_drive_id
-from dam.index.locks import INDEX_LOCK
+from dam.index.locks import COPYING, INDEX_LOCK
 from dam.index.repo import FileRecord, FileRepo, ext_of
 
 # One scan at a time: the watcher, reconcile timer and CLI share the DB with the executor.
@@ -255,6 +255,8 @@ def _connected(repo: FileRepo, folder: ArchiveFolder) -> bool:
 def _index_start(s: _Scan, start: Path) -> bool | None:
     """Index the entry at ``start`` itself. True: a folder to walk; False: a file, or
     really gone; None: it cannot be read, so nothing may be concluded."""
+    if start.name in COPYING:  # a copy across disks being written: not a file yet
+        return None
     try:
         st = os.lstat(start)
     except (FileNotFoundError, NotADirectoryError):
@@ -294,7 +296,7 @@ def _walk(s: _Scan, start: Path, clash_folds: frozenset[str] = frozenset()) -> b
                 continue
             items: list[_Item] = []
             for e in entries:
-                if is_ignored(e.name):
+                if is_ignored(e.name) or e.name in COPYING:
                     continue
                 if directory == start and _fold(e.name) in clash_folds:
                     s.report.clashes.append(e.name)
