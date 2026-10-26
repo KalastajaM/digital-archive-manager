@@ -457,7 +457,7 @@ def _migrate_and_compare(db: Path) -> None:
     engine = _untrusted(make_engine(db))
     try:
         try:
-            migrate(engine)
+            migrate(engine, backup=False)  # a copy being checked
         except Exception as e:
             raise InvalidRequest(f"The snapshot's database could not be updated: {e}") from e
         with engine.connect() as connection:

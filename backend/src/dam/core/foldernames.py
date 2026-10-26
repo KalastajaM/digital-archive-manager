@@ -52,3 +52,20 @@ def check_folder_name(name: str, special_names: tuple[str, ...] = ()) -> str:
             f"Names starting with {SPECIAL_PREFIX} are kept for the app's own folders."
         )
     return clean
+
+
+def portable_name_problem(name: str) -> str | None:
+    """Why the new file or folder name ``name`` would break on Windows or a cloud drive
+    the archive is synced to (in plain words), or None when it is fine there: a reserved
+    name (CON, PRN, AUX, NUL, COM1-9, LPT1-9, with any extension), a trailing dot or
+    space, or one of < > : " | ? * \\ or a control character."""
+    if _BAD_CHARS.search(name):
+        return (
+            f'{name!r} cannot be used: names cannot contain any of < > : " | ? * \\ or '
+            "control characters (Windows and cloud drives refuse them)."
+        )
+    if name.endswith((".", " ")):
+        return f"{name!r} cannot be used: a name cannot end with a dot or a space."
+    if name.split(".")[0].rstrip().casefold() in _WINDOWS_RESERVED:
+        return f"{name!r} is a reserved name on Windows. Choose another."
+    return None

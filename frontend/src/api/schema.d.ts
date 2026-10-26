@@ -1140,7 +1140,9 @@ export interface paths {
         put?: never;
         /**
          * Recover
-         * @description Settle interrupted operations from the disk (reads only, never changes files).
+         * @description Settle interrupted operations from the disk. Archive files are never changed; an
+         *     interrupted move of a rule picture across disks is finished by removing dam's own
+         *     copy in its settings folder once the archive copy is verified.
          */
         post: operations["recover_api_recovery_post"];
         delete?: never;

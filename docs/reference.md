@@ -197,7 +197,7 @@ API and does not open the browser.
 | `dam quarantine PATH-OR-DRIVE-ID... [--dry-run] [--yes]` | Move to To Delete (into `##. To Delete`) |
 | `dam activity [--limit N]` | Recent batches of operations |
 | `dam undo BATCH-ID [--yes]` | Revert a batch |
-| `dam recover` | Settle operations interrupted by a crash (reads the disk, changes no files) |
+| `dam recover` | Settle operations interrupted by a crash (reads the disk, changes no archive files) |
 | `dam openapi` | Print the API's OpenAPI schema |
 | `dam trays [--tray ID] [--done]` | List the items in each tray |
 | `dam collections [--closed]` | List collections with member count and `##. Ongoing` status |

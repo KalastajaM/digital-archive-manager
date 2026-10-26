@@ -17,6 +17,7 @@ from pathlib import Path
 
 import yaml
 
+from dam.codes.configfile import to_disk
 from dam.config import AppPaths, SpecialFolders, load_settings
 from dam.core.fs import newline_of, resolve
 from dam.core.paths import nfc
@@ -371,16 +372,19 @@ def write_archive_root(app_paths: AppPaths, path: Path) -> Path:
         try:
             with open(target.with_name(f"{target.name}.bak-{stamp}"), "xb") as fh:
                 fh.write(original)
+                to_disk(fh)
         except FileExistsError:
             pass  # a backup from this very second exists already
     try:
         with open(target, "w", encoding="utf-8", newline=nl) as f:
             f.write(new)
+            to_disk(f)
         if current_archive_root(app_paths) != str(path):
             raise OSError("the setting did not read back as written")
     except OSError:
         with open(target, "wb") as f:
             f.write(original)
+            to_disk(f)
         raise
     return target
 
@@ -486,16 +490,19 @@ def write_layout_settings(
     try:
         with open(target.with_name(f"{target.name}.bak-{stamp}"), "xb") as fh:
             fh.write(original)
+            to_disk(fh)
     except FileExistsError:
         pass
     try:
         with open(target, "w", encoding="utf-8", newline=nl) as f:
             f.write(new)
+            to_disk(f)
         if load_settings(app_paths).special_folders != special:
             raise OSError("the settings did not read back as written")
     except (OSError, ValueError, yaml.YAMLError):
         with open(target, "wb") as f:
             f.write(original)
+            to_disk(f)
         raise
     return target
 
@@ -588,15 +595,18 @@ def write_ai_exclude_folders(app_paths: AppPaths, folders: list[str]) -> Path:
     try:
         with open(target.with_name(f"{target.name}.bak-{stamp}"), "xb") as fh:
             fh.write(original)
+            to_disk(fh)
     except FileExistsError:
         pass  # a backup from this very second exists already
     try:
         with open(target, "w", encoding="utf-8", newline=nl) as f:
             f.write(new)
+            to_disk(f)
         if load_settings(app_paths).ai.exclude_folders != folders:
             raise OSError("the settings did not read back as written")
     except (OSError, ValueError, yaml.YAMLError):
         with open(target, "wb") as f:
             f.write(original)
+            to_disk(f)
         raise
     return target

@@ -258,6 +258,10 @@ def test_api_rename_refusals(client, filed):
     for url in ("/api/browse/rename/preview", "/api/browse/rename"):
         r = post(client, url, {"drive_id": "id-a", "name": "a/b", "folder": BANKS})
         assert r.status_code == 400 and r.json()["error"]
+        r = post(client, url, {"drive_id": "id-a", "name": "CON.pdf", "folder": BANKS})
+        assert r.status_code == 400 and "reserved name on Windows" in r.json()["error"]
+        r = post(client, url, {"drive_id": "id-a", "name": "a?.pdf", "folder": BANKS})
+        assert r.status_code == 400 and "cannot contain" in r.json()["error"]
         r = post(client, url, {"drive_id": "id-a", "name": "x.pdf", "folder": QUAR})
         assert r.status_code == 400
         assert (

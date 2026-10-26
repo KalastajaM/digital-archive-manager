@@ -471,7 +471,8 @@ def undo(
 
 @app.command()
 def recover(ctx: typer.Context) -> None:
-    """Settle operations that were interrupted (reads the disk, never changes files)."""
+    """Settle operations that were interrupted (reads the disk; archive files are never
+    changed, but an interrupted rule picture move may be finished)."""
     with session(ctx, warn_pending=False, write=True, in_app="Use Run recovery there") as a:
         r = a.activity.recover()
         if not r.entries and not r.index_errors:

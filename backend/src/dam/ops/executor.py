@@ -108,6 +108,17 @@ def _backwards(followed) -> list[list[str]]:
     return [[new_id, old_id, new_path, old_path] for old_id, new_id, old_path, new_path in followed]
 
 
+def not_recorded_message(rop: ResolvedOp, error: Exception) -> str:
+    """The change ``rop`` was made on disk, but the journal could not record it."""
+    what = f"{rop.src} -> {rop.dst}" if rop.src else rop.dst
+    why = getattr(error, "orig", None) or error  # the database's own words, not the SQL
+    return (
+        f"The change was made ({rop.kind.value} {what}) but could not be recorded in "
+        f"the activity log ({why}). Run recovery (in the app: Run recovery; on the "
+        "command line: dam recover) so dam records it and Undo works."
+    )
+
+
 def _outside_copy(rop: ResolvedOp) -> bool:
     """A COPY of a file elsewhere on this computer (``abs:``), not one already in the
     archive."""
@@ -262,7 +273,8 @@ class Executor:
         return _undo.pending(self)
 
     def recover(self) -> RecoveryResult:
-        """Settle ``planned`` rows from the disk, read only (see ``dam.ops.undo``)."""
+        """Settle ``planned`` rows from the disk (see ``dam.ops.undo.recover``: no archive
+        file is touched; it may finish a rule picture's move across disks)."""
         return _undo.recover(self)
 
     # --- run -----------------------------------------------------------------
@@ -481,7 +493,14 @@ class Executor:
             # For an undo op the revert was carried out: the original is undone too.
             self._stop(result, op_id, rop, "unverified", str(e), undo_of)
             return True
-        self._journal_finish(op_id, "done", reverts=undo_of, rop=rop)
+        try:
+            self._journal_finish(op_id, "done", reverts=undo_of, rop=rop)
+        except SQLAlchemyError as e:
+            # The change is on disk but its row stays ``planned``: stop and say so;
+            # recovery settles the row from the disk.
+            log.warning("could not record operation %s as done", op_id, exc_info=True)
+            result.failed, result.error = rop, not_recorded_message(rop, e)
+            return True
         result.done.append(rop)
         if rop.kind is OpKind.MKDIR and rop.made:
             self._record_made(result.batch_id, rop)

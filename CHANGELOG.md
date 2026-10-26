@@ -570,6 +570,26 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **The right file is moved when two names differ only in case.** On a case-sensitive
+  disk (Linux, or a Mac disk formatted that way) a folder can hold both `report.pdf` and
+  `Report.pdf`; a move or rename of one could pick the other. dam now takes the exact
+  name first.
+- **A change that could not be recorded now says so.** If the activity log could not be
+  written right after a file was moved or renamed (the database busy, or its disk full),
+  the batch failed with a bare error and nothing said the file had moved. It now stops
+  there and says the change was made but not recorded, and to use **Run recovery**
+  (`dam recover`) so it is recorded and can be undone.
+- **New names that Windows or a cloud drive would refuse are refused.** Renaming,
+  moving or copying a file to a name such as `CON.pdf` or `AUX.txt`, a name ending in a
+  dot or a space, or one with `< > : " | ? *` or control characters now stops with a
+  plain message on every platform, as New folder already did, because archives are
+  often synced to Windows or a cloud drive. Files that already have such names still
+  move and copy as before.
+- **The database is backed up before it is updated.** When a new version of dam
+  updates the layout of `dam.sqlite`, it first saves a copy next to it
+  (`dam.sqlite.before-<old>-to-<new>.bak`). If the database still differs from what this
+  version expects afterwards, dam says so once in its log and on the command line, and
+  keeps working.
 - **A large file moved to another disk no longer holds up the app.** While a move across
   disks copied a big file (to a USB or network disk, or a cloud-only file being
   downloaded), filing, other moves, undo and the folder watcher waited until that file was

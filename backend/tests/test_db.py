@@ -263,3 +263,94 @@ def test_ongoing_entries_cascade_with_their_collection(engine):
         )
         conn.execute(collections.delete())
         assert conn.execute(ongoing_entries.select()).all() == []
+
+
+# --- a backup before migrating, and a check of the layout after ---------------------
+
+
+def _upgrade_to(engine, revision: str) -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    from dam.db.engine import MIGRATIONS_DIR, write_tx
+
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    with write_tx(engine) as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, revision)
+
+
+def _rows(db: Path, sql: str) -> list:
+    import sqlite3
+
+    con = sqlite3.connect(db)
+    try:
+        return con.execute(sql).fetchall()
+    finally:
+        con.close()
+
+
+def test_a_fresh_database_is_not_backed_up_and_matches(tmp_path: Path, new_engine):
+    engine = new_engine(tmp_path / "dam.sqlite")
+    assert migrate(engine) == []
+    assert migrate(engine) == []  # nothing pending: no backup either
+    assert sorted(p.name for p in tmp_path.iterdir() if p.suffix == ".bak") == []
+
+
+def test_backup_before_a_pending_migration(tmp_path: Path, new_engine):
+    from dam.snapshots import head_revision
+
+    head = head_revision()
+    db = tmp_path / "dam.sqlite"
+    engine = new_engine(db)
+    _upgrade_to(engine, "head-1")
+    with engine.connect() as conn:
+        before = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO tags(name, name_fold) VALUES ('Kela', 'kela')"
+                if "name_fold" in {r[1] for r in conn.execute(text("PRAGMA table_info(tags)"))}
+                else "INSERT INTO tags(name) VALUES ('Kela')"
+            )
+        )
+    tags_before = _rows(db, "SELECT * FROM tags")
+    assert migrate(engine) == []
+    backup = tmp_path / f"dam.sqlite.before-{before}-to-{head}.bak"
+    assert [p.name for p in tmp_path.glob("*.bak")] == [backup.name]
+    assert _rows(backup, "SELECT version_num FROM alembic_version") == [(before,)]
+    assert _rows(backup, "SELECT * FROM tags") == tags_before  # WAL contents included
+    migrate(engine)
+    assert len(list(tmp_path.glob("*.bak"))) == 1
+
+
+def test_a_backup_name_already_taken_is_not_overwritten(tmp_path: Path):
+    from dam.db.engine import backup_name
+
+    db = tmp_path / "dam.sqlite"
+    (tmp_path / "dam.sqlite.before-0036-to-0037.bak").write_bytes(b"older")
+    assert backup_name(db, "0036", "0037").name == "dam.sqlite.before-0036-to-0037-2.bak"
+
+
+def test_a_layout_difference_is_logged_not_refused(tmp_path: Path, new_engine, caplog, monkeypatch):
+    import logging
+
+    from dam.db import engine as engine_module
+
+    monkeypatch.setattr(engine_module, "_warned", set())
+    engine = new_engine(tmp_path / "dam.sqlite")
+    migrate(engine)
+    with engine.begin() as conn:  # history from an older app
+        conn.execute(text("ALTER TABLE files ADD COLUMN legacy TEXT"))
+    with caplog.at_level(logging.INFO, logger="dam.db.engine"):
+        differences = migrate(engine)
+        assert differences
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        message = warnings[0].getMessage()
+        assert "legacy" in message and "dam keeps working" in message
+        caplog.clear()
+        migrate(engine)  # the same difference again: not warned twice in one run
+        assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+    assert TABLES <= _names(engine)

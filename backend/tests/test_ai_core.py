@@ -401,7 +401,10 @@ def test_budget_is_rechecked_at_run(ai_app):
 
 
 def test_month_boundary_is_the_local_calendar_month(ai_app):
-    last_month = (datetime.now().astimezone().replace(day=1) - timedelta(days=1)).timestamp()
+    # noon on the last day of last month, local time: a naive date, so a DST change
+    # between then and now cannot move it into this month near midnight
+    noon = datetime.now().replace(day=1, hour=12, minute=0, second=0, microsecond=0)
+    last_month = (noon - timedelta(days=1)).astimezone().timestamp()
     with write_tx(ai_app.engine) as conn:
         conn.execute(
             insert(ai_calls).values(
