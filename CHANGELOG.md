@@ -27,6 +27,8 @@ All notable changes are listed here. The format follows
   - Maintenance marks links into an unplugged or detached folder ("Folder not connected",
     "Folder detached") and lists a folder in the main folder that has the same name as an
     archive folder.
+  - **Manage archives** lists each archive's extra folders under its archive folder, each
+    with its own **Show in Finder** (or Explorer); a detached one is marked "(detached)".
 - **Maintenance screen** (sidebar, Archive, next to Activity) with checks you start
   yourself; nothing runs by itself or in the background, each shows its progress, can be
   stopped, and ends in a list you act on through the usual preview and Undo.
