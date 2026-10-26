@@ -143,12 +143,62 @@ type ListProps = {
 export function copyAcrossSummary(ops: ResolvedOp[]): string[] {
   const copies = ops.filter((op) => op.kind === "copy_across");
   if (copies.length === 0) return [];
+  const folder = folderAside(ops, copies);
+  if (folder) return folderSummary(ops, copies, folder);
   const size = copies.reduce((sum, op) => sum + (op.size ?? 0), 0);
   // a move puts each original aside after its copy; a restore copies out of To Delete only
   const moved = ops.some((op) => op.kind === "quarantine" && copies.some((c) => c.src === op.src));
   const originals = moved ? "The originals go to To Delete once each copy is checked." : "The originals stay in To Delete.";
   const lines = [`Copies ${plural(copies.length, "file")} (${formatSize(size)}) to another disk. ${originals}`];
   const cloud = copies.filter((op) => op.cloud_only).length;
+  if (cloud > 0) lines.push(`${plural(cloud, "file")} ${cloud === 1 ? "is" : "are"} in the cloud only and ${cloud === 1 ? "is" : "are"} downloaded first.`);
+  return lines;
+}
+
+/** The putting aside of a folder moved across disks: the QUARANTINE whose source holds
+ * the copied files (a file move puts each file aside under its own path). */
+function folderAside(ops: ResolvedOp[], copies: ResolvedOp[]): ResolvedOp | null {
+  return (
+    ops.find((op) => op.kind === "quarantine" && op.src && copies.some((c) => c.src?.startsWith(`${op.src}/`))) ?? null
+  );
+}
+
+/** Where a folder moved across disks goes (the folder it lands in): from a copy whose path
+ * inside the folder is kept, else from the note "copied to <new path>". */
+function folderDestination(copies: ResolvedOp[], aside: ResolvedOp): string | null {
+  const root = aside.src ?? "";
+  for (const c of copies) {
+    const rel = (c.src ?? "").slice(root.length + 1);
+    if (rel && c.dst.endsWith(`/${rel}`)) return parentOf(c.dst.slice(0, c.dst.length - rel.length - 1));
+  }
+  const noted = /^copied to (.+?)(?:; |$)/.exec(aside.note ?? "");
+  return noted ? parentOf(noted[1]) : null;
+}
+
+const isUnderPath = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
+
+/** A folder moved across disks: the folders made and the files copied (and how big) and
+ * where to, the files already there (only checked), and when the folder goes to To
+ * Delete (in its own archive folder, once every file is copied). */
+function folderSummary(ops: ResolvedOp[], copies: ResolvedOp[], aside: ResolvedOp): string[] {
+  const present = copies.filter((op) => op.method === "present").length;
+  const copied = copies.filter((op) => op.method !== "present");
+  const size = copied.reduce((sum, op) => sum + (op.size ?? 0), 0);
+  const dest = folderDestination(copies, aside);
+  // the folders made under the destination; those on the way to To Delete do not count
+  const folders =
+    dest === null
+      ? 0
+      : ops.filter((op) => op.kind === "mkdir" && op.dst.startsWith(`${dest}/`) && !isUnderPath(aside.dst, op.dst)).length;
+  const what = folders > 0 ? `${plural(folders, "folder")} and ${plural(copied.length, "file")}` : plural(copied.length, "file");
+  const where = dest ? `'${visible(dest)}'` : "another disk";
+  const lines = [`Copies ${what} (${formatSize(size)}) to ${where}.`];
+  if (present > 0) lines.push(`${present} ${present === 1 ? "is" : "are"} there already and ${present === 1 ? "is" : "are"} skipped.`);
+  // the To Delete is the source's own archive folder's: the part the two paths share
+  const label = sharedFolder(aside.src ?? "", aside.dst).replace(/\/$/, "");
+  const source = label ? `'${visible(label)}'` : "the main folder";
+  lines.push(`The folder goes to To Delete in ${source} once every file is copied.`);
+  const cloud = copies.filter((op) => op.cloud_only).length; // a file there is read to check it
   if (cloud > 0) lines.push(`${plural(cloud, "file")} ${cloud === 1 ? "is" : "are"} in the cloud only and ${cloud === 1 ? "is" : "are"} downloaded first.`);
   return lines;
 }

@@ -1396,15 +1396,16 @@ describe("Move to…", () => {
     expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
   });
 
-  it("is not offered for a folder", async () => {
+  it("takes the folder on the cursor when no file is picked: the folder alone, never with files", async () => {
     const { user } = setup("10. Financial", { "GET /api/folders": { body: [] } });
     await user.click(await screen.findByRole("button", { name: "Banks" })); // opens the folder
     await screen.findByText("a.pdf");
     await user.keyboard("{Backspace}");
     await within(listing()).findByText("Banks");
-    expect(screen.getByRole("button", { name: "Move to…" })).toBeDisabled();
+    const header = screen.getAllByRole("button", { name: "Move to…" })[0];
+    expect(header).toBeEnabled();
     await user.keyboard("{Meta>}{Shift>}m{/Shift}{/Meta}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Move Banks to…" })).toBeInTheDocument();
   });
 });
 

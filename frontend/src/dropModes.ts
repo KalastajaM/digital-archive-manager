@@ -9,9 +9,13 @@
  *   a drop does there is "Add to collection <name>";
  * - ``restore``: the files come from ``##. To Delete`` and go into the folder;
  * - ``files``: the move/link/copy choice, each way with the reason it is off (or null), and
- *   the way that is preselected (Option/Alt at the drop preselects Copy, as in Finder). */
+ *   the way that is preselected (Option/Alt at the drop preselects Copy, as in Finder).
+ *
+ * A folder dragged from Browse is only ever moved (``judgeFolderDrop``): Option does
+ * nothing, and the refusal says why before the drop. */
 import { LOCKED_REASON } from "./api/client";
 import { TO_DELETE_REASON } from "./toDelete";
+import { visible } from "./text";
 
 export type DropMode = "move" | "link" | "copy";
 export const DROP_MODES: DropMode[] = ["move", "link", "copy"];
@@ -32,7 +36,6 @@ export const IMPORTANT_TARGET_REASON = "Not allowed: ##. Important is kept by th
 export const TOP_REASON = "Not allowed: the top of the archive holds folders only";
 export const IMPORTANT_MOVE_REASON = "This file is marked Important; unmark it first";
 export const LINK_OFF_REASON = "Windows needs Developer Mode to make links: turn it on in Windows settings, or use Copy";
-export const FOLDER_DRAG_REASON = "Folders can't be dropped here: drag one to a collection in the sidebar";
 export const SEARCH_DROP_REASON = "Search results are not a folder: drop on a folder row or a pane showing a folder";
 export const MIXED_REASON = "These files are in different places: drag them one place at a time";
 export const ADD_FROM_OWN_FOLDER = "Open the file's own folder to add it to a collection, or use Add to collection";
@@ -140,3 +143,47 @@ export function judgeDrop(input: DropInput): DropVerdict {
 
 /** The reason a drag is refused, or true when a drop does something (for ``accept``). */
 export const verdictAccept = (v: DropVerdict): true | string => (v.kind === "refused" ? v.reason : true);
+
+// -- a folder dropped on a folder (or given to Move to…): moved, never linked or copied
+
+export const FOLDER_INTO_ITSELF = "Cannot move a folder into itself";
+export const FOLDER_TOP_REASON = "Not allowed: a folder is not moved to the top of the archive";
+export const ONGOING_TARGET_REASON = "Not allowed: ##. Ongoing is kept by the app";
+export const EXTRA_ROOT_REASON = "The top of an archive folder cannot be moved";
+export const APP_FOLDER_REASON = "The app keeps this folder in place";
+/** Link and Copy are off for a folder: only Move takes one. */
+export const FOLDERS_MOVE_ONLY = "Folders can only be moved";
+
+/** The app's folders, with the inbox (``##. Organize``), which stays in place too. */
+export type FolderAreas = Areas & { inbox?: string };
+/** The folder that moves: its path and, for an extra archive folder, that folder's label. */
+export type MovedFolder = { path: string; folder?: string | null };
+
+/** Why this folder may not be moved at all (null: it may): an extra folder's root, the
+ * app's own folders, and anything inside ``##. Ongoing``, ``##. Important`` or ``##. To
+ * Delete``. The server refuses the same (``_check_movable_folder``). */
+export function folderSourceRefusal(f: MovedFolder, areas: FolderAreas | undefined): string | null {
+  if (!areas) return "The special folders are not known yet";
+  if (f.folder != null && !f.path.includes("/")) return EXTRA_ROOT_REASON;
+  const own = [areas.inbox, areas.ongoing, areas.important, areas.quarantine].filter((a): a is string => !!a);
+  if (own.some((a) => fold(a) === fold(f.path))) return APP_FOLDER_REASON;
+  if (isInside(f.path, areas.quarantine)) return TO_DELETE_REASON;
+  for (const area of [areas.ongoing, areas.important]) {
+    if (isInside(f.path, area)) return `Folders in ${visible(area)} cannot be moved: the app keeps them`;
+  }
+  return null;
+}
+
+/** Why the folder may not go into ``target`` (null: it may): the folder itself first,
+ * then the target (never itself or below it, the top of the archive, the app's folders). */
+export function judgeFolderDrop({ folder, target, areas }: { folder: MovedFolder; target: string; areas: FolderAreas | undefined }): string | null {
+  const why = folderSourceRefusal(folder, areas);
+  if (why || !areas) return why;
+  if (!target) return FOLDER_TOP_REASON;
+  if (isUnder(target, folder.path)) return FOLDER_INTO_ITSELF;
+  if (fold(parentOf(folder.path)) === fold(target)) return ALREADY_HERE;
+  if (isUnder(target, areas.quarantine)) return DELETE_TARGET_REASON;
+  if (isUnder(target, areas.important)) return IMPORTANT_TARGET_REASON;
+  if (isUnder(target, areas.ongoing)) return ONGOING_TARGET_REASON;
+  return null;
+}

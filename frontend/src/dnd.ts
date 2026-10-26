@@ -12,8 +12,10 @@
  * target never takes a drag of files or a Today card (``application/x-dam-card``).
  *
  * A folder dragged from Browse carries ``application/x-dam-folder`` = JSON ``{id}`` and
- * nothing else: only a collection takes it (as a folder member). Files targets (folders,
- * trays, the Inbox) never see it, so a folder is never moved or put in a tray by a drop.
+ * nothing else. Browse's own folder targets (folder rows, a pane, a breadcrumb) take it
+ * as a move of that folder (``readBrowseDrag``), and a collection takes it as a folder
+ * member. Files targets in the sidebar (trays, the Inbox) never see it, so a folder is
+ * never put in a tray or sent back to the inbox by a drop.
  *
  * A row of ``##. Ongoing``, ``##. Important`` or ``##. To Delete`` dragged from Browse
  * carries ``application/x-dam-special`` = JSON ``{ids}`` instead of the files type: those
@@ -165,8 +167,8 @@ export function readDragSpecial(e: AnyDragEvent): string[] | null {
   return dragging ? [...dragging] : null;
 }
 
-/** What Browse's own folders and panes take: documents (``special``: rows of the app's
- * own folders), or a folder (which they refuse, with a reason, instead of ignoring). */
+/** What Browse's own folders, panes and breadcrumbs take: documents (``special``: rows of
+ * the app's own folders), or a folder (moved there on its own). */
 export type BrowseDrag = { kind: "files"; ids: string[]; special: boolean } | { kind: "folder"; id: string };
 
 export function readBrowseDrag(e: AnyDragEvent): BrowseDrag | null {
@@ -196,14 +198,14 @@ export function setDragCollection(e: AnyDragEvent, id: number, label: string) {
   if (typeof dt.setDragImage === "function") dt.setDragImage(dragImage(label), 12, 12);
 }
 
-/** Start a drag of the folder ``id`` (its drive id); ``label`` (its name) is the drag
- * image and what a drop's toast calls it. */
+/** Start a drag of the folder ``id`` (its drive id), never with the checked files;
+ * ``label`` (its name) is the drag image and what a drop's toast calls it. */
 export function setDragFolder(e: AnyDragEvent, id: string, label: string) {
   const dt = e.dataTransfer;
   if (!dt) return;
   if (typeof dt.clearData === "function") dt.clearData();
   dt.setData(FOLDER_DRAG_TYPE, JSON.stringify({ id }));
-  dt.effectAllowed = "copy";
+  dt.effectAllowed = "copyMove"; // moved in Browse, added to a collection in the sidebar
   dragging = null;
   draggingLabel = label;
   draggingPaths = null;
@@ -326,7 +328,7 @@ export function useDropTarget<T = string[]>({ accept, onDrop, onRefused, read }:
       e.preventDefault(); // without it the drop never fires
       e.stopPropagation();
       // A drop effect the drag does not allow cancels the drop in a real browser (the row
-      // still highlights): a folder drag allows only "copy" (it is never moved). A target
+      // still highlights): a drag that allows only "copy" gets "copy". A target
       // with ``onRefused`` wants the drop of a refused drag too (to say why), so it keeps
       // an allowed effect; the reason is shown on it while the drag is over.
       if (e.dataTransfer) {

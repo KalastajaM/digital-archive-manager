@@ -11,7 +11,6 @@ import {
   ADD_FROM_OWN_FOLDER,
   ALREADY_HERE,
   DELETE_TARGET_REASON,
-  FOLDER_DRAG_REASON,
   IMPORTANT_MOVE_REASON,
   IMPORTANT_TARGET_REASON,
   LINK_OFF_REASON,
@@ -367,15 +366,24 @@ describe("Refused targets say why, visibly, and a drop there says it in a toast"
     expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
   });
 
-  it("a folder dragged onto another folder is refused with a reason, not ignored", async () => {
-    setup(one(""));
+  it("a folder dragged onto another folder is a move only: Option does not switch to Copy", async () => {
+    const plan = [op("move", "10. Financial", "13. Taxes/10. Financial", "d-10. Financial")];
+    const { calls } = setup(one(""), { "POST /api/browse/move/preview": { body: plan } });
     await screen.findByText("13. Taxes");
     const dt = dragFrom(rowOf(listing(), "10. Financial"));
     const target = rowOf(listing(), "13. Taxes");
-    fireEvent.dragEnter(target, { dataTransfer: dt });
-    expect(within(target).getByRole("status")).toHaveTextContent(FOLDER_DRAG_REASON);
-    fireEvent.drop(target, { dataTransfer: dt });
-    expect(await screen.findByText(FOLDER_DRAG_REASON)).toBeInTheDocument();
+    dropOn(target, dt, true);
+    const dialog = await screen.findByRole("dialog", { name: "Move 10. Financial to 13. Taxes?" });
+    expect(posts(calls, "/api/browse/move/preview").map((c) => c.body)).toEqual([
+      { drive_ids: ["d-10. Financial"], folder: "13. Taxes" },
+    ]);
+    expect(within(dialog).getByRole("radio", { name: /Move/ })).toBeChecked();
+    for (const way of [/Link/, /Copy/]) {
+      const radio = within(dialog).getByRole("radio", { name: way });
+      expect(radio).toBeDisabled();
+      expect(radio.closest("label")).toHaveTextContent("Folders can only be moved");
+    }
+    expect(within(dialog).getByRole("button", { name: /^Move folder/ })).toBeInTheDocument();
   });
 
   it("search results are no folder", async () => {

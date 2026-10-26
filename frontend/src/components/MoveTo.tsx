@@ -22,7 +22,7 @@ import { dialogOpen } from "../keyboard";
 import { unexpectedDestinations } from "../screens/useFiling";
 import { TO_DELETE_REASON } from "../toDelete";
 import { visible } from "../text";
-import { type DropMode, MODE_HINT, MODE_LABEL, DROP_MODES } from "../dropModes";
+import { type DropMode, FOLDERS_MOVE_ONLY, MODE_HINT, MODE_LABEL, DROP_MODES } from "../dropModes";
 import { FolderPicker } from "./FolderPicker";
 import { startedCopyJob } from "./CopyJobProgress";
 import { ConfirmPlan, snapshotKey } from "./PlanPreview";
@@ -126,10 +126,25 @@ export type MoveRequest = {
   /** The dragged rows are links in ##. Ongoing / ##. Important: the sheet names the real
    * file that moves, is linked or copied. */
   fromRows?: "ongoing" | "important";
+  /** ``ids`` holds one folder, which moves with everything in it (Move only: Link and
+   * Copy are off). Across disks it is copied file by file as a background job. */
+  folderMove?: true;
 };
 type Pending = MoveRequest & { ops: ResolvedOp[]; error?: string | null };
 
 const modeOf = (r: MoveRequest): DropMode => r.mode ?? "move";
+
+/** A move of the folder ``id`` into ``folder``: Move only, with why Link and Copy are off. */
+export function folderMoveRequest(id: string, folder: string): MoveRequest {
+  return { ids: [id], folder, folderMove: true, modes: { move: null, link: FOLDERS_MOVE_ONLY, copy: FOLDERS_MOVE_ONLY } };
+}
+
+/** The name of the folder a folder plan moves: its move (one disk) or the putting aside
+ * of the original (across disks). */
+function movedFolderName(ops: ResolvedOp[]): string | null {
+  const src = ops.find((op) => (op.kind === "move" || op.kind === "quarantine") && op.src)?.src;
+  return src ? baseName(src) : null;
+}
 const VERB: Record<DropMode, string> = { move: "move", link: "link", copy: "copy" };
 const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
@@ -282,6 +297,8 @@ export function useMoveFlow(
       const said =
         moved.length === 0 && renamed
           ? `Renamed to ${visible(baseName(renamed.dst))}`
+          : pending.folderMove && moved.length === 1
+            ? `Moved folder ${visible(baseName(moved[0].dst))} to ${there}`
           : mode === "link"
             ? `Linked ${what} in ${there}`
             : mode === "copy"
@@ -308,7 +325,8 @@ export function useMoveFlow(
   const renaming = confirm?.name !== undefined;
   const renameOnly = renaming && !confirm?.ops.some((op) => op.kind === "move");
   const mode = confirm ? modeOf(confirm) : "move";
-  const count = confirm ? plural(confirm.ids.length, "file") : "";
+  const folderName = confirm?.folderMove ? movedFolderName(confirm.ops) : null;
+  const count = confirm ? (folderName !== null ? visible(folderName) : plural(confirm.ids.length, "file")) : "";
   const there = confirm ? folderLabel(confirm.folder) : "";
   const view: ReactNode = confirm ? (
     <ConfirmPlan
@@ -329,7 +347,9 @@ export function useMoveFlow(
           ? "Rename"
           : confirm.ops.some((op) => op.kind === "copy_across")
             ? "Copy and move"
-            : mode === "link"
+            : confirm.folderMove
+              ? "Move folder"
+              : mode === "link"
               ? "Make links"
               : MODE_LABEL[mode]
       }
@@ -353,6 +373,8 @@ export function useMoveFlow(
             <p>
               A name already taken there gets a suffix such as <code>_2</code>. Undo puts the file back as it was.
             </p>
+          ) : confirm.folderMove ? (
+            <p>Everything in the folder moves with it. Undo puts it back.</p>
           ) : mode === "link" ? (
             <p>
               Each link is a shortcut that opens the file; the file itself stays where it is. A name already taken
@@ -455,6 +477,8 @@ function FromRows({ pending, mode }: { pending: Pending; mode: DropMode }) {
 type SheetProps = {
   /** The names of the files to move (shown, up to a few). */
   names: string[];
+  /** The sheet's title (default "Move N files to…"; a folder: "Move <name> to…"). */
+  title?: string;
   /** The folder the picker starts with (e.g. the other pane's). */
   initial: string;
   onCancel: () => void;
@@ -465,7 +489,7 @@ const NAMES_SHOWN = 5;
 
 /** "Move to…": pick the folder (type to filter, any existing or new folder), then the
  * move flow previews it. */
-export function MoveToSheet({ names, initial, onCancel, onChoose }: SheetProps) {
+export function MoveToSheet({ names, title, initial, onCancel, onChoose }: SheetProps) {
   const [folder, setFolder] = useState(initial);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -483,7 +507,7 @@ export function MoveToSheet({ names, initial, onCancel, onChoose }: SheetProps) 
     <Sheet
       open
       className="move-to"
-      title={`Move ${plural(names.length, "file")} to…`}
+      title={title ?? `Move ${plural(names.length, "file")} to…`}
       onClose={onCancel}
       onKeyDown={(e) => e.stopPropagation()} // page shortcuts never see keys typed here
       footer={
