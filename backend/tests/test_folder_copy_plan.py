@@ -1,7 +1,9 @@
 """Planning a folder move across disks (the dry run): made folders, a copy per file, one
 QUARANTINE of the whole source carrying the planned tree."""
 
+import contextlib
 import os
+import unicodedata
 
 import pytest
 import xattr
@@ -135,6 +137,66 @@ def test_destination_taken_by_a_file_gets_suffix(across, extra_folder):
     assert resolved[0].dst == f"{DEST}/2009_2" and resolved[0].made
     assert resolved[-1].copied_to == f"{DEST}/2009_2"
     assert _copies(resolved)[0].dst == f"{DEST}/2009_2/a.pdf"
+
+
+def test_names_differing_only_in_case_refuse(across, fake_archive):
+    """On a case-sensitive disk a.pdf and A.pdf are two files; the planned tree would
+    hold one of them, so the move is refused before anything is planned."""
+    other = fake_archive.root / SRC / "A.pdf"
+    try:
+        with open(other, "xb") as f:
+            f.write(b"AAAA")
+    except FileExistsError:
+        pytest.skip("this filesystem does not tell a.pdf and A.pdf apart")
+    with pytest.raises(GuardError) as refused:
+        _move(across)
+    assert str(refused.value) == (
+        "2009 holds A.pdf and a.pdf, which differ only in case or accents."
+        " Rename one of them first."
+    )
+
+
+class _Entry:
+    """A ``os.DirEntry`` under another name (a second file on a case- or
+    normalization-sensitive disk)."""
+
+    def __init__(self, real, name: str) -> None:
+        self._real, self.name, self.path = real, name, real.path
+
+    def stat(self, *, follow_symlinks: bool = True):
+        return self._real.stat(follow_symlinks=follow_symlinks)
+
+
+@pytest.mark.parametrize(
+    ("first", "twin"),
+    [("b.pdf", "B.pdf"), ("\u00e9.pdf", "e\u0301.pdf")],  # é composed and decomposed
+)
+def test_names_differing_only_in_case_or_accents_refuse_in_subfolders(
+    across, fake_archive, monkeypatch, first, twin
+):
+    """The same refusal in a subfolder, on a disk that keeps both spellings (faked:
+    macOS keeps neither pair apart)."""
+    fake_archive.add(f"{SRC}/sub/{first}", b"x", drive_id=None)
+    sub = os.fspath(fake_archive.root / SRC / "sub")
+    real = os.scandir
+
+    @contextlib.contextmanager
+    def scandir(path):
+        with real(path) as it:
+            found = list(it)
+        if os.fspath(path) == sub:
+            (one,) = [e for e in found if unicodedata.normalize("NFC", e.name) == first]
+            found.append(_Entry(one, twin))
+        yield iter(found)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    with pytest.raises(GuardError) as refused:
+        _move(across)
+    a, b = sorted((first, twin))
+    assert str(refused.value) == (
+        f"2009/sub holds {a} and {b}, which differ only in case or accents."
+        " Rename one of them first."
+    )
 
 
 def test_ds_store_not_copied(across, fake_archive):

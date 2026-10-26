@@ -16,7 +16,9 @@ All notable changes are listed here. The format follows
   without duplicates, and if the original changed meanwhile nothing goes to To Delete.
   Links inside the folder are not copied (they go to To Delete with it), and the preview
   warns about links that would point to nothing. Collections and notes on the folder
-  follow it, and **Undo** puts everything back. Breadcrumbs now also take files.
+  follow it, and **Undo** puts everything back (after a Stop and a second move, undo the
+  second move first). A folder holding two names that differ only in case or accents is
+  not moved to another disk until one is renamed. Breadcrumbs now also take files.
 - **Compare and resolve same-name files in Duplicates.** Files with the same name but
   other content (versions of a document, or a PDF saved twice) now open side by side in
   one window with **Compare side by side**, with **Keep this one** under each. They get

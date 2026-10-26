@@ -88,14 +88,24 @@ def list_tree(root: Path, name: str) -> list[tuple[tuple[str, ...], str, os.stat
     """Everything inside the folder ``root`` (named ``name`` in messages), links not
     followed, as (path parts relative to ``root``, kind, lstat), parents before children,
     each folder's entries sorted by folded name. ``.DS_Store`` files are left out; an
-    unfinished copy (``.dam-copy-*``) or anything that is not a file, folder or link
-    refuses. The planner lists a folder moved across disks with it, and the executor
-    lists it again before the folder goes to To Delete."""
+    unfinished copy (``.dam-copy-*``), anything that is not a file, folder or link, or
+    two names of one folder that differ only in case or normalization refuses. The
+    planner lists a folder moved across disks with it, and the executor lists it again
+    before the folder goes to To Delete."""
     out: list[tuple[tuple[str, ...], str, os.stat_result]] = []
 
     def walk(folder: Path, rel: tuple[str, ...]) -> None:
         with os.scandir(folder) as it:
-            entries = sorted(it, key=lambda e: fold_parts(e.name))
+            entries = sorted(it, key=lambda e: (fold_parts(e.name), e.name))
+        for one, other in zip(entries, entries[1:], strict=False):
+            if fold_parts(one.name) == fold_parts(other.name):
+                # a case- or normalization-sensitive disk: the tree (keyed by folded
+                # name) would hold only one of them, and the other could reach To Delete
+                # uncopied
+                raise GuardError(
+                    f"{_below(name, rel)} holds {one.name} and {other.name}, which differ"
+                    " only in case or accents. Rename one of them first."
+                )
         for entry in entries:
             st = entry.stat(follow_symlinks=False)
             if entry.name.startswith(TEMP_COPY_PREFIX):
