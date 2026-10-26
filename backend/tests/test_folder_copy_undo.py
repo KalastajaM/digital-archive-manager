@@ -17,7 +17,7 @@ from dam.index.driveid import DRIVE_ID_XATTR
 from dam.ops import executor as executor_module
 from dam.ops import primitives
 from dam.ops import undo as journal
-from dam.ops.model import OpKind
+from dam.ops.model import OpFailed, OpKind
 from dam.ops.primitives import PRESENT
 from dam.ops.undo import MANUAL_CHECK
 
@@ -315,3 +315,35 @@ def test_recover_done_quarantine_whose_rows_never_followed(across, ids, monkeypa
     assert across.repo.by_path(SRC) is None
     across.executor.recover()  # again: nothing changes
     assert across.repo.by_path(COPY).drive_id == folder.drive_id
+
+
+def _tree(*roots) -> list[str]:
+    return sorted(str(p) for root in roots for p in root.rglob("*"))
+
+
+def test_undo_of_stopped_batch_refused_while_a_later_move_relies_on_it(
+    across, ids, fake_archive, extra_folder, monkeypatch
+):
+    """The second move found the first batch's copy present and sent the original to To
+    Delete: undoing the first batch now would put the only live copy in To Delete too."""
+    real = _stop_after_first(across, monkeypatch)
+    first = _move(across).result
+    assert first.stopped
+    monkeypatch.setattr(across.executor, "apply", real)
+    across.scan()
+    second = _move(across).result
+    assert second.failed is None, second.error
+    before = _tree(fake_archive.root, extra_folder.root)
+    states = [e.state for e in _journal(across, first.batch_id)]
+    for attempt in (across.executor.preview_undo, across.executor.undo):
+        with pytest.raises(OpFailed) as refused:
+            attempt(first.batch_id)
+        assert str(refused.value) == "Undo the later move of 2009 first."
+    assert _tree(fake_archive.root, extra_folder.root) == before
+    assert [e.state for e in _journal(across, first.batch_id)] == states
+    assert (extra_folder.root / "2009" / "a.pdf").read_bytes() == b"aaaa"
+    undone = across.executor.undo(second.batch_id)
+    assert undone.failed is None, undone.error
+    again = across.executor.undo(first.batch_id)
+    assert again.failed is None, again.error
+    _assert_back(across, fake_archive, extra_folder, ids)

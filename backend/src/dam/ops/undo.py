@@ -179,6 +179,7 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
     acted = [r for r in rows if r.state in ACTED]
     if not acted:
         raise OpFailed("There is nothing to undo here.")
+    _check_no_later_move_relies(ex, batch_id, acted)
     known: dict[str, bool] = {}  # each folder's root is listed once
     for row in acted:  # an unplugged folder would look changed: wait until it is back
         check_connected(ex.paths, row.src, row.dst, known=known)
@@ -205,6 +206,37 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
             # the app's folder holds what came later (a sync's links, the user's files)
             raise GuardError(f"{e}{FOLDER_NOT_EMPTY}") from None
         raise
+
+
+def _check_no_later_move_relies(ex: Executor, batch_id: str, acted: list[JournalEntry]) -> None:
+    """A later move of the same folder across disks found this batch's copies present
+    and sent the folder (with the originals) to To Delete: undoing this batch would move
+    those copies, the only live ones, to To Delete as well. Refused until that later move
+    is undone (its final QUARANTINE is acted and not undone). OpFailed: a 409, like the
+    other refusals here."""
+    made = {
+        fold_parts(r.dst)
+        for r in acted
+        if r.kind == OpKind.COPY_ACROSS and r.method != primitives.PRESENT
+    }
+    if not made:
+        return
+    present = entries(
+        ex,
+        operations.c.batch_id != batch_id,
+        operations.c.kind == str(OpKind.COPY_ACROSS),
+        operations.c.method == primitives.PRESENT,
+        operations.c.state.in_(ACTED),
+    )
+    for later in dict.fromkeys(r.batch_id for r in present if fold_parts(r.dst) in made):
+        for final in entries(
+            ex,
+            operations.c.batch_id == later,
+            operations.c.kind == str(OpKind.QUARANTINE),
+            operations.c.copied_to.is_not(None),
+            operations.c.state.in_(ACTED),
+        ):
+            raise OpFailed(f"Undo the later move of {PurePosixPath(final.src).name} first.")
 
 
 def _mark_restored_rows(resolved: list[ResolvedOp], revert: list[JournalEntry]) -> None:
