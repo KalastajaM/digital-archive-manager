@@ -174,6 +174,26 @@ describe("Collections list", () => {
 });
 
 describe("Collection detail", () => {
+  it("marks a member in an archive folder that is not connected", async () => {
+    const offline = {
+      ...SAUNA.members[0],
+      drive_id: "v1",
+      path: "Vault/2009/deed.pdf",
+      folder: "Vault",
+      connected: false,
+    };
+    renderCollections("/collections/7", {
+      "GET /api/collections/7": { body: { ...SAUNA, members: [SAUNA.members[0], offline] } },
+      "GET /api/files/v1/summary": { body: { ai: null, user: null } },
+      "GET /api/notes/file/v1": { body: { text: "" } },
+    });
+    const members = await within(panel()).findByRole("region", { name: "Members" });
+    const deed = within(members).getByText("deed.pdf").closest("li")!;
+    expect(within(deed).getByText("Not connected")).toHaveClass("entry-offline");
+    const quote = within(members).getByText("quote.pdf").closest("li")!;
+    expect(within(quote).queryByText("Not connected")).toBeNull();
+  });
+
   it("lists the members as a plain list (no Ungrouped without groups) with their folder, marks folders, missing and quarantined ones, and removes one", async () => {
     const { calls, user } = renderCollections("/collections/7", {
       "POST /api/collections/7/members/remove": {

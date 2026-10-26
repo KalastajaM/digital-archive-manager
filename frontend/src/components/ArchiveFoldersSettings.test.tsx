@@ -45,10 +45,30 @@ describe("Archive folders settings", () => {
       within(dialog).getByText("Detach 'Scans'? Its 40 files leave the archive until you attach it again. Nothing on the disk changes."),
     ).toBeInTheDocument();
     expect(posts(calls, "/api/archive-folders/Scans/detach")).toHaveLength(0);
+    const removed = "The folder is also removed from this list, so its label can be used again.";
+    expect(within(dialog).queryByText(removed)).toBeNull();
     await user.click(within(dialog).getByRole("checkbox", { name: "Also forget their tags, notes and collection places" }));
+    expect(within(dialog).getByText(removed)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Detach" }));
     await waitFor(() => expect(posts(calls, "/api/archive-folders/Scans/detach")).toHaveLength(1));
     expect(posts(calls, "/api/archive-folders/Scans/detach")[0].body).toEqual({ forget: true, dry_run: false });
+  });
+
+  it("Forget on a detached folder asks first, then forgets it", async () => {
+    const { calls, user } = setup({ "POST /api/archive-folders/Old/detach": { body: { ...CHANGE, label: "Old" } } });
+    const old = (await screen.findAllByRole("listitem"))[3];
+    await user.click(within(old).getByRole("button", { name: "Forget" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(
+        "Forget 'Old'? It is removed from this list, with the tags, notes and collection places of its 3 files, and its label can be used again. Nothing on the disk changes.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("checkbox")).toBeNull();
+    expect(posts(calls, "/api/archive-folders/Old/detach")).toHaveLength(0);
+    await user.click(within(dialog).getByRole("button", { name: "Forget" }));
+    await waitFor(() => expect(posts(calls, "/api/archive-folders/Old/detach")).toHaveLength(1));
+    expect(posts(calls, "/api/archive-folders/Old/detach")[0].body).toEqual({ forget: true, dry_run: false });
   });
 
   it("Attach again attaches the folder", async () => {

@@ -542,7 +542,7 @@ describe("The other checks", () => {
     await user.click(within(clashes).getByRole("button", { name: "Check" }));
     expect(
       await within(clashes).findByText(
-        "A folder in the main folder has the same name as the archive folder 'Old years'. Rename it or the archive folder.",
+        "A folder in the main folder has the same name as the archive folder 'Old years'. Rename the folder in the main folder, or detach the archive folder with Also forget.",
       ),
     ).toBeInTheDocument();
   });

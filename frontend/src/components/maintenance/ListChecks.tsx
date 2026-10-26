@@ -654,7 +654,7 @@ export function LabelClashes() {
       title="Archive folder names"
       icon={<FolderX />}
       kind="label_clashes"
-      intro="Folders at the top of the main folder that have the same name as one of the archive folders. The archive folder wins, so the folder in the main folder is left out of the index and search until one of the two is renamed."
+      intro="Folders at the top of the main folder that have the same name as one of the archive folders. The archive folder wins, so the folder in the main folder is left out of the index and search until it is renamed, or the archive folder is detached with Also forget."
       check={check}
       empty="No folder in the main folder has the name of an archive folder."
       found={labels.length > 0}
@@ -665,8 +665,8 @@ export function LabelClashes() {
           {labels.map((label) => (
             <li key={label}>
               <span>
-                A folder in the main folder has the same name as the archive folder &apos;{visible(label)}&apos;. Rename it or
-                the archive folder.
+                A folder in the main folder has the same name as the archive folder &apos;{visible(label)}&apos;. Rename the
+                folder in the main folder, or detach the archive folder with Also forget.
               </span>
             </li>
           ))}

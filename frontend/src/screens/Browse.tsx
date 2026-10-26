@@ -366,7 +366,7 @@ function EntryRow({
         <span className="entry-name">{visible(item.name)}</span>
       )}
       <MarkIcons marks={item.marks} driveId={item.is_dir ? undefined : item.drive_id} path={item.path} />
-      {driveRoot && item.connected === false && <span className="entry-offline">Not connected</span>}
+      {item.connected === false && <span className="entry-offline">Not connected</span>}
       {item.is_link && (
         <span className="link-icon" role="img" aria-label="Symbolic link" title="Symbolic link">
           ↪
@@ -1183,6 +1183,8 @@ export default function Browse() {
   );
   // A root of a folder whose disk is away is not opened: the row says why.
   const [offlineNote, setOfflineNote] = useState<string | null>(null);
+  // it is about the folder the pane showed: any way to another one clears it
+  useEffect(() => setOfflineNote(null), [paths.left, paths.right]);
   const open = (pane: PaneId, item: Item | undefined) => {
     if (!item?.is_dir) return;
     if (item.connected === false && item.folder != null && !item.path.includes("/")) {

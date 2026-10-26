@@ -1,6 +1,7 @@
 /** Settings → Archive folders: the main folder and the extra folders attached to this
  * archive (another disk, a cloud drive). An extra folder can be detached (its files leave
- * the archive; nothing on the disk changes) and attached again. */
+ * the archive; nothing on the disk changes) and attached again, or forgotten: it leaves
+ * the list and its label is free again. */
 import { useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, HardDrive } from "lucide-react";
 import { useState } from "react";
@@ -27,8 +28,11 @@ function RestartNotice() {
   );
 }
 
+/** Detach an attached folder (optionally forgetting it), or forget a detached one. */
 function DetachSheet({ folder, onClose, onDone }: { folder: ArchiveFolder; onClose: () => void; onDone: (c: FolderChange) => void }) {
-  const [forget, setForget] = useState(false);
+  const detached = !folder.attached;
+  const [ticked, setTicked] = useState(false);
+  const forget = detached || ticked;
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const label = folder.label ?? "";
@@ -45,7 +49,7 @@ function DetachSheet({ folder, onClose, onDone }: { folder: ArchiveFolder; onClo
   return (
     <Sheet
       open
-      title="Detach folder"
+      title={detached ? "Forget folder" : "Detach folder"}
       onClose={() => !busy && onClose()}
       footer={
         <>
@@ -53,16 +57,23 @@ function DetachSheet({ folder, onClose, onDone }: { folder: ArchiveFolder; onClo
             Cancel
           </button>
           <button type="button" className="primary danger" disabled={busy} onClick={() => void run()}>
-            Detach
+            {detached ? "Forget" : "Detach"}
           </button>
         </>
       }
     >
-      <p>{`Detach '${visible(label)}'? Its ${folder.files} files leave the archive until you attach it again. Nothing on the disk changes.`}</p>
-      <label className="check">
-        <input type="checkbox" checked={forget} disabled={busy} onChange={(e) => setForget(e.target.checked)} />
-        Also forget their tags, notes and collection places
-      </label>
+      {detached ? (
+        <p>{`Forget '${visible(label)}'? It is removed from this list, with the tags, notes and collection places of its ${folder.files} files, and its label can be used again. Nothing on the disk changes.`}</p>
+      ) : (
+        <>
+          <p>{`Detach '${visible(label)}'? Its ${folder.files} files leave the archive until you attach it again. Nothing on the disk changes.`}</p>
+          <label className="check">
+            <input type="checkbox" checked={ticked} disabled={busy} onChange={(e) => setTicked(e.target.checked)} />
+            Also forget their tags, notes and collection places
+          </label>
+          {ticked && <p className="first-run-hint">The folder is also removed from this list, so its label can be used again.</p>}
+        </>
+      )}
       {problem && (
         <p className="first-run-problem" role="alert">
           <CircleAlert size={14} aria-hidden="true" /> {visible(problem)}
@@ -201,9 +212,14 @@ export function ArchiveFoldersSettings() {
                     Detach
                   </button>
                 ) : (
-                  <button type="button" onClick={() => void attach(f.label as string)}>
-                    Attach again
-                  </button>
+                  <>
+                    <button type="button" onClick={() => void attach(f.label as string)}>
+                      Attach again
+                    </button>
+                    <button type="button" onClick={() => setDetaching(f)}>
+                      Forget
+                    </button>
+                  </>
                 )}
               </div>
             )}

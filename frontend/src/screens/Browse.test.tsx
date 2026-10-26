@@ -118,6 +118,38 @@ describe("Browse extra archive folders", () => {
     ).toBeInTheDocument();
     expect(browseCalls(calls).some((c) => queryOf(c).get("path") === "Vault")).toBe(false);
   });
+
+  it("the note goes away when the pane goes to another folder, also through Back", async () => {
+    const { user } = setup("10. Financial", {
+      "GET /api/browse": (call) => {
+        const path = queryOf(call).get("path") ?? "";
+        return { body: path === "" ? [root("Vault", false), dir("10. Financial")] : (LISTINGS[path] ?? []) };
+      },
+    });
+    await screen.findByText("Banks");
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
+    await user.click(within(crumbs).getByRole("link", { name: "Archive" }));
+    await user.click(await screen.findByRole("button", { name: /Vault/ }));
+    const note = "'Vault' is not connected. Connect the disk or sign in to the cloud drive, and it comes back by itself.";
+    expect(await screen.findByText(note)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByText("Banks")).toBeInTheDocument();
+    expect(screen.queryByText(note)).toBeNull();
+  });
+
+  it("marks a search hit in a folder that is not connected", async () => {
+    const hits: SearchHit[] = [
+      { drive_id: "v1", path: "Vault/2009/old.pdf", name: "old.pdf", snippet: "old.pdf", rank: -2, size: 1, mtime: 1, folder: "Vault", connected: false, marks: [] },
+      { drive_id: "s1", path: "Scans/new.pdf", name: "new.pdf", snippet: "new.pdf", rank: -1, size: 1, mtime: 1, folder: "Scans", connected: true, marks: [] },
+    ];
+    const { user } = setup("", { "GET /api/search": { body: hits } });
+    await screen.findByText("readme.txt");
+    await user.type(screen.getByRole("searchbox", { name: "Search" }), "pdf");
+    const results = await screen.findByRole("list", { name: "Search results" });
+    const row = (name: string) => within(results).getByText(name).closest("li")!;
+    expect(within(row("old.pdf")).getByText("Not connected")).toBeInTheDocument();
+    expect(within(row("new.pdf")).queryByText("Not connected")).toBeNull();
+  });
 });
 
 describe("Browse", () => {
