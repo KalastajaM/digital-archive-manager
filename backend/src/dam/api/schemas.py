@@ -2216,6 +2216,26 @@ class MaintenanceForgetOut(BaseModel):
     forgotten: int
 
 
+IgnoreKindIn = Literal[
+    "duplicates", "versions", "empty_folders", "broken_links", "references", "names"
+]
+
+
+class MaintenanceIgnoreIn(_In):
+    kind: IgnoreKindIn
+    key: str = Field(min_length=1, max_length=2000)
+    label: str = Field(min_length=1, max_length=2000)
+    members: list[str] = Field(default_factory=list, max_length=10000)
+
+
+class MaintenanceIgnoredOut(BaseModel):
+    id: int
+    kind: str
+    key: str
+    label: str
+    created: float
+
+
 class DupFileOut(BaseModel):
     drive_id: str
     path: str
@@ -2362,12 +2382,16 @@ class MaintenanceJobOut(BaseModel):
 class DuplicateChoiceIn(_In):
     keep: str
     others: list[str]
+    # those of ``others`` replaced with a link whatever ``action`` says (one copy to To
+    # Delete and another replaced with a link, in one batch)
+    links: list[str] = Field(default_factory=list)
 
 
 class DuplicateResolveIn(_In):
     """What to do with the copies of one or more duplicate groups: ``quarantine`` moves
     each copy in ``others`` to To Delete, ``link`` also leaves a link to ``keep`` where it
-    was. ``carry_over`` adds what the removed copies had to the kept one."""
+    was; a copy in a group's ``links`` is replaced with a link either way. ``carry_over``
+    adds what the removed copies had to the kept one."""
 
     groups: list[DuplicateChoiceIn]
     action: Literal["quarantine", "link"]

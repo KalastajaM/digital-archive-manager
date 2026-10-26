@@ -1721,6 +1721,28 @@ export const getMaintenanceJob = (id: string) => get<MaintenanceJob>(`/api/maint
 export const latestMaintenanceJob = (kind: MaintenanceKind) =>
   get<MaintenanceJob | null>(`/api/maintenance/jobs/latest/${enc(kind)}`);
 export const stopMaintenanceJob = (id: string) => post<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}/stop`);
+/** A result entry the owner ignores (``dam.maintenance.ignored`` has the keys per kind). */
+export type MaintenanceIgnored = Schemas["MaintenanceIgnoredOut"];
+export type IgnoreKind = Schemas["MaintenanceIgnoreIn"]["kind"];
+const ignoredKey = ["maintenance", "ignored"];
+
+export const useMaintenanceIgnored = () =>
+  useQuery({ queryKey: ignoredKey, queryFn: () => get<MaintenanceIgnored[]>("/api/maintenance/ignored") });
+
+/** Ignore an entry, or stop ignoring one (by its id). Nothing in the archive changes. */
+export const useMaintenanceIgnore = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      change: { kind: IgnoreKind; key: string; label: string; members?: string[] } | { stop: number },
+    ): Promise<MaintenanceIgnored | null> =>
+      "stop" in change
+        ? del(`/api/maintenance/ignored/${change.stop}`).then(() => null)
+        : post<MaintenanceIgnored>("/api/maintenance/ignored", change),
+    onSettled: () => qc.invalidateQueries({ queryKey: ignoredKey }),
+  });
+};
+
 /** Reset: forget the checks of ``kind`` (every kind when left out) and their results. */
 export const forgetMaintenanceJobs = (kind?: MaintenanceKind) =>
   del<{ forgotten: number }>(`/api/maintenance/jobs${kind ? `?${new URLSearchParams({ kind })}` : ""}`);

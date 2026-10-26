@@ -15,6 +15,8 @@ from dam.api.schemas import (
     DuplicateResolveOut,
     LinkRemoveIn,
     MaintenanceForgetOut,
+    MaintenanceIgnoredOut,
+    MaintenanceIgnoreIn,
     MaintenanceJobOut,
     MaintenanceKindIn,
     MaintenanceStartIn,
@@ -70,6 +72,27 @@ def forget(app: AppDep, kind: MaintenanceKindIn | None = None) -> dict:
     return {"forgotten": app.maintenance.jobs.forget(kind)}
 
 
+@router.get("/ignored", response_model=list[MaintenanceIgnoredOut])
+def ignored(app: AppDep) -> list[dict]:
+    """What the owner ignores in the checks' results, newest first."""
+    return [asdict(i) for i in app.maintenance.ignored.list()]
+
+
+@router.post("/ignored", response_model=MaintenanceIgnoredOut)
+def ignore(app: AppDep, body: MaintenanceIgnoreIn) -> dict:
+    """Ignore a result entry: later results of its check leave it out (see
+    ``dam.maintenance.ignored`` for the keys). Nothing in the archive changes."""
+    return asdict(app.maintenance.ignored.add(body.kind, body.key, body.label, body.members))
+
+
+@router.delete("/ignored/{ignored_id}", response_model=MaintenanceForgetOut)
+def stop_ignoring(app: AppDep, ignored_id: int) -> dict:
+    """Stop ignoring an entry; it shows in the check's results again. 404 if unknown."""
+    if not app.maintenance.ignored.unignore(ignored_id):
+        raise NotFound(str(ignored_id))
+    return {"forgotten": 1}
+
+
 @router.get("/jobs/latest/{kind}", response_model=MaintenanceJobOut | None)
 def latest(app: AppDep, kind: str) -> dict | None:
     """The latest job of ``kind`` of this run (finished ones too), else null."""
@@ -109,6 +132,7 @@ def resolve_duplicates(app: AppDep, body: DuplicateResolveIn):
         carry_over=body.carry_over,
         origin=UI_ORIGIN,
         dry_run=body.dry_run,
+        links=[i for g in body.groups for i in g.links],
     )
     return result
 

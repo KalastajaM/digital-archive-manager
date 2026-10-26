@@ -12,7 +12,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
@@ -26,6 +26,7 @@ from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.locks import LockService
 from dam.maintenance import checks, duplicates
 from dam.maintenance.duplicates import WHY_LOCKED, LockIndex
+from dam.maintenance.ignored import IgnoreList, fold_name
 from dam.maintenance.jobs import Job, MaintenanceJobs
 from dam.notes import NotesService
 from dam.ops.executor import Executor
@@ -97,6 +98,19 @@ class _Pair:
     removed: list[FileRecord]
 
 
+def _dups(n: int) -> str:
+    return "1 duplicate" if n == 1 else f"{n} duplicates"
+
+
+def _resolve_label(moved: int, linked: int) -> str:
+    """The batch's title in Activity."""
+    if not linked:
+        return f"Moved {_dups(moved)} to To Delete"
+    if not moved:
+        return f"Replaced {_dups(linked)} with a link to the kept copy"
+    return f"Moved {_dups(moved)} to To Delete and replaced {linked} with a link"
+
+
 class MaintenanceService:
     def __init__(
         self,
@@ -128,6 +142,7 @@ class MaintenanceService:
         self.rescan = rescan
         self.important_lock = important_lock if important_lock is not None else nullcontext()
         self.jobs = MaintenanceJobs()
+        self.ignored = IgnoreList(engine)
 
     def close(self) -> None:
         self.jobs.close()
@@ -169,7 +184,7 @@ class MaintenanceService:
     def result_of(self, job: Job) -> tuple[str, object]:
         """``(kind, result)`` of a job as it stands now: without what has changed since it
         was found (a duplicate that moved, a folder that is no longer empty or was marked
-        for deletion). Reads the index only."""
+        for deletion) and without what the owner ignores. Reads the index only."""
         result = job.view().result
         if result is None:
             return job.kind, None
@@ -179,7 +194,36 @@ class MaintenanceService:
             result = self._still_there(result)
         elif job.kind == "waiting":
             result = self._still_there(result, waiting=True)
-        return job.kind, result
+        return job.kind, self._not_ignored(job.kind, result)
+
+    def _not_ignored(self, kind: str, result):
+        """A copy of ``result`` without the entries the owner ignores, totals lowered."""
+        drop = self.ignored.drop
+        ids = lambda g: [f.drive_id for f in g.files]  # noqa: E731
+        if kind == "duplicates":
+            groups, n = drop("duplicates", result.groups, lambda g: g.sha256, ids)
+            names, m = drop("versions", result.name_groups, lambda g: fold_name(g.name), ids)
+            if not (n or m):
+                return result
+            return dataclasses.replace(
+                result,
+                groups=groups,
+                groups_total=max(0, result.groups_total - n),
+                name_groups=names,
+                name_groups_total=max(0, result.name_groups_total - m),
+            )
+        if kind == "references":
+            key = lambda r: "-".join(  # noqa: E731
+                (r.kind, r.owner_id, "" if r.item_id is None else str(r.item_id), r.drive_id)
+            )
+        elif kind in ("empty_folders", "broken_links", "names"):
+            key = lambda r: r.drive_id  # noqa: E731
+        else:
+            return result
+        items, n = drop(kind, result.items, key)
+        if not n:
+            return result
+        return dataclasses.replace(result, items=items, total=max(0, result.total - n))
 
     def _still_there(self, result, waiting: bool = False):
         """A copy of a list result without the entries whose file is gone from where it
@@ -253,11 +297,14 @@ class MaintenanceService:
         carry_over: bool = True,
         origin: str = "ui",
         dry_run: bool = False,
+        links: Collection[str] = (),
     ) -> ResolveResult:
         """For each group ``(keep, [copies to remove])``: move the copies to ``##. To
         Delete`` (``action`` ``quarantine``) or, ``link``, also make a link to the kept
         copy where each one was. One batch, one Undo. ``carry_over``: add what the removed
         copies had to the kept one (listed in the result; applied unless ``dry_run``).
+        ``links``: copies (among those to remove) replaced with a link whatever ``action``
+        is, so one batch can move some copies and link others.
 
         Refused (``InvalidRequest``, nothing happens): a copy that is Important or locked,
         a file not known to have the same content (the check must have hashed both), a file
@@ -266,24 +313,21 @@ class MaintenanceService:
         check_origin(origin)
         if action not in ACTIONS:
             raise InvalidRequest(f"action must be one of {', '.join(ACTIONS)}")
-        if action == "link" and not can_make_links():
-            raise InvalidRequest(LINK_UNAVAILABLE)
         pairs = self._pairs(groups)
+        linked = {r.drive_id for p in pairs for r in p.removed} if action == "link" else set(links)
+        if not linked <= {r.drive_id for p in pairs for r in p.removed}:
+            raise InvalidRequest("A copy to replace with a link is not one of the copies to remove")
+        if linked and not can_make_links():
+            raise InvalidRequest(LINK_UNAVAILABLE)
         ops: list[Op] = []
         ids: list[str] = []
         for pair in pairs:
             for rec in pair.removed:
                 ops.append(Op(OpKind.QUARANTINE, rec.path, None))
                 ids.append(rec.drive_id)
-                if action == "link":
+                if rec.drive_id in linked:
                     ops.append(Op(OpKind.SYMLINK, pair.keep.path, rec.path, exact=True))
-        count = len(ids)
-        what = "1 duplicate" if count == 1 else f"{count} duplicates"
-        label = (
-            f"Replaced {what} with a link to the kept copy"
-            if action == "link"
-            else f"Moved {what} to To Delete"
-        )
+        label = _resolve_label(len(ids) - len(linked), len(linked))
         plan = Plan(ops, origin=origin, label=label)
         with self.important_lock:
             batch = self.executor.apply(
@@ -298,8 +342,9 @@ class MaintenanceService:
             if carry_over:
                 result.carry_over = self._carry_plans(pairs)
             return result
-        if action == "link" and self.rescan is not None and batch.done:
-            for folder in dict.fromkeys(parent(r.path) for p in pairs for r in p.removed):
+        if linked and self.rescan is not None and batch.done:
+            folders = (parent(r.path) for p in pairs for r in p.removed if r.drive_id in linked)
+            for folder in dict.fromkeys(folders):
                 try:
                     self.rescan(folder)
                 except Exception:  # the batch is done; the watcher's next scan picks it up

@@ -2301,13 +2301,22 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .dup-group { border: 0.5px solid var(--hairline); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
 .dup-group-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-1); }
 .dup-files { list-style: none; margin: 0; padding: 0; }
-.dup-file { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: 3px 0; }
-.dup-file[data-keep] { background: var(--selected); border-radius: var(--r-sm); padding-left: var(--sp-1); }
+/* every copy's row has the same padding, so Keep and the folder line up whether or not
+   the row is the kept one (only that one is highlighted) */
+.dup-file { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: 3px var(--sp-1); border-radius: var(--r-sm); }
+.dup-file[data-keep] { background: var(--selected); }
 .dup-file-plain { grid-template-columns: minmax(0, 1fr) auto; }
 .dup-keep { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); }
 .dup-path { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); min-width: 0; }
+/* a copy: the folder, then its details close under it */
+.dup-copy { flex-direction: column; align-items: flex-start; gap: 1px; }
+.dup-meta { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--sp-2); row-gap: 1px; }
 .dup-actions { display: inline-flex; align-items: center; gap: var(--sp-3); }
 .dup-why { grid-column: 2 / -1; }
+/* Ignore sits at the right of a group's head */
+.dup-group-head > .link-button { margin-left: auto; font-size: var(--fs-sm); }
+.ignored { margin-top: var(--sp-2); font-size: var(--fs-sm); }
+.ignored .check-list { margin-top: var(--sp-1); }
 .dup-group-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
 .carry-list { margin: var(--sp-1) 0 var(--sp-2); padding-left: var(--sp-5); }
 .carry-list ul { margin: 0; padding-left: var(--sp-4); }

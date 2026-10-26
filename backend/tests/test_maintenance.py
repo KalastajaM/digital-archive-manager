@@ -38,6 +38,12 @@ def run(app, kind, days=None, wait=15):
     return view
 
 
+def run_job(app, kind, wait=15):
+    job = app.maintenance.start(kind)
+    job.join(wait)
+    return job
+
+
 def dup_result(app):
     return run(app, "duplicates").result
 
@@ -250,6 +256,27 @@ def test_several_groups_in_one_batch(app, fake_archive):
     app.activity.undo(result.batch_id)
     assert not (fake_archive.root / HOME / "d1.pdf").is_symlink()
     assert not (fake_archive.root / HOME / "d2.pdf").is_symlink()
+
+
+def test_one_copy_to_to_delete_and_another_replaced_with_a_link_in_one_batch(app, pair):
+    pair.add(f"{HOME}/third.pdf", b"same-content", drive_id="id-third")
+    app.scan()
+    dup_result(app)
+    result = app.maintenance.resolve(
+        [("id-keep", ["id-dup", "id-third"])], "quarantine", links=["id-third"]
+    )
+    assert result.error is None and result.failed is None
+    assert not (pair.root / INBOX / "scan.pdf").exists()  # moved, no link
+    assert (pair.root / HOME / "third.pdf").is_symlink()  # moved and linked
+    assert {r["label"] for r in journal(app, result.batch_id)} == {
+        "Moved 1 duplicate to To Delete and replaced 1 with a link"
+    }
+    app.activity.undo(result.batch_id)
+    assert (pair.root / INBOX / "scan.pdf").is_file()
+    third = pair.root / HOME / "third.pdf"
+    assert third.is_file() and not third.is_symlink()
+    with pytest.raises(InvalidRequest, match="not one of the copies to remove"):
+        app.maintenance.resolve([("id-keep", ["id-dup"])], "quarantine", links=["id-third"])
 
 
 def test_a_taken_name_in_to_delete_gets_a_number_and_undo_still_restores(app, pair):
@@ -782,3 +809,69 @@ def test_label_clash_check(extra_folder, app, fake_archive):
         assert job.status_code == 200, job.text
         body = poll(c, job.json()["job_id"])
     assert body["label_clashes"] == {"items": ["Old years"], "total": 1}
+
+
+# --- ignoring results ---
+
+
+def test_an_ignored_duplicate_group_stays_out_until_a_new_copy_joins(app, pair):
+    [group] = run(app, "duplicates").result.groups
+    app.maintenance.ignored.add(
+        "duplicates", group.sha256, "20230101_bill.pdf", ["id-keep", "id-dup"]
+    )
+    result = app.maintenance.result_of(run_job(app, "duplicates"))[1]
+    assert (result.groups, result.groups_total) == ([], 0)
+    pair.add(f"{HOME}/third copy.pdf", b"same-content", drive_id="id-third")
+    app.scan()
+    [back] = app.maintenance.result_of(run_job(app, "duplicates"))[1].groups
+    assert {f.drive_id for f in back.files} == {"id-keep", "id-dup", "id-third"}
+
+
+def test_ignored_versions_folders_and_entries_are_left_out(app, fake_archive):
+    fake_archive.add(f"{BANKS}/Statement.pdf", b"one", drive_id="id-v1")
+    fake_archive.add(f"{HOME}/statement.pdf", b"two", drive_id="id-v2")
+    (fake_archive.root / HOME / "Old").mkdir()
+    (fake_archive.root / HOME / "Older").mkdir()
+    app.scan()
+    old = app.repo.by_path(f"{HOME}/Old")
+    ignored = app.maintenance.ignored
+    ignored.add("versions", "STATEMENT.pdf", "Statement.pdf", ["id-v1", "id-v2"])  # folded
+    ignored.add("empty_folders", old.drive_id, f"{HOME}/Old")
+    dups = app.maintenance.result_of(run_job(app, "duplicates"))[1]
+    assert (dups.name_groups, dups.name_groups_total) == ([], 0)
+    folders = app.maintenance.result_of(run_job(app, "empty_folders"))[1]
+    assert [f.path for f in folders.items] == [f"{HOME}/Older"] and folders.total == 1
+    [entry] = ignored.list()[1:]  # newest first
+    assert ignored.unignore(entry.id) and not ignored.unignore(entry.id)
+    assert app.maintenance.result_of(run_job(app, "duplicates"))[1].name_groups_total == 1
+
+
+def test_an_ignored_reference_is_keyed_by_owner_item_and_file(app, fake_archive):
+    fake_archive.add(f"{BANKS}/c.pdf", b"c", drive_id="id-c")
+    app.scan()
+    col = app.collections.create("Trip")
+    app.collections.add_members(col.id, ["id-c"])
+    (fake_archive.root / BANKS / "c.pdf").rename(fake_archive.root / "elsewhere.tmp")
+    app.scan()
+    app.maintenance.ignored.add("references", f"collection-{col.id}--id-c", "c.pdf")
+    result = app.maintenance.result_of(run_job(app, "references"))[1]
+    assert (result.items, result.total) == ([], 0)
+
+
+def test_api_ignore_list_and_stop_ignoring(client, app, fake_archive):
+    body = {"kind": "names", "key": "id-x", "label": "10. Financial/x.pdf"}
+    added = client.post("/api/maintenance/ignored", json=body, headers=H)
+    assert added.status_code == 200 and added.json()["label"] == "10. Financial/x.pdf"
+    listed = client.get("/api/maintenance/ignored", headers=H).json()
+    assert [(i["kind"], i["key"]) for i in listed] == [("names", "id-x")]
+    group = {"kind": "duplicates", "key": "abc", "label": "a.pdf"}
+    assert client.post("/api/maintenance/ignored", json=group, headers=H).status_code == 400
+    bad = {**body, "kind": "waiting"}
+    assert client.post("/api/maintenance/ignored", json=bad, headers=H).status_code in (400, 422)
+    gone = client.delete(f"/api/maintenance/ignored/{added.json()['id']}", headers=H)
+    assert gone.status_code == 200
+    assert client.get("/api/maintenance/ignored", headers=H).json() == []
+    assert (
+        client.delete(f"/api/maintenance/ignored/{added.json()['id']}", headers=H).status_code
+        == 404
+    )

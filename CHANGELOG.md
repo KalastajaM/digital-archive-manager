@@ -34,9 +34,10 @@ All notable changes are listed here. The format follows
     read and how big they are (with a warning that files kept online-only in Google Drive
     are downloaded), reads only files that share a size with another, and does not read a
     file again once it has been read. In each group you pick the copy to keep (the
-    suggestion is a numbered folder before the Inbox, then the oldest) and then **Move the
-    others to To Delete** or **Replace them with a link** to the kept copy, per group or for
-    several groups at once. One preview, one Undo (which removes the links and brings the
+    suggestion is a numbered folder before the Inbox, then the oldest) and, for each other
+    copy, whether to leave it, move it to To Delete, or replace it with a link to the kept
+    copy (icons next to the copy; To Delete to begin with). **Apply** does a group, or all
+    ticked groups at once. One preview, one Undo (which removes the links and brings the
     copies back). Tags, collections, star, notes, checklist entries, tray items and From and
     For of the removed copies can be added to the kept one (ticked by default, listed in
     the preview, nothing overwritten). A copy marked Important or locked is never removed.
@@ -48,9 +49,14 @@ All notable changes are listed here. The format follows
     of days you choose. dam still never empties To Delete. The empty-folder check leaves
     out the folders the archive is set up with, such as the filing code folders in
     `##. Organize`.
-  - Duplicates show each copy's folder, and its name only where it differs. Collections and
-    trays show where a gone file was last seen instead of an internal id, say what each
-    entry means, and offer **Take out** for a gone file in a collection.
+  - Duplicates show each copy's folder with its details under it, and its name only where
+    it differs.
+  - Collections and trays show where a gone file was last seen instead of an internal id,
+    say what each entry means, and offer **Take out** for a gone file in a collection.
+  - **Ignore** an entry (a duplicate group, a name used by different files, an empty
+    folder, a broken link, a collection or tray entry, a file name) to leave it out of
+    later results. Each card lists what it ignores, with **Stop ignoring**. An ignored
+    duplicate group comes back when a new copy turns up.
   - Each check's card folds to one line (Collapse all and Expand all in the toolbar,
     remembered in this browser). The reset icon at the top right of each card forgets that
     check's result, and **Reset all** in the toolbar every result, without changing the
@@ -86,6 +92,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Previews list a new folder structure as one step.** When a change needs several
+  missing folders, one inside the other (such as the same folder path in To Delete), the
+  preview shows one "New folders" line with the deepest folder and how many are made,
+  instead of a step per folder.
 - **Trays and collections:** the list buttons in the header (Add file, Open and Done; the
   collection's folder and share buttons) sit at the right edge of the list column, over
   the list they act on, instead of right after the title.
@@ -472,6 +482,12 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A copy of a Google Drive file can be moved again.** Copying a file also copies its
+  Drive id, and dam refused to move such a copy ("now has Drive id …, so it is not the
+  file indexed there; scan and try again"), which a scan never cleared. This blocked
+  Move, filing and the duplicate actions for copies. Such a copy can now be moved, and a
+  later scan keeps the Drive id, with its tags and collections, on the original even when
+  the copy moves to a place that sorts first, such as To Delete.
 - In the sidebar's Tags section, only the tag Browse is filtering by is highlighted.
   Before, every tag looked selected while Browse was open.
 - While you edit a rule, the test result still on screen was the one for the rule before

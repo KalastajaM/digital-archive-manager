@@ -1198,6 +1198,14 @@ that check's result (and ends it if it is running), and **Reset all** in the too
 forgets every result, so the screen is as before any check
 ran. Reset changes nothing in the archive.
 
+**Ignore** on an entry leaves it out of that check's results from then on, for example a
+duplicate you want to keep or a folder that is meant to be empty. dam keeps the ignored
+entries with the archive, so they stay ignored after Reset and after a restart. A card's
+**ignored entries** link lists them, each with **Stop ignoring**. An ignored duplicate group
+shows again when a new copy with the same content turns up, and the same goes for a name
+shared by files with different content. Waiting in To Delete has no Ignore: it is a
+reminder. Ignoring changes nothing in the archive.
+
 ### Duplicates
 
 **Find duplicates** looks for files with exactly the same content.
@@ -1211,15 +1219,19 @@ ran. Reset changes nothing in the archive.
   moment; the fingerprints already made are kept, so the next run goes on from there.
 - **Identical copies** come in groups. In each group you pick the copy to **Keep**. The
   suggestion is a copy in a numbered folder rather than in the Inbox, then the oldest; a
-  copy marked Important or locked is suggested first, because it cannot be removed. Untick
-  **Remove** on a copy you want to leave where it is. A copy marked Important or locked is
-  never chosen for removal, and the row says why.
-- Each copy shows its folder; its name too only where it differs from the group's name.
-- For the other copies, per group or for all ticked groups at once, choose **Move to To
-  Delete**, or **Replace with a link**: each copy goes to To Delete and a link to the kept
-  copy is put at its old path, so anything that points there still opens the file. The
-  preview lists every operation. It is one batch and one Undo: Undo removes the links and
-  brings the copies back. (On Windows, links need Developer Mode.)
+  copy marked Important or locked is suggested first, because it cannot be removed. A copy
+  marked Important or locked is never removed, and the row says it stays.
+- Each copy shows its folder, and under it its size and date, and its name too where it
+  differs from the group's name.
+- Each other copy has three icons: **leave** it where it is, move it **to To Delete** (the
+  starting choice), or replace it with a **link**: the copy goes to To Delete and a link to
+  the kept copy is put at its old path, so anything that points there still opens the
+  file. Copies in one group can have different choices.
+- **Apply** under a group does what its copies are set to; **Apply the ticked groups** does
+  every ticked group at once, and **Set every copy in them to** To Delete or Link sets all
+  their copies in one click. The preview lists every operation. It is one batch and one
+  Undo: Undo removes the links and brings the copies back. (On Windows, links need
+  Developer Mode.)
 - **Also add what the removed copies had** (ticked by default) adds their tags,
   collections, star, note, checklist entries, tray items and From and For to the kept copy.
   The preview lists exactly what will be added. It only adds: a note is appended below the

@@ -98,6 +98,31 @@ export function collapseLinkSwaps(ops: ResolvedOp[]): Shown[] {
   return shown;
 }
 
+/** Missing folders made one inside the other on the way to a move (``a``, ``a/b``,
+ * ``a/b/c``) are one step to the user: the chain is shown as one line, ``folders``
+ * holding each path. */
+type Line = Shown | { folders: string[] };
+
+const madeOnTheWay = (s: Shown): s is { op: ResolvedOp } =>
+  "op" in s && s.op.kind === "mkdir" && s.op.note === "create missing folder";
+
+function collapseFolderChains(shown: Shown[]): Line[] {
+  const out: Line[] = [];
+  for (const s of shown) {
+    const last = out[out.length - 1];
+    const chain = last && "folders" in last ? last.folders : last && madeOnTheWay(last) ? [last.op.dst] : null;
+    const deepest = chain?.[chain.length - 1];
+    if (chain && deepest && madeOnTheWay(s) && parentOf(s.op.dst) === deepest) {
+      out[out.length - 1] = { folders: [...chain, s.op.dst] };
+    } else {
+      out.push(s);
+    }
+  }
+  return out;
+}
+
+const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
+
 /** Notes that only say what happens anyway (a folder is made on the way). */
 const ROUTINE_NOTES = new Set(["create missing folder"]);
 
@@ -110,7 +135,7 @@ type ListProps = {
 
 /** The resolved operations exactly as the API will carry them out. */
 export function PlanList({ ops, tags, followUps }: ListProps) {
-  const items = collapseLinkSwaps(ops);
+  const items = collapseFolderChains(collapseLinkSwaps(ops));
   // One step alone is a sentence, not a list: a lone "1." reads like a step number
   const single = items.length === 1;
   const row = (i: number, className: string, content: ReactNode) =>
@@ -133,6 +158,17 @@ export function PlanList({ ops, tags, followUps }: ListProps) {
             <Breakable text={item.kept} />
           </code>{" "}
           stays; the app now manages this link
+        </>,
+      );
+    }
+    if ("folders" in item) {
+      return row(
+        i,
+        "plan-op",
+        <>
+          <span className="plan-kind">New folders</span>
+          <PathCode path={item.folders[item.folders.length - 1]} />
+          <span className="plan-note plan-note-routine"> ({item.folders.length} missing folders)</span>
         </>,
       );
     }

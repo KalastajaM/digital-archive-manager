@@ -453,6 +453,44 @@ def test_a_local_file_replaced_by_one_with_a_drive_id_is_refused(app, fake_archi
     assert journal(app) == [] and not (fake_archive.root / TAXES).exists()
 
 
+def test_a_copy_that_carries_its_originals_drive_id_can_be_moved(app, fake_archive):
+    # copying a file copies its Drive id xattr; the scan (in path order) gives the copy a
+    # local id
+    fake_archive.add(f"{BANKS}/a.pdf", b"same", drive_id="id-a")
+    fake_archive.add("20. Home/copy of a.pdf", b"same", drive_id="id-a")
+    app.scan()
+    copy_id = local_id(app, "20. Home/copy of a.pdf")
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"
+    result = app.browse.move([copy_id], TAXES)
+    assert result.failed is None and result.error is None, result.error
+    assert (fake_archive.root / TAXES / "copy of a.pdf").read_bytes() == b"same"
+    assert app.repo.get(copy_id).path == f"{TAXES}/copy of a.pdf"
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"  # the original is untouched
+
+
+def test_a_copy_moved_where_it_sorts_first_does_not_take_its_originals_id(app, fake_archive):
+    fake_archive.add(f"{BANKS}/a.pdf", b"same", drive_id="id-a")
+    fake_archive.add("20. Home/copy of a.pdf", b"same", drive_id="id-a")
+    app.scan()
+    copy_id = local_id(app, "20. Home/copy of a.pdf")
+    col = app.collections.create("Kept")
+    app.collections.add_members(col.id, ["id-a"])
+    app.browse.quarantine([copy_id], origin="ui")  # ##. To Delete sorts before 10.
+    app.scan()
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"
+    assert app.repo.get(copy_id).path == f"{QUAR}/20. Home/copy of a.pdf"
+    assert [m.drive_id for m in app.collections.get(col.id).members] == ["id-a"]
+
+
+def test_twins_scanned_fresh_still_give_the_id_to_the_first(app, fake_archive):
+    fake_archive.add(f"{BANKS}/a.pdf", b"same", drive_id="id-a")
+    fake_archive.add("20. Home/copy of a.pdf", b"same", drive_id="id-a")
+    app.scan()
+    app.scan()  # a second scan changes nothing
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"
+    assert app.repo.by_path("20. Home/copy of a.pdf").drive_id.startswith("local:")
+
+
 def test_a_local_file_whose_size_changed_is_refused(app, fake_archive):
     fake_archive.add(f"{BANKS}/new.pdf", b"mine", drive_id=None)
     app.scan()

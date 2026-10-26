@@ -112,6 +112,24 @@ class _Scan:
         link_target = _link_target(self.paths, abs_path) if is_link else None
         return _Item(rel, abs_path, st, is_dir, is_link, read_drive_id(abs_path), link_target)
 
+    def _held_elsewhere(self, repo: FileRepo, disk_id: str, item: _Item) -> bool:
+        """The file indexed under ``disk_id`` is still at its own path, a different file
+        on disk with the same id: ``item`` is its twin (a copy keeps its original's
+        xattr), whichever of the two the scan reaches first. Without this, a copy moved
+        to a path that sorts earlier (such as ``##. To Delete``) would take over the
+        original's id, and with it its tags and collections."""
+        rec = repo.get(disk_id)
+        if rec is None or rec.missing or rec.parked_at is not None or rec.path == item.rel:
+            return False
+        try:
+            there = self.paths.abs(rec.path)
+            st = os.lstat(there)
+        except (OSError, ValueError):
+            return False
+        if (st.st_ino, st.st_dev) == (item.st.st_ino, item.st.st_dev):
+            return False  # the same file, spelled differently (NFD/NFC, case)
+        return read_drive_id(there) == disk_id
+
     def entry(self, repo: FileRepo, item: _Item, seen: list[str]) -> None:
         rel, st, is_dir, is_link = item.rel, item.st, item.is_dir, item.is_link
         link_target = item.link_target
@@ -119,6 +137,8 @@ class _Scan:
         disk_id = item.disk_id
         if disk_id in self.claimed:  # duplicate id (e.g. a copied xattr): treat as id-less
             disk_id = None
+        elif disk_id and self._held_elsewhere(repo, disk_id, item):
+            disk_id = None  # the file indexed with this id is still in its place: a copy
         if disk_id:
             self.claimed.add(disk_id)
         at_path = repo.by_path(rel)

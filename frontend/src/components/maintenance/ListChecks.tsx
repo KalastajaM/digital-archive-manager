@@ -8,6 +8,7 @@ import {
   ApiError,
   type BatchResult,
   errorText,
+  type IgnoreKind,
   type MaintenanceKind,
   useCollectionMembers,
   useRemoveBrokenLinks,
@@ -26,6 +27,7 @@ import { useUndoConfirm } from "../UndoConfirm";
 import { Card } from "../ui/Card";
 import { IconButton } from "../ui/IconButton";
 import { Tag } from "../ui/Tag";
+import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
 import { useFold } from "./view";
@@ -72,6 +74,7 @@ function CheckCard({
   empty,
   found,
   summary,
+  ignores,
   children,
 }: {
   title: string;
@@ -88,6 +91,8 @@ function CheckCard({
   found: boolean;
   /** The headline of what was found, for the folded card. */
   summary: string;
+  /** What its entries are ignored as: the card lists the ignored ones. */
+  ignores?: IgnoreKind;
   children: ReactNode;
 }) {
   const ended = check.job !== null && !check.running;
@@ -126,6 +131,7 @@ function CheckCard({
         </p>
       )}
       {ended && check.job?.state !== "error" && (found ? children : <p className="hint">{empty}</p>)}
+      {ignores && <IgnoredList kinds={[ignores]} onChange={check.reload} />}
     </Card>
   );
 }
@@ -161,6 +167,7 @@ function Capped({ shown, total }: { shown: number; total: number }) {
 export function EmptyFolders() {
   const check = useMaintenanceJob("empty_folders");
   const trash = useTrash({ onTrashed: () => check.reload() });
+  const ignore = useIgnore(check.reload);
   const items = check.job?.empty_folders?.items ?? [];
   const ticks = useTicks(items.map((i) => i.drive_id));
   return (
@@ -171,6 +178,7 @@ export function EmptyFolders() {
       intro="Folders with nothing in them (a Finder cache file does not count). The top level, the app's own folders and the folders the archive is set up with (such as the filing code folders in the Inbox) are left out."
       check={check}
       empty="No empty folders."
+      ignores="empty_folders"
       found={items.length > 0}
       summary={plural(check.job?.empty_folders?.total ?? 0, "empty folder")}
     >
@@ -189,9 +197,16 @@ export function EmptyFolders() {
                   <input type="checkbox" checked={ticks.has(f.drive_id)} onChange={() => ticks.toggle(f.drive_id)} />
                   <code>{visible(f.path)}</code>
                 </label>
-                <Link to={`/browse?${new URLSearchParams({ path: f.path })}`} className="card-link">
-                  Show in Browse
-                </Link>
+                <span className="dup-actions">
+                  <IgnoreButton
+                    label={f.path}
+                    disabled={ignore.busy}
+                    onClick={() => void ignore.ignore({ kind: "empty_folders", key: f.drive_id, label: f.path })}
+                  />
+                  <Link to={`/browse?${new URLSearchParams({ path: f.path })}`} className="card-link">
+                    Show in Browse
+                  </Link>
+                </span>
               </li>
             ))}
           </ul>
@@ -227,6 +242,7 @@ export function BrokenLinks() {
   const remove = useRemoveBrokenLinks();
   const undo = useUndoConfirm(() => check.reload());
   const trash = useTrash({ onTrashed: () => check.reload(), onUndone: () => check.reload() });
+  const ignore = useIgnore(check.reload);
   const [plan, setPlan] = useState<{ ids: string[]; batchId: string; result: BatchResult } | null>(null);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
@@ -292,6 +308,7 @@ export function BrokenLinks() {
       intro="Links whose target is gone. In Ongoing and Important the app may remove a broken link; anywhere else a link is moved to To Delete like a file, and you decide. A link into an archive folder that is not connected is only listed: it works again once the folder is back."
       check={check}
       empty="No broken links."
+      ignores="broken_links"
       found={items.length > 0}
       summary={plural(check.job?.broken_links?.total ?? 0, "broken link")}
     >
@@ -324,6 +341,11 @@ export function BrokenLinks() {
                   <span className="dup-actions">
                     <LinkReason reason={l.reason} />
                     {l.inside && <Tag tone="grey">kept by the app</Tag>}
+                    <IgnoreButton
+                      label={l.path}
+                      disabled={ignore.busy}
+                      onClick={() => void ignore.ignore({ kind: "broken_links", key: l.drive_id, label: l.path })}
+                    />
                   </span>
                 </li>
               );
@@ -396,6 +418,7 @@ export function Missing() {
   const toast = useToast();
   const [taken, setTaken] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const ignore = useIgnore(check.reload);
   const key = (r: { kind: string; owner_id: string; item_id?: number | null; drive_id: string }) =>
     `${r.kind}-${r.owner_id}-${r.item_id ?? ""}-${r.drive_id}`;
   const rows = (check.job?.references?.items ?? []).filter((r) => !taken.has(key(r)));
@@ -424,6 +447,7 @@ export function Missing() {
       intro="Collection members and files of open tray items whose file is gone, or is in To Delete. Take a gone file out of its collection here; for a tray item, open the tray and take the file out or mark the item done."
       check={{ ...check, start }}
       empty="Every collection member and tray file is where it should be."
+      ignores="references"
       found={rows.length > 0}
       summary={plural(rows.length, "entry", "entries")}
     >
@@ -463,6 +487,13 @@ export function Missing() {
                       Take out
                     </button>
                   )}
+                  <IgnoreButton
+                    label={`${r.owner_name}: ${r.path ?? "a gone file"}`}
+                    disabled={ignore.busy}
+                    onClick={() =>
+                      void ignore.ignore({ kind: "references", key: key(r), label: `${r.owner_name}: ${r.path ?? "a gone file"}` })
+                    }
+                  />
                 </span>
               </li>
             ))}
@@ -483,6 +514,7 @@ export function Names() {
     () => check.reload(),
   );
   const rows = check.job?.names?.items ?? [];
+  const ignore = useIgnore(check.reload);
   return (
     <CheckCard
       title="File names"
@@ -491,6 +523,7 @@ export function Names() {
       intro="Files in the numbered folders whose name does not start with the date as YYYYMMDD_. The suggestion uses the date in the name, else the document date, else the day the file was last changed."
       check={check}
       empty="Every file in the numbered folders follows the naming convention."
+      ignores="names"
       found={rows.length > 0}
       summary={`${plural(check.job?.names?.total ?? 0, "file")} to rename`}
     >
@@ -520,6 +553,11 @@ export function Names() {
                   >
                     Rename…
                   </button>
+                  <IgnoreButton
+                    label={r.path}
+                    disabled={ignore.busy}
+                    onClick={() => void ignore.ignore({ kind: "names", key: r.drive_id, label: r.path })}
+                  />
                   <Link to={browseTo(r.path, r.drive_id)} className="card-link">
                     Show in Browse
                   </Link>

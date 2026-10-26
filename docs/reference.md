@@ -996,6 +996,15 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   `DELETE /api/maintenance/jobs?kind=` (Reset) forgets the jobs of the kind, or of every
   kind without `kind`, ending one still running; answers `{forgotten}`. Nothing in the
   archive changes.
+- Ignoring results: `GET /api/maintenance/ignored` lists them (newest first: `id`, `kind`,
+  `key`, `label`, `created`), `POST /api/maintenance/ignored {kind, key, label, members?}`
+  adds one (again: label and members are replaced), `DELETE /api/maintenance/ignored/{id}`
+  takes one back (404 if unknown). They live in the `maintenance_ignored` table (0034) and
+  are left out of every result read, with the totals lowered. Keys per `kind`:
+  `duplicates` the sha256, `versions` the name (folded), `empty_folders`, `broken_links`
+  and `names` the drive id, `references` `"<collection|tray>-<owner id>-<item id>-<drive
+  id>"`. For `duplicates` and `versions`, `members` (required) are the group's drive ids;
+  the group stays out only while all its files are among them.
 - The `references` check gives a missing file's `path` as last seen: its index row's
   path, else the latest done journal operation for its drive id (null when neither
   knows). A gone collection member is taken out with the existing
@@ -1012,10 +1021,12 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   (Important or locked) first, then a numbered folder before the inbox or elsewhere, then
   the oldest, then the path. The same-name list compares names NFC-normalised and
   case-folded, and lists a name when two of its files differ in size or in a known hash.
-- `POST /api/maintenance/duplicates/resolve {groups: [{keep, others}], action:
+- `POST /api/maintenance/duplicates/resolve {groups: [{keep, others, links?}], action:
   "quarantine" | "link", carry_over?, dry_run?}` is one batch for all groups: a
-  `quarantine` of each file in `others` and, for `link`, a `symlink` at its old path to
-  the kept file (an exact path: the quarantine has just freed it). Undo is the ordinary
+  `quarantine` of each file in `others` and, for `link` or a file in its group's `links`
+  (which must be among `others`), a `symlink` at its old path to the kept file (an exact
+  path: the quarantine has just freed it). The app sends `action: "quarantine"` with the
+  copies to link in `links`, so one batch can move some copies and link others. Undo is the ordinary
   undo: it removes the link (a link the app made, still pointing at that file) and moves
   the copy back, so no new kind of removal exists. 400 when a copy is Important or locked
   (also unlocked "for now"), when the files are not known to have the same content (both
