@@ -45,6 +45,8 @@ def _rel_in_folders(paths: ArchivePaths, real: Path) -> str | None:
     for folder in paths.folders:
         inner = _rel_inside(folder.root, real)
         if inner:
+            if not folder.label and not paths.main_rel_ok(inner):
+                return None  # a main entry named like an archive folder is not in the archive
             return f"{folder.label}/{inner}" if folder.label else inner
     return None
 

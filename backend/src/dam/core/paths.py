@@ -58,6 +58,16 @@ class ArchivePaths:
     def extra_labels(self) -> tuple[str, ...]:
         return tuple(f.label for f in self.folders[1:])
 
+    def main_rel_ok(self, inner: str) -> bool:
+        """``inner`` (a path in the main folder) does not start with a component that
+        folds to an archive folder's label, attached or detached: such an entry is left
+        out of the archive, as its rel would name that folder's files."""
+        parts = PurePosixPath(inner).parts
+        if not parts:
+            return True
+        first = _fold(parts[0])
+        return all(_fold(extra.label) != first for extra in self.settings.extra_folders)
+
     def label_of(self, rel: str) -> str:
         """The extra folder's label ``rel`` lies at or under, else ``""``."""
         parts = PurePosixPath(rel).parts
@@ -160,6 +170,8 @@ class ArchivePaths:
                 continue
             inner = "" if r == Path(".") else r.as_posix()
             if not folder.label:
+                if not self.main_rel_ok(inner):
+                    break
                 return inner
             return f"{folder.label}/{inner}" if inner else folder.label
         raise OutsideArchiveError(f"{p} is outside the archive")

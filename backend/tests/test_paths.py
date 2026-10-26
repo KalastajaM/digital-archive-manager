@@ -193,3 +193,17 @@ def test_disconnected_labels(tmp_path):
     extra.rename(extra.with_name("gone"))
     assert p.disconnected_labels() == ("Old years",)
     assert not p.is_connected("Old years")
+
+
+@pytest.mark.parametrize("attached", [True, False])
+def test_rel_refuses_a_main_entry_named_like_a_label(tmp_path, attached):
+    """Its rel would be the label's, and abs() sends that to the archive folder."""
+    main, extra, p = _with_extra(tmp_path, attached=attached)
+    (main / "OLD YEARS").mkdir()
+    with pytest.raises(OutsideArchiveError):
+        p.rel(main / "OLD YEARS" / "a.pdf")
+    with pytest.raises(OutsideArchiveError):
+        p.rel(main / "old years")
+    assert p.rel(main / "Old years 2" / "a.pdf") == "Old years 2/a.pdf"
+    if attached:
+        assert p.rel(extra / "a.pdf") == "Old years/a.pdf"

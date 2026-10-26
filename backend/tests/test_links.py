@@ -352,3 +352,24 @@ def test_link_drop_from_extra_folder(extra_folder, app, fake_archive):
     link = fake_archive.root / "10. Financial" / "Banks" / "a.pdf"
     assert link.is_symlink()
     assert Path(os.readlink(link)) == src.resolve()
+
+
+def test_a_link_into_a_main_entry_named_like_a_label_is_not_the_extra_file(
+    extra_folder, app, fake_archive
+):
+    from dam.index.repo import FileRecord
+    from dam.services.links import link_target
+
+    src = extra_folder.add("a.pdf", b"extra", drive_id="x1")
+    st = src.stat()
+    app.repo.upsert(FileRecord(drive_id="x1", path="Old years/a.pdf", size=5, mtime=st.st_mtime))
+    stray = fake_archive.add("Old years/a.pdf", b"main", drive_id="stray")  # a clash
+    link = fake_archive.root / "10. Financial" / "to-stray.pdf"
+    link.parent.mkdir(exist_ok=True)
+    os.symlink(stray, link)
+    app.repo.upsert(FileRecord(drive_id="l1", path="10. Financial/to-stray.pdf", is_link=True))
+    assert link_target(app.paths, app.repo, app.repo.get("l1")) is None
+    good = fake_archive.root / "10. Financial" / "to-extra.pdf"
+    os.symlink(src, good)
+    app.repo.upsert(FileRecord(drive_id="l2", path="10. Financial/to-extra.pdf", is_link=True))
+    assert link_target(app.paths, app.repo, app.repo.get("l2")).drive_id == "x1"
