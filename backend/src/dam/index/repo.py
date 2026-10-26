@@ -15,14 +15,22 @@ from dam.codes.qr_model import QrRead
 from dam.core.paths import nfc
 from dam.db.engine import write_tx
 from dam.db.tables import (
+    checklist_items,
+    collection_members,
+    file_assignments,
     file_barcodes,
+    file_fields,
     file_layouts,
+    file_locks,
     file_qr_codes,
+    file_summaries,
     file_tags,
     file_text,
     files,
     item_files,
     items,
+    member_link_names,
+    notes,
     tags,
 )
 from dam.extract.base import ExtractedText
@@ -876,12 +884,32 @@ class FileRepo:
             ).scalar_one()
 
     def forget_subtree(self, rel: str) -> int:
-        """Remove the index rows at or under ``rel`` (tags, text and the rest of each row
-        with them); returns how many. Database only: nothing on disk is touched."""
+        """Remove the index rows at or under ``rel`` with everything the owner gave those
+        files: tags, notes, checklists, collection and item places, summaries, fields,
+        sender and person, locks (the collections and items themselves stay). Returns how
+        many rows. Database only: nothing on disk is touched."""
         with self._conn(write=True) as conn:
             ids = list(
                 conn.execute(select(files.c.drive_id).where(self._subtree_cond(rel))).scalars()
             )
+            for i in range(0, len(ids), 500):
+                chunk = ids[i : i + 500]
+                for table in (notes, checklist_items):
+                    conn.execute(
+                        table.delete().where(
+                            table.c.target_kind == "file", table.c.target_id.in_(chunk)
+                        )
+                    )
+                for table in (
+                    collection_members,
+                    member_link_names,
+                    item_files,
+                    file_summaries,
+                    file_fields,
+                    file_assignments,
+                    file_locks,
+                ):
+                    conn.execute(table.delete().where(table.c.drive_id.in_(chunk)))
             self._delete_rows(conn, ids)
         return len(ids)
 

@@ -251,11 +251,135 @@ def test_forget_removes_rows_only(app_paths, extra_folder, app):
     assert app.repo.get("x1") is None and app.repo.get("x2") is None
     assert TagRepo(app.engine).for_file("x1") == []
     assert sorted(p.name for p in extra_folder.root.rglob("*")) == on_disk
-    assert not load_settings(app_paths).extra_folders[0].attached
-    # forgetting a folder that is already detached still works, and reopens nothing
+    # nothing is left to attach again, so the folder leaves the list and its label is free
+    assert load_settings(app_paths).extra_folders == []
+    assert change.reopen
+
+
+def test_forgetting_a_detached_folder_removes_its_entry(app_paths, extra_folder, app):
     _index_extra(app, extra_folder, "2011/c.pdf", "x3")
+    detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    assert not load_settings(app_paths).extra_folders[0].attached
     again = detach_folder(app_paths, app.repo, "Old years", forget=True, dry_run=False)
-    assert again.files == 1 and not again.reopen
+    assert again.files == 1 and again.reopen  # the running App must free the label
+    assert load_settings(app_paths).extra_folders == []
+    assert app.repo.get("x3") is None
+
+
+def test_forget_leaves_no_row_that_names_a_forgotten_file(app_paths, extra_folder, app):
+    from sqlalchemy import insert, select
+
+    from dam.db import tables as t
+
+    _index_extra(app, extra_folder, "2009/a.pdf", "x1")
+    _index_extra(app, extra_folder, "2010/b.pdf", "x2")
+    app.repo.upsert(FileRecord(drive_id="kept", path="10. Financial/k.pdf", last_seen=1.0))
+    kept = app.repo.get("kept")  # a main-folder row keeps everything it has
+    with app.engine.begin() as conn:
+        cid = conn.execute(
+            insert(t.collections).values(name="Receipts", name_fold="receipts", created=1.0)
+        ).inserted_primary_key[0]
+        iid = conn.execute(
+            insert(t.items).values(tray_id="to-read", title="Letter", fields={}, created=1.0)
+        ).inserted_primary_key[0]
+        for drive_id in ("x1", "x2", kept.drive_id):
+            conn.execute(
+                insert(t.notes).values(
+                    target_kind="file", target_id=drive_id, text="n", updated=1.0
+                )
+            )
+            conn.execute(
+                insert(t.checklist_items).values(
+                    target_kind="file", target_id=drive_id, text="c", position=0
+                )
+            )
+            conn.execute(
+                insert(t.collection_members).values(collection_id=cid, drive_id=drive_id, added=1.0)
+            )
+            conn.execute(
+                insert(t.member_link_names).values(
+                    collection_id=cid, drive_id=drive_id, link_name="x"
+                )
+            )
+            conn.execute(insert(t.item_files).values(item_id=iid, drive_id=drive_id))
+            conn.execute(
+                insert(t.file_summaries).values(
+                    drive_id=drive_id, source="user", summary="s", key_facts=[], at=1.0
+                )
+            )
+            conn.execute(insert(t.file_fields).values(drive_id=drive_id, fields="[]", updated=1.0))
+            conn.execute(
+                insert(t.file_assignments).values(
+                    drive_id=drive_id, sender="Bank", set_by="owner", set_at=1.0
+                )
+            )
+            conn.execute(insert(t.file_locks).values(drive_id=drive_id, locked_at=1.0))
+    detach_folder(app_paths, app.repo, "Old years", forget=True, dry_run=False)
+
+    def ids(table, column):
+        with app.engine.connect() as conn:
+            return set(conn.execute(select(column)).scalars())
+
+    for table, column in (
+        (t.notes, t.notes.c.target_id),
+        (t.checklist_items, t.checklist_items.c.target_id),
+        (t.collection_members, t.collection_members.c.drive_id),
+        (t.member_link_names, t.member_link_names.c.drive_id),
+        (t.item_files, t.item_files.c.drive_id),
+        (t.file_summaries, t.file_summaries.c.drive_id),
+        (t.file_fields, t.file_fields.c.drive_id),
+        (t.file_assignments, t.file_assignments.c.drive_id),
+        (t.file_locks, t.file_locks.c.drive_id),
+    ):
+        assert ids(table, column) == {kept.drive_id}, table.name
+    # the collection and the item themselves stay
+    assert cid in ids(t.collections, t.collections.c.id)
+    assert ids(t.items, t.items.c.id) == {iid}
+
+
+def test_after_a_forget_the_main_folder_entry_with_that_name_is_indexed(
+    app_paths, extra_folder, app, fake_archive
+):
+    from dam.app import App
+
+    detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    fake_archive.add("Old years/kept.pdf", drive_id="main-old")
+    application = App.create(app_paths.data_dir)
+    try:
+        assert application.scan().clashes == ["Old years"]
+        assert application.repo.get("main-old") is None
+    finally:
+        application.close()
+    detach_folder(app_paths, app.repo, "Old years", forget=True, dry_run=False)
+    application = App.create(app_paths.data_dir)
+    try:
+        report = application.scan()
+        assert report.clashes == []
+        assert application.repo.get("main-old").path == "Old years/kept.pdf"
+    finally:
+        application.close()
+
+
+def test_detach_writes_the_settings_reopens_then_changes_the_index(app_paths, extra_folder, app):
+    """The forget runs after the reopen, so no scan of the old App puts rows back."""
+    _index_extra(app, extra_folder, "2009/a.pdf", "x1")
+    seen = []
+
+    def reopen():
+        seen.append(
+            (
+                [e.label for e in load_settings(app_paths).extra_folders],
+                app.repo.get("x1") is not None,
+            )
+        )
+        return True
+
+    change = detach_folder(
+        app_paths, app.repo, "Old years", forget=True, dry_run=False, reopen=reopen
+    )
+    assert seen == [([], True)]  # the entry was gone, the rows were not yet
+    assert app.repo.get("x1") is None
+    assert (change.files, change.reopen, change.restart_needed) == (1, False, False)
 
 
 def test_check_not_label_covers_top_level_main_entries_only(app_paths, extra_folder):

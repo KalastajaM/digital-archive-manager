@@ -6,6 +6,8 @@ touched. A dry run computes the same ``FolderChange`` and writes nothing."""
 
 import math
 import os
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from dam.config import AppPaths, ExtraFolder, Settings, load_settings
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.fs import listable
 from dam.core.paths import ArchivePaths, _fold
+from dam.db.engine import make_engine
 from dam.index.repo import FileRepo
 from dam.profiles import ProfileStore, related, root_conflict
 from dam.services.errors import InvalidRequest, NotFound
@@ -26,13 +29,15 @@ class FolderChange:
     """What adding, detaching or attaching a folder does (or, in a dry run, would do).
 
     ``files`` is the number of index rows a detach marks missing or a forget removes;
-    ``reopen`` is true when the attached set changed, so the app must reopen its
-    scanner and watcher."""
+    ``reopen`` is true when the folders changed and the caller must still reopen the
+    app's scanner and watcher; ``restart_needed`` is true when a reopen made here (a
+    detach given ``reopen``) was not possible."""
 
     label: str
     path: str
     files: int
     reopen: bool
+    restart_needed: bool = False
 
 
 def _taken(label: str, settings: Settings) -> bool:
@@ -177,30 +182,66 @@ def add_folder(
 
 
 def detach_folder(
-    app_paths: AppPaths, repo: FileRepo, label: str, forget: bool, dry_run: bool
+    app_paths: AppPaths,
+    repo: FileRepo,
+    label: str,
+    forget: bool,
+    dry_run: bool,
+    reopen: Callable[[], bool] | None = None,
 ) -> FolderChange:
-    """Take the folder out of the archive; its entry stays in the settings, detached. Its
-    index rows are marked missing (as when it is offline), or with ``forget`` removed.
-    Database rows only: no file on disk is touched."""
+    """Take the folder out of the archive. Its entry stays in the settings, detached, and
+    its index rows are marked missing (as when it is offline). With ``forget`` the entry
+    is removed (nothing is left to attach again, so its label is free) and so are its rows
+    with everything the owner gave those files. Database and settings only: no file on
+    disk is touched.
+
+    The order is settings, then ``reopen`` (the running app opened afresh; True when that
+    worked), then the index. After the reopen the old app's scans have stopped, so none
+    puts forgotten rows back. When the reopen is not possible the index changes anyway;
+    a row a late scan still marks seen is marked missing again by the next full scan (a
+    detached label's rows always are, and a forgotten label is no folder any more).
+    Without ``reopen`` the caller reopens afterwards (``FolderChange.reopen``)."""
     settings, _ = _context(app_paths)
     target = _entry(settings, label)
-    was_attached = target.attached
     if dry_run:
         files = repo.count_subtree(target.label, live_only=not forget)
-    else:
-        if was_attached:
-            _write(
-                app_paths,
-                [
-                    e.model_copy(update={"attached": False}) if e is target else e
-                    for e in settings.extra_folders
-                ],
-            )
+        return FolderChange(target.label, str(target.path), files, False)
+    if forget:
+        _write(app_paths, [e for e in settings.extra_folders if e is not target])
+    elif target.attached:
+        _write(
+            app_paths,
+            [
+                e.model_copy(update={"attached": False}) if e is target else e
+                for e in settings.extra_folders
+            ],
+        )
+    changed = forget or target.attached
+    restart_needed = False
+    if changed and reopen is not None:
+        restart_needed = not reopen()
+    with _index_repo(app_paths, repo, fresh=changed and reopen is not None) as index:
         if forget:
-            files = repo.forget_subtree(target.label)
+            files = index.forget_subtree(target.label)
         else:
-            files = repo.mark_missing(math.inf, subtree=target.label)
-    return FolderChange(target.label, str(target.path), files, not dry_run and was_attached)
+            files = index.mark_missing(math.inf, subtree=target.label)
+    return FolderChange(
+        target.label, str(target.path), files, changed and reopen is None, restart_needed
+    )
+
+
+@contextmanager
+def _index_repo(app_paths: AppPaths, repo: FileRepo, fresh: bool) -> Iterator[FileRepo]:
+    """``repo``, or after a reopen (which closed the app ``repo`` belongs to) one on its
+    own connection to the same index, closed again at the end."""
+    if not fresh:
+        yield repo
+        return
+    engine = make_engine(app_paths.db_path)
+    try:
+        yield FileRepo(engine, inbox=repo.inbox)
+    finally:
+        engine.dispose()
 
 
 def attach_folder(

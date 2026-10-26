@@ -310,6 +310,24 @@ def test_detach_with_forget_counts_and_removes_the_rows(xapp, xclient, extra_fol
     r = post(xclient, "/api/archive-folders/Old years/detach", {"forget": True})
     assert r.status_code == 200 and r.json()["files"] == every
     assert xapp.repo.get("old-1") is None
+    labels = [f["label"] for f in xclient.get("/api/archive-folders").json()["folders"]]
+    assert labels == [None]  # the folder left the list
+
+
+def test_forgetting_in_a_server_reopens_before_the_rows_go(served, events, disk):
+    host, c = served
+    disk.add("2009/receipt.pdf", drive_id="old-1")
+    r = post(c, "/api/archive-folders", {"label": "Old years", "path": str(disk.root)})
+    assert r.status_code == 200, r.text
+    added = host.current.app
+    added.scan()
+    assert added.repo.get("old-1") is not None
+    r = post(c, "/api/archive-folders/Old years/detach", {"forget": True})
+    assert r.status_code == 200 and r.json()["restart_needed"] is False
+    fresh = host.current.app
+    assert fresh is not added and fresh.paths.extra_labels == ()
+    assert fresh.repo.get("old-1") is None
+    assert [f["label"] for f in c.get("/api/archive-folders").json()["folders"]] == [None]
 
 
 def test_detaching_in_a_server_reopens(served, events, disk):

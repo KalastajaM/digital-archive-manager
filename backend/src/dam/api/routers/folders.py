@@ -35,7 +35,7 @@ def _not_busy(app: App) -> None:
 
 
 def _done(archives: ArchiveService, change: FolderChange) -> dict:
-    restart_needed = change.reopen and not archives.reopen()
+    restart_needed = change.restart_needed or (change.reopen and not archives.reopen())
     return {
         "label": change.label,
         "path": change.path,
@@ -73,10 +73,12 @@ def detach_folder(
     app: AppDep, archives: ArchivesDep, label: str, body: ArchiveFolderDetachIn
 ) -> dict:
     """Take the folder out of the archive (it stays listed, detached). Its index rows
-    are marked missing, or with ``forget`` removed; ``files`` says how many."""
+    are marked missing; with ``forget`` they are removed and the folder leaves the list.
+    ``files`` says how many. The archive is reopened before the index changes (see
+    ``archive_folders.detach_folder``)."""
     _not_busy(app)
     change = archive_folders.detach_folder(
-        app.app_paths, app.repo, label, body.forget, body.dry_run
+        app.app_paths, app.repo, label, body.forget, body.dry_run, reopen=archives.reopen
     )
     return _done(archives, change)
 
