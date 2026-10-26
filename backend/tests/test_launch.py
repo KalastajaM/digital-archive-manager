@@ -7,7 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dam.api import create_api
-from dam.core.fs import resolve as fs_resolve
 
 BASE = "http://127.0.0.1:8765"
 LOCAL_ORIGIN = {"Origin": BASE}
@@ -280,6 +279,6 @@ def test_open_file_in_disconnected_folder_says_so(extra_folder, app, client, cal
     os.rename(extra_folder.root, gone)
     r = post(client, "/api/files/x1/open")
     assert r.status_code == 409
-    message = r.json()["error"]  # decoded: Windows paths carry backslashes
-    assert f"'Old years' is not connected ({fs_resolve(extra_folder.root)}). Connect it" in message
+    want = f"'Old years' is not connected ({extra_folder.root.resolve()}). Connect it"
+    assert want in r.json()["error"]
     assert calls == []
