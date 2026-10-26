@@ -101,6 +101,14 @@ def check_folder(
     return None
 
 
+def _detached_as(candidate: Path, settings: Settings) -> str | None:
+    """Why ``candidate`` is not a new folder: it is a detached one, under its own label."""
+    for e in settings.extra_folders:
+        if not e.attached and related(candidate, Path(e.path).expanduser()) == "same":
+            return f"That folder was detached as '{e.label}'. Attach it again instead."
+    return None
+
+
 @dataclass
 class FolderStatus:
     """One folder of the archive as Settings lists it; ``label`` None is the main folder."""
@@ -172,6 +180,8 @@ def add_folder(
     message = check_label(label, paths, settings)
     if message is None:
         message = check_folder(candidate, paths, store, current_id)
+    if message is None:
+        message = _detached_as(candidate, settings)
     if message is None and related(candidate, app_paths.data_dir):
         message = "That folder overlaps the app's own data folder. Choose another."
     if message:

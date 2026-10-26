@@ -479,3 +479,13 @@ def test_an_empty_mount_is_not_connected_anywhere(app_paths, extra_folder, app, 
         assert app.paths.is_connected("Old years")
     finally:
         watcher.stop()
+
+
+def test_a_detached_folder_cannot_be_added_again_under_a_new_label(app_paths, extra_folder, app):
+    detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    before = settings_bytes(app_paths)
+    for dry_run in (True, False):
+        with pytest.raises(InvalidRequest) as e:
+            add_folder(app_paths, "Scans", extra_folder.root, dry_run, store=None, current_id=None)
+        assert str(e.value) == "That folder was detached as 'Old years'. Attach it again instead."
+    assert settings_bytes(app_paths) == before
