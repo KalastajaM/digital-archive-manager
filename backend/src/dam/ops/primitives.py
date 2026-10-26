@@ -192,6 +192,16 @@ def file_sha256(path: Path, stop: Callable[[], bool] | None = None) -> str:
     return digest.hexdigest()
 
 
+def present_matches(src: Path, dst: Path, stop: Callable[[], bool] | None = None) -> None:
+    """A ``present`` file of a folder move: ``dst`` (already at the destination) has the
+    content of ``src``. Both are only read; ``stop`` as for ``file_sha256``. Otherwise
+    ``OpFailed``, and the batch ends there."""
+    if file_sha256(src, stop) != file_sha256(dst, stop):
+        raise OpFailed(
+            f"{dst.name} at the destination differs from the original; nothing more was moved."
+        )
+
+
 def copy_verified(
     src: Path,
     dst: Path,

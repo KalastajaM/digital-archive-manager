@@ -81,6 +81,59 @@ def _add_note(note: str | None, extra: str) -> str:
     return f"{note}; {extra}" if note else extra
 
 
+def list_tree(root: Path, name: str) -> list[tuple[tuple[str, ...], str, os.stat_result]]:
+    """Everything inside the folder ``root`` (named ``name`` in messages), links not
+    followed, as (path parts relative to ``root``, kind, lstat), parents before children,
+    each folder's entries sorted by folded name. ``.DS_Store`` files are left out; an
+    unfinished copy (``.dam-copy-*``) or anything that is not a file, folder or link
+    refuses. The planner lists a folder moved across disks with it, and the executor
+    lists it again before the folder goes to To Delete."""
+    out: list[tuple[tuple[str, ...], str, os.stat_result]] = []
+
+    def walk(folder: Path, rel: tuple[str, ...]) -> None:
+        with os.scandir(folder) as it:
+            entries = sorted(it, key=lambda e: fold_parts(e.name))
+        for entry in entries:
+            st = entry.stat(follow_symlinks=False)
+            if entry.name.startswith(TEMP_COPY_PREFIX):
+                raise GuardError(f"Remove the unfinished copy {entry.name} first.")
+            if stat.S_ISLNK(st.st_mode):
+                kind = "link"
+            elif stat.S_ISDIR(st.st_mode):
+                kind = "dir"
+            elif stat.S_ISREG(st.st_mode):
+                if entry.name == DS_STORE:
+                    continue  # Finder makes it again; the original goes with the folder
+                kind = "file"
+            else:
+                raise GuardError(
+                    f"{entry.name} is not a file, folder or link, so"
+                    f" {name} is not copied across disks."
+                )
+            out.append(((*rel, entry.name), kind, st))
+            if kind == "dir":
+                walk(Path(entry.path), (*rel, entry.name))
+
+    walk(root, ())
+    return out
+
+
+def tree_key(parts: tuple[str, ...]) -> str:
+    """The key of an entry in a folder move's ``tree``: its folded path inside the folder."""
+    return "/".join(fold_parts("/".join(parts)))
+
+
+def tree_of(
+    listed: list[tuple[tuple[str, ...], str, os.stat_result]],
+) -> dict[str, tuple[str, int | None, float | None]]:
+    """A ``list_tree`` listing as a folder move's ``tree``: files with size and mtime,
+    folders and links by kind only."""
+    return {
+        tree_key(parts): (kind, st.st_size, st.st_mtime) if kind == "file" else (kind, None, None)
+        for parts, kind, st in listed
+    }
+
+
 class _Sim:
     """The archive as it will look after the ops simulated so far.
 
@@ -544,41 +597,11 @@ class Planner:
         return rop
 
     def _list_tree(self, src: str) -> list[tuple[tuple[str, ...], str, os.stat_result]]:
-        """Everything inside the folder ``src`` on disk, links not followed, as (path parts
-        relative to ``src``, kind, lstat), parents before children, each folder's entries
-        sorted by folded name. ``.DS_Store`` files are left out; an unfinished copy
-        (``.dam-copy-*``) or anything that is not a file, folder or link refuses."""
+        """``list_tree`` of the folder ``src`` as it is on disk now."""
         root = self.sim.disk_path(src)
         if root is None:
             raise GuardError(f"{src!r} was made in this batch, so it is not copied across disks.")
-        out: list[tuple[tuple[str, ...], str, os.stat_result]] = []
-
-        def walk(folder: Path, rel: tuple[str, ...]) -> None:
-            with os.scandir(folder) as it:
-                entries = sorted(it, key=lambda e: fold_parts(e.name))
-            for entry in entries:
-                st = entry.stat(follow_symlinks=False)
-                if entry.name.startswith(TEMP_COPY_PREFIX):
-                    raise GuardError(f"Remove the unfinished copy {entry.name} first.")
-                if stat.S_ISLNK(st.st_mode):
-                    kind = "link"
-                elif stat.S_ISDIR(st.st_mode):
-                    kind = "dir"
-                elif stat.S_ISREG(st.st_mode):
-                    if entry.name == DS_STORE:
-                        continue  # Finder makes it again; the original goes with the folder
-                    kind = "file"
-                else:
-                    raise GuardError(
-                        f"{entry.name} is not a file, folder or link, so"
-                        f" {PurePosixPath(src).name} is not copied across disks."
-                    )
-                out.append(((*rel, entry.name), kind, st))
-                if kind == "dir":
-                    walk(Path(entry.path), (*rel, entry.name))
-
-        walk(root, ())
-        return out
+        return list_tree(root, PurePosixPath(src).name)
 
     def _present(self, src_st: os.stat_result, dst: str) -> bool:
         """``dst`` (on disk before this batch) is a regular file with the size and the
@@ -651,16 +674,13 @@ class Planner:
                         PRESENT_NOTE,
                         size=st.st_size,
                         method=PRESENT,
+                        # its act reads the original: a cloud-only one is downloaded
+                        cloud_only=primitives.is_dataless(self.sim.disk_path(file_src)),
                     )
                 )
                 continue
             self._plan_copy(file_src, dst_folder, parts[-1])
-        tree = {
-            "/".join(fold_parts("/".join(parts))): (
-                (kind, st.st_size, st.st_mtime) if kind == "file" else (kind, None, None)
-            )
-            for parts, kind, st in listed
-        }
+        tree = tree_of(listed)
         self._relocate(Op(OpKind.QUARANTINE, src, None), self._quarantine_folder(src))
         quarantine = self.out[-1]
         quarantine.copied_to = root

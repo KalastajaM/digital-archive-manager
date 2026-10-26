@@ -4275,6 +4275,8 @@ export interface components {
             stopped?: boolean | null;
             /** Job Id */
             job_id?: string | null;
+            /** Message */
+            message?: string | null;
         };
         /**
          * BatchRowOut
@@ -4869,6 +4871,8 @@ export interface components {
             stopped?: boolean | null;
             /** Job Id */
             job_id?: string | null;
+            /** Message */
+            message?: string | null;
             /** Carry Over */
             carry_over: components["schemas"]["CarryOverOut"][];
             /** Carry Errors */
@@ -5066,6 +5070,8 @@ export interface components {
             stopped?: boolean | null;
             /** Job Id */
             job_id?: string | null;
+            /** Message */
+            message?: string | null;
             /** Tag Error */
             tag_error: string | null;
             /** Untagged */
@@ -6095,6 +6101,8 @@ export interface components {
             stopped?: boolean | null;
             /** Job Id */
             job_id?: string | null;
+            /** Message */
+            message?: string | null;
             /** Unchanged */
             unchanged: string[];
         };
@@ -7747,6 +7755,8 @@ export interface components {
             stopped?: boolean | null;
             /** Job Id */
             job_id?: string | null;
+            /** Message */
+            message?: string | null;
             /** Follow Up Error */
             follow_up_error: string | null;
             /**

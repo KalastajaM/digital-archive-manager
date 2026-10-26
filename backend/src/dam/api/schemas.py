@@ -727,6 +727,9 @@ class BatchResultOut(BaseModel):
     # a move across disks started in the background: poll /api/browse/move/jobs/{job_id};
     # this answer is empty and the job's result is the batch
     job_id: str | None = None
+    # what a finished batch did, in words, when it says it itself (a folder moved across
+    # disks); else null
+    message: str | None = None
 
 
 class DraftWordOut(BaseModel):

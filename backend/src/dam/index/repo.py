@@ -1291,8 +1291,10 @@ class FileRepo:
             )
             conn.execute(text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": other})
 
-    def update_path(self, old_rel: str, new_rel: str) -> None:
+    def update_path(self, old_rel: str, new_rel: str, *, recursive: bool = True) -> None:
         """Move the record at ``old_rel`` (and, for folders, its descendants) to ``new_rel``.
+        ``recursive`` False: that one row only (a folder row following its copy across
+        disks, while the rows below it stay where they are).
 
         Matching is NFC-normalised and respects component boundaries (``a/b`` never
         touches ``a/bc``). Paths not in the index are ignored. Each re-pathed row gets
@@ -1302,14 +1304,12 @@ class FileRepo:
         prefix = old_nfc + "/"
         depth = len(PurePosixPath(old_rel).parts)
         now = time.time()  # a re-pathed row is on disk right now: a concurrent scan must keep it
+        where = files.c.path_nfc == old_nfc
+        if recursive:
+            where = or_(where, func.substr(files.c.path_nfc, 1, len(prefix)) == prefix)
         with self._conn(write=True) as conn:
             rows = conn.execute(
-                select(files.c.drive_id, files.c.path, files.c.is_dir).where(
-                    or_(
-                        files.c.path_nfc == old_nfc,
-                        func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-                    )
-                )
+                select(files.c.drive_id, files.c.path, files.c.is_dir).where(where)
             ).all()
             for drive_id, path, is_dir in rows:
                 rest = PurePosixPath(path).parts[depth:]

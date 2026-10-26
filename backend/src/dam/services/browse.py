@@ -345,6 +345,8 @@ class BrowseService:
             resolved = hand_over.ops
         copies = [r for r in resolved if r.kind is OpKind.COPY_ACROSS]
         total, size = len(copies), sum(r.size or 0 for r in copies)
+        # a folder moved across disks: its final QUARANTINE says where the copy is
+        folder = next((r for r in resolved if r.copied_to is not None), None)
 
         def work(ctx) -> BatchResult:
             moved = {"files": 0, "bytes": 0}
@@ -366,12 +368,33 @@ class BrowseService:
             result = self.executor.apply(
                 plan, check=check, should_stop=ctx.stopped, progress=progress, copied=copied
             )
-            if result.stopped:
+            if folder is not None:
+                name = PurePosixPath(folder.src).name
+                if result.stopped:
+                    result.error = (
+                        f"Copied {moved['files']} of {total} files;"
+                        f" {name} stays in place until all are copied"
+                    )
+                elif result.failed is None and result.error is None:
+                    files = "1 file" if total == 1 else f"{total} files"
+                    result.message = (
+                        f"Moved folder {name} ({files}) to {self._place(folder.copied_to)}"
+                    )
+            elif result.stopped:
                 result.error = f"Stopped: {moved['files']} of {total} files moved."
             return result_of(result)
 
         job = self.copy_jobs.start(work)
         return result_of(BatchResult("", False, job_id=job.job_id))
+
+    def _place(self, copied_to: str) -> str:
+        """Where a folder went, for its job result: the archive folder's label in quotes
+        when it went to the top of that folder, else the folder it went into."""
+        dest = parent(copied_to)
+        label = self.executor.paths.label_of(copied_to)
+        if label and fold_parts(dest) == fold_parts(label):
+            return f"'{label}'"
+        return dest or "the main folder"
 
     def _original(self, path: str) -> str:
         """``path`` (inside a quarantine folder) without that folder's quarantine prefix,

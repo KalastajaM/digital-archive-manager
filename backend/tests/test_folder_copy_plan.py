@@ -188,6 +188,15 @@ def test_cloud_only_flagged(across, monkeypatch):
     assert (a.cloud_only, b.cloud_only) == (False, True)
 
 
+def test_present_cloud_only_flagged(across, fake_archive, extra_folder, monkeypatch):
+    st = os.lstat(fake_archive.root / SRC / "a.pdf")
+    there = extra_folder.add("2009/a.pdf", b"aaaa", drive_id=None)
+    os.utime(there, ns=(st.st_atime_ns, st.st_mtime_ns))
+    monkeypatch.setattr(primitives, "is_dataless", lambda p: p.name == "a.pdf")
+    a = _copies(_move(across))[0]
+    assert a.method == PRESENT and a.cloud_only is True  # its act reads the original
+
+
 def test_plain_plan_still_refused(across):
     with pytest.raises(OpFailed) as e:
         across.executor.preview(_plan(Op(OpKind.MOVE, SRC, DEST), copy_across=False))

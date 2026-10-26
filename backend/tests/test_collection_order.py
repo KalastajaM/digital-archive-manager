@@ -181,7 +181,7 @@ def test_migration_0032_backfills_the_name_order_per_parent(tmp_path: Path, new_
             )
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0035"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0036"
         got = dict(conn.execute(text("SELECT id, position FROM collections")).all())
         kinds = conn.execute(text("SELECT position FROM collections WHERE kind IS NOT NULL")).all()
     assert (got[11], got[10]) == (0, 1)  # apple, Zebra

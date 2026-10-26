@@ -78,6 +78,10 @@ class JournalEntry:
     label: str | None = None
     method: str | None = None  # rule pictures: "rename" or "copy"
     content_hash: str | None = None  # rule pictures: sha256 of the file
+    # a folder moved across disks, on its final QUARANTINE: where the copy is, and the
+    # folder rows that followed it (JSON: [[old_id, new_id, old_path, new_path], ...])
+    copied_to: str | None = None
+    followed: str | None = None
 
 
 @dataclass

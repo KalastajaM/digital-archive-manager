@@ -173,3 +173,6 @@ class BatchResult:
     # a move across disks started in the background (``dam.ops.jobs``): this result is
     # empty, and the job's result is the batch
     job_id: str | None = None
+    # what a finished batch did, in words for the owner, when the batch says it itself
+    # (a folder moved across disks: "Moved folder 2009 (2 files) to 'Old years'")
+    message: str | None = None
