@@ -605,7 +605,7 @@ class App:
         all of them (``tag_mode`` "any": at least one)."""
         ctx = SearchContext(
             trays=lambda: [(t.id, t.name) for t in self.trays.defs()],
-            disconnected=self.paths.disconnected_labels(),
+            disconnected=self.paths.disconnected_labels(cached=True),
         )
         return search(
             self.engine,

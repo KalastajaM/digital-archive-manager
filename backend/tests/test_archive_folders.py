@@ -492,3 +492,20 @@ def test_a_detached_folder_cannot_be_added_again_under_a_new_label(app_paths, ex
             add_folder(app_paths, "Scans", extra_folder.root, dry_run, store=None, current_id=None)
         assert str(e.value) == "That folder was detached as 'Old years'. Attach it again instead."
     assert settings_bytes(app_paths) == before
+
+
+def test_forget_keeps_rows_the_new_scan_added_at_the_same_paths(app_paths, extra_folder, app):
+    """The rows to forget are chosen before the reopen: the new App's first scan may
+    already index a main-folder entry named like the freed label, and those rows stay."""
+    _index_extra(app, extra_folder, "2009/a.pdf", "x1")
+
+    def reopen():
+        app.repo.upsert(FileRecord(drive_id="main-old", path="Old years/kept.pdf", last_seen=2.0))
+        return True
+
+    change = detach_folder(
+        app_paths, app.repo, "Old years", forget=True, dry_run=False, reopen=reopen
+    )
+    assert change.files == 1
+    assert app.repo.get("x1") is None
+    assert app.repo.get("main-old").path == "Old years/kept.pdf"

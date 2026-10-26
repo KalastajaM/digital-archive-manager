@@ -224,3 +224,19 @@ def test_an_empty_mount_with_indexed_rows_is_not_connected(tmp_path):
     assert not hooked.is_connected("Old years")
     (extra / "2009").mkdir()
     assert hooked.is_connected("Old years")
+
+
+def test_a_connectivity_answer_can_be_reused_for_a_while(tmp_path, monkeypatch):
+    monkeypatch.setattr(ArchivePaths, "connected_ttl_s", 60.0)
+    main = tmp_path / "main"
+    extra = tmp_path / "disk" / "Old"
+    main.mkdir()
+    extra.mkdir(parents=True)
+    settings = Settings(archive_root=main, extra_folders=[ExtraFolder(label="Old", path=extra)])
+    paths = ArchivePaths(main, settings)
+    assert paths.is_connected("Old")
+    extra.rename(tmp_path / "disk" / "away")
+    assert paths.is_connected("Old", cached=True)  # the answer of a moment ago
+    assert paths.disconnected_labels(cached=True) == ()
+    assert not paths.is_connected("Old")  # not cached: always asked afresh
+    assert paths.disconnected_labels(cached=True) == ("Old",)

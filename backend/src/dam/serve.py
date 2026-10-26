@@ -48,6 +48,9 @@ log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parents[3] / "frontend" / "dist"  # the built frontend
 JOIN_TIMEOUT_S = 5.0
+# stopping the background as a whole (the watcher's threads and these) waits at most
+# this long: a reopen does it inside the request that changed the archive folders
+STOP_TIMEOUT_S = 10.0
 GRACEFUL_SHUTDOWN_S = 10  # a hung request cannot hold up shutdown longer than this
 _STARTED_POLL_S = 0.05
 REMIND_FIRST_S = 60  # the first reminder check, after the start
@@ -88,14 +91,15 @@ def _shutdown(
     wake: threading.Event,
     threads: list[threading.Thread],
 ) -> None:
+    deadline = time.monotonic() + STOP_TIMEOUT_S
     stop.set()
     wake.set()
-    watcher.stop()
+    watcher.stop(timeout=STOP_TIMEOUT_S)
     app.content.close()
     for t in threads:
         if t.ident is None:
             continue  # never started
-        t.join(JOIN_TIMEOUT_S)
+        t.join(max(0.0, min(JOIN_TIMEOUT_S, deadline - time.monotonic())))
         if t.is_alive():
             log.warning("background thread %s still running after stop()", t.name)
 

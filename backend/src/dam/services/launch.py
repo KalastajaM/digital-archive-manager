@@ -126,7 +126,15 @@ def _runnable(
     names += Path(rec.path).parts[:-1]
     if via is not None:
         names += Path(via.path).parts
-    names += paths.rel(real).split("/")[:-1]
+    try:
+        names += paths.rel(real).split("/")[:-1]
+    except OutsideArchiveError:
+        # a link into a main-folder entry named like an archive folder: dam leaves
+        # that entry out, so it is not opened either
+        raise Conflict(
+            f"{rec.name} leads into a folder of the main folder that has the same name as "
+            "an archive folder, so dam leaves it out. Rename that folder to open it."
+        ) from None
     if any(_runnable_name(n) for n in names):
         return True
     try:

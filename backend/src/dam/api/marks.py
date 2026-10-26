@@ -19,7 +19,7 @@ def _dict(obj: Any) -> dict:
 def _place(app: App, rows: Iterable[dict]) -> None:
     """Set ``folder`` (the extra folder's label, None for the main folder) and
     ``connected`` on every record dict that has a ``path``; others are left as they are."""
-    offline = set(app.paths.disconnected_labels())
+    offline = set(app.paths.disconnected_labels(cached=True))
     for r in rows:
         path = r.get("path")
         if not isinstance(path, str):

@@ -893,15 +893,26 @@ class FileRepo:
                 select(func.count()).select_from(files).where(files.c.missing.is_not(True))
             ).scalar_one()
 
-    def forget_subtree(self, rel: str) -> int:
-        """Remove the index rows at or under ``rel`` with everything the owner gave those
-        files: tags, notes, checklists, collection and item places, summaries, fields,
-        sender and person, locks (the collections and items themselves stay). Returns how
-        many rows. Database only: nothing on disk is touched."""
-        with self._conn(write=True) as conn:
-            ids = list(
+    def subtree_ids(self, rel: str) -> list[str]:
+        """The drive ids of the rows at or under ``rel``."""
+        with self._conn() as conn:
+            return list(
                 conn.execute(select(files.c.drive_id).where(self._subtree_cond(rel))).scalars()
             )
+
+    def forget_rows(self, drive_ids: Collection[str]) -> int:
+        """Remove the index rows ``drive_ids`` with everything the owner gave those
+        files: tags, notes, checklists, collection and item places, summaries, fields,
+        sender and person, locks (the collections and items themselves stay). Returns how
+        many rows there were. Database only: nothing on disk is touched."""
+        with self._conn(write=True) as conn:
+            wanted = list(dict.fromkeys(drive_ids))
+            ids = []
+            for i in range(0, len(wanted), 500):
+                chunk = wanted[i : i + 500]
+                ids += conn.execute(
+                    select(files.c.drive_id).where(files.c.drive_id.in_(chunk))
+                ).scalars()
             for i in range(0, len(ids), 500):
                 chunk = ids[i : i + 500]
                 for table in (notes, checklist_items):
@@ -1040,6 +1051,17 @@ class FileRepo:
                 )
                 queued += result.rowcount
         return queued
+
+    def retry_now_under(self, rel: str) -> int:
+        """Let the files at or under ``rel`` that wait to be read again (``retry_at``
+        set: a cloud file not downloaded, a disk that went away) be read at once, with
+        their attempts counted from zero; returns how many."""
+        with self._conn(write=True) as conn:
+            return conn.execute(
+                update(files)
+                .where(self._subtree_cond(rel), files.c.retry_at.is_not(None))
+                .values(retry_at=None, attempts=0)
+            ).rowcount
 
     def set_index_state(
         self,

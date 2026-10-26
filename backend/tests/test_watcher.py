@@ -381,3 +381,86 @@ def test_a_stopped_watcher_calls_no_on_change(fake_archive, engine):
     w.stop()
     w._call_on_change()  # a scan that finished after stop(), as after a reopen
     assert calls == [1]
+
+
+def test_a_folder_that_cannot_be_watched_is_tried_again_less_often(
+    fake_archive, engine, tmp_path, monkeypatch
+):
+    """A failed watch (on Linux: no inotify watches left) is not retried every check."""
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo, folder_check_s=30)
+    real = w._observer.schedule
+    tries = []
+
+    def schedule(handler, path, recursive):
+        if Path(path).resolve() == extra.resolve():
+            tries.append(path)
+            if len(tries) < 3:
+                raise OSError(28, "inotify watch limit reached")
+        return real(handler, path, recursive=recursive)
+
+    monkeypatch.setattr(w._observer, "schedule", schedule)
+    try:
+        assert w.refresh_watches() == []
+        assert w._watch_retry["Old years"][1] == 30
+        assert w.refresh_watches() == []
+        assert len(tries) == 1  # still waiting
+        w._watch_retry["Old years"] = (0.0, 30)  # the wait is over
+        assert w.refresh_watches() == []
+        assert len(tries) == 2
+        assert w._watch_retry["Old years"][1] == 60  # waits twice as long now
+        w._watch_retry["Old years"] = (0.0, 60)
+        assert w.refresh_watches() == ["Old years"]
+        assert "Old years" not in w._watch_retry
+        assert "Old years" in w._watches
+    finally:
+        w.stop()
+
+
+def test_a_folder_that_comes_back_is_read_again_without_waiting(fake_archive, engine, tmp_path):
+    """Files that could not be read while the folder was away lose their retry wait."""
+    from dam.index.repo import FileRecord
+
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    (extra / "2009" / "a.pdf").write_bytes(b"x")
+    st = (extra / "2009" / "a.pdf").stat()
+    later = time.time() + 3600
+    repo.upsert(
+        FileRecord(
+            drive_id="x1",
+            path="Old years/2009/a.pdf",
+            size=st.st_size,
+            mtime=st.st_mtime,
+            index_state="cloud_pending",
+            retry_at=later,
+            attempts=5,
+        )
+    )
+    repo.upsert(
+        FileRecord(drive_id="m1", path="elsewhere.pdf", index_state="cloud_pending", retry_at=later)
+    )
+    w = Watcher(paths, repo, debounce_s=0.1, reconcile_every_s=3600, folder_check_s=0.1)
+    w.start()
+    try:
+        gone = extra.with_name("away")
+        os.rename(extra, gone)
+        assert wait_for(lambda: "Old years" not in w._watches, 5)
+        os.rename(gone, extra)
+        assert wait_for(lambda: repo.get("x1").retry_at is None, 5)
+        assert repo.get("x1").attempts == 0
+        assert repo.get("m1").retry_at == later  # other folders keep their wait
+    finally:
+        w.stop()
+
+
+def test_stop_waits_at_most_the_timeout_in_all(fake_archive, engine):
+    paths, repo = setup(fake_archive, engine)
+    w = Watcher(paths, repo)
+    hold = threading.Event()
+    w._threads = [threading.Thread(target=hold.wait, daemon=True) for _ in range(3)]
+    for t in w._threads:
+        t.start()
+    began = time.monotonic()
+    w.stop(timeout=0.3)
+    assert time.monotonic() - began < 2
+    hold.set()
