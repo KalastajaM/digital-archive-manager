@@ -1554,6 +1554,37 @@ class ArchiveRevealIn(_In):
     what: Literal["data", "archive"]
 
 
+# -- backups ------------------------------------------------------------------
+
+
+class BackupOut(BaseModel):
+    name: str
+    created_at: str  # ISO 8601 with the offset
+    size: int  # bytes
+    kind: Literal["manual", "before-restore"]
+    revision: str | None  # the database's migration revision when it was made
+    app_version: str | None
+    archive_root: str | None
+    problem: str | None  # why it cannot be restored here; None when it can
+
+
+class BackupsOut(BaseModel):
+    folder: str  # <data dir>/backups
+    backups: list[BackupOut]  # newest first
+    can_restore: bool  # False: this window cannot close and reopen the archive
+
+
+class BackupRestoreIn(_In):
+    # required: the user was asked whether to back up the current state first
+    backup_current: bool
+
+
+class BackupRestoreOut(BaseModel):
+    restored: str
+    safety_backup: BackupOut | None  # the backup of the state before the restore
+    replaced_folder: str  # where the replaced settings were moved (nothing is deleted)
+
+
 # -- filing codes -------------------------------------------------------------
 
 

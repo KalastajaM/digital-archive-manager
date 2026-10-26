@@ -75,6 +75,10 @@ export type Archive = Schemas["ArchiveOut"];
 export type Archives = Schemas["ArchivesOut"];
 export type ArchiveForgotten = Schemas["ArchiveForgetOut"];
 export type ArchiveSwitched = Schemas["ArchiveSwitchOut"];
+// backups of this archive's database and settings
+export type Backup = Schemas["BackupOut"];
+export type Backups = Schemas["BackupsOut"];
+export type BackupRestored = Schemas["BackupRestoreOut"];
 // first-run setup (only while no archive folder is configured)
 export type SetupCandidate = Schemas["SetupCandidateOut"];
 export type SetupCandidates = Schemas["SetupCandidatesOut"];
@@ -416,6 +420,30 @@ export const forgetArchive = (id: string, switch_to?: string) =>
 /** Show the archive's data folder or archive folder in Finder / Explorer. */
 export const revealArchive = (id: string, what: "data" | "archive") =>
   post<void>(`/api/archives/${enc(id)}/reveal`, { what });
+
+// -- backups --------------------------------------------------------------------
+
+const backupsKey = ["backups"] as const;
+
+/** This archive's backups (newest first) and the folder they are in. */
+export const useBackups = () => useQuery({ queryKey: backupsKey, queryFn: () => get<Backups>("/api/backups") });
+
+/** Back up the database and settings now. */
+export const useCreateBackup = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => post<Backup>("/api/backups"),
+    onSettled: () => client.invalidateQueries({ queryKey: backupsKey }),
+  });
+};
+
+/** Replace the database and settings with a backup; ``backup_current``: back up the
+ * current state first. The archive closes and opens again, so the page reloads after. */
+export const restoreBackup = (name: string, backup_current: boolean) =>
+  post<BackupRestored>(`/api/backups/${enc(name)}/restore`, { backup_current });
+
+/** Show the backups folder in Finder / Explorer. */
+export const revealBackups = () => post<void>("/api/backups/reveal");
 
 export const useSetupCandidates = () =>
   useQuery({

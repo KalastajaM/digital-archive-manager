@@ -34,6 +34,7 @@ from dam.api.routers import (
     trays,
 )
 from dam.api.routers import archives as archives_router
+from dam.api.routers import backups as backups_router
 from dam.api.schemas import ErrorBody
 from dam.api.security import (
     ArchiveGuardMiddleware,
@@ -45,6 +46,7 @@ from dam.app import App
 from dam.core.paths import OutsideArchiveError
 from dam.ops.model import GuardError, OpFailed
 from dam.services.archives import ArchiveService
+from dam.services.backups import BackupService, Reopener
 from dam.services.errors import (
     Conflict,
     InvalidRequest,
@@ -159,6 +161,13 @@ def create_api(
     api.state.dam = app
     if archives is not None:
         api.state.archives = archives
+    host = archives.switcher if archives is not None else None
+    api.state.backups = BackupService(
+        app.app_paths,
+        app.settings.archive_root,
+        host if isinstance(host, Reopener) else None,
+        pending=lambda: bool(app.activity.pending()),
+    )
     for module in (
         system,
         inbox,
@@ -182,6 +191,7 @@ def create_api(
         codes,
         rules,
         archives_router,
+        backups_router,
         setup,
         settings,
         tags,

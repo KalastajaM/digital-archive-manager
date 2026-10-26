@@ -395,6 +395,32 @@ class Host:
                 old.lock.release()
             return dataclasses.replace(target, active=True)
 
+    def reopen[T](self, change: Callable[[], T]) -> T:
+        """Close the open archive, run ``change`` (a restore swaps its files), then open
+        the same archive again with the same lock. It is opened again even when
+        ``change`` fails, so the server never stays on a closed archive."""
+        if self.store is None or self.board is None or self.current is None:
+            raise Conflict("This server cannot reopen the archive; start it with `dam serve`.")
+        with self.lock:
+            if self.stopping:
+                raise Conflict("The server is stopping.")
+            old = self.current
+            if old.profile_id is None or old.app is None:
+                raise Conflict("The archive is not open yet.")
+            profile = self.store.find(old.profile_id)
+            if old.background is not None:
+                old.background.stop()
+                old.background = None
+            old.app.close()
+            try:
+                return change()
+            finally:
+                new = self._open(profile, old.lock)  # type: ignore[arg-type]
+                self.board.target = new.api
+                self.current = new
+                if self.running and new.app is not None:
+                    new.background = start_background(new.app)
+
     def _rollback(
         self, old: Opened, old_api: ASGIApp, old_background: Background | None, new: Opened
     ) -> None:

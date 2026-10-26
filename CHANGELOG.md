@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Backups** (Settings, Backups): back up an archive's database and settings while dam
+  runs, and restore one. Before a restore dam asks whether to back up the current state
+  first. The replaced settings are moved aside, never deleted, and a backup from an older
+  version of dam is updated when it is restored. Your documents are not part of a backup.
 - **Maintenance screen** (sidebar, Archive, next to Activity) with checks you start
   yourself; nothing runs by itself or in the background, each shows its progress, can be
   stopped, and ends in a list you act on through the usual preview and Undo.

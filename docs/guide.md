@@ -53,6 +53,7 @@
   - [Duplicates](#duplicates)
   - [The other checks](#the-other-checks)
 - [Settings](#settings)
+  - [Backups](#backups)
 - [Notes and checklists](#notes-and-checklists)
 - [Reminders](#reminders)
 - [AI (optional)](#ai-optional)
@@ -1282,9 +1283,35 @@ each area, grouped by what it applies to; one section shows at a time.
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
     [Reading page 1](#reading-page-1).
+  - **Backups**: back up this archive's database and settings, and restore a backup. See
+    [Backups](#backups).
 - **This browser** (every archive alike):
   - **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at
     once, and is remembered by this browser (another browser starts on Auto).
+
+### Backups
+
+**Settings, Backups** keeps copies of what dam knows about this archive: the database
+(the index, tags, collections, notes, checklists, tray items, activity and Undo) and the
+settings (rules, trays, filing codes, people, the AI on/off switch). Your documents are
+not in a backup; back those up with your cloud drive or your usual backup. The AI key
+and the e-mail password stay in the Keychain and are not in a backup either.
+
+- **Back up now** makes a backup while dam keeps running. Each archive has its own
+  backups, in a `backups` folder inside its data folder; **Show folder** opens it.
+- dam never removes a backup. Remove old ones from the folder yourself when you no
+  longer want them.
+- **Restore…** on a backup first asks **Back up the current state first?**
+  **Back up and restore** makes a backup of the state you have now (listed as "made
+  before a restore") and then restores; **Restore without backup** restores straight
+  away; **Cancel** changes nothing. The archive then closes and opens again, and the
+  window reloads.
+- After a restore, Activity and Undo go back to the moment of the backup. Files moved
+  since then are found again when dam scans the archive. The settings that were replaced
+  are moved to a `replaced-…` folder beside the backups, not deleted.
+- A backup made by an older version of dam is updated when it is restored. A backup from
+  a newer version of dam, or from another archive folder, cannot be restored here; the
+  list says why.
 
 ## Notes and checklists
 

@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Navigate, NavLink, useParams } from "react-router-dom";
 import { useArchives } from "../api/client";
 import { AppearanceSettings } from "../components/AppearanceSettings";
+import { BackupSettings } from "../components/BackupSettings";
 import { FilingCodes } from "../components/codes/FilingCodes";
 import { IndexingSettings } from "../components/IndexingSettings";
 import { FilingRules } from "../components/rules/FilingRules";
@@ -18,6 +19,7 @@ export const SECTIONS: Section[] = [
   { id: "filing-codes", label: "Filing codes", scope: "archive", render: () => <FilingCodes /> },
   { id: "filing-rules", label: "Filing rules", scope: "archive", render: () => <FilingRules /> },
   { id: "indexing", label: "Indexing", scope: "archive", render: () => <IndexingSettings /> },
+  { id: "backups", label: "Backups", scope: "archive", render: () => <BackupSettings /> },
   { id: "appearance", label: "Appearance", scope: "browser", render: () => <AppearanceSettings /> },
 ];
 

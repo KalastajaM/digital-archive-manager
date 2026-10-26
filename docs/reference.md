@@ -14,6 +14,7 @@ the app's sidebar).
 - [Running dam](#running-dam)
 - [Command line](#command-line)
 - [Several archives](#several-archives)
+- [Backups](#backups)
 - [Config and rules](#config-and-rules)
 - [Tray files](#tray-files)
 - [Reminders setup](#reminders-setup)
@@ -269,6 +270,47 @@ Existing installs need nothing: a data folder that already has `config/settings.
 folder being the base folder itself. Nothing is moved, renamed or rewritten; only
 `archives.yaml` is created. `dam --data-dir X ...` on a data folder from before archives
 means that folder is "Main", as ever.
+
+## Backups
+
+A backup is one zip per archive in `<data folder>/backups/`, named
+`dam-backup-YYYYMMDD-HHMMSS.zip` (`…-before-restore.zip` for the one made just before a
+restore). It holds:
+
+- `dam.sqlite`, copied with SQLite's online backup API, so it is consistent while the
+  app runs (the WAL is included);
+- all of `config/` (`settings.yaml`, `filing_codes.yaml`, `rules/` with its picture
+  crops, `trays/`, `layouts/`);
+- the state files beside it: `ai-state.json`, `rules-state.json`,
+  `tray-defaults-seeded.json`, `tray-defaults-dismissed.json`;
+- `manifest.json`: format, time, kind (`manual` or `before-restore`), app version, the
+  database's migration revision, the archive folder and the file list.
+
+Left out: `cache/` (thumbnails, page-1 pictures, exports; rebuilt), `logs/`, the lock and
+server files, `archives.yaml` and the other archives' data folders, the archive's own
+files, and the Keychain entries. The zip is built in a temporary folder inside `backups/`
+and moved into place in one step. dam never removes a backup.
+
+**Restore** (`POST /api/backups/{name}/restore {backup_current}`; `backup_current` is
+required) only takes a backup by name from this archive's `backups/` folder. Before
+anything changes it unpacks the zip into a temporary folder and checks it: only the
+expected entries (no absolute paths, `..` or links), the manifest format, `PRAGMA
+integrity_check`, a readable `settings.yaml`, a migration revision this version of dam
+knows (a newer or unknown one, such as one from another branch of dam, is refused) and
+the same archive folder as the open archive. The unpacked database is then migrated to
+the current revision. It is refused while an interrupted operation waits for
+`dam recover`. With `backup_current` a `before-restore` backup is made next. Then the
+server closes the archive (`Host.reopen`: background work stopped, App closed), writes
+the unpacked database into the live `dam.sqlite` with the backup API (one transaction,
+no file is renamed or removed), moves the current `config/` and state files to
+`backups/replaced-YYYYMMDD-HHMMSS/` and moves the backup's into place (exclusive
+renames), and opens the archive again, which starts its background scan. Nothing is
+deleted, and `tests/test_no_delete.py` is unchanged. A restore needs `dam serve`; an API
+used on its own refuses it.
+
+Other routes: `GET /api/backups` (the list, newest first, each with `problem` when it
+cannot be restored here), `POST /api/backups` (back up now) and `POST /api/backups/reveal`
+(show the folder).
 
 ## Config and rules
 
