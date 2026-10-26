@@ -1,6 +1,6 @@
 # Folder moves (archive folders step 2, PR 2)
 
-Status: proposal 2026-10-26, waiting for the owner's corrections. Builds on PR 1 (#85,
+Status: design agreed 2026-10-26. Builds on PR 1 (#85,
 copy across for files), whose spec is `2026-10-26-archive-folders-step-2-design.md`;
 read its "Part 1: copy across" first. Where the two differ, this one wins for folders.
 
@@ -79,8 +79,8 @@ re-paths the folder row and everything under it, undo is a MOVE back with `exact
 Locks and protected paths inside the folder are already handled by the planner
 (`_check_locked` looks at "is, holds or lies inside"; `_track_protected`).
 
-A taken name at the destination gets `_2` (`2009_2`), as for files. **Open: see
-question 1 at the end.**
+A taken name at the destination gets `_2` (`2009_2`), as for files, and the preview says
+so: "2009 exists there already, so it becomes 2009_2." (Decided, see Decisions.)
 
 ## 4. Across disks: the layout
 
@@ -241,16 +241,15 @@ case of the move endpoints and the identity check, the `present` method, the fol
 summary fields); `CHANGELOG.md` Added: moving folders in Browse, on one disk and to
 another disk.
 
-## Open questions for the owner
+## Decisions (owner, 2026-10-26)
 
-1. **A taken name on one disk.** Across disks the move merges into an existing folder
-   (needed so a stopped move can be finished). On one disk I propose `2009_2`, as for
-   files, because a rename has no stopped state and merging on one disk means moving
-   each file separately and leaving an empty source folder to send to To Delete. The
-   cost: the same drop gives `2009_2` on one disk and a merge across disks. The
-   alternative is merging on both.
-2. Links across disks left behind in To Delete (7), rather than recreated.
-3. Per-file index follow during the job (4), rather than all rows at the end.
+1. A taken name on one disk gets `2009_2`, as for files; across disks the move merges
+   into the existing folder (needed so a stopped move can be finished). The preview
+   names the `_2`. Merging on one disk can follow later if it is wanted.
+2. Links inside a folder moved across disks are not copied: they go to To Delete with
+   the original folder, and the preview lists them.
+3. Each file's index row follows its copy as soon as it is copied (PR 1 unchanged); a
+   stopped move leaves bare originals in the source until it is moved again.
 
 ## Left to the builder
 
