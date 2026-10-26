@@ -990,7 +990,8 @@ collision").
 
 When the destination folder already exists, the move merges into it: existing subfolders
 are reused, a free name is copied, and a name taken by a regular file with the same size
-and the same whole second of modification time is planned as a `copy_across` with
+and a modification time at most 2 seconds off (FAT32 keeps 2-second steps) is planned as
+a `copy_across` with
 `method` `present` (`ResolvedOpOut.method`; note "already at the destination; checked, not
 copied again"). When it runs, both hashes are read: equal means nothing is written,
 different stops the batch before the last step ("<name> at the destination differs from

@@ -129,8 +129,9 @@ instead of making `2009_2`:
 
 - Subfolders that exist are reused (no MKDIR); missing ones are made.
 - A file whose name is free is copied.
-- A file whose name is taken by a regular file with the same size and modification time
-  (a copy sets the mtime to the source's) is planned as "already copied": a COPY_ACROSS
+- A file whose name is taken by a regular file with the same size and a modification
+  time at most 2 seconds off (a copy sets the mtime to the source's; FAT32 keeps it in
+  2-second steps) is planned as "already copied": a COPY_ACROSS
   with `method="present"`. At act time it reads both hashes and compares; equal: done,
   nothing is written, journaled like any op; different: the batch stops there, before
   the final QUARANTINE, with "<name> at the destination differs from the original;

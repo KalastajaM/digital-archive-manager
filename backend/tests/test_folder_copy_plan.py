@@ -107,6 +107,21 @@ def test_present_ignores_subsecond_mtime(across, fake_archive, extra_folder):
     assert _copies(_move(across))[0].method == PRESENT
 
 
+@pytest.mark.parametrize(
+    ("seconds", "present"), [(1, True), (-1, True), (2, True), (-2, True), (3, False), (-3, False)]
+)
+def test_present_allows_fat_two_second_mtimes(across, fake_archive, extra_folder, seconds, present):
+    """FAT32 keeps modification times in steps of 2 seconds: a copy on it reads back up
+    to 2 seconds off. The hashes are compared when the move runs."""
+    st = os.lstat(fake_archive.root / SRC / "a.pdf")
+    there = extra_folder.add("2009/a.pdf", b"aaaa", drive_id=None)
+    when = st.st_mtime_ns + seconds * 1_000_000_000
+    os.utime(there, ns=(when, when))
+    a = _copies(_move(across))[0]
+    assert (a.method == PRESENT) is present
+    assert a.dst == (f"{DEST}/2009/a.pdf" if present else f"{DEST}/2009/a_2.pdf")
+
+
 def test_same_name_other_size_gets_suffix(across, extra_folder):
     extra_folder.add("2009/a.pdf", b"other content", drive_id=None)
     a = _copies(_move(across))[0]

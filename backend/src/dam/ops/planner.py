@@ -63,6 +63,9 @@ COPY_BACK_NOTE = "copied back; the copy in To Delete stays"
 ORIGINAL_STAYS_NOTE = "the original stays in To Delete"
 MKDIR_NOTE = "create missing folder"
 PRESENT_NOTE = "already at the destination; checked, not copied again"
+# how far a file's mtime at the destination may be from the source's and still count
+# as ``present`` (FAT32 keeps 2-second steps)
+_PRESENT_MTIME_NS = 2_000_000_000
 
 
 _UNREAD = object()
@@ -604,9 +607,10 @@ class Planner:
         return list_tree(root, PurePosixPath(src).name)
 
     def _present(self, src_st: os.stat_result, dst: str) -> bool:
-        """``dst`` (on disk before this batch) is a regular file with the size and the
-        whole seconds of mtime of the source (exFAT and FAT keep coarser times than
-        APFS); the hashes are compared at act time."""
+        """``dst`` (on disk before this batch) is a regular file with the size of the
+        source and an mtime at most 2 seconds from it (exFAT keeps coarser times than
+        APFS, and FAT32 keeps them in 2-second steps); the hashes are compared at act
+        time, which is the real check."""
         disk = self.sim.disk_path(dst)
         if disk is None:
             return False
@@ -617,7 +621,7 @@ class Planner:
         return (
             stat.S_ISREG(st.st_mode)
             and st.st_size == src_st.st_size
-            and st.st_mtime_ns // 1_000_000_000 == src_st.st_mtime_ns // 1_000_000_000
+            and abs(st.st_mtime_ns - src_st.st_mtime_ns) <= _PRESENT_MTIME_NS
         )
 
     def _copy_folder(self, op: Op, folder: str) -> None:
