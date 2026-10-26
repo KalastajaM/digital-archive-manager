@@ -1252,6 +1252,41 @@ describe("Two panes", () => {
     expect(new URLSearchParams(screen.getByTestId("where").textContent!).get("path")).toBe("10. Financial");
   });
 
+  it("Swap panes puts each pane's folder and history on the other side", async () => {
+    const { user } = setupSplit("/browse?left=10.%20Financial&right=");
+    expect(await within(pane("Left pane")).findByText("Banks")).toBeInTheDocument();
+    await user.click(within(pane("Left pane")).getByRole("button", { name: "Banks" }));
+    expect(await within(pane("Left pane")).findByText("a.pdf")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Swap panes" }));
+    const where = new URLSearchParams(screen.getByTestId("where").textContent!);
+    expect(where.get("left")).toBe("");
+    expect(where.get("right")).toBe("10. Financial/Banks");
+    expect(await within(pane("Right pane")).findByText("a.pdf")).toBeInTheDocument();
+    // the history went with the folder: Back on the right goes to 10. Financial
+    expect(within(pane("Left pane")).getByRole("button", { name: "Back" })).toBeDisabled();
+    await user.click(within(pane("Right pane")).getByRole("button", { name: "Back" }));
+    expect(await within(pane("Right pane")).findByText("Banks")).toBeInTheDocument();
+  });
+
+  it("Swap panes is there only with two panes", async () => {
+    setupSplit("/browse?path=10.%20Financial");
+    await screen.findByText("Banks");
+    expect(screen.queryByRole("button", { name: "Swap panes" })).not.toBeInTheDocument();
+  });
+
+  it("a file row's Quick Look button opens Quick Look on that file, in its pane", async () => {
+    const { user } = setupSplit("/browse?left=&right=10.%20Financial%2FBanks");
+    await within(pane("Right pane")).findByText("a.pdf");
+    // the left pane is active; the button makes the right pane's row current
+    await user.click(within(pane("Right pane")).getByRole("button", { name: "Quick Look a.pdf" }));
+    expect(await screen.findByRole("dialog", { name: "Quick Look: a.pdf" })).toBeInTheDocument();
+    await user.keyboard("j");
+    expect(screen.getByRole("dialog", { name: "Quick Look: link.pdf" })).toBeInTheDocument();
+    // folders have no Quick Look button
+    expect(within(pane("Left pane")).queryByRole("button", { name: /^Quick Look 10/ })).not.toBeInTheDocument();
+  });
+
   it("the split is remembered, and works when storage is unavailable", async () => {
     localStorage.setItem("dam.browse.split", "1");
     const { unmount } = setupSplit("/browse");

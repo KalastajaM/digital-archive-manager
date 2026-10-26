@@ -21,6 +21,11 @@ All notable changes are listed here. The format follows
   the Inbox (or click the QR button), pick a code, and the selected files fill in from it
   and join File N marked. Nothing is written into the files; × on the form or Undo takes
   the code off. A code you assign wins over a folder or sticker code on the same file.
+- **Swap the panes in Browse.** With two panes, the button next to **Two panes** swaps
+  them: each pane keeps its folder, filter, view, sort, history and selection on the
+  other side.
+- **Quick Look from a file row.** With two panes, hovering a file shows an eye button at
+  the right end of its row; it opens Quick Look on that file.
 - **Diagrams in Help.** Under **How dam works**, Help now shows how a document goes from
   paper to its folder, where a filed document ends up, when each tray reminds you, how
   every change is previewed and can be undone, and what stays on your computer. They
