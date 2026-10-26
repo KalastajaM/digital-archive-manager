@@ -2,7 +2,7 @@
 the rules and similar files; what they leave unset keeps the earlier suggestion."""
 
 import dataclasses
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from datetime import date
 from typing import Protocol
 
@@ -107,6 +107,7 @@ def apply_codes(
     special: SpecialFolders,
     *,
     original_name: str,
+    quarantines: Sequence[str] = (),
 ) -> Suggestion:
     """``found`` with each field the hit codes set (source ``code:<CODE>``). Tags and
     collections are united; for the folder, name and tray the first code wins and a
@@ -161,7 +162,8 @@ def apply_codes(
             put("tray", NO_TRAY, fc.code)
         elif fc.folder is not None:
             try:
-                put("folder", _render_folder(fc.folder, doc_date, stem, special), fc.code)
+                folder = _render_folder(fc.folder, doc_date, stem, special, None, quarantines)
+                put("folder", folder, fc.code)
             except TemplateError:
                 errored = True
         if fc.name is not None and not conventional and not fc.as_suggested:

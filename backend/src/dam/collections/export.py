@@ -114,6 +114,7 @@ def prune_exports(app_paths: AppPaths, older_than_s: float = PRUNE_AFTER_S) -> l
 
 
 def _new_export_dir(app_paths: AppPaths, paths: ArchivePaths) -> Path:
+    # exports live in the main folder only
     root = _exports_root(app_paths, paths.root)
     try:
         prune_exports(app_paths)

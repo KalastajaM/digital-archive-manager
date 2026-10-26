@@ -73,6 +73,8 @@ class SearchContext:
 
     # ``(tray id, tray name)`` of every configured tray, for ``tray:``
     trays: Callable[[], list[tuple[str, str]]] = list
+    # the labels of the extra folders that are not connected now, for ``is:disconnected``
+    disconnected: tuple[str, ...] = ()
 
 
 class _Where:
@@ -242,11 +244,11 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
             neg,
         )
     elif f.name == "is":
-        _add_is(engine, w, v, neg)
+        _add_is(engine, w, v, neg, ctx)
     # ``tag`` is handled with the tag mode by the caller
 
 
-def _add_is(engine: Engine, w: _Where, value: str, neg: bool) -> None:
+def _add_is(engine: Engine, w: _Where, value: str, neg: bool, ctx: SearchContext) -> None:
     if value == "starred":
         w.add(_member_cond(engine, w, _builtin_id(engine, "starred")), neg)
     elif value == "important":
@@ -271,6 +273,8 @@ def _add_is(engine: Engine, w: _Where, value: str, neg: bool) -> None:
         )
     elif value == "summary":
         w.add("f.drive_id IN (SELECT drive_id FROM file_summaries WHERE TRIM(summary) != '')", neg)
+    elif value == "disconnected":
+        w.add(_under_any(w, list(ctx.disconnected)), neg)  # none: "0", nothing found
 
 
 def search(

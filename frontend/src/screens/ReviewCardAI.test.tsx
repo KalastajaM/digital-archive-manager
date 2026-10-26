@@ -29,7 +29,7 @@ const ENTRY: InboxEntry = {
     missing: false,
     last_seen: null,
     parked_at: null,
-    marks: [],
+    connected: true, marks: [],
   },
   suggestion: {
     name: "scan001.pdf",

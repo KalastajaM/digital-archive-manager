@@ -1,5 +1,7 @@
 """``marks`` on the file records the API returns: one ``MarkService.marks_for`` query per
-response, whatever the number of rows (never a query per row)."""
+response, whatever the number of rows (never a query per row). The same helpers set
+``folder`` and ``connected`` (``_place``), with one look at the extra folders per
+response."""
 
 from __future__ import annotations
 
@@ -14,9 +16,24 @@ def _dict(obj: Any) -> dict:
     return asdict(obj) if is_dataclass(obj) else dict(obj)
 
 
+def _place(app: App, rows: Iterable[dict]) -> None:
+    """Set ``folder`` (the extra folder's label, None for the main folder) and
+    ``connected`` on every record dict that has a ``path``; others are left as they are."""
+    offline = set(app.paths.disconnected_labels())
+    for r in rows:
+        path = r.get("path")
+        if not isinstance(path, str):
+            continue
+        folder = app.paths.label_of(path) or None
+        r["folder"] = folder
+        r["connected"] = folder not in offline
+
+
 def with_marks(app: App, rows: Iterable[Any], key: str = "drive_id") -> list[dict]:
-    """``rows`` (dataclasses or dicts) as dicts, each with its ``marks``."""
+    """``rows`` (dataclasses or dicts) as dicts, each with its ``marks``, ``folder``
+    and ``connected``."""
     out = [_dict(r) for r in rows]
+    _place(app, out)
     found = app.marks.marks_for([r[key] for r in out])
     for r in out:
         r["marks"] = found.get(r[key], [])
@@ -25,8 +42,9 @@ def with_marks(app: App, rows: Iterable[Any], key: str = "drive_id") -> list[dic
 
 def with_record_marks(app: App, rows: Iterable[Any]) -> list[dict]:
     """``rows`` holding a file ``record`` (inbox entries, file detail) as dicts, the
-    record with its ``marks``."""
+    record with its ``marks``, ``folder`` and ``connected``."""
     out = [_dict(r) for r in rows]
+    _place(app, [r["record"] for r in out])
     found = app.marks.marks_for([r["record"]["drive_id"] for r in out])
     for r in out:
         r["record"]["marks"] = found.get(r["record"]["drive_id"], [])
@@ -35,11 +53,13 @@ def with_record_marks(app: App, rows: Iterable[Any]) -> list[dict]:
 
 def collections_out(app: App, cols: Iterable[Any], extra: list[dict] | None = None) -> list[dict]:
     """Collections as dicts, each member with its ``marks`` (one query for all of
-    them). ``extra``: fields to merge into each, in the same order."""
+    them), and ``folder`` / ``connected`` when it has a path. ``extra``: fields to merge
+    into each, in the same order."""
     out = [_dict(c) for c in cols]
     if extra is not None:
         for c, more in zip(out, extra, strict=True):
             c.update(more)
+    _place(app, [m for c in out for m in c["members"]])
     found = app.marks.marks_for([m["drive_id"] for c in out for m in c["members"]])
     for c in out:
         for m in c["members"]:

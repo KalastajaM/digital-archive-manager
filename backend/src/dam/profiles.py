@@ -362,6 +362,12 @@ class ProfileStore:
                 message = root_conflict(Path(root).expanduser(), profiles, self.base, p.id)
                 if message:
                     out[p.id] = message
+                    continue
+            for extra in setup.current_extra_folders(p.paths):
+                message = root_conflict(extra, profiles, self.base, p.id)
+                if message:
+                    out[p.id] = message
+                    break
         return out
 
 
@@ -422,7 +428,8 @@ def root_conflict(
     """Why ``candidate`` cannot be the archive folder of profile ``current_id``, or None.
 
     It may not touch any profile's data folder (or the folder holding ``archives.yaml``),
-    and may not be, contain or sit inside another profile's archive folder."""
+    and may not be, contain or sit inside another profile's archive folder or one of its
+    extra folders."""
     for p in profiles:
         if related(candidate, p.data_dir):
             return (
@@ -434,15 +441,27 @@ def root_conflict(
         if p.id == current_id:
             continue
         root = p.archive_root
-        if not root:
-            continue
-        how = related(candidate, Path(root).expanduser())
+        how = related(candidate, Path(root).expanduser()) if root else None
         if how == "same":
             return f"That folder is already the archive folder of '{p.name}'. Choose another."
         if how == "inside":
             return f"That folder is inside the archive folder of '{p.name}'. Choose another."
         if how == "around":
             return f"That folder contains the archive folder of '{p.name}'. Choose another."
+        for extra in setup.current_extra_folders(p.paths):
+            how = related(candidate, extra)
+            if how == "same":
+                return (
+                    f"That folder is already an extra archive folder of '{p.name}'. Choose another."
+                )
+            if how == "inside":
+                return (
+                    f"That folder is inside an extra archive folder of '{p.name}'. Choose another."
+                )
+            if how == "around":
+                return (
+                    f"That folder contains an extra archive folder of '{p.name}'. Choose another."
+                )
     return None
 
 

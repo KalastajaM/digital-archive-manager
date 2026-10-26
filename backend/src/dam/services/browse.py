@@ -159,7 +159,7 @@ class BrowseService:
         rel_n = nfc(rel)
         exclude = [
             a
-            for a in (nfc(self.special.ongoing), nfc(self.special.quarantine))
+            for a in map(nfc, (self.special.ongoing, *self.executor.paths.quarantines))
             if not _under(rel_n, a)
         ]
         within = None
@@ -201,7 +201,7 @@ class BrowseService:
 
     def folders(self) -> list[str]:
         """Every indexed folder except the quarantine and inbox trees (filing targets)."""
-        hidden = (self.special.quarantine, self.special.inbox)
+        hidden = (*self.executor.paths.quarantines, self.special.inbox)
         return sorted(
             (p for p in self.repo.dir_paths() if not any(is_under(p, h) for h in hidden)),
             key=_sort_key,
@@ -264,14 +264,15 @@ class BrowseService:
         if len(set(drive_ids)) != len(drive_ids):
             dup = next(d for d in drive_ids if drive_ids.count(d) > 1)
             raise InvalidRequest(f"File {dup!r} requested more than once")
-        quarantine = self.special.quarantine
+        paths = self.executor.paths
         records = []
         for drive_id in drive_ids:
             rec = self.repo.get(drive_id)
             if rec is None or rec.missing or rec.parked_at is not None:
                 raise NotFound(drive_id)
-            if not is_under(rec.path, quarantine, strict=True):
-                raise InvalidRequest(f"{rec.path} is not in {quarantine}: nothing to restore")
+            if not paths.is_quarantined(rec.path, strict=True):
+                where = paths.quarantine_for(rec.path)
+                raise InvalidRequest(f"{rec.path} is not in {where}: nothing to restore")
             records.append(rec)
         dirs = [r.path for r in records if r.is_dir]
         records = [r for r in records if not any(is_under(r.path, d, strict=True) for d in dirs)]
@@ -289,7 +290,7 @@ class BrowseService:
                         f"{rec.path}: it stood at the top of the archive; restore it to the inbox"
                     )
                 try:
-                    check_destination_area(dest, self.special)
+                    check_destination_area(dest, paths)
                 except InvalidRequest:
                     raise InvalidRequest(
                         f"{rec.path}: its original place is in {self.special.ongoing};"
@@ -305,9 +306,14 @@ class BrowseService:
         return self.executor.apply(Plan(ops, origin=origin, label=label), dry_run=dry_run)
 
     def _original(self, path: str) -> str:
-        """``path`` (inside the quarantine folder) without the quarantine prefix."""
-        parts = PurePosixPath(path).parts[len(PurePosixPath(self.special.quarantine).parts) :]
-        return PurePosixPath(*parts).as_posix()
+        """``path`` (inside a quarantine folder) without that folder's quarantine prefix,
+        so in the same archive folder: ``Old years/##. To Delete/2009/a.pdf`` ->
+        ``Old years/2009/a.pdf``."""
+        paths = self.executor.paths
+        label = paths.label_of(path)
+        quarantine = paths.quarantine_for(path)
+        parts = PurePosixPath(path).parts[len(PurePosixPath(quarantine).parts) :]
+        return PurePosixPath(*((label,) if label else ()), *parts).as_posix()
 
     def _refuse_important(self, records: list[FileRecord]) -> None:
         """One query for the Important entries; refuse if any record is one, is a
@@ -340,7 +346,8 @@ class BrowseService:
             raise InvalidRequest(f"{folder!r} is not a folder in the archive") from None
         if not dest:
             raise InvalidRequest("Not allowed: the top of the archive holds folders only")
-        for area in (self.special.quarantine, self.special.ongoing, self.special.important):
+        paths = self.executor.paths
+        for area in (*paths.quarantines, self.special.ongoing, self.special.important):
             if is_under(dest, area):
                 raise InvalidRequest(f"Nothing is {what} into {area}: the app keeps that folder")
         return dest
@@ -506,7 +513,7 @@ class BrowseService:
             dest = canonical(folder, self.executor.paths)
         except GuardError:
             raise InvalidRequest(f"{folder!r} is not a folder in the archive") from None
-        check_destination_area(dest, self.special)
+        check_destination_area(dest, self.executor.paths)
         move = _Move(Plan([], origin=origin), [], [], dest)
         requested = list(drive_ids)
         drive_ids = []  # the files that move: a row of Ongoing / Important is its target
@@ -524,7 +531,7 @@ class BrowseService:
                 raise InvalidRequest(f"{rec.path}: folders cannot be moved yet")
             if rec.is_link:
                 raise InvalidRequest(f"{rec.path}: links cannot be moved")
-            for area in (self.special.ongoing, self.special.quarantine):
+            for area in (self.special.ongoing, *self.executor.paths.quarantines):
                 if is_under(rec.path, area):
                     raise InvalidRequest(f"{rec.path}: files in {area} cannot be moved")
             renamed = name is not None and name != rec.name
@@ -566,7 +573,7 @@ class BrowseService:
             rec = self.repo.get(requested_id)
             if rec is None or rec.missing or rec.parked_at is not None:
                 raise NotFound(requested_id)
-            if is_under(rec.path, self.special.quarantine):
+            if self.executor.paths.is_quarantined(rec.path):
                 raise InvalidRequest(f"{rec.path}: restore it first, then it can be {verb}")
             rec = self._resolve_row(rec, mode)
             if any(r.drive_id == rec.drive_id for r in chosen):
@@ -576,9 +583,8 @@ class BrowseService:
                 raise InvalidRequest(f"{rec.path}: folders cannot be {verb} yet")
             if rec.is_link:
                 raise InvalidRequest(f"{rec.path}: links cannot be {verb}")
-            if any(
-                is_under(rec.path, a)
-                for a in (self.special.ongoing, self.special.important, self.special.quarantine)
+            if self.executor.paths.is_quarantined(rec.path) or any(
+                is_under(rec.path, a) for a in (self.special.ongoing, self.special.important)
             ):
                 raise InvalidRequest(f"{rec.path}: files in the app's own folders cannot be {verb}")
             if mode == "link":

@@ -20,8 +20,8 @@ const SAUNA: Collection = {
   publish: { ongoing: false },
   ongoing_rel: null,
   members: [
-    { drive_id: "f1", path: "40. House/Sauna/quote.pdf", is_dir: false, missing: false, quarantined: false, is_link: false, group_id: null, marks: [] },
-    { drive_id: "d1", path: PLANS, is_dir: true, missing: false, quarantined: false, is_link: false, group_id: null, marks: [] },
+    { drive_id: "f1", path: "40. House/Sauna/quote.pdf", is_dir: false, missing: false, quarantined: false, is_link: false, group_id: null, connected: true, marks: [] },
+    { drive_id: "d1", path: PLANS, is_dir: true, missing: false, quarantined: false, is_link: false, group_id: null, connected: true, marks: [] },
   ],
   ongoing_status: null,
   summary: "",
@@ -39,7 +39,7 @@ const entry = (name: string, dir: string, is_dir: boolean, drive_id: string): Di
   size: is_dir ? null : 10,
   mtime: 1,
   drive_id,
-  marks: [],
+  connected: true, marks: [],
 });
 
 function Where() {

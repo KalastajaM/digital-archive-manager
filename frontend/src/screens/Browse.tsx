@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderPlus } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderPlus, HardDrive } from "lucide-react";
 import {
   type DragEvent,
   Fragment,
@@ -28,6 +28,7 @@ import {
 } from "../api/client";
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
+import { notConnected } from "../components/FileLaunch";
 import type { PreviewFile } from "../components/FilePreview";
 import { BUILTIN_LABEL, MarkIcons } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
@@ -104,6 +105,9 @@ type Item = {
   marks?: Mark[];
   size?: number | null;
   mtime?: number | null;
+  /** The extra archive folder the entry is in (null or left out: the main folder). */
+  folder?: string | null;
+  connected?: boolean;
 };
 
 type PaneId = "left" | "right";
@@ -207,6 +211,8 @@ const previewOf = (item: Item): PreviewFile => ({
   path: item.path,
   ext: extOf(item.name),
   is_link: item.is_link,
+  folder: item.folder,
+  connected: item.connected,
 });
 
 /** A search snippet: ``[...]`` marks a match. Built from text nodes and <mark>, never HTML. */
@@ -348,7 +354,8 @@ function EntryRow({
   dropProps,
   onContextMenu,
 }: RowProps) {
-  const Icon = item.is_dir ? Folder : File;
+  const driveRoot = item.is_dir && item.folder != null && !item.path.includes("/"); // an extra folder's own root
+  const Icon = driveRoot ? HardDrive : item.is_dir ? Folder : File;
   const cls = [checked && "checked", item.is_dir && "entry-row-dir"].filter(Boolean).join(" ");
   const main = (
     <>
@@ -359,6 +366,7 @@ function EntryRow({
         <span className="entry-name">{visible(item.name)}</span>
       )}
       <MarkIcons marks={item.marks} driveId={item.is_dir ? undefined : item.drive_id} path={item.path} />
+      {item.connected === false && <span className="entry-offline">Not connected</span>}
       {item.is_link && (
         <span className="link-icon" role="img" aria-label="Symbolic link" title="Symbolic link">
           ↪
@@ -1173,8 +1181,18 @@ export default function Browse() {
     split ? "Ask AI works on one file: use one pane" : "Select one file to ask AI",
     locked,
   );
+  // A root of a folder whose disk is away is not opened: the row says why.
+  const [offlineNote, setOfflineNote] = useState<string | null>(null);
+  // it is about the folder the pane showed: any way to another one clears it
+  useEffect(() => setOfflineNote(null), [paths.left, paths.right]);
   const open = (pane: PaneId, item: Item | undefined) => {
-    if (item?.is_dir) go(pane, item.path);
+    if (!item?.is_dir) return;
+    if (item.connected === false && item.folder != null && !item.path.includes("/")) {
+      setOfflineNote(notConnected(item.folder));
+      return;
+    }
+    setOfflineNote(null);
+    go(pane, item.path);
   };
   const step = (delta: number) => {
     if (list.length === 0) return;
@@ -1498,6 +1516,11 @@ export default function Browse() {
                 })}
               </div>
             </div>
+          )}
+          {offlineNote && act === pane && (
+            <p className="hint" role="status">
+              {visible(offlineNote)}
+            </p>
           )}
           {body ?? (
             <ul

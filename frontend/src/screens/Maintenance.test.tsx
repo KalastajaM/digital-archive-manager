@@ -11,7 +11,7 @@ import { maintenancePolling } from "../components/maintenance/useMaintenanceJob"
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import Maintenance from "./Maintenance";
 
-const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting"];
+const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes"];
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 
 const file = (id: string, path: string, over: Partial<DupFile> = {}): DupFile => ({
@@ -145,12 +145,12 @@ afterEach(() => {
 describe("Maintenance screen", () => {
   it("starts nothing by itself: every check waits for its button", async () => {
     const { calls } = setup();
-    for (const name of ["Duplicates", "Empty folders", "Broken links", "Collections and trays", "File names", "Waiting in To Delete"]) {
+    for (const name of ["Duplicates", "Empty folders", "Broken links", "Collections and trays", "File names", "Waiting in To Delete", "Archive folder names"]) {
       expect(card(name)).toBeInTheDocument();
     }
     await screen.findByText(/Starting reads/);
     expect(calls.filter((c) => c.method === "POST")).toEqual([]);
-    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(6);
+    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(7);
   });
 
   it("says how much the duplicate check will read, with the Google Drive warning, before it starts", async () => {
@@ -385,8 +385,8 @@ describe("The other checks", () => {
         broken_links: {
           broken_links: {
             items: [
-              { drive_id: "l1", path: "##. Ongoing/Sauna/dead.pdf", target: "gone/x.pdf", inside: "##. Ongoing" },
-              { drive_id: "l2", path: "20. Home/dead.pdf", target: "gone/y.pdf", inside: null },
+              { drive_id: "l1", path: "##. Ongoing/Sauna/dead.pdf", target: "gone/x.pdf", inside: "##. Ongoing", reason: "broken" },
+              { drive_id: "l2", path: "20. Home/dead.pdf", target: "gone/y.pdf", inside: null, reason: "broken" },
             ],
             total: 2,
           },
@@ -483,7 +483,7 @@ describe("The other checks", () => {
         waiting: {
           waiting: {
             days: 14,
-            items: [{ drive_id: "w1", path: "##. To Delete/old.pdf", size: 2048, since: 1_700_000_000, days: 40, approximate: false }],
+            items: [{ drive_id: "w1", path: "##. To Delete/old.pdf", size: 2048, since: 1_700_000_000, days: 40, approximate: false, folder: null }],
             total: 1,
             total_size: 2048,
             in_to_delete: 3,
@@ -504,6 +504,74 @@ describe("The other checks", () => {
       "1 file (2,0 KB) has waited longer than 14 days.",
     );
     expect(within(waiting).getByRole("link", { name: "Open To Delete in Browse" })).toHaveAttribute("href", `/browse?${new URLSearchParams({ path: "##. To Delete" })}`);
+  });
+
+  it("broken links: a link into an unplugged or detached folder is not called missing, and is not offered for removal", async () => {
+    const { user } = setup(
+      {},
+      {
+        broken_links: {
+          broken_links: {
+            items: [
+              { drive_id: "l1", path: "##. Ongoing/Car/old.pdf", target: "Old years/2009/old.pdf", inside: "##. Ongoing", reason: "folder_not_connected" },
+              { drive_id: "l2", path: "20. Home/dead.pdf", target: "gone/y.pdf", inside: null, reason: "broken" },
+              { drive_id: "l3", path: "20. Home/away.pdf", target: "/Volumes/Old/away.pdf", inside: null, reason: "folder_detached" },
+            ],
+            total: 3,
+          },
+        },
+      },
+    );
+    const links = card("Broken links");
+    await user.click(within(links).getByRole("button", { name: "Check" }));
+    const offline = (await within(links).findByText("##. Ongoing/Car/old.pdf")).closest("li") as HTMLElement;
+    expect(within(offline).getByText("Folder not connected")).toBeInTheDocument();
+    expect(within(offline).queryByText("Missing")).not.toBeInTheDocument();
+    expect(within(offline).queryByRole("checkbox")).not.toBeInTheDocument();
+    const detached = within(links).getByText("20. Home/away.pdf").closest("li") as HTMLElement;
+    expect(within(detached).getByText("Folder detached")).toBeInTheDocument();
+    const dead = within(links).getByText("20. Home/dead.pdf").closest("li") as HTMLElement;
+    expect(within(dead).getByText("Missing")).toBeInTheDocument();
+    expect(within(links).queryByRole("button", { name: /in Ongoing or Important/ })).not.toBeInTheDocument();
+    expect(within(links).getByRole("button", { name: /Mark 2 links for deletion/ })).toBeEnabled();
+  });
+
+  it("waiting in To Delete: files are listed by the folder whose To Delete they are in", async () => {
+    const { user } = setup(
+      {},
+      {
+        waiting: {
+          waiting: {
+            days: 30,
+            items: [
+              { drive_id: "w1", path: "Old years/##. To Delete/2009/a.pdf", size: 20, since: 1_700_000_000, days: 40, approximate: false, folder: "Old years" },
+              { drive_id: "w2", path: "##. To Delete/m.pdf", size: 10, since: 1_700_000_100, days: 39, approximate: false, folder: null },
+            ],
+            total: 2,
+            total_size: 30,
+            in_to_delete: 2,
+            in_to_delete_size: 30,
+          },
+        },
+      },
+    );
+    const waiting = card("Waiting in To Delete");
+    await user.click(within(waiting).getByRole("button", { name: "Check" }));
+    const main = await within(waiting).findByRole("list", { name: "The main folder" });
+    expect(within(main).getByText("##. To Delete/m.pdf")).toBeInTheDocument();
+    const old = within(waiting).getByRole("list", { name: "Old years" });
+    expect(within(old).getByText("Old years/##. To Delete/2009/a.pdf")).toBeInTheDocument();
+  });
+
+  it("archive folder names: a main-folder entry named like an archive folder says how to fix it", async () => {
+    const { user } = setup({}, { label_clashes: { label_clashes: { items: ["Old years"], total: 1 } } });
+    const clashes = card("Archive folder names");
+    await user.click(within(clashes).getByRole("button", { name: "Check" }));
+    expect(
+      await within(clashes).findByText(
+        "A folder in the main folder has the same name as the archive folder 'Old years'. Rename the folder in the main folder, or detach the archive folder with Also forget.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("an invalid number of days starts nothing", async () => {

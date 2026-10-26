@@ -14,6 +14,7 @@ the app's sidebar).
 - [Running dam](#running-dam)
 - [Command line](#command-line)
 - [Several archives](#several-archives)
+- [Several archive folders](#several-archive-folders)
 - [Config and rules](#config-and-rules)
 - [Tray files](#tray-files)
 - [Reminders setup](#reminders-setup)
@@ -269,6 +270,53 @@ Existing installs need nothing: a data folder that already has `config/settings.
 folder being the base folder itself. Nothing is moved, renamed or rewritten; only
 `archives.yaml` is created. `dam --data-dir X ...` on a data folder from before archives
 means that folder is "Main", as ever.
+
+## Several archive folders
+
+One archive can have extra folders next to `archive_root`, in `settings.yaml`:
+
+```yaml
+archive_root: ~/Library/Mobile Documents/com~apple~CloudDocs/Archive
+extra_folders:
+  - label: Old years
+    path: /Volumes/Archive disk/Archive 2000-2015
+    attached: true
+```
+
+`attached: false` is a detached folder: it stays listed but is not mapped, and its label
+stays reserved (a main-folder entry with that name is left out) until it is forgotten. The main
+folder's paths have no prefix; a path whose first component is an extra folder's label
+belongs to that folder (`Old years/2009/car/invoice.pdf`). Labels compare NFC and
+case-folded and cannot be changed yet (they also live in stored paths).
+
+**API** (all under `/api/archive-folders`; `400` carries the reason in plain words,
+`404` an unknown label, `409` while a maintenance check or rule replay runs):
+
+| Call | Does |
+|---|---|
+| `GET /api/archive-folders` | The main folder, then every extra folder (detached ones too), with label, path, `attached`, `connected` and file count. |
+| `POST /api/archive-folders` `{label, path, dry_run}` | Adds a folder after the overlap, label and readable checks. |
+| `POST /api/archive-folders/{label}/detach` `{forget, dry_run}` | Detaches it. Its index rows are marked missing. With `forget` (also for a detached folder) the entry leaves the settings and its rows are removed together with the notes, checklists, collection and item places, summaries, fields, sender and person, and locks of those files; collections and items stay. |
+| `POST /api/archive-folders/{label}/attach` `{dry_run}` | Attaches a detached folder again, after the same checks as adding. |
+
+Each answers with `label`, `path`, `files` and `restart_needed`; `dry_run` answers the
+same and writes nothing. A change takes effect at once (the server reopens the archive);
+`restart_needed` is true only when it could not. A detach writes the settings, reopens and
+only then changes the index, so no scan of the old App puts rows back; every full scan
+marks the rows of a detached label missing again. Every file record carries `folder` (its
+label, null for the main folder) and `connected`. `is:disconnected` finds the files of
+every folder that is not connected now; files of a detached folder are marked missing and
+are not found.
+
+**Folders that are not connected.** A folder is connected when its root can be listed and
+it does not list nothing while the index has live rows under its label (a signed-out cloud
+drive leaves an empty mount point); `core.paths.folder_connected` is the one definition the
+scanner, the guards, the watcher and the API use. A scan skips a folder that is not, and marks nothing in it missing. The server checks about
+every 30 seconds and rescans a folder that comes back. Planning refuses any operation
+whose source or destination is in an unplugged folder, naming its label and path. The
+publisher leaves Ongoing and Important links into an unplugged or detached folder alone.
+Maintenance shows them as "Folder not connected" or "Folder detached", and its **Archive
+folder names** check lists main-folder entries that share a folder's label.
 
 ## Config and rules
 
@@ -774,6 +822,11 @@ The user guide's "What dam never does" gives the short version. The details:
   the same `move` operations into that ordinary folder (made if missing, a taken name `_N`);
   the top of the archive, `##. Ongoing`, `##. Important` and `##. To Delete` are a 400.
   Undo is the ordinary undo of a move and puts the entries back in To Delete.
+  **To Delete exists per archive folder, and nothing crosses disks.** A file in an extra
+  folder goes to `<label>/##. To Delete/<path inside the folder>`, created on demand, and
+  Restore moves it back inside the same folder. A move between folders on different disks
+  is refused in the dry run with a message naming both folders; there is no copy across
+  yet. A folder that is not connected refuses every operation that touches it.
   While in `##. To Delete`, a file is read-only for the API: setting tags, a summary or a
   note, a checklist entry, ★ / !, a tray item and adding to a collection answer 400
   ("Marked for deletion: restore it first"); its existing tags, collection membership,
@@ -1140,6 +1193,9 @@ by design. Scanning only reads metadata (and Drive IDs from the
 `com.google.drivefs.item-id#S` xattr on macOS), so moves and renames made in Finder or on
 the web are followed by Drive ID. An export skips files Drive has not downloaded
 ("cloud-only") and lists them.
+
+With several archive folders this applies to each cloud-synced folder separately, so
+plan the disk space for all of them.
 
 **Check once on Google Drive.** These depend on how Drive for desktop behaves and cannot
 be tested against a fake archive:

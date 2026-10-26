@@ -5,6 +5,7 @@
 import type { ReactNode } from "react";
 import { Navigate, NavLink, useParams } from "react-router-dom";
 import { useArchives } from "../api/client";
+import { ArchiveFoldersSettings } from "../components/ArchiveFoldersSettings";
 import { AppearanceSettings } from "../components/AppearanceSettings";
 import { FilingCodes } from "../components/codes/FilingCodes";
 import { IndexingSettings } from "../components/IndexingSettings";
@@ -17,6 +18,7 @@ type Section = { id: string; label: string; scope: "archive" | "browser"; render
 export const SECTIONS: Section[] = [
   { id: "filing-codes", label: "Filing codes", scope: "archive", render: () => <FilingCodes /> },
   { id: "filing-rules", label: "Filing rules", scope: "archive", render: () => <FilingRules /> },
+  { id: "folders", label: "Archive folders", scope: "archive", render: () => <ArchiveFoldersSettings /> },
   { id: "indexing", label: "Indexing", scope: "archive", render: () => <IndexingSettings /> },
   { id: "appearance", label: "Appearance", scope: "browser", render: () => <AppearanceSettings /> },
 ];

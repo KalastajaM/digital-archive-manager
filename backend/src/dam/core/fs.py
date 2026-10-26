@@ -39,6 +39,46 @@ def resolve(p: str | os.PathLike, strict: bool = False) -> Path:
     return Path(strip_extended(str(Path(p).resolve(strict=strict))))
 
 
+def listable(directory: Path) -> bool:
+    """True when ``directory`` can be opened and listed right now."""
+    try:
+        with os.scandir(directory):
+            return True
+    except OSError:
+        return False
+
+
+# OS junk (never deleted, only left out of the index)
+_IGNORED_NAMES = {
+    ".DS_Store",
+    "Icon\r",
+    ".tmp.drivedownload",
+    ".tmp.driveupload",
+    "Thumbs.db",
+    "desktop.ini",
+}
+_IGNORED_FOLDED = {n.casefold() for n in _IGNORED_NAMES if n in ("Thumbs.db", "desktop.ini")}
+
+
+def is_ignored(name: str) -> bool:
+    return (
+        name in _IGNORED_NAMES
+        or name.casefold() in _IGNORED_FOLDED
+        or name.startswith(("~$", ".~"))
+        or name.endswith(".tmp")
+    )
+
+
+def lists_nothing(directory: Path) -> bool:
+    """``directory`` can be listed and has no entry but OS junk (False when it cannot be
+    listed)."""
+    try:
+        with os.scandir(directory) as it:
+            return not any(not is_ignored(e.name) for e in it)
+    except OSError:
+        return False
+
+
 def newline_of(raw: bytes) -> str:
     """The line ending a text file uses: CRLF if it has any (Windows editors write it,
     and git may check files out that way), else LF. Rewrites keep it."""

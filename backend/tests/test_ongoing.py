@@ -818,6 +818,23 @@ def test_initial_scan_with_archive_gone_does_not_sync(app, fake_archive, tmp_pat
     assert wake.is_set() and calls == []
 
 
+def test_a_stopped_background_scans_and_syncs_nothing(app, monkeypatch):
+    """After a reopen the old App's background must not sync ##. Ongoing next to the new
+    one's: its stop flag is checked before the scan and before each sync."""
+    from dam.serve import _after_watcher_scan, _initial_scan
+
+    calls = []
+    monkeypatch.setattr(app, "sync_publishers", lambda: calls.append("sync"))
+    monkeypatch.setattr(app, "scan", lambda: calls.append("scan"))
+    stop, wake = threading.Event(), threading.Event()
+    stop.set()
+    _initial_scan(app, wake, stop)
+    assert wake.is_set() and calls == []
+    wake = threading.Event()
+    _after_watcher_scan(app, wake, stop)
+    assert calls == []
+
+
 def test_background_sync_errors_are_logged_never_raised(app, monkeypatch, caplog):
     from dam.serve import _after_watcher_scan, _initial_scan
 
@@ -2052,3 +2069,105 @@ def test_a_parent_cycle_is_logged_and_left_alone(app, fake_archive, caplog):
     assert result.batch is None and result.plan == []
     assert "parent cycle" in caplog.text and "'Houses'" in caplog.text
     assert listing(ongoing(fake_archive) / "Houses" / "Sauna" / "Deck") == ["c.pdf"]
+
+
+# --- an extra archive folder that is not connected ---------------------------------------
+
+
+def _unplug(extra_folder, tmp_path) -> Path:
+    away = tmp_path / "unplugged"
+    os.rename(extra_folder.root, away)
+    return away
+
+
+def test_ongoing_sync_plans_nothing_for_offline_folder(extra_folder, app, fake_archive, tmp_path):
+    extra_folder.add("2009/x.pdf", drive_id="x1")
+    fake_archive.add(f"{BANKS}/a.pdf", drive_id="id-a")
+    app.scan()
+    sauna(app, ["x1", "id-a"])
+    base = ongoing(fake_archive) / "Sauna"
+    assert listing(base) == ["a.pdf", "x.pdf"]
+    away = _unplug(extra_folder, tmp_path)
+    app.scan()
+    result = app.ongoing.sync(dry_run=True)
+    assert (result.plan, result.problems) == ([], [])
+    # a change in the main folder is still published; the offline member's link stays
+    os.rename(fake_archive.root / BANKS / "a.pdf", fake_archive.root / BANKS / "a2.pdf")
+    app.scan()
+    plan = app.ongoing.sync(dry_run=True).plan
+    assert [op.kind for op in plan] == [OpKind.UNLINK_SYMLINK, OpKind.SYMLINK]
+    assert plan[1].dst == f"{ONG}/Sauna/a2.pdf"
+    assert not any("x.pdf" in f"{op.src} {op.dst}" for op in plan)
+    result = app.ongoing.sync()
+    assert result.batch is not None and result.batch.failed is None
+    assert result.problems == []
+    assert listing(base) == ["a2.pdf", "x.pdf"]
+    assert os.path.islink(base / "x.pdf")
+    assert app.collections.get(app.collections.list(None)[0].id).ongoing_status is None
+    os.rename(away, extra_folder.root)
+    app.scan()
+    assert app.ongoing.sync().batch is None  # the link was right all along
+    assert (base / "x.pdf").exists()
+
+
+def test_offline_member_gets_its_link_when_back(extra_folder, app, fake_archive, tmp_path):
+    extra_folder.add("2009/x.pdf", drive_id="x1")
+    fake_archive.add(f"{BANKS}/a.pdf", drive_id="id-a")
+    app.scan()
+    c = sauna(app, ["id-a"])
+    away = _unplug(extra_folder, tmp_path)
+    app.collections.add_members(c.id, ["x1"])
+    base = ongoing(fake_archive) / "Sauna"
+    assert listing(base) == ["a.pdf"]
+    result = app.ongoing.sync(dry_run=True)
+    assert (result.plan, result.problems) == ([], [])
+    assert app.collections.get(c.id).ongoing_status is None
+    os.rename(away, extra_folder.root)
+    app.ongoing.sync()
+    assert listing(base) == ["a.pdf", "x.pdf"]
+    assert (base / "x.pdf").exists()
+
+
+def test_offline_member_link_is_never_taken_down(extra_folder, app, fake_archive, tmp_path):
+    folder(extra_folder, "2009/car", "d-car")
+    extra_folder.add("2009/x.pdf", drive_id="x1")
+    fake_archive.add(f"{BANKS}/a.pdf", drive_id="id-a")
+    app.scan()
+    c = sauna(app, ["x1", "id-a"])
+    car = app.collections.create("Car")
+    app.collections.add_members(car.id, ["d-car"])
+    base = ongoing(fake_archive) / "Sauna"
+    assert os.path.islink(ongoing(fake_archive) / "Car")
+    away = _unplug(extra_folder, tmp_path)
+    app.scan()
+    app.collections.remove_members(c.id, ["x1"])
+    app.collections.close(car.id)
+    plan = app.ongoing.sync(dry_run=True).plan
+    assert plan == []
+    app.ongoing.sync()
+    assert listing(base) == ["a.pdf", "x.pdf"]
+    assert os.path.islink(ongoing(fake_archive) / "Car")
+    os.rename(away, extra_folder.root)
+    app.ongoing.sync()  # back: now it goes
+    assert listing(base) == ["a.pdf"]
+    assert not os.path.lexists(ongoing(fake_archive) / "Car")
+
+
+def test_links_into_a_detached_folder_are_left_alone(extra_folder, app, app_paths, fake_archive):
+    from dam.app import App
+    from dam.archive_folders import detach_folder
+
+    extra_folder.add("2009/x.pdf", drive_id="x1")
+    fake_archive.add(f"{BANKS}/a.pdf", drive_id="id-a")
+    app.scan()
+    sauna(app, ["x1", "id-a"])
+    base = ongoing(fake_archive) / "Sauna"
+    assert listing(base) == ["a.pdf", "x.pdf"]
+    detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    again = App.create(app_paths.data_dir)
+    try:
+        result = again.ongoing.sync()
+        assert (result.plan, result.problems) == ([], [])
+        assert listing(base) == ["a.pdf", "x.pdf"]
+    finally:
+        again.close()

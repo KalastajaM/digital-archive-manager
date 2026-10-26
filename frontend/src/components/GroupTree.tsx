@@ -472,6 +472,7 @@ function MemberRow({
           </span>
           <span className="member-tags">
             {m.is_dir && <Tag tone="grey">folder</Tag>}
+            {m.connected === false && <span className="entry-offline">Not connected</span>}
             {m.missing && <Tag tone="red">file missing</Tag>}
             {!m.missing && m.quarantined && <Tag tone="red">in ##. To Delete</Tag>}
             {attentionTags(attention).map((t) => (

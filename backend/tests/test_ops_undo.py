@@ -1122,3 +1122,25 @@ def test_undo_refuses_automatic_ongoing_syncs(fake_archive, executor, engine):
         executor.undo(done.batch_id)
     assert not (fake_archive.root / "##. Ongoing/Tax/a.pdf").is_symlink()
     assert [r["state"] for r in journal(engine, done.batch_id)] == ["done"]
+
+
+def test_undo_waits_for_folder(extra_folder, app):
+    src = extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    app.scan()
+    result = app.browse.move(["x1"], "Old years/2010", origin="ui")
+    assert result.failed is None and result.error is None
+    root = extra_folder.root.resolve()
+    gone = root.with_name("away")
+    os.rename(root, gone)
+    message = f"'Old years' is not connected ({root}). Connect it and try again."
+    with pytest.raises(GuardError) as e:
+        app.executor.preview_undo(result.batch_id)
+    assert str(e.value) == message
+    with pytest.raises(GuardError) as e:
+        app.executor.undo(result.batch_id)
+    assert str(e.value) == message
+    assert (gone / "2010" / "a.pdf").read_bytes() == b"a"
+    os.rename(gone, root)  # plugged in again: the undo goes through
+    undone = app.executor.undo(result.batch_id)
+    assert undone.failed is None and undone.error is None
+    assert src.read_bytes() == b"a"

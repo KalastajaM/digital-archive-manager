@@ -164,7 +164,7 @@ class Executor:
         app made outside the publish roots (``undo_link``, undo of a Link drop), are
         checked from the archive folder itself."""
         if made or (undo_link and self.paths.in_publish_root(rel) is None):
-            return self.paths.root
+            return self.paths.folder_of(rel).root
         root = self.paths.in_publish_root(rel) or self.paths.ongoing
         return self.paths.abs(root)
 

@@ -11,12 +11,13 @@ from typing import TYPE_CHECKING
 
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.naming import unique_name
-from dam.core.paths import ArchivePaths
+from dam.core.paths import ArchivePaths, not_connected_message
 from dam.index.driveid import read_drive_id
 from dam.ops import primitives
 from dam.ops.guards import (
     canonical,
     check_areas_source,
+    check_connected,
     fold_parts,
     is_abs_target,
     is_under,
@@ -27,8 +28,8 @@ from dam.ops.guards import (
     touches_protected,
     validate,
 )
-from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind, Plan, ResolvedOp
-from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME
+from dam.ops.model import ABS_TARGET, GuardError, Op, OpFailed, OpKind, Plan, ResolvedOp
+from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME, different_disks_message
 
 if TYPE_CHECKING:
     from dam.locks import LockService
@@ -100,7 +101,7 @@ class _Sim:
         disk, kind = self._origin(rel)
         if disk is None:
             return kind
-        p = self.paths.root / disk if disk else self.paths.root
+        p = self.paths.join(disk)
         if p.is_symlink():
             return "link"
         if p.is_dir():
@@ -109,7 +110,7 @@ class _Sim:
 
     def disk_path(self, rel: str) -> Path | None:
         disk, _ = self._origin(rel)
-        return None if disk is None else self.paths.root / disk
+        return None if disk is None else self.paths.join(disk)
 
     def _current(self, start: int, rel: str) -> str | None:
         """Where an entry created/moved at event ``start`` is now (None if gone)."""
@@ -182,7 +183,7 @@ class _Sim:
         an unnecessary suffix, never risks a collision).
         """
         disk = self.disk_path(folder)
-        directory = disk if disk is not None else self.paths.root / folder
+        directory = disk if disk is not None else self.paths.join(folder)
         added = self.added_names(folder)
         if exclude is not None:
             added = [a for a in added if fold_parts(a) != fold_parts(exclude)]
@@ -201,8 +202,11 @@ class Planner:
         # the lock service, when locked files must be refused (never in an undo)
         self.locks = locks
 
-    def resolve(self, plan: Plan, *, restore: bool = False) -> list[ResolvedOp]:
-        """``restore``: only for plans built by ``dam.ops.undo`` (see ``validate``)."""
+    def resolve(
+        self, plan: Plan, *, restore: bool = False, connected: dict[str, bool] | None = None
+    ) -> list[ResolvedOp]:
+        """``restore``: only for plans built by ``dam.ops.undo`` (see ``validate``).
+        ``connected``: folder connectivity already looked at in this planning (undo)."""
         self.sim = _Sim(self.paths)
         self.aliases: list[tuple[str, str]] = []  # (requested path, actual path)
         self.from_protected: list[str] = []  # current paths of entries moved out of protection
@@ -210,11 +214,19 @@ class Planner:
         self._restore = restore
         self._locked_state = _UNREAD  # read when the first file is to be changed
         self.locked_names: list[str] = []  # files this plan may not change (locked)
+        # label -> connected, for this planning: each folder's root is listed once
+        self._connected: dict[str, bool] = {} if connected is None else connected
         if plan.inbox_folders and not plan.new_folders:
             raise GuardError("Inbox folders are made only by a new-folder plan.")
         self.made = plan.new_folders  # MKDIRs of a New folder / layout batch are "made"
         ops = self._new_folder_ops(plan) if plan.new_folders else plan.ops
         for op in ops:
+            # not a place that changes: a RENAME's or PICTURE_BACK's dst is a name, an
+            # UNLINK_SYMLINK's the target the link is only compared with
+            other_dst = op.kind in (OpKind.RENAME, OpKind.PICTURE_BACK, OpKind.UNLINK_SYMLINK)
+            check_connected(
+                self.paths, op.src, None if other_dst else op.dst, known=self._connected
+            )
             validate(op, self.paths, restore=restore)
             redirect = None
             if not _outside(op) and op.src is not None and not is_abs_target(op):
@@ -297,7 +309,8 @@ class Planner:
             inbox_child = plan.inbox_folders and fold_parts(parent(folder)) == fold_parts(
                 special.inbox
             )
-            for area in names:
+            # the special folders, and the extra folders' To Delete
+            for area in (*names, *self.paths.quarantines[1:]):
                 if is_under(folder, area, strict=True) and not (
                     inbox_child and area == special.inbox
                 ):
@@ -346,6 +359,7 @@ class Planner:
         A new top-level folder needs ``allow_top_level``. The one exception
         (``quarantine_root``, set only for QUARANTINE ops): the configured quarantine
         folder itself may be created, so marking for deletion works before it exists.
+        (An extra folder's To Delete sits one level down, so it needs no exception.)
         """
         parts = PurePosixPath(folder).parts
         for i in range(1, len(parts) + 1):
@@ -402,7 +416,8 @@ class Planner:
         src = op.src
         self._require_src(src)
         self._check_locked(src)
-        into_quarantine = is_under(folder, self.paths.quarantine)
+        self._check_same_disk(src, folder)
+        into_quarantine = self.paths.is_quarantined(folder)
         if into_quarantine and self._is_protected_origin(src):
             raise GuardError(f"{src!r} comes from a protected path and cannot be quarantined")
         folder = self.sim.spell(folder)
@@ -422,6 +437,27 @@ class Planner:
         self.sim.events.append(("move", src, dst))
         self._track_protected(src, dst)
 
+    def _check_same_disk(self, src: str, folder: str) -> None:
+        """A move between two archive folders is a rename, so it works only when both
+        are on one disk: refused here, in the dry run, rather than half way."""
+        a, b = self.paths.folder_of(src), self.paths.folder_of(folder)
+        if a.label == b.label:
+            return
+        try:
+            same = primitives.same_disk(a.root, b.root)
+        except OSError:  # unplugged since check_connected looked
+            gone = next((f for f in (a, b) if f.label and not os.path.isdir(f.root)), None)
+            raise GuardError(not_connected_message(gone or (b if b.label else a))) from None
+        if not same:
+            raise OpFailed(different_disks_message(a.label, b.label))
+
+    def _quarantine_folder(self, src: str) -> str:
+        """Where QUARANTINE puts ``src``: its own folder's To Delete, keeping the path
+        inside that folder (``Old years/2009/a.pdf`` -> ``Old years/##. To Delete/2009``)."""
+        parts = PurePosixPath(src).parts
+        inner = parts[1:] if self.paths.label_of(src) else parts
+        return PurePosixPath(self.paths.quarantine_for(src), *inner).parent.as_posix()
+
     def _areas(self) -> Path:
         if self.areas_dir is None:
             raise GuardError("The rules' picture folder is not known here, so no picture is moved.")
@@ -436,7 +472,7 @@ class Planner:
         folder = self.sim.spell(canonical(op.dst, self.paths))
         self._ensure_folder(folder, False, quarantine_root=True)
         # a rename works only on one disk: look at the folder, or at what holds it
-        disk = self.paths.root / folder
+        disk = self.paths.join(folder)
         while not os.path.lexists(disk) and disk != disk.parent:
             disk = disk.parent
         method = PICTURE_RENAME if primitives.same_disk(areas, disk) else PICTURE_COPY
@@ -495,7 +531,7 @@ class Planner:
             case OpKind.MOVE:
                 self._relocate(op, canonical(op.dst, paths))
             case OpKind.QUARANTINE:
-                self._relocate(op, join(paths.quarantine, parent(op.src)))
+                self._relocate(op, self._quarantine_folder(op.src))
             case OpKind.MKDIR:
                 folder = self.sim.spell(canonical(op.dst, paths))
                 if op.exact and self.sim.kind(folder) is not None:

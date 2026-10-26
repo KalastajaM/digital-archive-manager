@@ -137,6 +137,13 @@ a parameter and refuse everything else. The one addition is a *conversion* (orig
 and carries this publisher's creations for the built-in as it will be
 (``important_layout_after``); "Star it" in the Ongoing converter does the same for
 one ★ link (``star_layout_after``). Both are recorded with ``record_layout``.
+
+Archive folders that are not there. A member in an extra archive folder that is not
+connected now (an unplugged disk) is not gone, and one in a detached folder is left
+as it was: a sync leaves out every change to a link into such a folder (no link is
+created, repaired, replaced or taken down, nor the folder it is in, nor whatever was
+to take its place) and plans the rest as usual (``_hold``). Once the folder is back,
+the next sync catches up.
 """
 
 from __future__ import annotations
@@ -156,7 +163,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from dam.core.fs import readlink
+from dam.core.fs import readlink, resolve
 from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
 from dam.db.engine import write_tx
 from dam.db.tables import collections as collections_table
@@ -1411,7 +1418,9 @@ class OngoingPublisher:
             if publish is not None:
                 c = dataclasses.replace(c, publish={**c.publish, PUBLISHER_ID: publish})
             changed[c.id] = c
-        ops = self._ordered(self._shares(self._trees_of(collection_ids, changed), []))
+        shares = self._shares(self._trees_of(collection_ids, changed), [])
+        self._hold(shares)
+        ops = self._ordered(shares)
         return self.executor.preview(Plan(ops, ORIGIN)) if ops else []
 
     # --- for the Ongoing converter ----------------------------------------------------
@@ -1754,7 +1763,85 @@ class OngoingPublisher:
         except ArchiveUnavailable as e:
             problems.append(str(e))
         out.append((self.paths.important, self._important_shares(problems)))
+        for _, shares in out:
+            self._hold(shares)
         return out
+
+    def _hold(self, shares: list[_Share]) -> None:
+        """Leave out of the shares (one root's) every change to a link into an extra
+        folder that is not connected now or is detached: its unlink, the removal of
+        each folder above it, a new link to a member there, and any creation at or
+        below a path that therefore stays as it is (a creation inside a folder left
+        out goes too)."""
+        offline = set(self.paths.disconnected_labels())
+        detached = [resolve(e.path) for e in self.paths.settings.extra_folders if not e.attached]
+        if not offline and not detached:
+            return
+        held: list[tuple[str, ...]] = []
+        for g in shares:
+            keep = []
+            for op in g.removals:
+                if op.kind is OpKind.UNLINK_SYMLINK and self._into_absent(
+                    op.src, offline, detached
+                ):
+                    log.info("ongoing: %s left as it is (its folder is not there)", op.src)
+                    held.append(fold_parts(op.src))
+                else:
+                    keep.append(op)
+            g.removals = keep
+        if not held and not any(
+            op.kind is OpKind.SYMLINK and self.paths.label_of(op.src) in offline
+            for g in shares
+            for op in g.creations
+        ):
+            return
+
+        def above_held(rel: str) -> bool:
+            parts = fold_parts(rel)
+            return any(h[: len(parts)] == parts for h in held)
+
+        for g in shares:
+            g.removals = [
+                op
+                for op in g.removals
+                if not (op.kind is OpKind.REMOVE_EMPTY_DIR and above_held(op.src))
+            ]
+        blocked = list(held)
+        for g in shares:
+            keep = []
+            for op in g.creations:  # parents first: a folder left out takes its content
+                parts = fold_parts(op.dst)
+                if (
+                    (op.kind is OpKind.SYMLINK and self.paths.label_of(op.src) in offline)
+                    or above_held(op.dst)
+                    or any(parts[: len(b)] == b for b in blocked)
+                ):
+                    if op.kind is OpKind.MKDIR:
+                        blocked.append(parts)
+                    continue
+                keep.append(op)
+            g.creations = keep
+
+    def _into_absent(self, link_rel: str, offline: set[str], detached: list[Path]) -> bool:
+        """The link ``link_rel`` points into an extra folder that is not connected
+        (``offline``: labels) or detached (``detached``: their folders)."""
+        link = self.paths.abs(link_rel)
+        try:
+            raw = readlink(link)
+        except OSError:
+            return False
+        full = Path(os.path.normpath(os.path.join(link.parent, raw)))
+        try:
+            return self.paths.label_of(self.paths.rel(full)) in offline
+        except (OutsideArchiveError, OSError):
+            pass
+        for root in detached:
+            try:
+                full.relative_to(root)
+            except ValueError:
+                continue
+            return True
+        return False
 
     def _sync(self, dry_run: bool, label: str | None = None) -> SyncResult:
         """Each root on its own: planned, previewed, applied as one batch and

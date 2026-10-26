@@ -57,6 +57,7 @@
 - [Reminders](#reminders)
 - [AI (optional)](#ai-optional)
 - [Several archives](#several-archives)
+- [Several archive folders](#several-archive-folders)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Drag and drop](#drag-and-drop)
 - [What dam never does](#what-dam-never-does)
@@ -1107,7 +1108,7 @@ the box. A search with only filters lists the matching files by name.
 | `after:` | Dated on or after the first day of that year, month or day. | `after:2025` |
 | `before:` | Dated before the first day of that year, month or day. | `before:2026-06` |
 | `tray:` | Files with an open item in that tray, by its id or name. | `tray:to-pay` |
-| `is:` | `starred`, `important`, `locked` (the locks you set yourself; Important files are always locked but are found with `is:important`), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary` (the file has a summary). | `is:locked` |
+| `is:` | `starred`, `important`, `locked` (the locks you set yourself; Important files are always locked but are found with `is:important`), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary` (the file has a summary), `disconnected` (the file is in an archive folder that is not connected now; see [Several archive folders](#several-archive-folders)). | `is:locked` |
 
 Tips:
 
@@ -1281,6 +1282,10 @@ each area, grouped by what it applies to; one section shows at a time.
     delete or add rules, test a document from the inbox, and switch the offer to make a
     rule on or off. The **People** list and the address area are here too. See
     [Filing rules](#filing-rules).
+  - **Archive folders**: the main folder and any extra folders, each with its status
+    (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
+    **Forget**.
+    See [Several archive folders](#several-archive-folders).
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
     [Reading page 1](#reading-page-1).
@@ -1363,6 +1368,52 @@ nothing done in one can touch another.
 - **Manage archives…** renames, recolours, shows each archive's folders, and forgets an
   archive. **Forgetting deletes nothing**: both its folders are shown so you can remove
   them yourself if you want.
+
+## Several archive folders
+
+One archive can span several folders, for example a synced cloud folder for current
+papers and an external disk for the old years. Search, Browse, tags, collections and
+Maintenance treat them as one archive. (Several *archives* are separate; see above.)
+
+- **Add a folder**: Settings, **Archive folders**, **Add folder**. Give it a label and its
+  path. The label is the name the folder has at the top of Browse and in paths, and it
+  cannot be changed later yet. A label cannot be empty, cannot start with `##.`, and cannot
+  be the name of a folder already in the main folder or the label of another archive
+  folder (case is ignored). dam also refuses a folder that is, contains or sits inside
+  another folder of this or any other archive, or that cannot be read, and says why. Adding
+  changes nothing on disk; dam then indexes the folder like the main one.
+- **The main folder stays special.** The Inbox, `##. Ongoing` and `##. Important` live only
+  in the main folder. A folder with one of those names inside an extra folder is an
+  ordinary folder.
+- **Each folder has its own `##. To Delete`**, made when you first move something to it.
+  Moving a file to To Delete is a rename, which cannot cross disks, so a file goes to the
+  To Delete of the folder it is in, and Restore brings it back there. The To Delete views
+  list them all. You empty them yourself, as always.
+- **Moving between folders**: allowed when both are on the same disk. On different disks
+  the preview refuses with a message naming both folders. Copying across disks is not
+  built yet.
+- **A folder that is not connected** (unplugged disk, cloud drive not signed in) gets a "Not
+  connected" mark on its row in Browse. Its files stay in the index, search and
+  collections, where they carry the same mark, and are not marked missing; the file view says the folder is not connected
+  and turns off Open and Show in Finder until it is back. `is:disconnected` finds them,
+  and `-is:disconnected` leaves them out. Changes that involve the folder are refused
+  until it is back. dam looks about every 30 seconds and picks the folder up by itself;
+  nothing needs restarting. Links in `##. Ongoing` and `##. Important` that lead into it
+  are left alone.
+- **Detach** takes a folder out of the archive; it changes nothing on the disk. Its files
+  leave Browse and search, but their tags, notes and collection memberships are kept, and
+  **Attach again** brings everything back. Tick **Also forget their tags, notes and
+  collection places** to drop them as well (the confirmation says how many files); the
+  folder then leaves the list and its label is free for another folder. A folder that is
+  already detached has **Forget** for the same. Links that lead into a detached folder are
+  left alone.
+- **Maintenance** marks links into an unplugged or detached folder as "Folder not
+  connected" or "Folder detached" instead of broken, and **Archive folder names** lists a
+  folder at the top of the main folder that has the same name as an archive folder. The
+  archive folder wins: rename the folder in the main folder, or detach the archive folder
+  with Also forget.
+- While a Maintenance check or a rule replay runs, adding, detaching and attaching are
+  refused until it has finished.
 
 ## Keyboard shortcuts
 

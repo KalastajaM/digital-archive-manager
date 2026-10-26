@@ -42,6 +42,7 @@ describe("Settings", () => {
     expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual([
       "/settings/filing-codes",
       "/settings/filing-rules",
+      "/settings/folders",
       "/settings/indexing",
       "/settings/appearance",
     ]);
@@ -71,6 +72,22 @@ describe("Settings", () => {
     expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-speed")?.body).toEqual({ reads_per_minute: 600 });
     await user.click(within(section).getByRole("checkbox", { name: /Read page 1 of older documents/ }));
     expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/page1-backfill")?.body).toEqual({ enabled: false });
+  });
+
+  it("Archive folders lists the folders of this archive", async () => {
+    mockFetch({
+      "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true } },
+      "GET /api/archive-folders": { body: { folders: [{ label: null, path: "/Archive", attached: true, connected: true, files: 5 }] } },
+    });
+    renderWithProviders(
+      <MemoryRouter initialEntries={["/settings/folders"]}>
+        <Routes>
+          <Route path="/settings/:section?" element={<Settings />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const section = await screen.findByRole("region", { name: "Archive folders" });
+    expect(await within(section).findByText("Main folder")).toBeInTheDocument();
   });
 
   it("an unknown section opens the first", async () => {

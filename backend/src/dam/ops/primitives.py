@@ -99,6 +99,18 @@ DIFFERENT_DISKS = (
     "The rules' picture folder and the archive are on different disks, so the file cannot be "
     "renamed into place; it is copied instead."
 )
+
+
+def different_disks_message(a: str, b: str) -> str:
+    """Why a move between the archive folders labelled ``a`` and ``b`` (``""``: the main
+    folder) is refused: they are on different disks, and a move is only a rename."""
+    first, second = ("the main folder" if not x else f"'{x}'" for x in (a, b))
+    text = (
+        f"{first} and {second} are on different disks, so files cannot be moved between them yet."
+    )
+    return text[0].upper() + text[1:]
+
+
 PICTURE_RENAME = "rename"
 PICTURE_COPY = "copy"
 

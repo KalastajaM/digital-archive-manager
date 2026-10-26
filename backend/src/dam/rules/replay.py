@@ -199,14 +199,18 @@ def _replay_stem(rec: FileRecord) -> str:
 
 
 def _rule_path(
-    rule: Rule, rec: FileRecord, special: SpecialFolders, person: str | None = None
+    rule: Rule,
+    rec: FileRecord,
+    special: SpecialFolders,
+    person: str | None = None,
+    quarantines: Sequence[str] = (),
 ) -> str:
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
     doc_date = parse_doc_date(name) or rec.doc_date
     stem = _replay_stem(rec)
     if rule.then.folder is not None:
-        folder = _render_folder(rule.then.folder, doc_date, stem, special, person)
+        folder = _render_folder(rule.then.folder, doc_date, stem, special, person, quarantines)
     else:
         folder = _parent(rec.path)
     if rule.then.name is not None:
@@ -377,10 +381,13 @@ class ReplayRun:
         source_drive_id: str | None = None,
         register: bool = False,
         with_marked: bool = True,
+        quarantines: Sequence[str] = (),
     ) -> None:
         self.engine = engine
         self.rule = rule
         self.special = special
+        # every archive folder's To Delete (``ArchivePaths.quarantines``); empty: main's
+        self.quarantines = tuple(quarantines) or (special.quarantine,)
         self.inbox_code_of = inbox_code_of
         self.layouts_for = layouts_for
         self.want_layouts = want_layouts
@@ -442,7 +449,7 @@ class ReplayRun:
 
     def _skipped(self, path: str) -> bool:
         s = self.special
-        return any(is_under(path, base) for base in (s.ongoing, s.important, s.quarantine))
+        return any(is_under(path, base) for base in (s.ongoing, s.important, *self.quarantines))
 
     def _plan(self) -> None:
         started = perf_counter()
@@ -784,7 +791,7 @@ class ReplayRun:
         if c.picture_score is not None:
             self.scores.append(PictureScore(row.path, c.picture_score, True, row.drive_id))
         try:
-            path_rule = _rule_path(rule, rec, special, person)
+            path_rule = _rule_path(rule, rec, special, person, self.quarantines)
         except TemplateError:
             path_rule = ""
         if path_rule and nfc(path_rule).casefold() == nfc(row.path).casefold():
@@ -899,6 +906,7 @@ def replay(
     after: str | None = None,
     near_folder: str | None = None,
     source_drive_id: str | None = None,
+    quarantines: Sequence[str] = (),
 ) -> ReplayResult:
     """``rules`` is the load order with ``rule`` in its place. For filed files
     ``folder_is`` is ignored: a rule meant for the inbox is judged on the files it would
@@ -959,6 +967,7 @@ def replay(
         near_folder=near_folder,
         source_drive_id=source_drive_id,
         register=True,
+        quarantines=quarantines,
     )
     finished = run.advance(max(0.0, budget_s - (time.monotonic() - started)))
     result = run.snapshot(truncated=not finished)

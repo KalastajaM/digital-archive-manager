@@ -252,3 +252,32 @@ def test_501_only_on_open_and_reveal(app):
         ("/api/files/{drive_id}/open", "post"),
         ("/api/files/{drive_id}/reveal", "post"),
     ]
+
+
+def _index_extra(app, extra, rel: str, drive_id: str, content: bytes = b"x") -> str:
+    """Put ``rel`` (inside the extra folder) on its disk and in the index as "Old years/<rel>"."""
+    from dam.index.repo import FileRecord
+
+    path = extra.add(rel, content, drive_id=drive_id)
+    st = path.stat()
+    indexed = f"Old years/{rel}"
+    app.repo.upsert(FileRecord(drive_id=drive_id, path=indexed, size=st.st_size, mtime=st.st_mtime))
+    return indexed
+
+
+def test_reveal_file_in_extra_folder(extra_folder, app, client, calls):
+    _index_extra(app, extra_folder, "2009/a.pdf", "x1")
+    real = str((extra_folder.root / "2009" / "a.pdf").resolve())
+    assert post(client, "/api/files/x1/open").status_code == 204
+    assert post(client, "/api/files/x1/reveal").status_code == 204
+    assert calls == [["/usr/bin/open", real], ["/usr/bin/open", "-R", real]]
+
+
+def test_open_file_in_disconnected_folder_says_so(extra_folder, app, client, calls):
+    _index_extra(app, extra_folder, "2009/a.pdf", "x1")
+    gone = extra_folder.root.with_name("away")
+    os.rename(extra_folder.root, gone)
+    r = post(client, "/api/files/x1/open")
+    assert r.status_code == 409
+    assert f"'Old years' is not connected ({extra_folder.root.resolve()}). Connect it" in r.text
+    assert calls == []

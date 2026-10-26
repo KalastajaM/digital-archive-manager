@@ -254,6 +254,7 @@ class AIService:
         made yet); none while the archive cannot be listed (that is not the same)."""
         if not self.app.archive_available:
             return []
+        # exclusions name paths in the main folder
         return [f for f in folders if not _folder_exists(self.app.paths.root, f)]
 
     def recent(self, limit: int = 50) -> list[dict]:

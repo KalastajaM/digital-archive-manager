@@ -3040,6 +3040,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/archive-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Folders
+         * @description The main folder first, then every extra folder, detached ones included.
+         */
+        get: operations["list_folders_api_archive_folders_get"];
+        put?: never;
+        /**
+         * Add Folder
+         * @description Add a folder to the archive under ``label``; 400 with the reason when it cannot
+         *     be (it overlaps a folder of any archive, the label is taken, it cannot be read).
+         *     409 while a maintenance check or rule replay runs.
+         */
+        post: operations["add_folder_api_archive_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/archive-folders/{label}/detach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Detach Folder
+         * @description Take the folder out of the archive; it stays listed, detached, and its index rows
+         *     are marked missing. With ``forget`` the rows are removed and the folder leaves the
+         *     list. ``files`` says how many. The archive is reopened before the index changes (see
+         *     ``archive_folders.detach_folder``).
+         */
+        post: operations["detach_folder_api_archive_folders__label__detach_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/archive-folders/{label}/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Folder
+         * @description Attach a detached folder again, after the same checks as adding one.
+         */
+        post: operations["attach_folder_api_archive_folders__label__attach_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/candidates": {
         parameters: {
             query?: never;
@@ -3627,6 +3696,57 @@ export interface components {
             /** Demo Folder */
             demo_folder?: string | null;
         };
+        /** ArchiveFolderAddIn */
+        ArchiveFolderAddIn: {
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /** ArchiveFolderAttachIn */
+        ArchiveFolderAttachIn: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /** ArchiveFolderDetachIn */
+        ArchiveFolderDetachIn: {
+            /**
+             * Forget
+             * @default false
+             */
+            forget: boolean;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /** ArchiveFolderOut */
+        ArchiveFolderOut: {
+            /** Label */
+            label: string | null;
+            /** Path */
+            path: string;
+            /** Attached */
+            attached: boolean;
+            /** Connected */
+            connected: boolean;
+            /** Files */
+            files: number;
+        };
+        /** ArchiveFoldersOut */
+        ArchiveFoldersOut: {
+            /** Folders */
+            folders: components["schemas"]["ArchiveFolderOut"][];
+        };
         /** ArchiveForgetIn */
         ArchiveForgetIn: {
             /** Switch To */
@@ -3958,6 +4078,11 @@ export interface components {
             target: string | null;
             /** Inside */
             inside: string | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "broken" | "folder_not_connected" | "folder_detached";
         };
         /** BrokenLinksOut */
         BrokenLinksOut: {
@@ -4289,6 +4414,13 @@ export interface components {
             drive_id: string;
             /** Marks */
             marks: ("starred" | "important")[];
+            /** Folder */
+            folder?: string | null;
+            /**
+             * Connected
+             * @default true
+             */
+            connected: boolean;
         };
         /** DismissTrayDefaultsIn */
         DismissTrayDefaultsIn: {
@@ -4686,6 +4818,13 @@ export interface components {
             parked_at: number | null;
             /** Marks */
             marks: ("starred" | "important")[];
+            /** Folder */
+            folder?: string | null;
+            /**
+             * Connected
+             * @default true
+             */
+            connected: boolean;
         };
         /** FileRequestIn */
         FileRequestIn: {
@@ -4904,6 +5043,20 @@ export interface components {
             rows: components["schemas"]["DirEntryOut"][];
             /** Total */
             total: number;
+        };
+        /**
+         * FolderChangeOut
+         * @description What adding, detaching or attaching a folder did (or, in a dry run, would do).
+         */
+        FolderChangeOut: {
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+            /** Files */
+            files: number;
+            /** Restart Needed */
+            restart_needed: boolean;
         };
         /** FolderPathIn */
         FolderPathIn: {
@@ -5146,6 +5299,13 @@ export interface components {
             in_inbox: boolean;
             /** Marks */
             marks: ("starred" | "important")[];
+            /** Folder */
+            folder?: string | null;
+            /**
+             * Connected
+             * @default true
+             */
+            connected: boolean;
         };
         /**
          * ItemMergeBody
@@ -5254,6 +5414,16 @@ export interface components {
              * @default []
              */
             marks: ("starred" | "important")[];
+        };
+        /**
+         * LabelClashesOut
+         * @description The archive folders whose label a top-level entry of the main folder also has.
+         */
+        LabelClashesOut: {
+            /** Items */
+            items: string[];
+            /** Total */
+            total: number;
         };
         /** LayoutFolderOut */
         LayoutFolderOut: {
@@ -5480,6 +5650,7 @@ export interface components {
             references?: components["schemas"]["BadReferencesOut"] | null;
             names?: components["schemas"]["BadNamesOut"] | null;
             waiting?: components["schemas"]["WaitingOut"] | null;
+            label_clashes?: components["schemas"]["LabelClashesOut"] | null;
         };
         /** MaintenanceStartIn */
         MaintenanceStartIn: {
@@ -5487,7 +5658,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting";
+            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes";
             /** Days */
             days?: number | null;
         };
@@ -5571,6 +5742,13 @@ export interface components {
              * @default false
              */
             is_link: boolean;
+            /** Folder */
+            folder?: string | null;
+            /**
+             * Connected
+             * @default true
+             */
+            connected: boolean;
         };
         /**
          * MoveBody
@@ -6420,6 +6598,13 @@ export interface components {
             mtime: number | null;
             /** Marks */
             marks: ("starred" | "important")[];
+            /** Folder */
+            folder?: string | null;
+            /**
+             * Connected
+             * @default true
+             */
+            connected: boolean;
         };
         /** SenderOut */
         SenderOut: {
@@ -7212,6 +7397,8 @@ export interface components {
             days: number;
             /** Approximate */
             approximate: boolean;
+            /** Folder */
+            folder: string | null;
         };
         /** WaitingOut */
         WaitingOut: {
@@ -10804,7 +10991,7 @@ export interface operations {
     forget_api_maintenance_jobs_delete: {
         parameters: {
             query?: {
-                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting") | null;
+                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes") | null;
             };
             header?: never;
             path?: never;
@@ -23333,6 +23520,390 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_folders_api_archive_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveFoldersOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    add_folder_api_archive_folders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveFolderAddIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderChangeOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    detach_folder_api_archive_folders__label__detach_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveFolderDetachIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderChangeOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    attach_folder_api_archive_folders__label__attach_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveFolderAttachIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderChangeOut"];
+                };
             };
             /** @description Bad Request */
             400: {

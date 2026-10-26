@@ -14,7 +14,6 @@ from dam.ops.model import OpKind, ResolvedOp
 from dam.services.errors import InvalidRequest
 
 if TYPE_CHECKING:
-    from dam.config import SpecialFolders
     from dam.index.repo import FileRepo
 
 ORIGINS = frozenset({"ui", "cli", "workflow"})
@@ -30,14 +29,14 @@ def check_origin(origin: str) -> str:
 _RELOCATIONS = (OpKind.RENAME, OpKind.MOVE)
 
 
-def check_destination_area(dest: str, special: "SpecialFolders") -> None:
-    """Refuse (``InvalidRequest``) a move or filing destination at or under the
-    quarantine or ``##. Ongoing``: nothing is ever moved into either, whichever way it
-    is asked for (Browse's Move to…, Edit details, inbox filing, ``dam file``). The
-    quarantine is only reached through ``BrowseService.quarantine``, which is where
-    the ! Important protection is checked, so this is also what keeps a marked file
-    from being filed into ``##. To Delete``."""
-    for area in (special.quarantine, special.ongoing):
+def check_destination_area(dest: str, paths: ArchivePaths) -> None:
+    """Refuse (``InvalidRequest``) a move or filing destination at or under a
+    quarantine (any folder's ``##. To Delete``) or ``##. Ongoing``: nothing is ever
+    moved into either, whichever way it is asked for (Browse's Move to…, Edit details,
+    inbox filing, ``dam file``). The quarantine is only reached through
+    ``BrowseService.quarantine``, which is where the ! Important protection is checked,
+    so this is also what keeps a marked file from being filed into ``##. To Delete``."""
+    for area in (*paths.quarantines, paths.ongoing):
         if is_under(dest, area):
             raise InvalidRequest(f"Files cannot be moved into {area}.")
 

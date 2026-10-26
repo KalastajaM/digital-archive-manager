@@ -19,7 +19,7 @@ const hit = (id: string, path: string): SearchHit => ({
   rank: -1,
   size: 10,
   mtime: 1_700_000_000,
-  marks: [],
+  connected: true, marks: [],
 });
 
 const queryOf = (call: Call) => new URL(call.url, "http://x").searchParams;

@@ -8,6 +8,25 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **One archive can now span several folders.** In Settings, **Archive folders**, **Add
+  folder** joins a further folder (for example on an external disk or a cloud drive) under
+  a label you choose. Browse, search, tags, collections and Maintenance see one combined
+  archive, and dam refuses a folder that overlaps another folder of any archive. **Detach**
+  takes a folder out without touching the disk (its notes and tags are kept, and **Attach
+  again** brings them back). Ticking **Also forget** (or **Forget** on a detached folder)
+  also drops its files' tags, notes and collection places and removes the folder from the
+  list, so its label can be used again.
+  - **An unplugged disk keeps its files in the index.** A folder that is not connected shows
+    "Not connected" in Browse and the file view, its files stay in search and collections
+    with the same mark (find them with `is:disconnected`), and nothing is marked missing. dam checks about every
+    30 seconds and picks the folder up again by itself. Changes to an unplugged folder are
+    refused, and links in `##. Ongoing` and `##. Important` that lead into it are left alone.
+  - **Each folder has its own `##. To Delete`**, because a file cannot be moved to another disk
+    that way. Moving a file between folders on different disks is refused for now, with a
+    message that names both folders. A folder's label cannot be changed yet.
+  - Maintenance marks links into an unplugged or detached folder ("Folder not connected",
+    "Folder detached") and lists a folder in the main folder that has the same name as an
+    archive folder.
 - **Maintenance screen** (sidebar, Archive, next to Activity) with checks you start
   yourself; nothing runs by itself or in the background, each shows its progress, can be
   stopped, and ends in a list you act on through the usual preview and Undo.

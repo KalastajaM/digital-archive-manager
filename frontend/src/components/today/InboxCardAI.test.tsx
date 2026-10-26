@@ -29,7 +29,7 @@ function entry(id: string, name: string, trayGuess: string | null): InboxEntry {
       missing: false,
       last_seen: null,
       parked_at: null,
-      marks: [],
+      connected: true, marks: [],
     },
     suggestion: { name, folder: null, tags: [], fields: { dates: [], amounts: [], iban: null, reference: null }, doc_date: null, sources: [], name_source: "scan", folder_source: null, tag_sources: {}, tray: null, tray_source: null, collections: [], collection_sources: {}, codes: [], conflict: false, star: null, important: null, marks_unclear: false, waiting_for_page1: false, people_found: [], areas: [], person_line: null },
     text_excerpt: "",
