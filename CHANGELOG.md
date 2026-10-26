@@ -15,9 +15,10 @@ All notable changes are listed here. The format follows
     read and how big they are (with a warning that files kept online-only in Google Drive
     are downloaded), reads only files that share a size with another, and does not read a
     file again once it has been read. In each group you pick the copy to keep (the
-    suggestion is a numbered folder before the Inbox, then the oldest) and then **Move the
-    others to To Delete** or **Replace them with a link** to the kept copy, per group or for
-    several groups at once. One preview, one Undo (which removes the links and brings the
+    suggestion is a numbered folder before the Inbox, then the oldest) and, for each other
+    copy, whether to leave it, move it to To Delete, or replace it with a link to the kept
+    copy (icons next to the copy; To Delete to begin with). **Apply** does a group, or all
+    ticked groups at once. One preview, one Undo (which removes the links and brings the
     copies back). Tags, collections, star, notes, checklist entries, tray items and From and
     For of the removed copies can be added to the kept one (ticked by default, listed in
     the preview, nothing overwritten). A copy marked Important or locked is never removed.
@@ -30,8 +31,7 @@ All notable changes are listed here. The format follows
     out the folders the archive is set up with, such as the filing code folders in
     `##. Organize`.
   - Duplicates show each copy's folder with its details under it, and its name only where
-    it differs. **Remove** is offered only in groups of three or more copies, where there
-    is a choice.
+    it differs.
   - Collections and trays show where a gone file was last seen instead of an internal id,
     say what each entry means, and offer **Take out** for a gone file in a collection.
   - **Ignore** an entry (a duplicate group, a name used by different files, an empty

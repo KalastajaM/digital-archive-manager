@@ -968,10 +968,12 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   (Important or locked) first, then a numbered folder before the inbox or elsewhere, then
   the oldest, then the path. The same-name list compares names NFC-normalised and
   case-folded, and lists a name when two of its files differ in size or in a known hash.
-- `POST /api/maintenance/duplicates/resolve {groups: [{keep, others}], action:
+- `POST /api/maintenance/duplicates/resolve {groups: [{keep, others, links?}], action:
   "quarantine" | "link", carry_over?, dry_run?}` is one batch for all groups: a
-  `quarantine` of each file in `others` and, for `link`, a `symlink` at its old path to
-  the kept file (an exact path: the quarantine has just freed it). Undo is the ordinary
+  `quarantine` of each file in `others` and, for `link` or a file in its group's `links`
+  (which must be among `others`), a `symlink` at its old path to the kept file (an exact
+  path: the quarantine has just freed it). The app sends `action: "quarantine"` with the
+  copies to link in `links`, so one batch can move some copies and link others. Undo is the ordinary
   undo: it removes the link (a link the app made, still pointing at that file) and moves
   the copy back, so no new kind of removal exists. 400 when a copy is Important or locked
   (also unlocked "for now"), when the files are not known to have the same content (both
