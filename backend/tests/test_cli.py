@@ -583,9 +583,9 @@ def test_trays_command_shows_titles_as_plain_text(run, app, a_bill):
     assert "\u202e" not in r.stdout and "\x1b" not in r.stdout
 
 
-def test_ongoing_sync_help_warns_about_dam_serve(run):
+def test_ongoing_sync_help_says_it_waits_for_the_app(run):
     r = run("ongoing", "sync", "--help")
-    assert "Do not run while" in r.stdout and "dam serve" in r.stdout
+    assert "Refused while the app has the archive open" in r.stdout
 
 
 def test_collections_command(run, app, a_bill):
@@ -652,3 +652,179 @@ def test_ongoing_sync_and_entries(run, app, a_bill, fake_archive):
     r = run("ongoing", "entries")
     assert r.exit_code == 0, r.output
     assert "Sauna" in r.stdout and "managed" in r.stdout and "Mine" in r.stdout
+
+
+# -- one writer at a time: commands that change the archive hold its lock ---------------
+
+WRITERS = [
+    ("scan",),
+    ("index",),
+    ("errors", "--retry"),
+    ("errors", "--retry-unsupported"),
+    ("file", "id-1", "--folder", BANKS, "--yes"),
+    ("quarantine", "id-1", "--yes"),
+    ("move", "id-1", "--folder", BANKS, "--yes"),
+    ("undo", "nope", "--yes"),
+    ("init", "--yes"),
+    ("star", "id-1"),
+    ("unstar", "id-1"),
+    ("important", "id-1"),
+    ("unimportant", "id-1"),
+    ("ongoing", "sync"),
+    ("ai", "--on"),
+    ("ai", "--off"),
+]
+READERS = [
+    ("inbox",),
+    ("search", "x"),
+    ("activity",),
+    ("errors",),
+    ("file", "id-1", "--folder", BANKS, "--dry-run"),
+    ("quarantine", "id-1", "--dry-run"),
+    ("move", "id-1", "--folder", BANKS, "--dry-run"),
+    ("ongoing", "sync", "--dry-run"),
+    ("ongoing", "entries"),
+    ("remind", "--dry-run"),
+    ("ai", "--status"),
+    ("ai", "--log"),
+    ("trays",),
+    ("collections",),
+    ("starred",),
+    ("important", "--list"),
+    ("openapi",),
+]
+
+
+@pytest.fixture
+def held_by_app(app_paths):
+    from dam.profiles import ServeLock
+
+    lock = ServeLock(app_paths.data_dir)
+    lock.acquire()
+    lock.publish(8766)
+    yield lock
+    lock.release()
+
+
+@pytest.mark.parametrize("args", WRITERS, ids=" ".join)
+def test_a_writer_is_refused_while_the_app_has_the_archive(run, fake_archive, held_by_app, args):
+    fake_archive.add(f"{INBOX}/a.pdf", drive_id="id-1")
+    r = run(*args)
+    assert r.exit_code == 1, r.output
+    assert "open in the app on port 8766" in r.stderr and "close the app" in r.stderr
+
+
+def test_add_and_recover_are_refused_while_the_app_has_the_archive(
+    run, app_paths, held_by_app, tmp_path
+):
+    outside = tmp_path / "outside.pdf"
+    outside.write_bytes(b"%PDF-1.4")
+    r = run("add", outside, "--yes")
+    assert r.exit_code == 1 and "open in the app on port 8766" in r.stderr
+    r = run("recover")
+    assert r.exit_code == 1 and "Run recovery" in r.stderr and "8766" in r.stderr
+
+
+@pytest.mark.parametrize("args", READERS, ids=" ".join)
+def test_a_reader_still_works_while_the_app_has_the_archive(
+    run, app, fake_archive, held_by_app, args
+):
+    fake_archive.add(f"{INBOX}/a.pdf", drive_id="id-1")
+    app.scan()
+    r = run(*args)
+    assert r.exit_code == 0, r.output
+    assert "open in the app" not in r.output
+
+
+def test_a_writer_is_refused_while_another_command_changes_the_archive(run, app_paths):
+    from dam.profiles import ServeLock
+
+    lock = ServeLock(app_paths.data_dir)
+    lock.acquire(command="dam scan")
+    try:
+        r = run("star", "x")
+        assert r.exit_code == 1
+        assert "A dam command (dam scan) is changing this archive right now" in r.stderr
+        assert "Wait for it to finish" in r.stderr
+        r = run("serve", "--no-open")
+        assert r.exit_code == 1 and "A dam command (dam scan)" in r.stderr
+        assert run("inbox").exit_code == 0
+    finally:
+        lock.release()
+
+
+def test_no_recover_warning_while_another_process_has_the_archive(
+    run, app, fake_archive, held_by_app
+):
+    """Its pending rows may be changes under way there, and `dam recover` is refused."""
+    fake_archive.add(f"{INBOX}/a.pdf", drive_id="id-1")
+    app.scan()
+    stuck_row(app)
+    r = run("inbox")
+    assert r.exit_code == 0 and "dam recover" not in r.output
+
+
+def test_a_writer_holds_the_lock_and_names_itself(run, app_paths, monkeypatch):
+    import json
+
+    from dam.app import App
+
+    seen = []
+    real = App.scan
+
+    def spying(self, subtree=""):
+        seen.append(json.loads((app_paths.data_dir / "serve.json").read_text(encoding="utf-8")))
+        return real(self, subtree)
+
+    monkeypatch.setattr(App, "scan", spying)
+    assert run("scan").exit_code == 0
+    assert seen[0]["kind"] == "cli" and seen[0]["command"] == "dam scan"
+    assert run("scan").exit_code == 0  # released when the command ended
+
+
+def test_init_with_a_layout_takes_the_lock_once(run, app_paths, tmp_path):
+    """``init`` holds the lock and opens a session inside it: the same process never
+    refuses itself."""
+    folder = tmp_path / "fresh"
+    folder.mkdir()
+    r = run("init", "--archive", folder, "--layout", "minimal", "--yes")
+    assert r.exit_code == 0, r.output
+    assert "Undo it with" in r.stdout
+
+
+HOLD_LOCK = """
+import sys
+from pathlib import Path
+from dam.profiles import ServeLock
+lock = ServeLock(Path(sys.argv[1]))
+lock.acquire(command="dam file")
+sys.stdout.write("held\\n")
+sys.stdout.flush()
+sys.stdin.read()  # hold it until the parent closes stdin
+"""
+
+
+def test_a_writer_waits_for_a_command_in_another_process(run, app_paths, fake_archive):
+    import subprocess
+    import sys
+
+    fake_archive.add(f"{INBOX}/a.pdf", drive_id="id-1")
+    other = subprocess.Popen(
+        [sys.executable, "-c", HOLD_LOCK, str(app_paths.data_dir)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    try:
+        assert other.stdout is not None and other.stdout.readline() == b"held\n"
+        r = run("scan")
+        assert r.exit_code == 1 and "A dam command (dam file)" in r.stderr
+        assert "added" not in r.stdout
+    finally:
+        assert other.stdin is not None
+        other.stdin.close()
+        other.wait(30)
+        assert other.stdout is not None
+        other.stdout.close()
+    assert other.returncode == 0
+    r = run("scan")
+    assert r.exit_code == 0 and "added" in r.stdout, r.output

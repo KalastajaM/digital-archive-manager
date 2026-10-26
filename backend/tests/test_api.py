@@ -1117,7 +1117,7 @@ def test_serve_warns_about_pending_recovery(app_paths, fake_serve, monkeypatch):
 
     monkeypatch.setattr(ActivityService, "pending", lambda self: ["x"])
     r = serve_cmd(app_paths, "--no-open")
-    assert r.exit_code == 0 and "dam recover" in r.stderr
+    assert r.exit_code == 0 and "Run recovery in the app" in r.stderr
 
 
 def _free_port() -> int:

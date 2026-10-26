@@ -381,7 +381,7 @@ def test_restore_is_refused_without_a_host_or_with_an_interrupted_operation(tmp_
             return change()
 
     interrupted = SnapshotService(paths, Folders(None), Reopen(), pending=lambda: True)
-    with pytest.raises(Conflict, match="dam recover"):
+    with pytest.raises(Conflict, match="Use Run recovery"):
         interrupted.restore("dam-snapshot-20200101-000000.zip", snapshot_current=False)
 
 

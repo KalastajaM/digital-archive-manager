@@ -199,6 +199,21 @@ def test_serve_opens_the_chosen_archive_and_refuses_one_served_elsewhere(
     assert len(served) == 3
 
 
+def test_archives_list_names_a_command_that_holds_an_archive(run, base, fake_archive, tmp_path):
+    other = FakeArchive(tmp_path / "other")
+    assert (
+        run("archives", "add", "Test", "--folder", other.root, "-y", "--layout", "none").exit_code
+        == 0
+    )
+    held = ServeLock(base / "archives" / "test")
+    held.acquire(command="dam scan")
+    try:
+        line = next(x for x in run("archives", "list").stdout.splitlines() if "Test" in x)
+        assert "in use by a dam command (dam scan)" in line and "window" not in line
+    finally:
+        held.release()
+
+
 def test_the_reminder_job_is_per_archive(run, base, tmp_path, monkeypatch):
     import dam.cli.main as cli_main
 

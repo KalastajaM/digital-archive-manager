@@ -182,7 +182,10 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
     if any(r.origin == SYNC_ORIGIN for r in rows):
         raise OpFailed(SYNC_UNDO_REFUSED)
     if any(r.state == "planned" for r in rows):
-        raise OpFailed("This change was interrupted before it finished. Run dam recover first.")
+        raise OpFailed(
+            "This change was interrupted before it finished. Run recovery first "
+            "(Run recovery in the app, or dam recover)."
+        )
     acted = [r for r in rows if r.state in ACTED]
     if not acted:
         raise OpFailed("There is nothing to undo here.")
