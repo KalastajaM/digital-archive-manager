@@ -1,9 +1,28 @@
 """Operation data model."""
 
+import json
 from dataclasses import dataclass, field
 from enum import StrEnum, auto
 
 from dam.ops.identity import Identity
+
+
+def read_followed(value: str | None) -> tuple[list[list[str]], bool] | None:
+    """A journaled ``operations.followed`` as (rows, applied), or None when there is
+    none. It is the envelope ``{"rows": [[old_id, new_id, old_path, new_path], ...],
+    "applied": bool}``: ``applied`` turns true once the rows moved and the index step of
+    the folder's QUARANTINE finished. A bare list (before the envelope) is not applied."""
+    if not value:
+        return None
+    data = json.loads(value)
+    if isinstance(data, list):
+        return data, False
+    return data["rows"], bool(data["applied"])
+
+
+def followed_json(rows: list[list[str]], applied: bool) -> str:
+    """The ``operations.followed`` envelope of ``rows`` (``read_followed``)."""
+    return json.dumps({"rows": rows, "applied": applied})
 
 
 class OpKind(StrEnum):
@@ -133,7 +152,8 @@ class ResolvedOp:
     # act). REMOVE_EMPTY_DIR: removing such a folder (undo only).
     made: bool = False
     # PICTURE_TO_QUARANTINE / PICTURE_BACK: "rename" (one disk) or "copy" (two disks), as
-    # decided when planned
+    # decided when planned. COPY_ACROSS of a folder move: "present" (``primitives.PRESENT``)
+    # when the destination already holds the file (same size and mtime when planned)
     method: str | None = None
     # the sha256 of that picture, read and journaled just before acting (set by the executor)
     content_hash: str | None = None
@@ -146,6 +166,15 @@ class ResolvedOp:
     # QUARANTINE of a copy, by the undo of a COPY_ACROSS: (the original's path, its
     # drive id); the index row goes back to describing the original
     restore_row: tuple[str, str | None] | None = None
+    # The final QUARANTINE of a folder moved across disks: the destination folder its files
+    # were copied into, and the source tree as listed when planned: folded path relative to
+    # the source folder ("/"-joined, as ``fold_parts``) -> (kind "file" | "dir" | "link",
+    # size, mtime); sizes and mtimes of files only. ``.DS_Store`` files are left out.
+    copied_to: str | None = None
+    tree: dict[str, tuple[str, int | None, float | None]] | None = None
+    # MOVE of an undo that brings such a folder back from To Delete: the undone row's
+    # ``followed`` (old id, new id, old path, new path); each folder row goes back
+    follow_back: list[tuple[str, str, str, str]] | None = None
 
 
 @dataclass
@@ -166,3 +195,6 @@ class BatchResult:
     # a move across disks started in the background (``dam.ops.jobs``): this result is
     # empty, and the job's result is the batch
     job_id: str | None = None
+    # what a finished batch did, in words for the owner, when the batch says it itself
+    # (a folder moved across disks: "Moved folder 2009 (2 files) to 'Old years'")
+    message: str | None = None

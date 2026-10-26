@@ -59,6 +59,19 @@ describe("Move across disks progress", () => {
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 
+  it("a folder move ends with the server's own words", async () => {
+    mockFetch({
+      "GET /api/browse/move/jobs/latest": { body: null },
+      "GET /api/browse/move/jobs/j1": {
+        body: job({ state: "done", done: 2, result: { ...batch, message: "Moved folder 2009 (2 files) to 'Old years'" } }),
+      },
+    });
+    renderWithProviders(<CopyJobProgress />);
+    act(() => startedCopyJob("j1"));
+    expect(await screen.findByText("Moved folder 2009 (2 files) to 'Old years'")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
   it("a stopped move says how far it got", async () => {
     mockFetch({
       "GET /api/browse/move/jobs/latest": { body: null },

@@ -13,6 +13,7 @@ from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
 from dam.ops.jobs import CopyJobs
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
+from dam.ops.planner import _add_note
 from dam.ops.primitives import can_make_links
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.errors import InvalidRequest, NotFound
@@ -345,6 +346,8 @@ class BrowseService:
             resolved = hand_over.ops
         copies = [r for r in resolved if r.kind is OpKind.COPY_ACROSS]
         total, size = len(copies), sum(r.size or 0 for r in copies)
+        # a folder moved across disks: its final QUARANTINE says where the copy is
+        folder = next((r for r in resolved if r.copied_to is not None), None)
 
         def work(ctx) -> BatchResult:
             moved = {"files": 0, "bytes": 0}
@@ -366,12 +369,33 @@ class BrowseService:
             result = self.executor.apply(
                 plan, check=check, should_stop=ctx.stopped, progress=progress, copied=copied
             )
-            if result.stopped:
+            if folder is not None:
+                name = PurePosixPath(folder.src).name
+                if result.stopped:
+                    result.error = (
+                        f"Copied {moved['files']} of {total} files;"
+                        f" {name} stays in place until all are copied"
+                    )
+                elif result.failed is None and result.error is None:
+                    files = "1 file" if total == 1 else f"{total} files"
+                    result.message = (
+                        f"Moved folder {name} ({files}) to {self._place(folder.copied_to)}"
+                    )
+            elif result.stopped:
                 result.error = f"Stopped: {moved['files']} of {total} files moved."
             return result_of(result)
 
         job = self.copy_jobs.start(work)
         return result_of(BatchResult("", False, job_id=job.job_id))
+
+    def _place(self, copied_to: str) -> str:
+        """Where a folder went, for its job result: the archive folder's label in quotes
+        when it went to the top of that folder, else the folder it went into."""
+        dest = parent(copied_to)
+        label = self.executor.paths.label_of(copied_to)
+        if label and fold_parts(dest) == fold_parts(label):
+            return f"'{label}'"
+        return dest or "the main folder"
 
     def _original(self, path: str) -> str:
         """``path`` (inside a quarantine folder) without that folder's quarantine prefix,
@@ -478,7 +502,60 @@ class BrowseService:
         move = self._drop(drive_ids, folder, origin, mode)
         resolved = self.executor.preview(move.plan)
         self._check_drop(move.ids, resolved, mode)
+        self._warn_links_elsewhere(move, resolved, mode)
         return resolved
+
+    def _warn_links_elsewhere(self, move: "_Move", ops: list[ResolvedOp], mode: str) -> None:
+        """For a folder move: a note on the folder's op (the MOVE, or across disks the final
+        QUARANTINE) naming the links outside ``##. Ongoing`` / ``##. Important`` that
+        point into the folder; they will point to nothing. Counted from the index."""
+        if mode != "move" or len(move.ids) != 1:
+            return
+        rec = self.repo.get(move.ids[0])
+        if rec is None or not rec.is_dir:
+            return
+        op = next(
+            (
+                o
+                for o in ops
+                if o.src == rec.path and (o.kind is OpKind.MOVE or o.copied_to is not None)
+            ),
+            None,
+        )
+        if op is None:
+            return
+        if op.note and "will point to nothing" in op.note:
+            return  # the check ran before on these ops
+        folder = nfc(rec.path)
+        across = op.kind is not OpKind.MOVE
+        elsewhere: list[str] = []
+        inside: list[str] = []
+        for link in self.repo.live_links():
+            if any(is_under(link.path, a) for a in (self.special.ongoing, self.special.important)):
+                continue
+            target = link_target(self.executor.paths, self.repo, link)
+            if target is None or not _under(nfc(target.path), folder):
+                continue
+            if _under(nfc(link.path), folder):
+                # across disks it is already in the "not copied" note
+                if not across:
+                    inside.append(link.name)
+            else:
+                elsewhere.append(link.name)
+        for names, where in ((elsewhere, "elsewhere"), (inside, "inside")):
+            if not names:
+                continue
+            if where == "elsewhere":
+                head = "link elsewhere points" if len(names) == 1 else "links elsewhere point"
+                text = f"{len(names)} {head} into this folder and will point to nothing"
+            else:
+                head = "link inside this folder points" if len(names) == 1 else (
+                    "links inside this folder point"
+                )
+                text = f"{len(names)} {head} into it and will point to nothing"
+            if len(names) <= 5:
+                text += ": " + ", ".join(names)
+            op.note = _add_note(op.note, text)
 
     def move(
         self,
@@ -499,8 +576,10 @@ class BrowseService:
         Ongoing sync repoint their links, nothing is synced here.
         """
         move = self._drop(drive_ids, folder, origin, mode)
+
         def check(ops: list[ResolvedOp]) -> None:
             self._check_drop(move.ids, ops, mode)
+            self._warn_links_elsewhere(move, ops, mode)
 
         if mode == "move" and not dry_run:
             return self._apply_or_background(
@@ -603,7 +682,9 @@ class BrowseService:
             drive_id = rec.drive_id
             drive_ids.append(drive_id)
             if rec.is_dir:
-                raise InvalidRequest(f"{rec.path}: folders cannot be moved yet")
+                if len(requested) != 1 or name is not None:
+                    raise InvalidRequest("Move one folder at a time, without files")
+                self._check_movable_folder(rec, dest)
             if rec.is_link:
                 raise InvalidRequest(f"{rec.path}: links cannot be moved")
             for area in (self.special.ongoing, *self.executor.paths.quarantines):
@@ -622,6 +703,25 @@ class BrowseService:
             move.ids.append(drive_id)
         move.plan.label = self._move_label(drive_ids, name, dest, move)
         return move
+
+    def _check_movable_folder(self, rec: FileRecord, dest: str) -> None:
+        """Refuse (``InvalidRequest``) a folder that must stay: the top of the archive,
+        an extra folder's root, the app's own folders and what is inside them, and a
+        move of a folder into itself."""
+        paths = self.executor.paths
+        parts = PurePosixPath(rec.path).parts
+        if paths.is_root(rec.path) or (
+            len(parts) == 1
+            and any(fold_parts(rec.path) == fold_parts(x) for x in paths.extra_labels)
+        ):
+            raise InvalidRequest(f"{rec.path}: the top of an archive folder cannot be moved")
+        if fold_parts(rec.path) == fold_parts(self.special.inbox):
+            raise InvalidRequest(f"{rec.path}: the app keeps that folder in place")
+        for area in (self.special.ongoing, self.special.important, *paths.quarantines):
+            if is_under(rec.path, area):
+                raise InvalidRequest(f"{rec.path}: the app keeps {area} in place")
+        if is_under(dest, rec.path):
+            raise InvalidRequest(f"{rec.path}: a folder cannot be moved into itself")
 
     def _link_copy_ops(self, drive_ids: list[str], folder: str, origin: str, mode: str) -> "_Move":
         """``mode`` ``link``: a SYMLINK in ``folder`` to each file (named like it); the
@@ -655,7 +755,7 @@ class BrowseService:
                 continue  # two rows (two collections) of one file
             chosen.append(rec)
             if rec.is_dir:
-                raise InvalidRequest(f"{rec.path}: folders cannot be {verb} yet")
+                raise InvalidRequest("Folders can only be moved")
             if rec.is_link:
                 raise InvalidRequest(f"{rec.path}: links cannot be {verb}")
             if self.executor.paths.is_quarantined(rec.path) or any(
@@ -690,5 +790,7 @@ class BrowseService:
             if fold_parts(parent(first.path)) == fold_parts(dest):
                 return f"Renamed {old} to {name}"
             return f"Renamed {old} to {name} and moved it to {dest}"
+        if first is not None and first.is_dir:
+            return f"Moved folder {old} to {dest}"
         what = old if len(move.ids) == 1 and old else f"{len(move.ids)} files"
         return f"Moved {what} to {dest}"

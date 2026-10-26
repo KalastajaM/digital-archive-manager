@@ -5,12 +5,14 @@ import {
   COLLECTION_DRAG_TYPE,
   DRAG_TYPE,
   dragSelection,
+  FOLDER_DRAG_TYPE,
   readDragCollection,
   readBrowseDrag,
   readDragFiles,
   SPECIAL_DRAG_TYPE,
   setDragCollection,
   setDragFiles,
+  setDragFolder,
   useDropTarget,
 } from "./dnd";
 import { dataTransfer } from "./test-utils";
@@ -235,6 +237,33 @@ describe("nested drop targets", () => {
     fireEvent.drop(screen.getByTestId("child"), { dataTransfer: dt });
     expect(outerDrop).toHaveBeenCalledWith(["f1"], expect.anything());
     expect(innerDrop).not.toHaveBeenCalled();
+    document.dispatchEvent(new Event("dragend"));
+  });
+});
+
+describe("folder drags", () => {
+  it("carry only the folder: Browse's folder targets read it as a folder, files targets never as files", () => {
+    const dt = dataTransfer({ protectedMode: true }); // hovering: only the types are readable
+    setDragFolder(dragEvent(dt), "d9", "2009");
+    expect(dt.types).toEqual([FOLDER_DRAG_TYPE]);
+    // a move (Browse) and an add to a collection (sidebar) both allowed
+    expect(dt.effectAllowed).toBe("copyMove");
+    expect(readBrowseDrag(dragEvent(dt))).toEqual({ kind: "folder", id: "d9" });
+    expect(readDragFiles(dragEvent(dt))).toBeNull(); // a tray or the Inbox never sees it
+    document.dispatchEvent(new Event("dragend"));
+    expect(readBrowseDrag(dragEvent(dt))).toBeNull();
+  });
+
+  it("a Browse target that takes the folder gets a move drop effect", () => {
+    function Browse() {
+      const target = useDropTarget({ read: readBrowseDrag, accept: () => true, onDrop: () => {} });
+      return <div data-testid="t" {...target.props} />;
+    }
+    render(<Browse />);
+    const dt = dataTransfer();
+    setDragFolder(dragEvent(dt), "d9", "2009");
+    fireEvent.dragOver(screen.getByTestId("t"), { dataTransfer: dt });
+    expect(dt.dropEffect).toBe("move");
     document.dispatchEvent(new Event("dragend"));
   });
 });

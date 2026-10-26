@@ -714,6 +714,8 @@ class ResolvedOpOut(BaseModel):
     # copy_across: the file's size, and whether it is in the cloud only (downloaded first)
     size: int | None = None
     cloud_only: bool | None = None
+    # copy_across of a folder move: "present" when the destination already holds the file
+    method: str | None = None
 
 
 class BatchResultOut(BaseModel):
@@ -727,6 +729,9 @@ class BatchResultOut(BaseModel):
     # a move across disks started in the background: poll /api/browse/move/jobs/{job_id};
     # this answer is empty and the job's result is the batch
     job_id: str | None = None
+    # what a finished batch did, in words, when it says it itself (a folder moved across
+    # disks); else null
+    message: str | None = None
 
 
 class DraftWordOut(BaseModel):

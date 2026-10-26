@@ -17,7 +17,7 @@ import type { RestoreTo } from "../components/Restore";
 import { SavedNote } from "../components/SavedNote";
 import { inToDelete, toDeleteReason } from "../toDelete";
 import { visible } from "../text";
-import { type BackToInbox, FileActions, FileCollections, FolderActions } from "./FileActions";
+import { type BackToInbox, FileActions, FileCollections, FolderActions, type FolderMoveTo } from "./FileActions";
 
 export function FilePanel({
   file,
@@ -110,11 +110,14 @@ export function FolderPanel({
   folder,
   refusal,
   restore,
+  moveTo,
 }: {
   folder: { drive_id: string; name: string; path: string };
   refusal: string | null;
   /** A folder in To Delete: Restore it to where it was or to the inbox. */
   restore?: (to: RestoreTo) => void;
+  /** Move to… for this folder (Browse). */
+  moveTo?: FolderMoveTo;
 }) {
   return (
     <div className="file-panel folder-panel">
@@ -131,7 +134,13 @@ export function FolderPanel({
       <p className="hint">
         Added to a collection, a folder brings everything in it, also what is put in it later. Enter opens it.
       </p>
-      <FolderActions key={folder.drive_id} driveId={folder.drive_id} refusal={refusal} restore={inToDelete(folder.path) ? restore : undefined} />
+      <FolderActions
+        key={folder.drive_id}
+        driveId={folder.drive_id}
+        refusal={refusal}
+        restore={inToDelete(folder.path) ? restore : undefined}
+        moveTo={moveTo}
+      />
     </div>
   );
 }

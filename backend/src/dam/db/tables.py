@@ -157,6 +157,11 @@ operations = Table(
     # rule pictures only (0030): "rename" or "copy", and the sha256 of the file's content
     Column("method", Text, nullable=True),
     Column("content_hash", Text, nullable=True),
+    # a folder moved across disks (0036), on its final QUARANTINE: where the copy is, and
+    # the folder rows that followed it as JSON {"rows": [[old_id, new_id, old_path,
+    # new_path], ...], "applied": bool} (``dam.ops.model.read_followed``)
+    Column("copied_to", Text, nullable=True),
+    Column("followed", Text, nullable=True),
     Index("ix_operations_batch_id", "batch_id"),  # migration 0004
 )
 

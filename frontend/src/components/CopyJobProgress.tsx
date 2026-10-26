@@ -74,7 +74,8 @@ export function CopyJobProgress() {
         const at = r.failed ? ` (at ${visible(r.failed.src ?? r.failed.dst)})` : "";
         toast({ kind: "error", text: `Stopped: ${visible(r.error ?? "an operation failed")}${at}`, action });
       } else {
-        toast({ kind: "info", text: `Moved ${plural(j.done, "file")} across disks`, action });
+        // a folder move says it in the server's words ("Moved folder 2009 (2 files) to …")
+        toast({ kind: "info", text: r.message ? visible(r.message) : `Moved ${plural(j.done, "file")} across disks`, action });
       }
     };
     const tick = async () => {

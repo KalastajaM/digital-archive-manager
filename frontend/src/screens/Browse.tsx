@@ -38,6 +38,7 @@ import {
   backToInbox,
   deletionRefusal,
   FILES_MOVED_EVENT,
+  folderMoveRequest,
   type FilesMovedDetail,
   inboxRefusal,
   MOVE_BUSY,
@@ -62,7 +63,7 @@ import { Toolbar } from "../components/ui/Toolbar";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { type BrowseDrag, type DropTarget, dragSelection, readBrowseDrag, setDragFiles, setDragFolder, useDropTarget } from "../dnd";
-import { type DropVerdict, FOLDER_DRAG_REASON, judgeDrop, placeOf, SEARCH_DROP_REASON } from "../dropModes";
+import { type DropVerdict, folderSourceRefusal, judgeDrop, judgeFolderDrop, placeOf, SEARCH_DROP_REASON } from "../dropModes";
 import { useDropToCollection } from "../components/useDropToCollection";
 import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
@@ -250,45 +251,61 @@ function SelectAll({ checked, total, onChange }: { checked: number; total: numbe
   );
 }
 
-/** The pane's folder as a path of links; each link goes there in this pane only. */
+/** One step of the breadcrumb as a drop target: files or a folder dropped on it go
+ * into that folder, as on a folder row. */
+function Crumb({ drop, children }: { drop: DropProps; children: (props: DropTarget["props"]) => ReactNode }) {
+  const target = useDropTarget<BrowseDrag>({ ...drop, read: readBrowseDrag, onRefused: drop.onRefused });
+  return <>{children(target.props)}</>;
+}
+
+/** The pane's folder as a path of links; each link goes there in this pane only, and
+ * takes a drop into that folder (``drop``). */
 function Breadcrumb({
   path,
   href,
   go,
+  drop,
 }: {
   path: string;
   href: (to: string) => string;
   go: (to: string) => void;
+  drop: (to: string) => DropProps;
 }) {
   const parts = path ? path.split("/") : [];
   const link = (to: string, label: string) => (
-    <Link
-      to={href(to)}
-      draggable={false}
-      title={label}
-      onClick={(e) => {
-        e.preventDefault();
-        go(to);
-      }}
-    >
-      {label}
-    </Link>
+    <Crumb drop={drop(to)}>
+      {(props) => (
+        <Link
+          to={href(to)}
+          draggable={false}
+          title={label}
+          onClick={(e) => {
+            e.preventDefault();
+            go(to);
+          }}
+          {...props}
+        >
+          {label}
+        </Link>
+      )}
+    </Crumb>
+  );
+  const current = (to: string, label: string) => (
+    <Crumb drop={drop(to)}>
+      {(props) => (
+        <span aria-current="page" title={label} {...props}>
+          {label}
+        </span>
+      )}
+    </Crumb>
   );
   return (
     <nav className="breadcrumb" aria-label="Breadcrumb">
       <ol>
-        <li>{parts.length === 0 ? <span aria-current="page">Archive</span> : link("", "Archive")}</li>
+        <li>{parts.length === 0 ? current("", "Archive") : link("", "Archive")}</li>
         {parts.map((part, i) => {
           const here = parts.slice(0, i + 1).join("/");
-          return (
-            <li key={here}>
-              {i === parts.length - 1 ? (
-                <span aria-current="page" title={visible(part)}>
-                  {visible(part)}
-                </span>
-              ) : link(here, visible(part))}
-            </li>
-          );
+          return <li key={here}>{i === parts.length - 1 ? current(here, visible(part)) : link(here, visible(part))}</li>;
         })}
       </ol>
     </nav>
@@ -432,9 +449,9 @@ function EntryRow({
   );
 }
 
-/** A folder row: a drop target (files dropped here move into it). It drags only as a
- * folder, which only a collection in the sidebar takes (``collectable``: its area allows
- * that); it is never moved by a drag. */
+/** A folder row: a drop target (files or a folder dropped here move into it). It drags
+ * only as a folder, never with the checked files (``collectable``: its area allows that):
+ * Browse's folder targets move it, a collection in the sidebar takes it as a member. */
 function FolderRow({ drop, collectable, ...row }: Omit<RowProps, "dropProps" | "dragIds"> & { drop: DropProps; collectable: boolean }) {
   const target = useDropTarget<BrowseDrag>({ ...drop, read: readBrowseDrag, onRefused: drop.onRefused });
   const { item } = row;
@@ -957,7 +974,9 @@ export default function Browse() {
     return () => window.removeEventListener(FILES_MOVED_EVENT, onMoved);
   }, []);
   const move = useMoveFlow();
-  const [moveTo, setMoveTo] = useState<{ ids: string[]; names: string[]; initial: string } | null>(null);
+  const [moveTo, setMoveTo] = useState<{ ids: string[]; names: string[]; initial: string; title?: string; folder?: true } | null>(
+    null,
+  );
   // From… / For… on the same rows as Move to…
   const [assigning, setAssigning] = useState<{ kind: AssignKind; ids: string[] } | null>(null);
   const locked = marking.busy || move.busy;
@@ -1017,7 +1036,8 @@ export default function Browse() {
   });
 
   /** The files a drag or Move to… takes: the checked files of the pane, else the row
-   * the user is on (once they chose one). Folders never move. */
+   * the user is on (once they chose one). A folder moves on its own, never with files:
+   * dragged, or with Move to… in its panel (``folderToMove``). */
   const filesOf = (pane: PaneId): Item[] => {
     const s = selOf(pane);
     const byId = new Map(items[pane].map((it) => [it.drive_id, it]));
@@ -1093,8 +1113,34 @@ export default function Browse() {
     }
     startRequest({ ids: dragged, folder: dest });
   };
+  /** Why this folder cannot move at all (null: it can), as far as this screen knows. */
+  const folderMoveWhy = (it: Item): string | null =>
+    folderSourceRefusal(it, specialFolders) ?? (it.connected === false && it.folder ? notConnected(it.folder) : null);
+  /** Why the folder ``id`` cannot go into ``target`` (null: it can). A folder no pane lists
+   * any more is left to the server's preview. */
+  const folderDropWhy = (id: string, target: string): string | null => {
+    const it = rowsById.get(id);
+    if (!it) return null;
+    return folderMoveWhy(it) ?? judgeFolderDrop({ folder: it, target, areas: specialFolders });
+  };
+  /** Move the folder ``id`` (with everything in it) into ``dest``: Move only, through the
+   * same preview, confirm and Undo as files. */
+  const moveFolder = (id: string, dest: string) => {
+    const why = folderDropWhy(id, dest);
+    if (why) toast({ kind: "info", text: why });
+    else startRequest(folderMoveRequest(id, dest));
+  };
+  /** Move to… for one folder (one pane: the other pane is no choice to start with). */
+  const openFolderMoveTo = (it: Item) => {
+    if (running() || folderMoveWhy(it)) return;
+    setMoveTo({ ids: [it.drive_id], names: [it.name], title: `Move ${visible(it.name)} to…`, folder: true, initial: "" });
+  };
   const inbox = useInboxFolder();
   const openMoveTo = () => {
+    if (folderToMove) {
+      openFolderMoveTo(folderToMove);
+      return;
+    }
     if (running() || moveTargets.length === 0 || moveBlocked) return;
     const other: PaneId = act === "left" ? "right" : "left";
     setMoveTo({
@@ -1109,8 +1155,7 @@ export default function Browse() {
   const addToCollection = useDropToCollection();
   const status = useStatus().data;
   const collectionRows = collections.data?.filter((c) => c.state === "open" && !c.kind);
-  const judge = (drag: BrowseDrag, target: string, alt: boolean): DropVerdict => {
-    if (drag.kind === "folder") return { kind: "refused", reason: FOLDER_DRAG_REASON };
+  const judge = (drag: Extract<BrowseDrag, { kind: "files" }>, target: string, alt: boolean): DropVerdict => {
     const dragged = drag.ids.flatMap((id) => {
       const it = rowsById.get(id);
       return it && !it.is_dir ? [{ id, path: it.path, locked: isBlocked(id, it.marks, it.path) }] : [];
@@ -1126,7 +1171,10 @@ export default function Browse() {
     });
   };
   const dropOn = (drag: BrowseDrag, target: string, alt: boolean) => {
-    if (drag.kind === "folder") return;
+    if (drag.kind === "folder") {
+      moveFolder(drag.id, target); // Option does nothing: a folder is only moved
+      return;
+    }
     const verdict = judge(drag, target, alt);
     if (verdict.kind === "refused") {
       toast({ kind: "info", text: verdict.reason });
@@ -1147,6 +1195,7 @@ export default function Browse() {
   };
   const dropTo = (target: string): DropProps => ({
     accept: (drag, e) => {
+      if (drag.kind === "folder") return folderDropWhy(drag.id, target) ?? (running() ? MOVE_BUSY : true);
       const verdict = judge(drag, target, e.altKey);
       if (verdict.kind === "refused") return verdict.reason;
       return running() ? MOVE_BUSY : true;
@@ -1159,7 +1208,7 @@ export default function Browse() {
     searching && pane === sp
       ? {
           // search results are no folder
-          accept: (drag) => (drag.kind === "folder" ? FOLDER_DRAG_REASON : SEARCH_DROP_REASON),
+          accept: () => SEARCH_DROP_REASON,
           onDrop: () => {},
           onRefused: (reason) => toast({ kind: "info", text: reason }),
         }
@@ -1185,6 +1234,9 @@ export default function Browse() {
   // a folder on the cursor shows its own panel: its collections and Add to collection
   const folderShown: Item | null =
     !split && sel.touched && currentItem?.is_dir && !gone.has(currentItem.drive_id) ? currentItem : null;
+  // Move to… (the header's, ⇧⌘M and the panel's) takes the folder shown when no file is picked
+  const folderToMove: Item | null = moveTargets.length === 0 ? folderShown : null;
+  const folderMoveBlocked = folderToMove ? folderMoveWhy(folderToMove) : null;
   // Back to inbox for the selected files: why not (the inbox is unknown, they are there already, locked)
   const inboxWhy =
     moveTargets.length === 0
@@ -1487,6 +1539,7 @@ export default function Browse() {
             path={paths[pane]}
             href={(to) => hrefFor(pane, to)}
             go={(to) => go(pane, to)}
+            drop={dropTo}
           />
           <div className="pane-tools">
             {marked && <MarkToggles key={marked.drive_id} driveId={marked.drive_id} name={marked.name} marks={marked.marks} path={marked.path} />}
@@ -1860,8 +1913,8 @@ export default function Browse() {
             moveTo={{
               run: openMoveTo,
               shortcut: "⇧⌘M",
-              disabled: moveTargets.length === 0 || locked,
-              reason: moveBlocked,
+              disabled: (moveTargets.length === 0 && !folderToMove) || locked,
+              reason: moveBlocked ?? folderMoveBlocked,
             }}
             sender={{
               run: () => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) }),
@@ -1941,6 +1994,7 @@ export default function Browse() {
                   folder={folderShown}
                   refusal={folderCollectRefusal(folderShown.path, specialFolders)}
                   restore={(to) => startRestore([folderShown.drive_id], to)}
+                  moveTo={{ run: () => openFolderMoveTo(folderShown), refusal: folderMoveWhy(folderShown) ?? (locked ? MOVE_BUSY : null) }}
                 />
               ) : (
                 <EmptyState
@@ -1960,12 +2014,14 @@ export default function Browse() {
       {moveTo && (
         <MoveToSheet
           names={moveTo.names}
+          title={moveTo.title}
           initial={moveTo.initial}
           onCancel={() => setMoveTo(null)}
           onChoose={(dest) => {
             const chosen = moveTo;
             setMoveTo(null);
-            startMove(chosen.ids, dest);
+            if (chosen.folder) moveFolder(chosen.ids[0], dest);
+            else startMove(chosen.ids, dest);
           }}
         />
       )}

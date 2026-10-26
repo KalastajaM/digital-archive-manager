@@ -283,6 +283,17 @@ class FileRepo:
             rows = conn.execute(select(files).where(*cond).order_by(files.c.path)).all()
         return [_record(r) for r in rows]
 
+    def live_links(self) -> list[FileRecord]:
+        """Every live link row (not missing, not parked), by path."""
+        cond = [
+            files.c.is_link.is_(True),
+            files.c.missing.is_not(True),
+            files.c.parked_at.is_(None),
+        ]
+        with self._conn() as conn:
+            rows = conn.execute(select(files).where(*cond).order_by(files.c.path)).all()
+        return [_record(r) for r in rows]
+
     def save_hash(
         self, drive_id: str, sha256: str, expect: tuple[int | None, float | None]
     ) -> bool:
@@ -1291,8 +1302,10 @@ class FileRepo:
             )
             conn.execute(text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": other})
 
-    def update_path(self, old_rel: str, new_rel: str) -> None:
+    def update_path(self, old_rel: str, new_rel: str, *, recursive: bool = True) -> None:
         """Move the record at ``old_rel`` (and, for folders, its descendants) to ``new_rel``.
+        ``recursive`` False: that one row only (a folder row following its copy across
+        disks, while the rows below it stay where they are).
 
         Matching is NFC-normalised and respects component boundaries (``a/b`` never
         touches ``a/bc``). Paths not in the index are ignored. Each re-pathed row gets
@@ -1302,14 +1315,12 @@ class FileRepo:
         prefix = old_nfc + "/"
         depth = len(PurePosixPath(old_rel).parts)
         now = time.time()  # a re-pathed row is on disk right now: a concurrent scan must keep it
+        where = files.c.path_nfc == old_nfc
+        if recursive:
+            where = or_(where, func.substr(files.c.path_nfc, 1, len(prefix)) == prefix)
         with self._conn(write=True) as conn:
             rows = conn.execute(
-                select(files.c.drive_id, files.c.path, files.c.is_dir).where(
-                    or_(
-                        files.c.path_nfc == old_nfc,
-                        func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-                    )
-                )
+                select(files.c.drive_id, files.c.path, files.c.is_dir).where(where)
             ).all()
             for drive_id, path, is_dir in rows:
                 rest = PurePosixPath(path).parts[depth:]

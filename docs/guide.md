@@ -1493,8 +1493,40 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   - A name that is within 19 characters of the longest name a disk takes (255 bytes) is
     refused in the preview, because the copy is first written under a longer temporary
     name. Shorten it and move it again.
-  - Only files move this way for now; a folder cannot be moved to another disk yet, and
-    a protected file is not copied across.
+  - A protected file is not copied across.
+- **Moving a folder**: drag a folder row in Browse onto a folder row, the other pane or a
+  breadcrumb, or use **Move to…** in the folder's panel. One folder moves at a time, and a
+  folder drop offers Move only (no Link or Copy). The top of an archive folder, `##. Ongoing`,
+  `##. Important`, `##. To Delete`, the inbox and anything inside them stay where they
+  are, and a folder cannot go into itself.
+  - On the same disk it is one rename, with its files, tags, notes and collections going
+    along. A taken name gets `_2` (the preview says so). Links inside the folder move with
+    it.
+  - On either kind of move the preview warns about links that will point to nothing: links
+    elsewhere that point into the folder and, on the same disk, links inside it that point
+    into it. Links in `##. Ongoing` and `##. Important` are left out.
+  - To a folder on another disk dam makes the folder tree there (empty subfolders too),
+    copies and checks every file as above (modification dates kept), and only when every
+    file is copied moves the whole original folder to the To Delete of its own archive
+    folder. The preview lists the links inside that are not copied (they go to To Delete
+    with the folder).
+    The folder's own collections and notes follow it. The move runs in the background as
+    above, and **Undo** puts everything back and removes the folders it made while they
+    are empty.
+  - **Stop** ends the move after the file being copied. The original folder stays whole
+    where it is, and the copies made so far stay at the destination. Move the folder again
+    to finish: it merges into the folder already there and skips files already copied
+    (checked by content), so nothing is duplicated. To undo both, undo the second move
+    first: until then the first one cannot be undone, because its copies are the only
+    ones left outside To Delete.
+  - If the original folder changed during the move (a file added, removed, renamed or
+    edited after it was copied), the last step stops: nothing goes to To Delete, the
+    message names what changed, and moving the folder again copies the rest. An edited
+    file is copied next to its old copy as `name_2`; the old copy is never overwritten.
+  - A folder that holds an unfinished copy (`.dam-copy-`) or a protected file is refused,
+    and so is one holding two names that differ only in case or accents (`a.pdf` and
+    `A.pdf`, possible on some disks): rename one of them first.
+    `.DS_Store` files are not copied.
 - **A folder that is not connected** (unplugged disk, cloud drive not signed in) gets a "Not
   connected" mark on its row in Browse. Its files stay in the index, search and
   collections, where they carry the same mark, and are not marked missing; the file view says the folder is not connected
@@ -1572,7 +1604,8 @@ selection drags all of it. A valid target highlights; an invalid one shows why n
 | A collection in the sidebar | Adds the files to the collection, ungrouped. |
 | A collection onto another collection (or the **Collections** caption) | Moves the collection inside the other one (or to the top level), with everything under it. |
 | A group inside a collection | Adds the files to that group, or moves them there if they are already members. |
-| A folder in Browse (a folder row, or the other pane) | **Move, Link or Copy, always behind a preview and confirm**, with **Undo**. The confirm has the three ways side by side: **Move** (the default), **Link** (a shortcut in that folder that opens the file; the file stays where it is; Undo removes the shortcut) and **Copy** (marked "not recommended: makes a duplicate"; Undo moves the copy to To Delete). Hold **Option** (Alt) while dropping to start with Copy. A taken name gets `_2`. |
+| A file, onto a folder in Browse (a folder row, the other pane, or a breadcrumb) | **Move, Link or Copy, always behind a preview and confirm**, with **Undo**. The confirm has the three ways side by side: **Move** (the default), **Link** (a shortcut in that folder that opens the file; the file stays where it is; Undo removes the shortcut) and **Copy** (marked "not recommended: makes a duplicate"; Undo moves the copy to To Delete). Hold **Option** (Alt) while dropping to start with Copy. A taken name gets `_2`. |
+| A folder row, onto a folder row, the other pane or a breadcrumb | **Move** only, behind a preview and confirm ("Move folder" on one disk, "Copy and move" to another disk), with **Undo**. See **Moving a folder** above. |
 | The file's own folder | Move and Link are refused with "Already in this folder". Copy works if you hold Option while dropping (the copy gets a number). |
 | A row of `##. Ongoing` onto a folder | Move moves the **real file** (the link's target), not the link. The confirm names the folder it is in now and where it goes; it stays in its collections and the link in Ongoing follows. Link and Copy use the original. |
 | A row of `##. Important` onto a folder | Link and Copy use the original. Move is refused: "This file is marked Important; unmark it first". |
@@ -1581,9 +1614,9 @@ selection drags all of it. A valid target highlights; an invalid one shows why n
 | `##. Ongoing` itself, `##. Important`, `##. To Delete`, the top of the archive, search results | Refused. While you drag, the reason shows on the folder or pane itself, and dropping there anyway shows it as a message. To send a file to To Delete use **Mark for deletion**. |
 
 Every drop has a keyboard or menu equivalent: the Inbox form, **Put in tray…** and **Add
-to collection…** on a file, the group menu, and **Move to…** in Browse. Only files move;
-folders can be opened and dropped on. A folder can be dragged to a collection in the
-sidebar; dropped on a folder in Browse it is refused, with the reason.
+to collection…** on a file, the group menu, and **Move to…** in Browse (for a file or a
+folder). A folder can also be dragged to a collection in the sidebar. Breadcrumbs take
+file drops too. A drop that is refused shows the reason.
 
 Link needs permission to make links. On Windows that means Developer Mode; without it Link
 is off in the confirm, with the reason, and Copy still works.

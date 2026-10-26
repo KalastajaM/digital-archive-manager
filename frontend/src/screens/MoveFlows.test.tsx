@@ -122,6 +122,179 @@ describe("move flows in Browse and the sidebar", () => {
   });
 });
 
+describe("moving a folder in Browse", () => {
+  const TO_PAY = { id: "to-pay", name: "To pay", order: 1, item_title: "{name}", fields: {}, date_field: null, done: { label: "Mark paid", fields: {} } };
+  const LISTINGS: Record<string, DirEntry[]> = {
+    "": [dir("20. Home"), dir("Old years")],
+    "20. Home": [dir("20. Home/2009"), dir("20. Home/2010")],
+    "20. Home/2009": [dir("20. Home/2009/sub"), file("20. Home/2009/a.pdf", "fa")],
+    "Old years": [dir("Old years/1990s")],
+    "Old years/1990s": [],
+  };
+  const FOLDER = "id-20. Home/2009";
+  const moveOp = { kind: "move", src: "20. Home/2009", dst: "Old years/2009", drive_id: FOLDER, note: null };
+  const acrossOps = [
+    { kind: "mkdir", src: null, dst: "Old years/2009", drive_id: null, note: null },
+    { kind: "copy_across", src: "20. Home/2009/a.pdf", dst: "Old years/2009/a.pdf", drive_id: "fa", note: null, size: 1, cloud_only: false },
+    { kind: "quarantine", src: "20. Home/2009", dst: "##. To Delete/20. Home/2009", drive_id: FOLDER, note: "copied to Old years/2009" },
+  ];
+
+  function open(url: string, extra: Parameters<typeof mockFetch>[0] = {}) {
+    const calls = mockFetch({
+      "GET /api/status": { body: { inbox_count: 1, special_folders: SPECIAL } },
+      "GET /api/today": { body: { attention: [], overview: { inbox: 0, trays: [], collections: [] } } },
+      "GET /api/trays": { body: { trays: [TO_PAY], errors: [] } },
+      "GET /api/collections": { body: [] },
+      "GET /api/browse": (call) => ({ body: LISTINGS[new URL(call.url, "http://x").searchParams.get("path") ?? ""] ?? [] }),
+      "GET /api/activity": { body: [] },
+      "GET /api/folders": { body: [] },
+      [`GET /api/files/${encodeURIComponent(FOLDER)}/links`]: { body: { items: [], collections: [], note: "" } },
+      ...extra,
+    });
+    renderWithProviders(
+      <MemoryRouter initialEntries={[url]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/browse" element={<Browse />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    return { calls, user: userEvent.setup() };
+  }
+  const twoPanes = (left: string, right: string) => `/browse?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`;
+  const pane = (name: "Left pane" | "Right pane") => screen.getByRole("region", { name });
+  const rowIn = (scope: HTMLElement, name: string) => within(scope).getByText(name).closest("li")!;
+  const folderDrag = (row: HTMLElement) => {
+    const dt = dataTransfer({ protectedMode: true }); // hovering: only the types are readable
+    fireEvent.dragStart(row, { dataTransfer: dt });
+    return dt;
+  };
+  const nav = () => screen.getByRole("navigation", { name: "Main" });
+
+  it("a folder row, the other pane and a breadcrumb take it; a tray, the Inbox and the sidebar do not", async () => {
+    open(twoPanes("20. Home", "Old years/1990s"));
+    const left = pane("Left pane");
+    await within(left).findByText("2009");
+    const right = pane("Right pane");
+    const targets = [
+      rowIn(left, "2010"),
+      within(right).getByTestId("pane-drop"),
+      within(within(right).getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Old years" }),
+    ];
+    for (const target of targets) {
+      const dt = folderDrag(rowIn(left, "2009"));
+      fireEvent.dragEnter(target, { dataTransfer: dt });
+      expect(target).toHaveAttribute("data-drop", "over");
+      fireEvent.dragOver(target, { dataTransfer: dt });
+      expect(dt.dropEffect).toBe("move");
+      document.dispatchEvent(new Event("dragend"));
+    }
+    const sidebar = [
+      await within(nav()).findByRole("link", { name: "To pay" }),
+      await inboxRow(),
+      within(nav()).getByRole("link", { name: "Browse" }),
+    ];
+    for (const target of sidebar) {
+      const dt = folderDrag(rowIn(left, "2009"));
+      expect(fireEvent.dragEnter(target, { dataTransfer: dt })).toBe(true); // not taken
+      expect(target).not.toHaveAttribute("data-drop");
+      document.dispatchEvent(new Event("dragend"));
+    }
+  });
+
+  it("a refused breadcrumb says why in a toast too", async () => {
+    const { calls } = open("/browse?path=20.%20Home");
+    await screen.findByText("2009");
+    const top = within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Archive" });
+    const dt = folderDrag(rowIn(listing(), "2009"));
+    fireEvent.dragEnter(top, { dataTransfer: dt });
+    expect(top).toHaveAttribute("data-drop", "refused");
+    fireEvent.drop(top, { dataTransfer: dt });
+    expect(await screen.findByText("Not allowed: a folder is not moved to the top of the archive")).toBeInTheDocument();
+    expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
+  });
+
+  it("dropped into itself or its own subfolder, it is refused before the drop", async () => {
+    const { calls } = open(twoPanes("20. Home", "20. Home/2009"));
+    const left = pane("Left pane");
+    await within(left).findByText("2009");
+    const right = pane("Right pane");
+    await within(right).findByText("sub");
+    for (const target of [rowIn(right, "sub"), within(right).getByTestId("pane-drop"), rowIn(left, "2009")]) {
+      const dt = folderDrag(rowIn(left, "2009"));
+      fireEvent.dragEnter(target, { dataTransfer: dt });
+      expect(target).toHaveAttribute("data-drop", "refused");
+      expect(target).toHaveAttribute("data-tip", "Cannot move a folder into itself");
+      fireEvent.drop(target, { dataTransfer: dt });
+      document.dispatchEvent(new Event("dragend"));
+    }
+    expect((await screen.findAllByText("Cannot move a folder into itself")).length).toBeGreaterThan(0); // the toast
+    expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
+  });
+
+  it("a drop on one disk previews a move of that folder alone and confirms with Move folder", async () => {
+    const { calls, user } = open(twoPanes("20. Home", "Old years"), {
+      "POST /api/browse/move/preview": { body: [moveOp] },
+      "POST /api/browse/move": { body: result([moveOp], "Old years") },
+    });
+    const left = pane("Left pane");
+    await within(left).findByText("2009");
+    const right = pane("Right pane");
+    await within(right).findByText("1990s");
+    drag(rowIn(left, "2009"), within(right).getByTestId("pane-drop"));
+    const confirm = await screen.findByRole("dialog", { name: "Move 2009 to Old years?" });
+    expect(posts(calls, "/api/browse/move/preview").map((c) => c.body)).toEqual([{ drive_ids: [FOLDER], folder: "Old years" }]);
+    await user.click(within(confirm).getByRole("button", { name: /^Move folder/ }));
+    await waitFor(() => expect(posts(calls, "/api/browse/move")).toHaveLength(1));
+    expect(posts(calls, "/api/browse/move")[0].body).toEqual({ drive_ids: [FOLDER], folder: "Old years" });
+    expect(await screen.findByText("Moved folder 2009 to Old years")).toBeInTheDocument();
+  });
+
+  it("the folder's panel has Move to…: picking Old years previews it, and across disks the confirm says Copy and move", async () => {
+    const started: string[] = [];
+    const listen = (e: Event) => started.push((e as CustomEvent<string>).detail);
+    window.addEventListener("dam:copy-job-started", listen);
+    const { calls, user } = open("/browse?path=20.%20Home", {
+      "POST /api/browse/move/preview": { body: acrossOps },
+      "POST /api/browse/move": { body: { ...result([], "Old years"), batch_id: "", job_id: "j9" } },
+    });
+    await screen.findByText("2009");
+    await user.keyboard("{ArrowDown}"); // the cursor on 2009: its panel
+    const panel = screen.getByRole("region", { name: "Preview" });
+    const button = await within(panel).findByRole("button", { name: "Move to…" });
+    expect(button).toBeEnabled();
+    expect(button.tagName).toBe("BUTTON"); // a plain button: Tab reaches it
+    await user.click(button);
+    const sheet = await screen.findByRole("dialog", { name: "Move 2009 to…" });
+    await user.type(within(sheet).getByRole("combobox", { name: "Folder" }), "Old years");
+    await user.click(within(sheet).getByRole("button", { name: "Preview move" }));
+    const confirm = await screen.findByRole("dialog", { name: "Move 2009 to Old years?" });
+    expect(posts(calls, "/api/browse/move/preview").map((c) => c.body)).toEqual([{ drive_ids: [FOLDER], folder: "Old years" }]);
+    expect(within(confirm).getByText(/Copies 1 folder and 1 file \(1 bytes\) to 'Old years'/)).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: /^Copy and move/ }));
+    await waitFor(() => expect(started).toEqual(["j9"]));
+    window.removeEventListener("dam:copy-job-started", listen);
+  });
+
+  it("Move to… is off, with the reason, for a folder the app keeps in place", async () => {
+    const top = LISTINGS[""];
+    LISTINGS[""] = [dir("##. Organize")];
+    try {
+      const { user } = open("/browse?path=", {
+        [`GET /api/files/${encodeURIComponent("id-##. Organize")}/links`]: { body: { items: [], collections: [], note: "" } },
+      });
+      await screen.findByText("##. Organize");
+      await user.keyboard("{ArrowDown}");
+      const panel = screen.getByRole("region", { name: "Preview" });
+      const button = await within(panel).findByRole("button", { name: "Move to…" });
+      expect(button).toBeDisabled();
+      expect(button.closest(".button-wrap")).toHaveAttribute("data-tip", "The app keeps this folder in place");
+    } finally {
+      LISTINGS[""] = top;
+    }
+  });
+});
+
 describe("useBlockToastActions", () => {
   function Blocker({ label }: { label: string }) {
     const [on, setOn] = useState(false);

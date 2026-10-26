@@ -159,6 +159,9 @@ def different_disks_message(a: str, b: str) -> str:
 
 PICTURE_RENAME = "rename"
 PICTURE_COPY = "copy"
+# COPY_ACROSS of a folder move: the destination already holds the file (same size and
+# mtime, planned); at act time both hashes are compared and nothing is written
+PRESENT = "present"
 
 
 def move_between_folders(src: Path, dst: Path) -> None:
@@ -187,6 +190,16 @@ def file_sha256(path: Path, stop: Callable[[], bool] | None = None) -> str:
             if stop is not None and stop():
                 raise OpFailed("stopped")
     return digest.hexdigest()
+
+
+def present_matches(src: Path, dst: Path, stop: Callable[[], bool] | None = None) -> None:
+    """A ``present`` file of a folder move: ``dst`` (already at the destination) has the
+    content of ``src``. Both are only read; ``stop`` as for ``file_sha256``. Otherwise
+    ``OpFailed``, and the batch ends there."""
+    if file_sha256(src, stop) != file_sha256(dst, stop):
+        raise OpFailed(
+            f"{dst.name} at the destination differs from the original; nothing more was moved."
+        )
 
 
 def copy_verified(

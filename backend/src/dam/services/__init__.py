@@ -69,11 +69,17 @@ def check_disk_identity(
       file (a copy carries its original's xattr; the scanner treats such a twin as
       id-less too), and, when the index has its size, the disk size must equal it (a
       weak signal, but the only one there is).
-    - Always: the source is a regular file on disk (lstat: not a folder, not a link).
+    - Always: the source is a regular file on disk (lstat: not a folder, not a link), or
+      a folder on disk when the indexed row is a folder.
+
+    A folder moved across disks is many ops (made folders, a copy per file); the op
+    checked for it is its final QUARANTINE (the one carrying the planned ``tree``), whose
+    source is the folder itself.
 
     Catches a stale index (the file was replaced since the last scan). Pass it as
     ``Executor.apply(check=...)`` so the ops checked are the ops run."""
-    relocations = [r for r in resolved if r.kind in kinds]
+    folder_copies = [r for r in resolved if r.kind is OpKind.QUARANTINE and r.tree is not None]
+    relocations = folder_copies or [r for r in resolved if r.kind in kinds]
     if len(relocations) != len(ids):
         raise InvalidRequest("The files have changed since this was planned. Scan and try again.")
     for drive_id, rop in zip(ids, relocations, strict=True):
@@ -91,6 +97,12 @@ def check_disk_identity(
             st = os.lstat(paths.abs(rop.src))
         except OSError:
             raise InvalidRequest(f"{rop.src} cannot be read; scan and try again") from None
+        rec = repo.get(drive_id)
+        is_folder = rec is not None and rec.is_dir
+        if is_folder:
+            if not stat.S_ISDIR(st.st_mode):
+                raise InvalidRequest(f"{rop.src} is not a folder on disk; scan and try again")
+            continue  # a folder has no size to compare; its identity was checked above
         if not stat.S_ISREG(st.st_mode):
             raise InvalidRequest(f"{rop.src} is not a file on disk; scan and try again")
         if local:

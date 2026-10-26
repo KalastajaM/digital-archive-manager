@@ -362,17 +362,12 @@ the relabel endpoint, the job endpoints, the safety model: "nothing crosses disk
 becomes "a move across disks is a verified copy plus a move to To Delete"). The step 1
 spec's status line points here.
 
-## PR 2: folder moves (designed before it is built)
+## PR 2: folder moves
 
-Moving a folder, on one disk and across disks. Open questions for its own design, found
-while checking this one: picking a folder in the UI (drag and Move to…); a folder variant
-of `check_disk_identity`; how a cross-disk folder move is laid out (MKDIR the tree, copy
-every file, then one QUARANTINE of the whole source folder, so a stop leaves the source
-whole); what a second move does after a stopped one (merge into the existing destination
-tree and skip files whose hash matches, rather than `_N` duplicates); what the last step
-does when the source folder changed during a long job (files added or edited since
-copied); folder rows following to the destination and back on undo; links inside a
-folder.
+Designed and built separately: see `2026-10-26-folder-moves-design.md`. It settles the
+questions found here (picking a folder, the identity check, the layout of a cross-disk
+move, a second move after a stopped one, a source that changed, folder rows, links
+inside a folder), and where the two differ, that spec wins for folders.
 
 ## Decisions
 

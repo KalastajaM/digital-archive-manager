@@ -35,6 +35,7 @@ from dam.ops.model import (
     OpKind,
     Plan,
     ResolvedOp,
+    read_followed,
 )
 from dam.ops.planner import Planner
 from dam.ops.primitives import DS_STORE, TEMP_COPY_PREFIX, finder_cache_problem
@@ -78,6 +79,11 @@ class JournalEntry:
     label: str | None = None
     method: str | None = None  # rule pictures: "rename" or "copy"
     content_hash: str | None = None  # rule pictures: sha256 of the file
+    # a folder moved across disks, on its final QUARANTINE: where the copy is, and the
+    # folder rows that followed it (JSON ``{"rows": [[old_id, new_id, old_path, new_path],
+    # ...], "applied": bool}``, ``model.read_followed``)
+    copied_to: str | None = None
+    followed: str | None = None
 
 
 @dataclass
@@ -121,13 +127,25 @@ def undo(ex: Executor, batch_id: str) -> BatchResult:
         UNDO_ORIGIN, resolved, BatchResult(uuid4().hex, dry_run=False), undo_of=batch_id
     )
     result.kept = kept
-    if len(result.done) == len(resolved):  # complete: created folders count as undone
+    if len(result.done) == len(resolved):
+        # complete: created folders count as undone, and so do the files a folder move
+        # found at the destination already (no inverse: ``_select_reverts``)
         with write_tx(ex.engine) as conn:
             conn.execute(
                 update(operations)
                 .where(
                     operations.c.batch_id == batch_id,
                     operations.c.kind == str(OpKind.MKDIR),
+                    operations.c.state.in_(ACTED),
+                )
+                .values(state="undone")
+            )
+            conn.execute(
+                update(operations)
+                .where(
+                    operations.c.batch_id == batch_id,
+                    operations.c.kind == str(OpKind.COPY_ACROSS),
+                    operations.c.method == primitives.PRESENT,
                     operations.c.state.in_(ACTED),
                 )
                 .values(state="undone")
@@ -162,6 +180,7 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
     acted = [r for r in rows if r.state in ACTED]
     if not acted:
         raise OpFailed("There is nothing to undo here.")
+    _check_no_later_move_relies(ex, batch_id, acted)
     known: dict[str, bool] = {}  # each folder's root is listed once
     for row in acted:  # an unplugged folder would look changed: wait until it is back
         check_connected(ex.paths, row.src, row.dst, known=known)
@@ -190,14 +209,58 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
         raise
 
 
+def _check_no_later_move_relies(ex: Executor, batch_id: str, acted: list[JournalEntry]) -> None:
+    """A later move of the same folder across disks found this batch's copies present
+    and sent the folder (with the originals) to To Delete: undoing this batch would move
+    those copies, the only live ones, to To Delete as well. Refused until that later move
+    is undone (its final QUARANTINE is acted and not undone). OpFailed: a 409, like the
+    other refusals here."""
+    made = {
+        fold_parts(r.dst)
+        for r in acted
+        if r.kind == OpKind.COPY_ACROSS and r.method != primitives.PRESENT
+    }
+    if not made:
+        return
+    present = entries(
+        ex,
+        operations.c.batch_id != batch_id,
+        operations.c.kind == str(OpKind.COPY_ACROSS),
+        operations.c.method == primitives.PRESENT,
+        operations.c.state.in_(ACTED),
+    )
+    for later in dict.fromkeys(r.batch_id for r in present if fold_parts(r.dst) in made):
+        for final in entries(
+            ex,
+            operations.c.batch_id == later,
+            operations.c.kind == str(OpKind.QUARANTINE),
+            operations.c.copied_to.is_not(None),
+            operations.c.state.in_(ACTED),
+        ):
+            raise OpFailed(f"Undo the later move of {PurePosixPath(final.src).name} first.")
+
+
 def _mark_restored_rows(resolved: list[ResolvedOp], revert: list[JournalEntry]) -> None:
     """The QUARANTINE that undoes a copy across disks carries the original's path and
-    id, so the executor points the index row back at the original."""
+    id, so the executor points the index row back at the original. The MOVE that brings
+    a folder moved across disks back from To Delete carries the folder rows that
+    followed its copy (``followed``), so they follow back."""
     copies = {fold_parts(r.dst): r for r in revert if r.kind == OpKind.COPY_ACROSS}
+    folders = {
+        fold_parts(r.dst): r
+        for r in revert
+        if r.kind == OpKind.QUARANTINE and r.copied_to is not None
+    }
     for rop in resolved:
-        row = copies.get(fold_parts(rop.src)) if rop.kind is OpKind.QUARANTINE else None
-        if row is not None:
-            rop.restore_row = (row.src, row.drive_id)
+        if rop.kind is OpKind.QUARANTINE:
+            row = copies.get(fold_parts(rop.src))
+            if row is not None:
+                rop.restore_row = (row.src, row.drive_id)
+        elif rop.kind is OpKind.MOVE:
+            row = folders.get(fold_parts(rop.src))
+            journaled = read_followed(row.followed) if row is not None else None
+            if journaled is not None:
+                rop.follow_back = [tuple(f) for f in journaled[0]]
 
 
 def _fold_key(rel: str) -> tuple[str, ...]:
@@ -228,12 +291,21 @@ def _select_reverts(
     that was made (its identity), and empty: holding nothing, or only folders removed
     before it in this same undo (deepest first) and a genuine Finder ``.DS_Store``.
     Otherwise it stays, and so does every folder that holds it. Other created folders
-    stay, as ever, except those ``_replaces`` names."""
+    stay, as ever, except those ``_replaces`` names.
+
+    A copy across disks goes to To Delete before the folders it is in, so it does not
+    keep them. A file a folder move found at the destination already (``present``) has
+    no inverse: that copy belongs to the earlier batch, whose own undo moves it."""
     revert: list[JournalEntry] = []
     kept: list[str] = []
     removed: set[tuple[str, ...]] = set()
     for r in reversed(acted):
-        if r.kind != OpKind.MKDIR:
+        if r.kind == OpKind.COPY_ACROSS and r.method == primitives.PRESENT:
+            continue
+        if r.kind == OpKind.COPY_ACROSS:
+            revert.append(r)
+            removed.add(_fold_key(r.dst))
+        elif r.kind != OpKind.MKDIR:
             revert.append(r)
         elif _fold_key(r.dst) in made:
             if _removable(ex, r.dst, made[_fold_key(r.dst)], removed):
@@ -506,8 +578,13 @@ def recover(ex: Executor) -> RecoveryResult:
     evidently happened, ``failed`` with ``"interrupted before execution"`` when it
     evidently did not, otherwise ``failed`` with ``"needs manual check"``. An index
     update that fails is collected in ``index_errors``; the remaining rows still run.
+    A done final QUARANTINE of a folder moved across disks (``copied_to``) whose index
+    step did not finish (``followed`` missing, or not ``applied``) also has its folder
+    rows follow its copy: planned and journaled first when ``followed`` is missing, else
+    the journaled plan again (idempotent; index only). A finished one is left alone.
     """
     result = RecoveryResult()
+    settled: set[int] = set()
     for e in pending(ex):
         state, error = _classify(ex, e)
         now = time.time()
@@ -520,15 +597,34 @@ def recover(ex: Executor) -> RecoveryResult:
             if state == "done" and e.undo_of is not None:
                 mark_reverted(conn, e.undo_of, OpKind(e.kind), e.src, e.dst)
         if state == "done" and OpKind(e.kind) in (*RELOCATE, OpKind.COPY_ACROSS):
+            settled.add(e.id)
             try:
                 with INDEX_LOCK:
                     if OpKind(e.kind) is OpKind.COPY_ACROSS:
-                        ex._repoint_copy(ResolvedOp(OpKind.COPY_ACROSS, e.src, e.dst))
+                        rop = ResolvedOp(OpKind.COPY_ACROSS, e.src, e.dst, method=e.method)
+                        ex._repoint_copy(rop)
+                    elif e.copied_to is not None:  # a folder moved across disks
+                        ex._recover_followed(e)
                     else:
                         ex.repo.update_path(e.src, e.dst)
             except SQLAlchemyError as err:
                 result.index_errors.append(f"index update failed for {e.dst}: {err}")
         result.entries.append(dataclasses.replace(e, state=state, error=error, finished=now))
+    # a folder moved across disks whose index step stopped part way (its row was done
+    # already): its folder rows follow now
+    for e in entries(
+        ex,
+        operations.c.kind == str(OpKind.QUARANTINE),
+        operations.c.state == "done",
+        operations.c.copied_to.is_not(None),
+    ):
+        if e.id in settled:
+            continue
+        try:
+            with INDEX_LOCK:
+                ex._recover_followed(e)
+        except SQLAlchemyError as err:
+            result.index_errors.append(f"index update failed for {e.dst}: {err}")
     return result
 
 
@@ -557,6 +653,8 @@ def _happened(ex: Executor, e: JournalEntry) -> bool | None:
             st = os.lstat(dst)
             # complete only when it has the size of the source (a cut-short copy is not)
             return True if stat.S_ISREG(st.st_mode) and st.st_size == e.size else None
+        case OpKind.COPY_ACROSS if e.method == primitives.PRESENT:
+            return _present_happened(ex, e)
         case OpKind.COPY_ACROSS:
             return _copy_across_happened(ex, e)
         case OpKind.PICTURE_TO_QUARANTINE | OpKind.PICTURE_BACK:
@@ -620,6 +718,17 @@ def _copy_across_happened(ex: Executor, e: JournalEntry) -> bool | None:
     if not stat.S_ISREG(st.st_mode) or st.st_size != e.size or not os.path.lexists(src):
         return None
     return True if primitives.file_sha256(dst) == e.content_hash else None
+
+
+def _present_happened(ex: Executor, e: JournalEntry) -> bool | None:
+    """A file a folder move found at the destination already: nothing was written, only
+    compared. Done when both files are there and the same (their hashes); otherwise
+    unclear, and both are left alone."""
+    src, dst = ex.paths.abs(e.src), ex.paths.abs(e.dst)
+    for p in (src, dst):
+        if not os.path.lexists(p) or not stat.S_ISREG(os.lstat(p).st_mode):
+            return None
+    return True if primitives.file_sha256(src) == primitives.file_sha256(dst) else None
 
 
 def _picture_copy_happened(ex: Executor, e: JournalEntry, here: Path, there: Path) -> bool | None:

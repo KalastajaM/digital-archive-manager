@@ -6,7 +6,8 @@ import stat
 import threading
 import time
 from collections.abc import Callable
-from pathlib import Path
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -14,7 +15,7 @@ from sqlalchemy import Engine, insert, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from dam.core.fs import readlink
-from dam.core.paths import ArchivePaths, OutsideArchiveError
+from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
 from dam.db.engine import write_tx
 from dam.db.tables import made_folders, operations
 from dam.index.driveid import read_drive_id
@@ -32,8 +33,10 @@ from dam.ops.model import (
     OpKind,
     Plan,
     ResolvedOp,
+    followed_json,
+    read_followed,
 )
-from dam.ops.planner import Planner
+from dam.ops.planner import Planner, list_tree, tree_key, tree_of
 from dam.ops.undo import JournalEntry, RecoveryResult
 from dam.services import LOCAL_ID_PREFIX
 from dam.services.errors import Conflict
@@ -53,6 +56,53 @@ _FAILURES = (OSError, OpFailed, GuardError, OutsideArchiveError)
 # ##. Important; no Drive uploads of documents)
 _PICTURE_KINDS = {OpKind.PICTURE_TO_QUARANTINE, OpKind.PICTURE_BACK}
 _ONGOING_KINDS = {OpKind.MKDIR, OpKind.SYMLINK, OpKind.UNLINK_SYMLINK, OpKind.REMOVE_EMPTY_DIR}
+
+
+@dataclass
+class _FolderRun:
+    """A folder moved across disks, while its batch runs: the final QUARANTINE (of the
+    whole source, with the planned ``tree``), the index of the last COPY_ACROSS before
+    it, and the spelling of each copied file's path inside the folder (for messages)."""
+
+    final: ResolvedOp
+    at: int
+    last_copy: int
+    names: dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def of(cls, resolved: list[ResolvedOp]) -> "_FolderRun | None":
+        finals = (
+            i for i, r in enumerate(resolved) if r.kind is OpKind.QUARANTINE and r.tree is not None
+        )
+        at = next(finals, None)
+        if at is None:
+            return None
+        run = cls(resolved[at], at, -1)
+        for i, r in enumerate(resolved[:at]):
+            if r.kind is OpKind.COPY_ACROSS:
+                run.last_copy = i
+                run.names[run.key(r.src)] = r.src[len(run.final.src) + 1 :]
+        return run
+
+    def key(self, src: str) -> str:
+        return tree_key(fold_parts(src)[len(fold_parts(self.final.src)) :])
+
+    def no_stop(self, seq: int) -> bool:
+        """Once every file is copied, the rest (To Delete folders, the QUARANTINE) runs
+        without asking Stop, so Stop never lands between the tree check and the move."""
+        return self.last_copy < seq <= self.at
+
+    def copied(self, rop: ResolvedOp, snap: dict) -> None:
+        """A file was copied (or found present): the tree expects it as it was read."""
+        self.final.tree[self.key(rop.src)] = ("file", snap["size"], snap["mtime"])
+
+
+def _backwards(followed) -> list[list[str]]:
+    """A ``followed`` plan turned round, for undo: each folder row at its new path, with
+    its new id, goes back to its old path and old id. ``_apply_followed`` then drops a
+    scanner row at the old path (unless the owner gave it something), and leaves an entry
+    whose row is not at its new path (the forward step skipped it, or a scan moved it)."""
+    return [[new_id, old_id, new_path, old_path] for old_id, new_id, old_path, new_path in followed]
 
 
 def _outside_copy(rop: ResolvedOp) -> bool:
@@ -177,7 +227,12 @@ class Executor:
         The throttle (spacing out changes Drive must sync) applies only to ops outside
         the publish roots: creating or removing links and folders inside ``##. Ongoing``
         or ``##. Important`` never waits, also in a batch that mixes both (an Ongoing
-        conversion)."""
+        conversion).
+
+        A folder moved across disks (a final QUARANTINE with a ``tree``): Stop is not
+        asked once its last file is copied, and that QUARANTINE first checks that the
+        source still holds what was copied (``_check_tree``)."""
+        folder = _FolderRun.of(resolved)
         for seq, rop in enumerate(resolved):
             # the move of an original to To Delete right after its copy: always runs, and
             # at once (a restore has copies only, so Stop works between those)
@@ -187,13 +242,14 @@ class Executor:
                 and rop.kind is OpKind.QUARANTINE
                 and fold_parts(rop.src) == fold_parts(resolved[seq - 1].src)
             )
-            if should_stop is not None and not pair and should_stop():
+            settled = folder is not None and folder.no_stop(seq)
+            if should_stop is not None and not pair and not settled and should_stop():
                 result.stopped = True
                 return result
             if seq and self.throttle_ms and not pair and not self._in_publish_root(rop):
                 time.sleep(self.throttle_ms / 1000)  # outside the lock
             with INDEX_LOCK:
-                if self._run_op(seq, rop, origin, result, undo_of, label, copied):
+                if self._run_op(seq, rop, origin, result, undo_of, label, copied, folder):
                     return result
             if progress is not None:
                 progress(rop, seq, len(resolved))
@@ -223,8 +279,10 @@ class Executor:
         undo_of: str | None,
         label: str | None = None,
         copied: Callable[[ResolvedOp, int], None] | None = None,
+        folder: _FolderRun | None = None,
     ) -> bool:
-        """Journal, act, verify and index one op; True when the batch must stop."""
+        """Journal, act, verify and index one op; True when the batch must stop.
+        ``folder``: the folder moved across disks this op belongs to, if any."""
         try:
             snap, snap_error = self._snapshot(rop), None
         except _FAILURES as e:
@@ -235,7 +293,10 @@ class Executor:
             self._stop(result, op_id, rop, "failed", snap_error)
             return True
         try:
-            self._precheck(rop)
+            if folder is not None and rop is folder.final:
+                self._precheck(rop, folder.names)
+            else:
+                self._precheck(rop)
             self._act(rop, copied)
         except _FAILURES as e:
             self._stop(result, op_id, rop, "failed", str(e))
@@ -270,6 +331,8 @@ class Executor:
                 result.index_error = f"index update failed for {rop.src}: {e}"
                 return True
         if rop.kind is OpKind.COPY_ACROSS:
+            if folder is not None:
+                folder.copied(rop, snap)
             try:
                 self._repoint_copy(rop)
             except SQLAlchemyError as e:
@@ -277,7 +340,16 @@ class Executor:
                 return True
         if rop.kind in _RELOCATE:
             try:
+                followed = None
+                if rop.copied_to is not None:  # journaled first, so it can be finished
+                    followed = self._follow_folder_rows(rop.src, rop.copied_to)
+                    self._journal_followed(op_id, followed)
+                    self._apply_followed(followed)
                 self.repo.update_path(rop.src, rop.dst)
+                if followed is not None:  # recovery need not follow these rows again
+                    self._journal_followed(op_id, followed, applied=True)
+                if rop.follow_back:  # after the rows the scanner gave To Delete came back
+                    self._apply_followed(_backwards(rop.follow_back))
                 if rop.restore_row is not None:
                     self._restore_row(rop)
             except SQLAlchemyError as e:
@@ -294,6 +366,10 @@ class Executor:
         rec = self.repo.by_path(rop.src)
         if rec is None:  # never indexed: the next scan finds the copy
             return
+        if rop.method == primitives.PRESENT and self.repo.by_path(rop.dst) is not None:
+            # the copy has its row (the earlier move's, which the owner's things follow);
+            # the original's row goes to To Delete with the folder
+            return
         new_id = read_drive_id(self.paths.abs(rop.dst))
         if new_id is None:
             local = rec.drive_id.startswith(LOCAL_ID_PREFIX)
@@ -301,6 +377,127 @@ class Executor:
         if new_id != rec.drive_id:
             self.repo.rekey(rec.drive_id, new_id)
         self.repo.update_path(rop.src, rop.dst)
+
+    def _follow_folder_rows(self, src: str, dst_root: str) -> list[list[str]]:
+        """A folder was copied across disks to ``dst_root`` and goes to To Delete next:
+        the plan for every indexed folder row at or under ``src`` to follow to its
+        mirrored folder, so its collections and notes follow (the file rows followed their
+        copies already), as [old id, new id, old path, new path], parents first. The new
+        id follows the ``_repoint_copy`` rule (the mirrored folder's own Drive id, else a
+        fresh local id when the row had a Drive id, else the same). A row the scanner made
+        for a mirrored folder meanwhile that the owner gave something is not replaced:
+        that folder row is left out, so both stay and the source's row goes to To Delete
+        with the folder. Read only: it is journaled (``followed``) and then carried out
+        by ``_apply_followed``."""
+        depth = len(PurePosixPath(src).parts)
+        rows = [r for r in map(self.repo.get, self.repo.subtree_ids(src)) if r and r.is_dir]
+        followed = []
+        for rec in sorted(rows, key=lambda r: len(PurePosixPath(r.path).parts)):
+            new_path = PurePosixPath(dst_root, *PurePosixPath(rec.path).parts[depth:]).as_posix()
+            there = self.repo.by_path(new_path)
+            if there is not None and there.drive_id != rec.drive_id:
+                if self.repo.has_attachments(there.drive_id):
+                    log.warning("%s keeps its own index row; %s stays as well", new_path, rec.path)
+                    continue
+            new_id = read_drive_id(self.paths.abs(new_path))
+            if new_id is None:
+                local = rec.drive_id.startswith(LOCAL_ID_PREFIX)
+                new_id = rec.drive_id if local else f"{LOCAL_ID_PREFIX}{uuid4()}"
+            followed.append([rec.drive_id, new_id, rec.path, new_path])
+        return followed
+
+    def _apply_followed(self, followed: list[list[str]]) -> None:
+        """Carry out a journaled ``followed`` plan (``_follow_folder_rows``). Each entry
+        is idempotent, so recovery can run the whole list again after a crash part way.
+        The row is found by id and path: the old id at the old path (not started), the
+        new id at the old path (rekeyed, not re-pathed), or the new id at the new path
+        (done, skipped). Anything else (the row is gone, or a scan moved it) is left for
+        the next scan, logged. A scanner row at the new path is dropped first, unless
+        the owner gave it something: then that entry is left, logged."""
+        for old_id, new_id, old_path, new_path in followed:
+            rec = next(
+                (
+                    r
+                    for r in (self.repo.get(old_id), self.repo.get(new_id))
+                    if r is not None and nfc(r.path) == nfc(old_path)
+                ),
+                None,
+            )
+            if rec is None:
+                done = self.repo.get(new_id)
+                if done is None or nfc(done.path) != nfc(new_path):
+                    log.warning("the index row of %s is not where it was; left alone", old_path)
+                continue
+            there = self.repo.by_path(new_path)
+            if there is not None and there.drive_id != rec.drive_id:
+                if self.repo.has_attachments(there.drive_id):
+                    log.warning("%s keeps its own index row; %s stays as well", new_path, rec.path)
+                    continue
+                self.repo.forget_rows([there.drive_id])
+            if rec.drive_id != new_id:
+                self.repo.rekey(rec.drive_id, new_id)
+            self.repo.update_path(rec.path, new_path, recursive=False)
+
+    def _recover_followed(self, e: JournalEntry) -> None:
+        """Recovery of a done final QUARANTINE of a folder moved across disks (``e``):
+        without a journaled ``followed`` its index step never started, so it runs now
+        (plan, journal, apply, then the rows left under the source); with one not yet
+        ``applied`` the step stopped part way, so it runs again (each entry is
+        idempotent). Then it is marked applied. An applied step is never run again: the
+        owner may have put the original back since, and its row must stay with it."""
+        journaled = read_followed(e.followed)
+        if journaled is not None and journaled[1]:
+            return
+        if journaled is None:
+            followed = self._follow_folder_rows(e.src, e.copied_to)
+            self._journal_followed(e.id, followed)
+        else:
+            followed = journaled[0]
+        self._apply_followed(followed)
+        self.repo.update_path(e.src, e.dst)
+        self._journal_followed(e.id, followed, applied=True)
+
+    def _journal_followed(
+        self, op_id: int, followed: list[list[str]], applied: bool = False
+    ) -> None:
+        with write_tx(self.engine) as conn:
+            conn.execute(
+                update(operations)
+                .where(operations.c.id == op_id)
+                .values(followed=followed_json(followed, applied))
+            )
+
+    def _check_tree(self, rop: ResolvedOp, names: dict[str, str]) -> None:
+        """The final QUARANTINE of a folder moved across disks: the source must still hold
+        exactly what was planned, each file as it was when copied; otherwise it stays
+        where it is (its copies stay too) and the message names up to five differences."""
+        name = PurePosixPath(rop.src).name
+        root = self.paths.abs(rop.src)
+        if root.is_symlink() or not root.is_dir():
+            raise OpFailed(f"{rop.src} is no longer there.")
+        listed = list_tree(root, name)
+        now = tree_of(listed)
+        names = {tree_key(parts): "/".join(parts) for parts, _, _ in listed} | names
+        changes = []
+        for key in sorted(set(now) | set(rop.tree)):
+            if key not in rop.tree:
+                what = "added"
+            elif key not in now:
+                what = "removed"
+            elif now[key] != rop.tree[key]:
+                what = "changed"
+            else:
+                continue
+            changes.append(f"{names.get(key, key)} was {what}")
+        if not changes:
+            return
+        shown = ", ".join(changes[:5])
+        if len(changes) > 5:
+            shown += f" and {len(changes) - 5} more"
+        raise OpFailed(
+            f"{name} changed during the move ({shown}). It stays where it is;"
+            " move it again to copy the rest."
+        )
 
     def _restore_row(self, rop: ResolvedOp) -> None:
         """Undo of a copy across disks: the copy went to To Delete (``rop.dst``), and the
@@ -456,6 +653,7 @@ class Executor:
                     label=label,
                     method=rop.method,
                     content_hash=snap["content_hash"],
+                    copied_to=rop.copied_to,
                     created=time.time(),
                 )
             )
@@ -530,7 +728,10 @@ class Executor:
         if stat.S_ISLNK(folder.st_mode) or not stat.S_ISDIR(folder.st_mode):
             raise OpFailed("The rules' picture folder is not a real folder.")
 
-    def _precheck(self, rop: ResolvedOp) -> None:
+    def _precheck(self, rop: ResolvedOp, names: dict[str, str] | None = None) -> None:
+        """``names``: a folder move's spelling of its copied files, for ``_check_tree``."""
+        if rop.tree is not None:  # a folder moved across disks: checked before it moves
+            self._check_tree(rop, names or {})
         if rop.kind in _PICTURE_KINDS:
             self._precheck_picture(rop)
             return
@@ -602,6 +803,14 @@ class Executor:
             raise OpFailed(f"{rop.src} is no longer a plain file.")
         if rop.drive_id is not None and read_drive_id(src) != rop.drive_id:
             raise OpFailed(f"{rop.src} changed since the preview.")
+        if rop.method == primitives.PRESENT:  # already there: compared, not written
+            try:
+                there = os.lstat(dst)
+            except OSError:
+                raise OpFailed(f"{rop.dst} is no longer there.") from None
+            if not stat.S_ISREG(there.st_mode):
+                raise OpFailed(f"{rop.dst} is no longer a plain file.")
+            return
         if os.path.lexists(dst):
             raise OpFailed(f"{rop.dst} already exists.")
         if not dst.parent.is_dir() or dst.parent.is_symlink():
@@ -643,6 +852,8 @@ class Executor:
                 primitives.remove_empty_dir(
                     dst, self._removal_root(rop.dst, rop.made), identity=rop.identity
                 )
+            case OpKind.COPY_ACROSS if rop.method == primitives.PRESENT:
+                primitives.present_matches(self.paths.abs(rop.src), dst, self.cancel_copies.is_set)
             case OpKind.COPY_ACROSS:
                 primitives.copy_across(
                     self.paths.abs(rop.src),
@@ -708,6 +919,10 @@ class Executor:
             case OpKind.COPY:
                 st = os.lstat(dst)
                 ok = stat.S_ISREG(st.st_mode) and st.st_size == snap["size"]
+            case OpKind.COPY_ACROSS if rop.method == primitives.PRESENT:
+                ok = stat.S_ISREG(os.lstat(dst).st_mode) and os.path.lexists(
+                    self.paths.abs(rop.src)
+                )
             case OpKind.COPY_ACROSS:  # its content was checked by ``copy_across`` itself
                 st = os.lstat(dst)
                 ok = (

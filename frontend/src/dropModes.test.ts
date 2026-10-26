@@ -12,8 +12,16 @@ import {
   MIXED_REASON,
   ONGOING_ROOT_REASON,
   TOP_REASON,
+  APP_FOLDER_REASON,
+  EXTRA_ROOT_REASON,
+  FOLDER_INTO_ITSELF,
+  FOLDER_TOP_REASON,
+  folderSourceRefusal,
+  judgeFolderDrop,
+  ONGOING_TARGET_REASON,
 } from "./dropModes";
 import { LOCKED_REASON } from "./api/client";
+import { TO_DELETE_REASON } from "./toDelete";
 
 const areas = { quarantine: "##. To Delete", ongoing: "##. Ongoing", important: "##. Important" };
 const sauna = { id: 7, name: "Sauna", ongoing_rel: "##. Ongoing/Sauna", members: [] as { drive_id: string }[] };
@@ -125,5 +133,46 @@ describe("collectionAt", () => {
     expect(collectionAt("##. Ongoing/Sauna/Inner/x", [sauna, inner])?.id).toBe(8);
     expect(collectionAt("##. Ongoing/Sauna", [sauna, inner])?.id).toBe(7);
     expect(collectionAt("##. Ongoing/Nope", [sauna, inner])).toBeNull();
+  });
+});
+
+describe("judgeFolderDrop", () => {
+  const special = { ...areas, inbox: "##. Organize" };
+  const folder = { path: "20. Home/2009", folder: null };
+  const judge = (target: string, f: { path: string; folder?: string | null } = folder) =>
+    judgeFolderDrop({ folder: f, target, areas: special });
+
+  it("takes an ordinary folder elsewhere, also the top of an extra folder", () => {
+    expect(judge("Old years")).toBeNull();
+    expect(judge("30. Car/Old")).toBeNull();
+  });
+
+  it("never into itself or its own subfolder; not where it is already", () => {
+    expect(judge("20. Home/2009")).toBe(FOLDER_INTO_ITSELF);
+    expect(judge("20. Home/2009/sub")).toBe(FOLDER_INTO_ITSELF);
+    expect(FOLDER_INTO_ITSELF).toBe("Cannot move a folder into itself");
+    expect(judge("20. Home")).toBe(ALREADY_HERE);
+    expect(judge("20. Home/2009x")).toBeNull(); // a sibling with a longer name is no subfolder
+  });
+
+  it("never to the top of the archive or into the app's own folders", () => {
+    expect(judge("")).toBe(FOLDER_TOP_REASON);
+    expect(judge("##. To Delete/x")).toBe(DELETE_TARGET_REASON);
+    expect(judge("##. Important")).toBe(IMPORTANT_TARGET_REASON);
+    expect(judge("##. Ongoing/Sauna")).toBe(ONGOING_TARGET_REASON);
+  });
+
+  it("refuses the folders the app keeps in place", () => {
+    expect(folderSourceRefusal({ path: "Old years", folder: "Old years" }, special)).toBe(EXTRA_ROOT_REASON);
+    for (const path of ["##. Organize", "##. Ongoing", "##. Important", "##. To Delete"]) {
+      expect(folderSourceRefusal({ path }, special)).toBe(APP_FOLDER_REASON);
+    }
+    expect(folderSourceRefusal({ path: "##. Ongoing/Sauna" }, special)).toMatch(/##\. Ongoing/);
+    expect(folderSourceRefusal({ path: "##. Important/x" }, special)).toMatch(/##\. Important/);
+    expect(folderSourceRefusal({ path: "##. To Delete/x" }, special)).toBe(TO_DELETE_REASON);
+    expect(folderSourceRefusal({ path: "##. Organize/Scans" }, special)).toBeNull(); // inside the inbox is ordinary
+    expect(folderSourceRefusal({ path: "Old years/2009", folder: "Old years" }, special)).toBeNull();
+    expect(folderSourceRefusal({ path: "x" }, undefined)).toBe("The special folders are not known yet");
+    expect(judge("Old years", { path: "##. Ongoing/Sauna" })).toMatch(/##\. Ongoing/); // the source first
   });
 });

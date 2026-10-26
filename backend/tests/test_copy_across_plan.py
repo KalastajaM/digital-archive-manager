@@ -90,10 +90,12 @@ def test_plain_plan_still_refused(across):
     )
 
 
-def test_folder_move_across_disks_refused(across):
-    with pytest.raises(OpFailed) as e:
-        across.executor.preview(_plan(Op(OpKind.MOVE, "Old years/2009", BANKS)))
-    assert "different disks" in str(e.value)
+def test_folder_move_across_disks_is_copied(across):
+    # the layout itself is in test_folder_copy_plan.py
+    resolved = across.executor.preview(_plan(Op(OpKind.MOVE, "Old years/2009", BANKS)))
+    assert _kinds(resolved)[-2:] == ["copy_across", "quarantine"]
+    assert resolved[-1].dst == f"Old years/{QUAR}/2009"
+    assert resolved[-1].copied_to == f"{BANKS}/2009"
 
 
 def test_requested_copy_across_refused(across):

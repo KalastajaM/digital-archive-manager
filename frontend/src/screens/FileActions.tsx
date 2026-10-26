@@ -275,20 +275,43 @@ function RestoreButtons({ restore }: { restore: (to: RestoreTo) => void }) {
   );
 }
 
-/** A selected folder's one action: add it to a collection (everything in it then belongs). */
+/** "Move to…" for a selected folder: run by the screen's move flow (picker → preview →
+ * confirm → Undo); ``refusal`` says why it cannot move (the app keeps it in place). */
+export type FolderMoveTo = { refusal: string | null; run: () => void };
+
+/** A selected folder's actions: add it to a collection (everything in it then belongs),
+ * and Move to… (the folder with everything in it). */
 export function FolderActions({
   driveId,
   refusal,
   restore,
+  moveTo,
 }: {
   driveId: string;
   refusal: string | null;
   restore?: (to: RestoreTo) => void;
+  moveTo?: FolderMoveTo;
 }) {
   return (
     <div className="file-actions">
       <CollectionsField driveId={driveId} refusal={refusal} />
-      {restore && <RestoreButtons restore={restore} />}
+      {(moveTo || restore) && (
+        <div className="actions">
+          {moveTo &&
+            (moveTo.refusal ? (
+              <span className="button-wrap" data-tip={moveTo.refusal}>
+                <button type="button" disabled>
+                  Move to…
+                </button>
+              </span>
+            ) : (
+              <button type="button" onClick={moveTo.run}>
+                Move to…
+              </button>
+            ))}
+          {restore && <RestoreButtons restore={restore} />}
+        </div>
+      )}
     </div>
   );
 }

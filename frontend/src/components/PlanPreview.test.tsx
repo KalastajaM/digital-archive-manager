@@ -332,3 +332,53 @@ describe("a move across disks", () => {
     expect(screen.queryByText(/another disk/)).toBeNull();
   });
 });
+
+describe("a folder moved across disks", () => {
+  const GB = 1024 * 1024 * 1024;
+  const mkdir = (dst: string) => ({ kind: "mkdir" as const, src: null, dst, drive_id: null, note: null });
+  const copy = (rel: string, size: number, method: string | null = null) => ({
+    kind: "copy_across" as const,
+    src: `20. Home/2009/${rel}`,
+    dst: `Old years/2009/${rel}`,
+    drive_id: null,
+    note: null,
+    size,
+    cloud_only: false,
+    method,
+  });
+  const aside = { kind: "quarantine" as const, src: "20. Home/2009", dst: "##. To Delete/20. Home/2009", drive_id: "d9", note: "copied to Old years/2009" };
+  const plan = (files: number, present: number, folders = ["Old years/2009", "Old years/2009/sub"]) => [
+    ...folders.map(mkdir),
+    ...Array.from({ length: files }, (_, i) => copy(`f${i}.pdf`, (3.1 * GB) / files)),
+    ...Array.from({ length: present }, (_, i) => copy(`sub/p${i}.pdf`, 1000, "present")),
+    mkdir("##. To Delete/20. Home"),
+    aside,
+  ];
+
+  it("counts the folders made, the files copied and their size, and where they go", () => {
+    render(<PlanList ops={plan(812, 120)} />);
+    expect(screen.getByText(/^Copies 2 folders and 812 files \(3,1 GB\) to 'Old years'/)).toBeInTheDocument();
+    expect(screen.getByText(/120 are there already and are skipped/)).toBeInTheDocument();
+    expect(screen.getByText(/The folder goes to To Delete in the main folder once every file is copied/)).toBeInTheDocument();
+    expect(screen.queryByText(/The originals go to To Delete/)).toBeNull();
+  });
+
+  it("leaves the folder count out when nothing new is made (merging into a folder there)", () => {
+    render(<PlanList ops={plan(3, 0, [])} />);
+    expect(screen.getByText(/^Copies 3 files \(3,1 GB\) to 'Old years'/)).toBeInTheDocument();
+    expect(screen.queryByText(/are there already/)).toBeNull();
+  });
+
+  it("names the extra folder whose To Delete takes the folder", () => {
+    const ops = plan(1, 0).map((op) =>
+      op.kind === "quarantine" ? { ...op, src: "Archive B/2009", dst: "Archive B/##. To Delete/2009" } : op.kind === "copy_across" ? { ...op, src: op.src.replace("20. Home", "Archive B") } : op,
+    );
+    render(<PlanList ops={ops} />);
+    expect(screen.getByText(/The folder goes to To Delete in 'Archive B' once every file is copied/)).toBeInTheDocument();
+  });
+
+  it("renders a plan of 300 steps", () => {
+    render(<PlanList ops={plan(296, 0)} />);
+    expect(screen.getAllByText("Copy to other disk")).toHaveLength(296);
+  });
+});
