@@ -170,6 +170,31 @@ describe("From and For chips", () => {
     }
   });
 
+  it("reload the inbox at most once per interval however many cards wait", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const ids = ["d1", "d2", "d3", "d4", "d5", "d6"];
+      const page1 = Object.fromEntries(
+        ids.map((id) => [`GET /api/files/${id}/page1`, { body: { read: true, lines: [], unavailable: null } }]),
+      );
+      const card = (id: string) => {
+        const e = entry({ waiting_for_page1: true });
+        return <FromFor key={id} entry={{ ...e, record: { ...e.record, drive_id: id } }} />;
+      };
+      const { calls } = setup(<>{ids.map(card)}</>, page1);
+      const inbox = () => calls.filter((c) => c.url === "/api/inbox").length;
+      await waitFor(() => expect(calls.filter((c) => c.url.endsWith("/page1"))).toHaveLength(ids.length));
+      await vi.advanceTimersByTimeAsync(100);
+      const start = inbox();
+      await vi.advanceTimersByTimeAsync(10 * 2000);
+      // six cards polling every 2 s for 20 s: one reload per interval, not one per card
+      expect(inbox() - start).toBeLessThanOrEqual(11);
+      expect(inbox() - start).toBeGreaterThanOrEqual(9);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("say why page 1 cannot be read instead of Reading page 1…, and do not ask for it", () => {
     const { calls } = setup(<FromFor entry={entry({ page1_unavailable: "no OCR engine" })} />);
     expect(screen.getByText("Page 1 could not be read: no OCR engine.")).toBeInTheDocument();

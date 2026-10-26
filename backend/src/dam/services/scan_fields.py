@@ -11,7 +11,7 @@ The *effective* list (saved, else detected) drives the tray-field prefill
 
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from decimal import Decimal
 from typing import Any
 
@@ -116,11 +116,22 @@ class ScanFieldService:
 
     def saved(self, drive_id: str) -> list[dict[str, str | None]] | None:
         """The file's saved list, None if the user never changed it."""
+        return self.saved_for([drive_id]).get(drive_id)
+
+    def saved_for(self, drive_ids: Collection[str]) -> dict[str, list[dict[str, str | None]]]:
+        """``saved`` for many files in one query (files the user never changed are left
+        out)."""
+        ids = list(drive_ids)
+        out: dict[str, list[dict[str, str | None]]] = {}
         with self.engine.connect() as conn:
-            raw = conn.execute(
-                select(file_fields.c.fields).where(file_fields.c.drive_id == drive_id)
-            ).scalar()
-        return None if raw is None else json.loads(raw)
+            for start in range(0, len(ids), 500):
+                rows = conn.execute(
+                    select(file_fields.c.drive_id, file_fields.c.fields).where(
+                        file_fields.c.drive_id.in_(ids[start : start + 500])
+                    )
+                ).all()
+                out.update((r.drive_id, json.loads(r.fields)) for r in rows if r.fields is not None)
+        return out
 
     def get(self, drive_id: str) -> dict[str, Any]:
         """``{fields, edited}``: the effective list and whether it is a saved one."""

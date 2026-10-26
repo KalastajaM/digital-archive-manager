@@ -158,6 +158,13 @@ def _fts_clear_path(conn: Connection, drive_id: str) -> None:
     )
 
 
+def _chunks(drive_ids: Collection[str], size: int = 500) -> Iterator[list[str]]:
+    """``drive_ids`` in lists of at most ``size``, for ``IN (...)`` queries."""
+    ids = list(drive_ids)
+    for start in range(0, len(ids), size):
+        yield ids[start : start + size]
+
+
 def _record(row) -> FileRecord:
     data = {c: row._mapping[c] for c in _COLUMNS}
     data["is_dir"] = bool(data["is_dir"])
@@ -464,11 +471,20 @@ class FileRepo:
 
     def text_for(self, drive_id: str) -> str:
         """Extracted text of ``drive_id``; ``""`` when there is none."""
+        return self.texts_for([drive_id]).get(drive_id, "")
+
+    def texts_for(self, drive_ids: Collection[str]) -> dict[str, str]:
+        """``text_for`` for many files in one query (files without text are left out)."""
+        out: dict[str, str] = {}
         with self._conn() as conn:
-            body = conn.execute(
-                select(file_text.c.text).where(file_text.c.drive_id == drive_id)
-            ).scalar()
-        return body or ""
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_text.c.drive_id, file_text.c.text).where(
+                        file_text.c.drive_id.in_(chunk)
+                    )
+                ).all()
+                out.update((r.drive_id, r.text) for r in rows if r.text)
+        return out
 
     def content_keys(self) -> list[tuple[str, str]]:
         """(drive id, sha256) of every indexed file whose content is known."""
@@ -481,15 +497,23 @@ class FileRepo:
     def barcode_for(self, drive_id: str) -> str | None:
         """The bank barcode read from the file's current content; None if none was read
         (or it was read from content the file no longer has)."""
+        return self.barcodes_for([drive_id]).get(drive_id)
+
+    def barcodes_for(self, drive_ids: Collection[str]) -> dict[str, str]:
+        """``barcode_for`` for many files in one query (files without one are left out)."""
+        out: dict[str, str] = {}
         with self._conn() as conn:
-            return conn.execute(
-                select(file_barcodes.c.code)
-                .join(files, files.c.drive_id == file_barcodes.c.drive_id)
-                .where(
-                    file_barcodes.c.drive_id == drive_id,
-                    files.c.sha256 == file_barcodes.c.sha256,
-                )
-            ).scalar()
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_barcodes.c.drive_id, file_barcodes.c.code)
+                    .join(files, files.c.drive_id == file_barcodes.c.drive_id)
+                    .where(
+                        file_barcodes.c.drive_id.in_(chunk),
+                        files.c.sha256 == file_barcodes.c.sha256,
+                    )
+                ).all()
+                out.update((r.drive_id, r.code) for r in rows if r.code is not None)
+        return out
 
     def save_barcode(self, drive_id: str, sha256: str, code: str | None) -> bool:
         """Record what the barcode pass read from content ``sha256`` (``code`` None: none
@@ -514,16 +538,25 @@ class FileRepo:
     def qr_for(self, drive_id: str) -> list[QrRead]:
         """The QR stickers read from the file's current content; ``[]`` if none were
         found or none were read (or they were read from content the file no longer has)."""
+        return self.qrs_for([drive_id]).get(drive_id, [])
+
+    def qrs_for(self, drive_ids: Collection[str]) -> dict[str, list[QrRead]]:
+        """``qr_for`` for many files in one query (files without stickers are left out)."""
+        out: dict[str, list[QrRead]] = {}
         with self._conn() as conn:
-            reads = conn.execute(
-                select(file_qr_codes.c.reads)
-                .join(files, files.c.drive_id == file_qr_codes.c.drive_id)
-                .where(
-                    file_qr_codes.c.drive_id == drive_id,
-                    files.c.sha256 == file_qr_codes.c.sha256,
-                )
-            ).scalar()
-        return [QrRead(**r) for r in json.loads(reads)] if reads else []
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_qr_codes.c.drive_id, file_qr_codes.c.reads)
+                    .join(files, files.c.drive_id == file_qr_codes.c.drive_id)
+                    .where(
+                        file_qr_codes.c.drive_id.in_(chunk),
+                        files.c.sha256 == file_qr_codes.c.sha256,
+                    )
+                ).all()
+                for r in rows:
+                    if r.reads:
+                        out[r.drive_id] = [QrRead(**x) for x in json.loads(r.reads)]
+        return out
 
     def save_qr(self, drive_id: str, sha256: str, reads: Sequence[QrRead]) -> bool:
         """Record the QR stickers read from content ``sha256`` (``[]``: none found). Not
@@ -551,10 +584,20 @@ class FileRepo:
     def assigned_code(self, drive_id: str) -> str | None:
         """The filing code the owner gave the file in the app, else None (also for a
         file outside the inbox: the caller decides when it counts)."""
+        return self.assigned_codes([drive_id]).get(drive_id)
+
+    def assigned_codes(self, drive_ids: Collection[str]) -> dict[str, str]:
+        """``assigned_code`` for many files in one query (files without one are left out)."""
+        out: dict[str, str] = {}
         with self._conn() as conn:
-            return conn.execute(
-                select(file_assigned_codes.c.code).where(file_assigned_codes.c.drive_id == drive_id)
-            ).scalar()
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_assigned_codes.c.drive_id, file_assigned_codes.c.code).where(
+                        file_assigned_codes.c.drive_id.in_(chunk)
+                    )
+                ).all()
+                out.update((r.drive_id, r.code) for r in rows if r.code is not None)
+        return out
 
     def set_assigned_code(self, drive_ids: Sequence[str], code: str | None) -> None:
         """Give each file ``code`` (upper case), replacing the one it had; None removes
@@ -638,11 +681,9 @@ class FileRepo:
     def layouts_for(self, drive_ids: Collection[str]) -> dict[str, Page1Layout]:
         """``layout_for`` for many files in one query (files without a current layout are
         left out)."""
-        ids = list(drive_ids)
         out: dict[str, Page1Layout] = {}
         with self._conn() as conn:
-            for start in range(0, len(ids), 500):
-                chunk = ids[start : start + 500]
+            for chunk in _chunks(drive_ids):
                 rows = conn.execute(
                     select(file_layouts.c.drive_id, file_layouts.c.lines, file_layouts.c.source)
                     .join(files, files.c.drive_id == file_layouts.c.drive_id)
