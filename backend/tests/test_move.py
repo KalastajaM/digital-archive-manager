@@ -155,9 +155,9 @@ def assert_refused(app, fake_archive, ids, folder, match):
     assert after == before and journal(app) == []
 
 
-def test_a_folder_cannot_be_moved(app, fake_archive, two_files):
-    folder_id = app.repo.by_path(BANKS).drive_id
-    assert_refused(app, fake_archive, [folder_id], INBOX, "folders cannot be moved yet")
+def test_an_app_folder_cannot_be_moved(app, fake_archive, two_files):
+    folder_id = app.repo.by_path(ONG).drive_id
+    assert_refused(app, fake_archive, [folder_id], INBOX, "keeps")
 
 
 def test_a_link_cannot_be_moved(app, fake_archive, two_files):
@@ -349,7 +349,7 @@ def test_api_move_refusals_are_400(client, app, fake_archive, two_files):
     fake_archive.add(f"{ONG}/Sauna/x.pdf", drive_id="id-ong")
     fake_archive.add(f"{QUAR}/old.pdf", drive_id="id-quar")
     app.scan()
-    folder_id = app.repo.by_path(BANKS).drive_id
+    folder_id = app.repo.by_path(ONG).drive_id
     for drive_id in ("id-ong", "id-quar", folder_id):
         for url in ("/api/browse/move/preview", "/api/browse/move"):
             r = post(client, url, {"drive_ids": [drive_id], "folder": INBOX})

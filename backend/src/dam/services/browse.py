@@ -499,6 +499,7 @@ class BrowseService:
         Ongoing sync repoint their links, nothing is synced here.
         """
         move = self._drop(drive_ids, folder, origin, mode)
+
         def check(ops: list[ResolvedOp]) -> None:
             self._check_drop(move.ids, ops, mode)
 
@@ -603,7 +604,9 @@ class BrowseService:
             drive_id = rec.drive_id
             drive_ids.append(drive_id)
             if rec.is_dir:
-                raise InvalidRequest(f"{rec.path}: folders cannot be moved yet")
+                if len(requested) != 1 or name is not None:
+                    raise InvalidRequest("Move one folder at a time, without files")
+                self._check_movable_folder(rec, dest)
             if rec.is_link:
                 raise InvalidRequest(f"{rec.path}: links cannot be moved")
             for area in (self.special.ongoing, *self.executor.paths.quarantines):
@@ -622,6 +625,25 @@ class BrowseService:
             move.ids.append(drive_id)
         move.plan.label = self._move_label(drive_ids, name, dest, move)
         return move
+
+    def _check_movable_folder(self, rec: FileRecord, dest: str) -> None:
+        """Refuse (``InvalidRequest``) a folder that must stay: the top of the archive,
+        an extra folder's root, the app's own folders and what is inside them, and a
+        move of a folder into itself."""
+        paths = self.executor.paths
+        parts = PurePosixPath(rec.path).parts
+        if paths.is_root(rec.path) or (
+            len(parts) == 1
+            and any(fold_parts(rec.path) == fold_parts(x) for x in paths.extra_labels)
+        ):
+            raise InvalidRequest(f"{rec.path}: the top of an archive folder cannot be moved")
+        if fold_parts(rec.path) == fold_parts(self.special.inbox):
+            raise InvalidRequest(f"{rec.path}: the app keeps that folder in place")
+        for area in (self.special.ongoing, self.special.important, *paths.quarantines):
+            if is_under(rec.path, area):
+                raise InvalidRequest(f"{rec.path}: the app keeps {area} in place")
+        if is_under(dest, rec.path):
+            raise InvalidRequest(f"{rec.path}: a folder cannot be moved into itself")
 
     def _link_copy_ops(self, drive_ids: list[str], folder: str, origin: str, mode: str) -> "_Move":
         """``mode`` ``link``: a SYMLINK in ``folder`` to each file (named like it); the
@@ -655,7 +677,7 @@ class BrowseService:
                 continue  # two rows (two collections) of one file
             chosen.append(rec)
             if rec.is_dir:
-                raise InvalidRequest(f"{rec.path}: folders cannot be {verb} yet")
+                raise InvalidRequest("Folders can only be moved")
             if rec.is_link:
                 raise InvalidRequest(f"{rec.path}: links cannot be {verb}")
             if self.executor.paths.is_quarantined(rec.path) or any(
@@ -690,5 +712,7 @@ class BrowseService:
             if fold_parts(parent(first.path)) == fold_parts(dest):
                 return f"Renamed {old} to {name}"
             return f"Renamed {old} to {name} and moved it to {dest}"
+        if first is not None and first.is_dir:
+            return f"Moved folder {old} to {dest}"
         what = old if len(move.ids) == 1 and old else f"{len(move.ids)} files"
         return f"Moved {what} to {dest}"
