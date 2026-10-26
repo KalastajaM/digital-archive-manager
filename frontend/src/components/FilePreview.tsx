@@ -28,7 +28,7 @@ import { isShortcutIn, useKeydown } from "../keyboard";
 import { openViewer } from "../selection";
 import { inFileManager } from "../fileManager";
 import { visible, visibleText } from "../text";
-import { LaunchButtons, useFileLaunch } from "./FileLaunch";
+import { LaunchButtons, notConnected, useFileLaunch } from "./FileLaunch";
 import { IconButton } from "./ui/IconButton";
 import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
 
@@ -513,7 +513,7 @@ function ImagePreview({
 
 /** What a preview needs to know about a file (an index record has all of it). A link
  * (``is_link``) previews as its target inside the archive. */
-export type PreviewFile = Pick<FileRecord, "drive_id" | "path" | "ext"> & { is_link?: boolean };
+export type PreviewFile = Pick<FileRecord, "drive_id" | "path" | "ext"> & { is_link?: boolean; folder?: string | null; connected?: boolean };
 
 type PreviewProps = {
   file: PreviewFile;
@@ -549,14 +549,25 @@ function Preview({ file, windowButton, zoomControl, extraTools, boxTool }: Previ
   const kind = ext?.toLowerCase() ?? "";
   const [stage, setStage] = useState<Stage>(() => firstStage(kind));
   const launch = useFileLaunch(driveId);
+  const offline = file.connected === false;
   const tools = (
     <>
-      <LaunchButtons launch={launch} />
+      <LaunchButtons launch={launch} offline={offline} />
       {windowButton && <OpenInWindow driveId={driveId} />}
       {extraTools}
     </>
   );
   const next = (to: Stage) => () => setStage(to);
+  if (offline) {
+    return (
+      <figure className="no-preview-figure">
+        <PreviewTools>{tools}</PreviewTools>
+        <div className="no-preview">
+          <p role="status">{notConnected(file.folder ?? "")}</p>
+        </div>
+      </figure>
+    );
+  }
   if (stage === "doc" && kind === "pdf") return <PdfPages driveId={driveId} tools={tools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
   if (stage === "doc") return <ImagePreview driveId={driveId} path={path} tools={tools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
   if (stage === "text") return <TextPreview driveId={driveId} tools={tools} onFail={next("thumb")} />;

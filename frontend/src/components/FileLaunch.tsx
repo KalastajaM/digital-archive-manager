@@ -15,6 +15,10 @@ const ICON = { size: 16, strokeWidth: 1.75 } as const;
 
 export const LAUNCH_BUSY = "Still opening the last request";
 
+/** Said where an archive folder's disk or cloud drive is away. */
+export const notConnected = (label: string) =>
+  `'${label}' is not connected. Connect the disk or sign in to the cloud drive, and it comes back by itself.`;
+
 type How = "open" | "reveal";
 const FAILED: Record<How, () => string> = { open: () => "Could not open it", reveal: () => `Could not show it ${inFileManager()}` };
 
@@ -82,11 +86,13 @@ type Props = {
   tipSide?: "below" | "above";
   /** "reveal": Show in Finder alone (a link to outside the archive opens nothing). */
   only?: "reveal";
+  /** The file's archive folder is not connected: both buttons are off. */
+  offline?: boolean;
 };
 
 /** The Open and Show in Finder icon buttons. */
-export function LaunchButtons({ launch, tipSide, only }: Props) {
-  const reason = launch.busy ? LAUNCH_BUSY : undefined;
+export function LaunchButtons({ launch, tipSide, only, offline = false }: Props) {
+  const reason = offline ? "Not connected" : launch.busy ? LAUNCH_BUSY : undefined;
   return (
     <>
       {only !== "reveal" && (
@@ -94,7 +100,7 @@ export function LaunchButtons({ launch, tipSide, only }: Props) {
           icon={<ExternalLink {...ICON} />}
           label="Open"
           tipSide={tipSide}
-          disabled={launch.busy}
+          disabled={launch.busy || offline}
           disabledReason={reason}
           onClick={() => void launch.run("open")}
         />
@@ -103,7 +109,7 @@ export function LaunchButtons({ launch, tipSide, only }: Props) {
         icon={<FolderSearch {...ICON} />}
         label={showInLabel()}
         tipSide={tipSide}
-        disabled={launch.busy}
+        disabled={launch.busy || offline}
         disabledReason={reason}
         onClick={() => void launch.run("reveal")}
       />

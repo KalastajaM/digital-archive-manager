@@ -87,6 +87,39 @@ const rowNames = () =>
     .getAllByRole("listitem")
     .map((li) => li.querySelector(".entry-name")?.textContent);
 
+describe("Browse extra archive folders", () => {
+  const root = (label: string, connected: boolean): DirEntry => ({ ...dir(label), folder: label, connected });
+
+  it("shows an extra folder's root with a drive icon, and says Not connected when its disk is away", async () => {
+    setup(null, {
+      "GET /api/browse": (call) => ({
+        body: (queryOf(call).get("path") ?? "") === "" ? [root("Scans", true), root("Vault", false), dir("10. Financial")] : [],
+      }),
+    });
+    await screen.findByText("Scans");
+    const items = within(listing()).getAllByRole("listitem");
+    const [scans, vault, plain] = items;
+    expect(scans.querySelector(".lucide-hard-drive")).not.toBeNull();
+    expect(vault.querySelector(".lucide-hard-drive")).not.toBeNull();
+    expect(plain.querySelector(".lucide-hard-drive")).toBeNull();
+    expect(within(scans).queryByText("Not connected")).toBeNull();
+    expect(within(vault).getByText("Not connected")).toBeInTheDocument();
+  });
+
+  it("opening a root that is not connected explains it instead of opening", async () => {
+    const { user, calls } = setup(null, {
+      "GET /api/browse": (call) => ({
+        body: (queryOf(call).get("path") ?? "") === "" ? [root("Vault", false)] : [],
+      }),
+    });
+    await user.click(await screen.findByRole("button", { name: /Vault/ }));
+    expect(
+      await screen.findByText("'Vault' is not connected. Connect the disk or sign in to the cloud drive, and it comes back by itself."),
+    ).toBeInTheDocument();
+    expect(browseCalls(calls).some((c) => queryOf(c).get("path") === "Vault")).toBe(false);
+  });
+});
+
 describe("Browse", () => {
   it("lists folders first, marks symlinks and navigates with the breadcrumb", async () => {
     const { calls, user } = setup("10. Financial/Banks");
