@@ -9,10 +9,11 @@ from fastapi.testclient import TestClient
 import dam.serve as serve_mod
 from conftest import FakeArchive
 from dam.api import create_api
-from dam.app import App
+from dam.app import JOBS_RUNNING, App
 from dam.config import load_settings
 from dam.profiles import ProfileStore, ServeLock
 from dam.serve import Host, Switchboard
+from dam.services.errors import Conflict
 
 PORT = 8798
 BASE = f"http://127.0.0.1:{PORT}"
@@ -208,7 +209,7 @@ def test_a_failed_reopen_keeps_the_app_and_asks_for_a_restart(served, events, di
             "'10. Financial' is already the name of a folder in the main folder. "
             "Choose another label.",
         ),
-        ("##. Mine", "disk", None),
+        ("##. Mine", "disk", "Names starting with ##. are kept for the app's own folders."),
         (
             "Old years",
             "missing",
@@ -231,8 +232,7 @@ def test_each_refusal_is_a_400_with_its_message(
     before = settings_bytes(app_paths)
     r = post(client, "/api/archive-folders", {"label": label, "path": path})
     assert r.status_code == 400, r.text
-    if message is not None:
-        assert r.json()["error"] == message
+    assert r.json()["error"] == message
     assert settings_bytes(app_paths) == before
 
 
@@ -360,3 +360,66 @@ def test_file_detail_and_collection_members_carry_the_folder(xapp, xclient, extr
     assert [(m["drive_id"], m["folder"], m["connected"]) for m in members] == [
         ("old-1", "Old years", True)
     ]
+
+
+def test_tray_files_carry_the_folder_with_one_look_per_response(
+    xapp, xclient, extra_folder, fake_archive, tmp_path, monkeypatch
+):
+    extra_folder.add("2009/letter.pdf", drive_id="old-1")
+    fake_archive.add(f"{INBOX}/new.pdf", drive_id="new-1")
+    xapp.scan()
+    r = post(xclient, "/api/items/quick", {"tray": "to-read", "drive_ids": ["old-1", "new-1"]})
+    assert r.status_code == 200, r.text
+    old_item, new_item = (i["id"] for i in r.json()["created"])
+    shutil.move(extra_folder.root, tmp_path / "unplugged")
+    looks = []
+    real = xapp.paths.disconnected_labels
+
+    def counted():
+        looks.append(1)
+        return real()
+
+    monkeypatch.setattr(xapp.paths, "disconnected_labels", counted)
+
+    rows = xclient.get("/api/trays/to-read/items").json()
+    assert len(looks) == 1
+    first = {row["id"]: row["first_file"] for row in rows}
+    assert (first[old_item]["folder"], first[old_item]["connected"]) == ("Old years", False)
+    assert (first[new_item]["folder"], first[new_item]["connected"]) == (None, True)
+
+    looks.clear()
+    files = xclient.get(f"/api/items/{old_item}/files").json()
+    assert len(looks) == 1
+    assert [(f["drive_id"], f["folder"], f["connected"]) for f in files] == [
+        ("old-1", "Old years", False)
+    ]
+
+
+# -- running jobs ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("which", ["maintenance", "replay"])
+def test_no_change_while_a_job_runs(xapp, xclient, app_paths, disk, monkeypatch, which):
+    jobs = xapp.maintenance.jobs if which == "maintenance" else xapp.replay_jobs
+    monkeypatch.setattr(jobs, "running", lambda: True)
+    before = settings_bytes(app_paths)
+    for url, body in (
+        ("/api/archive-folders", {"label": "More", "path": str(disk.root)}),
+        ("/api/archive-folders/Old years/detach", {}),
+        ("/api/archive-folders/Old years/detach", {"forget": True}),
+        ("/api/archive-folders/Old years/attach", {}),
+    ):
+        r = post(xclient, url, body)
+        assert r.status_code == 409, (url, r.text)
+        assert r.json()["error"] == JOBS_RUNNING
+    assert settings_bytes(app_paths) == before
+    assert [e.label for e in load_settings(app_paths).extra_folders] == ["Old years"]
+
+
+def test_host_reopen_refuses_while_a_job_runs(served, events, monkeypatch):
+    host, _ = served
+    first = host.current.app
+    monkeypatch.setattr(first.replay_jobs, "running", lambda: True)
+    with pytest.raises(Conflict, match="rule replay is running"):
+        host.reopen()
+    assert host.current.app is first and events == [("start", id(first))]

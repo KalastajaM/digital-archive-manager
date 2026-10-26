@@ -20,10 +20,18 @@ from dam.api.schemas import (
     ArchiveFoldersOut,
     FolderChangeOut,
 )
+from dam.app import JOBS_RUNNING, App
 from dam.archive_folders import FolderChange
 from dam.services.archives import ArchiveService
+from dam.services.errors import Conflict
 
 router = APIRouter(prefix="/api/archive-folders", tags=["archive-folders"])
+
+
+def _not_busy(app: App) -> None:
+    """409 before anything is written while a job runs that a reopen would end."""
+    if app.jobs_running():
+        raise Conflict(JOBS_RUNNING)
 
 
 def _done(archives: ArchiveService, change: FolderChange) -> dict:
@@ -46,7 +54,9 @@ def list_folders(app: AppDep) -> dict:
 @router.post("", response_model=FolderChangeOut)
 def add_folder(app: AppDep, archives: ArchivesDep, body: ArchiveFolderAddIn) -> dict:
     """Add a folder to the archive under ``label``; 400 with the reason when it cannot
-    be (it overlaps a folder of any archive, the label is taken, it cannot be read)."""
+    be (it overlaps a folder of any archive, the label is taken, it cannot be read).
+    409 while a maintenance check or rule replay runs."""
+    _not_busy(app)
     change = archive_folders.add_folder(
         app.app_paths,
         body.label,
@@ -64,6 +74,7 @@ def detach_folder(
 ) -> dict:
     """Take the folder out of the archive (it stays listed, detached). Its index rows
     are marked missing, or with ``forget`` removed; ``files`` says how many."""
+    _not_busy(app)
     change = archive_folders.detach_folder(
         app.app_paths, app.repo, label, body.forget, body.dry_run
     )
@@ -75,6 +86,7 @@ def attach_folder(
     app: AppDep, archives: ArchivesDep, label: str, body: ArchiveFolderAttachIn
 ) -> dict:
     """Attach a detached folder again, after the same checks as adding one."""
+    _not_busy(app)
     change = archive_folders.attach_folder(
         app.app_paths,
         label,

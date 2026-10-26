@@ -190,6 +190,8 @@ def test_item_files_with_path_and_state(client, app, files, fake_archive):
             "state": "ok",
             "in_inbox": False,
             "marks": [],
+            "folder": None,
+            "connected": True,
         },
         {
             "drive_id": "f3",
@@ -198,6 +200,8 @@ def test_item_files_with_path_and_state(client, app, files, fake_archive):
             "state": "ok",
             "in_inbox": False,
             "marks": [],
+            "folder": None,
+            "connected": True,
         },
     ]
     (fake_archive.root / BANKS / "c.txt").rename(fake_archive.root / "##. To Delete" / "c.txt")
@@ -243,6 +247,8 @@ def test_tray_items_carry_their_first_file(client, app, files, fake_archive):
         "state": "ok",
         "in_inbox": True,
         "marks": [],
+        "folder": None,
+        "connected": True,
     }
     post(client, f"/api/items/{two['id']}/files/remove", {"drive_id": "i1"})
     rows = {r["id"]: r for r in client.get("/api/trays/to-pay/items").json()}

@@ -60,6 +60,9 @@ from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
 
+# why the archive cannot be reopened now (adding, detaching or attaching a folder)
+JOBS_RUNNING = "A maintenance check or rule replay is running. Try again when it has finished."
+
 
 @dataclass(eq=False)
 class App:
@@ -612,6 +615,10 @@ class App:
             tag_mode=tag_mode,
             ctx=ctx,
         )
+
+    def jobs_running(self) -> bool:
+        """A maintenance check or a rule replay is running (closing the App ends it)."""
+        return self.maintenance.jobs.running() or self.replay_jobs.running()
 
     def close(self) -> None:
         self.replay_jobs.close()

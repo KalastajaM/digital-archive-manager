@@ -3012,6 +3012,7 @@ export interface paths {
          * Add Folder
          * @description Add a folder to the archive under ``label``; 400 with the reason when it cannot
          *     be (it overlaps a folder of any archive, the label is taken, it cannot be read).
+         *     409 while a maintenance check or rule replay runs.
          */
         post: operations["add_folder_api_archive_folders_post"];
         delete?: never;
@@ -5248,6 +5249,13 @@ export interface components {
             in_inbox: boolean;
             /** Marks */
             marks: ("starred" | "important")[];
+            /** Folder */
+            folder?: string | null;
+            /**
+             * Connected
+             * @default true
+             */
+            connected: boolean;
         };
         /**
          * ItemMergeBody

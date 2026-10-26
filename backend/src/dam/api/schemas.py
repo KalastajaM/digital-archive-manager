@@ -1131,6 +1131,10 @@ class ItemFileOut(BaseModel):
     # present and directly in the inbox or in a filing code's inbox folder (not filed yet)
     in_inbox: bool
     marks: list[Mark]
+    # the extra archive folder it lies in (None: the main folder, or not in the index),
+    # and whether that folder is connected now
+    folder: str | None = None
+    connected: bool = True
 
 
 class TrayItemOut(ItemOut):

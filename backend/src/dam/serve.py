@@ -33,7 +33,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from dam import setup
-from dam.app import App
+from dam.app import JOBS_RUNNING, App
 from dam.config import AppPaths
 from dam.extract.picture import prune_page1_pictures
 from dam.index.watcher import Watcher
@@ -411,6 +411,8 @@ class Host:
             old = self.current
             if self.board is None or old is None or old.app is None:
                 raise Conflict("The archive is not open yet.")
+            if old.app.jobs_running():
+                raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
             paths = old.paths or old.app.app_paths
             app = App.create(paths.data_dir)
             try:
