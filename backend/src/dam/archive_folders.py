@@ -96,6 +96,32 @@ def check_folder(
     return None
 
 
+@dataclass
+class FolderStatus:
+    """One folder of the archive as Settings lists it; ``label`` None is the main folder."""
+
+    label: str | None
+    path: str
+    attached: bool
+    connected: bool
+    files: int
+
+
+def list_folders(app_paths: AppPaths, repo: FileRepo) -> list[FolderStatus]:
+    """The main folder, then every extra folder (detached ones too), as the settings
+    file has them now. ``files`` counts index rows not flagged missing; the main folder's
+    are the rows under no attached label."""
+    settings, _ = _context(app_paths)
+    extras = []
+    for e in settings.extra_folders:
+        files = repo.count_subtree(e.label, live_only=True)
+        connected = listable(Path(e.path).expanduser())
+        extras.append(FolderStatus(e.label, str(e.path), e.attached, connected, files))
+    in_extras = sum(f.files for f in extras if f.attached)
+    main = FolderStatus(None, str(settings.archive_root), True, True, repo.count_live() - in_extras)
+    return [main, *extras]
+
+
 def _context(app_paths: AppPaths) -> tuple[Settings, ArchivePaths]:
     settings = load_settings(app_paths)
     if settings.archive_root is None:

@@ -8,6 +8,7 @@ used on its own) switching is refused with a message. Forgetting only edits the
 registry: no folder is ever deleted.
 """
 
+import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,11 +21,16 @@ from dam.profiles import MAIN_ID, MAIN_NAME, PALETTE, Locked, Profile, ProfileSt
 from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.services.launch import LaunchService, Runner, run_open
 
+log = logging.getLogger(__name__)
+
 
 class Switcher(Protocol):
-    """What ``dam serve`` offers: open another profile in the running process."""
+    """What ``dam serve`` offers: open another profile in the running process, or open
+    this one afresh (its archive folders changed)."""
 
     def switch(self, key: str) -> Profile: ...
+
+    def reopen(self) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -142,6 +148,19 @@ class ArchiveService:
             return SwitchOutcome(self.switcher.switch(target.id))
         except Locked as e:
             raise Conflict(f"'{target.name}': {e}") from None
+
+    def reopen(self) -> bool:
+        """Open this archive afresh in the running server, so an added, detached or
+        attached archive folder takes effect. False when it could not (no server, or the
+        reopen failed and was rolled back): ``dam serve`` must be restarted."""
+        if self.switcher is None:
+            return False
+        try:
+            self.switcher.reopen()
+        except Exception:
+            log.exception("could not reopen the archive after its folders changed")
+            return False
+        return True
 
     def update(self, key: str, name: str | None = None, color: str | None = None) -> dict:
         target = self.store.find(key)

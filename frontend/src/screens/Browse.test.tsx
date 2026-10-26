@@ -9,10 +9,10 @@ import { ONGOING_ROOT_REASON } from "../dropModes";
 import Browse, { folderCollectRefusal } from "./Browse";
 
 function dir(path: string, drive_id = `id-${path}`): DirEntry {
-  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id, marks: [] };
+  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id, connected: true, marks: [] };
 }
 function file(path: string, drive_id: string, is_link = false): DirEntry {
-  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false, is_link, size: 10, mtime: 1, drive_id, marks: [] };
+  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false, is_link, size: 10, mtime: 1, drive_id, connected: true, marks: [] };
 }
 
 const LISTINGS: Record<string, DirEntry[]> = {
@@ -197,7 +197,7 @@ describe("Search", () => {
     rank: -1,
     size: 1000,
     mtime: 1_700_000_000,
-    marks: [],
+    connected: true, marks: [],
     ...overrides,
   });
 
@@ -288,9 +288,9 @@ describe("Search", () => {
 
 describe("Search results' columns", () => {
   const hits: SearchHit[] = [
-    { drive_id: "b", path: "20. Home/b.pdf", name: "b.pdf", snippet: "b.pdf", rank: -3, size: 10, mtime: 1_600_000_000, marks: [] },
-    { drive_id: "a", path: "10. Financial/a.pdf", name: "a.pdf", snippet: "a.pdf", rank: -2, size: 300, mtime: 1_700_000_000, marks: [] },
-    { drive_id: "c", path: "30. Car/c.pdf", name: "c.pdf", snippet: "c.pdf", rank: -1, size: null, mtime: null, marks: [] },
+    { drive_id: "b", path: "20. Home/b.pdf", name: "b.pdf", snippet: "b.pdf", rank: -3, size: 10, mtime: 1_600_000_000, connected: true, marks: [] },
+    { drive_id: "a", path: "10. Financial/a.pdf", name: "a.pdf", snippet: "a.pdf", rank: -2, size: 300, mtime: 1_700_000_000, connected: true, marks: [] },
+    { drive_id: "c", path: "30. Car/c.pdf", name: "c.pdf", snippet: "c.pdf", rank: -1, size: null, mtime: null, connected: true, marks: [] },
   ];
   const order = () =>
     within(screen.getByRole("list", { name: "Search results" }))
@@ -1383,7 +1383,7 @@ describe("Task 11 review fixes", () => {
   });
 
   it("undoing a move reloads the search results", async () => {
-    const hit: SearchHit = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", name: "a.pdf", snippet: "[a]", rank: -1, size: 1, mtime: 1, marks: [] };
+    const hit: SearchHit = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", name: "a.pdf", snippet: "[a]", rank: -1, size: 1, mtime: 1, connected: true, marks: [] };
     const op = { kind: "move" as const, src: hit.path, dst: "13. Taxes/a.pdf", drive_id: "f1", note: null };
     const { calls, user } = setup("", {
       "GET /api/search": { body: [hit] },

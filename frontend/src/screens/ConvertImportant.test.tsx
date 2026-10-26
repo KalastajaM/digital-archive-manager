@@ -195,7 +195,7 @@ const IMPORTANT: Collection = {
   publish: {},
   ongoing_rel: null,
   members: [
-    { drive_id: "deed", path: "40. Family/deed.pdf", is_dir: false, missing: false, quarantined: false, is_link: false, group_id: 11, marks: ["important"] },
+    { drive_id: "deed", path: "40. Family/deed.pdf", is_dir: false, missing: false, quarantined: false, is_link: false, group_id: 11, connected: true, marks: ["important"] },
   ],
   ongoing_status: null,
   summary: "",

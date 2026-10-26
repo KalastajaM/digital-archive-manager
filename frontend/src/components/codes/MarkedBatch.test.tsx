@@ -26,7 +26,7 @@ function entry(id: string, name: string, suggested: string): InboxEntry {
       missing: false,
       last_seen: null,
       parked_at: null,
-      marks: [],
+      connected: true, marks: [],
     },
     suggestion: {
       name: suggested,

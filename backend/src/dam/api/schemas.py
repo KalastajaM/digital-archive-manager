@@ -393,6 +393,10 @@ class FileRecordOut(BaseModel):
     last_seen: float | None
     parked_at: float | None
     marks: list[Mark]
+    # the extra archive folder it lies in (None: the main folder), and whether that
+    # folder is connected now (always True for the main folder)
+    folder: str | None = None
+    connected: bool = True
 
 
 class FileDetailOut(BaseModel):
@@ -773,6 +777,10 @@ class DirEntryOut(BaseModel):
     mtime: float | None
     drive_id: str
     marks: list[Mark]
+    # the extra archive folder it lies in (None: the main folder), and whether that
+    # folder is connected now (always True for the main folder)
+    folder: str | None = None
+    connected: bool = True
 
 
 class FlatFilesOut(BaseModel):
@@ -791,6 +799,10 @@ class SearchHitOut(BaseModel):
     size: int | None
     mtime: float | None
     marks: list[Mark]
+    # the extra archive folder it lies in (None: the main folder), and whether that
+    # folder is connected now (always True for the main folder)
+    folder: str | None = None
+    connected: bool = True
 
 
 class JournalEntryOut(BaseModel):
@@ -1157,6 +1169,10 @@ class MemberOut(BaseModel):
     group_id: int | None  # None: ungrouped
     marks: list[Mark]
     is_link: bool = False  # a symbolic link: Trash moves the link, never its target
+    # the extra archive folder it lies in (None: the main folder), and whether that
+    # folder is connected now (always True for the main folder)
+    folder: str | None = None
+    connected: bool = True
 
 
 class GroupOut(BaseModel):
@@ -1552,6 +1568,46 @@ class ArchiveForgetOut(BaseModel):
 
 class ArchiveRevealIn(_In):
     what: Literal["data", "archive"]
+
+
+# -- archive folders (the main folder and the extra ones) ------------------------------
+
+
+class ArchiveFolderOut(BaseModel):
+    label: str | None  # None: the main folder
+    path: str
+    attached: bool  # False: detached (kept in the settings, offered to attach again)
+    connected: bool  # the folder can be read now
+    files: int  # index rows in it, not counting missing ones
+
+
+class ArchiveFoldersOut(BaseModel):
+    folders: list[ArchiveFolderOut]  # the main folder first
+
+
+class ArchiveFolderAddIn(_In):
+    label: str = Field(max_length=255)
+    path: str = Field(max_length=4096)
+    dry_run: bool = False
+
+
+class ArchiveFolderDetachIn(_In):
+    forget: bool = False  # also remove its index entries (tags, notes and the rest)
+    dry_run: bool = False
+
+
+class ArchiveFolderAttachIn(_In):
+    dry_run: bool = False
+
+
+class FolderChangeOut(BaseModel):
+    """What adding, detaching or attaching a folder did (or, in a dry run, would do)."""
+
+    label: str
+    path: str
+    files: int  # rows a detach marks missing, or a forget removes
+    # True when the server could not reopen the archive itself: restart ``dam serve``
+    restart_needed: bool
 
 
 # -- filing codes -------------------------------------------------------------

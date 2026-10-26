@@ -26,7 +26,7 @@ const member = (drive_id: string): Member => ({
   quarantined: false,
   is_link: false,
   group_id: null,
-  marks: [],
+  connected: true, marks: [],
 });
 
 const SAUNA: CollectionRow = {

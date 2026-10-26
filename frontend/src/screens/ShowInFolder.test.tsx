@@ -23,7 +23,7 @@ const member = (over: Partial<Collection["members"][number]> = {}): Collection["
   quarantined: false,
   is_link: false,
   group_id: null,
-  marks: [],
+  connected: true, marks: [],
   ...over,
 });
 const collection = (over: Partial<Collection>): Collection => ({
@@ -52,7 +52,7 @@ const row = (name: string, id: string): DirEntry => ({
   size: 10,
   mtime: 1,
   drive_id: id,
-  marks: [],
+  connected: true, marks: [],
 });
 
 function Where() {

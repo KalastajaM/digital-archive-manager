@@ -873,6 +873,19 @@ def test_openapi_schema_is_typed(app):
     ok = schema["paths"]["/api/inbox/file"]["post"]["responses"]["200"]
     assert ok["content"]["application/json"]["schema"]["$ref"].endswith("FileItResultOut")
     assert "ErrorBody" in schema["components"]["schemas"]
+    assert "/api/archive-folders" in schema["paths"]
+    record = schema["components"]["schemas"]["FileRecordOut"]["properties"]
+    assert "folder" in record and "connected" in record
+
+
+def test_main_folder_records_say_so(client, app, inbox_file):
+    """Every file record names its archive folder: ``None`` for the main folder."""
+    record = client.get("/api/inbox").json()[0]["record"]
+    assert record["folder"] is None and record["connected"] is True
+    detail = client.get(f"/api/files/{record['drive_id']}").json()["record"]
+    assert detail["folder"] is None and detail["connected"] is True
+    root = client.get("/api/browse").json()
+    assert root and all(e["folder"] is None and e["connected"] is True for e in root)
 
 
 runner = CliRunner()

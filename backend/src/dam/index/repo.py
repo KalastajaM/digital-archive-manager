@@ -868,6 +868,13 @@ class FileRepo:
                 select(func.count()).select_from(files).where(and_(*cond))
             ).scalar_one()
 
+    def count_live(self) -> int:
+        """Rows not flagged missing, in every folder of the archive."""
+        with self._conn() as conn:
+            return conn.execute(
+                select(func.count()).select_from(files).where(files.c.missing.is_not(True))
+            ).scalar_one()
+
     def forget_subtree(self, rel: str) -> int:
         """Remove the index rows at or under ``rel`` (tags, text and the rest of each row
         with them); returns how many. Database only: nothing on disk is touched."""

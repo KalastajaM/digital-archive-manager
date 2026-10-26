@@ -30,7 +30,7 @@ const DETAIL: FileDetail = {
     missing: false,
     last_seen: null,
     parked_at: null,
-    marks: [],
+    connected: true, marks: [],
   },
   tags: ["bank", "power"],
   link_target_id: null,

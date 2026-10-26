@@ -29,6 +29,7 @@ const record = (marks: Mark[]): FileDetail["record"] => ({
   missing: false,
   last_seen: null,
   parked_at: null,
+  connected: true,
   marks,
 });
 const detail = (marks: Mark[]): FileDetail => ({
