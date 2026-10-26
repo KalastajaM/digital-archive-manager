@@ -1365,6 +1365,9 @@ and are not in a snapshot either.
   folder had another path) is marked "Of another archive folder". To restore it, tick
   the box in the restore sheet: dam then restores it but keeps this archive's own
   folders in the settings. Do this only for the same documents.
+- A restore always keeps this archive's own folders, its protected paths and the folders
+  never sent to AI as they are now. The snapshot can add protected paths or excluded
+  folders, but not remove any.
 - After a restore, Activity and Undo go back to the moment of the snapshot. Files moved
   since then are found again when dam scans the archive. The settings that were
   replaced are moved to a `replaced-…` folder beside the snapshots, not deleted.

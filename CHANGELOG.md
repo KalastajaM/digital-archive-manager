@@ -829,6 +829,19 @@ All notable changes are listed here. The format follows
 - Text that is cut off shows in full on hover; folder paths are shortened in the middle,
   keeping the last folder.
 
+### Security
+
+- **Importing and restoring a snapshot checks more.** A snapshot file can come from
+  anywhere, so dam now refuses one with entry names that would land outside its
+  temporary folder on Windows (drive letters, `:` streams, device names such as `NUL`),
+  one that would unpack to far more than it looks (more than 10,000 entries, more than
+  16 GB, more than the free disk space, or an entry packed unusually small), and one
+  whose database holds triggers, views or tables dam never makes, or does not match
+  dam's own database layout (for example a snapshot from an older app that used the
+  same version numbers). A restore now always keeps this archive's own folders, its
+  protected paths and the folders never sent to AI; a snapshot can add protected paths
+  or excluded folders but no longer remove them, or add a folder to the archive.
+
 ## [0.1.0] - Unreleased
 
 First public release.

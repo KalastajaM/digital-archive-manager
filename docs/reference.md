@@ -389,20 +389,31 @@ files, and the Keychain entries. The zip is built in a temporary folder inside
 **Import** is `POST /api/snapshots/import` with the zip as the body
 (`application/octet-stream`, up to 2 GB; besides the inbox upload it is the only route
 that takes a non-JSON body). The file is unpacked into a temporary folder and checked as
-for a restore (below, apart from the archive folder and the migration); then it is copied
-in as `…-imported.zip`. A taken name gets `-2`; nothing is overwritten.
+for a restore (below, apart from the archive folder and the settings it keeps, the
+unpacked copy is migrated and compared too); then it is copied in as `…-imported.zip`. A taken name gets `-2`; nothing is overwritten.
 
 **Restore** (`POST /api/snapshots/{name}/restore {snapshot_current, other_folder_ok}`;
 `snapshot_current` is required) only takes a snapshot by name from this archive's
 `snapshots/` folder. Before anything changes it unpacks the zip into a temporary folder
-and checks it: only the expected entries (no absolute paths, `..` or links), the
-manifest format, `PRAGMA integrity_check`, a readable `settings.yaml` and a migration
-revision this version of dam knows (a newer or unknown one, such as one from another
-branch of dam, is refused). A snapshot whose `archive_root` differs from the open
-archive's is a 409 unless `other_folder_ok` is true; then `archive_root` and
-`extra_folders` in the unpacked `settings.yaml` are set to the open archive's (the index
-stores paths relative to the archive folders, so the rest still fits). The unpacked
-database is then migrated to the current revision. It is refused while an interrupted
+and checks it: only the expected entries (no absolute paths, `..`, `:` (drives and
+streams on Windows), Windows device names or links, on every platform), at most 10,000
+entries, deflated or stored only, no large entry packed more than 250 times smaller, at
+most 16 GB unpacked in all (counted again while unpacking, so a zip that declares less
+than it holds stops there) and no more than the free disk space, the manifest format,
+`PRAGMA integrity_check`, a migration revision this version of dam knows (a newer or
+unknown one, such as one from another branch of dam, is refused), no trigger, view or
+table that a fresh database migrated to that revision does not have, and a readable
+`settings.yaml`. The snapshot's database is opened with `PRAGMA trusted_schema=OFF`
+throughout. It is then migrated to the current revision and compared with dam's table
+definitions (`alembic` `compare_metadata`, the full-text index's own tables aside): any
+difference is a 409, since bare revision ids are shared with an older app that had
+another layout. A snapshot whose `archive_root` differs from the open archive's is a 409
+unless `other_folder_ok` is true. Every restore sets `archive_root` and `extra_folders` in
+the unpacked `settings.yaml` to the open archive's (the index stores paths relative to the
+archive folders, so the rest still fits; `kept_folders` says whether they differed), and
+keeps every current entry of `protected_paths` and `ai.exclude_folders`: the snapshot's
+entries are added after them, but none of the current ones is dropped, so a snapshot file
+cannot add a folder to the archive or lift a protection. It is refused while an interrupted
 operation waits for recovery (Run recovery), and while a maintenance check or rule replay runs.
 With `snapshot_current` a `before-restore` snapshot is taken next. Then the server closes
 the archive (`Host.close_and_reopen`: background work stopped, App closed), writes the

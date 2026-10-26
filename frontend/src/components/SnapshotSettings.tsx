@@ -201,7 +201,8 @@ function RestoreSheet({ snapshot, onClose }: { snapshot: Snapshot; onClose: () =
       </p>
       <p className="hint">
         Activity and Undo go back to that moment. Files moved since then are found again when the archive is scanned. The current settings are
-        moved aside to the snapshots folder, not deleted.
+        moved aside to the snapshots folder, not deleted. This archive's own folders, its protected paths and the folders never sent to AI are kept
+        as they are now; the snapshot can add to those, not remove from them.
       </p>
       {snapshot.other_folder && (
         <label className="check">
