@@ -81,6 +81,17 @@ file_qr_codes = Table(
     Column("read_at", Float, nullable=False),
 )
 
+# The filing code the owner gave an inbox file in the app (migration 0035): one per file,
+# kept after filing (an undone filing brings the file back with it) and used only while
+# the file is in the inbox. Not tied to the content: the decision is about the document.
+file_assigned_codes = Table(
+    "file_assigned_codes",
+    metadata,
+    Column("drive_id", Text, ForeignKey("files.drive_id"), primary_key=True),
+    Column("code", Text, nullable=False),
+    Column("assigned_at", Float, nullable=False),
+)
+
 # Where the text of page 1 sits (migration 0028): ``lines`` is a JSON list of
 # ``{text, box}`` (``[]``: read, no text on page 1), ``source`` the reader
 # (``text-layer`` | ``vision`` | ``tesseract``). Same lifetime as ``file_barcodes``: a row

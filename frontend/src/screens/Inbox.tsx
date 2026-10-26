@@ -1,4 +1,4 @@
-import { Upload } from "lucide-react";
+import { QrCode, Upload } from "lucide-react";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -10,7 +10,9 @@ import {
   type ResolvedOp,
   type RuleOffer,
   type TrayDef,
+  useAssignCode,
   useDeclineRule,
+  useFilingCodes,
   useInbox,
   useStatus,
   useToday,
@@ -19,6 +21,7 @@ import {
 import { useAddFiles } from "../components/AddFiles";
 import { scannedFields } from "../components/FileDetails";
 import { InboxEmpty } from "../components/InboxEmpty";
+import { CodePicker } from "../components/codes/CodePicker";
 import { MarkedBatch, markedFollowUps } from "../components/codes/MarkedBatch";
 import { useSetupFolders } from "../components/SetupFolders";
 import { ConfirmPlan, snapshotKey } from "../components/PlanPreview";
@@ -85,6 +88,7 @@ const KEYS: KeyHint[] = [
   [["Space"], "Quick Look"],
   [["↩"], "preview"],
   [["⌘↩"], "file it"],
+  [["c"], "filing code"],
   [["n"], "name"],
   [["f"], "folder"],
   [["1–9"], "tray"],
@@ -106,14 +110,19 @@ function ScanChip({ prefill, today }: { prefill: Record<string, string>; today: 
   );
 }
 
-/** The filing codes found for a file ("P", "P?" when the reading was unclear). */
+/** The code the owner assigned to the entry in the app, or null. */
+export const assignedOf = (entry: InboxEntry) => entry.suggestion.codes.find((c) => c.via === "assigned")?.code ?? null;
+
+/** The filing codes found for a file ("P", "P?" when the reading was unclear); codes an
+ * assigned code overrides are left out. */
 function CodeBadge({ codes }: { codes: InboxEntry["suggestion"]["codes"] }) {
-  if (codes.length === 0) return null;
   const shown: string[] = [];
   for (const c of codes) {
+    if (c.overridden) continue;
     const text = c.unclear ? `${c.code}?` : c.code;
     if (!shown.includes(text)) shown.push(text);
   }
+  if (shown.length === 0) return null;
   return (
     <Tag tone="grey" className="entry-chip" title={`Filing code ${shown.join(", ")}`}>
       {visible(shown.join(" "))}
@@ -238,6 +247,42 @@ export default function Inbox() {
   const targetsRef = useRef(targets);
   targetsRef.current = targets; // a dry run for other entries than these is dropped
   const locked = filing.busy || filing.inFlight.current || trash.busy;
+
+  // Assign a filing code (c, or the toolbar button) to the selection or the current file.
+  const filingCodes = useFilingCodes().data?.codes ?? [];
+  const assign = useAssignCode();
+  const [codeAnchor, setCodeAnchor] = useState<HTMLButtonElement | null>(null);
+  const [picking, setPicking] = useState(false);
+  const canAssign = !markedOpen && targets.length > 0 && filingCodes.length > 0;
+  const targetEntries = entries.filter((e) => targets.includes(e.record.drive_id));
+  const pickCode = (code: string | null) => {
+    setPicking(false);
+    // each file's code before, for Undo (files that had the same one go back together)
+    const before = new Map<string | null, string[]>();
+    for (const e of targetEntries) {
+      const was = assignedOf(e);
+      before.set(was, [...(before.get(was) ?? []), e.record.drive_id]);
+    }
+    const ids = targetEntries.map((e) => e.record.drive_id);
+    const what = ids.length > 1 ? plural(ids.length, "file") : visible(targetEntries[0]?.suggestion.name ?? "");
+    assign.mutate(
+      { driveIds: ids, code },
+      {
+        onSuccess: () =>
+          toast({
+            kind: "info",
+            text: code ? `Gave ${what} filing code ${code}.` : `Took the filing code off ${what}.`,
+            action: {
+              label: "Undo",
+              run: () => {
+                for (const [was, back] of before) assign.mutate({ driveIds: back, code: was });
+              },
+            },
+          }),
+        onError: (e) => toast({ kind: "error", text: `Could not set the filing code: ${errorText(e)}` }),
+      },
+    );
+  };
   const trashTargets = () => {
     // the panel hides the selection: never act on what is not on screen
     if (markedOpen) return;
@@ -372,6 +417,12 @@ export default function Inbox() {
       trashTargets();
       return;
     }
+    if (isShortcut(e) && e.key === "c" && !e.shiftKey) {
+      if (!canAssign || locked) return;
+      e.preventDefault();
+      setPicking(true);
+      return;
+    }
     if (!isShortcut(e) || !["j", "k", "J", "K", "u", "ArrowDown", "ArrowUp"].includes(e.key)) return;
     // The marked panel shows no selection: moving it would act on a hidden file.
     if (markedOpen && e.key !== "u") return;
@@ -448,6 +499,20 @@ export default function Inbox() {
                   Reading filing codes…
                 </span>
               )}
+              <button
+                ref={setCodeAnchor}
+                type="button"
+                className="icon-button"
+                aria-label="Assign a filing code…"
+                aria-expanded={picking}
+                data-tip={canAssign ? "Assign a filing code… c" : "No file to give a filing code"}
+                disabled={!canAssign || locked}
+                onClick={() => setPicking((open) => !open)}
+              >
+                <span className="icon-button-glyph" aria-hidden="true">
+                  <QrCode />
+                </span>
+              </button>
               <IconButton
                 icon={<Upload />}
                 label="Add files…"
@@ -547,13 +612,24 @@ export default function Inbox() {
           />
         ) : current ? (
           <ReviewCard
-            key={current.record.drive_id}
+            // an assigned code refills the form, as for a file that arrived with it
+            key={`${current.record.drive_id}:${assignedOf(current) ?? ""}`}
             entry={current}
             filing={filing}
             trash={{ run: trashTargets, busy: trash.busy }}
           />
         ) : null}
       </section>
+      {picking && canAssign && (
+        <CodePicker
+          anchor={codeAnchor}
+          codes={filingCodes}
+          count={targetEntries.length}
+          canClear={targetEntries.some((e) => assignedOf(e) !== null)}
+          onPick={pickCode}
+          onClose={() => setPicking(false)}
+        />
+      )}
       {quickLook.view}
       {trash.view}
       {ruleOffer && (

@@ -9,6 +9,8 @@ from pydantic import ValidationError
 
 from dam.api.deps import UI_ORIGIN, AppDep
 from dam.api.schemas import (
+    AssignCodeIn,
+    AssignCodeOut,
     BatchResultOut,
     BatchRowOut,
     FilingCodeFoldersOut,
@@ -21,6 +23,7 @@ from dam.api.schemas import (
 )
 from dam.app import App
 from dam.codes import folders, sheets
+from dam.codes.assigned import assign_code
 from dam.codes.batch import marked_rows
 from dam.codes.model import FilingCode, confusable_with, format_validation
 from dam.services.errors import InvalidRequest
@@ -90,6 +93,15 @@ def batch(app: AppDep) -> list:
     it (post the ticked ones to ``/api/inbox/file``) and a flag when it needs a look.
     Changes nothing."""
     return marked_rows(app)
+
+
+@router.put("/assigned", response_model=AssignCodeOut)
+def assigned(app: AppDep, body: AssignCodeIn) -> dict:
+    """Give inbox files a filing code, as if a sticker were on them (``code`` null: take
+    it away). Only dam's index changes; 400 for an unknown code or a file outside the
+    inbox, 404 for an unknown file."""
+    code = assign_code(app, body.drive_ids, body.code)
+    return {"drive_ids": list(dict.fromkeys(body.drive_ids)), "code": code}
 
 
 @router.get("/sheets", response_model=list[SheetLayoutOut])

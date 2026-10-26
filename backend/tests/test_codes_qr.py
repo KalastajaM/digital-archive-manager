@@ -309,6 +309,6 @@ def test_migration_0026_adds_the_table(tmp_path: Path, new_engine):
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(file_qr_codes)"))]
         assert conn.execute(text("SELECT count(*) FROM file_barcodes")).scalar() == 1
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0034"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0035"
     assert cols == ["drive_id", "sha256", "reads", "read_at"]
     engine.dispose()
