@@ -1314,9 +1314,15 @@ and are not in a snapshot either.
 - A snapshot in the data folder is on the same disk as dam, so it helps when a change
   goes wrong but not when the disk or the computer fails. **Export** on a snapshot
   saves the zip through your browser: keep it on another disk, a NAS or a cloud folder.
+  Export only copies the file, so copying it from the folder yourself (or letting your
+  usual backup pick up the `snapshots` folder) works just as well.
 - **Import…** adds a snapshot zip you saved earlier (on this computer or another one).
   dam checks the whole file first and adds it to the list marked "imported"; nothing is
-  restored until you choose **Restore…**.
+  restored until you choose **Restore…**. You can also copy a snapshot file into the
+  `snapshots` folder yourself: it shows in the list as long as its name still has the
+  form `dam-snapshot-YYYYMMDD-HHMMSS.zip` (a browser may add `(1)` to a second download;
+  rename it back, or use Import, which takes any name). It is then checked when you
+  restore it rather than when it is added.
 - dam never removes a snapshot. Remove old ones from the folder yourself.
 - **Restore…** first asks **Take a snapshot of the current state first?** **Take
   snapshot and restore** keeps the state you have now as a snapshot (listed as "taken

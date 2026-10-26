@@ -109,6 +109,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Snapshots** have tooltips on Import, Export and Restore (a snapshot that cannot be
+  restored says why), and the help says that Export only copies the file, so copying it
+  from the snapshots folder yourself works too.
 - **Previews list a new folder structure as one step.** When a change needs several
   missing folders, one inside the other (such as the same folder path in To Delete), the
   preview shows one "New folders" line with the deepest folder and how many are made,

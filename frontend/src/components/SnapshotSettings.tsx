@@ -17,6 +17,7 @@ import {
 import { clockTime, formatSize, longDay } from "../format";
 import { visible } from "../text";
 import { Sheet } from "./ui/Sheet";
+import { TipButton } from "./ui/TipButton";
 
 const when = (iso: string) => {
   const at = new Date(iso);
@@ -45,15 +46,20 @@ export function SnapshotSettings() {
       <p className="hint">
         A snapshot holds this archive's database (index, tags, collections, notes, activity) and its settings (rules, trays, filing codes). Your
         documents are not in it. Snapshots are kept in this archive's data folder on this computer, so they help when a change goes wrong but not
-        when the disk fails: <strong>Export</strong> a snapshot to keep a copy on another disk or in the cloud. dam never removes a snapshot.
+        when the disk fails: <strong>Export</strong> a snapshot (or copy its file from the folder) to keep it on another disk or in the cloud. dam never
+        removes a snapshot.
       </p>
       <div className="snapshot-actions">
         <button type="button" className="primary" disabled={create.isPending} onClick={() => create.mutate()}>
           {create.isPending ? "Taking snapshot…" : "Take snapshot"}
         </button>
-        <button type="button" disabled={add.isPending} onClick={() => picker.current?.click()}>
+        <TipButton
+          tip="Add a snapshot file you saved earlier. It is checked first; nothing is restored yet."
+          disabled={add.isPending}
+          onClick={() => picker.current?.click()}
+        >
           {add.isPending ? "Importing…" : "Import…"}
-        </button>
+        </TipButton>
         <input
           ref={picker}
           type="file"
@@ -122,16 +128,23 @@ export function SnapshotSettings() {
                 {s.problem && <div className="hint">{visible(s.problem)}</div>}
               </div>
               <div className="snapshot-row-actions">
-                <a className="button-link" href={snapshotDownloadUrl(s.name)} download={s.name}>
+                <a
+                  className="button-link tip-end"
+                  href={snapshotDownloadUrl(s.name)}
+                  download={s.name}
+                  data-tip="Save a copy of this snapshot (a zip file), for example on another disk. The same as copying it from the folder."
+                >
                   Export
                 </a>
-                <button
-                  type="button"
+                <TipButton
+                  className="tip-end"
+                  tip="Replace this archive's database and settings with this snapshot. You are asked first."
                   disabled={s.problem !== null || !snapshots.data?.can_restore}
+                  disabledReason={s.problem ?? (snapshots.data?.can_restore ? null : "This window cannot restore a snapshot.")}
                   onClick={() => setRestoring(s)}
                 >
                   Restore…
-                </button>
+                </TipButton>
               </div>
             </li>
           ))}
