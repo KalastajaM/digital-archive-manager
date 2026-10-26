@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Columns2, File, Folder, FolderPlus, HardDrive } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Eye, File, Folder, FolderPlus, HardDrive } from "lucide-react";
 import {
   type DragEvent,
   Fragment,
@@ -352,6 +352,8 @@ type RowProps = {
   dropProps?: DropTarget["props"];
   /** Right-click (folder rows only). */
   onContextMenu?: (e: MouseEvent) => void;
+  /** A file row: the Quick Look button at its right end, shown on hover. */
+  onQuickLook?: () => void;
 };
 
 /** One listed entry. Files drag (with the selection), unless their area keeps them. */
@@ -370,6 +372,7 @@ function EntryRow({
   onClick,
   dropProps,
   onContextMenu,
+  onQuickLook,
 }: RowProps) {
   const driveRoot = item.is_dir && item.folder != null && !item.path.includes("/"); // an extra folder's own root
   const Icon = driveRoot ? HardDrive : item.is_dir ? Folder : File;
@@ -434,6 +437,9 @@ function EntryRow({
         )}
         {item.snippet !== undefined && item.snippet !== item.name && <Snippet text={item.snippet} />}
       </button>
+      {onQuickLook && !item.is_dir && (
+        <IconButton icon={<Eye />} label={`Quick Look ${visible(item.name)}`} tip="Quick Look" shortcut="Space" className="entry-ql" onClick={onQuickLook} />
+      )}
       {refusal && (
         <span className="drop-refusal" role="status">
           {refusal}
@@ -880,6 +886,19 @@ export default function Browse() {
     setNaming(null);
     // the new right pane starts as a copy of the left one
     setParams(urlFor({ left: panes.left, right: next ? panes.left : panes.right }, next));
+  };
+  /** Two panes: the left one goes right and the right one left, each with its folder,
+   * filter, view, sort, history, selection and search. */
+  const swapPanes = () => {
+    if (!split) return;
+    const flip = <T,>(all: Record<PaneId, T>): Record<PaneId, T> => ({ left: all.right, right: all.left });
+    setNaming(null);
+    setHistory(flip);
+    setSorts(flip);
+    setSelections(flip);
+    setActive((a) => (a === "left" ? "right" : "left"));
+    setSearchPane((p) => (p === "left" ? "right" : "left"));
+    setParams(urlFor(flip(panes), true));
   };
   const sortBy = (pane: PaneId, sort: FlatSort) =>
     setSorts((all) => ({
@@ -1342,6 +1361,22 @@ export default function Browse() {
     },
   );
 
+  // A row's Quick Look button: that row becomes the pane's current one, and Quick Look
+  // opens once the render has its pane's files.
+  const [lookAt, setLookAt] = useState<string | null>(null);
+  const quickLookRow = (pane: PaneId, i: number) => {
+    const id = items[pane][i].drive_id;
+    setActive(pane);
+    setGone(NONE);
+    update(pane, { index: i, anchor: id, touched: true });
+    setLookAt(id);
+  };
+  useEffect(() => {
+    if (lookAt === null) return;
+    setLookAt(null);
+    if (qlCurrent.current === lookAt) quickLook.open();
+  }, [lookAt]);
+
   useKeydown((e) => {
     if (e.key === "Escape" && isTyping(e.target)) {
       (e.target as HTMLElement).blur();
@@ -1657,7 +1692,14 @@ export default function Browse() {
                   return ids.map((d) => pathOf.get(d)).filter((p): p is string => p !== undefined);
                 };
                 return (
-                  <EntryRow key={item.drive_id} {...row} dragIds={dragIds} dragPaths={dragPaths} dragSpecial={dragSpecial} />
+                  <EntryRow
+                    key={item.drive_id}
+                    {...row}
+                    dragIds={dragIds}
+                    dragPaths={dragPaths}
+                    dragSpecial={dragSpecial}
+                    onQuickLook={split ? () => quickLookRow(pane, i) : undefined}
+                  />
                 );
               })}
             </ul>
@@ -1833,6 +1875,7 @@ export default function Browse() {
               pressed={split}
               onClick={toggleSplit}
             />
+            {split && <IconButton icon={<ArrowLeftRight />} label="Swap panes" onClick={swapPanes} />}
             <IconButton
               icon={<FolderPlus />}
               label="New folder"
