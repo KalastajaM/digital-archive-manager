@@ -4378,6 +4378,8 @@ export interface components {
             keep: string;
             /** Others */
             others: string[];
+            /** Links */
+            links?: string[];
         };
         /**
          * DuplicateEstimateOut
@@ -4399,7 +4401,8 @@ export interface components {
          * DuplicateResolveIn
          * @description What to do with the copies of one or more duplicate groups: ``quarantine`` moves
          *     each copy in ``others`` to To Delete, ``link`` also leaves a link to ``keep`` where it
-         *     was. ``carry_over`` adds what the removed copies had to the kept one.
+         *     was; a copy in a group's ``links`` is replaced with a link either way. ``carry_over``
+         *     adds what the removed copies had to the kept one.
          */
         DuplicateResolveIn: {
             /** Groups */

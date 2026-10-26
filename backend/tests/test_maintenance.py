@@ -258,6 +258,27 @@ def test_several_groups_in_one_batch(app, fake_archive):
     assert not (fake_archive.root / HOME / "d2.pdf").is_symlink()
 
 
+def test_one_copy_to_to_delete_and_another_replaced_with_a_link_in_one_batch(app, pair):
+    pair.add(f"{HOME}/third.pdf", b"same-content", drive_id="id-third")
+    app.scan()
+    dup_result(app)
+    result = app.maintenance.resolve(
+        [("id-keep", ["id-dup", "id-third"])], "quarantine", links=["id-third"]
+    )
+    assert result.error is None and result.failed is None
+    assert not (pair.root / INBOX / "scan.pdf").exists()  # moved, no link
+    assert (pair.root / HOME / "third.pdf").is_symlink()  # moved and linked
+    assert {r["label"] for r in journal(app, result.batch_id)} == {
+        "Moved 1 duplicate to To Delete and replaced 1 with a link"
+    }
+    app.activity.undo(result.batch_id)
+    assert (pair.root / INBOX / "scan.pdf").is_file()
+    third = pair.root / HOME / "third.pdf"
+    assert third.is_file() and not third.is_symlink()
+    with pytest.raises(InvalidRequest, match="not one of the copies to remove"):
+        app.maintenance.resolve([("id-keep", ["id-dup"])], "quarantine", links=["id-third"])
+
+
 def test_a_taken_name_in_to_delete_gets_a_number_and_undo_still_restores(app, pair):
     pair.add(f"{QUAR}/{INBOX}/scan.pdf", b"older-thing", drive_id="id-old-q")
     app.scan()

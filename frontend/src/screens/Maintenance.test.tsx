@@ -60,11 +60,13 @@ function job(kind: string, over: Partial<MaintenanceJob> = {}): MaintenanceJob {
 }
 
 const resolveRoute = (call: Call) => {
-  const body = call.body as { groups: { keep: string; others: string[] }[]; action: string; carry_over: boolean; dry_run: boolean };
+  const body = call.body as { groups: { keep: string; others: string[]; links?: string[] }[]; action: string; carry_over: boolean; dry_run: boolean };
   const done = body.groups.flatMap((g) =>
     g.others.flatMap((id) => [
       { kind: "quarantine", src: `src/${id}`, dst: `##. To Delete/src/${id}`, drive_id: id, note: null },
-      ...(body.action === "link" ? [{ kind: "symlink", src: `keep/${g.keep}`, dst: `src/${id}`, drive_id: null, note: null }] : []),
+      ...(body.action === "link" || g.links?.includes(id)
+        ? [{ kind: "symlink", src: `keep/${g.keep}`, dst: `src/${id}`, drive_id: null, note: null }]
+        : []),
     ]),
   );
   return {
@@ -213,58 +215,64 @@ describe("Maintenance screen", () => {
     expect(rows[0]).toHaveTextContent(/^Keep10\. Financial\/Banks2,0 KB/);
     expect(rows[1]).toHaveTextContent("##. Organizenamed scan.pdf");
     expect(screen.getByText("Important")).toBeInTheDocument();
-    // only one copy can go (the other is Important), so there is nothing to untick
-    expect(screen.queryByRole("checkbox", { name: /^Remove/ })).not.toBeInTheDocument();
+    // the Important copy has no choice; the other is set to To Delete
+    expect(screen.queryByRole("group", { name: "What to do with 20. Home/bill copy.pdf" })).not.toBeInTheDocument();
     expect(screen.getByText("Stays")).toHaveAttribute("title", "It is marked Important, so it stays");
+    const choice = screen.getByRole("group", { name: "What to do with ##. Organize/scan.pdf" });
+    expect(within(choice).getByRole("button", { name: "To Delete" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Inbox")).toBeInTheDocument();
   });
 
-  it("a group of two copies has no Remove to untick: the other copy is the one that goes", async () => {
-    const { user } = setup({}, withDuplicates(GROUP2));
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
-    await screen.findAllByRole("radio");
-    expect(screen.queryByRole("checkbox", { name: /^Remove/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Move the other to To Delete/ })).toBeEnabled();
-  });
+  const choose = (path: string, what: "Leave" | "To Delete" | "Link") =>
+    within(screen.getByRole("group", { name: `What to do with ${path}` })).getByRole("button", { name: what });
 
-  it("previews a replace-with-links batch, shows what is carried over, applies it and offers Undo", async () => {
+  it("one copy to To Delete and another replaced with a link: one preview, one Apply, one Undo", async () => {
     const { calls, user } = setup(
       {
-        "POST /api/activity/r1/undo/preview": { body: [{ kind: "unlink_symlink", src: null, dst: "##. Organize/scan.pdf", drive_id: null, note: null }] },
+        "POST /api/activity/r1/undo/preview": { body: [{ kind: "unlink_symlink", src: null, dst: "20. Home/bill copy.pdf", drive_id: null, note: null }] },
       },
       withDuplicates(GROUP),
     );
     await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
     await screen.findAllByRole("radio");
-    await user.click(screen.getByRole("button", { name: /Replace them with a link…/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Replace 2 duplicates with links?" });
+    await user.click(choose("20. Home/bill copy.pdf", "Link"));
+    expect(screen.getByText("1 to To Delete, 1 replaced with a link")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Apply…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Apply 2 changes to duplicates?" });
     expect(posts(calls, "/api/maintenance/duplicates/resolve").map((c) => c.body)).toEqual([
-      { groups: [{ keep: "k1", others: ["d1", "d2"] }], action: "link", carry_over: true, dry_run: true },
+      { groups: [{ keep: "k1", others: ["d1", "d2"], links: ["d2"] }], action: "quarantine", carry_over: true, dry_run: true },
     ]);
-    expect(dialog).toHaveTextContent("Move to To Delete");
-    expect(dialog).toHaveTextContent("Link");
     expect(dialog).toHaveTextContent("Tags: tax");
-    expect(dialog).toHaveTextContent("Collections: Tax 2023, Starred");
     expect(dialog).toHaveTextContent('Note added: "paid in June"');
-    expect(dialog).toHaveTextContent("From: Pohjola");
     expect(dialog).toHaveTextContent(/Nothing is deleted/);
-    await user.click(within(dialog).getByRole("button", { name: /Replace with links/ }));
-    expect(await screen.findByText("Replaced 2 duplicates with links")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(await screen.findByText("Moved 1 duplicate to To Delete and replaced 1 with a link")).toBeInTheDocument();
     expect(posts(calls, "/api/maintenance/duplicates/resolve").map((c) => (c.body as { dry_run: boolean }).dry_run)).toEqual([true, false]);
     await user.click(screen.getByRole("button", { name: "Undo" }));
     expect(await screen.findByRole("dialog", { name: "Undo these changes?" })).toBeInTheDocument();
   });
 
-  it("a different copy to keep, and a copy left out, change the request", async () => {
+  it("every copy replaced with a link says so", async () => {
+    const { user } = setup({}, withDuplicates(GROUP2));
+    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await screen.findAllByRole("radio");
+    await user.click(choose("20. Home/b.pdf", "Link"));
+    await user.click(screen.getByRole("button", { name: "Apply…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Replace 1 duplicate with links?" });
+    await user.click(within(dialog).getByRole("button", { name: /Replace with links/ }));
+    expect(await screen.findByText("Replaced 1 duplicate with links")).toBeInTheDocument();
+  });
+
+  it("a different copy to keep, and a copy left where it is, change the request", async () => {
     const { calls, user } = setup({}, withDuplicates(GROUP));
     await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
     const radios = await screen.findAllByRole("radio");
     await user.click(radios[2]); // keep the copy in 20. Home
-    await user.click(screen.getByRole("checkbox", { name: "Remove ##. Organize/scan.pdf" })); // and leave the inbox one
-    await user.click(screen.getByRole("button", { name: /Move the other to To Delete/ }));
+    await user.click(choose("##. Organize/scan.pdf", "Leave")); // and leave the inbox one
+    await user.click(screen.getByRole("button", { name: "Apply…" }));
     const dialog = await screen.findByRole("dialog", { name: "Move 1 duplicate to To Delete?" });
     expect(posts(calls, "/api/maintenance/duplicates/resolve")[0].body).toEqual({
-      groups: [{ keep: "d2", others: ["k1"] }],
+      groups: [{ keep: "d2", others: ["k1"], links: [] }],
       action: "quarantine",
       carry_over: true,
       dry_run: true,
@@ -272,26 +280,37 @@ describe("Maintenance screen", () => {
     expect(within(dialog).getByRole("button", { name: /Move to To Delete/ })).toHaveClass("danger");
   });
 
+  it("with every copy left where it is, Apply is off", async () => {
+    const { user } = setup({}, withDuplicates(GROUP2));
+    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await screen.findAllByRole("radio");
+    await user.click(choose("20. Home/b.pdf", "Leave"));
+    expect(screen.getByRole("button", { name: "Apply…" })).toBeDisabled();
+  });
+
   it("with carry-over unticked the request says so and the preview carries nothing", async () => {
     const { calls, user } = setup({}, withDuplicates(GROUP));
     await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
     await screen.findAllByRole("radio");
     await user.click(screen.getByRole("checkbox", { name: /Also add what the removed copies had/ }));
-    await user.click(screen.getAllByRole("button", { name: /Move the others to To Delete/ })[0]);
+    await user.click(screen.getByRole("button", { name: "Apply…" }));
     const dialog = await screen.findByRole("dialog", { name: "Move 2 duplicates to To Delete?" });
     expect((posts(calls, "/api/maintenance/duplicates/resolve")[0].body as { carry_over: boolean }).carry_over).toBe(false);
     expect(dialog).toHaveTextContent("Nothing is carried over to the kept copies.");
   });
 
-  it("the bulk action covers the ticked groups only", async () => {
+  it("the bulk Apply covers the ticked groups only, and can set all their copies to Link", async () => {
     const { calls, user } = setup({}, withDuplicates(GROUP, GROUP2));
     await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
     await screen.findAllByRole("radio");
     await user.click(screen.getByRole("checkbox", { name: "Include 20230101_bill.pdf in the bulk action" }));
-    await user.click(screen.getByRole("button", { name: /Move the other copies of the ticked groups/ }));
-    await screen.findByRole("dialog", { name: "Move 1 duplicate to To Delete?" });
+    await user.click(screen.getByRole("button", { name: "Set every copy in the ticked groups to Link" }));
+    expect(choose("20. Home/b.pdf", "Link")).toHaveAttribute("aria-pressed", "true");
+    expect(choose("##. Organize/scan.pdf", "To Delete")).toHaveAttribute("aria-pressed", "true"); // not ticked
+    await user.click(screen.getByRole("button", { name: "Apply the ticked groups…" }));
+    await screen.findByRole("dialog", { name: "Replace 1 duplicate with links?" });
     expect((posts(calls, "/api/maintenance/duplicates/resolve")[0].body as { groups: unknown[] }).groups).toEqual([
-      { keep: "k2", others: ["e2"] },
+      { keep: "k2", others: ["e2"], links: ["e2"] },
     ]);
   });
 
@@ -302,7 +321,7 @@ describe("Maintenance screen", () => {
     );
     await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
     await screen.findAllByRole("radio");
-    await user.click(screen.getByRole("button", { name: /Move the other to To Delete/ }));
+    await user.click(screen.getByRole("button", { name: "Apply…" }));
     expect(await screen.findByText(/Nothing was changed: 20\. Home\/bill copy\.pdf is marked Important/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

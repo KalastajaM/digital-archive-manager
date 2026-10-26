@@ -132,6 +132,7 @@ def resolve_duplicates(app: AppDep, body: DuplicateResolveIn):
         carry_over=body.carry_over,
         origin=UI_ORIGIN,
         dry_run=body.dry_run,
+        links=[i for g in body.groups for i in g.links],
     )
     return result
 
