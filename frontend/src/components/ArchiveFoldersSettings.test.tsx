@@ -115,3 +115,39 @@ describe("Archive folders settings", () => {
     expect(await screen.findByText(/stop dam \(Ctrl\+C in the terminal\) and run/)).toBeInTheDocument();
   });
 });
+
+describe("Changing a folder's label", () => {
+  const RELABEL = {
+    label: "Scans",
+    new_label: "Scans 2020",
+    counts: { files: 41, operations: 5, made_folders: 0, maintenance_ignored: 0 },
+    files: [
+      { name: "settings.yaml", lines: [3] },
+      { name: "mine.yaml", lines: [4, 9] },
+    ],
+    warnings: [],
+    restart_needed: false,
+  };
+
+  it("shows what changes before applying it", async () => {
+    const { calls, user } = setup({ "POST /api/archive-folders/Scans/relabel": { body: RELABEL } });
+    const scans = (await screen.findAllByRole("listitem"))[1];
+    await user.click(within(scans).getByRole("button", { name: "Change label" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByRole("textbox", { name: "New label" }), "Scans 2020");
+    await user.click(within(dialog).getByRole("button", { name: "Preview" }));
+    expect(
+      await within(dialog).findByText("Changes 41 index entries, 5 journal entries and 2 files (settings.yaml, mine.yaml). Nothing on the disk changes."),
+    ).toBeInTheDocument();
+    expect(posts(calls, "/api/archive-folders/Scans/relabel")[0].body).toEqual({ label: "Scans 2020", dry_run: true });
+    await user.click(within(dialog).getByRole("button", { name: "Change label" }));
+    await waitFor(() => expect(posts(calls, "/api/archive-folders/Scans/relabel")).toHaveLength(2));
+    expect(posts(calls, "/api/archive-folders/Scans/relabel")[1].body).toEqual({ label: "Scans 2020", dry_run: false });
+  });
+
+  it("is offered for extra folders only", async () => {
+    setup();
+    const [main] = await screen.findAllByRole("listitem");
+    expect(within(main).queryByRole("button", { name: "Change label" })).toBeNull();
+  });
+});

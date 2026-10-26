@@ -24,6 +24,7 @@ import Today from "./screens/Today";
 import Viewer from "./screens/Viewer";
 import Tags from "./screens/Tags";
 import Trays from "./screens/Trays";
+import { CopyJobProgress } from "./components/CopyJobProgress";
 import { groupDigits, plural } from "./format";
 import { visible } from "./text";
 
@@ -128,6 +129,7 @@ function Shell() {
       {band && <div className="archive-band" aria-hidden="true" />}
       <Sidebar footer={foot} />
       <div className="content">
+        <CopyJobProgress />
         {status.data?.archive_available === false && <ArchiveUnavailableBanner />}
         {!onActivity && <RecoveryPanel count={status.data?.recovery_pending ?? 0} />}
         <main>

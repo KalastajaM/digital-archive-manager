@@ -24,6 +24,7 @@ import { TO_DELETE_REASON } from "../toDelete";
 import { visible } from "../text";
 import { type DropMode, MODE_HINT, MODE_LABEL, DROP_MODES } from "../dropModes";
 import { FolderPicker } from "./FolderPicker";
+import { startedCopyJob } from "./CopyJobProgress";
 import { ConfirmPlan, snapshotKey } from "./PlanPreview";
 import { useToast } from "./Toasts";
 import { Sheet } from "./ui/Sheet";
@@ -251,6 +252,10 @@ export function useMoveFlow(
       toast({ kind: "error", text: `Could not ${pending.name === undefined ? VERB[modeOf(pending)] : "change"}: ${visible(errorText(e))}` });
       return;
     }
+    if (result.job_id) {
+      startedCopyJob(result.job_id); // a copy across disks: the progress view takes over
+      return;
+    }
     const complete = !result.error && !result.failed;
     if (!complete) {
       const at = result.failed ? ` (at ${visible(result.failed.src ?? result.failed.dst)})` : "";
@@ -319,7 +324,15 @@ export function useMoveFlow(
             ? `Rename to ${visible(confirm.name ?? "")}?`
             : `Move to ${there} as ${visible(confirm.name ?? "")}?`
       }
-      confirmLabel={renameOnly ? "Rename" : mode === "link" ? "Make links" : MODE_LABEL[mode]}
+      confirmLabel={
+        renameOnly
+          ? "Rename"
+          : confirm.ops.some((op) => op.kind === "copy_across")
+            ? "Copy and move"
+            : mode === "link"
+              ? "Make links"
+              : MODE_LABEL[mode]
+      }
       intro={
         <>
           {confirm.modes && (

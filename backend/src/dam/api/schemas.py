@@ -710,7 +710,7 @@ class ResolvedOpOut(BaseModel):
     note: str | None
     # copy_across: the file's size, and whether it is in the cloud only (downloaded first)
     size: int | None = None
-    cloud_only: bool = False
+    cloud_only: bool | None = None
 
 
 class BatchResultOut(BaseModel):
@@ -720,7 +720,7 @@ class BatchResultOut(BaseModel):
     failed: ResolvedOpOut | None
     error: str | None
     index_error: str | None
-    stopped: bool = False  # a background move ended early on Stop
+    stopped: bool | None = None  # a background move ended early on Stop (else null)
     # a move across disks started in the background: poll /api/browse/move/jobs/{job_id};
     # this answer is empty and the job's result is the batch
     job_id: str | None = None

@@ -285,3 +285,37 @@ describe("ConfirmPlan", () => {
     expect(snapshotKey(a)).not.toBe(snapshotKey([{ ...a[0], folder: "Y" }]));
   });
 });
+
+describe("a move across disks", () => {
+  const op = (kind: "copy_across" | "quarantine" | "mkdir", src: string | null, dst: string, size?: number, cloud_only = false) => ({
+    kind,
+    src,
+    dst,
+    drive_id: null,
+    note: null,
+    size: size ?? null,
+    cloud_only,
+  });
+
+  it("says how many files are copied, how big, where to, and where the originals go", () => {
+    render(
+      <PlanList
+        ops={[
+          op("mkdir", null, "Old years/2010"),
+          op("copy_across", "Banks/a.pdf", "Old years/2010/a.pdf", 3 * 1024 * 1024),
+          op("quarantine", "Banks/a.pdf", "##. To Delete/Banks/a.pdf"),
+          op("copy_across", "Banks/b.pdf", "Old years/2010/b.pdf", 1024 * 1024, true),
+          op("quarantine", "Banks/b.pdf", "##. To Delete/Banks/b.pdf"),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Copies 2 files (4,0 MB) to another disk. The originals go to To Delete once each copy is checked.")).toBeInTheDocument();
+    expect(screen.getByText("1 file is in the cloud only and is downloaded first.")).toBeInTheDocument();
+    expect(screen.getAllByText("Copy to other disk")).toHaveLength(2);
+  });
+
+  it("says nothing extra for an ordinary move", () => {
+    render(<PlanList ops={[{ kind: "move", src: "A/a.pdf", dst: "B/a.pdf", drive_id: "d", note: null }]} />);
+    expect(screen.queryByText(/another disk/)).toBeNull();
+  });
+});
