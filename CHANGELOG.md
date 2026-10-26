@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Diagrams in Help.** Under **How dam works**, Help now shows how a document goes from
+  paper to its folder, where a filed document ends up, when each tray reminds you, how
+  every change is previewed and can be undone, and what stays on your computer. They
+  follow the Light and Dark appearance.
 - **Print a document from its preview.** The printer button next to the zoom buttons (in
   the file view, Quick Look and the viewer window) prints a PDF, every page of it, or an
   image through the browser's print dialog.
