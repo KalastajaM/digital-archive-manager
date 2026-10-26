@@ -2,11 +2,12 @@
 
 import os
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from dam.config import Settings
-from dam.core.fs import listable, resolve
+from dam.core.fs import listable, lists_nothing, resolve
 
 
 class OutsideArchiveError(ValueError):
@@ -36,15 +37,32 @@ class ArchiveFolder:
     root: Path
 
 
+def folder_connected(folder: ArchiveFolder, has_rows: Callable[[str], bool] | None) -> bool:
+    """The one definition of a connected folder: its root can be listed, and an extra
+    folder does not list nothing while the index has rows under its label (a cloud drive
+    signed out leaves an empty mount point). ``has_rows`` (label -> the index has live
+    rows under it) None: listable is enough."""
+    if not listable(folder.root):
+        return False
+    if not folder.label or has_rows is None:
+        return True
+    return not (lists_nothing(folder.root) and has_rows(folder.label))
+
+
 def not_connected_message(folder: ArchiveFolder) -> str:
     """What the owner reads when ``folder`` (an extra folder) is needed but unplugged."""
     return f"'{folder.label}' is not connected ({folder.root}). Connect it and try again."
 
 
 class ArchivePaths:
-    def __init__(self, root: Path, settings: Settings) -> None:
+    def __init__(
+        self, root: Path, settings: Settings, has_rows: Callable[[str], bool] | None = None
+    ) -> None:
         self.root = resolve(root)
         self.settings = settings
+        # label -> the index has live rows under it (``FileRepo.has_live_under``, wired by
+        # ``App``); used by ``is_connected``
+        self.has_rows = has_rows
         self.folders: tuple[ArchiveFolder, ...] = (
             ArchiveFolder("", self.root),
             *(
@@ -91,10 +109,11 @@ class ArchivePaths:
         return folder.root.joinpath(*(parts[1:] if folder.label else parts))
 
     def is_connected(self, label: str) -> bool:
-        return listable(next(f for f in self.folders if f.label == label).root)
+        folder = next(f for f in self.folders if f.label == label)
+        return folder_connected(folder, self.has_rows)
 
     def disconnected_labels(self) -> tuple[str, ...]:
-        return tuple(f.label for f in self.folders[1:] if not listable(f.root))
+        return tuple(f.label for f in self.folders[1:] if not self.is_connected(f.label))
 
     @property
     def inbox(self) -> str:

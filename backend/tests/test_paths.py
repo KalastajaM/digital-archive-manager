@@ -207,3 +207,20 @@ def test_rel_refuses_a_main_entry_named_like_a_label(tmp_path, attached):
     assert p.rel(main / "Old years 2" / "a.pdf") == "Old years 2/a.pdf"
     if attached:
         assert p.rel(extra / "a.pdf") == "Old years/a.pdf"
+
+
+def test_an_empty_mount_with_indexed_rows_is_not_connected(tmp_path):
+    """A signed-out cloud drive leaves its mount point there, listing nothing."""
+    main, extra, p = _with_extra(tmp_path)
+    assert p.is_connected("Old years")  # without the index hook: listable is enough
+    rows = {"Old years": True}
+    hooked = ArchivePaths(main, p.settings, has_rows=lambda label: rows.get(label, False))
+    assert not hooked.is_connected("Old years")
+    assert hooked.disconnected_labels() == ("Old years",)
+    rows["Old years"] = False  # a new, empty folder is connected
+    assert hooked.is_connected("Old years") and hooked.disconnected_labels() == ()
+    rows["Old years"] = True
+    (extra / ".DS_Store").write_bytes(b"")  # OS junk does not count as content
+    assert not hooked.is_connected("Old years")
+    (extra / "2009").mkdir()
+    assert hooked.is_connected("Old years")

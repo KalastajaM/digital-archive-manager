@@ -15,7 +15,7 @@ from dam import settings_write
 from dam.config import AppPaths, ExtraFolder, Settings, load_settings
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.fs import listable
-from dam.core.paths import ArchivePaths, _fold
+from dam.core.paths import ArchiveFolder, ArchivePaths, _fold, folder_connected
 from dam.db.engine import make_engine
 from dam.index.repo import FileRepo
 from dam.profiles import ProfileStore, related, root_conflict
@@ -120,7 +120,8 @@ def list_folders(app_paths: AppPaths, repo: FileRepo) -> list[FolderStatus]:
     extras = []
     for e in settings.extra_folders:
         files = repo.count_subtree(e.label, live_only=True)
-        connected = listable(Path(e.path).expanduser())
+        root = Path(e.path).expanduser()
+        connected = folder_connected(ArchiveFolder(e.label, root), repo.has_live_under)
         extras.append(FolderStatus(e.label, str(e.path), e.attached, connected, files))
     in_extras = sum(f.files for f in extras if f.attached)
     main = FolderStatus(None, str(settings.archive_root), True, True, repo.count_live() - in_extras)

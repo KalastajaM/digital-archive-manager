@@ -446,3 +446,36 @@ def test_detach_dry_run_count_matches_the_real_one(app_paths, extra_folder, app)
     preview = detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=True)
     real = detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
     assert preview.files == real.files == 2
+
+
+def test_an_empty_mount_is_not_connected_anywhere(app_paths, extra_folder, app, tmp_path):
+    from dam.archive_folders import list_folders
+    from dam.index.watcher import Watcher
+
+    extra_folder.add("2009/zebra.pdf", drive_id="z1")
+    app.scan()
+    watcher = Watcher(app.paths, app.repo)
+    try:
+        watcher.refresh_watches()
+        assert "Old years" in watcher._watches
+        away = tmp_path / "stash"
+        away.mkdir()
+        for child in list(extra_folder.root.iterdir()):
+            child.rename(away / child.name)  # the mount point stays, listing nothing
+
+        assert not app.paths.is_connected("Old years")
+        plan = Plan([Op(OpKind.MKDIR, None, "Old years/New")], origin="ui", new_folders=True)
+        with pytest.raises(GuardError, match="'Old years' is not connected"):
+            app.executor.preview(plan)
+        assert not (extra_folder.root / "New").exists()
+        assert [h.drive_id for h in app.search("is:disconnected") if h.drive_id == "z1"] == ["z1"]
+        listed = {f.label: f.connected for f in list_folders(app_paths, app.repo)}
+        assert listed["Old years"] is False
+        assert watcher.refresh_watches() == [] and "Old years" not in watcher._watches
+
+        for child in list(away.iterdir()):
+            child.rename(extra_folder.root / child.name)
+        assert watcher.refresh_watches() == ["Old years"]
+        assert app.paths.is_connected("Old years")
+    finally:
+        watcher.stop()

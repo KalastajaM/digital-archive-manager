@@ -876,6 +876,16 @@ class FileRepo:
                 select(func.count()).select_from(files).where(and_(*cond))
             ).scalar_one()
 
+    def has_live_under(self, rel: str) -> bool:
+        """Some row strictly under ``rel`` is not flagged missing."""
+        prefix = nfc(rel) + "/"
+        cond = and_(
+            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
+            files.c.missing.is_not(True),
+        )
+        with self._conn() as conn:
+            return conn.execute(select(files.c.drive_id).where(cond).limit(1)).first() is not None
+
     def count_live(self) -> int:
         """Rows not flagged missing, in every folder of the archive."""
         with self._conn() as conn:

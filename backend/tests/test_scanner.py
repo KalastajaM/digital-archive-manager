@@ -683,7 +683,10 @@ def test_extra_gone_during_walk_marks_nothing(fake_archive, engine, tmp_path, mo
                 return False
         return real(p)
 
+    from dam.core import paths as paths_mod
+
     monkeypatch.setattr(scanner_mod, "listable", flaky)
+    monkeypatch.setattr(paths_mod, "listable", flaky)  # the check before the walk
     rep = scan(paths, repo)
     assert len(calls) == 2
     assert rep.aborted is False and rep.offline == ["Old years"]

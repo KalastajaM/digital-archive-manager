@@ -301,6 +301,7 @@ class App:
         try:
             migrate(engine)
             repo = FileRepo(engine, inbox=settings.special_folders.inbox)
+            paths.has_rows = repo.has_live_under  # an empty mount with rows is not connected
             registry = default_registry(settings.ocr_languages)
             return cls(
                 settings=settings,

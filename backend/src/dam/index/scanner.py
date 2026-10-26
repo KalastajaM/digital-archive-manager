@@ -8,26 +8,16 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from dam.core.fs import listable, readlink  # noqa: F401 (listable is re-exported)
+# listable and is_ignored are re-exported
+from dam.core.fs import is_ignored, listable, lists_nothing, readlink  # noqa: F401
 from dam.core.naming import parse_doc_date
-from dam.core.paths import ArchiveFolder, ArchivePaths, _fold, nfc
+from dam.core.paths import ArchiveFolder, ArchivePaths, _fold, folder_connected, nfc
 from dam.index.driveid import read_drive_id
 from dam.index.locks import INDEX_LOCK
 from dam.index.repo import FileRecord, FileRepo, ext_of
 
 # One scan at a time: the watcher, reconcile timer and CLI share the DB with the executor.
 SCAN_LOCK = threading.Lock()
-
-# OS junk (never deleted, only left out of the index)
-_IGNORED_NAMES = {
-    ".DS_Store",
-    "Icon\r",
-    ".tmp.drivedownload",
-    ".tmp.driveupload",
-    "Thumbs.db",
-    "desktop.ini",
-}
-_IGNORED_FOLDED = {n.casefold() for n in _IGNORED_NAMES if n in ("Thumbs.db", "desktop.ini")}
 
 
 @dataclass
@@ -49,15 +39,6 @@ class ScanReport:
     # Top-level main-folder entries (on-disk names) that fold to an archive folder's
     # label: never indexed, since their rows would land on that folder's.
     clashes: list[str] = field(default_factory=list)
-
-
-def is_ignored(name: str) -> bool:
-    return (
-        name in _IGNORED_NAMES
-        or name.casefold() in _IGNORED_FOLDED
-        or name.startswith(("~$", ".~"))
-        or name.endswith(".tmp")
-    )
 
 
 @dataclass
@@ -246,19 +227,9 @@ def scan(paths: ArchivePaths, repo: FileRepo, subtree: str = "") -> ScanReport:
         return _scan(paths, repo, subtree)
 
 
-def _root_looks_empty(root: Path) -> bool:
-    try:
-        with os.scandir(root) as it:
-            return not any(not is_ignored(e.name) for e in it)
-    except OSError:
-        return False
-
-
 def _connected(repo: FileRepo, folder: ArchiveFolder) -> bool:
-    """The extra folder can be listed, and does not list nothing while it has rows."""
-    if not listable(folder.root):
-        return False
-    return not (repo.list_dir(folder.label) and _root_looks_empty(folder.root))
+    """``core.paths.folder_connected``, with the rows this scan's index has."""
+    return folder_connected(folder, repo.has_live_under)
 
 
 def _index_start(s: _Scan, start: Path) -> bool | None:
@@ -346,7 +317,7 @@ def _scan_all(s: _Scan) -> ScanReport:
     # A detached folder's rows stay under its label, so a main entry there is a clash too.
     labels = frozenset(_fold(extra.label) for extra in paths.settings.extra_folders)
     own_rows = [r for r in repo.list_dir("") if _fold(r.path) not in labels]
-    if own_rows and _root_looks_empty(paths.root):
+    if own_rows and lists_nothing(paths.root):
         # A mount that lists nothing while the index has top-level rows is not "all deleted".
         report.aborted = True
         return report
