@@ -267,5 +267,8 @@ def test_restore_to_inbox_from_extra_folder_needs_one_disk(extra_folder, app, mo
     monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
     with pytest.raises(OpFailed) as e:
         app.browse.restore(["x1"], to="inbox", origin="ui", dry_run=True)
-    assert str(e.value) == primitives.DIFFERENT_DISKS
+    assert str(e.value) == (
+        "'Old years' and the main folder are on different disks, so files cannot be moved"
+        " between them yet."
+    )
     assert (extra_folder.root / QUAR / "2009" / "a.pdf").exists()

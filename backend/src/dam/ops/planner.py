@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.naming import unique_name
-from dam.core.paths import ArchivePaths
+from dam.core.paths import ArchivePaths, not_connected_message
 from dam.index.driveid import read_drive_id
 from dam.ops import primitives
 from dam.ops.guards import (
@@ -29,7 +29,7 @@ from dam.ops.guards import (
     validate,
 )
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpFailed, OpKind, Plan, ResolvedOp
-from dam.ops.primitives import DIFFERENT_DISKS, DS_STORE, PICTURE_COPY, PICTURE_RENAME
+from dam.ops.primitives import DS_STORE, PICTURE_COPY, PICTURE_RENAME, different_disks_message
 
 if TYPE_CHECKING:
     from dam.locks import LockService
@@ -202,8 +202,11 @@ class Planner:
         # the lock service, when locked files must be refused (never in an undo)
         self.locks = locks
 
-    def resolve(self, plan: Plan, *, restore: bool = False) -> list[ResolvedOp]:
-        """``restore``: only for plans built by ``dam.ops.undo`` (see ``validate``)."""
+    def resolve(
+        self, plan: Plan, *, restore: bool = False, connected: dict[str, bool] | None = None
+    ) -> list[ResolvedOp]:
+        """``restore``: only for plans built by ``dam.ops.undo`` (see ``validate``).
+        ``connected``: folder connectivity already looked at in this planning (undo)."""
         self.sim = _Sim(self.paths)
         self.aliases: list[tuple[str, str]] = []  # (requested path, actual path)
         self.from_protected: list[str] = []  # current paths of entries moved out of protection
@@ -211,6 +214,8 @@ class Planner:
         self._restore = restore
         self._locked_state = _UNREAD  # read when the first file is to be changed
         self.locked_names: list[str] = []  # files this plan may not change (locked)
+        # label -> connected, for this planning: each folder's root is listed once
+        self._connected: dict[str, bool] = {} if connected is None else connected
         if plan.inbox_folders and not plan.new_folders:
             raise GuardError("Inbox folders are made only by a new-folder plan.")
         self.made = plan.new_folders  # MKDIRs of a New folder / layout batch are "made"
@@ -219,7 +224,9 @@ class Planner:
             # not a place that changes: a RENAME's or PICTURE_BACK's dst is a name, an
             # UNLINK_SYMLINK's the target the link is only compared with
             other_dst = op.kind in (OpKind.RENAME, OpKind.PICTURE_BACK, OpKind.UNLINK_SYMLINK)
-            check_connected(self.paths, op.src, None if other_dst else op.dst)
+            check_connected(
+                self.paths, op.src, None if other_dst else op.dst, known=self._connected
+            )
             validate(op, self.paths, restore=restore)
             redirect = None
             if not _outside(op) and op.src is not None and not is_abs_target(op):
@@ -434,8 +441,15 @@ class Planner:
         """A move between two archive folders is a rename, so it works only when both
         are on one disk: refused here, in the dry run, rather than half way."""
         a, b = self.paths.folder_of(src), self.paths.folder_of(folder)
-        if a.label != b.label and not primitives.same_disk(a.root, b.root):
-            raise OpFailed(DIFFERENT_DISKS)
+        if a.label == b.label:
+            return
+        try:
+            same = primitives.same_disk(a.root, b.root)
+        except OSError:  # unplugged since check_connected looked
+            gone = next((f for f in (a, b) if f.label and not os.path.isdir(f.root)), None)
+            raise GuardError(not_connected_message(gone or (b if b.label else a))) from None
+        if not same:
+            raise OpFailed(different_disks_message(a.label, b.label))
 
     def _quarantine_folder(self, src: str) -> str:
         """Where QUARANTINE puts ``src``: its own folder's To Delete, keeping the path

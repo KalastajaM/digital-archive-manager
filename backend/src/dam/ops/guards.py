@@ -251,15 +251,26 @@ def check_not_label(paths: ArchivePaths, rel: str) -> None:
         raise GuardError(f"'{parts[0]}' is the name of an archive folder. Choose another name.")
 
 
-def check_connected(paths: ArchivePaths, *rels: str | None) -> None:
+def check_connected(
+    paths: ArchivePaths, *rels: str | None, known: dict[str, bool] | None = None
+) -> None:
     """Refuse a change to a folder that is not connected (an unplugged disk): the first
     archive path in ``rels`` whose extra folder cannot be listed now. ``None`` and
-    ``abs:`` paths (outside the archive) are skipped."""
+    ``abs:`` paths (outside the archive) are skipped. ``known`` (label -> connected)
+    keeps the answers for one planning, so each root is listed once."""
     for rel in rels:
         if not isinstance(rel, str) or rel.startswith(ABS_TARGET):
             continue
         folder = paths.folder_of(rel)
-        if folder.label and not paths.is_connected(folder.label):
+        if not folder.label:
+            continue
+        if known is None or folder.label not in known:
+            connected = paths.is_connected(folder.label)
+            if known is not None:
+                known[folder.label] = connected
+        else:
+            connected = known[folder.label]
+        if not connected:
             raise GuardError(not_connected_message(folder))
 
 
