@@ -172,6 +172,7 @@ def test_inbox_flow_preview_then_file(client, app, fake_archive, inbox_file):
             "note": None,
             "size": None,
             "cloud_only": False,
+            "method": None,
         }
     ]
     assert journal(app) == []  # a preview changes nothing
@@ -636,6 +637,7 @@ def test_undo_preview_is_what_undo_then_applies(client, app, fake_archive, inbox
             "note": None,
             "size": None,
             "cloud_only": False,
+            "method": None,
         }
     ]  # the created folder stays: no op for it
     undone = post(client, f"/api/activity/{batch['batch_id']}/undo").json()

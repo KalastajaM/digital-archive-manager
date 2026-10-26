@@ -13,6 +13,7 @@ from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
 from dam.ops.jobs import CopyJobs
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
+from dam.ops.planner import _add_note
 from dam.ops.primitives import can_make_links
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.errors import InvalidRequest, NotFound
@@ -501,7 +502,45 @@ class BrowseService:
         move = self._drop(drive_ids, folder, origin, mode)
         resolved = self.executor.preview(move.plan)
         self._check_drop(move.ids, resolved, mode)
+        self._warn_links_elsewhere(move, resolved, mode)
         return resolved
+
+    def _warn_links_elsewhere(self, move: "_Move", ops: list[ResolvedOp], mode: str) -> None:
+        """For a folder move: a note on the folder's op (the MOVE, or across disks the final
+        QUARANTINE) naming the links outside ``##. Ongoing`` / ``##. Important`` that
+        point into the folder; they will point to nothing. Counted from the index."""
+        if mode != "move" or len(move.ids) != 1:
+            return
+        rec = self.repo.get(move.ids[0])
+        if rec is None or not rec.is_dir:
+            return
+        op = next(
+            (
+                o
+                for o in ops
+                if o.src == rec.path and (o.kind is OpKind.MOVE or o.copied_to is not None)
+            ),
+            None,
+        )
+        if op is None:
+            return
+        folder = nfc(rec.path)
+        names: list[str] = []
+        for link in self.repo.live_links():
+            if any(is_under(link.path, a) for a in (self.special.ongoing, self.special.important)):
+                continue
+            target = link_target(self.executor.paths, self.repo, link)
+            if target is not None and _under(nfc(target.path), folder):
+                names.append(link.name)
+        if not names:
+            return
+        if len(names) == 1:
+            note = f"1 link elsewhere points into this folder and will point to nothing: {names[0]}"
+        else:
+            note = f"{len(names)} links elsewhere point into this folder and will point to nothing"
+            if len(names) <= 5:
+                note += ": " + ", ".join(names)
+        op.note = _add_note(op.note, note)
 
     def move(
         self,
@@ -525,6 +564,7 @@ class BrowseService:
 
         def check(ops: list[ResolvedOp]) -> None:
             self._check_drop(move.ids, ops, mode)
+            self._warn_links_elsewhere(move, ops, mode)
 
         if mode == "move" and not dry_run:
             return self._apply_or_background(

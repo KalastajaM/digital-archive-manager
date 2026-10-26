@@ -211,3 +211,20 @@ def test_no_move_starts_while_held():
             jobs.start(lambda ctx: None)
         assert str(e.value) == COPY_HELD
     _wait(jobs.start(lambda ctx: None))
+
+
+def test_api_move_preview_has_method(client, across, fake_archive, extra_folder):
+    import shutil
+
+    fake_archive.add("10. Financial/Folder/c.pdf", b"cc", drive_id="id-c")
+    across.scan()
+    folder_id = across.repo.by_path("10. Financial/Folder").drive_id
+    body = {"drive_ids": [folder_id], "folder": "Old years"}
+    first = client.post("/api/browse/move/preview", json=body).json()
+    assert all("method" in op and op["method"] is None for op in first)
+    dest = extra_folder.root / "Folder"
+    dest.mkdir(parents=True)
+    shutil.copy2(fake_archive.root / "10. Financial/Folder/c.pdf", dest / "c.pdf")
+    again = client.post("/api/browse/move/preview", json=body).json()
+    copy = next(op for op in again if op["kind"] == "copy_across")
+    assert copy["method"] == "present"

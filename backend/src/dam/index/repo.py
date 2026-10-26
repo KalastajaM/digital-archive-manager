@@ -283,6 +283,17 @@ class FileRepo:
             rows = conn.execute(select(files).where(*cond).order_by(files.c.path)).all()
         return [_record(r) for r in rows]
 
+    def live_links(self) -> list[FileRecord]:
+        """Every live link row (not missing, not parked), by path."""
+        cond = [
+            files.c.is_link.is_(True),
+            files.c.missing.is_not(True),
+            files.c.parked_at.is_(None),
+        ]
+        with self._conn() as conn:
+            rows = conn.execute(select(files).where(*cond).order_by(files.c.path)).all()
+        return [_record(r) for r in rows]
+
     def save_hash(
         self, drive_id: str, sha256: str, expect: tuple[int | None, float | None]
     ) -> bool:

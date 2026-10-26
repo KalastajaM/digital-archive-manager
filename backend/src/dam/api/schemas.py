@@ -714,6 +714,8 @@ class ResolvedOpOut(BaseModel):
     # copy_across: the file's size, and whether it is in the cloud only (downloaded first)
     size: int | None = None
     cloud_only: bool | None = None
+    # copy_across of a folder move: "present" when the destination already holds the file
+    method: str | None = None
 
 
 class BatchResultOut(BaseModel):

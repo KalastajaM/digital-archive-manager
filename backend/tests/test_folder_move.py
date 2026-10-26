@@ -160,3 +160,49 @@ def test_identity_folder_with_changed_drive_id(tree, fake_archive):
     resolved = app.executor.preview(app.browse._move_ops(ids, MISC, "ui").plan)
     with pytest.raises(InvalidRequest, match="scan and try again"):
         check_disk_identity(app.executor.paths, app.repo, ids, resolved)
+
+
+def test_warns_about_links_into_folder(tree, fake_archive):
+    app = tree
+    fake_archive.link("30. Work/to-a.pdf", f"{FOLDER}/a.pdf")
+    fake_archive.link(f"{ONG}/also-a.pdf", f"{FOLDER}/a.pdf")  # Ongoing is not counted
+    fake_archive.link(f"{MISC}/to-keep.pdf", f"{MISC}/keep.pdf")  # points elsewhere
+    app.scan()
+    folder_id = fid(app, FOLDER)
+    ops = app.browse.move_preview([folder_id], MISC)
+    move = next(o for o in ops if o.kind is OpKind.MOVE)
+    assert move.note == (
+        "1 link elsewhere points into this folder and will point to nothing: to-a.pdf"
+    )
+    result = app.browse.move([folder_id], MISC, dry_run=True)
+    assert any(o.note and o.note.startswith("1 link elsewhere points into") for o in result.done)
+
+
+def test_warning_lists_up_to_five_names(tree, fake_archive):
+    app = tree
+    for n in range(2):
+        fake_archive.link(f"30. Work/l{n}.pdf", f"{FOLDER}/a.pdf")
+    app.scan()
+    ops = app.browse.move_preview([fid(app, FOLDER)], MISC)
+    move = next(o for o in ops if o.kind is OpKind.MOVE)
+    assert move.note == (
+        "2 links elsewhere point into this folder and will point to nothing: l0.pdf, l1.pdf"
+    )
+
+
+def test_warning_gives_only_the_count_above_five(tree, fake_archive):
+    app = tree
+    for n in range(7):
+        fake_archive.link(f"30. Work/l{n}.pdf", f"{FOLDER}/a.pdf")
+    app.scan()
+    ops = app.browse.move_preview([fid(app, FOLDER)], MISC)
+    move = next(o for o in ops if o.kind is OpKind.MOVE)
+    assert move.note == "7 links elsewhere point into this folder and will point to nothing"
+
+
+def test_no_warning_for_a_file_move(tree, fake_archive):
+    app = tree
+    fake_archive.link("30. Work/to-a.pdf", f"{FOLDER}/a.pdf")
+    app.scan()
+    ops = app.browse.move_preview(["id-a"], MISC)
+    assert all(not o.note or "link" not in o.note for o in ops)

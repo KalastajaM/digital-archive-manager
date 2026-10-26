@@ -6602,6 +6602,8 @@ export interface components {
             size?: number | null;
             /** Cloud Only */
             cloud_only?: boolean | null;
+            /** Method */
+            method?: string | null;
         };
         /**
          * RestoreBody
