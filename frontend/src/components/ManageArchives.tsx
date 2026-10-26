@@ -128,11 +128,20 @@ function ArchiveRow({ archive, all, onForgotten }: { archive: Archive; all: Arch
         manager={manager}
         onShow={() => void attempt(() => revealArchive(archive.id, "archive"))}
       />
+      {archive.extra_folders.map((f) => (
+        <PathRow
+          key={f.label}
+          label={`Archive folder '${visible(f.label)}'${f.attached ? "" : " (detached)"}`}
+          path={f.path}
+          manager={manager}
+          onShow={() => void attempt(() => revealArchive(archive.id, "extra", f.label))}
+        />
+      ))}
       {confirming ? (
         <div className="archive-forget" role="group" aria-label={`Forget ${label}`}>
           <p>
             <strong>Forget {label}?</strong> This only removes it from this list. <strong>Nothing is deleted</strong>: its data folder
-            and its archive folder stay where they are, and you can remove them yourself if you wish.
+            and its archive {archive.extra_folders.length > 0 ? "folders" : "folder"} stay where they are, and you can remove them yourself if you wish.
           </p>
           {archive.current && (
             <div className="field">

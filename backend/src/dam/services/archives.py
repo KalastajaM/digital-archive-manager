@@ -17,6 +17,7 @@ from typing import Protocol
 
 from dam import demo, setup
 from dam.config import AppPaths
+from dam.core.paths import _fold
 from dam.profiles import MAIN_ID, MAIN_NAME, PALETTE, Locked, Profile, ProfileStore, ServeLock
 from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.services.launch import LaunchService, Runner, run_open
@@ -83,6 +84,10 @@ class ArchiveService:
             "color": p.color,
             "data_dir": str(p.data_dir),
             "archive_root": root,
+            "extra_folders": [
+                {"label": label, "path": str(path), "attached": attached}
+                for label, path, attached in setup.current_extra_folder_entries(p.paths)
+            ],
             "configured": root is not None,
             "current": p.id == self.current_id,
             "in_use_elsewhere": elsewhere is not None,
@@ -197,13 +202,26 @@ class ArchiveService:
             "archive_root": info["archive_root"],
         }
 
-    def reveal(self, key: str, what: str) -> None:
-        """Show the profile's data folder or archive folder in the file manager. The
-        folder comes from the registry and the settings, never from the client."""
+    def reveal(self, key: str, what: str, label: str | None = None) -> None:
+        """Show the profile's data folder, archive folder or one of its extra archive
+        folders (``what="extra"`` with its ``label``) in the file manager. The folder
+        comes from the registry and the settings, never from the client."""
         p = self.store.find(key)
-        raw = p.archive_root if what == "archive" else str(p.data_dir)
-        if what not in ("data", "archive"):
-            raise InvalidRequest("what must be 'data' or 'archive'")
+        if what not in ("data", "archive", "extra"):
+            raise InvalidRequest("what must be 'data', 'archive' or 'extra'")
+        if what == "extra":
+            if not label:
+                raise InvalidRequest("Say which extra folder (its label).")
+            found = [
+                path
+                for name, path, _ in setup.current_extra_folder_entries(p.paths)
+                if _fold(name) == _fold(label)
+            ]
+            if not found:
+                raise NotFound(f"This archive has no extra folder '{label}'.")
+            raw = str(found[0])
+        else:
+            raw = p.archive_root if what == "archive" else str(p.data_dir)
         if not raw:
             raise NotFound("This archive has no archive folder yet.")
         folder = Path(raw).expanduser()

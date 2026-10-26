@@ -1523,12 +1523,19 @@ class AILogOut(BaseModel):
 # -- archives (profiles) -----------------------------------------------------------
 
 
+class ArchiveExtraFolderOut(BaseModel):
+    label: str
+    path: str
+    attached: bool  # False: detached (kept in the settings, not part of the archive)
+
+
 class ArchiveOut(BaseModel):
     id: str
     name: str
     color: str
     data_dir: str  # where its settings, index and logs live
     archive_root: str | None  # its archive folder (None: not set up yet)
+    extra_folders: list[ArchiveExtraFolderOut] = []  # its other archive folders, if any
     configured: bool
     current: bool  # the one this window shows
     in_use_elsewhere: bool  # another dam process serves it
@@ -1571,7 +1578,8 @@ class ArchiveForgetOut(BaseModel):
 
 
 class ArchiveRevealIn(_In):
-    what: Literal["data", "archive"]
+    what: Literal["data", "archive", "extra"]
+    label: str | None = Field(default=None, max_length=255)  # which extra folder
 
 
 # -- snapshots ----------------------------------------------------------------

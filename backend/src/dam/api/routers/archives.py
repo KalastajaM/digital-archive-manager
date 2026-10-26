@@ -63,6 +63,7 @@ def forget_archive(archives: ArchivesDep, archive_id: str, body: ArchiveForgetIn
 
 @router.post("/{archive_id}/reveal", status_code=204, response_class=Response)
 def reveal_archive(archives: ArchivesDep, archive_id: str, body: ArchiveRevealIn) -> Response:
-    """Show its data folder or archive folder in Finder / Explorer."""
-    archives.reveal(archive_id, body.what)
+    """Show its data folder, archive folder or an extra archive folder in Finder /
+    Explorer."""
+    archives.reveal(archive_id, body.what, body.label)
     return Response(status_code=204)

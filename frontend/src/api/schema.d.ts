@@ -3031,7 +3031,8 @@ export interface paths {
         put?: never;
         /**
          * Reveal Archive
-         * @description Show its data folder or archive folder in Finder / Explorer.
+         * @description Show its data folder, archive folder or an extra archive folder in Finder /
+         *     Explorer.
          */
         post: operations["reveal_archive_api_archives__archive_id__reveal_post"];
         delete?: never;
@@ -3801,6 +3802,15 @@ export interface components {
             /** Demo Folder */
             demo_folder?: string | null;
         };
+        /** ArchiveExtraFolderOut */
+        ArchiveExtraFolderOut: {
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+            /** Attached */
+            attached: boolean;
+        };
         /** ArchiveFolderAddIn */
         ArchiveFolderAddIn: {
             /** Label */
@@ -3877,6 +3887,11 @@ export interface components {
             data_dir: string;
             /** Archive Root */
             archive_root: string | null;
+            /**
+             * Extra Folders
+             * @default []
+             */
+            extra_folders: components["schemas"]["ArchiveExtraFolderOut"][];
             /** Configured */
             configured: boolean;
             /** Current */
@@ -3892,7 +3907,9 @@ export interface components {
              * What
              * @enum {string}
              */
-            what: "data" | "archive";
+            what: "data" | "archive" | "extra";
+            /** Label */
+            label?: string | null;
         };
         /** ArchiveSwitchOut */
         ArchiveSwitchOut: {

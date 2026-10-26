@@ -14,6 +14,7 @@ const MAIN: Archive = {
   color: "#3b6fd4",
   data_dir: "/data",
   archive_root: "/Archive",
+  extra_folders: [],
   configured: true,
   current: true,
   in_use_elsewhere: false,
@@ -25,6 +26,7 @@ const TEST: Archive = {
   color: "#d9822b",
   data_dir: "/data/archives/test",
   archive_root: "/TestArchive",
+  extra_folders: [],
   configured: true,
   current: false,
   in_use_elsewhere: false,
@@ -230,6 +232,29 @@ describe("Manage archives", () => {
     await user.click(within(rows[1]).getByRole("button", { name: /Show archive folder in/ }));
     await waitFor(() => expect(posts(calls, "/api/archives/test/reveal")).toHaveLength(1));
     expect(posts(calls, "/api/archives/test/reveal")[0].body).toEqual({ what: "archive" });
+  });
+
+  it("lists an archive's extra folders and shows one in the file manager", async () => {
+    const withExtras: Archive = {
+      ...TEST,
+      extra_folders: [
+        { label: "Old years", path: "/Volumes/Disk/Old", attached: true },
+        { label: "Scans", path: "/Volumes/Disk/Scans", attached: false },
+      ],
+    };
+    const { user, calls } = renderSwitcher({
+      "GET /api/archives": listing([MAIN, withExtras]),
+      "POST /api/archives/test/reveal": { status: 204, body: null },
+    });
+    const dialog = await open(user);
+    const rows = await within(dialog).findAllByRole("listitem");
+    expect(within(rows[0]).queryByText(/Old years/)).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText("/Volumes/Disk/Old")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Archive folder 'Old years'")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Archive folder 'Scans' (detached)")).toBeInTheDocument();
+    await user.click(within(rows[1]).getByRole("button", { name: /Show archive folder 'old years' in/ }));
+    await waitFor(() => expect(posts(calls, "/api/archives/test/reveal")).toHaveLength(1));
+    expect(posts(calls, "/api/archives/test/reveal")[0].body).toEqual({ what: "extra", label: "Old years" });
   });
 
   it("renames and recolours", async () => {

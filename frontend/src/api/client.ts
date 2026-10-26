@@ -421,8 +421,8 @@ export const forgetArchive = (id: string, switch_to?: string) =>
   post<ArchiveForgotten>(`/api/archives/${enc(id)}/forget`, switch_to ? { switch_to } : {});
 
 /** Show the archive's data folder or archive folder in Finder / Explorer. */
-export const revealArchive = (id: string, what: "data" | "archive") =>
-  post<void>(`/api/archives/${enc(id)}/reveal`, { what });
+export const revealArchive = (id: string, what: "data" | "archive" | "extra", label?: string) =>
+  post<void>(`/api/archives/${enc(id)}/reveal`, label === undefined ? { what } : { what, label });
 
 // -- snapshots ------------------------------------------------------------------
 

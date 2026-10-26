@@ -274,6 +274,45 @@ def test_reveal_opens_a_folder_from_the_registry_only(world, monkeypatch):
     assert post(c, "/api/archives/test/reveal", {"what": "/etc"}).status_code == 422
 
 
+def _with_extra_folders(store, tmp_root):
+    """Give Test an attached extra folder 'Old years' and a detached one 'Scans'."""
+    old, scans = tmp_root / "disk" / "Old", tmp_root / "disk" / "Scans"
+    old.mkdir(parents=True)
+    scans.mkdir(parents=True)
+    settings_file = store.find("test").paths.config_dir / "settings.yaml"
+    data = yaml.safe_load(settings_file.read_text(encoding="utf-8"))
+    data["extra_folders"] = [
+        {"label": "Old years", "path": str(old)},
+        {"label": "Scans", "path": str(scans), "attached": False},
+    ]
+    settings_file.write_text(yaml.safe_dump(data), encoding="utf-8")
+    return old, scans
+
+
+def test_the_list_names_each_archives_extra_folders(world):
+    host, c, store, arch_a, arch_b = unpack(world)
+    old, scans = _with_extra_folders(store, arch_b.root.parent)
+    by_id = {a["id"]: a for a in c.get("/api/archives").json()["archives"]}
+    assert by_id["main"]["extra_folders"] == []
+    assert by_id["test"]["extra_folders"] == [
+        {"label": "Old years", "path": str(old), "attached": True},
+        {"label": "Scans", "path": str(scans), "attached": False},
+    ]
+
+
+def test_reveal_opens_an_extra_folder_by_its_label(world):
+    host, c, store, arch_a, arch_b = unpack(world)
+    old, _ = _with_extra_folders(store, arch_b.root.parent)
+    opened = []
+    host.current.archives.runner = lambda args: opened.append(args) or 0
+    r = post(c, "/api/archives/test/reveal", {"what": "extra", "label": "old YEARS"})
+    assert r.status_code == 204
+    assert str(old.resolve()) in opened[-1][-1]
+    unknown = post(c, "/api/archives/test/reveal", {"what": "extra", "label": "Nope"})
+    assert unknown.status_code == 404
+    assert post(c, "/api/archives/test/reveal", {"what": "extra"}).status_code == 400
+
+
 def test_switching_to_an_archive_that_is_not_set_up_opens_setup_then_the_app(world, events):
     host, c, store, arch_a, arch_b = unpack(world)
     fresh = post(c, "/api/archives", {"name": "Fresh"}).json()
