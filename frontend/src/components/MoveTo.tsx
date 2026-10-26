@@ -355,7 +355,8 @@ export function useMoveFlow(
       }
       intro={
         <>
-          {confirm.modes && (
+          {/* a folder is only moved: no choice of ways to show */}
+          {confirm.modes && !confirm.folderMove && (
             <ModeChoice
               modes={confirm.modes}
               mode={mode}

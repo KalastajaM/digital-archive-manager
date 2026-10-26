@@ -202,6 +202,18 @@ describe("moving a folder in Browse", () => {
     }
   });
 
+  it("a refused breadcrumb says why in a toast too", async () => {
+    const { calls } = open("/browse?path=20.%20Home");
+    await screen.findByText("2009");
+    const top = within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Archive" });
+    const dt = folderDrag(rowIn(listing(), "2009"));
+    fireEvent.dragEnter(top, { dataTransfer: dt });
+    expect(top).toHaveAttribute("data-drop", "refused");
+    fireEvent.drop(top, { dataTransfer: dt });
+    expect(await screen.findByText("Not allowed: a folder is not moved to the top of the archive")).toBeInTheDocument();
+    expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
+  });
+
   it("dropped into itself or its own subfolder, it is refused before the drop", async () => {
     const { calls } = open(twoPanes("20. Home", "20. Home/2009"));
     const left = pane("Left pane");

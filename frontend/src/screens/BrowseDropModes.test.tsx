@@ -17,6 +17,7 @@ import {
   ONGOING_ROOT_REASON,
   SEARCH_DROP_REASON,
 } from "../dropModes";
+import { folderMoveRequest } from "../components/MoveTo";
 import Browse from "./Browse";
 
 const dir = (path: string): DirEntry => ({
@@ -377,13 +378,19 @@ describe("Refused targets say why, visibly, and a drop there says it in a toast"
     expect(posts(calls, "/api/browse/move/preview").map((c) => c.body)).toEqual([
       { drive_ids: ["d-10. Financial"], folder: "13. Taxes" },
     ]);
-    expect(within(dialog).getByRole("radio", { name: /Move/ })).toBeChecked();
-    for (const way of [/Link/, /Copy/]) {
-      const radio = within(dialog).getByRole("radio", { name: way });
-      expect(radio).toBeDisabled();
-      expect(radio.closest("label")).toHaveTextContent("Folders can only be moved");
-    }
+    expect(within(dialog).queryByRole("radio")).toBeNull(); // Move only: no Link / Copy choice shown
+    // the request still says why Link and Copy are off, should anything reach them
+    expect(folderMoveRequest("d", "X").modes).toEqual({ move: null, link: "Folders can only be moved", copy: "Folders can only be moved" });
     expect(within(dialog).getByRole("button", { name: /^Move folder/ })).toBeInTheDocument();
+  });
+
+  it("files dropped on a folder still get the Move / Link / Copy choice", async () => {
+    setup(two("10. Financial", "13. Taxes"), { "POST /api/browse/move/preview": { body: [op("move", "10. Financial/x.pdf", "13. Taxes/x.pdf", "fx")] } });
+    const left = pane("Left pane");
+    await within(left).findByText("x.pdf");
+    dropOn(within(pane("Right pane")).getByTestId("pane-drop"), dragFrom(rowOf(left, "x.pdf")));
+    const dialog = await screen.findByRole("dialog", { name: "Move 1 file to 13. Taxes?" });
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(3);
   });
 
   it("search results are no folder", async () => {

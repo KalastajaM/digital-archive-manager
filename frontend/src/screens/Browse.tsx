@@ -254,7 +254,7 @@ function SelectAll({ checked, total, onChange }: { checked: number; total: numbe
 /** One step of the breadcrumb as a drop target: files or a folder dropped on it go
  * into that folder, as on a folder row. */
 function Crumb({ drop, children }: { drop: DropProps; children: (props: DropTarget["props"]) => ReactNode }) {
-  const target = useDropTarget<BrowseDrag>({ ...drop, read: readBrowseDrag });
+  const target = useDropTarget<BrowseDrag>({ ...drop, read: readBrowseDrag, onRefused: drop.onRefused });
   return <>{children(target.props)}</>;
 }
 

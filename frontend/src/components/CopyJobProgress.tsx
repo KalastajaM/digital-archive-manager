@@ -69,7 +69,7 @@ export function CopyJobProgress() {
       if (j.state === "error" || !r) {
         toast({ kind: "error", text: `The move across disks failed: ${visible(j.error ?? "unknown error")}` });
       } else if (r.stopped) {
-        toast({ kind: "warning", text: visible(r.message ?? r.error ?? "Stopped."), action });
+        toast({ kind: "warning", text: visible(r.error ?? "Stopped."), action });
       } else if (r.failed || r.error) {
         const at = r.failed ? ` (at ${visible(r.failed.src ?? r.failed.dst)})` : "";
         toast({ kind: "error", text: `Stopped: ${visible(r.error ?? "an operation failed")}${at}`, action });
