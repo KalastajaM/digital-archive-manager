@@ -3,6 +3,7 @@
 import logging
 import os
 import stat
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -34,6 +35,7 @@ from dam.ops.model import (
 )
 from dam.ops.planner import Planner
 from dam.ops.undo import JournalEntry, RecoveryResult
+from dam.services import LOCAL_ID_PREFIX
 
 if TYPE_CHECKING:
     from dam.locks import LockService
@@ -74,6 +76,9 @@ class Executor:
         self.throttle_ms = throttle_ms
         # refuses a change to a locked file (``dam.locks``); set by the App
         self.locks: LockService | None = None
+        # set when the app closes: a copy across disks in progress ends at its next
+        # chunk (its unfinished temporary file stays, and the op fails saying so)
+        self.cancel_copies = threading.Event()
 
     def preview(self, plan: Plan) -> list[ResolvedOp]:
         """Validate and resolve ``plan`` without touching the disk or the journal.
@@ -90,6 +95,8 @@ class Executor:
         plan: Plan,
         dry_run: bool = False,
         check: Callable[[list[ResolvedOp]], None] | None = None,
+        should_stop: Callable[[], bool] | None = None,
+        progress: Callable[[ResolvedOp, int, int], None] | None = None,
     ) -> BatchResult:
         """Run ``plan``; stops at the first failure. Dry run: ``done`` lists what would run.
 
@@ -97,6 +104,11 @@ class Executor:
         journaled or changed; it raises to refuse the whole plan. The ops it approved
         are exactly the ops run (each relocation's ``drive_id`` is re-checked against
         the disk at act time by the pre-check).
+
+        ``should_stop`` (a background move) is asked before each op; true ends the batch
+        there (``BatchResult.stopped``), except between a copy across disks and the move
+        of its original to To Delete, which always run together. ``progress`` is called
+        with each op that completed, its index and the number of ops.
         """
         resolved = self.preview(plan)
         if check is not None:
@@ -105,7 +117,10 @@ class Executor:
         if dry_run:
             result.done = resolved
             return result
-        return self._run_resolved(plan.origin, resolved, result, label=plan.label)
+        return self._run_resolved(
+            plan.origin, resolved, result, label=plan.label, should_stop=should_stop,
+            progress=progress,
+        )
 
     # --- undo and recovery (see dam.ops.undo) --------------------------------
 
@@ -138,19 +153,28 @@ class Executor:
         result: BatchResult,
         undo_of: str | None = None,
         label: str | None = None,
+        should_stop: Callable[[], bool] | None = None,
+        progress: Callable[[ResolvedOp, int, int], None] | None = None,
     ) -> BatchResult:
         """Journal and carry out ``resolved`` in order; ``undo_of``: the batch reverted.
+        ``should_stop`` and ``progress``: see ``apply``.
 
         The throttle (spacing out changes Drive must sync) applies only to ops outside
         the publish roots: creating or removing links and folders inside ``##. Ongoing``
         or ``##. Important`` never waits, also in a batch that mixes both (an Ongoing
         conversion)."""
         for seq, rop in enumerate(resolved):
+            pair = seq and resolved[seq - 1].kind is OpKind.COPY_ACROSS
+            if should_stop is not None and not pair and should_stop():
+                result.stopped = True
+                return result
             if seq and self.throttle_ms and not self._in_publish_root(rop):
                 time.sleep(self.throttle_ms / 1000)  # outside the lock
             with INDEX_LOCK:
                 if self._run_op(seq, rop, origin, result, undo_of, label):
                     return result
+            if progress is not None:
+                progress(rop, seq, len(resolved))
         return result
 
     def _in_publish_root(self, rop: ResolvedOp) -> bool:
@@ -222,6 +246,12 @@ class Executor:
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.src}: {e}"
                 return True
+        if rop.kind is OpKind.COPY_ACROSS:
+            try:
+                self._repoint_copy(rop)
+            except SQLAlchemyError as e:
+                result.index_error = f"index update failed for {rop.dst}: {e}"
+                return True
         if rop.kind in _RELOCATE:
             try:
                 self.repo.update_path(rop.src, rop.dst)
@@ -229,6 +259,23 @@ class Executor:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
         return False
+
+    def _repoint_copy(self, rop: ResolvedOp) -> None:
+        """The file was copied across disks: its index row now describes the copy, so
+        everything given to it (tags, notes, collections, items, locks) follows. The row
+        takes the copy's own Drive id if it has one; a row with a Drive id gets a fresh
+        local id otherwise, since the original (moved to To Delete next) keeps that id
+        on disk and must not take the row back on the next scan."""
+        rec = self.repo.by_path(rop.src)
+        if rec is None:  # never indexed: the next scan finds the copy
+            return
+        new_id = read_drive_id(self.paths.abs(rop.dst))
+        if new_id is None:
+            local = rec.drive_id.startswith(LOCAL_ID_PREFIX)
+            new_id = rec.drive_id if local else f"{LOCAL_ID_PREFIX}{uuid4()}"
+        if new_id != rec.drive_id:
+            self.repo.rekey(rec.drive_id, new_id)
+        self.repo.update_path(rop.src, rop.dst)
 
     def _record_made(self, batch_id: str, rop: ResolvedOp) -> None:
         """Remember which folder a New folder / layout batch made, so that undo removes
@@ -307,7 +354,7 @@ class Executor:
             is_file=stat.S_ISREG(st.st_mode),
             link=self._link_record(p) if stat.S_ISLNK(st.st_mode) else None,
         )
-        if rop.kind is OpKind.PICTURE_BACK:
+        if rop.kind in (OpKind.PICTURE_BACK, OpKind.COPY_ACROSS):
             snap["content_hash"] = primitives.file_sha256(p)
         if rop.kind is OpKind.COPY:  # the row describes the new file, not the original's id
             snap["drive_id"] = None
@@ -464,6 +511,9 @@ class Executor:
             if rop.drive_id is not None and read_drive_id(origin) != rop.drive_id:
                 raise OpFailed(f"{rop.src} changed since the preview.")
             return
+        if rop.kind is OpKind.COPY_ACROSS:
+            self._precheck_copy_across(rop, dst)
+            return
         if rop.kind is OpKind.SYMLINK and rop.src.startswith(ABS_TARGET):
             src = None  # target outside the archive: never looked at
         else:
@@ -492,6 +542,21 @@ class Executor:
         # CHECK-THEN-ACT WINDOW: ancestors are re-checked here (abs() refuses escapes,
         # the parent must be a real folder) but could still be swapped for a symlink
         # before the rename; RENAME_EXCL still guarantees nothing is overwritten.
+        if not dst.parent.is_dir() or dst.parent.is_symlink():
+            raise OpFailed(f"The folder for {rop.dst} is missing.")
+
+    def _precheck_copy_across(self, rop: ResolvedOp, dst: Path) -> None:
+        src = self.paths.abs(rop.src)
+        try:
+            st = os.lstat(src)
+        except OSError:
+            raise OpFailed(f"{rop.src} is no longer there.") from None
+        if not stat.S_ISREG(st.st_mode):
+            raise OpFailed(f"{rop.src} is no longer a plain file.")
+        if rop.drive_id is not None and read_drive_id(src) != rop.drive_id:
+            raise OpFailed(f"{rop.src} changed since the preview.")
+        if os.path.lexists(dst):
+            raise OpFailed(f"{rop.dst} already exists.")
         if not dst.parent.is_dir() or dst.parent.is_symlink():
             raise OpFailed(f"The folder for {rop.dst} is missing.")
 
@@ -528,6 +593,10 @@ class Executor:
             case OpKind.REMOVE_EMPTY_DIR:
                 primitives.remove_empty_dir(
                     dst, self._removal_root(rop.dst, rop.made), identity=rop.identity
+                )
+            case OpKind.COPY_ACROSS:
+                primitives.copy_across(
+                    self.paths.abs(rop.src), dst, rop.content_hash, stop=self.cancel_copies.is_set
                 )
             case OpKind.COPY:
                 if _outside_copy(rop):
@@ -586,6 +655,14 @@ class Executor:
             case OpKind.COPY:
                 st = os.lstat(dst)
                 ok = stat.S_ISREG(st.st_mode) and st.st_size == snap["size"]
+            case OpKind.COPY_ACROSS:
+                st = os.lstat(dst)
+                ok = (
+                    stat.S_ISREG(st.st_mode)
+                    and st.st_size == snap["size"]
+                    and primitives.file_sha256(dst) == snap["content_hash"]
+                    and os.path.lexists(self.paths.abs(rop.src))
+                )
             case _:
                 ok = os.path.lexists(dst)
                 if ok and snap["drive_id"] is not None:

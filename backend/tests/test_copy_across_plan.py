@@ -38,8 +38,8 @@ def _work(resolved) -> list:
 
 def test_file_move_across_disks_plans_copy_and_quarantine(across):
     resolved = across.executor.preview(_plan(Op(OpKind.MOVE, f"{BANKS}/a.pdf", "Old years/2010")))
-    assert _kinds(resolved)[:2] == ["mkdir", "copy_across"]
     assert resolved[0].dst == "Old years/2010"
+    assert _kinds(resolved)[-2:] == ["copy_across", "quarantine"]  # always together
     copy, quarantine = _work(resolved)
     assert (copy.src, copy.dst, copy.drive_id) == (f"{BANKS}/a.pdf", "Old years/2010/a.pdf", "id-a")
     assert copy.size == 4 and copy.cloud_only is False
@@ -58,7 +58,7 @@ def test_move_into_main_folder_quarantines_in_extra_folder(across):
 def test_taken_name_gets_suffix(across, extra_folder):
     extra_folder.add("2009/a.pdf", b"other", drive_id="x2")
     resolved = across.executor.preview(_plan(Op(OpKind.MOVE, f"{BANKS}/a.pdf", "Old years/2009")))
-    copy = resolved[0]
+    copy = _work(resolved)[0]
     assert copy.dst == "Old years/2009/a_2.pdf" and copy.note == COLLISION_NOTE
 
 
@@ -66,7 +66,7 @@ def test_new_name_is_kept(across):
     resolved = across.executor.preview(
         _plan(Op(OpKind.MOVE, f"{BANKS}/a.pdf", "Old years/2009", name="2009 bank.pdf"))
     )
-    assert resolved[0].dst == "Old years/2009/2009 bank.pdf"
+    assert _work(resolved)[0].dst == "Old years/2009/2009 bank.pdf"
 
 
 def test_restore_across_disks_plans_copy_only(across):

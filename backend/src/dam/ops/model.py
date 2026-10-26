@@ -158,3 +158,5 @@ class BatchResult:
     # undo of a batch that made folders: the ones left alone because something was put
     # in them since (or they were swapped); everything else was removed
     kept: list[str] = field(default_factory=list)
+    # ended early on request (``should_stop``): what is in ``done`` happened, the rest not
+    stopped: bool = False

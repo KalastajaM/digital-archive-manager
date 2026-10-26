@@ -473,6 +473,10 @@ class Planner:
             raise GuardError(f"{name} is protected, so it is not copied across disks.")
         folder = self.sim.spell(folder)
         self._ensure_folder(folder, op.allow_top_level)
+        original_stays = self.paths.is_quarantined(src)
+        if not original_stays:  # made first, so the move to To Delete follows the copy
+            aside = self.sim.spell(self._quarantine_folder(src))
+            self._ensure_folder(aside, False, quarantine_root=True)
         wanted = op.name or name
         free = self._free_or_exact(op, folder, wanted, src)
         dst = join(folder, free)
@@ -494,7 +498,7 @@ class Planner:
             )
         )
         self.sim.events.append(("create", dst, "file"))
-        if self.paths.is_quarantined(src):
+        if original_stays:
             self.out[-1].note = _add_note(self.out[-1].note, ORIGINAL_STAYS_NOTE)
             return
         self._relocate(Op(OpKind.QUARANTINE, src, None), self._quarantine_folder(src))
