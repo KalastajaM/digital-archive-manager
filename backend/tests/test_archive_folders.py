@@ -88,9 +88,12 @@ def test_the_same_folder_in_nfd_spelling(app_paths, tmp_path):
     settings_file.write_text(yaml.safe_dump(data), encoding="utf-8")
     paths, _ = paths_of(app_paths)
     nfd = tmp_path / unicodedata.normalize("NFD", "Arkisto é")
-    same_folder = nfd.exists()  # a normalisation-insensitive file system (macOS)
     message = check_folder(nfd, paths, None, None)
-    assert (message is not None) == same_folder
+    # Refused everywhere: paths are compared NFC-normalised, so on Linux (where the NFD
+    # spelling is another, here missing, folder) it is refused too, never accepted.
+    assert message is not None
+    if nfd.exists():  # a normalisation-insensitive file system (macOS)
+        assert message == "That folder is already part of this archive ('the main folder')."
 
 
 def test_inside_another_profiles_extra_folder(tmp_path):
