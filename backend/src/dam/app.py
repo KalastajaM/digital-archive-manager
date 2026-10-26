@@ -583,6 +583,8 @@ class App:
         then read bank barcodes (``ContentIndexer.run_barcodes_once``) and page-1 layouts
         (``run_layouts_once``) the same way. The layout pass reads only the inbox and the
         wanted files here, never the whole archive: the background pass does the rest."""
+        # a file whose read stopped dam last time (``dam index`` or the app) is skipped
+        self.content.recover_interrupted()
         # Hard cap: a file is attempted at most about once per call, so never more than
         # the number of rows, even if a failing file were somehow picked again.
         with self.engine.connect() as conn:

@@ -5,6 +5,7 @@ import struct
 import zipfile
 from pathlib import Path
 
+from dam.extract import zip_guard
 from dam.extract.base import ExtractedText, UnsupportedContent
 
 MAX_CHARS = 2_000_000  # text kept per file; the rest of a huge sheet is dropped
@@ -44,6 +45,7 @@ class XlsxExtractor:
     def extract(self, path: Path, data: bytes | None = None) -> ExtractedText:
         import openpyxl
 
+        zip_guard.check(path, data)
         try:
             book = openpyxl.load_workbook(
                 io.BytesIO(data) if data is not None else str(path),
@@ -135,6 +137,7 @@ class PptxExtractor:
         from pptx import Presentation
         from pptx.exc import PackageNotFoundError
 
+        zip_guard.check(path, data)
         try:
             deck = Presentation(io.BytesIO(data) if data is not None else str(path))
         except (zipfile.BadZipFile, PackageNotFoundError) as exc:

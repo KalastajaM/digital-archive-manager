@@ -1357,8 +1357,14 @@ were fewer than three). `GET /api/status` has the same `page1`.
 A file whose text could not be extracted is `error` (something a retry might fix: a
 crash in the extractor, an extraction over 5 minutes) or `unsupported` (retrying will
 not help: a `.docx` that is not a valid Word file or not a Word document, a
-password-protected Word file or PDF, a type with no extractor, a file over 256 MB). The
-reason is stored with the file (`files.last_error`). `GET /api/index/errors` lists the
+password-protected Word file or PDF, a type with no extractor, a file over 256 MB, a
+Word, Excel, PowerPoint or iWork zip that would unpack to more than 512 MB, holds more
+than 10,000 parts or has a part over 1 MB packed more than 200 to 1). The
+reason is stored with the file (`files.last_error`). While a file is read its
+`last_error` is `dam: reading`; recording the outcome replaces it, and closing dam clears
+it. A file still marked on the next start (dam was killed mid-read, say out of memory)
+becomes `error` with "reading this file stopped dam unexpectedly; it is skipped until you
+retry it", so it is not read again until it is retried. `GET /api/index/errors` lists the
 `error` files (`?all=1` adds the unsupported ones) with `reason` and `retry_at`, newest
 file (mtime) first; `POST /api/index/retry {drive_ids}` puts those of them in `error` or
 `unsupported` back to `pending` (attempts and reason cleared) and wakes the indexer. On
@@ -1376,6 +1382,11 @@ the command line: `dam errors [--all] [--retry]`.
   .scpt .action`, and any file with an executable bit, plus Windows and Linux program,
   script and shortcut types such as `.exe .bat .ps1 .lnk .desktop`) with 409 "Won't open
   apps or scripts from the archive — use Show in Finder"; Reveal still works for them.
+  It also refuses web pages, SVG and XML files (`.html .htm .xhtml .svg .svgz .xml
+  .webarchive .mht .mhtml`, by the file's, the resolved or the link's name), whose
+  default app is a browser that would run their scripts as a local page, with 409 "Won't
+  open web pages, SVG or XML files from the archive, as their scripts would run in the
+  browser. Use Show in Finder".
 - `GET /api/tags?prefix=&limit=` lists the tags in use with the number of files that have
   each (`[{"name", "files"}]`), those starting with `prefix` (case and accents ignored),
   most used first then by name, at most `limit` (default 8, up to 50): the tag field's

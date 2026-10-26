@@ -93,6 +93,16 @@ _COLUMNS = [f.name for f in fields(FileRecord)]
 
 FLAT_SORTS = ("name", "date", "size", "folder")
 
+# ``last_error`` of a pending file while the content indexer reads it: set before the
+# read, replaced when its outcome is recorded. Still there on the next start means the
+# read stopped dam (a crafted file that ran it out of memory), so the file is skipped.
+READING_MARK = "dam: reading"
+
+
+def _unmarked():
+    """``last_error`` with a reading mark dropped (any other reason is kept)."""
+    return case((files.c.last_error == READING_MARK, None), else_=files.c.last_error)
+
 
 def _below(folder_nfc: str):
     """``path_nfc`` lies strictly below ``folder_nfc``: a range on the path index.
@@ -1189,6 +1199,37 @@ class FileRepo:
                 .values(retry_at=None, attempts=0)
             ).rowcount
 
+    def mark_reading(self, drive_id: str) -> None:
+        """Note that ``drive_id``'s content is being read (``READING_MARK``)."""
+        with self._conn(write=True) as conn:
+            conn.execute(
+                update(files).where(files.c.drive_id == drive_id).values(last_error=READING_MARK)
+            )
+
+    def clear_reading(self, drive_ids: Collection[str]) -> None:
+        """Drop the reading mark of those of ``drive_ids`` that still have it."""
+        ids = list(drive_ids)
+        with self._conn(write=True) as conn:
+            for i in range(0, len(ids), 500):
+                conn.execute(
+                    update(files)
+                    .where(
+                        files.c.drive_id.in_(ids[i : i + 500]),
+                        files.c.last_error == READING_MARK,
+                    )
+                    .values(last_error=None)
+                )
+
+    def fail_interrupted(self, reason: str) -> int:
+        """Put every file still marked as being read in ``error`` with ``reason`` (only
+        the explicit retry queues it again); returns how many."""
+        with self._conn(write=True) as conn:
+            return conn.execute(
+                update(files)
+                .where(files.c.last_error == READING_MARK)
+                .values(index_state="error", retry_at=None, attempts=0, last_error=reason)
+            ).rowcount
+
     def set_index_state(
         self,
         drive_id: str,
@@ -1197,8 +1238,9 @@ class FileRepo:
         attempts: int | None = None,
         expect: tuple[int | None, float | None] | None = None,
     ) -> None:
-        """Set the state; with ``expect`` (size, mtime), a changed row goes to pending."""
-        values: dict = {"index_state": state, "retry_at": retry_at}
+        """Set the state; with ``expect`` (size, mtime), a changed row goes to pending.
+        A reading mark (``READING_MARK``) is dropped either way."""
+        values: dict = {"index_state": state, "retry_at": retry_at, "last_error": _unmarked()}
         if attempts is not None:
             values["attempts"] = attempts
         with self._conn(write=True) as conn:
@@ -1207,7 +1249,7 @@ class FileRepo:
                     select(files.c.size, files.c.mtime).where(files.c.drive_id == drive_id)
                 ).first()
                 if row is not None and (row.size, row.mtime) != expect:
-                    values = {"index_state": "pending", "retry_at": None}
+                    values = {"index_state": "pending", "retry_at": None, "last_error": _unmarked()}
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
 
     def save_content(
@@ -1242,7 +1284,7 @@ class FileRepo:
                 conn.execute(
                     update(files)
                     .where(files.c.drive_id == drive_id)
-                    .values(index_state="pending", retry_at=None)
+                    .values(index_state="pending", retry_at=None, last_error=_unmarked())
                 )
                 return False
             values: dict = {

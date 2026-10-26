@@ -11,7 +11,7 @@ from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedConten
 from dam.extract.pdf import PdfExtractor
 from dam.index import content
 from dam.index.content import ContentIndexer
-from dam.index.repo import FileRecord, FileRepo
+from dam.index.repo import READING_MARK, FileRecord, FileRepo
 from pdfs import make_text_pdf
 
 NOW = 1_000_000.0
@@ -459,3 +459,86 @@ def test_cloud_pending_respects_scanner_change(fake_archive, engine, monkeypatch
     indexer.run_once(now=NOW)
     rec = repo.get("m1")
     assert rec.index_state == "pending" and rec.attempts == 0
+
+
+def last_error(engine, drive_id):
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT last_error FROM files WHERE drive_id = :d"), {"d": drive_id}
+        ).scalar()
+
+
+def test_a_read_is_marked_until_its_outcome_is_recorded(fake_archive, engine):
+    seen = []
+
+    def read(path):
+        seen.append(last_error(engine, "m1"))
+        return ExtractedText(text="hello", extractor="fake")
+
+    repo, indexer = fake_indexer(fake_archive, engine, read)
+    add_file(fake_archive, repo, "##. Organize/m.pdf", "m1")
+    assert indexer.run_once(now=NOW) == 1
+    assert seen == [READING_MARK]  # set before the read started
+    assert repo.get("m1").index_state == "indexed"
+    assert last_error(engine, "m1") is None
+
+
+def test_a_read_that_cannot_happen_yet_clears_its_mark(fake_archive, engine):
+    def offline(path):
+        raise OSError("not downloaded")
+
+    repo, indexer = fake_indexer(fake_archive, engine, offline)
+    add_file(fake_archive, repo, "##. Organize/m.pdf", "m1")
+    indexer.run_once(now=NOW)
+    assert repo.get("m1").index_state == "cloud_pending"
+    assert last_error(engine, "m1") is None
+
+
+def test_a_file_whose_read_stopped_dam_is_skipped_until_retried(fake_archive, engine):
+    calls = []
+
+    def read(path):
+        calls.append(path)
+        return ExtractedText(text="hello", extractor="fake")
+
+    repo, indexer = fake_indexer(fake_archive, engine, read)
+    add_file(fake_archive, repo, "##. Organize/bomb.pdf", "b1")
+    add_file(fake_archive, repo, "##. Organize/ok.pdf", "ok")
+    # dam was killed while reading bomb.pdf: its mark is still there on the next start
+    repo.mark_reading("b1")
+    stop = threading.Event()
+    stop.set()
+    indexer.run_forever(stop)  # the start clears up before the first pass
+    rec = repo.get("b1")
+    assert rec.index_state == "error"
+    [problem] = repo.index_problems()
+    assert problem.drive_id == "b1" and problem.reason == content.READING_STOPPED
+    # not read again by the indexer; the other file is
+    assert indexer.run_once(now=NOW) == 1
+    assert [p.name for p in calls] == ["ok.pdf"]
+    assert repo.get("ok").index_state == "indexed"
+    # the explicit retry reads it again
+    assert repo.retry_index(["b1"]) == 1
+    assert indexer.run_once(now=NOW) == 1
+    assert repo.get("b1").index_state == "indexed"
+
+
+def test_closing_mid_read_does_not_count_as_a_crash(fake_archive, engine):
+    started, release = threading.Event(), threading.Event()
+
+    def slow(path):
+        started.set()
+        release.wait(30)
+        return ExtractedText(text="hello", extractor="fake")
+
+    repo, indexer = fake_indexer(fake_archive, engine, slow)
+    add_file(fake_archive, repo, "##. Organize/m.pdf", "m1")
+    t = threading.Thread(target=indexer.run_once, kwargs={"now": NOW})
+    t.start()
+    assert started.wait(30)
+    assert last_error(engine, "m1") == READING_MARK
+    indexer.close()  # dam quits while the file is being read
+    assert last_error(engine, "m1") is None
+    release.set()
+    t.join(30)
+    assert indexer.recover_interrupted() == 0

@@ -2,6 +2,7 @@ import io
 import zipfile
 from pathlib import Path
 
+from dam.extract import zip_guard
 from dam.extract.base import ExtractedText, UnsupportedContent
 
 NOT_WORD = "not a valid Word file"
@@ -31,6 +32,7 @@ class DocxExtractor:
         import docx
         from docx.opc.exceptions import PackageNotFoundError
 
+        zip_guard.check(path, data)
         try:
             document = docx.Document(io.BytesIO(data) if data is not None else str(path))
         except (zipfile.BadZipFile, PackageNotFoundError) as exc:
