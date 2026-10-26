@@ -357,6 +357,12 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
                 ops={plan.ops}
                 tags={parseTags(tags)}
                 followUps={followUpLines(plan.requests, trays.list)}
+                onClose={filing.clearPlan}
+                action={
+                  <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || adding.busy}>
+                    File {count}
+                  </button>
+                }
               />
             </div>
           )}

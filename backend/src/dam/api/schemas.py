@@ -443,13 +443,16 @@ class DetectedFieldsOut(BaseModel):
 
 
 class CodeHitOut(BaseModel):
-    """A filing code found for a file: by its inbox folder, a pen mark or a QR sticker.
-    ``raw``: what was read (pen, QR); ``unclear``: the reading is uncertain."""
+    """A filing code found for a file: by its inbox folder, a pen mark, a QR sticker, or
+    given by the owner in the app (``assigned``). ``raw``: what was read (pen, QR);
+    ``unclear``: the reading is uncertain; ``overridden``: an assigned code replaces it,
+    so it sets nothing."""
 
     code: str
-    via: Literal["folder", "pen", "qr"]
+    via: Literal["folder", "pen", "qr", "assigned"]
     raw: str | None
     unclear: bool
+    overridden: bool
 
 
 class AreaOut(BaseModel):
@@ -1737,6 +1740,17 @@ class StickerSheetIn(_In):
     boxes: bool = True
     blank_labels: bool = False
     outlines_only: bool = False
+
+
+class AssignCodeIn(_In):
+    # give these inbox files this filing code (None: take their assigned code away)
+    drive_ids: list[str]
+    code: str | None
+
+
+class AssignCodeOut(BaseModel):
+    drive_ids: list[str]
+    code: str | None
 
 
 class FilingCodeFoldersOut(BaseModel):

@@ -150,6 +150,25 @@ def test_a_file_inside_an_important_folder_is_locked(app, tree):
     assert where(tree, f"{BANKS}/deed.pdf")
 
 
+def test_a_copy_carrying_its_originals_drive_id_is_not_locked_with_it(app, tree):
+    # a copy keeps its original's xattr; the index gives it an id of its own
+    tree.add(f"{HOME}/Docs/s1 copy.pdf", drive_id="s1")
+    app.scan()
+    copy = app.repo.by_path(f"{HOME}/Docs/s1 copy.pdf").drive_id
+    assert copy != "s1"
+    app.marks.mark_important(["s1"], None)
+    assert app.locks.reason(copy, f"{HOME}/Docs/s1 copy.pdf") is None
+    app.browse.move([copy], BANKS)
+    assert where(tree, f"{BANKS}/s1 copy.pdf")
+    # and the original is still locked
+    with pytest.raises(GuardError, match=MSG):
+        app.browse.move(["s1"], HOME)
+    # a lock on the copy itself holds, though its xattr names the original
+    app.locks.lock(copy)
+    with pytest.raises(GuardError, match=MSG):
+        app.browse.move([copy], HOME)
+
+
 def test_a_folder_with_a_locked_file_inside_cannot_be_moved(app, tree):
     app.locks.lock("deed")
     folder_op = Op(OpKind.MOVE, f"{HOME}/Deeds", BANKS)

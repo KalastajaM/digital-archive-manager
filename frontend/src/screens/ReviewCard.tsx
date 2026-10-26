@@ -14,6 +14,7 @@ import {
   type TrayDef,
   useFileLinks,
   useFileLock,
+  useAssignCode,
   useFilingCodes,
   useRules,
   useTrays,
@@ -38,6 +39,7 @@ import {
   TrayPicker,
   type TrayValues,
 } from "../components/TrayPicker";
+import { useToast } from "../components/Toasts";
 import { Toolbar } from "../components/ui/Toolbar";
 import { fieldWord } from "../format";
 import { dialogOpen, isCmdEnter, isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
@@ -45,6 +47,7 @@ import { visible } from "../text";
 import { LinkBadges } from "./FileActions";
 import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFiling";
 import { LockControl } from "../components/LockControl";
+import { useInboxFolder } from "../components/MoveTo";
 import { MarkToggles } from "../components/MarkToggles";
 import { TrashButton } from "../components/Trash";
 import {
@@ -150,9 +153,43 @@ export function useCodeLabel(hits: CodeHit[]): CodeLabel {
     if (!hit) return `code \`${code}\``;
     if (hit.via === "pen") return `from pen mark \`${code}\``;
     if (hit.via === "qr") return `from sticker \`${code}\``;
+    if (hit.via === "assigned") return `from code \`${code}\` you assigned`;
     const folder = codes.data?.codes.find((c) => c.code === code)?.inbox_folder;
     return folder ? `from folder ${folder}` : `code \`${code}\``;
   };
+}
+
+/** The code the owner assigned to the file, with × to take it away (the form refills
+ * from the codes found otherwise: the Inbox keys the form by the assigned code). */
+function AssignedCode({ entry, disabled }: { entry: InboxEntry; disabled: boolean }) {
+  const codes = useFilingCodes();
+  const assign = useAssignCode();
+  const toast = useToast();
+  const hit = entry.suggestion.codes.find((h) => h.via === "assigned");
+  if (!hit) return null;
+  const fc = codes.data?.codes.find((c) => c.code === hit.code);
+  const label = fc ? `${hit.code} · ${fc.label}` : hit.code;
+  return (
+    <p className="assigned-code">
+      <span className={fc ? "tag-token" : "tag-token code-overridden"}>
+        Filing code {visible(label)}
+        <button
+          type="button"
+          aria-label={`Take filing code ${hit.code} off`}
+          disabled={disabled || assign.isPending}
+          onClick={() =>
+            assign.mutate(
+              { driveIds: [entry.record.drive_id], code: null },
+              { onError: (e) => toast({ kind: "error", text: `Could not take the code off: ${errorText(e)}` }) },
+            )
+          }
+        >
+          ×
+        </button>
+      </span>
+      {!fc && <span className="hint"> not in your codes, so it sets nothing</span>}
+    </p>
+  );
 }
 
 /** In place of the tray fields when the file already has an open item in that tray:
@@ -241,6 +278,7 @@ type Props = { entry: InboxEntry; filing: Filing; trash?: CardTrash };
 export default function ReviewCard({ entry, filing, trash }: Props) {
   const ids = useId();
   const [name, setName] = useState(entry.suggestion.name);
+  const inbox = useInboxFolder();
   const [folder, setFolder] = useState(entry.suggestion.folder ?? "");
   const [tags, setTags] = useState(entry.suggestion.tags.join(", "));
   // A file with a filing code starts with the suggested tray, as File N marked files it (a
@@ -423,11 +461,14 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   useCardKeys({ preview, fileIt }, { folder: folderRef, name: nameRef });
 
   const fileName = entry.record.name ?? entry.record.path;
+  // every file here is in the inbox: name only a folder inside it (such as a code's folder)
+  const inFolder = folderOf(entry.record.path);
+  const inboxSubfolder = inbox && inFolder.startsWith(`${inbox}/`) ? inFolder.slice(inbox.length + 1) : inbox ? null : inFolder;
   return (
     <article className="review-card" aria-label={`Review ${fileName}`}>
       <Toolbar
         title={visible(fileName)}
-        subtitle={visible(folderOf(entry.record.path))}
+        subtitle={inboxSubfolder && visible(inboxSubfolder)}
         actions={
           <>
             {/* the app's one order: view, marks, Ask AI, the bin last; then this card's own steps */}
@@ -488,6 +529,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
               These filing codes disagree; pick the values here.
             </p>
           )}
+          <AssignedCode entry={entry} disabled={filing.busy} />
           <AIHint what="for filing suggestions" />
           {ai.sheet}
           <LinkBadges driveId={entry.record.drive_id} />
@@ -590,6 +632,12 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
                 ops={plan.ops}
                 tags={parseTags(tags)}
                 followUps={followUpLines(plan.requests, trays.list, entry.prefill)}
+                onClose={filing.clearPlan}
+                action={
+                  <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || lock.blocked}>
+                    File it
+                  </button>
+                }
               />
             </div>
           )}

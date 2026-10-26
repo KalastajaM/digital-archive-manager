@@ -276,7 +276,7 @@ describe("ReviewCard: Ask AI", () => {
     await user.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
     expect(posts(calls, "/api/inbox/preview")[0].body).toEqual([expected]);
-    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(within(screen.getByRole("region", { name: "Planned changes" })).getByRole("button", { name: "File it" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "File" }));
     await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
