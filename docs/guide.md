@@ -1271,7 +1271,8 @@ each area, grouped by what it applies to; one section shows at a time.
     rule on or off. The **People** list and the address area are here too. See
     [Filing rules](#filing-rules).
   - **Archive folders**: the main folder and any extra folders, each with its status
-    (Connected, Not connected or Detached), **Add folder**, **Detach** and **Attach again**.
+    (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
+    **Forget**.
     See [Several archive folders](#several-archive-folders).
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
@@ -1381,7 +1382,7 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   built yet.
 - **A folder that is not connected** (unplugged disk, cloud drive not signed in) gets a "Not
   connected" mark on its row in Browse. Its files stay in the index, search and
-  collections and are not marked missing; the file view says the folder is not connected
+  collections, where they carry the same mark, and are not marked missing; the file view says the folder is not connected
   and turns off Open and Show in Finder until it is back. `is:disconnected` finds them,
   and `-is:disconnected` leaves them out. Changes that involve the folder are refused
   until it is back. dam looks about every 30 seconds and picks the folder up by itself;
@@ -1390,12 +1391,15 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
 - **Detach** takes a folder out of the archive; it changes nothing on the disk. Its files
   leave Browse and search, but their tags, notes and collection memberships are kept, and
   **Attach again** brings everything back. Tick **Also forget their tags, notes and
-  collection places** to drop them as well (the confirmation says how many files). Links
-  that lead into a detached folder are left alone.
-- **Maintenance** marks links and files in an unplugged or detached folder as "Folder not
+  collection places** to drop them as well (the confirmation says how many files); the
+  folder then leaves the list and its label is free for another folder. A folder that is
+  already detached has **Forget** for the same. Links that lead into a detached folder are
+  left alone.
+- **Maintenance** marks links into an unplugged or detached folder as "Folder not
   connected" or "Folder detached" instead of broken, and **Archive folder names** lists a
-  folder at the top of the main folder that has the same name as an archive folder (the
-  archive folder wins; rename one of them).
+  folder at the top of the main folder that has the same name as an archive folder. The
+  archive folder wins: rename the folder in the main folder, or detach the archive folder
+  with Also forget.
 - While a Maintenance check or a rule replay runs, adding, detaching and attaching are
   refused until it has finished.
 

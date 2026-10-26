@@ -92,8 +92,9 @@ stays in `settings.yaml` with `attached: false`, so Settings can offer **Attach 
 and Maintenance can recognise links into it. Its index
 rows are kept and marked missing, exactly as when the folder is offline, so attaching
 the same folder again (same label) brings back tags, notes and collection memberships.
-A separate **Forget its index entries** button, behind a confirmation that names the
-number of files, purges them. App-made links in `##. Ongoing` / `##. Important` that
+**Also forget** on the Detach confirmation (or **Forget** on a folder that is already
+detached), which names the number of files, purges them with everything given to those
+files and removes the entry from the settings, so the label is free again. App-made links in `##. Ongoing` / `##. Important` that
 point into it are left alone. Maintenance lists them as pointing into a detached folder.
 
 ## Offline folders
@@ -102,7 +103,8 @@ This is the main risk for real data: an unplugged disk or a cloud folder that is
 mounted must never look like deleted files.
 
 - **Availability is per folder.** A folder is *connected* when its root can be listed
-  (`scanner.listable`). The scanner already aborts without marking anything missing when
+  and it does not list nothing while the index has rows under its label
+  (`core.paths.folder_connected`). The scanner already aborts without marking anything missing when
   the root cannot be listed. That rule moves from "the archive root" to "each folder's
   root": a scan of the whole archive scans each connected folder and skips the others
   completely.
@@ -110,8 +112,8 @@ mounted must never look like deleted files.
   when the watcher reports an unmount. On reconnect, the folder gets an incremental scan.
 - **Watcher**: one watchdog schedule per connected folder. A schedule whose folder goes
   away is dropped and added again on reconnect.
-- **What the owner sees**: in Browse the folder shows "Not connected" with its path.
-  Its files stay in search results and collections, marked as not connected; opening
+- **What the owner sees**: in Browse the folder's row carries a "Not connected" mark,
+  and the file view names the folder. Its files stay in search results and collections, marked as not connected; opening
   or previewing them gives a plain message. Inbox counts and Today are unaffected
   because the inbox lives in the main folder.
 - **Search**: a new `is:disconnected` value (in `query.IS_VALUES`) finds the files of

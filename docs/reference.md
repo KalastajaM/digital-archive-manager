@@ -283,7 +283,8 @@ extra_folders:
     attached: true
 ```
 
-`attached: false` is a detached folder: it stays listed but is not mapped. The main
+`attached: false` is a detached folder: it stays listed but is not mapped, and its label
+stays reserved (a main-folder entry with that name is left out) until it is forgotten. The main
 folder's paths have no prefix; a path whose first component is an extra folder's label
 belongs to that folder (`Old years/2009/car/invoice.pdf`). Labels compare NFC and
 case-folded and cannot be changed yet (they also live in stored paths).
@@ -295,18 +296,22 @@ case-folded and cannot be changed yet (they also live in stored paths).
 |---|---|
 | `GET /api/archive-folders` | The main folder, then every extra folder (detached ones too), with label, path, `attached`, `connected` and file count. |
 | `POST /api/archive-folders` `{label, path, dry_run}` | Adds a folder after the overlap, label and readable checks. |
-| `POST /api/archive-folders/{label}/detach` `{forget, dry_run}` | Detaches it. Its index rows are marked missing, or removed with `forget`. |
+| `POST /api/archive-folders/{label}/detach` `{forget, dry_run}` | Detaches it. Its index rows are marked missing. With `forget` (also for a detached folder) the entry leaves the settings and its rows are removed together with the notes, checklists, collection and item places, summaries, fields, sender and person, and locks of those files; collections and items stay. |
 | `POST /api/archive-folders/{label}/attach` `{dry_run}` | Attaches a detached folder again, after the same checks as adding. |
 
 Each answers with `label`, `path`, `files` and `restart_needed`; `dry_run` answers the
 same and writes nothing. A change takes effect at once (the server reopens the archive);
-`restart_needed` is true only when it could not. Every file record carries `folder` (its
+`restart_needed` is true only when it could not. A detach writes the settings, reopens and
+only then changes the index, so no scan of the old App puts rows back; every full scan
+marks the rows of a detached label missing again. Every file record carries `folder` (its
 label, null for the main folder) and `connected`. `is:disconnected` finds the files of
 every folder that is not connected now; files of a detached folder are marked missing and
 are not found.
 
-**Folders that are not connected.** A folder is connected when its root can be listed. A
-scan skips a folder that is not, and marks nothing in it missing. The server checks about
+**Folders that are not connected.** A folder is connected when its root can be listed and
+it does not list nothing while the index has live rows under its label (a signed-out cloud
+drive leaves an empty mount point); `core.paths.folder_connected` is the one definition the
+scanner, the guards, the watcher and the API use. A scan skips a folder that is not, and marks nothing in it missing. The server checks about
 every 30 seconds and rescans a folder that comes back. Planning refuses any operation
 whose source or destination is in an unplugged folder, naming its label and path. The
 publisher leaves Ongoing and Important links into an unplugged or detached folder alone.
