@@ -45,6 +45,13 @@ def check_destination_area(dest: str, special: "SpecialFolders") -> None:
 LOCAL_ID_PREFIX = "local:"  # the scanner's id for an entry without a Drive id xattr
 
 
+def _twin_of_another(repo: "FileRepo", rop: ResolvedOp) -> bool:
+    """The Drive id on disk belongs to another indexed file, elsewhere: the copied xattr
+    of a twin, which the scanner indexed under a local id."""
+    owner = repo.get(rop.drive_id) if rop.drive_id else None
+    return owner is not None and not owner.missing and owner.path != rop.src
+
+
 def check_disk_identity(
     paths: ArchivePaths,
     repo: "FileRepo",
@@ -59,8 +66,10 @@ def check_disk_identity(
     - A Drive id: the id the planner read from the disk must equal it.
     - A ``local:`` id (the scanner's, for a file without a Drive id xattr, e.g. one
       Drive has not uploaded yet): the disk must still carry no Drive id (one that now
-      does is a different or replaced file) and, when the index has its size, the disk
-      size must equal it (a weak signal, but the only one there is).
+      does is a different or replaced file), or only the Drive id of another indexed
+      file (a copy carries its original's xattr; the scanner treats such a twin as
+      id-less too), and, when the index has its size, the disk size must equal it (a
+      weak signal, but the only one there is).
     - Always: the source is a regular file on disk (lstat: not a folder, not a link).
 
     Catches a stale index (the file was replaced since the last scan). Pass it as
@@ -70,7 +79,7 @@ def check_disk_identity(
         raise InvalidRequest("The files have changed since this was planned. Scan and try again.")
     for drive_id, rop in zip(ids, relocations, strict=True):
         local = drive_id.startswith(LOCAL_ID_PREFIX)
-        if local and rop.drive_id is not None:
+        if local and rop.drive_id is not None and not _twin_of_another(repo, rop):
             raise InvalidRequest(
                 f"{rop.src} now has Drive id {rop.drive_id!r}, so it is not the file indexed"
                 " there (no Drive id); scan and try again"

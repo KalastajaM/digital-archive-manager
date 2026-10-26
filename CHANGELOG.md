@@ -459,6 +459,12 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A copy of a Google Drive file can be moved again.** Copying a file also copies its
+  Drive id, and dam refused to move such a copy ("now has Drive id …, so it is not the
+  file indexed there; scan and try again"), which a scan never cleared. This blocked
+  Move, filing and the duplicate actions for copies. Such a copy can now be moved, and a
+  later scan keeps the Drive id, with its tags and collections, on the original even when
+  the copy moves to a place that sorts first, such as To Delete.
 - In the sidebar's Tags section, only the tag Browse is filtering by is highlighted.
   Before, every tag looked selected while Browse was open.
 - While you edit a rule, the test result still on screen was the one for the rule before
