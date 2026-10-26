@@ -799,6 +799,12 @@ class FileRepo:
                     text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": drive_id}
                 )
 
+    def drop_rows(self, drive_ids: list[str]) -> None:
+        """Remove the index rows ``drive_ids`` with their text, fts, tags and codes reads
+        (database only; nothing on disk is touched)."""
+        with self._conn(write=True) as conn:
+            self._delete_rows(conn, list(drive_ids))
+
     def purge_parked(self) -> None:
         """Delete rows still parked (with their text, fts and tags). DB rows only."""
         with self._conn(write=True) as conn:

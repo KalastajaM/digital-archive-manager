@@ -708,6 +708,9 @@ class ResolvedOpOut(BaseModel):
     dst: str
     drive_id: str | None
     note: str | None
+    # copy_across: the file's size, and whether it is in the cloud only (downloaded first)
+    size: int | None = None
+    cloud_only: bool = False
 
 
 class BatchResultOut(BaseModel):
@@ -717,6 +720,10 @@ class BatchResultOut(BaseModel):
     failed: ResolvedOpOut | None
     error: str | None
     index_error: str | None
+    stopped: bool = False  # a background move ended early on Stop
+    # a move across disks started in the background: poll /api/browse/move/jobs/{job_id};
+    # this answer is empty and the job's result is the batch
+    job_id: str | None = None
 
 
 class DraftWordOut(BaseModel):
@@ -2395,6 +2402,24 @@ class LabelClashesOut(BaseModel):
 
     items: list[str]
     total: int
+
+
+class CopyJobOut(BaseModel):
+    """A move across disks running in the background (or finished): files and bytes
+    copied so far, the file being copied, and once it is over the batch (with its
+    ``batch_id`` for Undo; ``stopped`` and ``error`` when it ended early)."""
+
+    job_id: str
+    state: Literal["running", "done", "stopped", "error"]
+    version: int
+    done: int
+    total: int
+    bytes_done: int
+    bytes_total: int
+    current: str | None
+    elapsed_s: float
+    error: str | None
+    result: BatchResultOut | None = None
 
 
 class MaintenanceJobOut(BaseModel):

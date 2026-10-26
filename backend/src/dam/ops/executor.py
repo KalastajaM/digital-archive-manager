@@ -255,6 +255,8 @@ class Executor:
         if rop.kind in _RELOCATE:
             try:
                 self.repo.update_path(rop.src, rop.dst)
+                if rop.restore_row is not None:
+                    self._restore_row(rop)
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
@@ -276,6 +278,23 @@ class Executor:
         if new_id != rec.drive_id:
             self.repo.rekey(rec.drive_id, new_id)
         self.repo.update_path(rop.src, rop.dst)
+
+    def _restore_row(self, rop: ResolvedOp) -> None:
+        """Undo of a copy across disks: the copy went to To Delete (``rop.dst``), and the
+        index row that followed it describes the original again, at its path and with its
+        id. A row the scanner gave the original meanwhile (nothing can be attached to it:
+        a file in To Delete is read-only) is dropped first, so the owner's row survives."""
+        original, original_id = rop.restore_row
+        rec = self.repo.by_path(rop.dst)
+        if rec is None:
+            return
+        others = [r.drive_id for r in (self.repo.by_path(original),) if r is not None]
+        if original_id is not None and self.repo.get(original_id) is not None:
+            others.append(original_id)
+        self.repo.drop_rows([d for d in dict.fromkeys(others) if d != rec.drive_id])
+        self.repo.update_path(rop.dst, original)
+        if original_id is not None and original_id != rec.drive_id:
+            self.repo.rekey(rec.drive_id, original_id)
 
     def _record_made(self, batch_id: str, rop: ResolvedOp) -> None:
         """Remember which folder a New folder / layout batch made, so that undo removes

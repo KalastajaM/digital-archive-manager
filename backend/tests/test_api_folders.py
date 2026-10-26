@@ -438,6 +438,6 @@ def test_host_reopen_refuses_while_a_job_runs(served, events, monkeypatch):
     host, _ = served
     first = host.current.app
     monkeypatch.setattr(first.replay_jobs, "running", lambda: True)
-    with pytest.raises(Conflict, match="rule replay is running"):
+    with pytest.raises(Conflict, match="rule replay or move across disks is running"):
         host.reopen()
     assert host.current.app is first and events == [("start", id(first))]

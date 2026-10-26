@@ -562,24 +562,21 @@ def test_move_refused_while_folder_offline(extra_folder, app, fake_archive):
     assert journal(app) == []
 
 
-def test_cross_disk_move_refused_in_dry_run(extra_folder, app, fake_archive, monkeypatch):
+def test_cross_disk_move_previews_a_copy(extra_folder, app, fake_archive, monkeypatch):
     from dam.ops import primitives
-    from dam.ops.model import OpFailed
 
     fake_archive.add(f"{BANKS}/m.pdf", b"m", drive_id="id-m")
     extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
     app.scan()
     monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
     cases = (
-        ("id-m", "Old years/2009", "The main folder and 'Old years'"),
-        ("x1", TAXES, "'Old years' and the main folder"),
+        ("id-m", "Old years/2009", "Old years/2009/m.pdf", f"{QUAR}/{BANKS}/m.pdf"),
+        ("x1", TAXES, f"{TAXES}/a.pdf", f"Old years/{QUAR}/2009/a.pdf"),
     )
-    for drive_id, folder, both in cases:
-        with pytest.raises(OpFailed) as e:
-            app.browse.move([drive_id], folder, origin="ui", dry_run=True)
-        assert str(e.value) == (
-            f"{both} are on different disks, so this cannot be moved between them here."
-        )
+    for drive_id, folder, copy, aside in cases:
+        result = app.browse.move([drive_id], folder, origin="ui", dry_run=True)
+        work = [(str(r.kind), r.dst) for r in result.done if r.kind is not OpKind.MKDIR]
+        assert work == [("copy_across", copy), ("quarantine", aside)]
     # within one folder the disks are never compared
     result = app.browse.move(["x1"], "Old years/2010", origin="ui", dry_run=True)
     assert [r.dst for r in result.done][-1] == "Old years/2010/a.pdf"

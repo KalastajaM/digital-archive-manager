@@ -80,6 +80,9 @@ class Job:
     started: float = field(default_factory=time.monotonic)
     finished: float | None = None
     seen: float = field(default_factory=time.monotonic)
+    # ends by itself when nobody has asked about it for ``ABANDONED_S`` (a check); a
+    # move across disks does not (closing the window must not stop it half way)
+    abandon: bool = True
     _stop: threading.Event = field(default_factory=threading.Event)
     _thread: threading.Thread | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -109,7 +112,7 @@ class Job:
 
     def should_stop(self) -> bool:
         return self._stop.is_set() or (
-            self.state == RUNNING and time.monotonic() - self.seen > ABANDONED_S
+            self.abandon and self.state == RUNNING and time.monotonic() - self.seen > ABANDONED_S
         )
 
     def set_progress(
@@ -155,9 +158,10 @@ class MaintenanceJobs:
         self._latest: dict[str, str] = {}
         self._lock = threading.Lock()
 
-    def start(self, kind: str, work: Callable[[JobContext], Any]) -> Job:
-        """Start a job of ``kind``; an earlier live job of the same kind is ended."""
-        job = Job(secrets.token_hex(8), kind, work)
+    def start(self, kind: str, work: Callable[[JobContext], Any], abandon: bool = True) -> Job:
+        """Start a job of ``kind``; an earlier live job of the same kind is ended.
+        ``abandon``: see ``Job.abandon``."""
+        job = Job(secrets.token_hex(8), kind, work, abandon=abandon)
         doomed: list[Job] = []
         with self._lock:
             earlier = self._jobs.get(self._latest.get(kind, ""))

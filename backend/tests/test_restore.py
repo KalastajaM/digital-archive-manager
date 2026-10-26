@@ -255,9 +255,8 @@ def test_restore_original_in_extra_folder(extra_folder, app):
     assert app.repo.get("x1").path == "Old years/2009/a.pdf"
 
 
-def test_restore_to_inbox_from_extra_folder_needs_one_disk(extra_folder, app, monkeypatch):
+def test_restore_to_inbox_from_extra_folder_copies_across(extra_folder, app, monkeypatch):
     from dam.ops import primitives
-    from dam.ops.model import OpFailed
 
     extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
     app.scan()
@@ -265,10 +264,6 @@ def test_restore_to_inbox_from_extra_folder_needs_one_disk(extra_folder, app, mo
     preview = app.browse.restore(["x1"], to="inbox", origin="ui", dry_run=True)
     assert [r.dst for r in preview.done] == [f"{INBOX}/a.pdf"]
     monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
-    with pytest.raises(OpFailed) as e:
-        app.browse.restore(["x1"], to="inbox", origin="ui", dry_run=True)
-    assert str(e.value) == (
-        "'Old years' and the main folder are on different disks, so this cannot be moved"
-        " between them here."
-    )
+    preview = app.browse.restore(["x1"], to="inbox", origin="ui", dry_run=True)
+    assert [(str(r.kind), r.dst) for r in preview.done] == [("copy_across", f"{INBOX}/a.pdf")]
     assert (extra_folder.root / QUAR / "2009" / "a.pdf").exists()

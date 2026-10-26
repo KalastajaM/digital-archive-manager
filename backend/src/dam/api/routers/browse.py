@@ -8,6 +8,7 @@ from dam.api.deps import UI_ORIGIN, AppDep
 from dam.api.marks import with_marks
 from dam.api.schemas import (
     BatchResultOut,
+    CopyJobOut,
     DirEntryOut,
     FlatFilesOut,
     MoveBody,
@@ -18,6 +19,8 @@ from dam.api.schemas import (
     RestoreBody,
     SearchHitOut,
 )
+from dam.maintenance.jobs import Job
+from dam.services.errors import NotFound
 
 router = APIRouter(prefix="/api", tags=["browse"])
 
@@ -88,6 +91,50 @@ def move_preview(app: AppDep, body: MoveBody) -> list:
 @router.post("/browse/move", response_model=MoveResultOut)
 def move(app: AppDep, body: MoveBody):
     return app.browse.move(body.drive_ids, body.folder, origin=UI_ORIGIN, mode=body.mode)
+
+
+def _copy_job_out(job: Job) -> dict:
+    view = job.view()
+    return {
+        "job_id": view.job_id,
+        "state": view.state,
+        "version": view.version,
+        "done": view.done,
+        "total": view.total,
+        "bytes_done": view.bytes_done,
+        "bytes_total": view.bytes_total,
+        "current": view.current,
+        "elapsed_s": view.elapsed_s,
+        "error": view.error,
+        "result": None if view.result is None else vars(view.result),
+    }
+
+
+@router.get("/browse/move/jobs/latest", response_model=CopyJobOut | None)
+def latest_copy_job(app: AppDep) -> dict | None:
+    """The latest move across disks of this run (a finished one too), else null."""
+    job = app.copy_jobs.latest()
+    return None if job is None else _copy_job_out(job)
+
+
+@router.get("/browse/move/jobs/{job_id}", response_model=CopyJobOut)
+def get_copy_job(app: AppDep, job_id: str) -> dict:
+    job = app.copy_jobs.get(job_id)
+    if job is None:
+        raise NotFound(job_id)
+    return _copy_job_out(job)
+
+
+@router.post("/browse/move/jobs/{job_id}/stop", response_model=CopyJobOut)
+def stop_copy_job(app: AppDep, job_id: str) -> dict:
+    """End the move after the file being copied (it is finished, and its original goes
+    to To Delete); the files not reached stay where they are. Idempotent."""
+    job = app.copy_jobs.get(job_id)
+    if job is None:
+        raise NotFound(job_id)
+    job.stop()
+    job.join(2.0)
+    return _copy_job_out(job)
 
 
 @router.post("/browse/rename/preview", response_model=list[ResolvedOpOut])

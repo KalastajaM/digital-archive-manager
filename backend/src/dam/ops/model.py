@@ -143,6 +143,9 @@ class ResolvedOp:
     # COPY_ACROSS: the file's size, and whether it is in the cloud only (downloaded first)
     size: int | None = None
     cloud_only: bool = False
+    # QUARANTINE of a copy, by the undo of a COPY_ACROSS: (the original's path, its
+    # drive id); the index row goes back to describing the original
+    restore_row: tuple[str, str | None] | None = None
 
 
 @dataclass
@@ -160,3 +163,6 @@ class BatchResult:
     kept: list[str] = field(default_factory=list)
     # ended early on request (``should_stop``): what is in ``done`` happened, the rest not
     stopped: bool = False
+    # a move across disks started in the background (``dam.ops.jobs``): this result is
+    # empty, and the job's result is the batch
+    job_id: str | None = None

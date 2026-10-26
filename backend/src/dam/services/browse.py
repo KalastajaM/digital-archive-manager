@@ -11,6 +11,7 @@ from dam.core.paths import nfc
 from dam.index.repo import FLAT_SORTS, FileRecord, FileRepo
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
+from dam.ops.jobs import CopyJobs
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
 from dam.ops.primitives import can_make_links
 from dam.services import check_destination_area, check_disk_identity, check_origin
@@ -41,6 +42,14 @@ class MoveResult(BatchResult):
 
     unchanged: list[str] = field(default_factory=list)
     folder: str = ""  # the destination, as a canonical archive-relative path
+
+
+class _Background(Exception):  # noqa: N818 - a hand-over, not an error
+    """The plan copies files across disks: it runs as a background job instead."""
+
+    def __init__(self, ops: list[ResolvedOp]) -> None:
+        super().__init__("copies across disks")
+        self.ops = ops
 
 
 @dataclass
@@ -99,6 +108,9 @@ class BrowseService:
         # (CollectionService.important_lock)
         self.important = important
         self.important_lock = important_lock if important_lock is not None else nullcontext()
+        # runs moves across disks in the background (``dam.ops.jobs``); set by the App.
+        # Without it such a move runs in the request.
+        self.copy_jobs: CopyJobs | None = None
 
     def resolve(self, arg: str) -> FileRecord:
         """The live record for ``arg``: a drive id, else an absolute or archive-relative path.
@@ -303,7 +315,59 @@ class BrowseService:
             label += " to the inbox"
         elif target is not None:
             label += f" to {target}"
-        return self.executor.apply(Plan(ops, origin=origin, label=label), dry_run=dry_run)
+        plan = Plan(ops, origin=origin, label=label, copy_across=True)
+        if dry_run:
+            return self.executor.apply(plan, dry_run=True)
+        return self._apply_or_background(plan, None, lambda r: r)
+
+    def _apply_or_background(
+        self,
+        plan: Plan,
+        check: Callable[[list[ResolvedOp]], None] | None,
+        result_of: Callable[[BatchResult], BatchResult],
+    ) -> BatchResult:
+        """Apply ``plan``, or, when it copies files across disks, run it as a background
+        job (``copy_jobs``) and answer with its ``job_id`` at once. Refusals (and
+        ``check``) answer the request either way. ``result_of`` turns a batch into the
+        answer (and the job's result). The job plans again and runs with the same
+        ``check``, so what runs is what was checked; its progress counts the files copied
+        and their bytes."""
+
+        def check_here(ops: list[ResolvedOp]) -> None:
+            if check is not None:
+                check(ops)
+            if self.copy_jobs is not None and any(o.kind is OpKind.COPY_ACROSS for o in ops):
+                raise _Background(ops)
+
+        try:
+            return result_of(self.executor.apply(plan, check=check_here))
+        except _Background as hand_over:
+            resolved = hand_over.ops
+        copies = [r for r in resolved if r.kind is OpKind.COPY_ACROSS]
+        total, size = len(copies), sum(r.size or 0 for r in copies)
+
+        def work(ctx) -> BatchResult:
+            moved = {"files": 0, "bytes": 0}
+            ctx.progress(0, total, 0, size, PurePosixPath(copies[0].src).name)
+
+            def progress(rop: ResolvedOp, index: int, ops: int) -> None:
+                if rop.kind is not OpKind.COPY_ACROSS:
+                    return
+                moved["files"] += 1
+                moved["bytes"] += rop.size or 0
+                n = moved["files"]
+                upcoming = PurePosixPath(copies[n].src).name if n < total else None
+                ctx.progress(n, total, moved["bytes"], size, upcoming)
+
+            result = self.executor.apply(
+                plan, check=check, should_stop=ctx.stopped, progress=progress
+            )
+            if result.stopped:
+                result.error = f"Stopped: {moved['files']} of {total} files moved."
+            return result_of(result)
+
+        job = self.copy_jobs.start(work)
+        return result_of(BatchResult("", False, job_id=job.job_id))
 
     def _original(self, path: str) -> str:
         """``path`` (inside a quarantine folder) without that folder's quarantine prefix,
@@ -389,7 +453,9 @@ class BrowseService:
         if mode not in DROP_MODES:
             raise InvalidRequest(f"unknown way to put files in a folder: {mode!r}")
         if mode == "move":
-            return self._move_ops(drive_ids, folder, origin, resolve_rows=True)
+            move = self._move_ops(drive_ids, folder, origin, resolve_rows=True)
+            move.plan.copy_across = True  # a move by hand may cross disks
+            return move
         return self._link_copy_ops(drive_ids, folder, origin, mode)
 
     def _check_drop(self, ids: list[str], resolved: list[ResolvedOp], mode: str) -> None:
@@ -429,11 +495,16 @@ class BrowseService:
         Ongoing sync repoint their links, nothing is synced here.
         """
         move = self._drop(drive_ids, folder, origin, mode)
-        result = self.executor.apply(
-            move.plan,
-            dry_run=dry_run,
-            check=lambda ops: self._check_drop(move.ids, ops, mode),
-        )
+        def check(ops: list[ResolvedOp]) -> None:
+            self._check_drop(move.ids, ops, mode)
+
+        if mode == "move" and not dry_run:
+            return self._apply_or_background(
+                move.plan,
+                check,
+                lambda r: MoveResult(**vars(r), unchanged=move.unchanged, folder=move.folder),
+            )
+        result = self.executor.apply(move.plan, dry_run=dry_run, check=check)
         if mode != "move" and result.done and not dry_run and self.rescan is not None:
             try:
                 self.rescan(move.folder)
