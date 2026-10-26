@@ -12,7 +12,6 @@ The archive must be closed while this runs (``Host.close_and_reopen``), or the s
 would write paths under the old label back.
 """
 
-import json
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,7 +25,7 @@ from dam.config import AppPaths, load_settings
 from dam.core.yamledit import YamlEditError, replace_values
 from dam.db.tables import files, made_folders, maintenance_ignored, operations
 from dam.maintenance.ignored import GROUPS
-from dam.ops.model import ABS_TARGET, OpFailed, OpKind
+from dam.ops.model import ABS_TARGET, OpFailed, OpKind, followed_json, read_followed
 from dam.rules.model import _load_file as load_rule_file
 from dam.rules.model import rule_files
 from dam.snapshots import BEFORE_RELABEL, create_snapshot
@@ -116,18 +115,20 @@ def _rule_change(old: str, new: str) -> Callable:
 
 
 def _swap_followed(followed: str | None, old: str, new: str) -> str | None:
-    """A journaled ``followed`` list (JSON ``[[old_id, new_id, old_path, new_path], ...]``)
-    with both paths of each entry rewritten, or None when no path starts with ``old``."""
-    if not followed:
+    """A journaled ``followed`` envelope (``dam.ops.model.read_followed``) with both
+    paths of each row rewritten, ``applied`` kept, or None when no path starts with
+    ``old``."""
+    journaled = read_followed(followed)
+    if journaled is None:
         return None
-    entries = json.loads(followed)
+    rows, applied = journaled
     changed = False
-    for entry in entries:
+    for entry in rows:
         for i in (2, 3):
             moved = swap(entry[i], old, new)
             if moved is not None:
                 entry[i], changed = moved, True
-    return json.dumps(entries) if changed else None
+    return followed_json(rows, applied) if changed else None
 
 
 def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:

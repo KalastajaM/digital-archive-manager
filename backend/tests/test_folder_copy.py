@@ -227,7 +227,9 @@ def test_copied_to_journaled(across):
     batch = _move(across).result
     (final,) = [e for e in _journal(across, batch.batch_id) if e.kind == "quarantine"]
     assert final.copied_to == COPY and final.state == "done"
-    followed = json.loads(final.followed)
+    envelope = json.loads(final.followed)
+    assert envelope["applied"] is True
+    followed = envelope["rows"]
     folder = across.repo.by_path(COPY)
     assert ["id-dir", folder.drive_id, SRC, COPY] in followed
     assert {f[3] for f in followed} == {COPY, f"{COPY}/sub", f"{COPY}/empty"}
@@ -286,7 +288,9 @@ def test_followed_journaled_before_rows_move(across, fake_archive, monkeypatch):
     assert batch.index_error is not None and batch.failed is None
     final = _final(across, batch.batch_id)
     assert final.state == "done"  # the folder is in To Delete
-    followed = json.loads(final.followed)
+    envelope = json.loads(final.followed)
+    assert envelope["applied"] is False  # the index step stopped part way
+    followed = envelope["rows"]
     assert [f[2] for f in followed] == [SRC, f"{SRC}/empty", f"{SRC}/sub"]
     assert [f[3] for f in followed] == [COPY, f"{COPY}/empty", f"{COPY}/sub"]
     assert followed[0][0] == "id-dir"
@@ -314,7 +318,7 @@ def test_apply_followed_after_a_scan_drops_the_scanner_row(across, monkeypatch):
 
     monkeypatch.setattr(repo, "update_path", fail_every_folder)
     batch = _move(across).result
-    followed = json.loads(_final(across, batch.batch_id).followed)
+    followed = json.loads(_final(across, batch.batch_id).followed)["rows"]
     monkeypatch.setattr(repo, "update_path", real)
     across.scan()  # the made folders get rows of their own meanwhile
     assert repo.by_path(COPY) is not None

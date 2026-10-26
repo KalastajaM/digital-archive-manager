@@ -1,6 +1,5 @@
 """Journal-then-act executor: the only code that changes the archive."""
 
-import json
 import logging
 import os
 import stat
@@ -34,6 +33,8 @@ from dam.ops.model import (
     OpKind,
     Plan,
     ResolvedOp,
+    followed_json,
+    read_followed,
 )
 from dam.ops.planner import Planner, list_tree, tree_key, tree_of
 from dam.ops.undo import JournalEntry, RecoveryResult
@@ -339,11 +340,14 @@ class Executor:
                 return True
         if rop.kind in _RELOCATE:
             try:
+                followed = None
                 if rop.copied_to is not None:  # journaled first, so it can be finished
                     followed = self._follow_folder_rows(rop.src, rop.copied_to)
                     self._journal_followed(op_id, followed)
                     self._apply_followed(followed)
                 self.repo.update_path(rop.src, rop.dst)
+                if followed is not None:  # recovery need not follow these rows again
+                    self._journal_followed(op_id, followed, applied=True)
                 if rop.follow_back:  # after the rows the scanner gave To Delete came back
                     self._apply_followed(_backwards(rop.follow_back))
                 if rop.restore_row is not None:
@@ -437,22 +441,30 @@ class Executor:
     def _recover_followed(self, e: JournalEntry) -> None:
         """Recovery of a done final QUARANTINE of a folder moved across disks (``e``):
         without a journaled ``followed`` its index step never started, so it runs now
-        (plan, journal, apply, then the rows left under the source); with one, the plan
-        is carried out again (each entry is idempotent)."""
-        if e.followed is None:
+        (plan, journal, apply, then the rows left under the source); with one not yet
+        ``applied`` the step stopped part way, so it runs again (each entry is
+        idempotent). Then it is marked applied. An applied step is never run again: the
+        owner may have put the original back since, and its row must stay with it."""
+        journaled = read_followed(e.followed)
+        if journaled is not None and journaled[1]:
+            return
+        if journaled is None:
             followed = self._follow_folder_rows(e.src, e.copied_to)
             self._journal_followed(e.id, followed)
-            self._apply_followed(followed)
-            self.repo.update_path(e.src, e.dst)
         else:
-            self._apply_followed(json.loads(e.followed))
+            followed = journaled[0]
+        self._apply_followed(followed)
+        self.repo.update_path(e.src, e.dst)
+        self._journal_followed(e.id, followed, applied=True)
 
-    def _journal_followed(self, op_id: int, followed: list[list[str]]) -> None:
+    def _journal_followed(
+        self, op_id: int, followed: list[list[str]], applied: bool = False
+    ) -> None:
         with write_tx(self.engine) as conn:
             conn.execute(
                 update(operations)
                 .where(operations.c.id == op_id)
-                .values(followed=json.dumps(followed))
+                .values(followed=followed_json(followed, applied))
             )
 
     def _check_tree(self, rop: ResolvedOp, names: dict[str, str]) -> None:

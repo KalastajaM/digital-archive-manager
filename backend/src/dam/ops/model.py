@@ -1,9 +1,28 @@
 """Operation data model."""
 
+import json
 from dataclasses import dataclass, field
 from enum import StrEnum, auto
 
 from dam.ops.identity import Identity
+
+
+def read_followed(value: str | None) -> tuple[list[list[str]], bool] | None:
+    """A journaled ``operations.followed`` as (rows, applied), or None when there is
+    none. It is the envelope ``{"rows": [[old_id, new_id, old_path, new_path], ...],
+    "applied": bool}``: ``applied`` turns true once the rows moved and the index step of
+    the folder's QUARANTINE finished. A bare list (before the envelope) is not applied."""
+    if not value:
+        return None
+    data = json.loads(value)
+    if isinstance(data, list):
+        return data, False
+    return data["rows"], bool(data["applied"])
+
+
+def followed_json(rows: list[list[str]], applied: bool) -> str:
+    """The ``operations.followed`` envelope of ``rows`` (``read_followed``)."""
+    return json.dumps({"rows": rows, "applied": applied})
 
 
 class OpKind(StrEnum):

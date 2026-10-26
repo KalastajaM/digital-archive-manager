@@ -8,6 +8,7 @@ import os
 import pytest
 import xattr
 from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from dam import relabel
 from dam.app import App
@@ -222,7 +223,9 @@ def test_recover_final_quarantine_rows_follow(across, ids, fake_archive, monkeyp
     (entry,) = [e for e in result.entries if e.kind == "quarantine"]
     assert entry.state == "done"
     (final,) = [e for e in _journal(across, batch_id) if e.kind == "quarantine"]
-    assert {f[3] for f in json.loads(final.followed)} == {COPY, f"{COPY}/sub", f"{COPY}/empty"}
+    envelope = json.loads(final.followed)
+    assert envelope["applied"] is True
+    assert {f[3] for f in envelope["rows"]} == {COPY, f"{COPY}/sub", f"{COPY}/empty"}
     folder = across.repo.by_path(COPY)
     assert folder is not None and folder.is_dir
     assert [c.name for c in across.collections.for_file(folder.drive_id)] == ["Years"]
@@ -274,7 +277,9 @@ def test_relabel_rewrites_copied_to(app_paths, extra_folder, fake_archive, monke
     finally:
         engine.dispose()
     assert copied_to == "Archive 2000s/2009"
-    entries = json.loads(followed)
+    envelope = json.loads(followed)
+    assert envelope["applied"] is True
+    entries = envelope["rows"]
     assert entries and all(e[3].startswith("Archive 2000s/2009") for e in entries)
     assert all(e[2].startswith(SRC) for e in entries)
     app = App.create(app_paths.data_dir)
@@ -294,7 +299,6 @@ def test_relabel_rewrites_copied_to(app_paths, extra_folder, fake_archive, monke
 def test_recover_done_quarantine_whose_rows_never_followed(across, ids, monkeypatch):
     """The folder went to To Delete but its index step failed before ``followed`` was
     journaled: recovery plans, journals and applies it."""
-    from sqlalchemy.exc import SQLAlchemyError
 
     def broken(self, src, dst_root):
         raise SQLAlchemyError("disk I/O error")
@@ -309,7 +313,7 @@ def test_recover_done_quarantine_whose_rows_never_followed(across, ids, monkeypa
     result = across.executor.recover()
     assert result.index_errors == [] and result.entries == []
     (final,) = [e for e in _journal(across, batch.batch_id) if e.kind == "quarantine"]
-    assert len(json.loads(final.followed)) == 3
+    assert len(json.loads(final.followed)["rows"]) == 3
     folder = across.repo.by_path(COPY)
     assert [c.name for c in across.collections.for_file(folder.drive_id)] == ["Years"]
     assert across.repo.by_path(SRC) is None
@@ -347,3 +351,77 @@ def test_undo_of_stopped_batch_refused_while_a_later_move_relies_on_it(
     again = across.executor.undo(first.batch_id)
     assert again.failed is None, again.error
     _assert_back(across, fake_archive, extra_folder, ids)
+
+
+def _envelope(app, batch_id: str) -> dict:
+    (final,) = [e for e in _journal(app, batch_id) if e.kind == "quarantine"]
+    return json.loads(final.followed)
+
+
+def test_recover_leaves_a_restored_folder_row_alone(across, ids, fake_archive, extra_folder):
+    """A finished folder move is not followed again: the original, put back by hand and
+    given a collection, keeps its row through a later recover."""
+    batch = _move(across).result
+    assert batch.failed is None, batch.error
+    assert _envelope(across, batch.batch_id)["applied"] is True
+    col = across.collections.list()[0]
+    across.collections.remove_members(col.id, [across.repo.by_path(COPY).drive_id])
+    os.rename(fake_archive.root / QUAR / SRC, fake_archive.root / SRC)
+    across.scan()
+    assert across.repo.by_path(SRC).drive_id == "id-dir"
+    across.collections.add_members(col.id, ["id-dir"])
+    result = across.executor.recover()
+    assert result.index_errors == []
+    assert across.repo.by_path(SRC).drive_id == "id-dir"
+    assert [c.name for c in across.collections.for_file("id-dir")] == ["Years"]
+    assert across.repo.by_path(COPY) is not None
+
+
+def test_recover_finishes_a_follow_step_that_stopped_part_way(across, ids, monkeypatch):
+    repo = across.repo
+    real = repo.update_path
+    calls = {"one_row": 0}
+
+    def fail_on_second_folder(old, new, *, recursive=True):
+        if not recursive:
+            calls["one_row"] += 1
+            if calls["one_row"] == 2:
+                raise SQLAlchemyError("disk I/O error")
+        return real(old, new, recursive=recursive)
+
+    monkeypatch.setattr(repo, "update_path", fail_on_second_folder)
+    batch = _move(across).result
+    assert batch.index_error is not None and batch.failed is None
+    envelope = _envelope(across, batch.batch_id)
+    assert envelope["applied"] is False
+    monkeypatch.setattr(repo, "update_path", real)
+    result = across.executor.recover()
+    assert result.index_errors == []
+    envelope = _envelope(across, batch.batch_id)
+    assert envelope["applied"] is True
+    for _old_id, new_id, old_path, new_path in envelope["rows"]:
+        row = repo.by_path(new_path)
+        assert row is not None and row.is_dir and row.drive_id == new_id, new_path
+        assert repo.by_path(old_path) is None
+    for path in (f"{COPY}/a.pdf", f"{COPY}/sub/b.pdf"):
+        assert repo.by_path(path) is not None, path
+    assert not [p for p in ids if repo.by_path(p) is not None]
+    folder = repo.by_path(COPY)
+    assert [c.name for c in across.collections.for_file(folder.drive_id)] == ["Years"]
+
+
+def test_bare_followed_list_is_read_as_not_applied(across, ids):
+    """``followed`` as a bare list (before the envelope) is followed once more, then
+    marked applied."""
+    batch = _move(across).result
+    envelope = _envelope(across, batch.batch_id)
+    with across.engine.begin() as conn:
+        conn.execute(
+            operations.update()
+            .where(operations.c.batch_id == batch.batch_id, operations.c.kind == "quarantine")
+            .values(followed=json.dumps(envelope["rows"]))
+        )
+    across.executor.recover()
+    assert _envelope(across, batch.batch_id) == envelope
+    undone = across.executor.undo(batch.batch_id)
+    assert undone.failed is None, undone.error

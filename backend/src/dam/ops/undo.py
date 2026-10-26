@@ -7,7 +7,6 @@ and the journaled executor loop. Recovery only reads the disk and settles journa
 from __future__ import annotations
 
 import dataclasses
-import json
 import os
 import stat
 import time
@@ -36,6 +35,7 @@ from dam.ops.model import (
     OpKind,
     Plan,
     ResolvedOp,
+    read_followed,
 )
 from dam.ops.planner import Planner
 from dam.ops.primitives import DS_STORE, TEMP_COPY_PREFIX, finder_cache_problem
@@ -80,7 +80,8 @@ class JournalEntry:
     method: str | None = None  # rule pictures: "rename" or "copy"
     content_hash: str | None = None  # rule pictures: sha256 of the file
     # a folder moved across disks, on its final QUARANTINE: where the copy is, and the
-    # folder rows that followed it (JSON: [[old_id, new_id, old_path, new_path], ...])
+    # folder rows that followed it (JSON ``{"rows": [[old_id, new_id, old_path, new_path],
+    # ...], "applied": bool}``, ``model.read_followed``)
     copied_to: str | None = None
     followed: str | None = None
 
@@ -257,8 +258,9 @@ def _mark_restored_rows(resolved: list[ResolvedOp], revert: list[JournalEntry]) 
                 rop.restore_row = (row.src, row.drive_id)
         elif rop.kind is OpKind.MOVE:
             row = folders.get(fold_parts(rop.src))
-            if row is not None and row.followed:
-                rop.follow_back = [tuple(f) for f in json.loads(row.followed)]
+            journaled = read_followed(row.followed) if row is not None else None
+            if journaled is not None:
+                rop.follow_back = [tuple(f) for f in journaled[0]]
 
 
 def _fold_key(rel: str) -> tuple[str, ...]:
@@ -576,9 +578,10 @@ def recover(ex: Executor) -> RecoveryResult:
     evidently happened, ``failed`` with ``"interrupted before execution"`` when it
     evidently did not, otherwise ``failed`` with ``"needs manual check"``. An index
     update that fails is collected in ``index_errors``; the remaining rows still run.
-    A done final QUARANTINE of a folder moved across disks (``copied_to``) also has its
-    folder rows follow its copy: planned and journaled first when ``followed`` is
-    missing, else the journaled plan again (idempotent; index only).
+    A done final QUARANTINE of a folder moved across disks (``copied_to``) whose index
+    step did not finish (``followed`` missing, or not ``applied``) also has its folder
+    rows follow its copy: planned and journaled first when ``followed`` is missing, else
+    the journaled plan again (idempotent; index only). A finished one is left alone.
     """
     result = RecoveryResult()
     settled: set[int] = set()
