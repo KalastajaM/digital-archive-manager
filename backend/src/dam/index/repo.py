@@ -31,6 +31,7 @@ from dam.db.tables import (
     items,
     member_link_names,
     notes,
+    rule_outcomes,
     tags,
 )
 from dam.extract.base import ExtractedText
@@ -809,13 +810,37 @@ class FileRepo:
             self._delete_rows(conn, ids)
 
     def rekey(self, old_id: str, new_id: str) -> None:
-        """Replace a synthetic id by the real one, carrying text, fts, tags and the
-        barcode, QR sticker and page-1 layout reads along."""
+        """Give the row ``old_id`` the id ``new_id`` (a synthetic id replaced by the real
+        one, or a file copied across disks), carrying along everything that names the file
+        by its id: text, fts, tags, the barcode, QR sticker and page-1 layout reads, notes
+        and checklists, collection and tray item places, summaries, fields, sender and
+        person, locks and rule outcomes."""
         with self._conn(write=True) as conn:
             conn.exec_driver_sql("PRAGMA defer_foreign_keys = ON")
-            for table in (file_text, file_tags, file_barcodes, file_qr_codes, file_layouts, files):
+            for table in (
+                file_text,
+                file_tags,
+                file_barcodes,
+                file_qr_codes,
+                file_layouts,
+                collection_members,
+                member_link_names,
+                item_files,
+                file_locks,
+                file_assignments,
+                file_summaries,
+                file_fields,
+                rule_outcomes,
+                files,
+            ):
                 conn.execute(
                     update(table).where(table.c.drive_id == old_id).values(drive_id=new_id)
+                )
+            for table in (notes, checklist_items):
+                conn.execute(
+                    update(table)
+                    .where(table.c.target_kind == "file", table.c.target_id == old_id)
+                    .values(target_id=new_id)
                 )
             conn.execute(
                 text("UPDATE file_fts SET drive_id = :new WHERE drive_id = :old"),
