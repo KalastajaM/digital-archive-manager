@@ -16,7 +16,7 @@ from sqlalchemy import Engine, insert, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from dam.core.fs import readlink
-from dam.core.paths import ArchivePaths, OutsideArchiveError
+from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
 from dam.db.engine import write_tx
 from dam.db.tables import made_folders, operations
 from dam.index.driveid import read_drive_id
@@ -285,8 +285,9 @@ class Executor:
             return True
         try:
             if folder is not None and rop is folder.final:
-                self._check_tree(rop, folder.names)
-            self._precheck(rop)
+                self._precheck(rop, folder.names)
+            else:
+                self._precheck(rop)
             self._act(rop, copied)
         except _FAILURES as e:
             self._stop(result, op_id, rop, "failed", str(e))
@@ -330,8 +331,10 @@ class Executor:
                 return True
         if rop.kind in _RELOCATE:
             try:
-                if rop.copied_to is not None:
-                    self._journal_followed(op_id, self._follow_folder_rows(rop.src, rop.copied_to))
+                if rop.copied_to is not None:  # journaled first, so it can be finished
+                    followed = self._follow_folder_rows(rop.src, rop.copied_to)
+                    self._journal_followed(op_id, followed)
+                    self._apply_followed(followed)
                 self.repo.update_path(rop.src, rop.dst)
                 if rop.restore_row is not None:
                     self._restore_row(rop)
@@ -361,14 +364,17 @@ class Executor:
             self.repo.rekey(rec.drive_id, new_id)
         self.repo.update_path(rop.src, rop.dst)
 
-    def _follow_folder_rows(self, src: str, dst_root: str) -> list[tuple[str, str, str, str]]:
+    def _follow_folder_rows(self, src: str, dst_root: str) -> list[list[str]]:
         """A folder was copied across disks to ``dst_root`` and goes to To Delete next:
-        every indexed folder row at or under ``src`` moves to its mirrored folder, so its
-        collections and notes follow (the file rows followed their copies already). Each
-        is rekeyed as ``_repoint_copy`` does. A row the scanner made for a mirrored
-        folder meanwhile is dropped first, unless the owner gave it something: then both
-        stay and the source's row goes to To Delete with the folder. Returns what moved,
-        as (old id, new id, old path, new path)."""
+        the plan for every indexed folder row at or under ``src`` to follow to its
+        mirrored folder, so its collections and notes follow (the file rows followed their
+        copies already), as [old id, new id, old path, new path], parents first. The new
+        id follows the ``_repoint_copy`` rule (the mirrored folder's own Drive id, else a
+        fresh local id when the row had a Drive id, else the same). A row the scanner made
+        for a mirrored folder meanwhile that the owner gave something is not replaced:
+        that folder row is left out, so both stay and the source's row goes to To Delete
+        with the folder. Read only: it is journaled (``followed``) and then carried out
+        by ``_apply_followed``."""
         depth = len(PurePosixPath(src).parts)
         rows = [r for r in map(self.repo.get, self.repo.subtree_ids(src)) if r and r.is_dir]
         followed = []
@@ -379,23 +385,51 @@ class Executor:
                 if self.repo.has_attachments(there.drive_id):
                     log.warning("%s keeps its own index row; %s stays as well", new_path, rec.path)
                     continue
-                self.repo.forget_rows([there.drive_id])
             new_id = read_drive_id(self.paths.abs(new_path))
             if new_id is None:
                 local = rec.drive_id.startswith(LOCAL_ID_PREFIX)
                 new_id = rec.drive_id if local else f"{LOCAL_ID_PREFIX}{uuid4()}"
-            if new_id != rec.drive_id:
-                self.repo.rekey(rec.drive_id, new_id)
-            self.repo.update_path(rec.path, new_path, recursive=False)
-            followed.append((rec.drive_id, new_id, rec.path, new_path))
+            followed.append([rec.drive_id, new_id, rec.path, new_path])
         return followed
 
-    def _journal_followed(self, op_id: int, followed: list[tuple[str, str, str, str]]) -> None:
+    def _apply_followed(self, followed: list[list[str]]) -> None:
+        """Carry out a journaled ``followed`` plan (``_follow_folder_rows``). Each entry
+        is idempotent, so recovery can run the whole list again after a crash part way.
+        The row is found by id and path: the old id at the old path (not started), the
+        new id at the old path (rekeyed, not re-pathed), or the new id at the new path
+        (done, skipped). Anything else (the row is gone, or a scan moved it) is left for
+        the next scan, logged. A scanner row at the new path is dropped first, unless
+        the owner gave it something: then that entry is left, logged."""
+        for old_id, new_id, old_path, new_path in followed:
+            rec = next(
+                (
+                    r
+                    for r in (self.repo.get(old_id), self.repo.get(new_id))
+                    if r is not None and nfc(r.path) == nfc(old_path)
+                ),
+                None,
+            )
+            if rec is None:
+                done = self.repo.get(new_id)
+                if done is None or nfc(done.path) != nfc(new_path):
+                    log.warning("the index row of %s is not where it was; left alone", old_path)
+                continue
+            there = self.repo.by_path(new_path)
+            if there is not None and there.drive_id != rec.drive_id:
+                if self.repo.has_attachments(there.drive_id):
+                    log.warning("%s keeps its own index row; %s stays as well", new_path, rec.path)
+                    continue
+                self.repo.forget_rows([there.drive_id])
+            if rec.drive_id != new_id:
+                self.repo.rekey(rec.drive_id, new_id)
+            self.repo.update_path(rec.path, new_path, recursive=False)
+
+    def _journal_followed(self, op_id: int, followed: list[list[str]]) -> None:
         with write_tx(self.engine) as conn:
             conn.execute(
                 update(operations)
                 .where(operations.c.id == op_id)
-                .values(followed=json.dumps([list(f) for f in followed]))
+                .values(followed=json.dumps(followed))
             )
 
     def _check_tree(self, rop: ResolvedOp, names: dict[str, str]) -> None:
@@ -659,7 +693,10 @@ class Executor:
         if stat.S_ISLNK(folder.st_mode) or not stat.S_ISDIR(folder.st_mode):
             raise OpFailed("The rules' picture folder is not a real folder.")
 
-    def _precheck(self, rop: ResolvedOp) -> None:
+    def _precheck(self, rop: ResolvedOp, names: dict[str, str] | None = None) -> None:
+        """``names``: a folder move's spelling of its copied files, for ``_check_tree``."""
+        if rop.tree is not None:  # a folder moved across disks: checked before it moves
+            self._check_tree(rop, names or {})
         if rop.kind in _PICTURE_KINDS:
             self._precheck_picture(rop)
             return

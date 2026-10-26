@@ -8,6 +8,7 @@ import os
 import pytest
 import xattr
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from dam.db.tables import operations
 from dam.index.driveid import DRIVE_ID_XATTR
@@ -203,6 +204,15 @@ def test_file_edited_after_copy_stops(across, fake_archive, monkeypatch):
     )
 
 
+def test_file_touched_after_copy_stops(across, fake_archive, monkeypatch):
+    def touch():  # same size and bytes, another modification time
+        path = fake_archive.root / SRC / "a.pdf"
+        st = os.stat(path)
+        os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 10_000_000_000))
+
+    assert "(a.pdf was changed)" in _changed(across, fake_archive, monkeypatch, touch)
+
+
 def test_file_removed_during_job_stops(across, fake_archive, monkeypatch, tmp_path):
     def take_away():  # moved out of the archive, as the owner might in Finder
         (fake_archive.root / SRC / "a.pdf").rename(tmp_path / "a.pdf")
@@ -252,3 +262,63 @@ def test_empty_folder_moves_and_is_checked(across, fake_archive, extra_folder):
     assert (extra_folder.root / "2010").is_dir()
     assert (fake_archive.root / QUAR / HOME / "2010").is_dir()
     assert across.repo.by_path(f"{DEST}/2010").is_dir
+
+
+def _final(app, batch_id: str):
+    (final,) = [e for e in _journal(app, batch_id) if e.kind == "quarantine"]
+    return final
+
+
+def test_followed_journaled_before_rows_move(across, fake_archive, monkeypatch):
+    repo = across.repo
+    real = repo.update_path
+    calls = {"one_row": 0}
+
+    def fail_on_second_folder(old, new, *, recursive=True):
+        if not recursive:
+            calls["one_row"] += 1
+            if calls["one_row"] == 2:
+                raise SQLAlchemyError("disk I/O error")
+        return real(old, new, recursive=recursive)
+
+    monkeypatch.setattr(repo, "update_path", fail_on_second_folder)
+    batch = _move(across).result
+    assert batch.index_error is not None and batch.failed is None
+    final = _final(across, batch.batch_id)
+    assert final.state == "done"  # the folder is in To Delete
+    followed = json.loads(final.followed)
+    assert [f[2] for f in followed] == [SRC, f"{SRC}/empty", f"{SRC}/sub"]
+    assert [f[3] for f in followed] == [COPY, f"{COPY}/empty", f"{COPY}/sub"]
+    assert followed[0][0] == "id-dir"
+    assert repo.by_path(f"{COPY}/empty") is None  # not moved yet
+    monkeypatch.setattr(repo, "update_path", real)
+    across.executor._apply_followed(followed)
+    across.executor._apply_followed(followed)  # again: nothing changes
+    for old_id, new_id, old_path, new_path in followed:
+        row = repo.by_path(new_path)
+        assert row is not None and row.is_dir and row.drive_id == new_id, new_path
+        assert repo.by_path(old_path) is None
+        assert old_id == new_id or repo.get(old_id) is None
+    folder = repo.by_path(COPY)
+    assert [c.name for c in across.collections.for_file(folder.drive_id)] == ["Years"]
+
+
+def test_apply_followed_after_a_scan_drops_the_scanner_row(across, monkeypatch):
+    repo = across.repo
+    real = repo.update_path
+
+    def fail_every_folder(old, new, *, recursive=True):
+        if not recursive:
+            raise SQLAlchemyError("disk I/O error")
+        return real(old, new, recursive=recursive)
+
+    monkeypatch.setattr(repo, "update_path", fail_every_folder)
+    batch = _move(across).result
+    followed = json.loads(_final(across, batch.batch_id).followed)
+    monkeypatch.setattr(repo, "update_path", real)
+    across.scan()  # the made folders get rows of their own meanwhile
+    assert repo.by_path(COPY) is not None
+    across.executor._apply_followed(followed)
+    folder = repo.by_path(COPY)
+    assert folder.drive_id == followed[0][1]
+    assert [c.name for c in across.collections.for_file(folder.drive_id)] == ["Years"]
