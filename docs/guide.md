@@ -15,6 +15,7 @@
 - [Filing codes](#filing-codes)
   - [Inbox folders](#inbox-folders)
   - [QR stickers](#qr-stickers)
+  - [Assigning a code](#assigning-a-code)
   - [Several codes on one file](#several-codes-on-one-file)
   - [File N marked](#file-n-marked)
 - [Filing rules](#filing-rules)
@@ -294,8 +295,9 @@ Inbox. A code is one to four letters or digits from your own table, for example 
 To pay, and it can set any part of the filing form: the tray, the folder, a name pattern,
 tags and collections.
 
-A file gets its code from where you save it (an [inbox folder](#inbox-folders)) or from a
-[QR sticker](#qr-stickers) on its first page. Either way nothing is filed until you have
+A file gets its code from where you save it (an [inbox folder](#inbox-folders)), from a
+[QR sticker](#qr-stickers) on its first page, or from you in the Inbox
+([assigning a code](#assigning-a-code)). Either way nothing is filed until you have
 seen it: a coded file waits in the Inbox with the code's values filled in, and you file
 it from the form or together with the others through [File N marked](#file-n-marked).
 
@@ -409,6 +411,25 @@ sheet:
 **Test print** draws only the label outlines: print it on plain paper and hold it against
 a label sheet to check the fit. The L7651 measurements in dam have not been checked
 against Avery's own template, so make a test print before printing on labels.
+
+### Assigning a code
+
+A document that arrives as a file (an email attachment, a download) cannot carry a
+sticker, but you can give it a code in the Inbox as if it had one. Press **c**, or click
+the QR button in the Inbox toolbar, and pick a code: type the code or part of its label,
+then press Enter, or click it. The code goes to the selected files, or to the file on
+screen. The file then shows the code in its row and fills in the form from it, and
+**File N marked** includes it.
+
+Nothing is written into the file or moved: dam only remembers your choice, and filing
+still goes through the usual preview. The toast has **Undo**; **×** on the code at the top
+of the form takes it off again, and so does **No assigned code** in the picker. Giving a
+file another code replaces the one it had.
+
+A code you assign wins over the code of the file's inbox folder or a sticker on it, so
+they never disagree: the others still show in File N marked, struck through as
+"overridden". A sticker's ★ and **!** boxes still count. If you later remove the code
+from your table, the assigned code sets nothing and the file's other codes count again.
 
 ### Several codes on one file
 

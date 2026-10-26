@@ -29,16 +29,19 @@ _BIG_NUMBER = re.compile(r"\d{4,}")
 
 @dataclass
 class CodeHit:
-    """A filing code found for a file: by the inbox folder it is in, a pen mark or a QR
-    sticker. ``raw`` is what was read (pen, QR); ``unclear``: the reading is uncertain.
+    """A filing code found for a file: by the inbox folder it is in, a pen mark, a QR
+    sticker, or given by the owner in the app (``assigned``). ``raw`` is what was read
+    (pen, QR); ``unclear``: the reading is uncertain; ``overridden``: an assigned code
+    replaces this one, so it sets nothing.
 
     It belongs with ``dam.codes.apply`` (which re-exports it) and lives here only to
     avoid an import cycle (``dam.codes.model`` imports this module)."""
 
     code: str
-    via: Literal["folder", "pen", "qr"]
+    via: Literal["folder", "pen", "qr", "assigned"]
     raw: str | None = None
     unclear: bool = False
+    overridden: bool = False
 
 
 @dataclass

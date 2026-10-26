@@ -27,11 +27,13 @@ def codes_for(
     known: Collection[str] | None = None,
     qr: list[QrRead] | None = None,
 ) -> list[CodeHit]:
-    """The codes found for ``rec``: the code whose inbox folder holds it, then one hit
-    per code read from a QR sticker on an inbox file (``qr``: the file's reads, else
-    read from the index). A sticker code not in ``known`` (the loaded table, compared
-    case-insensitively) is ignored; without ``known`` none is. A code found in the
-    folder and on a sticker is one code with two hits."""
+    """The codes found for ``rec``: the code the owner assigned to an inbox file in the
+    app, then the code whose inbox folder holds it, then one hit per code read from a QR
+    sticker on an inbox file (``qr``: the file's reads, else read from the index). A
+    sticker code not in ``known`` (the loaded table, compared case-insensitively) is
+    ignored; without ``known`` none is. A code found in the folder and on a sticker is
+    one code with two hits. An assigned code that is in ``known`` overrides the others:
+    they are kept, marked ``overridden``, so the owner sees what was found."""
     repo = app_or_repo if isinstance(app_or_repo, FileRepo) else app_or_repo.repo
     hits: list[CodeHit] = []
     code = repo.inbox_code_of(rec.path)
@@ -40,7 +42,13 @@ def codes_for(
     for read in known_reads(repo, rec, known, qr):
         if not any(h.via == "qr" and h.code == read.code.upper() for h in hits):
             hits.append(CodeHit(read.code.upper(), "qr", raw=read.code))
-    return hits
+    assigned = repo.assigned_code(rec.drive_id) if repo.in_inbox_path(rec.path) else None
+    if assigned is None:
+        return hits
+    if known is not None and assigned.upper() in {k.upper() for k in known}:
+        for h in hits:
+            h.overridden = True
+    return [CodeHit(assigned, "assigned"), *hits]
 
 
 def known_reads(
@@ -113,10 +121,10 @@ def apply_codes(
     collections are united; for the folder, name and tray the first code wins and a
     different value from a later code sets ``conflict``. A code whose template does not
     render for this file sets nothing for that field (source noted with " (template
-    error)"). A code not in ``codes`` sets nothing. An ``as_suggested`` code ("already
-    handled") keeps the suggested folder and name but sets "no tray": the tray becomes
-    None (source ``code:<CODE>``), and with a code that names a tray it is a conflict.
-    Its tags and collections are added like any code's.
+    error)"). A code not in ``codes`` sets nothing, nor does an ``overridden`` hit. An
+    ``as_suggested`` code ("already handled") keeps the suggested folder and name but
+    sets "no tray": the tray becomes None (source ``code:<CODE>``), and with a code that
+    names a tray it is a conflict. Its tags and collections are added like any code's.
 
     As in the rules engine, a code's name template is not used when the file's own name
     (``original_name``, not the suggested one, which the scan may already have dated)
@@ -150,8 +158,9 @@ def apply_codes(
     applied: set[str] = set()
     for hit in hits:
         fc = codes.get(hit.code.upper())
-        # a code with several hits (folder and sticker) is applied once
-        if fc is None or fc.code in applied:
+        # a code with several hits (folder and sticker) is applied once; an assigned
+        # code's overridden hits not at all
+        if fc is None or fc.code in applied or hit.overridden:
             continue
         applied.add(fc.code)
         src = source_of(fc.code)

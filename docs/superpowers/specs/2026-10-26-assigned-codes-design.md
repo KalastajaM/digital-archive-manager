@@ -1,6 +1,6 @@
 # Assigned filing codes: design
 
-Status: proposed (2026-10-26). Builds on [filing codes](2026-10-23-filing-codes-design.md).
+Status: step 1 built (2026-10-26); step 2 (palette) not built. Builds on [filing codes](2026-10-23-filing-codes-design.md).
 
 ## Intent
 
@@ -16,7 +16,7 @@ confirm all of them at once in Marked files.
 
 ## Build steps
 
-1. **Assign from the keyboard and the batch form**, with a code picker that lists the
+1. **Assign from the keyboard or the Inbox toolbar**, with a code picker that lists the
    codes. Proves the source, the storage and the flow.
 2. **A code palette to drag from** (optional): decided after step 1 is in daily use.
 
@@ -57,12 +57,12 @@ worth of values needs a code that does both, or the form.
 
 ### Storage
 
-A new table in the index database, next to `file_qr_codes`: `drive_id`, `sha256` of the
-content it was assigned on, `code` (upper case) and `assigned_at`. Like the QR reads, it is
+A new table in the index database, next to `file_qr_codes`: `drive_id`, `code` (upper
+case) and `assigned_at`. Like the QR reads, it is
 used only while the file is in the inbox, and kept after filing, so a filing that is
-undone brings the file back with its code. A file whose content changed (`sha256`
-differs) keeps the code: the decision is about the document, not about the bytes.
-(Unlike a QR read, which depends on the content.) A file filed and later moved back into the
+undone brings the file back with its code. Unlike a QR read it is not tied to the
+content (no `sha256`): a file whose content changed keeps the code, since the decision
+is about the document, not about the bytes. A file filed and later moved back into the
 inbox shows its old code with its chip, which the owner can remove.
 
 A code later deleted from the table, or made invalid, sets nothing (as for stickers);
@@ -74,24 +74,24 @@ removing (and the toast after assigning has **Undo**).
 
 ### Assigning
 
-- **Code picker.** With an Inbox file (or a selection) focused, a key opens a small
-  picker at the list: each code with its sticker, the code and its label, the same list
-  as in Settings. Typing filters by code first, then label; Enter or a click assigns the
-  highlighted code to the file or every selected file and closes the picker; Esc closes
-  it. The key is the builder's call among the free ones (`j`, `k`, `u` and Space are
-  taken in the Inbox; check `keyboard.ts`); `c` if free.
-- **Batch form.** With several files selected, the batch form gets a **Filing code**
-  field (the same picker as a dropdown) that assigns it to all of them.
-- **Form.** The single-file form shows the assigned code as a chip at the top
-  ("V3 · Car insurance (assigned)", with ×), and an **Assign code…** button when none is
-  assigned, which opens the picker.
+- **Code picker.** `c` (free in the Inbox; `j`, `k`, `u`, `n`, `f`, digits and Space are
+  taken) or a QR button in the Inbox toolbar opens a small popover: each code with its
+  label, as in Settings. Typing filters by code first, then label; ↑/↓ move, Enter or a
+  click assigns the highlighted code to the selected files, or to the file on screen, and
+  closes the picker; Esc closes it. When one of the files has an assigned code, the list
+  ends with **No assigned code**. The toast after assigning has **Undo**, which gives
+  each file back the code it had. (Built as one picker for one file and for a selection,
+  in place of a separate batch-form field and form button.)
+- **Form.** The single-file form shows the assigned code as a chip at the top ("Filing
+  code V3 · Car insurance", with ×).
 - **List.** An Inbox row with an assigned code shows the code in its row, as coded rows do
-  now.
+  now; codes it overrides are left out of the row.
 
-After assigning, the form's fields refill from the code exactly as for a sticker; field
-chips read "from code `V3` you assigned". Fields the owner had already changed by hand
-in the open form are left alone (as when a QR read lands while the form is open; builder
-checks the existing behaviour and follows it).
+After assigning, the form refills from the code exactly as for a file that arrived with a
+sticker; field chips read "from code `V3` you assigned". The Inbox keys the form by the
+file and its assigned code, so assigning remounts it: values typed into the open form
+and not filed yet are dropped. (Before this, a sticker read landing while the form was
+open did not refill it at all.)
 
 ### File N marked
 

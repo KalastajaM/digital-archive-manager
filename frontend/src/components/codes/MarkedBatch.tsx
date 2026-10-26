@@ -21,10 +21,12 @@ import { Toolbar } from "../ui/Toolbar";
 import { Thumb } from "../Thumb";
 
 /** How a code was found, in the words the owner uses. */
-const VIA: Record<CodeHit["via"], string> = { folder: "folder", qr: "sticker", pen: "pen" };
+const VIA: Record<CodeHit["via"], string> = { folder: "folder", qr: "sticker", pen: "pen", assigned: "assigned" };
 
-/** "P (folder)", "A (sticker)", "D? (pen)" for an unclear reading. */
-export const codeText = (hit: CodeHit) => `${hit.code}${hit.unclear ? "?" : ""} (${VIA[hit.via]})`;
+/** "P (folder)", "A (sticker)", "D? (pen)" for an unclear reading, "P (sticker,
+ * overridden)" for a code an assigned code replaces. */
+export const codeText = (hit: CodeHit) =>
+  `${hit.code}${hit.unclear ? "?" : ""} (${VIA[hit.via]}${hit.overridden ? ", overridden" : ""})`;
 
 /** Said when the rows changed while File was previewing (nothing was filed). */
 export const MARKED_CHANGED = "The marked files changed; check the list and press File again";
@@ -123,7 +125,12 @@ function Row({
         <p className="marked-name">
           <span className="marked-to">{visible(request.name)}</span>
           {row.codes.map((hit, i) => (
-            <Tag key={i} tone={hit.unclear ? "orange" : "grey"} className="entry-chip" title="Filing code and how it was found">
+            <Tag
+              key={i}
+              tone={hit.unclear && !hit.overridden ? "orange" : "grey"}
+              className={hit.overridden ? "entry-chip code-overridden" : "entry-chip"}
+              title={hit.overridden ? "Found, but the code you assigned replaces it" : "Filing code and how it was found"}
+            >
               {visible(codeText(hit))}
             </Tag>
           ))}

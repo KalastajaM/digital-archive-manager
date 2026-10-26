@@ -1680,6 +1680,21 @@ export const useMarkedBatch = () =>
 export const useFilingCodes = () =>
   useQuery({ queryKey: keys.filingCodes, queryFn: () => get<FilingCodes>("/api/filing-codes") });
 
+/** Give inbox files a filing code, as if a sticker were on them (``code`` null: take it
+ * away). Only dam's index changes, so there is no preview and no journal entry. */
+export const useAssignCode = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveIds, code }: { driveIds: string[]; code: string | null }) =>
+      put<{ drive_ids: string[]; code: string | null }>("/api/filing-codes/assigned", { drive_ids: driveIds, code }),
+    onSettled: () => {
+      // the rows' suggestions, the marked batch below them, and Today's count
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: keys.today });
+    },
+  });
+};
+
 /** Replace the whole table (the old file is kept as a backup); a 400 says why not. */
 export const useSaveFilingCodes = () => {
   const client = useQueryClient();

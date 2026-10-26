@@ -125,7 +125,7 @@ def _row(
                 row.tray_fields.setdefault(name, "")
             request.tray_fields = dict(row.tray_fields)
 
-    if any(h.unclear for h in hits):
+    if any(h.unclear and not h.overridden for h in hits):
         return flag("unclear", "a code was read unclearly")
     if s.marks_unclear:
         return flag("unclear", "Tick box unclear: " + ", ".join(unclear_boxes(s)))

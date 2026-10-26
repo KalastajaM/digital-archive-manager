@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Give an inbox file a filing code in the app**, as if it had a sticker. Press **c** in
+  the Inbox (or click the QR button), pick a code, and the selected files fill in from it
+  and join File N marked. Nothing is written into the files; × on the form or Undo takes
+  the code off. A code you assign wins over a folder or sticker code on the same file.
 - **One archive can now span several folders.** In Settings, **Archive folders**, **Add
   folder** joins a further folder (for example on an external disk or a cloud drive) under
   a label you choose. Browse, search, tags, collections and Maintenance see one combined
