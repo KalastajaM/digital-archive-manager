@@ -1,7 +1,7 @@
 /** The small checks: each a button that starts a check, a list, and the existing flow that
  * acts on it (Move to To Delete, the previewed rename, a previewed link removal). Nothing
  * runs until its button is clicked. */
-import { Folder, FolderX, Link2Off, ListX, RotateCcw, Trash2, Type } from "lucide-react";
+import { CopyX, Folder, FolderX, Link2Off, ListX, RotateCcw, Trash2, Type } from "lucide-react";
 import { Fragment, type ReactNode, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -706,6 +706,49 @@ export function LabelClashes() {
             </li>
           ))}
         </ul>
+      )}
+    </CheckCard>
+  );
+}
+
+// -- unfinished copies of a move across disks ----------------------------------------------------------------
+
+export function UnfinishedCopies() {
+  const check = useMaintenanceJob("unfinished_copies");
+  const result = check.job?.unfinished_copies ?? null;
+  const items = result?.items ?? [];
+  return (
+    <CheckCard
+      title="Unfinished copies"
+      icon={<CopyX />}
+      kind="unfinished_copies"
+      intro="Copies that a move across disks left half done when it failed or was stopped. Their names start with .dam-copy-. The original was not moved, so each of these is a spare copy."
+      check={check}
+      empty="No unfinished copies."
+      found={items.length > 0}
+      summary={plural(result?.total ?? 0, "unfinished copy", "unfinished copies")}
+    >
+      {result && items.length > 0 && (
+        <>
+          <p role="status">
+            <strong>{plural(result.total, "unfinished copy", "unfinished copies")}</strong> ({formatSize(result.total_size)}). You can
+            remove {result.total === 1 ? "it" : "them"} {inFileManager()}; the app never deletes files. Names starting with a dot are
+            hidden until you show hidden files.
+          </p>
+          <ul className="check-list">
+            {items.map((f) => (
+              <li key={f.drive_id}>
+                <span>
+                  <code>{visible(f.path)}</code> <span className="hint">{formatSize(f.size)}</span>
+                </span>
+                <span className="dup-actions">
+                  <ShowInBrowse to={browseTo(f.path, f.drive_id)} />
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Capped shown={items.length} total={result.total} />
+        </>
       )}
     </CheckCard>
   );

@@ -11,7 +11,7 @@ import { maintenancePolling } from "../components/maintenance/useMaintenanceJob"
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import Maintenance from "./Maintenance";
 
-const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes"];
+const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes", "unfinished_copies"];
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 
 const file = (id: string, path: string, over: Partial<DupFile> = {}): DupFile => ({
@@ -145,12 +145,12 @@ afterEach(() => {
 describe("Maintenance screen", () => {
   it("starts nothing by itself: every check waits for its button", async () => {
     const { calls } = setup();
-    for (const name of ["Duplicates", "Empty folders", "Broken links", "Collections and trays", "File names", "Waiting in To Delete", "Archive folder names"]) {
+    for (const name of ["Duplicates", "Empty folders", "Broken links", "Collections and trays", "File names", "Waiting in To Delete", "Archive folder names", "Unfinished copies"]) {
       expect(card(name)).toBeInTheDocument();
     }
     await screen.findByText(/Starting reads/);
     expect(calls.filter((c) => c.method === "POST")).toEqual([]);
-    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(7);
+    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(8);
   });
 
   it("says how much the duplicate check will read, with the Google Drive warning, before it starts", async () => {
@@ -593,6 +593,15 @@ describe("The other checks", () => {
         "A folder in the main folder has the same name as the archive folder 'Old years'. Rename the folder in the main folder, or detach the archive folder with Also forget.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("unfinished copies: lists what a move across disks left and says the owner removes them", async () => {
+    const found = { items: [{ drive_id: "t1", path: "Old years/2010/.dam-copy-abcd1234-a.pdf", size: 2048 }], total: 1, total_size: 2048 };
+    const { user } = setup({}, { unfinished_copies: { unfinished_copies: found } });
+    const copies = card("Unfinished copies");
+    await user.click(within(copies).getByRole("button", { name: "Check" }));
+    expect(await within(copies).findByText("Old years/2010/.dam-copy-abcd1234-a.pdf")).toBeInTheDocument();
+    expect(within(copies).getByRole("status")).toHaveTextContent(/You can remove it .*; the app never deletes files\./);
   });
 
   it("an invalid number of days starts nothing", async () => {

@@ -138,14 +138,16 @@ type ListProps = {
 };
 
 /** What a move across disks does, above its steps: how many files are copied and how
- * big, and that the originals go to To Delete; how many are downloaded first. */
+ * big, and where the originals end up: to To Delete after a move, or left in To Delete
+ * after a restore (no quarantine follows the copy); how many are downloaded first. */
 export function copyAcrossSummary(ops: ResolvedOp[]): string[] {
   const copies = ops.filter((op) => op.kind === "copy_across");
   if (copies.length === 0) return [];
   const size = copies.reduce((sum, op) => sum + (op.size ?? 0), 0);
-  const lines = [
-    `Copies ${plural(copies.length, "file")} (${formatSize(size)}) to another disk. The originals go to To Delete once each copy is checked.`,
-  ];
+  // a move puts each original aside after its copy; a restore copies out of To Delete only
+  const moved = ops.some((op) => op.kind === "quarantine" && copies.some((c) => c.src === op.src));
+  const originals = moved ? "The originals go to To Delete once each copy is checked." : "The originals stay in To Delete.";
+  const lines = [`Copies ${plural(copies.length, "file")} (${formatSize(size)}) to another disk. ${originals}`];
   const cloud = copies.filter((op) => op.cloud_only).length;
   if (cloud > 0) lines.push(`${plural(cloud, "file")} ${cloud === 1 ? "is" : "are"} in the cloud only and ${cloud === 1 ? "is" : "are"} downloaded first.`);
   return lines;

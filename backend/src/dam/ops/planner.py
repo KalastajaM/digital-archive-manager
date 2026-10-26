@@ -480,6 +480,11 @@ class Planner:
             self._ensure_folder(aside, False, quarantine_root=True)
         wanted = op.name or name
         free = self._free_or_exact(op, folder, wanted, src)
+        if over := primitives.temp_copy_too_long(free):
+            raise GuardError(
+                f"{free} is too long a name to copy across disks: the copy is first written"
+                f" under a longer temporary name. Shorten it by {over} characters and try again."
+            )
         dst = join(folder, free)
         if free != wanted:
             self.aliases.append((join(folder, wanted), dst))
@@ -510,8 +515,7 @@ class Planner:
         the margin ``copy_file`` keeps free); checked once here, and again per file."""
         for label, size in self._copy_bytes.items():
             folder = next(f for f in self.paths.folders if f.label == label)
-            free = primitives.shutil.disk_usage(folder.root).free
-            if size + primitives._COPY_FREE_MARGIN > free:
+            if not primitives.has_room(folder.root, size):
                 where = f"'{label}'" if label else "the main folder"
                 needed = math.ceil(size / (1024 * 1024))
                 raise OpFailed(

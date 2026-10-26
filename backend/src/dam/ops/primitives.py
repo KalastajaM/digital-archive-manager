@@ -35,11 +35,15 @@ from dam.ops.identity import Identity, of_fd, of_stat
 from dam.ops.identity import same_object as same_identity
 from dam.ops.model import GuardError, OpFailed
 
-RENAME_EXCL = 0x4
+RENAME_EXCL = 0x4  # macOS renamex_np
+RENAME_NOREPLACE = 0x1  # Linux renameat2
+_AT_FDCWD = -100
 MAX_COPY_BYTES = 200 * 1024 * 1024  # one file copied into the archive (add / upload)
 _COPY_CHUNK = 1024 * 1024
 _COPY_FREE_MARGIN = 16 * 1024 * 1024  # left free on the disk after a copy
 _NOT_SUPPORTED = {errno.ENOTSUP, getattr(errno, "EOPNOTSUPP", errno.ENOTSUP)}
+# renameat2 answers EINVAL for a file system without RENAME_NOREPLACE, ENOSYS on an old kernel
+_NOT_SUPPORTED_LINUX = _NOT_SUPPORTED | {errno.EINVAL, errno.ENOSYS}
 
 
 def _load_renamex_np():
@@ -58,20 +62,55 @@ def _load_renamex_np():
 _renamex_np = _load_renamex_np()
 
 
+def _load_renameat2():
+    if not sys.platform.startswith("linux"):  # renameat2 is a Linux call
+        return None
+    try:
+        fn = ctypes.CDLL(None, use_errno=True).renameat2  # glibc 2.28 and later
+    except (OSError, AttributeError):
+        return None
+    fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    fn.restype = ctypes.c_int
+    return fn
+
+
+_renameat2 = _load_renameat2()
+
+
+def _rename_exclusive(src: Path, dst: Path) -> bool:
+    """The system's own no-overwrite rename (macOS ``renamex_np(RENAME_EXCL)``, Linux
+    ``renameat2(RENAME_NOREPLACE)``); False when there is none or the volume does not
+    support it, so the caller falls back."""
+    old, new = os.fsencode(src), os.fsencode(dst)
+    if _renamex_np is not None:
+        rc, unsupported = _renamex_np(old, new, RENAME_EXCL), _NOT_SUPPORTED
+    elif _renameat2 is not None:
+        rc = _renameat2(_AT_FDCWD, old, _AT_FDCWD, new, RENAME_NOREPLACE)
+        unsupported = _NOT_SUPPORTED_LINUX
+    else:
+        return False
+    if rc == 0:
+        return True
+    err = ctypes.get_errno()
+    if err == errno.EEXIST:
+        raise FileExistsError(err, os.strerror(err), str(dst))
+    if err not in unsupported:
+        raise OSError(err, os.strerror(err), str(src))
+    return False
+
+
 def rename_excl(src: Path, dst: Path) -> None:
     """Rename ``src`` to ``dst`` atomically, failing with FileExistsError if dst exists."""
-    if _renamex_np is not None:
-        if _renamex_np(os.fsencode(src), os.fsencode(dst), RENAME_EXCL) == 0:
-            return
-        err = ctypes.get_errno()
-        if err == errno.EEXIST:
-            raise FileExistsError(err, os.strerror(err), str(dst))
-        if err not in _NOT_SUPPORTED:
-            raise OSError(err, os.strerror(err), str(src))
-    # Volume without exclusive rename: best effort, check then rename.
-    # CHECK-THEN-ACT WINDOW: something created at ``dst`` between the lexists() check
-    # and os.rename() would be replaced. Only reached on volumes that reject
-    # RENAME_EXCL (APFS supports it), so the archive itself never takes this path.
+    if _rename_exclusive(src, dst):
+        return
+    # On Windows os.rename() itself never replaces an existing entry (it raises
+    # FileExistsError), so the check below only gives the same error early.
+    # CHECK-THEN-ACT WINDOW (macOS and Linux): something created at ``dst`` between the
+    # lexists() check and os.rename() would be replaced. Reached only where the system
+    # has no exclusive rename for this volume: a macOS volume that refuses RENAME_EXCL
+    # (some exFAT, FAT and network volumes), a Linux file system without
+    # RENAME_NOREPLACE, or a C library without renameat2. An archive folder can be on
+    # such a disk.
     if os.path.lexists(dst):
         raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(dst))
     os.rename(src, dst)
@@ -157,16 +196,18 @@ def copy_verified(
     limit: int | None = MAX_COPY_BYTES,
     stop: Callable[[], bool] | None = None,
     hash_source: bool = True,
+    on_bytes: Callable[[int], None] | None = None,
 ) -> None:
     """Copy ``src`` to the new file ``dst`` (exclusive create, fsync, ``copy_file``),
     then check that ``dst`` has the size and sha256 of ``src`` and that both are
     ``sha256`` (the hash journaled before). ``src`` is only read. On any failure nothing
     is removed: ``dst`` may remain, ``src`` stays. ``hash_source`` False: ``sha256`` was
     read from ``src`` just before (a copy across disks), so ``src`` is not read a second
-    time; a change while copying still shows, as a copy that does not match."""
+    time; a change while copying still shows, as a copy that does not match.
+    ``on_bytes``: see ``copy_file``."""
     if hash_source and file_sha256(src, stop) != sha256:
         raise OpFailed(f"{src.name} changed since it was planned, so it is not copied.")
-    size = copy_file(src, dst, limit=limit, stop=stop)
+    size = copy_file(src, dst, limit=limit, stop=stop, on_bytes=on_bytes)
     if os.lstat(dst).st_size != size or file_sha256(dst, stop) != sha256:
         raise OpFailed(
             f"The copy {dst.name} does not match {src.name}. Both files stay where they are;"
@@ -177,20 +218,39 @@ def copy_verified(
 copy_picture = copy_verified  # a rule picture crossing disks
 
 TEMP_COPY_PREFIX = ".dam-copy-"  # a copy across disks before it is verified and named
+TEMP_COPY_EXTRA = len(TEMP_COPY_PREFIX) + 9  # the prefix, 8 hex digits and "-"
+NAME_MAX_BYTES = 255  # the longest name macOS, Linux and Windows volumes all take
+
+
+def temp_copy_name(name: str) -> str:
+    """The temporary name a copy across disks of ``name`` is written under."""
+    return f"{TEMP_COPY_PREFIX}{secrets.token_hex(4)}-{name}"
+
+
+def temp_copy_too_long(name: str) -> int:
+    """How many bytes (UTF-8) too long ``name`` is for its temporary copy name; 0 when
+    it fits."""
+    return max(0, len(name.encode("utf-8")) + TEMP_COPY_EXTRA - NAME_MAX_BYTES)
 
 
 def copy_across(
-    src: Path, dst: Path, sha256: str, stop: Callable[[], bool] | None = None
+    src: Path,
+    dst: Path,
+    sha256: str,
+    stop: Callable[[], bool] | None = None,
+    on_bytes: Callable[[int], None] | None = None,
 ) -> None:
     """Copy the archive file ``src`` to the new file ``dst`` in a folder on another disk:
     written under a temporary name next to ``dst`` (``TEMP_COPY_PREFIX``), verified by
     size and sha256 (``copy_verified``, no size cap), given the source's access and
     modification times, and only then renamed to ``dst`` without overwriting. ``src`` is
     only read. On any failure nothing is removed and the error names the temporary file
-    that may remain."""
-    temp = dst.parent / f"{TEMP_COPY_PREFIX}{secrets.token_hex(4)}-{dst.name}"
+    that may remain. ``on_bytes``: see ``copy_file``."""
+    temp = dst.parent / temp_copy_name(dst.name)
     try:
-        copy_verified(src, temp, sha256, limit=None, stop=stop, hash_source=False)
+        copy_verified(
+            src, temp, sha256, limit=None, stop=stop, hash_source=False, on_bytes=on_bytes
+        )
         st = os.stat(src)
         os.utime(temp, ns=(st.st_atime_ns, st.st_mtime_ns))
         rename_excl(temp, dst)
@@ -241,6 +301,10 @@ def make_dir(p: Path) -> None:
     p.mkdir(parents=False, exist_ok=False)
 
 
+def has_room(folder: Path, size: int) -> bool:
+    """The disk that holds ``folder`` has room for ``size`` more bytes and still keeps
+    the margin every copy leaves free."""
+    return shutil.disk_usage(folder).free >= size + _COPY_FREE_MARGIN
 
 
 def copy_file(
@@ -248,13 +312,15 @@ def copy_file(
     dst: Path,
     limit: int | None = MAX_COPY_BYTES,
     stop: Callable[[], bool] | None = None,
+    on_bytes: Callable[[int], None] | None = None,
 ) -> int:
     """Copy the regular file ``src`` to the new file ``dst`` (created exclusively: an
     existing name, also a link, is an error, so nothing is ever overwritten); returns
     the bytes copied. ``src`` is only read. A file over ``limit`` bytes, or a disk
     without room for it, is refused before ``dst`` is created. ``limit`` None: no cap,
     only the free-space check. ``stop`` (looked at between chunks) true ends the copy
-    there, as a failure.
+    there, as a failure. ``on_bytes`` is called after each chunk with the bytes written
+    so far (the progress of a large file).
 
     If the copy is cut short after ``dst`` was created (the disk filled up, the source
     shrank), a partial file stays: the app never deletes, so the error says so."""
@@ -264,7 +330,7 @@ def copy_file(
             raise OpFailed(f"{src.name} is not a regular file.")
         if limit is not None and st.st_size > limit:
             raise OpFailed(f"{src.name} is larger than {limit // (1024 * 1024)} MB.")
-        if shutil.disk_usage(dst.parent).free < st.st_size + _COPY_FREE_MARGIN:
+        if not has_room(dst.parent, st.st_size):
             raise OpFailed("There is not enough free space on the disk for this file.")
         copied = 0
         with open(dst, "xb") as target:
@@ -274,6 +340,8 @@ def copy_file(
                     if limit is not None and copied > limit:
                         raise OpFailed(f"{src.name} is larger than {limit // (1024 * 1024)} MB.")
                     target.write(chunk)
+                    if on_bytes is not None:
+                        on_bytes(copied)
                     if stop is not None and stop():
                         raise OpFailed("stopped")
                 target.flush()

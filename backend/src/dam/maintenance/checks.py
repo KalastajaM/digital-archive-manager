@@ -1,6 +1,7 @@
 """The small maintenance lists: empty folders, broken links, collection and tray entries
 that point at missing files, names that do not follow the archive's convention, what
-has waited in ``##. To Delete``, and main-folder entries named like an archive folder.
+has waited in ``##. To Delete``, main-folder entries named like an archive folder, and
+unfinished copies a move across disks left.
 Each is a read of the index (empty folders, broken links and name clashes also look at
 the disk with ``lstat``/listing, nothing is opened or downloaded) and changes nothing;
 the owner acts on a list through the usual previewed batches."""
@@ -10,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -35,6 +37,7 @@ from dam.index.repo import FileRecord, FileRepo
 from dam.maintenance.duplicates import NUMBERED, own_folders
 from dam.maintenance.jobs import JobContext
 from dam.ops.guards import is_under, touches_protected
+from dam.ops.primitives import TEMP_COPY_PREFIX
 
 LIST_LIMIT = 500  # rows listed per check; the total is always counted
 FINDER_CACHE = {".ds_store"}  # what an "empty" folder may still hold
@@ -117,6 +120,20 @@ class WaitingFile:
 class LabelClashes:
     items: list[str] = field(default_factory=list)  # the archive folders' labels
     total: int = 0
+
+
+@dataclass
+class UnfinishedCopy:
+    drive_id: str
+    path: str
+    size: int
+
+
+@dataclass
+class UnfinishedCopies:
+    items: list[UnfinishedCopy] = field(default_factory=list)
+    total: int = 0
+    total_size: int = 0
 
 
 @dataclass
@@ -294,6 +311,43 @@ def label_clashes(
             out.total += 1
             out.items.append(extra.label)
     ctx.progress(len(extras), len(extras))
+    return out
+
+
+# --- unfinished copies of a move across disks ------------------------------------------------
+
+
+def unfinished_copies(
+    ctx: JobContext, repo: FileRepo, paths: ArchivePaths, engine: Engine
+) -> UnfinishedCopies:
+    """Files named like the temporary copy a move across disks writes before it is
+    verified and renamed (``TEMP_COPY_PREFIX``): what a failed, stopped or interrupted
+    move left. The original was never moved for them, so the owner can remove them; dam
+    never deletes. The index names them (a scan picks a leftover up), and each is looked
+    at on disk (``lstat``) before it is listed."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            select(files.c.drive_id, files.c.path)
+            .where(*_live(files.c.is_dir.is_not(True), files.c.is_link.is_not(True)))
+            .where(files.c.name.startswith(TEMP_COPY_PREFIX, autoescape=True))
+            .order_by(files.c.path)
+        ).all()
+    out = UnfinishedCopies()
+    for i, row in enumerate(rows):
+        if ctx.stopped():
+            break
+        ctx.progress(i, len(rows), current=row.path)
+        try:
+            st = os.lstat(paths.abs(row.path))
+        except (OSError, OutsideArchiveError):
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            continue
+        out.total += 1
+        out.total_size += st.st_size
+        if len(out.items) < LIST_LIMIT:
+            out.items.append(UnfinishedCopy(row.drive_id, row.path, st.st_size))
+    ctx.progress(len(rows), len(rows))
     return out
 
 

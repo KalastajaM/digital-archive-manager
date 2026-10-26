@@ -331,7 +331,7 @@ class BrowseService:
         ``check``) answer the request either way. ``result_of`` turns a batch into the
         answer (and the job's result). The job plans again and runs with the same
         ``check``, so what runs is what was checked; its progress counts the files copied
-        and their bytes."""
+        and their bytes, also within a large file."""
 
         def check_here(ops: list[ResolvedOp]) -> None:
             if check is not None:
@@ -359,8 +359,12 @@ class BrowseService:
                 upcoming = PurePosixPath(copies[n].src).name if n < total else None
                 ctx.progress(n, total, moved["bytes"], size, upcoming)
 
+            def copied(rop: ResolvedOp, n: int) -> None:
+                name = PurePosixPath(rop.src).name
+                ctx.progress(moved["files"], total, moved["bytes"] + n, size, name)
+
             result = self.executor.apply(
-                plan, check=check, should_stop=ctx.stopped, progress=progress
+                plan, check=check, should_stop=ctx.stopped, progress=progress, copied=copied
             )
             if result.stopped:
                 result.error = f"Stopped: {moved['files']} of {total} files moved."

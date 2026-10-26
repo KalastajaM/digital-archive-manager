@@ -8,7 +8,7 @@ import { archiveKey, type MaintenanceKind } from "../../api/client";
 export const FOLDED_KEY = "dam.maintenance.folded.v1";
 
 /** The checks in screen order. */
-export const KINDS: MaintenanceKind[] = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes"];
+export const KINDS: MaintenanceKind[] = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes", "unfinished_copies"];
 
 function read(): Set<string> {
   try {

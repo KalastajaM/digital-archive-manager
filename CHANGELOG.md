@@ -58,7 +58,11 @@ All notable changes are listed here. The format follows
     copied, how big they are and how many are in the cloud only (downloaded first). The
     move runs in the background with a progress dialog you can hide; **Stop** finishes the
     file in hand, so every file is either moved or untouched. **Undo** puts the originals
-    back and moves the copies to To Delete. Whole folders cannot be moved yet.
+    back and moves the copies to To Delete. Whole folders cannot be moved yet. The amount
+    copied moves along within a large file too, and a failed move says why it failed. A
+    name too long for the temporary copy name is refused in the preview, not half way.
+    Maintenance has a new check, **Unfinished copies**, that lists the `.dam-copy-` files a
+    failed or stopped move left, for you to remove.
   - **Change label** (Settings, Archive folders) renames an extra folder's label. Every
     path dam keeps under it changes with it: the index, the history (earlier changes can
     still be undone), protected folders, folders kept from AI and the `folder` values in

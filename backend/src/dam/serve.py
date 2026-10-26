@@ -24,7 +24,7 @@ import threading
 import time
 import webbrowser
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -420,12 +420,13 @@ class Host:
         old App back. The held ``ServeLock`` stays held: it is the same archive."""
         from dam.api import create_api
 
-        with self.lock:
+        with self.lock, ExitStack() as held:
             if self.stopping:
                 raise Conflict("The server is stopping.")
             old = self.current
             if self.board is None or old is None or old.app is None:
                 raise Conflict("The archive is not open yet.")
+            held.enter_context(old.app.copy_jobs.held())  # no move starts until done
             if old.app.jobs_running():
                 raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
             paths = old.paths or old.app.app_paths
@@ -458,12 +459,13 @@ class Host:
         stays on a closed archive."""
         if self.store is None or self.board is None or self.current is None:
             raise Conflict("This server cannot reopen the archive; start it with `dam serve`.")
-        with self.lock:
+        with self.lock, ExitStack() as held:
             if self.stopping:
                 raise Conflict("The server is stopping.")
             old = self.current
             if old.profile_id is None or old.app is None:
                 raise Conflict("The archive is not open yet.")
+            held.enter_context(old.app.copy_jobs.held())  # no move starts until done
             if old.app.jobs_running():
                 raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
             profile = self.store.find(old.profile_id)

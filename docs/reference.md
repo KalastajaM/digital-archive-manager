@@ -907,8 +907,9 @@ folder roots) is planned as two operations, always next to each other:
    Delete (note `the original stays in To Delete`).
 
 The dry run refuses (with a plain message) a folder or a link (only files cross disks),
-a protected file, a locked file, a folder that is not connected, and too little free space
-on the destination for the whole batch. Every other caller (filing, rules, conversions,
+a protected file, a locked file, a folder that is not connected, too little free space
+on the destination for the whole batch (`primitives.has_room`), and a destination name
+whose temporary name would be over 255 bytes (UTF-8; the prefix adds 19). Every other caller (filing, rules, conversions,
 filing codes) and every undo keeps the refusal "... are on different disks, so this cannot
 be moved between them here."
 
@@ -917,7 +918,12 @@ be moved between them here."
 time (a second is 409), it does not end when nobody polls, and closing the app ends the
 copy in progress at its next chunk (its `.dam-copy-` file stays and the op fails naming
 it). While it runs, adding, detaching, attaching or relabelling a folder and restoring a
-snapshot are 409.
+snapshot are 409. Those changes hold `CopyJobs.held()` from their check until they are
+done, so a move started meanwhile is 409 too ("The archive is being changed. Try the move
+again in a moment.") instead of being ended by the reopen. `bytes_done` moves after each
+1 MB chunk of the file being copied. A job that fails keeps dam's own reason in `error`
+(a refusal from the planner or a failed copy); anything else is
+"<type>: the move could not be completed".
 
 | Call | Does |
 |---|---|
@@ -940,7 +946,14 @@ places, a lock).
 **Recovery** settles a `planned` `copy_across` from the disk: no copy and no `.dam-copy-`
 file means it never started; a copy with the journaled size and hash, with the source
 still there, means it finished (the index is re-pointed); a `.dam-copy-` file only, or a
-copy that does not match, needs a manual check and every file is left alone.
+copy that does not match, needs a manual check and every file is left alone. The
+Maintenance check `unfinished_copies` lists indexed `.dam-copy-*` files (looked at on disk
+first) with `size`, and `total`/`total_size`; the owner removes them.
+
+`rename_excl` uses the system's no-overwrite rename: `renamex_np(RENAME_EXCL)` on macOS,
+`renameat2(RENAME_NOREPLACE)` on Linux. On Windows `os.rename` never replaces. Where the
+volume or C library has none (some exFAT, FAT and network volumes, older glibc), it checks
+and then renames, which leaves a short window.
 
 ## Safety model in detail
 
@@ -1125,7 +1138,8 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   out), `known` those with a stored sha256, `to_read_*` what the check would open. Reading a
   file kept online-only in Google Drive for desktop downloads it.
 - `POST /api/maintenance/jobs {kind, days?}` starts a check (`duplicates`, `empty_folders`,
-  `broken_links`, `references`, `names` or `waiting`; `days` only for `waiting`, default
+  `broken_links`, `references`, `names`, `waiting`, `label_clashes` or
+  `unfinished_copies`; `days` only for `waiting`, default
   30) and ends an earlier job of that kind. `GET /api/maintenance/jobs/{job_id}` answers
   the progress (`state` running, done, stopped or error; `done`/`total`, `bytes_done`/
   `bytes_total`, `current`) and, once it is not running, `result` as the field named after
