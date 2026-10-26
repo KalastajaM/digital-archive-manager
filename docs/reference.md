@@ -21,6 +21,7 @@ the app's sidebar).
 - [Reminders setup](#reminders-setup)
 - [AI setup](#ai-setup)
 - [Moves across disks](#moves-across-disks)
+- [Folder moves](#folder-moves)
 - [Safety model in detail](#safety-model-in-detail)
 - [Maintenance](#maintenance)
 - [Index errors](#index-errors)
@@ -929,7 +930,7 @@ again in a moment.") instead of being ended by the reopen. `bytes_done` moves af
 |---|---|
 | `GET /api/browse/move/jobs/{job_id}` | `state` (`running`, `done`, `stopped`, `error`), `done`/`total` files, `bytes_done`/`bytes_total`, `current` (the file being copied), `elapsed_s`, and once it is over `result`: the batch (`batch_id` for Undo; `stopped` and `error` "Stopped: N of M files moved." when it ended early). |
 | `GET /api/browse/move/jobs/latest` | The latest move of this run, or null. |
-| `POST /api/browse/move/jobs/{job_id}/stop` `{}` | Ends the move after the file in hand: a verified copy is always followed by the move of its original to To Delete, so each file is either moved or untouched. |
+| `POST /api/browse/move/jobs/{job_id}/stop` `{}` | Ends the move after the file in hand: a verified copy is always followed by the move of its original to To Delete, so each file is either moved or untouched. For a folder move see [Folder moves](#folder-moves). |
 
 **Undo** (renames only, so `test_no_delete.py` allows nothing new): the `quarantine` of the
 original is undone by moving it back; the `copy_across` by a `quarantine` of the copy into
@@ -955,6 +956,82 @@ first) with `size`, and `total`/`total_size`; the owner removes them.
 volume or C library has none (some exFAT, FAT and network volumes, older glibc), it checks
 and then renames, which leaves a short window.
 
+### Folder moves
+
+`POST /api/browse/move/preview` and `/api/browse/move` (mode `move`) also take one folder
+in `drive_ids`, alone (a folder together with files, or two folders, is a 400: "Move one
+folder at a time, without files"). Refused with a 400 before planning: the top of an
+archive folder, the inbox, `##. Ongoing`, `##. Important`, `##. To Delete` and anything
+inside them, and a folder into itself or its own subfolder. A folder that is not
+connected, a locked file inside it, and a top-level destination in the main folder are
+refused by the planner as for files. Link and Copy modes stay files only.
+
+`check_disk_identity` has a folder case, used when the requested row is a folder: the
+folder on disk must carry the Drive id of the row (a `local:` row must carry none, or only
+one belonging to another indexed entry) and `lstat` must say a real folder (not a link,
+not a file). There is no size check, and the files inside are not checked against the
+index (the planner lists them from disk and each copy reads its hash when it runs).
+
+**On one disk** it is one `move` of the folder: a rename, the folder row and every row
+under it re-pathed, undone by a move back. A taken name gets `_N` ("renamed to avoid
+collision").
+
+**Across disks** the folder's `move` is planned as, in order:
+
+1. `mkdir` of the destination folder and every subfolder of the tree, parents first,
+   empty ones included, each flagged as made by this batch.
+2. One `copy_across` per file, in tree order, each into its mirrored place (no
+   `quarantine` after each one). Dot files are copied, `.DS_Store` is not. A
+   `.dam-copy-*` file in the source refuses the move ("Remove the unfinished copy <name>
+   first."), and so does a protected entry anywhere inside. Links are not copied.
+3. One `quarantine` of the whole source folder into its own archive folder's To Delete,
+   with the note `copied to <dst>` and a note counting the links that are not copied. It
+   carries the planned tree and `copied_to`.
+
+When the destination folder already exists, the move merges into it: existing subfolders
+are reused, a free name is copied, and a name taken by a regular file with the same size
+and the same whole second of modification time is planned as a `copy_across` with
+`method` `present` (`ResolvedOpOut.method`; note "already at the destination; checked, not
+copied again"). When it runs, both hashes are read: equal means nothing is written,
+different stops the batch before the last step ("<name> at the destination differs from
+the original; nothing more was moved."). A name taken by anything else gets `_N`. If the
+folder's own name is taken by a file or link, the destination folder is `name_N`. Undo of a
+`present` op does nothing; the earlier batch's undo moves that copy.
+
+Before the last `quarantine` acts, the source folder is listed again and compared with the
+planned tree (names and kinds, and for each copied file the size and modification time its
+copy read). On any difference nothing goes to To Delete, the copies stay, and the batch
+stops with "<folder> changed during the move (<up to five changes>). It stays where it is;
+move it again to copy the rest."
+
+**Index rows.** Each file's row follows its copy as soon as it is copied (as for files), so
+after a Stop the originals still in the source are new, bare rows after the next scan. When
+the last `quarantine` has acted, every folder row of the source tree is re-keyed (the
+destination folder's own Drive id, else a fresh `local:` id when the row had a Drive id,
+else kept) and re-pathed to its mirrored folder, so a folder's collections and notes
+follow it; a row the scanner already made for a destination folder is dropped first unless
+it has attachments. The journal records this in two columns added by migration
+`0036_operation_copied_to`: `operations.copied_to` (where the copy of a folder went) and
+`operations.followed` (JSON `[[old_id, new_id, old_path, new_path], ...]`, the folder rows
+that followed). `dam recover` runs the follow step for a done `quarantine` whose rows
+did not follow. Relabel rewrites both columns.
+
+**Undo**, newest first: the folder comes back from To Delete (its rows follow back from
+`followed`), each copy goes to the destination's To Delete (rows go back to the originals),
+then each made folder is removed while it is still the folder the batch made and empty. A
+made folder that is not empty stays and the result lists it. A stopped batch undoes the
+same way without the first step.
+
+**Preview and job.** The preview carries no new fields: the folder summary is built from
+the ops (folders made, files copied and their size, files `present`, where the folder goes
+and which To Delete it ends in), and warns about links outside the folder that point into it
+("N links elsewhere point into this folder and will point to nothing", names listed up to
+five). On a Stop the job result is "Copied N of M files; <folder> stays in place until all
+are copied"; when it finishes, "Moved folder <name> (M files) to <place>". Activity says
+"Moved folder <name> to <folder>" on one disk. Stop for a folder move ends the batch after
+the file in hand; unlike a file move, no `quarantine` follows each copy, so the source
+stays whole.
+
 ## Safety model in detail
 
 The user guide's "What dam never does" gives the short version. The details:
@@ -977,8 +1054,10 @@ The user guide's "What dam never does" gives the short version. The details:
   extra folder goes to `<label>/##. To Delete/<path inside the folder>`, created on demand,
   and Restore moves it back inside the same folder. A move between folders on different
   disks is a verified copy followed by a move of the original to its own folder's To
-  Delete (see [Moves across disks](#moves-across-disks)); nothing is deleted. A folder that
-  is not connected refuses every operation that touches it.
+  Delete (see [Moves across disks](#moves-across-disks)); nothing is deleted. One folder
+  at a time moves the same way: a rename on one disk, and across disks every file copied
+  and verified first, then the whole source folder to its own To Delete in one move (see
+  [Folder moves](#folder-moves)). A folder that is not connected refuses every operation that touches it.
   While in `##. To Delete`, a file is read-only for the API: setting tags, a summary or a
   note, a checklist entry, ★ / !, a tray item and adding to a collection answer 400
   ("Marked for deletion: restore it first"); its existing tags, collection membership,

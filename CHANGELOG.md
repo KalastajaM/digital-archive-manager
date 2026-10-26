@@ -8,6 +8,15 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Move a folder in Browse.** Drag a folder row onto a folder, the other pane or a
+  breadcrumb, or use **Move to…** in its panel. On the same disk it is a rename. To a
+  folder on another disk, dam copies and checks every file in the background, and only
+  when all are copied moves the original folder to the To Delete of its own archive
+  folder. **Stop** leaves the original whole; moving the folder again finishes the job
+  without duplicates, and if the original changed meanwhile nothing goes to To Delete.
+  Links inside the folder are not copied (they go to To Delete with it), and the preview
+  warns about links that would point to nothing. Collections and notes on the folder
+  follow it, and **Undo** puts everything back. Breadcrumbs now also take files.
 - **Compare and resolve same-name files in Duplicates.** Files with the same name but
   other content (versions of a document, or a PDF saved twice) now open side by side in
   one window with **Compare side by side**, with **Keep this one** under each. They get
