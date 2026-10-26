@@ -1,19 +1,35 @@
 """File index repository."""
 
 import json
+import threading
 import time
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, fields
 from datetime import date
 from pathlib import PurePosixPath
+from typing import TypeVar
 
-from sqlalchemy import Connection, Engine, and_, case, false, func, not_, or_, select, text, update
+from sqlalchemy import (
+    Connection,
+    Engine,
+    Text,
+    and_,
+    case,
+    false,
+    func,
+    not_,
+    or_,
+    select,
+    text,
+    update,
+)
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.codes.qr_model import QrRead
 from dam.core.paths import nfc
 from dam.db.engine import write_tx
+from dam.db.generation import WriteGeneration
 from dam.db.tables import (
     checklist_items,
     collection_members,
@@ -52,6 +68,12 @@ PARKED = "/parked/"  # no archive-relative path starts with "/"
 
 # the rows the status counts and the inbox list count: no folders, links or parked rows
 _COUNTED = (files.c.is_dir.is_not(True), files.c.is_link.is_not(True), files.c.parked_at.is_(None))
+
+
+# the tables the kept status answers read (``FileRepo._kept_answer``)
+_STATUS_TABLES = ("files", "file_layouts", "file_text")
+
+T = TypeVar("T")
 
 
 def _folded(path: str) -> str:
@@ -111,6 +133,43 @@ def _below(folder_nfc: str):
     (``"0"`` follows ``"/"``; SQLite compares text bytewise, in code point order), and
     nothing else does, so ``"Sauna 2"`` is never under ``"Sauna"``."""
     return and_(files.c.path_nfc >= folder_nfc + "/", files.c.path_nfc < folder_nfc + "0")
+
+
+def _at_or_below(folder_nfc: str):
+    """``path_nfc`` is ``folder_nfc`` or lies below it (see ``_below``)."""
+    return or_(files.c.path_nfc == folder_nfc, _below(folder_nfc))
+
+
+# One ``path_nfc`` per direct child of the folder with the ``path_nfc`` prefix ``:pre``
+# (``""`` = the archive root): the child's own path, or for a child folder without a
+# row of its own the first path below it. Each step is one seek on ix_files_path_nfc:
+# past a child with no "/" after the prefix to the next path (``|| char(1)``: no path
+# holds NUL), past a child folder to the first path after its subtree (``"<child>0"``,
+# as ``_below``). So a listing reads its children, not everything below them.
+_CHILDREN_WALK = """
+WITH RECURSIVE walk(p) AS (
+    SELECT (SELECT min(path_nfc) FROM files WHERE path_nfc >= :pre {upper})
+    UNION ALL
+    SELECT (
+        SELECT min(path_nfc) FROM files
+        WHERE path_nfc >= CASE
+            WHEN instr(substr(p, :n + 1), '/') = 0 THEN p || char(1)
+            ELSE substr(p, 1, :n + instr(substr(p, :n + 1), '/') - 1) || '0'
+        END {upper}
+    )
+    FROM walk WHERE p IS NOT NULL
+)
+SELECT p FROM walk WHERE p IS NOT NULL
+"""
+
+
+def _children_walk(prefix: str):
+    """``_CHILDREN_WALK`` for the folder prefix ``prefix`` (``"<folder>/"``, or ``""``)."""
+    upper = "AND path_nfc < :hi" if prefix else ""
+    params = {"pre": prefix, "n": len(prefix)}
+    if prefix:
+        params["hi"] = prefix[:-1] + "0"
+    return text(_CHILDREN_WALK.format(upper=upper)).bindparams(**params).columns(p=Text)
 
 
 @dataclass
@@ -183,6 +242,12 @@ class FileRepo:
         # every load of the code table
         self.code_folders: dict[str, str] = {}
         self._bound: Connection | None = None
+        # the status answers (``counts``, ``layout_progress``, ``layout_unread``) kept
+        # until a write to the tables they read: the status bar asks every few seconds
+        self._kept_gen: WriteGeneration | None = None
+        self._kept: dict[tuple, object] = {}
+        self._kept_at = -1
+        self._kept_lock = threading.Lock()
 
     def in_inbox(self, rec: FileRecord) -> bool:
         """The file sits directly in the inbox folder or in a filing code's inbox folder
@@ -243,6 +308,29 @@ class FileRepo:
         esc = self.inbox.strip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         return files.c.path_nfc.like(esc + "/%", escape="\\")
 
+    def _kept_answer(self, key: tuple, compute: Callable[[], T]) -> T:
+        """``compute()``, or its answer from an earlier call while nothing in this process
+        has written to the tables it reads since (see ``WriteGeneration``). Not kept
+        inside a ``transaction``: its own writes are not committed yet."""
+        if self._bound is not None:
+            return compute()
+        with self._kept_lock:
+            if self._kept_gen is None:
+                self._kept_gen = WriteGeneration(self.engine, _STATUS_TABLES)
+            gen = self._kept_gen
+            at = gen.value
+            if self._kept_at == at and key in self._kept:
+                return self._kept[key]  # type: ignore[return-value]
+        answer = compute()
+        with self._kept_lock:
+            # a write while computing: the answer may be from the old rows
+            if gen.value == at:
+                if self._kept_at != at:
+                    self._kept.clear()
+                    self._kept_at = at
+                self._kept[key] = answer
+        return answer
+
     @staticmethod
     def record_from_row(row) -> FileRecord:
         """A ``FileRecord`` from a row selected from ``files`` (all columns)."""
@@ -285,22 +373,37 @@ class FileRepo:
         candidates for a path spelled in another case on a case-insensitive disk."""
         want = nfc(rel)
         folded = want.casefold()
-        cond = [
-            func.length(files.c.path_nfc) == len(want),
-            files.c.missing.is_not(True),
-            files.c.parked_at.is_(None),
-        ]
+        parts = folded.split("/")  # folding never makes or removes a "/"
+        # the spellings of each folder level in turn, from each level's children
+        prefixes = [""]
         with self._conn() as conn:
-            rows = conn.execute(select(files).where(*cond)).all()
-        return [_record(r) for r in rows if r.path_nfc.casefold() == folded]
+            for i, part in enumerate(parts):
+                last = i == len(parts) - 1
+                found: set[str] = set()
+                for prefix in prefixes:
+                    for p in conn.execute(_children_walk(prefix)).scalars():
+                        name = p[len(prefix) :].partition("/")[0]
+                        if name.casefold() == part:
+                            found.add(prefix + name if last else prefix + name + "/")
+                prefixes = sorted(found)
+            rows = []
+            for chunk in _chunks(prefixes):
+                cond = [
+                    files.c.path_nfc.in_(chunk),
+                    files.c.missing.is_not(True),
+                    files.c.parked_at.is_(None),
+                ]
+                rows += conn.execute(select(files).where(*cond)).all()
+        return [_record(r) for r in rows if len(r.path_nfc) == len(want)]
 
     def list_dir(self, rel: str) -> list[FileRecord]:
         """Direct children of ``rel`` (``""`` = archive root) that are not missing."""
         prefix = nfc(rel) + "/" if rel else ""
-        cond = [files.c.missing.is_not(True)]
-        if prefix:
-            cond.append(func.substr(files.c.path_nfc, 1, len(prefix)) == prefix)
-        cond.append(func.instr(func.substr(files.c.path_nfc, len(prefix) + 1), "/") == 0)
+        cond = [
+            files.c.path_nfc.in_(_children_walk(prefix)),
+            files.c.missing.is_not(True),
+            func.instr(func.substr(files.c.path_nfc, len(prefix) + 1), "/") == 0,
+        ]
         with self._conn() as conn:
             rows = conn.execute(select(files).where(and_(*cond)).order_by(files.c.path)).all()
         return [_record(r) for r in rows]
@@ -446,8 +549,13 @@ class FileRepo:
 
         One key per ``index_state`` of the present (not missing) files, plus ``total``
         (present files), ``inbox`` (present files directly in the inbox or in a filing
-        code's inbox folder, as ``inbox_files``) and ``missing``.
+        code's inbox folder, as ``inbox_files``) and ``missing``. Kept until the next
+        write (``_kept_answer``): counting reads every row.
         """
+        key = ("counts", tuple(sorted(self.code_folders.items())))
+        return dict(self._kept_answer(key, self._count))
+
+    def _count(self) -> dict[str, int]:
         present = files.c.missing.is_not(True)
         stmt = (
             select(
@@ -455,7 +563,13 @@ class FileRepo:
                 func.sum(case((present, 1), else_=0)),
                 func.sum(case((present, 0), else_=1)),
             )
-            .where(*_COUNTED)
+            # "+ 0": keeps the planner off ix_files_parked_at (nearly every row is
+            # unparked): a walk of ix_files_index_state_retry_at is about twice as fast
+            .where(
+                files.c.is_dir.is_not(True),
+                files.c.is_link.is_not(True),
+                (files.c.parked_at + 0).is_(None),
+            )
             .group_by(files.c.index_state)
         )
         under = select(files.c.path_nfc).where(*_COUNTED, present, self._under_inbox())
@@ -818,7 +932,10 @@ class FileRepo:
 
     def layout_progress(self) -> tuple[int, int]:
         """``(read, total)`` over the files the layout pass reads: how many have a layout
-        for their current content, and how many there are."""
+        for their current content, and how many there are. Kept until the next write."""
+        return self._kept_answer(("layout_progress",), self._layout_progress)
+
+    def _layout_progress(self) -> tuple[int, int]:
         read = case((self._has_layout(), 1), else_=0)
         with self._conn() as conn:
             row = conn.execute(
@@ -831,7 +948,10 @@ class FileRepo:
     def layout_unread(self) -> tuple[int, int]:
         """``(text, scans)``: of the files the layout pass has not read yet, how many are PDFs
         whose text came from their text layer (read quickly, no OCR) and how many need OCR
-        (scans, photos): the two are read at different speeds."""
+        (scans, photos): the two are read at different speeds. Kept until the next write."""
+        return self._kept_answer(("layout_unread",), self._layout_unread)
+
+    def _layout_unread(self) -> tuple[int, int]:
         quick = and_(files.c.ext == "pdf", file_text.c.ocr_used.is_not(True))
         with self._conn() as conn:
             row = conn.execute(
@@ -842,10 +962,7 @@ class FileRepo:
         return int(row[1]), int(row[0]) - int(row[1])
 
     def _in_inbox(self):
-        return or_(
-            files.c.path_nfc == self.inbox,
-            func.substr(files.c.path_nfc, 1, len(self.inbox) + 1) == self.inbox + "/",
-        )
+        return _at_or_below(self.inbox)
 
     def upsert(self, rec: FileRecord) -> None:
         """Insert or update by ``drive_id``; a different row holding the path is dropped."""
@@ -907,12 +1024,11 @@ class FileRepo:
         target = nfc(rel)
         cond = files.c.path_nfc == target
         if descendants:
-            cond = or_(cond, func.substr(files.c.path_nfc, 1, len(target) + 1) == target + "/")
+            cond = or_(cond, _below(target))
         conds = [cond, files.c.drive_id != keep_id]
         if except_under is not None:
             old = nfc(except_under)
-            conds.append(files.c.path_nfc != old)
-            conds.append(func.substr(files.c.path_nfc, 1, len(old) + 1) != old + "/")
+            conds.append(not_(_at_or_below(old)))
         with self._conn(write=True) as conn:
             ids = list(conn.execute(select(files.c.drive_id).where(and_(*conds))).scalars())
             for drive_id in ids:
@@ -1012,36 +1128,14 @@ class FileRepo:
             files.c.missing.is_not(True),
         ]
         if subtree:
-            sub = nfc(subtree)
-            prefix = sub + "/"
-            cond.append(
-                or_(
-                    files.c.path_nfc == sub,
-                    func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-                )
-            )
-        for rel in skipped:
-            sk = nfc(rel)
-            skip_prefix = sk + "/"
-            cond.append(
-                not_(
-                    or_(
-                        files.c.path_nfc == sk,
-                        func.substr(files.c.path_nfc, 1, len(skip_prefix)) == skip_prefix,
-                    )
-                )
-            )
+            cond.append(_at_or_below(nfc(subtree)))
+        cond.extend(not_(_at_or_below(nfc(rel))) for rel in skipped)
         with self._conn(write=True) as conn:
             return conn.execute(update(files).where(and_(*cond)).values(missing=True)).rowcount
 
     @staticmethod
     def _subtree_cond(rel: str):
-        sub = nfc(rel)
-        prefix = sub + "/"
-        return or_(
-            files.c.path_nfc == sub,
-            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-        )
+        return _at_or_below(nfc(rel))
 
     def count_subtree(self, rel: str, *, live_only: bool = False) -> int:
         """Rows at or under ``rel`` (``live_only``: not flagged missing)."""
@@ -1055,11 +1149,7 @@ class FileRepo:
 
     def has_live_under(self, rel: str) -> bool:
         """Some row strictly under ``rel`` is not flagged missing."""
-        prefix = nfc(rel) + "/"
-        cond = and_(
-            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-            files.c.missing.is_not(True),
-        )
+        cond = and_(_below(nfc(rel)), files.c.missing.is_not(True))
         with self._conn() as conn:
             return conn.execute(select(files.c.drive_id).where(cond).limit(1)).first() is not None
 
@@ -1417,12 +1507,11 @@ class FileRepo:
         its FTS name/path updated (or added, with empty text, if it had none).
         """
         old_nfc = nfc(old_rel)
-        prefix = old_nfc + "/"
         depth = len(PurePosixPath(old_rel).parts)
         now = time.time()  # a re-pathed row is on disk right now: a concurrent scan must keep it
         where = files.c.path_nfc == old_nfc
         if recursive:
-            where = or_(where, func.substr(files.c.path_nfc, 1, len(prefix)) == prefix)
+            where = or_(where, _below(old_nfc))
         with self._conn(write=True) as conn:
             rows = conn.execute(
                 select(files.c.drive_id, files.c.path, files.c.is_dir).where(where)

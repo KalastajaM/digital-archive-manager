@@ -154,6 +154,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Browse and the status bar stay fast on large archives.** Opening a folder in
+  Browse reads only that folder's entries instead of going through every file in the
+  archive (about 30 ms down to under 1 ms for a folder in an archive of 200,000 files).
+  The status bar, which checks every five seconds, now reuses its counts until a file
+  actually changes, so an idle app no longer counts the whole archive each time. The
+  app also loads less up front: the code for Help is fetched only when Help opens.
 - **Faster indexing and folder moves on large archives.** Updating the search index for
   one file no longer reads the whole index, so the first indexing of a large archive
   and moving a whole folder are much faster (a folder of 300 files in an archive of

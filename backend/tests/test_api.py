@@ -121,6 +121,19 @@ def test_status(client, app, fake_archive):
     }
 
 
+def test_status_counts_change_right_after_a_write(client, app, fake_archive):
+    fake_archive.add(f"{INBOX}/a.pdf", drive_id="id-1")
+    app.scan()
+    first = client.get("/api/status").json()
+    assert client.get("/api/status").json() == first  # kept between polls
+    app.repo.set_index_state("id-1", "indexed")
+    fake_archive.add(f"{INBOX}/b.pdf", drive_id="id-2")
+    app.scan()
+    now = client.get("/api/status").json()
+    assert (now["files"], now["inbox_count"], now["indexed"]) == (2, 2, 1)
+    assert (first["files"], first["inbox_count"], first["indexed"]) == (1, 1, 0)
+
+
 def test_status_reports_archive_unavailable(client, app, fake_archive, tmp_path):
     os.rename(fake_archive.root, tmp_path / "archive-away")
     try:
