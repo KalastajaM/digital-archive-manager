@@ -745,3 +745,62 @@ def test_subtree_scan_inside_extra(fake_archive, engine, tmp_path):
     os.rename(extra, extra.with_name("unplugged"))
     rep = scan(paths, repo, "Old years/2009")
     assert rep.aborted is True and rep.offline == ["Old years"] and rep.missing == 0
+
+
+def test_file_moved_onto_offline_extra_keeps_its_row(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_extra(fake_archive, engine, tmp_path)
+    fake_archive.add("Taxes/x.pdf", drive_id="id-y")
+    scan(paths, repo)
+    TagRepo(engine).add("id-y", ["tax"])
+    # outside dam: x.pdf goes onto the extra disk and another file takes its old path
+    os.rename(fake_archive.root / "Taxes" / "x.pdf", extra / "x.pdf")
+    fake_archive.add("Taxes/x.pdf", b"other content", drive_id="id-z")
+    away = extra.with_name("unplugged")
+    os.rename(extra, away)
+    rep = scan(paths, repo)
+    assert rep.offline == ["Old years"]
+    kept = repo.get("id-y")
+    assert kept is not None and kept.missing is True  # parked, not deleted
+    assert repo.by_path("Taxes/x.pdf").drive_id == "id-z"
+    assert TagRepo(engine).for_file("id-y") == ["tax"]
+    os.rename(away, extra)
+    rep = scan(paths, repo)
+    assert rep.offline == []
+    back = repo.get("id-y")
+    assert back.path == "Old years/x.pdf" and back.missing is False
+    assert TagRepo(engine).for_file("id-y") == ["tax"]
+
+
+def test_new_empty_extra_is_scanned_not_offline(fake_archive, engine, tmp_path):
+    from dam.config import ExtraFolder
+
+    extra = tmp_path / "disk" / "New disk"
+    extra.mkdir(parents=True)
+    settings = Settings(
+        archive_root=fake_archive.root, extra_folders=[ExtraFolder(label="New", path=extra)]
+    )
+    paths = ArchivePaths(fake_archive.root, settings)
+    repo = FileRepo(engine, inbox=paths.inbox)
+    for _ in range(2):
+        rep = scan(paths, repo)
+        assert rep.offline == [] and rep.aborted is False
+        assert repo.by_path("New").is_dir and repo.by_path("New").missing is False
+
+
+def test_main_with_only_extra_rows_is_judged_on_its_own(engine, tmp_path):
+    from dam.config import ExtraFolder
+
+    main = tmp_path / "bare-main"  # no rows of its own: lists nothing, legitimately
+    main.mkdir()
+    extra = tmp_path / "disk" / "Archive 2000-2015"
+    extra.mkdir(parents=True)
+    (extra / "b.pdf").write_bytes(b"x")
+    settings = Settings(
+        archive_root=main, extra_folders=[ExtraFolder(label="Old years", path=extra)]
+    )
+    paths = ArchivePaths(main, settings)
+    repo = FileRepo(engine, inbox=paths.inbox)
+    scan(paths, repo)
+    rep = scan(paths, repo)
+    assert rep.aborted is False and rep.missing == 0
+    assert repo.by_path("Old years/b.pdf").missing is False

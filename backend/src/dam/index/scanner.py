@@ -342,12 +342,13 @@ def _scan_all(s: _Scan) -> ScanReport:
     """Each folder on its own: one that is not connected is left out completely, so an
     unplugged disk never looks like deleted files."""
     paths, repo, report = s.paths, s.repo, s.report
-    if repo.list_dir("") and _root_looks_empty(paths.root):
+    # A detached folder's rows stay under its label, so a main entry there is a clash too.
+    labels = frozenset(_fold(extra.label) for extra in paths.settings.extra_folders)
+    own_rows = [r for r in repo.list_dir("") if _fold(r.path) not in labels]
+    if own_rows and _root_looks_empty(paths.root):
         # A mount that lists nothing while the index has top-level rows is not "all deleted".
         report.aborted = True
         return report
-    # A detached folder's rows stay under its label, so a main entry there is a clash too.
-    labels = frozenset(_fold(extra.label) for extra in paths.settings.extra_folders)
     if not _walk(s, paths.root, labels):
         report.aborted = True
         return report
@@ -371,7 +372,10 @@ def _scan_all(s: _Scan) -> ScanReport:
         for extra in paths.settings.extra_folders
         if _fold(extra.label) not in attached  # detached: its rows are already missing
     )
-    repo.purge_parked()
+    if not report.offline:
+        # A parked row may belong to a file moved onto a folder that was not walked:
+        # tombstones wait for the next scan that sees every folder.
+        repo.purge_parked()
     report.missing = repo.mark_missing(s.now, "", report.skipped)
     return report
 
