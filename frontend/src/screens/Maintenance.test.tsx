@@ -342,8 +342,13 @@ describe("Maintenance screen", () => {
       "href",
       `/browse?${new URLSearchParams({ left: "10. Financial/Banks", right: "20. Home" })}`,
     );
-    expect(screen.getAllByRole("link", { name: "Show in Browse" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Show in Browse" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /^(Move|Replace)/ })).not.toBeInTheDocument();
+    // Quick Look shows the file over the check, and only its button opens it
+    await user.click(screen.getAllByRole("button", { name: "Quick Look" })[1]);
+    expect(await screen.findByRole("dialog", { name: "Quick Look: statement.pdf" })).toBeInTheDocument();
+    await user.keyboard("{ArrowLeft}");
+    expect(await screen.findByRole("dialog", { name: "Quick Look: Statement.pdf" })).toBeInTheDocument();
   });
 });
 

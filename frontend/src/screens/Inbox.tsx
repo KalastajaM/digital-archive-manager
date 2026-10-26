@@ -540,7 +540,9 @@ export default function Inbox() {
               const cls = [i === index && "selected", isChecked && "checked", (multi ? isChecked : i === index) && "highlighted"]
                 .filter(Boolean)
                 .join(" ");
-              const date = e.record.mtime ? ` · ${shortDate(e.record.mtime)}` : "";
+              const date = e.record.mtime ? shortDate(e.record.mtime) : "";
+              // the file's own name first: a suggested name is only that until it is filed
+              const suggested = e.suggestion.name !== name ? e.suggestion.name : null;
               return (
                 <li
                   key={id}
@@ -569,13 +571,14 @@ export default function Inbox() {
                   >
                     <Thumb record={e.record} />
                     <span className="entry-text">
-                      <span className="entry-suggestion">
-                        {visible(e.suggestion.name)}
+                      <span className="entry-name">
+                        {visible(name)}
                         <MarkIcons marks={e.record.marks} driveId={id} path={e.record.path} />
                       </span>
                       <span className="entry-meta">
-                        {visible(name)}
                         {date}
+                        {date && suggested && " · "}
+                        {suggested && <>Suggested: {visible(suggested)}</>}
                       </span>
                       <ScanChip prefill={e.prefill} today={today} />
                       <CodeBadge codes={e.suggestion.codes} />
