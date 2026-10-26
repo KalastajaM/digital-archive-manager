@@ -279,5 +279,6 @@ def test_open_file_in_disconnected_folder_says_so(extra_folder, app, client, cal
     os.rename(extra_folder.root, gone)
     r = post(client, "/api/files/x1/open")
     assert r.status_code == 409
-    assert f"'Old years' is not connected ({extra_folder.root.resolve()}). Connect it" in r.text
+    want = f"'Old years' is not connected ({extra_folder.root.resolve()}). Connect it"
+    assert want in r.json()["error"]
     assert calls == []

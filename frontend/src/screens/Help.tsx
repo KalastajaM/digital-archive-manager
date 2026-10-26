@@ -2,15 +2,20 @@
  * stays the one source (the same file reads on GitHub). Its contents run down the left;
  * the guide's own Contents list is left out here, the side list replaces it. A heading's
  * id is GitHub's anchor for it, so `/help#trays` and the guide's own `#trays` links both
- * work. Links to the technical reference open it on GitHub, in a new tab. */
+ * work. Links to the technical reference open it on GitHub, in a new tab. The diagrams of
+ * how dam works sit under that section's heading (they are app code, so GitHub has the
+ * text only). */
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef } from "react";
 import Markdown, { type Components } from "react-markdown";
 import { useLocation, useNavigate } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import guide from "../../../docs/guide.md?raw";
+import { HowDamWorks } from "../components/HowDamWorks";
 import { Toolbar } from "../components/ui/Toolbar";
 
 const DOCS_URL = "https://github.com/KalastajaM/digital-archive-manager/blob/main/docs/";
+/** The section the diagrams are shown under. */
+export const DIAGRAMS_SECTION = "how-dam-works";
 
 /** GitHub's anchor for a heading: lower case, punctuation dropped, spaces as hyphens. */
 export function slug(text: string): string {
@@ -72,7 +77,11 @@ export default function Help() {
   };
 
   const components: Components = {
-    h2: ({ children }) => <h2 id={slug(textOf(children))}>{children}</h2>,
+    h2: ({ children }) => {
+      const id = slug(textOf(children));
+      const heading = <h2 id={id}>{children}</h2>;
+      return id === DIAGRAMS_SECTION ? <>{heading}<HowDamWorks /></> : heading;
+    },
     h3: ({ children }) => <h3 id={slug(textOf(children))}>{children}</h3>,
     a: ({ href = "", children }) => {
       if (href.startsWith("#")) {

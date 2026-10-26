@@ -35,6 +35,7 @@ from dam.api.routers import (
     trays,
 )
 from dam.api.routers import archives as archives_router
+from dam.api.routers import snapshots as snapshots_router
 from dam.api.schemas import ErrorBody
 from dam.api.security import (
     ArchiveGuardMiddleware,
@@ -54,6 +55,8 @@ from dam.services.errors import (
     StalePreview,
     TooLarge,
 )
+from dam.services.snapshots import Reopener, SnapshotService
+from dam.snapshots import Folders
 
 # Known errors -> HTTP status; anything else is a 500 with a generic body.
 ERROR_STATUS: dict[type[Exception], int] = {
@@ -160,6 +163,13 @@ def create_api(
     api.state.dam = app
     if archives is not None:
         api.state.archives = archives
+    host = archives.switcher if archives is not None else None
+    api.state.snapshots = SnapshotService(
+        app.app_paths,
+        Folders(app.settings.archive_root, tuple(app.settings.extra_folders)),
+        host if isinstance(host, Reopener) else None,
+        pending=lambda: bool(app.activity.pending()),
+    )
     for module in (
         system,
         inbox,
@@ -183,6 +193,7 @@ def create_api(
         codes,
         rules,
         archives_router,
+        snapshots_router,
         folders,
         setup,
         settings,

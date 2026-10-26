@@ -1526,12 +1526,19 @@ class AILogOut(BaseModel):
 # -- archives (profiles) -----------------------------------------------------------
 
 
+class ArchiveExtraFolderOut(BaseModel):
+    label: str
+    path: str
+    attached: bool  # False: detached (kept in the settings, not part of the archive)
+
+
 class ArchiveOut(BaseModel):
     id: str
     name: str
     color: str
     data_dir: str  # where its settings, index and logs live
     archive_root: str | None  # its archive folder (None: not set up yet)
+    extra_folders: list[ArchiveExtraFolderOut] = []  # its other archive folders, if any
     configured: bool
     current: bool  # the one this window shows
     in_use_elsewhere: bool  # another dam process serves it
@@ -1574,10 +1581,45 @@ class ArchiveForgetOut(BaseModel):
 
 
 class ArchiveRevealIn(_In):
-    what: Literal["data", "archive"]
+    what: Literal["data", "archive", "extra"]
+    label: str | None = Field(default=None, max_length=255)  # which extra folder
 
 
-# -- archive folders (the main folder and the extra ones) ------------------------------
+# -- snapshots ----------------------------------------------------------------
+
+
+class SnapshotOut(BaseModel):
+    name: str
+    created_at: str  # ISO 8601 with the offset
+    size: int  # bytes
+    kind: Literal["manual", "before-restore"]
+    imported: bool  # added with Import
+    revision: str | None  # the database's migration revision when it was taken
+    app_version: str | None
+    archive_root: str | None
+    # taken for another archive folder: a restore keeps this archive's folders
+    other_folder: bool
+    problem: str | None  # why it cannot be restored here; None when it can
+
+
+class SnapshotsOut(BaseModel):
+    folder: str  # <data dir>/snapshots
+    snapshots: list[SnapshotOut]  # newest first
+    can_restore: bool  # False: this window cannot close and reopen the archive
+
+
+class SnapshotRestoreIn(_In):
+    # required: the user was asked whether to keep the current state as a snapshot first
+    snapshot_current: bool
+    # the user confirmed restoring a snapshot of another archive folder
+    other_folder_ok: bool = False
+
+
+class SnapshotRestoreOut(BaseModel):
+    restored: str
+    safety_snapshot: SnapshotOut | None  # the snapshot of the state before the restore
+    replaced_folder: str  # where the replaced settings were moved (nothing is deleted)
+    kept_folders: bool  # the snapshot's folder settings were replaced by this archive's
 
 
 class ArchiveFolderOut(BaseModel):
