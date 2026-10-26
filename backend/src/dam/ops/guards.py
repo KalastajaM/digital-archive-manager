@@ -242,9 +242,11 @@ def _check_name(name: str) -> None:
 
 def check_not_label(paths: ArchivePaths, rel: str) -> None:
     """A top-level entry of the main folder may not be named like an extra folder's
-    label: the label would hide it (Browse shows the extra folder there)."""
+    label: the label would hide it (Browse shows the extra folder there). Detached
+    entries count too: their index rows stay under the label."""
     parts = PurePosixPath(rel).parts
-    if len(parts) == 1 and _fold(parts[0]) in {_fold(label) for label in paths.extra_labels}:
+    reserved = {_fold(e.label) for e in paths.settings.extra_folders}
+    if len(parts) == 1 and _fold(parts[0]) in reserved:
         raise GuardError(f"'{parts[0]}' is the name of an archive folder. Choose another name.")
 
 

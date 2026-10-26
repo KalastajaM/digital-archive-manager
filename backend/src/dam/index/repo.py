@@ -817,11 +817,15 @@ class FileRepo:
     def mark_missing(
         self, seen_before: float, subtree: str = "", skipped: Sequence[str] = ()
     ) -> int:
-        """Flag rows not seen since ``seen_before`` (limited to ``subtree``); returns count.
+        """Flag rows not seen since ``seen_before`` (never seen counts too), limited to
+        ``subtree``; returns count.
 
         Rows at or under any ``skipped`` rel (unreadable on disk) are left alone.
         """
-        cond = [files.c.last_seen < seen_before, files.c.missing.is_not(True)]
+        cond = [
+            or_(files.c.last_seen.is_(None), files.c.last_seen < seen_before),
+            files.c.missing.is_not(True),
+        ]
         if subtree:
             sub = nfc(subtree)
             prefix = sub + "/"

@@ -160,7 +160,9 @@ def test_add_writes_the_settings_and_changes_nothing_on_disk(app_paths, fake_arc
     new.mkdir(parents=True)
     (new / "a.txt").write_text("x", encoding="utf-8")
     before = sorted(p.name for p in fake_archive.root.rglob("*"))
-    change = add_folder(app_paths, " Archive 2016 ", new, dry_run=False)
+    change = add_folder(
+        app_paths, " Archive 2016 ", new, dry_run=False, store=None, current_id=None
+    )
     assert (change.label, change.path, change.files, change.reopen) == (
         "Archive 2016",
         str(new),
@@ -177,14 +179,14 @@ def test_add_writes_the_settings_and_changes_nothing_on_disk(app_paths, fake_arc
 
 def test_add_refuses_with_the_message(app_paths, fake_archive):
     with pytest.raises(InvalidRequest, match="already part of this archive"):
-        add_folder(app_paths, "Same", fake_archive.root, dry_run=False)
+        add_folder(app_paths, "Same", fake_archive.root, dry_run=False, store=None, current_id=None)
 
 
 def test_dry_run_writes_nothing(app_paths, extra_folder, app, tmp_path):
     new = tmp_path / "disk2"
     new.mkdir()
     before = settings_bytes(app_paths)
-    added = add_folder(app_paths, "New", new, dry_run=True)
+    added = add_folder(app_paths, "New", new, dry_run=True, store=None, current_id=None)
     detached = detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=True)
     assert not added.reopen and not detached.reopen
     assert settings_bytes(app_paths) == before
@@ -217,7 +219,7 @@ def test_detach_marks_rows_missing_and_attach_restores(app_paths, extra_folder, 
     assert record.missing and record.path == rel
     assert TagRepo(app.engine).for_file("x1") == ["taxes"]
 
-    back = attach_folder(app_paths, "old YEARS", dry_run=False)
+    back = attach_folder(app_paths, "old YEARS", dry_run=False, store=None, current_id=None)
     assert back.reopen
     assert load_settings(app_paths).extra_folders[0].attached
     # the scanner (a later step) sees the rows again; the identity and the tag stayed
@@ -233,7 +235,7 @@ def test_attach_checks_the_overlap_again(app_paths, extra_folder, app, fake_arch
     data["extra_folders"][0]["path"] = str(fake_archive.root / "10. Financial")
     (app_paths.config_dir / "settings.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
     with pytest.raises(InvalidRequest, match="inside 'the main folder'"):
-        attach_folder(app_paths, "Old years", dry_run=False)
+        attach_folder(app_paths, "Old years", dry_run=False, store=None, current_id=None)
     assert not load_settings(app_paths).extra_folders[0].attached
 
 
@@ -280,3 +282,43 @@ def test_rename_of_a_top_level_entry_to_a_label_name_refused(extra_folder, app, 
         app.executor.preview(refused)
     allowed = Plan([Op(OpKind.RENAME, "Foo", "Bar", allow_top_level=True)], origin="ui")
     app.executor.preview(allowed)
+
+
+def test_label_stays_reserved_while_detached(app_paths, extra_folder):
+    from dam.app import App
+
+    f = app_paths.config_dir / "settings.yaml"
+    data = yaml.safe_load(f.read_text(encoding="utf-8"))
+    data["extra_folders"][0]["attached"] = False
+    f.write_text(yaml.safe_dump(data), encoding="utf-8")
+    application = App.create(app_paths.data_dir)
+    try:
+        assert application.paths.extra_labels == ()
+        plan = Plan([Op(OpKind.MKDIR, None, "OLD YEARS")], origin="ui", new_folders=True)
+        with pytest.raises(GuardError, match="is the name of an archive folder"):
+            application.executor.preview(plan)
+    finally:
+        application.close()
+
+
+def test_attach_refused_when_a_main_entry_took_the_label(
+    app_paths, extra_folder, app, fake_archive
+):
+    detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    (fake_archive.root / "old YEARS").mkdir()
+    with pytest.raises(InvalidRequest, match="already the name of a folder in the main folder"):
+        attach_folder(app_paths, "Old years", dry_run=False, store=None, current_id=None)
+    assert not load_settings(app_paths).extra_folders[0].attached
+
+
+def test_detach_dry_run_count_matches_the_real_one(app_paths, extra_folder, app):
+    from dam.index.repo import FileRecord
+
+    _index_extra(app, extra_folder, "2009/a.pdf", "x1")
+    path = extra_folder.add("2010/b.pdf", b"x", drive_id="x2")
+    app.repo.upsert(  # a row that was never seen (NULL last_seen)
+        FileRecord(drive_id="x2", path="Old years/2010/b.pdf", size=1, mtime=path.stat().st_mtime)
+    )
+    preview = detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=True)
+    real = detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    assert preview.files == real.files == 2

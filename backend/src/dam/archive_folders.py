@@ -50,14 +50,19 @@ def check_label(label: str, paths: ArchivePaths, settings: Settings) -> str | No
         return str(e)
     if _taken(clean, settings):
         return f"There is already an archive folder labelled '{clean}'. Choose another label."
+    return _main_clash(clean, paths)
+
+
+def _main_clash(label: str, paths: ArchivePaths) -> str | None:
+    """Why ``label`` is the name of a top-level entry of the main folder, or None."""
     try:
         with os.scandir(paths.root) as entries:
             names = [entry.name for entry in entries]
     except OSError:
         names = []
-    if any(_fold(name) == _fold(clean) for name in names):
+    if any(_fold(name) == _fold(label) for name in names):
         return (
-            f"'{clean}' is already the name of a folder in the main folder. Choose another label."
+            f"'{label}' is already the name of a folder in the main folder. Choose another label."
         )
     return None
 
@@ -123,8 +128,9 @@ def add_folder(
     label: str,
     path: Path,
     dry_run: bool,
-    store: ProfileStore | None = None,
-    current_id: str | None = None,
+    *,
+    store: ProfileStore | None,
+    current_id: str | None,
 ) -> FolderChange:
     """Add ``path`` to the archive as an extra folder shown under ``label``."""
     settings, paths = _context(app_paths)
@@ -175,15 +181,18 @@ def attach_folder(
     app_paths: AppPaths,
     label: str,
     dry_run: bool,
-    store: ProfileStore | None = None,
-    current_id: str | None = None,
+    *,
+    store: ProfileStore | None,
+    current_id: str | None,
 ) -> FolderChange:
     """Attach a detached folder again; the same overlap checks as for a new one."""
     settings, paths = _context(app_paths)
     target = _entry(settings, label)
     if target.attached:
         return FolderChange(target.label, str(target.path), 0, False)
-    message = check_folder(target.path, paths, store, current_id)
+    message = _main_clash(target.label, paths) or check_folder(
+        target.path, paths, store, current_id
+    )
     if message is None and related(target.path, app_paths.data_dir):
         message = "That folder overlaps the app's own data folder. Choose another."
     if message:
