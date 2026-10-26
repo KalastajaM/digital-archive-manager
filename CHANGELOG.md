@@ -8,6 +8,9 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Print a document from its preview.** The printer button next to the zoom buttons (in
+  the file view, Quick Look and the viewer window) prints a PDF, every page of it, or an
+  image through the browser's print dialog.
 - **One archive can now span several folders.** In Settings, **Archive folders**, **Add
   folder** joins a further folder (for example on an external disk or a cloud drive) under
   a label you choose. Browse, search, tags, collections and Maintenance see one combined

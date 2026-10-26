@@ -2321,3 +2321,12 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .carry-list { margin: var(--sp-1) 0 var(--sp-2); padding-left: var(--sp-5); }
 .carry-list ul { margin: 0; padding-left: var(--sp-4); }
 .entry-offline { flex: none; margin-left: var(--sp-2); font-size: 0.85em; color: var(--muted); }
+
+/* Print (the preview's Print button): only the sheet of page images prints, one page per sheet of paper. */
+.print-sheet { display: none; }
+@media print {
+  body > :not(.print-sheet) { display: none !important; }
+  .print-sheet { display: block; }
+  .print-sheet img { display: block; width: 100%; height: auto; max-height: 98vh; object-fit: contain; break-after: page; }
+  .print-sheet img:last-child { break-after: auto; }
+}

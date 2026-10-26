@@ -448,3 +448,52 @@ describe("FilePreview of a link", () => {
     expect(order).toContain("navigated");
   });
 });
+
+describe("FilePreview print", () => {
+  const sheetImages = () => [...document.querySelectorAll<HTMLImageElement>("body > .print-sheet img")];
+  /** Waits for sheet image ``n`` (1-based) and lets it load, or fail. */
+  const answer = async (n: number, ok: boolean) => {
+    await waitFor(() => expect(sheetImages()).toHaveLength(n));
+    fireEvent(sheetImages()[n - 1], new Event(ok ? "load" : "error"));
+  };
+
+  it("prints every page of a PDF, sharp, and clears the sheet after printing", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    renderWithProviders(<FilePreview file={pdf} />);
+    fireEvent.click(screen.getByRole("button", { name: "Print" }));
+    await answer(1, true);
+    await answer(2, true);
+    await answer(3, false); // past the last page
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    expect(sheetImages().map((i) => i.getAttribute("src"))).toEqual([
+      "/api/files/d1/page/1.png?w=2000",
+      "/api/files/d1/page/2.png?w=2000",
+    ]);
+    fireEvent(window, new Event("afterprint"));
+    expect(document.querySelector(".print-sheet")).toBeNull();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Print" })).toBeEnabled());
+    print.mockRestore();
+  });
+
+  it("prints an image as it is", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    renderWithProviders(<FilePreview file={jpg} />);
+    fireEvent.click(screen.getByRole("button", { name: "Print" }));
+    await answer(1, true);
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    expect(sheetImages().map((i) => i.getAttribute("src"))).toEqual(["/api/files/d2/raw"]);
+    fireEvent(window, new Event("afterprint"));
+    print.mockRestore();
+  });
+
+  it("says so when nothing could be loaded, and prints nothing", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    renderWithProviders(<FilePreview file={pdf} />);
+    fireEvent.click(screen.getByRole("button", { name: "Print" }));
+    await answer(1, false);
+    expect(await screen.findByText("Could not print: the preview did not load")).toBeInTheDocument();
+    expect(print).not.toHaveBeenCalled();
+    expect(document.querySelector(".print-sheet")).toBeNull();
+    print.mockRestore();
+  });
+});
