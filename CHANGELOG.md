@@ -154,6 +154,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Faster indexing and folder moves on large archives.** Updating the search index for
+  one file no longer reads the whole index, so the first indexing of a large archive
+  and moving a whole folder are much faster (a folder of 300 files in an archive of
+  50,000 now takes well under a second instead of about 16 seconds). The status check
+  for interrupted changes is cheaper too. The first start after the update maps the
+  existing search index once, which takes about a second for 50,000 files.
 - **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
   folder's name under the file's name; it names only a folder inside the inbox (such
   as a code's folder). In Maintenance, **Show in Browse** is an icon button (the

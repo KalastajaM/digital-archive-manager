@@ -134,8 +134,12 @@ def _swap_followed(followed: str | None, old: str, new: str) -> str | None:
 def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
     """Rewrite (or, without ``write``, count) the stored paths under ``old``."""
     counts = {"files": 0, "operations": 0, "made_folders": 0, "maintenance_ignored": 0}
-    # the search rows by their rowid (drive_id is not indexed there: one scan, not one each)
-    fts = dict(conn.execute(text("SELECT drive_id, rowid FROM file_fts")).all()) if write else {}
+    # the search rows by their rowid (drive_id is not indexed there), from file_fts_map
+    fts = (
+        dict(conn.execute(text("SELECT drive_id, fts_rowid FROM file_fts_map")).all())
+        if write
+        else {}
+    )
     for drive_id, path in conn.execute(select(files.c.drive_id, files.c.path)).all():
         moved = swap(path, old, new)
         if moved is None:

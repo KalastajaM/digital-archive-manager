@@ -5,7 +5,7 @@ import pytest
 import xattr
 from sqlalchemy import insert, select, text
 
-from conftest import posix_names, posix_permissions
+from conftest import posix_names, posix_permissions, put_fts_row
 from dam.config import Settings
 from dam.core.paths import ArchivePaths
 from dam.db.tables import file_tags, file_text, files
@@ -201,11 +201,7 @@ def seed_children(engine, drive_id, path, body="hello"):
     with engine.begin() as conn:
         conn.execute(insert(file_text), {"drive_id": drive_id, "text": body})
         # the scan already wrote a name-only FTS row; replace it, as save_content does
-        conn.execute(text("DELETE FROM file_fts WHERE drive_id = :d"), {"d": drive_id})
-        conn.execute(
-            text("INSERT INTO file_fts(drive_id, name, path, text) VALUES (:d, 'n', :p, :t)"),
-            {"d": drive_id, "p": path, "t": body},
-        )
+        put_fts_row(conn, drive_id, "n", path, body)
     TagRepo(engine).add(drive_id, ["tagged"])
 
 
