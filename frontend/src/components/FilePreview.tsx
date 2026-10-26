@@ -1,4 +1,4 @@
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Printer } from "lucide-react";
 import {
   createContext,
   type Dispatch,
@@ -28,7 +28,9 @@ import { isShortcutIn, useKeydown } from "../keyboard";
 import { openViewer } from "../selection";
 import { inFileManager } from "../fileManager";
 import { visible, visibleText } from "../text";
-import { LaunchButtons, notConnected, useFileLaunch } from "./FileLaunch";
+import { InlineResults, LaunchButtons, notConnected, useFileLaunch } from "./FileLaunch";
+import { pageSrcs, printImages } from "./print";
+import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
 
@@ -71,6 +73,33 @@ type Zoom = ReturnType<typeof useZoom>;
 /** ⤢: the document in the separate viewer window. */
 function OpenInWindow({ driveId }: { driveId: string }) {
   return <IconButton icon={<Maximize2 />} label="Open in window" onClick={() => openViewer(driveId)} />;
+}
+
+/** Print: the PDF's pages (sharp: the widest render) or the image. A failure goes to
+ * the dialog's status line inside Quick Look, else a toast. */
+function PrintButton({ srcs, name }: { srcs: () => Iterable<string>; name: string }) {
+  const [busy, setBusy] = useState(false);
+  const inline = useContext(InlineResults);
+  const toast = useToast();
+  const print = async () => {
+    setBusy(true);
+    try {
+      if ((await printImages(srcs(), name)) === 0) {
+        (inline ?? toast)({ kind: "error", text: "Could not print: the preview did not load" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <IconButton
+      icon={<Printer />}
+      label="Print"
+      onClick={() => void print()}
+      disabled={busy}
+      disabledReason="Preparing to print…"
+    />
+  );
 }
 
 function ZoomControls({ zoom, children }: { zoom: Zoom; children?: ReactNode }) {
@@ -417,6 +446,7 @@ function PdfPages({
         <figure className="pdf-pages" ref={root}>
           <ZoomControls zoom={zoom}>
             {boxes.button}
+            <PrintButton srcs={() => pageSrcs((n) => pageUrl(driveId, n, 2000))} name="Document" />
             {tools}
           </ZoomControls>
           <ZoomFrame zoom={zoom}>
@@ -490,6 +520,7 @@ function ImagePreview({
         <figure className="image-figure" ref={root}>
           <ZoomControls zoom={zoom}>
             {boxes.button}
+            <PrintButton srcs={() => [rawUrl(driveId)]} name={path} />
             {tools}
           </ZoomControls>
           <ZoomFrame zoom={zoom}>

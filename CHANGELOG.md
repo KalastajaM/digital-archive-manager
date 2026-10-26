@@ -8,6 +8,9 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Print a document from its preview.** The printer button next to the zoom buttons (in
+  the file view, Quick Look and the viewer window) prints a PDF, every page of it, or an
+  image through the browser's print dialog.
 - **Snapshots** (Settings, Snapshots): take a snapshot of an archive's database and
   settings while dam runs, and restore one. Before a restore dam asks whether to take a
   snapshot of the current state first. **Export** saves a snapshot through the browser so

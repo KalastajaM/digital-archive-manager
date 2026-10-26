@@ -282,7 +282,7 @@ the x takes the file out, and typing in the field adds it, offering **Create col
 **Undo**), the summary, then what only that view
 has (in a tray: the fields, **Mark done** or **Mark paid** and the action row; in a
 collection: the group), the
-preview with its toolbar (zoom, select box, open, show in Finder, open in window and Quick Look), and last the notes, checklist and history. The summary, notes,
+preview with its toolbar (zoom, select box, print, open, show in Finder, open in window and Quick Look), and last the notes, checklist and history. The summary, notes,
 checklist and history fold. A tray item with several files shows the collections of the
 file you chose.
 
@@ -1160,6 +1160,10 @@ Tags are kept in dam's own database, not in the archive, so changing them moves 
 `+`/`−`/`0`), drag to pan, page through it, and see its details. It opens at Fit, the whole
 page visible. `→`/`←` (or `j`/`k`) go to the next or previous document of the list; Space
 or Esc closes it. It works in the Inbox, the trays, a collection and Browse.
+
+The printer button next to the zoom buttons (in the file view, Quick Look and the viewer
+window) prints a PDF or an image through the browser's print dialog: every page of a PDF
+(up to 300), one page per sheet of paper.
 
 **⤢ Open in window** opens the document in a separate window that **follows the
 selection** of the main window, so you can keep a document beside your work. The pin keeps
