@@ -1,6 +1,7 @@
 """Archive-relative path handling and guards."""
 
 import os
+import time
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -55,6 +56,10 @@ def not_connected_message(folder: ArchiveFolder) -> str:
 
 
 class ArchivePaths:
+    # how long a connectivity answer serves file lists and search (``cached``), so a
+    # slow network mount is not listed for every response; a change always asks afresh
+    connected_ttl_s = 2.0
+
     def __init__(
         self, root: Path, settings: Settings, has_rows: Callable[[str], bool] | None = None
     ) -> None:
@@ -63,6 +68,7 @@ class ArchivePaths:
         # label -> the index has live rows under it (``FileRepo.has_live_under``, wired by
         # ``App``); used by ``is_connected``
         self.has_rows = has_rows
+        self._connected: dict[str, tuple[float, bool]] = {}  # label -> (monotonic, answer)
         self.folders: tuple[ArchiveFolder, ...] = (
             ArchiveFolder("", self.root),
             *(
@@ -108,12 +114,21 @@ class ArchivePaths:
         parts = PurePosixPath(rel).parts
         return folder.root.joinpath(*(parts[1:] if folder.label else parts))
 
-    def is_connected(self, label: str) -> bool:
+    def is_connected(self, label: str, cached: bool = False) -> bool:
+        """Whether the folder ``label`` is connected (``folder_connected``). ``cached``
+        accepts an answer up to ``connected_ttl_s`` old: only for what is shown, never
+        before changing the archive."""
+        now = time.monotonic()
+        last = self._connected.get(label)
+        if cached and last is not None and now - last[0] <= self.connected_ttl_s:
+            return last[1]
         folder = next(f for f in self.folders if f.label == label)
-        return folder_connected(folder, self.has_rows)
+        connected = folder_connected(folder, self.has_rows)
+        self._connected[label] = (now, connected)
+        return connected
 
-    def disconnected_labels(self) -> tuple[str, ...]:
-        return tuple(f.label for f in self.folders[1:] if not self.is_connected(f.label))
+    def disconnected_labels(self, cached: bool = False) -> tuple[str, ...]:
+        return tuple(f.label for f in self.folders[1:] if not self.is_connected(f.label, cached))
 
     @property
     def inbox(self) -> str:

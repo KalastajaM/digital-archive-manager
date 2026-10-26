@@ -393,9 +393,9 @@ def test_tray_files_carry_the_folder_with_one_look_per_response(
     looks = []
     real = xapp.paths.disconnected_labels
 
-    def counted():
+    def counted(cached=False):
         looks.append(1)
-        return real()
+        return real(cached)
 
     monkeypatch.setattr(xapp.paths, "disconnected_labels", counted)
 

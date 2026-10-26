@@ -113,6 +113,14 @@ def _reset_dam_logging():
 
 
 @pytest.fixture(autouse=True)
+def _connectivity_asked_afresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test that unplugs a folder sees it at once; ``test_paths`` tests the cache."""
+    from dam.core.paths import ArchivePaths
+
+    monkeypatch.setattr(ArchivePaths, "connected_ttl_s", 0.0)
+
+
+@pytest.fixture(autouse=True)
 def _isolated_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A bare ``App.create()`` must never reach the real archive or data dir."""
     monkeypatch.setenv("DAM_DATA_DIR", str(tmp_path / "default-data"))

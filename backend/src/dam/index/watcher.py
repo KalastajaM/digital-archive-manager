@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 _JOIN_TIMEOUT_S = 5.0
 _MAX_BACKOFF_S = 300.0
 _FOLDER_CHECK_S = 30.0
+_MAX_WATCH_BACKOFF_S = 1800.0  # a folder that cannot be watched is tried again this rarely
 _NOISE_EVENTS = {"opened", "closed_no_write"}
 
 
@@ -88,6 +89,9 @@ class Watcher:
         self._started = False
         self._watches: dict[str, ObservedWatch] = {}  # folder label ("" = main) -> watch
         self._primed = False  # the first refresh_watches() is the initial setup
+        # label -> (monotonic time of the next try, the wait after that) for a folder
+        # whose watch could not be set up (on Linux: out of inotify watches)
+        self._watch_retry: dict[str, tuple[float, float]] = {}
 
     def start(self) -> None:
         if self._started:
@@ -118,6 +122,7 @@ class Watcher:
                 label = folder.label  # "" for the main folder
                 watched = label in self._watches
                 if label and not self.paths.is_connected(folder.label):
+                    self._watch_retry.pop(label, None)  # plugged in again: try at once
                     if watched:
                         watch = self._watches.pop(label)
                         try:
@@ -128,27 +133,50 @@ class Watcher:
                     continue
                 if watched:
                     continue
+                retry = self._watch_retry.get(label)
+                if retry is not None and time.monotonic() < retry[0]:
+                    continue
                 try:
                     self._watches[label] = self._observer.schedule(
                         _Handler(self), str(folder.root), recursive=True
                     )
-                except OSError:
+                except OSError as e:
                     if not label:
                         raise
-                    log.warning("cannot watch archive folder '%s' (%s)", label, folder.root)
+                    # a recursive watch of a big folder is costly: wait longer each time
+                    wait = min(retry[1] * 2, _MAX_WATCH_BACKOFF_S) if retry else self.folder_check_s
+                    self._watch_retry[label] = (time.monotonic() + wait, wait)
+                    log.warning(
+                        "cannot watch archive folder '%s' (%s): %s; trying again in %.0f s "
+                        "(the full scans still keep its files up to date)",
+                        label,
+                        folder.root,
+                        e,
+                        wait,
+                    )
                     continue
+                self._watch_retry.pop(label, None)
                 if label and not first:
                     reconnected.append(label)
         return reconnected
 
-    def stop(self) -> None:
+    def stop(self, timeout: float | None = None) -> None:
+        """Stop watching and wait for the threads: each at most 5 s, and with
+        ``timeout`` all of them together at most that long."""
         self._stop.set()
         self._wake.set()
+        deadline = None if timeout is None else time.monotonic() + timeout
+
+        def wait() -> float:
+            if deadline is None:
+                return _JOIN_TIMEOUT_S
+            return max(0.0, min(_JOIN_TIMEOUT_S, deadline - time.monotonic()))
+
         if self._started:
             self._observer.stop()
-            self._observer.join(_JOIN_TIMEOUT_S)
+            self._observer.join(wait())
         for t in self._threads:
-            t.join(_JOIN_TIMEOUT_S)
+            t.join(wait())
             if t.is_alive():
                 log.warning("watcher thread %s still running after stop()", t.name)
         self._threads.clear()
@@ -255,6 +283,9 @@ class Watcher:
                 for label in reconnected:
                     if self._stop.is_set():
                         return
+                    # Files that could not be read while it was away are read again now,
+                    # not after their retry wait (up to an hour).
+                    self.repo.retry_now_under(label)
                     # Changes made while the folder was away were never seen as events.
                     report = scan(self.paths, self.repo, subtree=label)
                     if not self._aborted(report):

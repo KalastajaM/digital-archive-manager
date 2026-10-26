@@ -4,7 +4,7 @@
  * the list and its label is free again. */
 import { useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, HardDrive } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type ArchiveFolder,
   addArchiveFolder,
@@ -36,6 +36,20 @@ function DetachSheet({ folder, onClose, onDone }: { folder: ArchiveFolder; onClo
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const label = folder.label ?? "";
+  // A forget also removes the rows of files no longer on the disk, which the list does not
+  // count (a detached folder's are all such): a dry run says how many it really removes.
+  const [forgets, setForgets] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    detachArchiveFolder(label, true, true).then(
+      (c) => live && setForgets(c.files),
+      (e) => live && setProblem(errorText(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [label]);
+  const counting = forget && forgets === null;
   const run = async () => {
     setBusy(true);
     setProblem(null);
@@ -56,14 +70,18 @@ function DetachSheet({ folder, onClose, onDone }: { folder: ArchiveFolder; onClo
           <button type="button" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="primary danger" disabled={busy} onClick={() => void run()}>
+          <button type="button" className="primary danger" disabled={busy || counting} onClick={() => void run()}>
             {detached ? "Forget" : "Detach"}
           </button>
         </>
       }
     >
       {detached ? (
-        <p>{`Forget '${visible(label)}'? It is removed from this list, with the tags, notes and collection places of its ${folder.files} files, and its label can be used again. Nothing on the disk changes.`}</p>
+        forgets === null ? (
+          <p className="first-run-hint">Counting its files…</p>
+        ) : (
+          <p>{`Forget '${visible(label)}'? It is removed from this list, with the tags, notes and collection places of its ${forgets} files, and its label can be used again. Nothing on the disk changes.`}</p>
+        )
       ) : (
         <>
           <p>{`Detach '${visible(label)}'? Its ${folder.files} files leave the archive until you attach it again. Nothing on the disk changes.`}</p>
@@ -71,7 +89,12 @@ function DetachSheet({ folder, onClose, onDone }: { folder: ArchiveFolder; onClo
             <input type="checkbox" checked={ticked} disabled={busy} onChange={(e) => setTicked(e.target.checked)} />
             Also forget their tags, notes and collection places
           </label>
-          {ticked && <p className="first-run-hint">The folder is also removed from this list, so its label can be used again.</p>}
+          {ticked && (
+            <p className="first-run-hint">
+              The folder is also removed from this list, so its label can be used again.
+              {forgets !== null && forgets !== folder.files && ` This forgets ${forgets} files, counting those no longer on the disk.`}
+            </p>
+          )}
         </>
       )}
       {problem && (

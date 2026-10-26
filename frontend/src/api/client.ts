@@ -483,9 +483,9 @@ export const addArchiveFolder = (label: string, path: string, dry_run: boolean) 
   post<FolderChange>("/api/archive-folders", { label, path, dry_run });
 
 /** Take a folder out of the archive (nothing on the disk changes); ``forget`` also drops
- * the tags, notes and collection places of its files. */
-export const detachArchiveFolder = (label: string, forget: boolean) =>
-  post<FolderChange>(`/api/archive-folders/${enc(label)}/detach`, { forget, dry_run: false });
+ * the tags, notes and collection places of its files. ``dry_run``: only count them. */
+export const detachArchiveFolder = (label: string, forget: boolean, dry_run = false) =>
+  post<FolderChange>(`/api/archive-folders/${enc(label)}/detach`, { forget, dry_run });
 
 export const attachArchiveFolder = (label: string) =>
   post<FolderChange>(`/api/archive-folders/${enc(label)}/attach`, { dry_run: false });

@@ -9,11 +9,19 @@ const FOLDERS = {
     { label: null, path: "/Archive", attached: true, connected: true, files: 120 },
     { label: "Scans", path: "/Volumes/Scans", attached: true, connected: true, files: 40 },
     { label: "Vault", path: "/Volumes/Vault", attached: true, connected: false, files: 7 },
-    { label: "Old", path: "/Volumes/Old", attached: false, connected: true, files: 3 },
+    // a detached folder's rows are all marked missing, so the list counts none of them
+    { label: "Old", path: "/Volumes/Old", attached: false, connected: true, files: 0 },
   ],
 };
 const CHANGE = { label: "Scans", path: "/Volumes/Scans", files: 40, restart_needed: false };
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
+// the changes made, not the dry runs that count the files first
+const changes = (calls: Call[], url: string) => posts(calls, url).filter((c) => !(c.body as { dry_run?: boolean }).dry_run);
+const dryRuns = (calls: Call[], url: string) => posts(calls, url).filter((c) => (c.body as { dry_run?: boolean }).dry_run);
+/** A detach route whose dry run counts ``forgets`` rows and whose real run returns ``change``. */
+const detachRoute = (change: typeof CHANGE, forgets: number) => (call: Call) => ({
+  body: (call.body as { dry_run: boolean }).dry_run ? { ...change, files: forgets } : change,
+});
 
 function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
   const calls = mockFetch({ "GET /api/archive-folders": { body: FOLDERS }, ...extra });
@@ -37,38 +45,49 @@ describe("Archive folders settings", () => {
   });
 
   it("Detach asks first, with the file count, and can also forget tags, notes and places", async () => {
-    const { calls, user } = setup({ "POST /api/archive-folders/Scans/detach": { body: CHANGE } });
+    const { calls, user } = setup({ "POST /api/archive-folders/Scans/detach": detachRoute(CHANGE, 40) });
     const scans = (await screen.findAllByRole("listitem"))[1];
     await user.click(within(scans).getByRole("button", { name: "Detach" }));
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByText("Detach 'Scans'? Its 40 files leave the archive until you attach it again. Nothing on the disk changes."),
     ).toBeInTheDocument();
-    expect(posts(calls, "/api/archive-folders/Scans/detach")).toHaveLength(0);
+    expect(changes(calls, "/api/archive-folders/Scans/detach")).toHaveLength(0);
     const removed = "The folder is also removed from this list, so its label can be used again.";
     expect(within(dialog).queryByText(removed)).toBeNull();
     await user.click(within(dialog).getByRole("checkbox", { name: "Also forget their tags, notes and collection places" }));
     expect(within(dialog).getByText(removed)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Detach" }));
-    await waitFor(() => expect(posts(calls, "/api/archive-folders/Scans/detach")).toHaveLength(1));
-    expect(posts(calls, "/api/archive-folders/Scans/detach")[0].body).toEqual({ forget: true, dry_run: false });
+    await waitFor(() => expect(changes(calls, "/api/archive-folders/Scans/detach")).toHaveLength(1));
+    expect(changes(calls, "/api/archive-folders/Scans/detach")[0].body).toEqual({ forget: true, dry_run: false });
   });
 
   it("Forget on a detached folder asks first, then forgets it", async () => {
-    const { calls, user } = setup({ "POST /api/archive-folders/Old/detach": { body: { ...CHANGE, label: "Old" } } });
+    const { calls, user } = setup({ "POST /api/archive-folders/Old/detach": detachRoute({ ...CHANGE, label: "Old" }, 3) });
     const old = (await screen.findAllByRole("listitem"))[3];
     await user.click(within(old).getByRole("button", { name: "Forget" }));
     const dialog = await screen.findByRole("dialog");
+    // the count is the dry run's: the list counts none of a detached folder's files
     expect(
-      within(dialog).getByText(
+      await within(dialog).findByText(
         "Forget 'Old'? It is removed from this list, with the tags, notes and collection places of its 3 files, and its label can be used again. Nothing on the disk changes.",
       ),
     ).toBeInTheDocument();
+    expect(dryRuns(calls, "/api/archive-folders/Old/detach")[0].body).toEqual({ forget: true, dry_run: true });
     expect(within(dialog).queryByRole("checkbox")).toBeNull();
-    expect(posts(calls, "/api/archive-folders/Old/detach")).toHaveLength(0);
+    expect(changes(calls, "/api/archive-folders/Old/detach")).toHaveLength(0);
     await user.click(within(dialog).getByRole("button", { name: "Forget" }));
-    await waitFor(() => expect(posts(calls, "/api/archive-folders/Old/detach")).toHaveLength(1));
-    expect(posts(calls, "/api/archive-folders/Old/detach")[0].body).toEqual({ forget: true, dry_run: false });
+    await waitFor(() => expect(changes(calls, "/api/archive-folders/Old/detach")).toHaveLength(1));
+    expect(changes(calls, "/api/archive-folders/Old/detach")[0].body).toEqual({ forget: true, dry_run: false });
+  });
+
+  it("Detach and forget says when it forgets more files than the list shows", async () => {
+    const { user } = setup({ "POST /api/archive-folders/Scans/detach": detachRoute(CHANGE, 45) });
+    const scans = (await screen.findAllByRole("listitem"))[1];
+    await user.click(within(scans).getByRole("button", { name: "Detach" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Also forget their tags, notes and collection places" }));
+    expect(await within(dialog).findByText(/This forgets 45 files, counting those no longer on the disk\./)).toBeInTheDocument();
   });
 
   it("Attach again attaches the folder", async () => {
