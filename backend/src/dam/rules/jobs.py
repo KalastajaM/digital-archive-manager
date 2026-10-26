@@ -221,6 +221,11 @@ class ReplayJobs:
         job.stop()
         return True
 
+    def running(self) -> bool:
+        """Some rule test is still going through documents or waiting for page 1."""
+        with self._lock:
+            return any(j.state in LIVE for j in self._jobs.values())
+
     def close(self) -> None:
         with self._lock:
             jobs = list(self._jobs.values())

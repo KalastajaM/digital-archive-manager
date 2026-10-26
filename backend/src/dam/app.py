@@ -60,6 +60,9 @@ from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
 
+# why the archive cannot be reopened now (adding, detaching or attaching a folder)
+JOBS_RUNNING = "A maintenance check or rule replay is running. Try again when it has finished."
+
 
 @dataclass(eq=False)
 class App:
@@ -125,7 +128,9 @@ class App:
         )
         self.notes = NotesService(self.engine)
         self.publishers = PublisherRegistry()
-        self.collections = CollectionService(self.engine, self.repo, self.publishers, special)
+        self.collections = CollectionService(
+            self.engine, self.repo, self.publishers, special, quarantines=self.paths.quarantines
+        )
         self.marks = MarkService(self.collections)
         # a locked file (Important, or locked by the owner) is not changed on disk
         self.locks = LockService(self.engine, self.marks.important_paths)
@@ -232,7 +237,7 @@ class App:
             self.notes,
             lambda: self.repo.counts()["inbox"],
             self.repo,
-            special.quarantine,
+            self.paths.quarantines,
             self.convert.unmanaged_count,
             self.inbox.list,
             self.convert_important.unmanaged_count,
@@ -296,6 +301,7 @@ class App:
         try:
             migrate(engine)
             repo = FileRepo(engine, inbox=settings.special_folders.inbox)
+            paths.has_rows = repo.has_live_under  # an empty mount with rows is not connected
             registry = default_registry(settings.ocr_languages)
             return cls(
                 settings=settings,
@@ -335,6 +341,7 @@ class App:
     @property
     def archive_available(self) -> bool:
         """The archive folder can be listed right now (Drive may go away)."""
+        # the main folder: extra folders being offline is reported per folder
         return listable(self.paths.root)
 
     @property
@@ -596,7 +603,10 @@ class App:
         """Full-text search over names and extracted text, with ``name:value`` filters in
         ``query`` (``dam.query``); ``folder`` limits to a subtree, ``tags`` to files that have
         all of them (``tag_mode`` "any": at least one)."""
-        ctx = SearchContext(trays=lambda: [(t.id, t.name) for t in self.trays.defs()])
+        ctx = SearchContext(
+            trays=lambda: [(t.id, t.name) for t in self.trays.defs()],
+            disconnected=self.paths.disconnected_labels(),
+        )
         return search(
             self.engine,
             query,
@@ -606,6 +616,10 @@ class App:
             tag_mode=tag_mode,
             ctx=ctx,
         )
+
+    def jobs_running(self) -> bool:
+        """A maintenance check or a rule replay is running (closing the App ends it)."""
+        return self.maintenance.jobs.running() or self.replay_jobs.running()
 
     def close(self) -> None:
         self.replay_jobs.close()

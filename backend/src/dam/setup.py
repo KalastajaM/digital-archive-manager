@@ -313,6 +313,25 @@ def current_archive_root(app_paths: AppPaths) -> str | None:
     return str(value) if value else None
 
 
+def current_extra_folders(app_paths: AppPaths) -> list[Path]:
+    """The attached extra archive folders in the settings file, read raw like
+    ``current_archive_root`` (no validation, no file: an empty list)."""
+    try:
+        raw = yaml.safe_load(settings_path(app_paths).read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    entries = raw.get("extra_folders") if isinstance(raw, dict) else None
+    out: list[Path] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if (
+            isinstance(entry, dict)
+            and entry.get("path")
+            and entry.get("attached", True) is not False
+        ):
+            out.append(Path(str(entry["path"])).expanduser())
+    return out
+
+
 def is_configured(app_paths: AppPaths) -> bool:
     return current_archive_root(app_paths) is not None
 

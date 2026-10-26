@@ -106,6 +106,23 @@ describe("viewer window", () => {
     expect(calls.some((c) => c.url.startsWith("/api/status"))).toBe(false);
   });
 
+  it("a file on a folder that is not connected says so, and Open and Show are off", async () => {
+    const offline = { ...record("d1", "Kotihoito.pdf"), path: "Scans/Kotihoito.pdf", folder: "Scans", connected: false };
+    mockFetch({
+      "GET /api/files/d1": { body: { record: offline, tags: [] } },
+      "GET /api/files/d1/links": NO_LINKS,
+      "GET /api/inbox": { body: [] },
+    });
+    renderViewer();
+    await waitFor(() => expect(title()).toBe("Kotihoito.pdf"));
+    expect(
+      await screen.findByText("'Scans' is not connected. Connect the disk or sign in to the cloud drive, and it comes back by itself."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Page 1" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Show in / })).toBeDisabled();
+  });
+
   it("a link shows what it links to, without Go to target (this window has no Browse)", async () => {
     const link = { ...record("l1", "deed"), ext: null, is_link: true };
     mockFetch({

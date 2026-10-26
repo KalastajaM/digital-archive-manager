@@ -13,7 +13,7 @@ const STATUS = {
   inbox_count: 0, rule_errors: [], tray_errors: [], recovery_pending: 0,
 };
 const A: DirEntry = {
-  name: "a.pdf", path: "X/a.pdf", is_dir: false, is_link: false, size: 1, mtime: 1, drive_id: "f1", marks: [],
+  name: "a.pdf", path: "X/a.pdf", is_dir: false, is_link: false, size: 1, mtime: 1, drive_id: "f1", connected: true, marks: [],
 };
 const PLAN: ResolvedOp[] = [
   { kind: "quarantine", src: "X/a.pdf", dst: "##. To Delete/X/a.pdf", drive_id: "f1", note: null },

@@ -16,6 +16,7 @@ const entry = (name: string, id: string, marks: DirEntry["marks"] = [], is_dir =
   size: 10,
   mtime: 1,
   drive_id: id,
+  connected: true,
   marks,
 });
 const CHANGE = { collection: { id: 1, name: "Ongoing", kind: "starred", members: [], groups: [] }, batch: null, problems: [], ongoing_status: null };

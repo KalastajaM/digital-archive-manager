@@ -27,7 +27,7 @@ const status = (inbox_exists = true) => ({
 });
 const batch = (id: string, done: ResolvedOp[] = []) => ({ batch_id: id, dry_run: false, done, failed: null, error: null, index_error: null });
 const mkdir = (dst: string): ResolvedOp => ({ kind: "mkdir", src: null, dst, drive_id: null, note: "create missing folder" });
-const dir = (path: string): DirEntry => ({ name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id: `id-${path}`, marks: [] });
+const dir = (path: string): DirEntry => ({ name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id: `id-${path}`, connected: true, marks: [] });
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url.split("?")[0] === url);
 
 // -- the inbox: how documents get in ----------------------------------------------------

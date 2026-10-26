@@ -56,7 +56,7 @@ const TO_READ: TrayDef = {
 };
 const TRAYS = { trays: [TO_PAY, TO_ACTION, TO_READ], errors: [] };
 
-const NORTHPOWER_FILE: ItemFile = { drive_id: "f1", path: "10. Financial/Banks/northpower.pdf", ext: "pdf", state: "ok", in_inbox: false, marks: [] };
+const NORTHPOWER_FILE: ItemFile = { drive_id: "f1", path: "10. Financial/Banks/northpower.pdf", ext: "pdf", state: "ok", in_inbox: false, connected: true, marks: [] };
 
 function item(id: number, overrides: Partial<TrayItem> = {}): TrayItem {
   return {
@@ -108,7 +108,7 @@ const LATER = item(2, {
   fields: { due_date: "2026-11-30", amount: "12.00" },
   date: "2026-11-30",
   file_state: "to_delete",
-  first_file: { drive_id: "f9", path: "a/b.pdf", ext: "pdf", state: "ok", in_inbox: false, marks: [] },
+  first_file: { drive_id: "f9", path: "a/b.pdf", ext: "pdf", state: "ok", in_inbox: false, connected: true, marks: [] },
 });
 const UNDATED = item(3, { title: "Kotihoito", missing_required: ["due_date"], level: "undated", file_state: "missing" });
 const PAID = item(9, {
@@ -120,7 +120,7 @@ const PAID = item(9, {
 
 const FILES: ItemFile[] = [
   NORTHPOWER_FILE,
-  { drive_id: "f2", path: "##. To Delete/receipt.png", ext: "png", state: "to_delete", in_inbox: false, marks: [] },
+  { drive_id: "f2", path: "##. To Delete/receipt.png", ext: "png", state: "to_delete", in_inbox: false, connected: true, marks: [] },
 ];
 const BARCODE_CODE = "521123456000007850000842018000000000539007547034261015";
 const BARCODE: ItemBarcode = {

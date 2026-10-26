@@ -7,7 +7,7 @@ import { ChevronsDownUp, ChevronsUpDown, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { errorText, forgetMaintenanceJobs } from "../api/client";
 import { Duplicates } from "../components/maintenance/Duplicates";
-import { BrokenLinks, EmptyFolders, Missing, Names, Waiting } from "../components/maintenance/ListChecks";
+import { BrokenLinks, EmptyFolders, LabelClashes, Missing, Names, Waiting } from "../components/maintenance/ListChecks";
 import { MaintenanceView, useMaintenanceView } from "../components/maintenance/view";
 import { useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
@@ -62,6 +62,7 @@ function Screen() {
         <Missing />
         <Names />
         <Waiting />
+        <LabelClashes />
       </div>
     </div>
   );

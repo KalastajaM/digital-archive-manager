@@ -15,14 +15,22 @@ from dam.codes.qr_model import QrRead
 from dam.core.paths import nfc
 from dam.db.engine import write_tx
 from dam.db.tables import (
+    checklist_items,
+    collection_members,
+    file_assignments,
     file_barcodes,
+    file_fields,
     file_layouts,
+    file_locks,
     file_qr_codes,
+    file_summaries,
     file_tags,
     file_text,
     files,
     item_files,
     items,
+    member_link_names,
+    notes,
     tags,
 )
 from dam.extract.base import ExtractedText
@@ -817,11 +825,15 @@ class FileRepo:
     def mark_missing(
         self, seen_before: float, subtree: str = "", skipped: Sequence[str] = ()
     ) -> int:
-        """Flag rows not seen since ``seen_before`` (limited to ``subtree``); returns count.
+        """Flag rows not seen since ``seen_before`` (never seen counts too), limited to
+        ``subtree``; returns count.
 
         Rows at or under any ``skipped`` rel (unreadable on disk) are left alone.
         """
-        cond = [files.c.last_seen < seen_before, files.c.missing.is_not(True)]
+        cond = [
+            or_(files.c.last_seen.is_(None), files.c.last_seen < seen_before),
+            files.c.missing.is_not(True),
+        ]
         if subtree:
             sub = nfc(subtree)
             prefix = sub + "/"
@@ -844,6 +856,72 @@ class FileRepo:
             )
         with self._conn(write=True) as conn:
             return conn.execute(update(files).where(and_(*cond)).values(missing=True)).rowcount
+
+    @staticmethod
+    def _subtree_cond(rel: str):
+        sub = nfc(rel)
+        prefix = sub + "/"
+        return or_(
+            files.c.path_nfc == sub,
+            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
+        )
+
+    def count_subtree(self, rel: str, *, live_only: bool = False) -> int:
+        """Rows at or under ``rel`` (``live_only``: not flagged missing)."""
+        cond = [self._subtree_cond(rel)]
+        if live_only:
+            cond.append(files.c.missing.is_not(True))
+        with self._conn() as conn:
+            return conn.execute(
+                select(func.count()).select_from(files).where(and_(*cond))
+            ).scalar_one()
+
+    def has_live_under(self, rel: str) -> bool:
+        """Some row strictly under ``rel`` is not flagged missing."""
+        prefix = nfc(rel) + "/"
+        cond = and_(
+            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
+            files.c.missing.is_not(True),
+        )
+        with self._conn() as conn:
+            return conn.execute(select(files.c.drive_id).where(cond).limit(1)).first() is not None
+
+    def count_live(self) -> int:
+        """Rows not flagged missing, in every folder of the archive."""
+        with self._conn() as conn:
+            return conn.execute(
+                select(func.count()).select_from(files).where(files.c.missing.is_not(True))
+            ).scalar_one()
+
+    def forget_subtree(self, rel: str) -> int:
+        """Remove the index rows at or under ``rel`` with everything the owner gave those
+        files: tags, notes, checklists, collection and item places, summaries, fields,
+        sender and person, locks (the collections and items themselves stay). Returns how
+        many rows. Database only: nothing on disk is touched."""
+        with self._conn(write=True) as conn:
+            ids = list(
+                conn.execute(select(files.c.drive_id).where(self._subtree_cond(rel))).scalars()
+            )
+            for i in range(0, len(ids), 500):
+                chunk = ids[i : i + 500]
+                for table in (notes, checklist_items):
+                    conn.execute(
+                        table.delete().where(
+                            table.c.target_kind == "file", table.c.target_id.in_(chunk)
+                        )
+                    )
+                for table in (
+                    collection_members,
+                    member_link_names,
+                    item_files,
+                    file_summaries,
+                    file_fields,
+                    file_assignments,
+                    file_locks,
+                ):
+                    conn.execute(table.delete().where(table.c.drive_id.in_(chunk)))
+            self._delete_rows(conn, ids)
+        return len(ids)
 
     def mark_missing_path(self, rel: str) -> None:
         """Flag the row at ``rel`` as missing (a folder just removed from disk)."""

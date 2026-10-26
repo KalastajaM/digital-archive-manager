@@ -1,7 +1,7 @@
 """Backups as the API and the UI see them: list, make one, restore one, show the folder.
 
 A restore closes the archive and opens it again around the swap; that is the host's job
-(``Host.reopen`` in ``dam serve``). Without a host (the API used on its own) a restore is
+(``Host.close_and_reopen`` in ``dam serve``). Without a host (the API used on its own) a restore is
 refused with a message. ``backup_current`` has no default: the caller must have asked
 whether to back up the current state first.
 """
@@ -25,7 +25,7 @@ _LOCK = threading.Lock()  # one backup or restore at a time in this process
 class Reopener(Protocol):
     """What ``dam serve`` offers: close this archive, run ``change``, open it again."""
 
-    def reopen[T](self, change: Callable[[], T]) -> T: ...
+    def close_and_reopen[T](self, change: Callable[[], T]) -> T: ...
 
 
 class BackupService:
@@ -75,7 +75,9 @@ class BackupService:
                 safety = None
                 if backup_current:
                     safety = backups.create_backup(self.paths, backups.BEFORE_RESTORE)
-                replaced = self.reopener.reopen(lambda: backups.apply_restore(self.paths, staged))
+                replaced = self.reopener.close_and_reopen(
+                    lambda: backups.apply_restore(self.paths, staged)
+                )
         return {
             "restored": name,
             "safety_backup": vars(safety) if safety else None,

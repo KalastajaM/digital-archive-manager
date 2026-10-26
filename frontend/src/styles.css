@@ -2325,3 +2325,4 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .dup-group-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
 .carry-list { margin: var(--sp-1) 0 var(--sp-2); padding-left: var(--sp-5); }
 .carry-list ul { margin: 0; padding-left: var(--sp-4); }
+.entry-offline { flex: none; margin-left: var(--sp-2); font-size: 0.85em; color: var(--muted); }

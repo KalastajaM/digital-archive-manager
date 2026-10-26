@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query
 
 from dam.api.deps import AppDep
+from dam.api.marks import _place
 from dam.api.routers.items import file_rows
 from dam.api.schemas import (
     ApplyTrayDefaultsIn,
@@ -54,6 +55,7 @@ def tray_items(app: AppDep, tray_id: str, state: Literal["open", "done"] = "open
                 ),
             }
         )
+    _place(app, [row["first_file"] for row in out if row["first_file"] is not None])
     return out
 
 

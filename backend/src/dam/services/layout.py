@@ -195,7 +195,7 @@ class LayoutService:
             disk = self.paths.abs(folder)
             if disk.is_symlink() or not disk.is_dir():
                 raise InvalidRequest(f"{folder!r} is not a folder in the archive.")
-        for area in names:
+        for area in (*names, *self.paths.quarantines[1:]):  # and the extra folders' To Delete
             if is_under(folder, area):
                 raise InvalidRequest(f"Folders are not made inside {area}.")
         target = join(folder, clean)

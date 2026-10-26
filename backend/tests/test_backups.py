@@ -279,7 +279,7 @@ def test_restore_is_refused_without_a_host_or_with_an_interrupted_operation(tmp_
         alone.restore("dam-backup-20200101-000000.zip", backup_current=False)
 
     class Reopen:
-        def reopen(self, change):
+        def close_and_reopen(self, change):
             return change()
 
     interrupted = BackupService(paths, None, Reopen(), pending=lambda: True)

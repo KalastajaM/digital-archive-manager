@@ -9,10 +9,10 @@ import { ONGOING_ROOT_REASON } from "../dropModes";
 import Browse, { folderCollectRefusal } from "./Browse";
 
 function dir(path: string, drive_id = `id-${path}`): DirEntry {
-  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id, marks: [] };
+  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id, connected: true, marks: [] };
 }
 function file(path: string, drive_id: string, is_link = false): DirEntry {
-  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false, is_link, size: 10, mtime: 1, drive_id, marks: [] };
+  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false, is_link, size: 10, mtime: 1, drive_id, connected: true, marks: [] };
 }
 
 const LISTINGS: Record<string, DirEntry[]> = {
@@ -86,6 +86,71 @@ const rowNames = () =>
   within(listing())
     .getAllByRole("listitem")
     .map((li) => li.querySelector(".entry-name")?.textContent);
+
+describe("Browse extra archive folders", () => {
+  const root = (label: string, connected: boolean): DirEntry => ({ ...dir(label), folder: label, connected });
+
+  it("shows an extra folder's root with a drive icon, and says Not connected when its disk is away", async () => {
+    setup(null, {
+      "GET /api/browse": (call) => ({
+        body: (queryOf(call).get("path") ?? "") === "" ? [root("Scans", true), root("Vault", false), dir("10. Financial")] : [],
+      }),
+    });
+    await screen.findByText("Scans");
+    const items = within(listing()).getAllByRole("listitem");
+    const [scans, vault, plain] = items;
+    expect(scans.querySelector(".lucide-hard-drive")).not.toBeNull();
+    expect(vault.querySelector(".lucide-hard-drive")).not.toBeNull();
+    expect(plain.querySelector(".lucide-hard-drive")).toBeNull();
+    expect(within(scans).queryByText("Not connected")).toBeNull();
+    expect(within(vault).getByText("Not connected")).toBeInTheDocument();
+  });
+
+  it("opening a root that is not connected explains it instead of opening", async () => {
+    const { user, calls } = setup(null, {
+      "GET /api/browse": (call) => ({
+        body: (queryOf(call).get("path") ?? "") === "" ? [root("Vault", false)] : [],
+      }),
+    });
+    await user.click(await screen.findByRole("button", { name: /Vault/ }));
+    expect(
+      await screen.findByText("'Vault' is not connected. Connect the disk or sign in to the cloud drive, and it comes back by itself."),
+    ).toBeInTheDocument();
+    expect(browseCalls(calls).some((c) => queryOf(c).get("path") === "Vault")).toBe(false);
+  });
+
+  it("the note goes away when the pane goes to another folder, also through Back", async () => {
+    const { user } = setup("10. Financial", {
+      "GET /api/browse": (call) => {
+        const path = queryOf(call).get("path") ?? "";
+        return { body: path === "" ? [root("Vault", false), dir("10. Financial")] : (LISTINGS[path] ?? []) };
+      },
+    });
+    await screen.findByText("Banks");
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
+    await user.click(within(crumbs).getByRole("link", { name: "Archive" }));
+    await user.click(await screen.findByRole("button", { name: /Vault/ }));
+    const note = "'Vault' is not connected. Connect the disk or sign in to the cloud drive, and it comes back by itself.";
+    expect(await screen.findByText(note)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByText("Banks")).toBeInTheDocument();
+    expect(screen.queryByText(note)).toBeNull();
+  });
+
+  it("marks a search hit in a folder that is not connected", async () => {
+    const hits: SearchHit[] = [
+      { drive_id: "v1", path: "Vault/2009/old.pdf", name: "old.pdf", snippet: "old.pdf", rank: -2, size: 1, mtime: 1, folder: "Vault", connected: false, marks: [] },
+      { drive_id: "s1", path: "Scans/new.pdf", name: "new.pdf", snippet: "new.pdf", rank: -1, size: 1, mtime: 1, folder: "Scans", connected: true, marks: [] },
+    ];
+    const { user } = setup("", { "GET /api/search": { body: hits } });
+    await screen.findByText("readme.txt");
+    await user.type(screen.getByRole("searchbox", { name: "Search" }), "pdf");
+    const results = await screen.findByRole("list", { name: "Search results" });
+    const row = (name: string) => within(results).getByText(name).closest("li")!;
+    expect(within(row("old.pdf")).getByText("Not connected")).toBeInTheDocument();
+    expect(within(row("new.pdf")).queryByText("Not connected")).toBeNull();
+  });
+});
 
 describe("Browse", () => {
   it("lists folders first, marks symlinks and navigates with the breadcrumb", async () => {
@@ -197,7 +262,7 @@ describe("Search", () => {
     rank: -1,
     size: 1000,
     mtime: 1_700_000_000,
-    marks: [],
+    connected: true, marks: [],
     ...overrides,
   });
 
@@ -288,9 +353,9 @@ describe("Search", () => {
 
 describe("Search results' columns", () => {
   const hits: SearchHit[] = [
-    { drive_id: "b", path: "20. Home/b.pdf", name: "b.pdf", snippet: "b.pdf", rank: -3, size: 10, mtime: 1_600_000_000, marks: [] },
-    { drive_id: "a", path: "10. Financial/a.pdf", name: "a.pdf", snippet: "a.pdf", rank: -2, size: 300, mtime: 1_700_000_000, marks: [] },
-    { drive_id: "c", path: "30. Car/c.pdf", name: "c.pdf", snippet: "c.pdf", rank: -1, size: null, mtime: null, marks: [] },
+    { drive_id: "b", path: "20. Home/b.pdf", name: "b.pdf", snippet: "b.pdf", rank: -3, size: 10, mtime: 1_600_000_000, connected: true, marks: [] },
+    { drive_id: "a", path: "10. Financial/a.pdf", name: "a.pdf", snippet: "a.pdf", rank: -2, size: 300, mtime: 1_700_000_000, connected: true, marks: [] },
+    { drive_id: "c", path: "30. Car/c.pdf", name: "c.pdf", snippet: "c.pdf", rank: -1, size: null, mtime: null, connected: true, marks: [] },
   ];
   const order = () =>
     within(screen.getByRole("list", { name: "Search results" }))
@@ -1383,7 +1448,7 @@ describe("Task 11 review fixes", () => {
   });
 
   it("undoing a move reloads the search results", async () => {
-    const hit: SearchHit = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", name: "a.pdf", snippet: "[a]", rank: -1, size: 1, mtime: 1, marks: [] };
+    const hit: SearchHit = { drive_id: "f1", path: "10. Financial/Banks/a.pdf", name: "a.pdf", snippet: "[a]", rank: -1, size: 1, mtime: 1, connected: true, marks: [] };
     const op = { kind: "move" as const, src: hit.path, dst: "13. Taxes/a.pdf", drive_id: "f1", note: null };
     const { calls, user } = setup("", {
       "GET /api/search": { body: [hit] },

@@ -13,7 +13,8 @@ swap it for another archive in the same process (``Host.switch``): the other arc
 files are opened first, then the first archive's scanner, watcher, indexer and reminders
 are stopped, and only then the other's start, so two archives' background work never runs
 at the same time and never on one database. A per-archive lock file (``ServeLock``)
-keeps a second process from serving the same archive.
+keeps a second process from serving the same archive. ``Host.reopen`` opens the same
+archive afresh the same way (its archive folders changed), keeping the lock it holds.
 """
 
 import dataclasses
@@ -32,7 +33,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from dam import setup
-from dam.app import App
+from dam.app import JOBS_RUNNING, App
 from dam.config import AppPaths
 from dam.extract.picture import prune_page1_pictures
 from dam.index.watcher import Watcher
@@ -119,10 +120,19 @@ def _prune_pictures(app: App) -> None:
         log.exception("pruning the page-1 picture cache failed (it is tried again at restart)")
 
 
-def _initial_scan(app: App, wake: threading.Event) -> None:
+def _initial_scan(app: App, wake: threading.Event, stop: threading.Event | None = None) -> None:
+    """The first full scan, then the Ongoing sync. With ``stop`` set (the background was
+    stopped, as by a reopen) nothing more is scanned or synced: the new App's background
+    does that, and two publishers must never sync the same ##. Ongoing at once."""
+    # the log names the main folder: extra folders get their own report with the scan
+    stopped = stop.is_set if stop is not None else lambda: False
     synced = False
     try:
+        if stopped():
+            return
         report = app.scan()
+        if stopped():
+            return
         if report.aborted:
             log.warning(
                 "archive folder %s is not available; initial scan skipped, index kept",
@@ -141,9 +151,12 @@ def _initial_scan(app: App, wake: threading.Event) -> None:
             wake.set()  # let the indexer pick up what the scan found
 
 
-def _after_watcher_scan(app: App, wake: threading.Event) -> None:
+def _after_watcher_scan(
+    app: App, wake: threading.Event, stop: threading.Event | None = None
+) -> None:
     wake.set()
-    _sync_ongoing(app)
+    if stop is None or not stop.is_set():
+        _sync_ongoing(app)
 
 
 def _remind_once(app: App) -> None:
@@ -183,7 +196,7 @@ def start_background(app: App) -> Background:
     stop, wake = threading.Event(), threading.Event()
     app.wake_indexer = wake.set  # e.g. after files are queued for indexing again
     scan_thread = threading.Thread(
-        target=_initial_scan, args=(app, wake), name="dam-initial-scan", daemon=True
+        target=_initial_scan, args=(app, wake, stop), name="dam-initial-scan", daemon=True
     )
     indexer_thread = threading.Thread(
         target=app.content.run_forever, args=(stop, wake), name="dam-indexer", daemon=True
@@ -191,7 +204,7 @@ def start_background(app: App) -> Background:
     reminders_thread = threading.Thread(
         target=_reminders_loop, args=(app, stop), name="dam-reminders", daemon=True
     )
-    watcher = Watcher(app.paths, app.repo, on_change=lambda: _after_watcher_scan(app, wake))
+    watcher = Watcher(app.paths, app.repo, on_change=lambda: _after_watcher_scan(app, wake, stop))
     threads = [scan_thread, indexer_thread, reminders_thread]
     try:
         scan_thread.start()
@@ -395,10 +408,50 @@ class Host:
                 old.lock.release()
             return dataclasses.replace(target, active=True)
 
-    def reopen[T](self, change: Callable[[], T]) -> T:
-        """Close the open archive, run ``change`` (a restore swaps its files), then open
-        the same archive again with the same lock. It is opened again even when
-        ``change`` fails, so the server never stays on a closed archive."""
+    def reopen(self) -> None:
+        """Open the archive in use afresh, so a change to its archive folders (added,
+        detached, attached) takes effect without a restart. Like ``switch``: the fresh
+        App is opened first (a failure leaves everything as it was), then the old App's
+        background work is stopped and the new one's started; a failure there puts the
+        old App back. The held ``ServeLock`` stays held: it is the same archive."""
+        from dam.api import create_api
+
+        with self.lock:
+            if self.stopping:
+                raise Conflict("The server is stopping.")
+            old = self.current
+            if self.board is None or old is None or old.app is None:
+                raise Conflict("The archive is not open yet.")
+            if old.app.jobs_running():
+                raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
+            paths = old.paths or old.app.app_paths
+            app = App.create(paths.data_dir)
+            try:
+                api = create_api(app, self.static_dir, old.archives)
+            except BaseException:
+                app.close()
+                raise
+            new = Opened(old.profile_id, api, app, True, old.archives, lock=old.lock, paths=paths)
+            old_api = self.board.target
+            self.board.target = api
+            self.current = new
+            old_background = old.background
+            try:
+                if old_background is not None:
+                    old_background.stop()
+                    old.background = None
+                if self.running:
+                    new.background = start_background(app)
+            except BaseException:
+                self._rollback(old, old_api, old_background, new, "reopen the archive")
+                raise
+            old.app.close()
+
+    def close_and_reopen[T](self, change: Callable[[], T]) -> T:
+        """Close the open archive, run ``change`` (a restore swaps its database and
+        settings, which needs the database closed), then open the same archive again with
+        the same lock. It is opened again even when ``change`` fails, so the server never
+        stays on a closed archive."""
         if self.store is None or self.board is None or self.current is None:
             raise Conflict("This server cannot reopen the archive; start it with `dam serve`.")
         with self.lock:
@@ -407,6 +460,8 @@ class Host:
             old = self.current
             if old.profile_id is None or old.app is None:
                 raise Conflict("The archive is not open yet.")
+            if old.app.jobs_running():
+                raise Conflict(JOBS_RUNNING)  # closing the App would end them unasked
             profile = self.store.find(old.profile_id)
             if old.background is not None:
                 old.background.stop()
@@ -422,10 +477,16 @@ class Host:
                     new.background = start_background(new.app)
 
     def _rollback(
-        self, old: Opened, old_api: ASGIApp, old_background: Background | None, new: Opened
+        self,
+        old: Opened,
+        old_api: ASGIApp,
+        old_background: Background | None,
+        new: Opened,
+        what: str = "switch archives",
     ) -> None:
-        """The switch failed after the first archive was stopped: put it back."""
-        log.exception("could not switch archives; staying on the first one")
+        """The switch (or reopen) failed after the first App was stopped: put it back.
+        A lock the two share (a reopen) stays held."""
+        log.exception("could not %s; staying on the first one", what)
         if new.background is not None:
             new.background.stop()
             new.background = None
@@ -438,7 +499,7 @@ class Host:
                 log.exception("could not restart the background work after a failed switch")
         if new.app is not None:
             new.app.close()
-        if new.lock is not None:
+        if new.lock is not None and new.lock is not old.lock:
             new.lock.release()
 
     # -- the end ------------------------------------------------------------------------
@@ -472,7 +533,9 @@ def serve(app: App, api: FastAPI, port: int, open_browser: bool, host: Host | No
     host = host or Host(port=port)
     host.port = port
     board = Switchboard(api)
-    host.attach(board, Opened(None, api, app, owns_app=False))
+    # the archives service travels with a reopen (``Host.reopen``)
+    archives = getattr(api.state, "archives", None)
+    host.attach(board, Opened(None, api, app, owns_app=False, archives=archives))
     server = DamServer(
         uvicorn.Config(
             board, host="127.0.0.1", port=port, timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S

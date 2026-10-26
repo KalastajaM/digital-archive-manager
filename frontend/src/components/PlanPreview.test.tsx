@@ -111,6 +111,32 @@ describe("PlanList paths and notes", () => {
     expect(warn.querySelector(".plan-note")).not.toHaveClass("plan-note-routine");
   });
 
+  it("shows missing folders made one inside the other as one line; a sibling or a folder of its own stays apart", () => {
+    const made = (dst: string, note: string | null = "create missing folder") =>
+      ({ kind: "mkdir", src: null, dst, drive_id: null, note }) as const;
+    render(
+      <PlanList
+        ops={[
+          made("##. To Delete/90. Other"),
+          made("##. To Delete/90. Other/Tomas"),
+          made("##. To Delete/90. Other/Tomas/Docs"),
+          made("##. To Delete/10. Bank"),
+          made("40. New", null),
+          made("40. New/Sub", null),
+          { kind: "quarantine", src: "90. Other/Tomas/Docs/p.pdf", dst: "##. To Delete/90. Other/Tomas/Docs/p.pdf", drive_id: "d", note: null },
+        ]}
+      />,
+    );
+    const lines = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(lines.slice(0, 4)).toEqual([
+      "New folders##. To Delete/90. Other/Tomas/Docs (3 missing folders)",
+      "New folder##. To Delete/10. Bank (create missing folder)",
+      "New folder40. New",
+      "New folder40. New/Sub",
+    ]);
+    expect(lines).toHaveLength(5);
+  });
+
   it("collapses a link removed and made again at the same path into one plain line", () => {
     const at = "##. Ongoing/Tax 2025.pdf";
     render(

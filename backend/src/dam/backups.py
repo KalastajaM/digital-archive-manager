@@ -10,7 +10,7 @@ Restoring never deletes anything. The backup is unpacked and checked first (safe
 names, ``PRAGMA integrity_check``, readable settings, a migration revision this app
 knows, the same archive folder), and its database is migrated to this app's revision in
 the unpacked copy. Only then, with the archive closed (``apply_restore`` runs inside
-``Host.reopen``), the copy is written into the live ``dam.sqlite`` with the backup API
+``Host.close_and_reopen``), the copy is written into the live ``dam.sqlite`` with the backup API
 and the current ``config/`` and state files are moved aside to
 ``backups/replaced-<time>/`` (``rename_excl``) before the backup's are moved in. The
 app makes no backups by itself and removes none; old ones are the user's to remove.

@@ -284,6 +284,39 @@ def test_check_archive_path_uses_the_guard(base, tmp_path):
     assert setup.check_archive_path(str(root_a), paths).ok  # no guard: no rule
 
 
+def test_roots_may_not_touch_another_archives_extra_folders(base, tmp_path):
+    store, a, b, root_a, root_b = two_archives(base, tmp_path)
+    extra = mk(tmp_path / "disk" / "Old years")
+    settings = AppPaths(a.data_dir).config_dir / "settings.yaml"
+    data = yaml.safe_load(settings.read_text(encoding="utf-8"))
+    data["extra_folders"] = [
+        {"label": "Old years", "path": str(extra)},
+        {"label": "Gone", "path": str(mk(tmp_path / "disk" / "Gone")), "attached": False},
+    ]
+    settings.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert setup.current_extra_folders(AppPaths(a.data_dir)) == [extra]
+    profiles = store.load()
+    assert "already an extra archive folder of 'Main'" in root_conflict(extra, profiles, base, b.id)
+    assert "inside an extra archive folder of 'Main'" in root_conflict(
+        extra / "sub", profiles, base, b.id
+    )
+    assert "contains an extra archive folder of 'Main'" in root_conflict(
+        extra.parent, profiles, base, b.id
+    )
+    assert root_conflict(extra, profiles, base, a.id) is None  # its own: not this rule
+    assert root_conflict(tmp_path / "disk" / "Gone", profiles, base, b.id) is None
+    assert store.root_problems() == {}
+
+
+def test_root_problems_flags_an_extra_folder_inside_another_archive(base, tmp_path):
+    store, a, b, root_a, root_b = two_archives(base, tmp_path)
+    settings = AppPaths(b.data_dir).config_dir / "settings.yaml"
+    data = yaml.safe_load(settings.read_text(encoding="utf-8"))
+    data["extra_folders"] = [{"label": "Oops", "path": str(root_a / "a-sub")}]
+    settings.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert set(store.root_problems()) == {"main", "test"}  # the overlap is mutual
+
+
 def test_root_problems_flags_a_hand_edited_overlap(base, tmp_path):
     store, a, b, root_a, root_b = two_archives(base, tmp_path)
     assert store.root_problems() == {}

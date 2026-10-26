@@ -238,3 +238,37 @@ def test_changes_to_a_file_in_to_delete_are_refused_and_nothing_is_lost(client, 
     ok = client.put("/api/files/id-a/tags", json={"tags": ["tax", "x"]}, headers=LOCAL_ORIGIN)
     assert ok.status_code == 200
     assert post(client, "/api/marks/star", {"drive_ids": ["id-a"]}).status_code == 200
+
+
+def test_restore_original_in_extra_folder(extra_folder, app):
+    src = extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    app.scan()
+    assert app.browse.quarantine(["x1"], origin="ui").failed is None
+    assert app.repo.get("x1").path == f"Old years/{QUAR}/2009/a.pdf"
+    preview = app.browse.restore(["x1"], to="original", origin="ui", dry_run=True)
+    assert [(r.kind, r.src, r.dst) for r in preview.done] == [
+        (OpKind.MOVE, f"Old years/{QUAR}/2009/a.pdf", "Old years/2009/a.pdf")
+    ]
+    result = app.browse.restore(["x1"], to="original", origin="ui")
+    assert result.failed is None and result.error is None
+    assert src.read_bytes() == b"a"
+    assert app.repo.get("x1").path == "Old years/2009/a.pdf"
+
+
+def test_restore_to_inbox_from_extra_folder_needs_one_disk(extra_folder, app, monkeypatch):
+    from dam.ops import primitives
+    from dam.ops.model import OpFailed
+
+    extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    app.scan()
+    assert app.browse.quarantine(["x1"], origin="ui").failed is None
+    preview = app.browse.restore(["x1"], to="inbox", origin="ui", dry_run=True)
+    assert [r.dst for r in preview.done] == [f"{INBOX}/a.pdf"]
+    monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
+    with pytest.raises(OpFailed) as e:
+        app.browse.restore(["x1"], to="inbox", origin="ui", dry_run=True)
+    assert str(e.value) == (
+        "'Old years' and the main folder are on different disks, so files cannot be moved"
+        " between them yet."
+    )
+    assert (extra_folder.root / QUAR / "2009" / "a.pdf").exists()

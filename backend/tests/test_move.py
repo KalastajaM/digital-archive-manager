@@ -453,6 +453,44 @@ def test_a_local_file_replaced_by_one_with_a_drive_id_is_refused(app, fake_archi
     assert journal(app) == [] and not (fake_archive.root / TAXES).exists()
 
 
+def test_a_copy_that_carries_its_originals_drive_id_can_be_moved(app, fake_archive):
+    # copying a file copies its Drive id xattr; the scan (in path order) gives the copy a
+    # local id
+    fake_archive.add(f"{BANKS}/a.pdf", b"same", drive_id="id-a")
+    fake_archive.add("20. Home/copy of a.pdf", b"same", drive_id="id-a")
+    app.scan()
+    copy_id = local_id(app, "20. Home/copy of a.pdf")
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"
+    result = app.browse.move([copy_id], TAXES)
+    assert result.failed is None and result.error is None, result.error
+    assert (fake_archive.root / TAXES / "copy of a.pdf").read_bytes() == b"same"
+    assert app.repo.get(copy_id).path == f"{TAXES}/copy of a.pdf"
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"  # the original is untouched
+
+
+def test_a_copy_moved_where_it_sorts_first_does_not_take_its_originals_id(app, fake_archive):
+    fake_archive.add(f"{BANKS}/a.pdf", b"same", drive_id="id-a")
+    fake_archive.add("20. Home/copy of a.pdf", b"same", drive_id="id-a")
+    app.scan()
+    copy_id = local_id(app, "20. Home/copy of a.pdf")
+    col = app.collections.create("Kept")
+    app.collections.add_members(col.id, ["id-a"])
+    app.browse.quarantine([copy_id], origin="ui")  # ##. To Delete sorts before 10.
+    app.scan()
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"
+    assert app.repo.get(copy_id).path == f"{QUAR}/20. Home/copy of a.pdf"
+    assert [m.drive_id for m in app.collections.get(col.id).members] == ["id-a"]
+
+
+def test_twins_scanned_fresh_still_give_the_id_to_the_first(app, fake_archive):
+    fake_archive.add(f"{BANKS}/a.pdf", b"same", drive_id="id-a")
+    fake_archive.add("20. Home/copy of a.pdf", b"same", drive_id="id-a")
+    app.scan()
+    app.scan()  # a second scan changes nothing
+    assert app.repo.get("id-a").path == f"{BANKS}/a.pdf"
+    assert app.repo.by_path("20. Home/copy of a.pdf").drive_id.startswith("local:")
+
+
 def test_a_local_file_whose_size_changed_is_refused(app, fake_archive):
     fake_archive.add(f"{BANKS}/new.pdf", b"mine", drive_id=None)
     app.scan()
@@ -472,3 +510,123 @@ def test_a_local_file_replaced_by_a_folder_is_refused(app, fake_archive):
     with pytest.raises(InvalidRequest, match="not a file on disk"):
         app.browse.move([drive_id], TAXES)
     assert journal(app) == []
+
+
+def test_move_within_extra_folder(extra_folder, app):
+    from dam.index.repo import FileRecord
+
+    src = extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    st = src.stat()
+    app.repo.upsert(
+        FileRecord(drive_id="x1", path="Old years/2009/a.pdf", size=st.st_size, mtime=st.st_mtime)
+    )
+    result = app.browse.move(["x1"], "Old years/2010", origin="ui")
+    assert result.failed is None and result.error is None
+    assert not src.exists()
+    assert (extra_folder.root / "2010" / "a.pdf").read_bytes() == b"a"
+    assert app.repo.get("x1").path == "Old years/2010/a.pdf"
+    outcome = app.activity.undo(result.batch_id)
+    assert outcome.batch.failed is None and outcome.batch.error is None
+    assert src.read_bytes() == b"a"
+    assert not (extra_folder.root / "2010" / "a.pdf").exists()
+
+
+def _offline(folder_root):
+    """Unplug the extra folder: its root cannot be listed any more."""
+    gone = folder_root.with_name("away")
+    os.rename(folder_root, gone)
+    return gone
+
+
+def test_move_refused_while_folder_offline(extra_folder, app, fake_archive):
+    from dam.ops.model import GuardError
+
+    fake_archive.add(f"{BANKS}/m.pdf", b"m", drive_id="id-m")
+    extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    app.scan()
+    root = extra_folder.root.resolve()
+    gone = _offline(extra_folder.root)
+    message = f"'Old years' is not connected ({root}). Connect it and try again."
+    with pytest.raises(GuardError) as e:
+        app.browse.move(["x1"], "Old years/2010", origin="ui", dry_run=True)
+    assert str(e.value) == message
+    with pytest.raises(GuardError) as e:  # into it, from the main folder
+        app.browse.move(["id-m"], "Old years/2010", origin="ui")
+    assert str(e.value) == message
+    with pytest.raises(GuardError) as e:
+        app.browse.quarantine(["x1"], origin="ui")
+    assert str(e.value) == message
+    assert (fake_archive.root / BANKS / "m.pdf").read_bytes() == b"m"
+    assert (gone / "2009" / "a.pdf").read_bytes() == b"a"
+    assert not (gone / "2010").exists()
+    assert journal(app) == []
+
+
+def test_cross_disk_move_refused_in_dry_run(extra_folder, app, fake_archive, monkeypatch):
+    from dam.ops import primitives
+    from dam.ops.model import OpFailed
+
+    fake_archive.add(f"{BANKS}/m.pdf", b"m", drive_id="id-m")
+    extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    app.scan()
+    monkeypatch.setattr(primitives, "same_disk", lambda a, b: False)
+    cases = (
+        ("id-m", "Old years/2009", "The main folder and 'Old years'"),
+        ("x1", TAXES, "'Old years' and the main folder"),
+    )
+    for drive_id, folder, both in cases:
+        with pytest.raises(OpFailed) as e:
+            app.browse.move([drive_id], folder, origin="ui", dry_run=True)
+        assert str(e.value) == (
+            f"{both} are on different disks, so files cannot be moved between them yet."
+        )
+    # within one folder the disks are never compared
+    result = app.browse.move(["x1"], "Old years/2010", origin="ui", dry_run=True)
+    assert [r.dst for r in result.done][-1] == "Old years/2010/a.pdf"
+    assert journal(app) == []
+
+
+def test_folder_unplugged_during_the_disk_check_says_so(
+    extra_folder, app, fake_archive, monkeypatch
+):
+    from dam.ops import primitives
+    from dam.ops.model import GuardError
+
+    fake_archive.add(f"{BANKS}/m.pdf", b"m", drive_id="id-m")
+    app.scan()
+    root = extra_folder.root.resolve()
+
+    def unplugged(a, b):  # the disk goes away after check_connected looked
+        os.rename(root, root.with_name("away"))
+        raise FileNotFoundError(str(root))
+
+    monkeypatch.setattr(primitives, "same_disk", unplugged)
+    with pytest.raises(GuardError) as e:
+        app.browse.move(["id-m"], "Old years/2009", origin="ui", dry_run=True)
+    assert str(e.value) == f"'Old years' is not connected ({root}). Connect it and try again."
+    assert (fake_archive.root / BANKS / "m.pdf").exists()
+
+
+def test_each_folder_is_listed_once_per_plan(extra_folder, app, monkeypatch):
+    from dam.core import paths as paths_module
+
+    for i in range(3):
+        extra_folder.add(f"2009/{i}.pdf", b"x", drive_id=f"x{i}")
+    app.scan()
+    root = extra_folder.root.resolve()
+    listed = []
+    real = paths_module.listable
+
+    def counting(directory):
+        if directory == root:
+            listed.append(directory)
+        return real(directory)
+
+    monkeypatch.setattr(paths_module, "listable", counting)
+    result = app.browse.move(["x0", "x1", "x2"], "Old years/2010", origin="ui")
+    assert result.failed is None and result.error is None
+    assert len(listed) == 1
+    listed.clear()
+    undone = app.executor.undo(result.batch_id)
+    assert undone.failed is None and undone.error is None
+    assert len(listed) == 1

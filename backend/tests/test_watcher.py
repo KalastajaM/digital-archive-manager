@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+from pathlib import Path
 
 from dam.config import Settings
 from dam.core.paths import ArchivePaths
@@ -247,3 +248,136 @@ def test_file_dropped_into_a_code_folder_shows_in_the_inbox_with_its_code(app, f
     assert entry.record.drive_id == "b1"
     assert [h.code for h in entry.suggestion.codes] == ["P"]
     assert entry.suggestion.tray == "to-pay"
+
+
+# --- extra archive folders ----------------------------------------------------
+
+
+def setup_with_extra(fake_archive, engine, tmp_path):
+    from dam.config import ExtraFolder
+
+    extra = tmp_path / "disk" / "Archive 2000-2015"
+    (extra / "2009").mkdir(parents=True)
+    settings = Settings(
+        archive_root=fake_archive.root,
+        extra_folders=[ExtraFolder(label="Old years", path=extra)],
+    )
+    paths = ArchivePaths(fake_archive.root, settings)
+    return paths, FileRepo(engine, inbox=paths.inbox), extra
+
+
+def _watched(w):
+    return sorted(str(Path(watch.path).resolve()) for watch in w._watches.values())
+
+
+def test_refresh_watches_follows_connect_and_disconnect(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo)
+    try:
+        # Starting the observer is not needed: scheduling works on a stopped one.
+        assert w.refresh_watches() == []  # the first call only sets up the initial watches
+        both = sorted([str(paths.root), str(extra.resolve())])
+        assert _watched(w) == both
+        assert w.refresh_watches() == []
+
+        gone = extra.with_name("away")
+        os.rename(extra, gone)
+        assert w.refresh_watches() == []
+        assert _watched(w) == [str(paths.root)]
+
+        os.rename(gone, extra)
+        assert w.refresh_watches() == ["Old years"]
+        assert _watched(w) == both
+        assert w.refresh_watches() == []
+    finally:
+        w.stop()
+
+
+def test_change_in_extra_folder_is_noted(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo)
+    w._note(str(extra.resolve() / "2009" / "a.pdf"))
+    assert w._pending == {"Old years/2009/a.pdf"}
+
+
+def test_refresh_watches_survives_events_while_toggling(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo, debounce_s=0.05, reconcile_every_s=3600, folder_check_s=3600)
+    w.start()
+    stop = threading.Event()
+
+    def writer():
+        i = 0
+        while not stop.is_set():
+            (fake_archive.root / "##. Organize").mkdir(exist_ok=True)
+            (fake_archive.root / "##. Organize" / f"f{i}.txt").write_bytes(b"x")
+            i += 1
+
+    def toggle():
+        gone = extra.with_name("away")
+        for _ in range(15):
+            os.rename(extra, gone)
+            w.refresh_watches()
+            os.rename(gone, extra)
+            w.refresh_watches()
+
+    t = threading.Thread(target=writer, daemon=True)
+    worker = threading.Thread(target=toggle, daemon=True)
+    t.start()
+    worker.start()
+    worker.join(30)
+    stop.set()
+    t.join(5)
+    hung = worker.is_alive()
+    w.stop()
+    assert not hung, "refresh_watches deadlocked against event delivery"
+
+
+def test_unschedule_failure_does_not_abort_or_leak(fake_archive, engine, tmp_path, monkeypatch):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo)
+    w.refresh_watches()
+
+    def boom(watch):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(w._observer, "unschedule", boom)
+    gone = extra.with_name("away")
+    os.rename(extra, gone)
+    assert w.refresh_watches() == []
+    assert "Old years" not in w._watches
+
+
+def test_folders_loop_rescans_a_folder_that_comes_back(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    changed = threading.Event()
+    w = Watcher(
+        paths,
+        repo,
+        on_change=changed.set,
+        debounce_s=0.1,
+        reconcile_every_s=3600,
+        folder_check_s=0.1,
+    )
+    w.start()
+    try:
+        gone = extra.with_name("away")
+        os.rename(extra, gone)
+        assert wait_for(lambda: "Old years" not in w._watches, 5)
+        (gone / "2009" / "a.pdf").write_bytes(b"x")
+        os.rename(gone, extra)
+        assert wait_for(lambda: repo.by_path("Old years/2009/a.pdf") is not None, 5)
+        assert changed.wait(5)
+    finally:
+        w.stop()
+
+
+def test_a_stopped_watcher_calls_no_on_change(fake_archive, engine):
+    paths, repo = setup(fake_archive, engine)
+    calls = []
+    w = Watcher(paths, repo, on_change=lambda: calls.append(1))
+    w._call_on_change()
+    assert calls == [1]
+    w.stop()
+    w._call_on_change()  # a scan that finished after stop(), as after a reopen
+    assert calls == [1]

@@ -12,7 +12,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
@@ -20,7 +20,7 @@ from pathlib import PurePosixPath
 from sqlalchemy import Engine, select
 
 from dam.collections.service import CollectionService
-from dam.core.paths import ArchivePaths
+from dam.core.paths import ArchivePaths, not_connected_message
 from dam.db.tables import collection_members, collections
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.locks import LockService
@@ -40,7 +40,15 @@ from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
 
-KINDS = ("duplicates", "empty_folders", "broken_links", "references", "names", "waiting")
+KINDS = (
+    "duplicates",
+    "empty_folders",
+    "broken_links",
+    "references",
+    "names",
+    "waiting",
+    "label_clashes",
+)
 ACTIONS = ("quarantine", "link")
 LINK_UNAVAILABLE = (
     "Windows needs Developer Mode to make links: turn it on in Windows settings, or move the "
@@ -88,6 +96,19 @@ class ResolveResult(BatchResult):
 class _Pair:
     keep: FileRecord
     removed: list[FileRecord]
+
+
+def _dups(n: int) -> str:
+    return "1 duplicate" if n == 1 else f"{n} duplicates"
+
+
+def _resolve_label(moved: int, linked: int) -> str:
+    """The batch's title in Activity."""
+    if not linked:
+        return f"Moved {_dups(moved)} to To Delete"
+    if not moved:
+        return f"Replaced {_dups(linked)} with a link to the kept copy"
+    return f"Moved {_dups(moved)} to To Delete and replaced {linked} with a link"
 
 
 class MaintenanceService:
@@ -151,6 +172,8 @@ class MaintenanceService:
                 work = lambda ctx: checks.bad_references(ctx, paths, engine, self.tray_name)  # noqa: E731
             case "names":
                 work = lambda ctx: checks.bad_names(ctx, repo, paths, engine)  # noqa: E731
+            case "label_clashes":
+                work = lambda ctx: checks.label_clashes(ctx, repo, paths, engine)  # noqa: E731
             case _:
                 limit = checks.DEFAULT_DAYS if days is None else days
                 work = lambda ctx: checks.waiting_in_to_delete(  # noqa: E731
@@ -274,11 +297,14 @@ class MaintenanceService:
         carry_over: bool = True,
         origin: str = "ui",
         dry_run: bool = False,
+        links: Collection[str] = (),
     ) -> ResolveResult:
         """For each group ``(keep, [copies to remove])``: move the copies to ``##. To
         Delete`` (``action`` ``quarantine``) or, ``link``, also make a link to the kept
         copy where each one was. One batch, one Undo. ``carry_over``: add what the removed
         copies had to the kept one (listed in the result; applied unless ``dry_run``).
+        ``links``: copies (among those to remove) replaced with a link whatever ``action``
+        is, so one batch can move some copies and link others.
 
         Refused (``InvalidRequest``, nothing happens): a copy that is Important or locked,
         a file not known to have the same content (the check must have hashed both), a file
@@ -287,24 +313,21 @@ class MaintenanceService:
         check_origin(origin)
         if action not in ACTIONS:
             raise InvalidRequest(f"action must be one of {', '.join(ACTIONS)}")
-        if action == "link" and not can_make_links():
-            raise InvalidRequest(LINK_UNAVAILABLE)
         pairs = self._pairs(groups)
+        linked = {r.drive_id for p in pairs for r in p.removed} if action == "link" else set(links)
+        if not linked <= {r.drive_id for p in pairs for r in p.removed}:
+            raise InvalidRequest("A copy to replace with a link is not one of the copies to remove")
+        if linked and not can_make_links():
+            raise InvalidRequest(LINK_UNAVAILABLE)
         ops: list[Op] = []
         ids: list[str] = []
         for pair in pairs:
             for rec in pair.removed:
                 ops.append(Op(OpKind.QUARANTINE, rec.path, None))
                 ids.append(rec.drive_id)
-                if action == "link":
+                if rec.drive_id in linked:
                     ops.append(Op(OpKind.SYMLINK, pair.keep.path, rec.path, exact=True))
-        count = len(ids)
-        what = "1 duplicate" if count == 1 else f"{count} duplicates"
-        label = (
-            f"Replaced {what} with a link to the kept copy"
-            if action == "link"
-            else f"Moved {what} to To Delete"
-        )
+        label = _resolve_label(len(ids) - len(linked), len(linked))
         plan = Plan(ops, origin=origin, label=label)
         with self.important_lock:
             batch = self.executor.apply(
@@ -319,8 +342,9 @@ class MaintenanceService:
             if carry_over:
                 result.carry_over = self._carry_plans(pairs)
             return result
-        if action == "link" and self.rescan is not None and batch.done:
-            for folder in dict.fromkeys(parent(r.path) for p in pairs for r in p.removed):
+        if linked and self.rescan is not None and batch.done:
+            folders = (parent(r.path) for p in pairs for r in p.removed if r.drive_id in linked)
+            for folder in dict.fromkeys(folders):
                 try:
                     self.rescan(folder)
                 except Exception:  # the batch is done; the watcher's next scan picks it up
@@ -472,6 +496,7 @@ class MaintenanceService:
         if not drive_ids or len(set(drive_ids)) != len(drive_ids):
             raise InvalidRequest("Give each link once")
         ops = []
+        connected: dict[str, bool] = {}
         for drive_id in drive_ids:
             rec = self.repo.get(drive_id)
             if rec is None or rec.missing or rec.parked_at is not None:
@@ -485,6 +510,9 @@ class MaintenanceService:
                 )
             if os.path.exists(self.paths.abs(rec.path)):
                 raise InvalidRequest(f"{rec.path} leads somewhere: it is not a broken link")
+            offline = checks.link_into_offline(self.paths, rec.path, connected)
+            if offline is not None:  # not broken: its folder is unplugged
+                raise InvalidRequest(not_connected_message(self.paths.folder_of(offline)))
             ops.append(Op(OpKind.UNLINK_SYMLINK, rec.path, None))
         n = len(ops)
         name = PurePosixPath(ops[0].src).name if n == 1 else f"{n} broken links"

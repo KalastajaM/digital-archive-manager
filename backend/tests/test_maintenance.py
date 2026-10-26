@@ -258,6 +258,27 @@ def test_several_groups_in_one_batch(app, fake_archive):
     assert not (fake_archive.root / HOME / "d2.pdf").is_symlink()
 
 
+def test_one_copy_to_to_delete_and_another_replaced_with_a_link_in_one_batch(app, pair):
+    pair.add(f"{HOME}/third.pdf", b"same-content", drive_id="id-third")
+    app.scan()
+    dup_result(app)
+    result = app.maintenance.resolve(
+        [("id-keep", ["id-dup", "id-third"])], "quarantine", links=["id-third"]
+    )
+    assert result.error is None and result.failed is None
+    assert not (pair.root / INBOX / "scan.pdf").exists()  # moved, no link
+    assert (pair.root / HOME / "third.pdf").is_symlink()  # moved and linked
+    assert {r["label"] for r in journal(app, result.batch_id)} == {
+        "Moved 1 duplicate to To Delete and replaced 1 with a link"
+    }
+    app.activity.undo(result.batch_id)
+    assert (pair.root / INBOX / "scan.pdf").is_file()
+    third = pair.root / HOME / "third.pdf"
+    assert third.is_file() and not third.is_symlink()
+    with pytest.raises(InvalidRequest, match="not one of the copies to remove"):
+        app.maintenance.resolve([("id-keep", ["id-dup"])], "quarantine", links=["id-third"])
+
+
 def test_a_taken_name_in_to_delete_gets_a_number_and_undo_still_restores(app, pair):
     pair.add(f"{QUAR}/{INBOX}/scan.pdf", b"older-thing", drive_id="id-old-q")
     app.scan()
@@ -719,6 +740,75 @@ def test_files_table_untouched_by_a_check_except_hashes(app, pair):
     with app.engine.connect() as conn:
         assert conn.execute(select(operations)).first() is None  # no journal rows
         assert conn.execute(select(files.c.sha256).where(files.c.sha256.is_not(None))).first()
+
+
+# --- extra archive folders that are not there ----------------------------------------------
+
+
+def test_broken_link_reason_offline(extra_folder, app, fake_archive, tmp_path):
+    target = extra_folder.add("2009/x.pdf", b"x", drive_id="x1")
+    (fake_archive.root / HOME).mkdir(exist_ok=True)
+    (fake_archive.root / HOME / "x.pdf").symlink_to(target)
+    (fake_archive.root / HOME / "dead.pdf").symlink_to(fake_archive.root / "gone" / "y.pdf")
+    app.scan()
+    assert [i.path for i in run(app, "broken_links").result.items] == [f"{HOME}/dead.pdf"]
+    os.rename(extra_folder.root, tmp_path / "unplugged")
+    app.scan()
+    result = run(app, "broken_links").result
+    assert [(i.path, i.reason) for i in result.items] == [
+        (f"{HOME}/dead.pdf", "broken"),
+        (f"{HOME}/x.pdf", "folder_not_connected"),
+    ]
+    assert result.total == 2
+
+
+def test_broken_link_reason_detached(extra_folder, app, app_paths, fake_archive):
+    from dam.app import App
+    from dam.archive_folders import detach_folder
+
+    target = extra_folder.add("2009/x.pdf", b"x", drive_id="x1")
+    (fake_archive.root / HOME).mkdir(exist_ok=True)
+    (fake_archive.root / HOME / "x.pdf").symlink_to(target)
+    app.scan()
+    detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    os.rename(extra_folder.root, extra_folder.root.with_name("moved away"))  # gone too
+    again = App.create(app_paths.data_dir)
+    try:
+        again.scan()
+        [link] = run(again, "broken_links").result.items
+        assert (link.path, link.reason) == (f"{HOME}/x.pdf", "folder_detached")
+    finally:
+        again.close()
+
+
+def test_remove_links_refuses_a_link_into_an_unplugged_folder(
+    extra_folder, app, fake_archive, tmp_path
+):
+    target = extra_folder.add("2009/x.pdf", b"x", drive_id="x1")
+    (fake_archive.root / ONG / "Sauna").mkdir()
+    link = fake_archive.root / ONG / "Sauna" / "x.pdf"
+    link.symlink_to(target)
+    app.scan()
+    os.rename(extra_folder.root, tmp_path / "unplugged")
+    app.scan()
+    [found] = run(app, "broken_links").result.items
+    assert found.reason == "folder_not_connected"
+    with pytest.raises(InvalidRequest, match="'Old years' is not connected"):
+        app.maintenance.remove_links([found.drive_id], dry_run=True)
+    assert os.path.lexists(link)
+
+
+def test_label_clash_check(extra_folder, app, fake_archive):
+    assert run(app, "label_clashes").result.items == []
+    fake_archive.add("old YEARS/a.pdf", b"a")
+    app.scan()
+    result = run(app, "label_clashes").result
+    assert (result.items, result.total) == (["Old years"], 1)
+    with TestClient(create_api(app, None), base_url=BASE) as c:
+        job = c.post("/api/maintenance/jobs", json={"kind": "label_clashes"}, headers=H)
+        assert job.status_code == 200, job.text
+        body = poll(c, job.json()["job_id"])
+    assert body["label_clashes"] == {"items": ["Old years"], "total": 1}
 
 
 # --- ignoring results ---

@@ -272,3 +272,32 @@ def test_only_a_negation_lists_every_other_file(archive):
     archive.tags.add("kela", ["paid"])
     assert "kela" not in ids(archive, "-tag:paid")
     assert len(ids(archive, "-tag:paid")) == len(FILES) - 1
+
+
+# --- is:disconnected ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def two_folders(extra_folder, app, fake_archive, tmp_path):
+    fake_archive.add(f"{MEDICAL}/main.pdf", drive_id="main")
+    extra_folder.add("2009/car/old.pdf", drive_id="old")
+    extra_folder.add("2010/older.txt", drive_id="older")
+    app.scan()
+    return app
+
+
+def test_is_disconnected(two_folders, extra_folder, tmp_path):
+    app = two_folders
+    assert ids(app, "is:disconnected") == []  # connected: nothing
+    os.rename(extra_folder.root, tmp_path / "unplugged")
+    app.scan()
+    assert ids(app, "is:disconnected") == ["old", "older"]  # still found, as not connected
+    assert ids(app, 'in:"Old years" is:disconnected type:pdf') == ["old"]
+
+
+def test_not_is_disconnected(two_folders, extra_folder, tmp_path):
+    app = two_folders
+    assert ids(app, "-is:disconnected") == ["main", "old", "older"]
+    os.rename(extra_folder.root, tmp_path / "unplugged")
+    app.scan()
+    assert ids(app, "-is:disconnected") == ["main"]

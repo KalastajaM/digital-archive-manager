@@ -610,7 +610,7 @@ class InboxService:
             self.special.inbox,
             self.special.ongoing,
             self.special.important,
-            self.special.quarantine,
+            *self.paths.quarantines,
         ]
         params: dict = {}
         clauses = []
@@ -749,6 +749,7 @@ class InboxService:
             layout=layout,
             people=self.people_context(rec.drive_id),
             pictures=self.pictures,
+            quarantines=self.paths.quarantines,
         )
         if found.waiting_for_page1:
             why = self._layout_blocked(rec.drive_id) if self._layout_blocked else None
@@ -770,7 +771,15 @@ class InboxService:
         if hits:
             stem, ext, name = stem_and_ext(rec)
             found = apply_codes(
-                found, hits, table, found.doc_date, stem, ext, self.special, original_name=name
+                found,
+                hits,
+                table,
+                found.doc_date,
+                stem,
+                ext,
+                self.special,
+                original_name=name,
+                quarantines=self.paths.quarantines,
             )
         return apply_ticks(found, reads)
 
@@ -800,7 +809,7 @@ class InboxService:
             dest = canonical(req.folder, self.paths)
             # never into the quarantine or Ongoing, whatever the file's marks (an
             # Important file would otherwise skip BrowseService.quarantine's check)
-            check_destination_area(dest, self.special)
+            check_destination_area(dest, self.paths)
             rec = self._record(req.drive_id)
             same_folder = fold_parts(dest) == fold_parts(parent(rec.path))
             if same_folder and req.name == rec.name:

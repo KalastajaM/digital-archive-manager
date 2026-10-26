@@ -79,6 +79,9 @@ export type ArchiveSwitched = Schemas["ArchiveSwitchOut"];
 export type Backup = Schemas["BackupOut"];
 export type Backups = Schemas["BackupsOut"];
 export type BackupRestored = Schemas["BackupRestoreOut"];
+// archive folders (extra folders attached to one archive)
+export type ArchiveFolder = Schemas["ArchiveFolderOut"];
+export type FolderChange = Schemas["FolderChangeOut"];
 // first-run setup (only while no archive folder is configured)
 export type SetupCandidate = Schemas["SetupCandidateOut"];
 export type SetupCandidates = Schemas["SetupCandidatesOut"];
@@ -444,6 +447,22 @@ export const restoreBackup = (name: string, backup_current: boolean) =>
 
 /** Show the backups folder in Finder / Explorer. */
 export const revealBackups = () => post<void>("/api/backups/reveal");
+
+export const archiveFoldersKey = ["archive-folders"] as const;
+export const useArchiveFolders = () =>
+  useQuery({ queryKey: archiveFoldersKey, queryFn: () => get<Schemas["ArchiveFoldersOut"]>("/api/archive-folders") });
+
+/** Attach a folder under ``label`` (``dry_run``: only check it). */
+export const addArchiveFolder = (label: string, path: string, dry_run: boolean) =>
+  post<FolderChange>("/api/archive-folders", { label, path, dry_run });
+
+/** Take a folder out of the archive (nothing on the disk changes); ``forget`` also drops
+ * the tags, notes and collection places of its files. */
+export const detachArchiveFolder = (label: string, forget: boolean) =>
+  post<FolderChange>(`/api/archive-folders/${enc(label)}/detach`, { forget, dry_run: false });
+
+export const attachArchiveFolder = (label: string) =>
+  post<FolderChange>(`/api/archive-folders/${enc(label)}/attach`, { dry_run: false });
 
 export const useSetupCandidates = () =>
   useQuery({

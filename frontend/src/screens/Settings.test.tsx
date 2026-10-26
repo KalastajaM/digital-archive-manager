@@ -43,6 +43,7 @@ describe("Settings", () => {
     expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual([
       "/settings/filing-codes",
       "/settings/filing-rules",
+      "/settings/folders",
       "/settings/indexing",
       "/settings/backups",
       "/settings/appearance",
@@ -115,6 +116,22 @@ describe("Settings", () => {
     await vi.waitFor(() => expect(leave).toHaveBeenCalled());
     expect(calls.find((c) => c.url === `/api/backups/${name}/restore`)?.body).toEqual({ backup_current: backupCurrent });
     leave.mockRestore();
+  });
+
+  it("Archive folders lists the folders of this archive", async () => {
+    mockFetch({
+      "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true } },
+      "GET /api/archive-folders": { body: { folders: [{ label: null, path: "/Archive", attached: true, connected: true, files: 5 }] } },
+    });
+    renderWithProviders(
+      <MemoryRouter initialEntries={["/settings/folders"]}>
+        <Routes>
+          <Route path="/settings/:section?" element={<Settings />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const section = await screen.findByRole("region", { name: "Archive folders" });
+    expect(await within(section).findByText("Main folder")).toBeInTheDocument();
   });
 
   it("an unknown section opens the first", async () => {

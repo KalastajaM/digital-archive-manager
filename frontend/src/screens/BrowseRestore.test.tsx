@@ -18,7 +18,7 @@ const entry = (name: string, id: string, is_dir = false): DirEntry => ({
   size: is_dir ? null : 10,
   mtime: 1,
   drive_id: id,
-  marks: [],
+  connected: true, marks: [],
 });
 const NO_LINKS: FileLinks = { items: [], collections: [], note: "" };
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);

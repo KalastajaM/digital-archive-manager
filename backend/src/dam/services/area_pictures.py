@@ -166,7 +166,7 @@ class AreaPictures:
         wanted = list(dict.fromkeys(names))
         if not wanted:
             raise InvalidRequest("Pick at least one unused picture.")
-        quarantine = self.executor.paths.quarantine
+        quarantine = self.executor.paths.quarantine  # the main folder's: pictures live there
         with self._save_lock:
             unused = set(self.unused(rules()))
             for name in wanted:

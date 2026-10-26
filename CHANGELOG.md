@@ -12,6 +12,25 @@ All notable changes are listed here. The format follows
   runs, and restore one. Before a restore dam asks whether to back up the current state
   first. The replaced settings are moved aside, never deleted, and a backup from an older
   version of dam is updated when it is restored. Your documents are not part of a backup.
+- **One archive can now span several folders.** In Settings, **Archive folders**, **Add
+  folder** joins a further folder (for example on an external disk or a cloud drive) under
+  a label you choose. Browse, search, tags, collections and Maintenance see one combined
+  archive, and dam refuses a folder that overlaps another folder of any archive. **Detach**
+  takes a folder out without touching the disk (its notes and tags are kept, and **Attach
+  again** brings them back). Ticking **Also forget** (or **Forget** on a detached folder)
+  also drops its files' tags, notes and collection places and removes the folder from the
+  list, so its label can be used again.
+  - **An unplugged disk keeps its files in the index.** A folder that is not connected shows
+    "Not connected" in Browse and the file view, its files stay in search and collections
+    with the same mark (find them with `is:disconnected`), and nothing is marked missing. dam checks about every
+    30 seconds and picks the folder up again by itself. Changes to an unplugged folder are
+    refused, and links in `##. Ongoing` and `##. Important` that lead into it are left alone.
+  - **Each folder has its own `##. To Delete`**, because a file cannot be moved to another disk
+    that way. Moving a file between folders on different disks is refused for now, with a
+    message that names both folders. A folder's label cannot be changed yet.
+  - Maintenance marks links into an unplugged or detached folder ("Folder not connected",
+    "Folder detached") and lists a folder in the main folder that has the same name as an
+    archive folder.
 - **Maintenance screen** (sidebar, Archive, next to Activity) with checks you start
   yourself; nothing runs by itself or in the background, each shows its progress, can be
   stopped, and ends in a list you act on through the usual preview and Undo.
@@ -19,9 +38,10 @@ All notable changes are listed here. The format follows
     read and how big they are (with a warning that files kept online-only in Google Drive
     are downloaded), reads only files that share a size with another, and does not read a
     file again once it has been read. In each group you pick the copy to keep (the
-    suggestion is a numbered folder before the Inbox, then the oldest) and then **Move the
-    others to To Delete** or **Replace them with a link** to the kept copy, per group or for
-    several groups at once. One preview, one Undo (which removes the links and brings the
+    suggestion is a numbered folder before the Inbox, then the oldest) and, for each other
+    copy, whether to leave it, move it to To Delete, or replace it with a link to the kept
+    copy (icons next to the copy; To Delete to begin with). **Apply** does a group, or all
+    ticked groups at once. One preview, one Undo (which removes the links and brings the
     copies back). Tags, collections, star, notes, checklist entries, tray items and From and
     For of the removed copies can be added to the kept one (ticked by default, listed in
     the preview, nothing overwritten). A copy marked Important or locked is never removed.
@@ -34,8 +54,7 @@ All notable changes are listed here. The format follows
     out the folders the archive is set up with, such as the filing code folders in
     `##. Organize`.
   - Duplicates show each copy's folder with its details under it, and its name only where
-    it differs. **Remove** is offered only in groups of three or more copies, where there
-    is a choice.
+    it differs.
   - Collections and trays show where a gone file was last seen instead of an internal id,
     say what each entry means, and offer **Take out** for a gone file in a collection.
   - **Ignore** an entry (a duplicate group, a name used by different files, an empty
@@ -77,6 +96,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Previews list a new folder structure as one step.** When a change needs several
+  missing folders, one inside the other (such as the same folder path in To Delete), the
+  preview shows one "New folders" line with the deepest folder and how many are made,
+  instead of a step per folder.
 - **Trays and collections:** the list buttons in the header (Add file, Open and Done; the
   collection's folder and share buttons) sit at the right edge of the list column, over
   the list they act on, instead of right after the title.
@@ -463,6 +486,12 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A copy of a Google Drive file can be moved again.** Copying a file also copies its
+  Drive id, and dam refused to move such a copy ("now has Drive id …, so it is not the
+  file indexed there; scan and try again"), which a scan never cleared. This blocked
+  Move, filing and the duplicate actions for copies. Such a copy can now be moved, and a
+  later scan keeps the Drive id, with its tags and collections, on the original even when
+  the copy moves to a place that sorts first, such as To Delete.
 - In the sidebar's Tags section, only the tag Browse is filtering by is highlighted.
   Before, every tag looked selected while Browse was open.
 - While you edit a rule, the test result still on screen was the one for the rule before

@@ -118,3 +118,20 @@ def test_ensure_skips_a_default_tray_whose_id_the_user_already_has(tmp_path):
     )
     paths.ensure()
     assert not (trays / "40-follow-up.yaml").exists()
+
+
+def test_extra_folders_round_trip_and_expand_user(tmp_path):
+    paths = AppPaths(tmp_path)
+    paths.ensure()
+    (paths.config_dir / "settings.yaml").write_text(
+        "archive_root: ~/x\nextra_folders:\n"
+        "  - {label: Old years, path: ~/disk/old}\n"
+        "  - {label: Spare, path: /spare, attached: false}\n",
+        encoding="utf-8",
+    )
+    s = load_settings(paths)
+    assert [(f.label, f.path, f.attached) for f in s.extra_folders] == [
+        ("Old years", Path.home() / "disk" / "old", True),
+        ("Spare", Path("/spare"), False),
+    ]
+    assert load_settings(paths).extra_folders == s.extra_folders

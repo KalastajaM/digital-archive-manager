@@ -25,7 +25,7 @@ from dam.db.tables import made_folders, ongoing_entries, operations
 from dam.index.driveid import read_drive_id
 from dam.index.locks import INDEX_LOCK
 from dam.ops import identity, primitives
-from dam.ops.guards import fold_parts, is_under, join, parent, rebase
+from dam.ops.guards import check_connected, fold_parts, is_under, join, parent, rebase
 from dam.ops.model import (
     UNDO_ORIGIN,
     BatchResult,
@@ -162,6 +162,9 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
     acted = [r for r in rows if r.state in ACTED]
     if not acted:
         raise OpFailed("There is nothing to undo here.")
+    known: dict[str, bool] = {}  # each folder's root is listed once
+    for row in acted:  # an unplugged folder would look changed: wait until it is back
+        check_connected(ex.paths, row.src, row.dst, known=known)
     made = _made_identities(ex, batch_id)
     revert, kept = _select_reverts(ex, acted, made)
     for row in revert:
@@ -174,7 +177,8 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
     # restore=True enables the restore-only guard exceptions for these exact ops;
     # Executor.preview/apply refuse origin "undo", so no other caller gets them.
     try:
-        return Planner(ex.paths, ex.areas_dir).resolve(plan, restore=True), kept
+        planner = Planner(ex.paths, ex.areas_dir)
+        return planner.resolve(plan, restore=True, connected=known), kept
     except GuardError as e:
         if str(e).startswith("not empty:") and any(
             op.kind is OpKind.REMOVE_EMPTY_DIR for op in inverses

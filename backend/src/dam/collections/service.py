@@ -35,7 +35,7 @@ import logging
 import threading
 import time
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import NamedTuple
@@ -358,11 +358,13 @@ class CollectionService:
         publishers: PublisherRegistry,
         special_folders: SpecialFolders,
         on_change: Callable[..., object] | None = None,
+        quarantines: Sequence[str] = (),
     ) -> None:
         self.engine = engine
         self.repo = repo
         self.publishers = publishers
-        self._quarantine = nfc(special_folders.quarantine)
+        # every archive folder's To Delete (``ArchivePaths.quarantines``); empty: main's
+        self._quarantines = tuple(nfc(q) for q in quarantines or (special_folders.quarantine,))
         # Called after every change that can alter what is published (create,
         # get_or_create when it creates, set_name, add/remove members,
         # remove_created_by, close, reopen, set_parent, set_publish, every group and
@@ -408,7 +410,7 @@ class CollectionService:
         return self.important_lock if collection_id == self._important_id else nullcontext()
 
     def _quarantined(self, row) -> bool:
-        return row.path_nfc is not None and _under(row.path_nfc, self._quarantine)
+        return row.path_nfc is not None and any(_under(row.path_nfc, q) for q in self._quarantines)
 
     # --- reading -----------------------------------------------------------------
 

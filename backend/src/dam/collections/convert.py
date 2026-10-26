@@ -242,7 +242,7 @@ class _Converter:
 
     @property
     def _forbidden_destinations(self) -> tuple[str, ...]:
-        return (self.paths.ongoing, self.paths.quarantine, self.paths.inbox)
+        return (self.paths.ongoing, *self.paths.quarantines, self.paths.inbox)
 
     def _root_dir(self) -> Path:
         return self.ongoing.root_dir(self.root)
@@ -406,7 +406,7 @@ class _Converter:
         for root in self._refused_roots:
             if is_under(target, root):
                 return target, is_dir, f"it points into {root} ({target})"
-        if is_under(target, self.paths.quarantine):
+        if self.paths.is_quarantined(target):
             # what CollectionService calls quarantined: never published, so never a member
             return target, is_dir, f"its target {target} is marked for deletion"
         return target, is_dir, self._indexed_problem(target)
