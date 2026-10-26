@@ -1,4 +1,5 @@
-"""Archive folders: the main folder and the extra ones (list, add, detach, attach).
+"""Archive folders: the main folder and the extra ones (list, add, detach, attach,
+change a label).
 
 Each change edits only the settings file and the index, never a file in a folder; a
 ``dry_run`` answers with the same numbers and writes nothing. After a change to the
@@ -12,13 +13,15 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from dam import archive_folders
-from dam.api.deps import AppDep, ArchivesDep
+from dam.api.deps import AppDep, ArchivesDep, SnapshotsDep
 from dam.api.schemas import (
     ArchiveFolderAddIn,
     ArchiveFolderAttachIn,
     ArchiveFolderDetachIn,
+    ArchiveFolderRelabelIn,
     ArchiveFoldersOut,
     FolderChangeOut,
+    RelabelOut,
 )
 from dam.app import JOBS_RUNNING, App
 from dam.archive_folders import FolderChange
@@ -97,3 +100,29 @@ def attach_folder(
         current_id=archives.current_id,
     )
     return _done(archives, change)
+
+
+def _relabel_out(change: archive_folders.RelabelChange) -> dict:
+    out = asdict(change)
+    out["files"] = [{"name": name, "lines": lines} for name, lines in change.files]
+    return out
+
+
+@router.post("/{label}/relabel", response_model=RelabelOut)
+def relabel_folder(
+    app: AppDep, snaps: SnapshotsDep, label: str, body: ArchiveFolderRelabelIn
+) -> dict:
+    """Change the folder's label: every stored path under it (index, journal, settings,
+    rules) is rewritten; nothing on disk changes. The dry run answers with what changes.
+    Applying closes the archive, changes it and opens it again (``dam serve`` only: 409
+    otherwise), after a snapshot. 409 while a job runs."""
+    _not_busy(app)
+    change = archive_folders.relabel_folder(app.app_paths, label, body.label, True, app.engine)
+    if body.dry_run:
+        return _relabel_out(change)
+    if snaps.reopener is None:
+        raise Conflict("This window cannot change a label. Start dam with `dam serve`.")
+    done = snaps.reopener.close_and_reopen(
+        lambda: archive_folders.relabel_folder(app.app_paths, label, body.label, False)
+    )
+    return _relabel_out(done)

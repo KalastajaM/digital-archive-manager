@@ -441,3 +441,53 @@ def test_host_reopen_refuses_while_a_job_runs(served, events, monkeypatch):
     with pytest.raises(Conflict, match="rule replay or move across disks is running"):
         host.reopen()
     assert host.current.app is first and events == [("start", id(first))]
+
+
+# -- changing a label -----------------------------------------------------------------------
+
+
+def test_relabel_dry_run_and_apply(extra_folder, served, app_paths):
+    host, client = served
+    extra_folder.add("2009/a.pdf", b"a", drive_id="x1")
+    host.current.app.scan()
+    url = "/api/archive-folders/Old years/relabel"
+    dry = post(client, url, {"label": "Archive disk", "dry_run": True})
+    assert dry.status_code == 200, dry.text
+    assert dry.json()["counts"]["files"] >= 2
+    assert [f["name"] for f in dry.json()["files"]] == ["settings.yaml"]
+    assert load_settings(app_paths).extra_folders[0].label == "Old years"
+    done = post(client, url, {"label": "Archive disk"})
+    assert done.status_code == 200, done.text
+    assert done.json()["new_label"] == "Archive disk"
+    app = host.current.app
+    assert app.paths.extra_labels == ("Archive disk",)
+    assert app.repo.get("x1").path == "Archive disk/2009/a.pdf"
+
+
+def test_relabel_refusals(extra_folder, served, fake_archive):
+    _, client = served
+    fake_archive.add("Taken/x.pdf", b"x")
+    url = "/api/archive-folders/Old years/relabel"
+    cases = {
+        "": "Give the folder a label.",
+        "Old years": "That is already the folder's label.",
+        "Taken": (
+            "'Taken' is already the name of a folder in the main folder. Choose another label."
+        ),
+    }
+    for label, message in cases.items():
+        r = post(client, url, {"label": label, "dry_run": True})
+        assert r.status_code == 400 and r.json()["error"] == message, (label, r.text)
+    assert post(client, "/api/archive-folders/Nope/relabel", {"label": "X"}).status_code == 404
+
+
+def test_relabel_409_while_job_runs(extra_folder, served, monkeypatch):
+    host, client = served
+    monkeypatch.setattr(host.current.app.copy_jobs, "running", lambda: True)
+    r = post(client, "/api/archive-folders/Old years/relabel", {"label": "X"})
+    assert r.status_code == 409
+
+
+def test_relabel_needs_the_server(xclient):
+    r = post(xclient, "/api/archive-folders/Old years/relabel", {"label": "X"})
+    assert r.status_code == 409 and "dam serve" in r.json()["error"]

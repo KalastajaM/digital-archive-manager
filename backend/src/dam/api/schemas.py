@@ -1653,6 +1653,30 @@ class ArchiveFolderAttachIn(_In):
     dry_run: bool = False
 
 
+class ArchiveFolderRelabelIn(_In):
+    label: str  # the new label
+    dry_run: bool = False
+
+
+class RelabelFileOut(BaseModel):
+    name: str
+    lines: list[int]
+
+
+class RelabelOut(BaseModel):
+    """What changing a folder's label changes (in a dry run: would change). ``counts``:
+    index entries (``files``), journal entries (``operations``), made folders and
+    maintenance entries set aside; ``files``: the settings and rule files edited, with
+    the lines that change. Nothing on disk changes."""
+
+    label: str
+    new_label: str
+    counts: dict[str, int]
+    files: list[RelabelFileOut]
+    warnings: list[str]
+    restart_needed: bool = False
+
+
 class FolderChangeOut(BaseModel):
     """What adding, detaching or attaching a folder did (or, in a dry run, would do)."""
 

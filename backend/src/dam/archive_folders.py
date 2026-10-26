@@ -284,3 +284,70 @@ def attach_folder(
             ],
         )
     return FolderChange(target.label, str(target.path), 0, not dry_run)
+
+
+@dataclass(frozen=True)
+class RelabelChange:
+    """What changing a folder's label changes (or, in a dry run, would change)."""
+
+    label: str
+    new_label: str
+    counts: dict[str, int]
+    files: list[tuple[str, list[int]]]  # file name, the lines that change
+    warnings: list[str]
+
+
+def _relabel_problem(new: str, target: ExtraFolder, paths: ArchivePaths, settings: Settings):
+    """Why ``new`` cannot be ``target``'s label, or None: the rules for a new label,
+    where the folder's own label does not count as taken (a change of case is fine)."""
+    if not isinstance(new, str) or not new.strip():
+        return "Give the folder a label."
+    try:
+        clean = check_folder_name(new)
+    except FolderNameError as e:
+        return str(e)
+    if clean == target.label:
+        return "That is already the folder's label."
+    others = [e for e in settings.extra_folders if e is not target]
+    if any(_fold(e.label) == _fold(clean) for e in others):
+        return f"There is already an archive folder labelled '{clean}'. Choose another label."
+    if _fold(clean) == _fold(target.label):
+        return None
+    return _main_clash(clean, paths)
+
+
+def relabel_folder(
+    app_paths: AppPaths, label: str, new_label: str, dry_run: bool, engine=None
+) -> RelabelChange:
+    """Change the label of the extra folder ``label`` to ``new_label`` (``dam.relabel``):
+    every stored path under it is rewritten, nothing on disk changes. Run with the
+    archive closed (``Host.close_and_reopen``); ``engine`` None opens the index for
+    the change. 400 for a label that cannot be used, a rule or setting that cannot be
+    edited safely, or an interrupted operation."""
+    from dam import relabel
+    from dam.core.yamledit import YamlEditError
+    from dam.ops.model import OpFailed
+
+    settings, paths = _context(app_paths)
+    target = _entry(settings, label)
+    message = _relabel_problem(new_label, target, paths, settings)
+    if message is not None:
+        raise InvalidRequest(message)
+    new = check_folder_name(new_label)
+    own = engine is None
+    engine = make_engine(app_paths.db_path) if own else engine
+    try:
+        try:
+            plan = relabel.plan(app_paths, engine, target.label, new)
+        except (YamlEditError, OpFailed) as e:
+            raise InvalidRequest(str(e)) from None
+        if not dry_run:
+            try:
+                relabel.apply(app_paths, engine, plan)
+            except OSError as e:
+                raise InvalidRequest(f"Could not change the label: {e}") from None
+    finally:
+        if own:
+            engine.dispose()
+    files = [(f.path.name, f.lines) for f in plan.files]
+    return RelabelChange(target.label, new, plan.counts, files, plan.warnings)
