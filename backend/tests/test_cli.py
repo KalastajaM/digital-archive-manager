@@ -815,7 +815,7 @@ def test_a_writer_waits_for_a_command_in_another_process(run, app_paths, fake_ar
         stdout=subprocess.PIPE,
     )
     try:
-        assert other.stdout is not None and other.stdout.readline() == b"held\n"
+        assert other.stdout is not None and other.stdout.readline().strip() == b"held"
         r = run("scan")
         assert r.exit_code == 1 and "A dam command (dam file)" in r.stderr
         assert "added" not in r.stdout

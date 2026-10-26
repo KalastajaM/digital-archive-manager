@@ -353,7 +353,7 @@ def test_serve_lock_refuses_another_process_until_it_exits(tmp_path):
         stdout=subprocess.PIPE,
     )
     try:
-        assert holder.stdout is not None and holder.stdout.readline() == b"held\n"
+        assert holder.stdout is not None and holder.stdout.readline().strip() == b"held"
         assert ServeLock.holder(data) == {"port": None, "command": "dam scan"}
         mine = ServeLock(data)
         with pytest.raises(Locked) as caught:
