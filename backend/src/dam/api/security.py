@@ -11,9 +11,10 @@ the user's browser must not be able to read or change anything:
   of these, so a form POST from another site is refused; non-browser clients (curl)
   must send ``Origin`` themselves to mutate. GETs without these headers are allowed.
 * A POST must be ``Content-Type: application/json``, which a plain cross-site form can
-  never send. The one exception is the file upload (``POST /api/inbox/upload``, body
-  ``application/octet-stream``): a type a plain form cannot send either, and it passes
-  the same host and origin checks as every other mutating request.
+  never send. The exceptions are the file uploads (``POST /api/inbox/upload`` and
+  ``POST /api/snapshots/import``, body ``application/octet-stream``): a type a plain form
+  cannot send either, and they pass the same host and origin checks as every other
+  mutating request.
 
 ``DAM_DEV_ORIGIN`` (e.g. ``http://localhost:5173`` for the Vite dev server) adds one more
 accepted origin; it is off unless set, and only ``http://localhost:<port>`` or
@@ -43,7 +44,7 @@ Send = Callable[[dict], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 SAFE_METHODS = frozenset({"GET", "HEAD"})
-UPLOAD_PATH = "/api/inbox/upload"
+UPLOAD_PATHS = frozenset({"/api/inbox/upload", "/api/snapshots/import"})
 LOCAL_FETCH_SITES = frozenset({"same-origin", "none"})
 DEV_ORIGIN_ENV = "DAM_DEV_ORIGIN"
 _DEV_ORIGIN = re.compile(r"http://(localhost|127\.0\.0\.1):[0-9]{1,5}")
@@ -119,7 +120,7 @@ class LocalOnlyMiddleware:
         if method == "POST":
             media_type = headers.get("content-type", "").split(";")[0].strip().lower()
             is_upload = (
-                media_type == "application/octet-stream" and scope.get("path") == UPLOAD_PATH
+                media_type == "application/octet-stream" and scope.get("path") in UPLOAD_PATHS
             )
             if media_type != "application/json" and not is_upload:
                 return 415, "unsupported media type: expected application/json"
