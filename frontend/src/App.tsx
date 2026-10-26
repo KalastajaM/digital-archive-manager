@@ -7,6 +7,7 @@ import { RecoveryPanel } from "./components/Recovery";
 import { hasBand } from "./components/archivePalette";
 import { EmptyState } from "./components/ui/EmptyState";
 import { Sidebar } from "./components/ui/Sidebar";
+import { CopyJobProgress } from "./components/CopyJobProgress";
 import { groupDigits, plural } from "./format";
 import { visible } from "./text";
 
@@ -138,6 +139,7 @@ function Shell() {
       {band && <div className="archive-band" aria-hidden="true" />}
       <Sidebar footer={foot} />
       <div className="content">
+        <CopyJobProgress />
         {status.data?.archive_available === false && <ArchiveUnavailableBanner />}
         {!onActivity && <RecoveryPanel count={status.data?.recovery_pending ?? 0} />}
         <main>

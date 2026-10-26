@@ -490,6 +490,12 @@ export const detachArchiveFolder = (label: string, forget: boolean, dry_run = fa
 export const attachArchiveFolder = (label: string) =>
   post<FolderChange>(`/api/archive-folders/${enc(label)}/attach`, { dry_run: false });
 
+export type Relabel = Schemas["RelabelOut"];
+/** Change an extra folder's label (``dry_run``: only say what changes). Every stored path
+ * under it is rewritten; nothing on the disk changes. */
+export const relabelArchiveFolder = (label: string, newLabel: string, dry_run: boolean) =>
+  post<Relabel>(`/api/archive-folders/${enc(label)}/relabel`, { label: newLabel, dry_run });
+
 export const useSetupCandidates = () =>
   useQuery({
     queryKey: keys.setupCandidates,
@@ -710,6 +716,15 @@ export const useMoveFiles = () => {
     onSettled: refresh,
   });
 };
+
+/** A move across disks running in the background (``POST /api/browse/move`` answered
+ * with a ``job_id``): files and bytes copied so far, and the batch once it is over. */
+export type CopyJob = Schemas["CopyJobOut"];
+export const getCopyJob = (jobId: string) => get<CopyJob>(`/api/browse/move/jobs/${enc(jobId)}`);
+/** The latest move across disks of this run (null when there was none). */
+export const latestCopyJob = () => get<CopyJob | null>("/api/browse/move/jobs/latest");
+/** Stop after the file being copied (it is finished and its original goes to To Delete). */
+export const stopCopyJob = (jobId: string) => post<CopyJob>(`/api/browse/move/jobs/${enc(jobId)}/stop`, {});
 
 /** One file's new name in a folder (its own: a rename; another: a move with that name). */
 export const useRenamePreview = () =>

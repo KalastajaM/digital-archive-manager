@@ -30,6 +30,7 @@ from dam.locks import LockService
 from dam.maintenance.service import MaintenanceService
 from dam.notes import NotesService
 from dam.ops.executor import Executor
+from dam.ops.jobs import CopyJobs
 from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
 from dam.rules.jobs import ReplayJobs
@@ -61,7 +62,10 @@ from dam.trays.service import TrayService
 log = logging.getLogger(__name__)
 
 # why the archive cannot be reopened now (adding, detaching or attaching a folder)
-JOBS_RUNNING = "A maintenance check or rule replay is running. Try again when it has finished."
+JOBS_RUNNING = (
+    "A maintenance check, rule replay or move across disks is running. Try again when it"
+    " has finished."
+)
 
 
 @dataclass(eq=False)
@@ -157,6 +161,7 @@ class App:
         # page-1 pictures (cache) and the crops of picture areas (the rules' folder)
         self.pictures = Pictures(lambda: self.rules_dir, self.app_paths.cache_dir)
         self.replay_jobs = ReplayJobs()  # rule tests that run in the background
+        self.copy_jobs = CopyJobs()  # moves across disks that run in the background
         self.area_pictures = AreaPictures(
             self.repo,
             self.app_paths.cache_dir,
@@ -207,6 +212,8 @@ class App:
             important_lock=self.collections.important_lock,
             rescan=self.scan,
         )
+        self.browse.copy_jobs = self.copy_jobs
+        self.executor.copying = self.copy_jobs.running
         self.maintenance = MaintenanceService(
             self.paths,
             self.repo,
@@ -619,9 +626,15 @@ class App:
 
     def jobs_running(self) -> bool:
         """A maintenance check or a rule replay is running (closing the App ends it)."""
-        return self.maintenance.jobs.running() or self.replay_jobs.running()
+        return (
+            self.maintenance.jobs.running()
+            or self.replay_jobs.running()
+            or self.copy_jobs.running()
+        )
 
     def close(self) -> None:
+        self.executor.cancel_copies.set()  # a copy in progress ends at its next chunk
+        self.copy_jobs.close()
         self.replay_jobs.close()
         self.maintenance.close()
         self.content.close()

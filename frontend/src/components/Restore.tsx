@@ -10,6 +10,7 @@ import { plural } from "../format";
 import { dialogOpen } from "../keyboard";
 import { visible } from "../text";
 import { folderLabel } from "./MoveTo";
+import { startedCopyJob } from "./CopyJobProgress";
 import { ConfirmPlan } from "./PlanPreview";
 import { undoAction, useBlockToastActions, useToast } from "./Toasts";
 import type { MenuEntry } from "./ui/Menu";
@@ -94,6 +95,10 @@ export function useRestoreFlow({ onRestored }: { onRestored?: (result: BatchResu
       toast({ kind: "error", text: `Not restored: ${visible(refusal(e))}` });
       return;
     }
+    if (result.job_id) {
+      startedCopyJob(result.job_id); // a copy across disks: the progress view takes over
+      return;
+    }
     const complete = !result.error && !result.failed;
     const moved = result.done.filter((op) => op.kind === "move");
     if (!complete) {
@@ -133,7 +138,13 @@ export function useRestoreFlow({ onRestored }: { onRestored?: (result: BatchResu
       }
       ops={confirm.ops}
       busy={busy}
-      confirmLabel={confirm.where.to === "folder" ? "Restore here" : RESTORE_LABEL[confirm.where.to]}
+      confirmLabel={
+        confirm.ops.some((op) => op.kind === "copy_across")
+          ? "Copy and restore"
+          : confirm.where.to === "folder"
+            ? "Restore here"
+            : RESTORE_LABEL[confirm.where.to]
+      }
       onConfirm={() => void guarded(() => apply(confirm))}
       onCancel={() => setConfirm(null)}
     />

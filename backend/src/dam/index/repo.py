@@ -32,6 +32,7 @@ from dam.db.tables import (
     items,
     member_link_names,
     notes,
+    rule_outcomes,
     tags,
 )
 from dam.extract.base import ExtractedText
@@ -832,6 +833,28 @@ class FileRepo:
                     text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": drive_id}
                 )
 
+    def has_attachments(self, drive_id: str) -> bool:
+        """The owner gave the file something: a tag, a note or checklist entry, a place in
+        a collection or a tray item, or a lock."""
+        with self._conn() as conn:
+            for column in (
+                file_tags.c.drive_id,
+                collection_members.c.drive_id,
+                item_files.c.drive_id,
+                file_locks.c.drive_id,
+            ):
+                if conn.execute(select(column).where(column == drive_id).limit(1)).first():
+                    return True
+            for table in (notes, checklist_items):
+                found = conn.execute(
+                    select(table.c.id)
+                    .where(table.c.target_kind == "file", table.c.target_id == drive_id)
+                    .limit(1)
+                ).first()
+                if found:
+                    return True
+        return False
+
     def purge_parked(self) -> None:
         """Delete rows still parked (with their text, fts and tags). DB rows only."""
         with self._conn(write=True) as conn:
@@ -843,13 +866,38 @@ class FileRepo:
             self._delete_rows(conn, ids)
 
     def rekey(self, old_id: str, new_id: str) -> None:
-        """Replace a synthetic id by the real one, carrying text, fts, tags and the
-        barcode, QR sticker and page-1 layout reads along."""
+        """Give the row ``old_id`` the id ``new_id`` (a synthetic id replaced by the real
+        one, or a file copied across disks), carrying along everything that names the file
+        by its id: text, fts, tags, the barcode, QR sticker and page-1 layout reads, notes
+        and checklists, collection and tray item places, summaries, fields, sender and
+        person, locks, rule outcomes and the filing code given in the app."""
         with self._conn(write=True) as conn:
             conn.exec_driver_sql("PRAGMA defer_foreign_keys = ON")
-            for table in (file_text, file_tags, file_barcodes, file_qr_codes, file_layouts, files):
+            for table in (
+                file_text,
+                file_tags,
+                file_barcodes,
+                file_qr_codes,
+                file_layouts,
+                collection_members,
+                member_link_names,
+                item_files,
+                file_locks,
+                file_assignments,
+                file_summaries,
+                file_fields,
+                rule_outcomes,
+                file_assigned_codes,
+                files,
+            ):
                 conn.execute(
                     update(table).where(table.c.drive_id == old_id).values(drive_id=new_id)
+                )
+            for table in (notes, checklist_items):
+                conn.execute(
+                    update(table)
+                    .where(table.c.target_kind == "file", table.c.target_id == old_id)
+                    .values(target_id=new_id)
                 )
             conn.execute(
                 text("UPDATE file_fts SET drive_id = :new WHERE drive_id = :old"),

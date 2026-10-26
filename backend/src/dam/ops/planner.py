@@ -4,6 +4,7 @@ Nothing here touches the disk except to read it.
 """
 
 import dataclasses
+import math
 import os
 import stat
 from pathlib import Path, PurePosixPath
@@ -52,6 +53,7 @@ def _outside(op: Op) -> bool:
 COLLISION_NOTE = "renamed to avoid collision"
 COPY_NOTE = "copied, then removed from dam's settings folder"
 COPY_BACK_NOTE = "copied back; the copy in To Delete stays"
+ORIGINAL_STAYS_NOTE = "the original stays in To Delete"
 MKDIR_NOTE = "create missing folder"
 
 
@@ -219,6 +221,9 @@ class Planner:
         if plan.inbox_folders and not plan.new_folders:
             raise GuardError("Inbox folders are made only by a new-folder plan.")
         self.made = plan.new_folders  # MKDIRs of a New folder / layout batch are "made"
+        # a move by hand may copy files across disks; an undo never does
+        self._copy_plan = plan.copy_across and not restore
+        self._copy_bytes: dict[str, int] = {}  # folder label -> bytes copied into it
         ops = self._new_folder_ops(plan) if plan.new_folders else plan.ops
         for op in ops:
             # not a place that changes: a RENAME's or PICTURE_BACK's dst is a name, an
@@ -246,6 +251,7 @@ class Planner:
                 self.out[-1].note = _add_note(self.out[-1].note, redirect)
         if self.locked_names:
             raise GuardError(self._locked_message(len(plan.ops)))
+        self._check_space()
         return self.out
 
     def _lock_state(self):
@@ -415,9 +421,14 @@ class Planner:
     def _relocate(self, op: Op, folder: str) -> None:
         """MOVE / QUARANTINE / RENAME: put ``op.src`` into ``folder`` under a free name."""
         src = op.src
-        self._require_src(src)
+        kind = self._require_src(src)
         self._check_locked(src)
-        self._check_same_disk(src, folder)
+        if not self._same_disk(src, folder):
+            if op.kind is OpKind.MOVE and self._copy_plan and kind == "file":
+                self._copy_across(op, folder)
+                return
+            a, b = self.paths.folder_of(src), self.paths.folder_of(folder)
+            raise OpFailed(different_disks_message(a.label, b.label))
         into_quarantine = self.paths.is_quarantined(folder)
         if into_quarantine and self._is_protected_origin(src):
             raise GuardError(f"{src!r} comes from a protected path and cannot be quarantined")
@@ -438,19 +449,75 @@ class Planner:
         self.sim.events.append(("move", src, dst))
         self._track_protected(src, dst)
 
-    def _check_same_disk(self, src: str, folder: str) -> None:
+    def _same_disk(self, src: str, folder: str) -> bool:
         """A move between two archive folders is a rename, so it works only when both
-        are on one disk: refused here, in the dry run, rather than half way."""
+        are on one disk; otherwise it is refused (or copied across) here, in the dry
+        run, rather than half way."""
         a, b = self.paths.folder_of(src), self.paths.folder_of(folder)
         if a.label == b.label:
-            return
+            return True
         try:
-            same = primitives.same_disk(a.root, b.root)
+            return primitives.same_disk(a.root, b.root)
         except OSError:  # unplugged since check_connected looked
             gone = next((f for f in (a, b) if f.label and not os.path.isdir(f.root)), None)
             raise GuardError(not_connected_message(gone or (b if b.label else a))) from None
-        if not same:
-            raise OpFailed(different_disks_message(a.label, b.label))
+
+    def _copy_across(self, op: Op, folder: str) -> None:
+        """A MOVE of the file ``op.src`` into ``folder`` in an archive folder on another
+        disk: COPY_ACROSS (a verified copy under a free name), then a QUARANTINE of the
+        original into its own folder's To Delete. An original already in a To Delete
+        (a restore) stays there. A protected file is refused: its original could not go
+        to To Delete."""
+        src = op.src
+        name = PurePosixPath(src).name
+        if self._is_protected_origin(src):
+            raise GuardError(f"{name} is protected, so it is not copied across disks.")
+        folder = self.sim.spell(folder)
+        self._ensure_folder(folder, op.allow_top_level)
+        original_stays = self.paths.is_quarantined(src)
+        if not original_stays:  # made first, so the move to To Delete follows the copy
+            aside = self.sim.spell(self._quarantine_folder(src))
+            self._ensure_folder(aside, False, quarantine_root=True)
+        wanted = op.name or name
+        free = self._free_or_exact(op, folder, wanted, src)
+        dst = join(folder, free)
+        if free != wanted:
+            self.aliases.append((join(folder, wanted), dst))
+        disk = self.sim.disk_path(src)
+        size = os.lstat(disk).st_size
+        label = self.paths.label_of(dst)
+        self._copy_bytes[label] = self._copy_bytes.get(label, 0) + size
+        self.out.append(
+            ResolvedOp(
+                OpKind.COPY_ACROSS,
+                src,
+                dst,
+                self._drive_id(src),
+                COLLISION_NOTE if free != wanted else None,
+                size=size,
+                cloud_only=primitives.is_dataless(disk),
+            )
+        )
+        self.sim.events.append(("create", dst, "file"))
+        if original_stays:
+            self.out[-1].note = _add_note(self.out[-1].note, ORIGINAL_STAYS_NOTE)
+            return
+        self._relocate(Op(OpKind.QUARANTINE, src, None), self._quarantine_folder(src))
+        self.out[-1].note = _add_note(self.out[-1].note, f"copied to {dst}")
+
+    def _check_space(self) -> None:
+        """Every archive folder that files are copied into has room for all of them (and
+        the margin ``copy_file`` keeps free); checked once here, and again per file."""
+        for label, size in self._copy_bytes.items():
+            folder = next(f for f in self.paths.folders if f.label == label)
+            free = primitives.shutil.disk_usage(folder.root).free
+            if size + primitives._COPY_FREE_MARGIN > free:
+                where = f"'{label}'" if label else "the main folder"
+                needed = math.ceil(size / (1024 * 1024))
+                raise OpFailed(
+                    f"There is not enough free space on {where} for these files"
+                    f" ({needed} MB needed)."
+                )
 
     def _quarantine_folder(self, src: str) -> str:
         """Where QUARANTINE puts ``src``: its own folder's To Delete, keeping the path

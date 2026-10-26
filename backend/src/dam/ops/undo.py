@@ -37,7 +37,7 @@ from dam.ops.model import (
     ResolvedOp,
 )
 from dam.ops.planner import Planner
-from dam.ops.primitives import DS_STORE, finder_cache_problem
+from dam.ops.primitives import DS_STORE, TEMP_COPY_PREFIX, finder_cache_problem
 
 if TYPE_CHECKING:
     from dam.ops.executor import Executor
@@ -178,7 +178,9 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
     # Executor.preview/apply refuse origin "undo", so no other caller gets them.
     try:
         planner = Planner(ex.paths, ex.areas_dir)
-        return planner.resolve(plan, restore=True, connected=known), kept
+        resolved = planner.resolve(plan, restore=True, connected=known)
+        _mark_restored_rows(resolved, revert)
+        return resolved, kept
     except GuardError as e:
         if str(e).startswith("not empty:") and any(
             op.kind is OpKind.REMOVE_EMPTY_DIR for op in inverses
@@ -186,6 +188,16 @@ def _plan_undo(ex: Executor, batch_id: str) -> tuple[list[ResolvedOp], list[str]
             # the app's folder holds what came later (a sync's links, the user's files)
             raise GuardError(f"{e}{FOLDER_NOT_EMPTY}") from None
         raise
+
+
+def _mark_restored_rows(resolved: list[ResolvedOp], revert: list[JournalEntry]) -> None:
+    """The QUARANTINE that undoes a copy across disks carries the original's path and
+    id, so the executor points the index row back at the original."""
+    copies = {fold_parts(r.dst): r for r in revert if r.kind == OpKind.COPY_ACROSS}
+    for rop in resolved:
+        row = copies.get(fold_parts(rop.src)) if rop.kind is OpKind.QUARANTINE else None
+        if row is not None:
+            rop.restore_row = (row.src, row.drive_id)
 
 
 def _fold_key(rel: str) -> tuple[str, ...]:
@@ -325,7 +337,8 @@ def _check_unchanged(ex: Executor, row: JournalEntry, now_at: str) -> None:
             same = read_drive_id(p) == row.drive_id
         if not same:
             raise OpFailed(f"{now_at} has changed since, so this cannot be undone.")
-    elif kind in (OpKind.COPY, OpKind.PICTURE_TO_QUARANTINE):  # still the file that came in
+    elif kind in (OpKind.COPY, OpKind.COPY_ACROSS, OpKind.PICTURE_TO_QUARANTINE):
+        # still the file that came in
         p = ex.paths.abs(now_at)
         try:
             st = os.lstat(p)
@@ -388,8 +401,10 @@ def _inverse(ex: Executor, row: JournalEntry, made: dict | None = None) -> Op:
         return Op(
             OpKind.REMOVE_EMPTY_DIR, row.dst, None, identity=made[_fold_key(row.dst)], made=True
         )
-    if kind is OpKind.COPY:
-        # a file copied into the inbox: moved to the quarantine folder, never deleted
+    if kind in (OpKind.COPY, OpKind.COPY_ACROSS):
+        # a copy (into the inbox, or across disks): moved to the To Delete of its own
+        # folder, never deleted; a copy across disks also gives the index row back to
+        # the original (``_mark_restored_rows``)
         return Op(OpKind.QUARANTINE, row.dst, None)
     if kind is OpKind.PICTURE_TO_QUARANTINE:
         # back to its plain name in the rules' areas folder, refused if that is taken
@@ -463,7 +478,9 @@ def mark_reverted(
                 hit = r["kind"] == OpKind.PICTURE_TO_QUARANTINE and same(r["dst"], src)
             case k if k in RELOCATE:
                 hit = (r["kind"] in RELOCATE and same(r["dst"], src) and same(r["src"], dst)) or (
-                    k is OpKind.QUARANTINE and r["kind"] == OpKind.COPY and same(r["dst"], src)
+                    k is OpKind.QUARANTINE
+                    and r["kind"] in (OpKind.COPY, OpKind.COPY_ACROSS)
+                    and same(r["dst"], src)
                 )
             case _:
                 hit = False
@@ -502,10 +519,13 @@ def recover(ex: Executor) -> RecoveryResult:
             )
             if state == "done" and e.undo_of is not None:
                 mark_reverted(conn, e.undo_of, OpKind(e.kind), e.src, e.dst)
-        if state == "done" and OpKind(e.kind) in RELOCATE:
+        if state == "done" and OpKind(e.kind) in (*RELOCATE, OpKind.COPY_ACROSS):
             try:
                 with INDEX_LOCK:
-                    ex.repo.update_path(e.src, e.dst)
+                    if OpKind(e.kind) is OpKind.COPY_ACROSS:
+                        ex._repoint_copy(ResolvedOp(OpKind.COPY_ACROSS, e.src, e.dst))
+                    else:
+                        ex.repo.update_path(e.src, e.dst)
             except SQLAlchemyError as err:
                 result.index_errors.append(f"index update failed for {e.dst}: {err}")
         result.entries.append(dataclasses.replace(e, state=state, error=error, finished=now))
@@ -537,6 +557,8 @@ def _happened(ex: Executor, e: JournalEntry) -> bool | None:
             st = os.lstat(dst)
             # complete only when it has the size of the source (a cut-short copy is not)
             return True if stat.S_ISREG(st.st_mode) and st.st_size == e.size else None
+        case OpKind.COPY_ACROSS:
+            return _copy_across_happened(ex, e)
         case OpKind.PICTURE_TO_QUARANTINE | OpKind.PICTURE_BACK:
             if ex.areas_dir is None:
                 return None
@@ -579,6 +601,25 @@ def _happened(ex: Executor, e: JournalEntry) -> bool | None:
     if src_here and not dst_here:
         return False
     return None
+
+
+def _copy_across_happened(ex: Executor, e: JournalEntry) -> bool | None:
+    """A copy across disks is complete when the copy has the journaled size and hash and
+    the original is still in its place (its move to To Delete is a row of its own). An
+    unfinished temporary copy, or a copy that does not match: unclear, every file is left
+    alone. Nothing at all: the copy never started."""
+    dst, src = ex.paths.abs(e.dst), ex.paths.abs(e.src)
+    if not os.path.lexists(dst):
+        try:
+            names = os.listdir(dst.parent)
+        except FileNotFoundError:
+            return False
+        temp = any(n.startswith(TEMP_COPY_PREFIX) and n.endswith(f"-{dst.name}") for n in names)
+        return None if temp else False
+    st = os.lstat(dst)
+    if not stat.S_ISREG(st.st_mode) or st.st_size != e.size or not os.path.lexists(src):
+        return None
+    return True if primitives.file_sha256(dst) == e.content_hash else None
 
 
 def _picture_copy_happened(ex: Executor, e: JournalEntry, here: Path, there: Path) -> bool | None:

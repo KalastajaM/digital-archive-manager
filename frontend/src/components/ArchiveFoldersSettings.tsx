@@ -15,6 +15,7 @@ import {
   useArchiveFolders,
 } from "../api/client";
 import { visible } from "../text";
+import { RelabelSheet } from "./RelabelSheet";
 import { Sheet } from "./ui/Sheet";
 
 const statusOf = (f: ArchiveFolder) => (!f.attached ? "Detached" : f.connected ? "Connected" : "Not connected");
@@ -183,6 +184,7 @@ export function ArchiveFoldersSettings() {
   const client = useQueryClient();
   const folders = useArchiveFolders();
   const [detaching, setDetaching] = useState<ArchiveFolder | null>(null);
+  const [relabelling, setRelabelling] = useState<ArchiveFolder | null>(null);
   const [adding, setAdding] = useState(false);
   const [restart, setRestart] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -230,6 +232,9 @@ export function ArchiveFoldersSettings() {
             <code title={f.path}>{f.path}</code>
             {f.label !== null && (
               <div className="archive-forget-actions">
+                <button type="button" onClick={() => setRelabelling(f)}>
+                  Change label
+                </button>
                 {f.attached ? (
                   <button type="button" onClick={() => setDetaching(f)}>
                     Detach
@@ -256,6 +261,16 @@ export function ArchiveFoldersSettings() {
       </div>
       {detaching && <DetachSheet folder={detaching} onClose={() => setDetaching(null)} onDone={changed} />}
       {adding && <AddSheet onClose={() => setAdding(false)} onDone={changed} />}
+      {relabelling && (
+        <RelabelSheet
+          folder={relabelling}
+          onClose={() => setRelabelling(null)}
+          onDone={(r) => {
+            setRelabelling(null);
+            changed({ label: r.new_label, path: relabelling.path, files: 0, restart_needed: r.restart_needed });
+          }}
+        />
+      )}
     </section>
   );
 }

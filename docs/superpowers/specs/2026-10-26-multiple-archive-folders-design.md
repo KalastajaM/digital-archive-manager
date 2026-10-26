@@ -1,6 +1,7 @@
 # Multiple archive folders: design
 
-Status: step 1 built (2026-10-26); step 2 (copy across, relabel) not built.
+Status: step 1 built (2026-10-26); step 2 (copy across, relabel) is designed in
+`2026-10-26-archive-folders-step-2-design.md`.
 
 ## Intent
 

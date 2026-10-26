@@ -20,6 +20,7 @@ the app's sidebar).
 - [Tray files](#tray-files)
 - [Reminders setup](#reminders-setup)
 - [AI setup](#ai-setup)
+- [Moves across disks](#moves-across-disks)
 - [Safety model in detail](#safety-model-in-detail)
 - [Maintenance](#maintenance)
 - [Index errors](#index-errors)
@@ -288,10 +289,11 @@ extra_folders:
 stays reserved (a main-folder entry with that name is left out) until it is forgotten. The main
 folder's paths have no prefix; a path whose first component is an extra folder's label
 belongs to that folder (`Old years/2009/car/invoice.pdf`). Labels compare NFC and
-case-folded and cannot be changed yet (they also live in stored paths).
+case-folded. Changing one rewrites every stored path under it (see `relabel` below).
 
 **API** (all under `/api/archive-folders`; `400` carries the reason in plain words,
-`404` an unknown label, `409` while a maintenance check or rule replay runs):
+`404` an unknown label, `409` while a maintenance check, rule replay or move across disks
+runs):
 
 | Call | Does |
 |---|---|
@@ -299,6 +301,7 @@ case-folded and cannot be changed yet (they also live in stored paths).
 | `POST /api/archive-folders` `{label, path, dry_run}` | Adds a folder after the overlap, label and readable checks. |
 | `POST /api/archive-folders/{label}/detach` `{forget, dry_run}` | Detaches it. Its index rows are marked missing. With `forget` (also for a detached folder) the entry leaves the settings and its rows are removed together with the notes, checklists, collection and item places, summaries, fields, sender and person, and locks of those files; collections and items stay. |
 | `POST /api/archive-folders/{label}/attach` `{dry_run}` | Attaches a detached folder again, after the same checks as adding. |
+| `POST /api/archive-folders/{label}/relabel` `{label, dry_run}` | Gives the folder (attached or detached) a new label. Answers with `label`, `new_label`, `counts` (`files`: index rows, `operations`: journal rows, `made_folders`, `maintenance_ignored`), `files` (each settings or rule file edited, with the lines that change), `warnings` and `restart_needed`. See below. |
 
 Each answers with `label`, `path`, `files` and `restart_needed`; `dry_run` answers the
 same and writes nothing. A change takes effect at once (the server reopens the archive);
@@ -308,6 +311,28 @@ marks the rows of a detached label missing again. Every file record carries `fol
 label, null for the main folder) and `connected`. `is:disconnected` finds the files of
 every folder that is not connected now; files of a detached folder are marked missing and
 are not found.
+
+**Changing a label** (`relabel`, `dam.relabel`). The new label passes the rules for a new
+one, except that the folder's own old label does not count as taken (a change of case is
+allowed). Refused while a journal row is still `planned` (run `dam recover`). Nothing on
+disk changes. Every value equal to the old label, or starting with `<old label>/`, becomes
+the new label: `files.path`, `path_nfc` and the folder's own top row's `name`, the
+`file_fts` rows, `operations.src` and `dst` (except `abs:` paths and the plain file names a
+`copy` from outside or a rule picture keeps), `made_folders.rel`, and the keys of
+maintenance entries set aside (except duplicate and version groups). In `settings.yaml`:
+the folder's `extra_folders` label, and `protected_paths` and `ai.exclude_folders` entries
+under it. In `config/rules/*.yaml`: every `folder` and `folder_is` value under it (a
+template whose first part is a placeholder, like `{payee}/x`, is left alone), and the
+same for each code's `folder` in `config/filing_codes.yaml`. Tray files name no folders. The YAML files are edited value by value (`dam.core.yamledit`: only the
+characters of each value change, in the quoting it had; a plain value that would read
+differently is written in double quotes), each new file is loaded again and compared with
+the old one with only those values changed, and a value that is folded, literal, spread
+over lines or an alias refuses the whole change with its file and line. Applying takes a
+snapshot (kind `before-relabel`), rewrites the database in one transaction, then writes
+the files (each with its `.bak-<time>`); if a file cannot be written, the files already
+written get their old content back and the database is rewritten back. It runs inside
+`Host.close_and_reopen` (the archive is closed, so no scan writes old paths back); the API
+without `dam serve` answers 409.
 
 **Folders that are not connected.** A folder is connected when its root can be listed and
 it does not list nothing while the index has live rows under its label (a signed-out cloud
@@ -323,7 +348,8 @@ folder names** check lists main-folder entries that share a folder's label.
 
 A snapshot is one zip per archive in `<data folder>/snapshots/`, named
 `dam-snapshot-YYYYMMDD-HHMMSS.zip` (`…-before-restore.zip` for the one taken just before
-a restore, `…-imported.zip` for one added with Import, named by when it was taken). It
+a restore, `…-before-relabel.zip` for the one taken before a folder's label changes,
+`…-imported.zip` for one added with Import, named by when it was taken). It
 holds:
 
 - `dam.sqlite`, copied with SQLite's online backup API, so it is consistent while the
@@ -332,7 +358,7 @@ holds:
   crops, `trays/`, `layouts/`);
 - the state files beside it: `ai-state.json`, `rules-state.json`,
   `tray-defaults-seeded.json`, `tray-defaults-dismissed.json`;
-- `manifest.json`: format, time, kind (`manual` or `before-restore`), app version, the
+- `manifest.json`: format, time, kind (`manual`, `before-restore` or `before-relabel`), app version, the
   database's migration revision, the archive folder and the file list.
 
 Left out: `cache/` (thumbnails, page-1 pictures, exports; rebuilt), `logs/`, the lock and
@@ -858,6 +884,64 @@ cd backend && uv run python -m dam.demo /tmp/dam-demo   # a small fake archive
 DAM_AI_FAKE=1 uv run dam --data-dir /tmp/dam-demo/data serve --port 8777 --no-open
 ```
 
+## Moves across disks
+
+A move the owner makes by hand (`POST /api/browse/move` with mode `move`, and
+`POST /api/restore`) carries `Plan.copy_across`. In such a plan a `move` of a **file**
+whose source and destination folders are on different disks (`os.stat().st_dev` of the two
+folder roots) is planned as two operations, always next to each other:
+
+1. `copy_across` (`src` the file, `dst` its path in the other folder; a taken name gets
+   `_N`). The preview's op carries `size` and `cloud_only` (macOS `SF_DATALESS`: reading it
+   downloads it first). The journal row gets the source's sha256 (`content_hash`) before
+   anything is copied. The copy is written under `.dam-copy-<8 hex>-<name>` next to the
+   destination (exclusive create, fsync, no size cap, only the free-space check), checked
+   against the journaled size and hash, given the source's access and modification time,
+   and only then renamed to its name without overwriting. The file's index row then
+   describes the copy, so tags, notes, checklists, collection and tray item places, locks,
+   summaries, fields and rule outcomes follow; it takes the copy's own Drive id if it has
+   one, else a fresh `local:` id when the original's was a Drive id (the original keeps
+   that id on disk, so it becomes a new, empty row on the next scan).
+2. `quarantine` of the original into its own folder's To Delete, with the note
+   `copied to <dst>`. A restore across disks has no step 2: the original stays in To
+   Delete (note `the original stays in To Delete`).
+
+The dry run refuses (with a plain message) a folder or a link (only files cross disks),
+a protected file, a locked file, a folder that is not connected, and too little free space
+on the destination for the whole batch. Every other caller (filing, rules, conversions,
+filing codes) and every undo keeps the refusal "... are on different disks, so this cannot
+be moved between them here."
+
+**In the background.** A move whose plan holds a `copy_across` answers at once with
+`job_id` (and an empty batch); refusals still answer the request. One such move runs at a
+time (a second is 409), it does not end when nobody polls, and closing the app ends the
+copy in progress at its next chunk (its `.dam-copy-` file stays and the op fails naming
+it). While it runs, adding, detaching, attaching or relabelling a folder and restoring a
+snapshot are 409.
+
+| Call | Does |
+|---|---|
+| `GET /api/browse/move/jobs/{job_id}` | `state` (`running`, `done`, `stopped`, `error`), `done`/`total` files, `bytes_done`/`bytes_total`, `current` (the file being copied), `elapsed_s`, and once it is over `result`: the batch (`batch_id` for Undo; `stopped` and `error` "Stopped: N of M files moved." when it ended early). |
+| `GET /api/browse/move/jobs/latest` | The latest move of this run, or null. |
+| `POST /api/browse/move/jobs/{job_id}/stop` `{}` | Ends the move after the file in hand: a verified copy is always followed by the move of its original to To Delete, so each file is either moved or untouched. |
+
+**Undo** (renames only, so `test_no_delete.py` allows nothing new): the `quarantine` of the
+original is undone by moving it back; the `copy_across` by a `quarantine` of the copy into
+the destination folder's own To Delete, after which the index row describes the original
+again (its path and journaled id; a row the scanner gave the original in To Delete
+meanwhile is dropped from the index first). Undo checks that the copy still has the
+journaled size and hash, and waits until both folders are connected. While a move across
+disks runs, undo (and its preview) is 409, so it can never land between a copy and the move
+of its original. If the index step after a copy never ran (the row still describes the
+original, and a scan gave the copy a row of its own), undo leaves both rows as they are
+when the original's row carries anything of the owner's (tags, notes, collection or tray
+places, a lock).
+
+**Recovery** settles a `planned` `copy_across` from the disk: no copy and no `.dam-copy-`
+file means it never started; a copy with the journaled size and hash, with the source
+still there, means it finished (the index is re-pointed); a `.dam-copy-` file only, or a
+copy that does not match, needs a manual check and every file is left alone.
+
 ## Safety model in detail
 
 The user guide's "What dam never does" gives the short version. The details:
@@ -876,11 +960,12 @@ The user guide's "What dam never does" gives the short version. The details:
   the same `move` operations into that ordinary folder (made if missing, a taken name `_N`);
   the top of the archive, `##. Ongoing`, `##. Important` and `##. To Delete` are a 400.
   Undo is the ordinary undo of a move and puts the entries back in To Delete.
-  **To Delete exists per archive folder, and nothing crosses disks.** A file in an extra
-  folder goes to `<label>/##. To Delete/<path inside the folder>`, created on demand, and
-  Restore moves it back inside the same folder. A move between folders on different disks
-  is refused in the dry run with a message naming both folders; there is no copy across
-  yet. A folder that is not connected refuses every operation that touches it.
+  **To Delete exists per archive folder, and a rename never crosses disks.** A file in an
+  extra folder goes to `<label>/##. To Delete/<path inside the folder>`, created on demand,
+  and Restore moves it back inside the same folder. A move between folders on different
+  disks is a verified copy followed by a move of the original to its own folder's To
+  Delete (see [Moves across disks](#moves-across-disks)); nothing is deleted. A folder that
+  is not connected refuses every operation that touches it.
   While in `##. To Delete`, a file is read-only for the API: setting tags, a summary or a
   note, a checklist entry, ★ / !, a tray item and adding to a collection answer 400
   ("Marked for deletion: restore it first"); its existing tags, collection membership,

@@ -711,6 +711,9 @@ class ResolvedOpOut(BaseModel):
     dst: str
     drive_id: str | None
     note: str | None
+    # copy_across: the file's size, and whether it is in the cloud only (downloaded first)
+    size: int | None = None
+    cloud_only: bool | None = None
 
 
 class BatchResultOut(BaseModel):
@@ -720,6 +723,10 @@ class BatchResultOut(BaseModel):
     failed: ResolvedOpOut | None
     error: str | None
     index_error: str | None
+    stopped: bool | None = None  # a background move ended early on Stop (else null)
+    # a move across disks started in the background: poll /api/browse/move/jobs/{job_id};
+    # this answer is empty and the job's result is the batch
+    job_id: str | None = None
 
 
 class DraftWordOut(BaseModel):
@@ -1592,7 +1599,7 @@ class SnapshotOut(BaseModel):
     name: str
     created_at: str  # ISO 8601 with the offset
     size: int  # bytes
-    kind: Literal["manual", "before-restore"]
+    kind: Literal["manual", "before-restore", "before-relabel"]
     imported: bool  # added with Import
     revision: str | None  # the database's migration revision when it was taken
     app_version: str | None
@@ -1647,6 +1654,30 @@ class ArchiveFolderDetachIn(_In):
 
 class ArchiveFolderAttachIn(_In):
     dry_run: bool = False
+
+
+class ArchiveFolderRelabelIn(_In):
+    label: str  # the new label
+    dry_run: bool = False
+
+
+class RelabelFileOut(BaseModel):
+    name: str
+    lines: list[int]
+
+
+class RelabelOut(BaseModel):
+    """What changing a folder's label changes (in a dry run: would change). ``counts``:
+    index entries (``files``), journal entries (``operations``), made folders and
+    maintenance entries set aside; ``files``: the settings and rule files edited, with
+    the lines that change. Nothing on disk changes."""
+
+    label: str
+    new_label: str
+    counts: dict[str, int]
+    files: list[RelabelFileOut]
+    warnings: list[str]
+    restart_needed: bool = False
 
 
 class FolderChangeOut(BaseModel):
@@ -2409,6 +2440,24 @@ class LabelClashesOut(BaseModel):
 
     items: list[str]
     total: int
+
+
+class CopyJobOut(BaseModel):
+    """A move across disks running in the background (or finished): files and bytes
+    copied so far, the file being copied, and once it is over the batch (with its
+    ``batch_id`` for Undo; ``stopped`` and ``error`` when it ended early)."""
+
+    job_id: str
+    state: Literal["running", "done", "stopped", "error"]
+    version: int
+    done: int
+    total: int
+    bytes_done: int
+    bytes_total: int
+    current: str | None
+    elapsed_s: float
+    error: str | None
+    result: BatchResultOut | None = None
 
 
 class MaintenanceJobOut(BaseModel):

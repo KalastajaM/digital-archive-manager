@@ -4,6 +4,7 @@ import { IconButton } from "./ui/IconButton";
 import { Sheet } from "./ui/Sheet";
 import type { ResolvedOp } from "../api/client";
 import { noKeysHeld } from "../keyboard";
+import { formatSize, plural } from "../format";
 import { visible } from "../text";
 
 export const KIND_LABEL: Record<ResolvedOp["kind"], string> = {
@@ -17,6 +18,7 @@ export const KIND_LABEL: Record<ResolvedOp["kind"], string> = {
   remove_empty_dir: "Remove empty folder",
   picture_to_quarantine: "Move to To Delete",
   picture_back: "Put back",
+  copy_across: "Copy to other disk",
 };
 
 /** Ops on one path (a folder made or removed, a link removed): shown with that path
@@ -135,6 +137,20 @@ type ListProps = {
   followUps?: string[];
 };
 
+/** What a move across disks does, above its steps: how many files are copied and how
+ * big, and that the originals go to To Delete; how many are downloaded first. */
+export function copyAcrossSummary(ops: ResolvedOp[]): string[] {
+  const copies = ops.filter((op) => op.kind === "copy_across");
+  if (copies.length === 0) return [];
+  const size = copies.reduce((sum, op) => sum + (op.size ?? 0), 0);
+  const lines = [
+    `Copies ${plural(copies.length, "file")} (${formatSize(size)}) to another disk. The originals go to To Delete once each copy is checked.`,
+  ];
+  const cloud = copies.filter((op) => op.cloud_only).length;
+  if (cloud > 0) lines.push(`${plural(cloud, "file")} ${cloud === 1 ? "is" : "are"} in the cloud only and ${cloud === 1 ? "is" : "are"} downloaded first.`);
+  return lines;
+}
+
 /** The resolved operations exactly as the API will carry them out. */
 export function PlanList({ ops, tags, followUps }: ListProps) {
   const items = collapseFolderChains(collapseLinkSwaps(ops));
@@ -213,6 +229,9 @@ export function PlanList({ ops, tags, followUps }: ListProps) {
   });
   return (
     <>
+      {copyAcrossSummary(ops).map((line) => (
+        <p key={line}>{line}</p>
+      ))}
       {ops.length === 0 ? <p>No file changes.</p> : single ? rows : <ol className="plan">{rows}</ol>}
       {tags && tags.length > 0 && <p>Tags: {tags.map(visible).join(", ")}</p>}
       {followUps?.map((line) => (

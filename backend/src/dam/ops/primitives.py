@@ -17,9 +17,11 @@ import errno
 import functools
 import hashlib
 import os
+import secrets
 import shutil
 import stat
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 try:  # not installed on Windows
@@ -34,6 +36,9 @@ from dam.ops.identity import same_object as same_identity
 from dam.ops.model import GuardError, OpFailed
 
 RENAME_EXCL = 0x4
+MAX_COPY_BYTES = 200 * 1024 * 1024  # one file copied into the archive (add / upload)
+_COPY_CHUNK = 1024 * 1024
+_COPY_FREE_MARGIN = 16 * 1024 * 1024  # left free on the disk after a copy
 _NOT_SUPPORTED = {errno.ENOTSUP, getattr(errno, "EOPNOTSUPP", errno.ENOTSUP)}
 
 
@@ -103,10 +108,12 @@ DIFFERENT_DISKS = (
 
 def different_disks_message(a: str, b: str) -> str:
     """Why a move between the archive folders labelled ``a`` and ``b`` (``""``: the main
-    folder) is refused: they are on different disks, and a move is only a rename."""
+    folder) is refused: they are on different disks, and outside a move the owner makes
+    by hand (``Plan.copy_across``) a move is only a rename."""
     first, second = ("the main folder" if not x else f"'{x}'" for x in (a, b))
     text = (
-        f"{first} and {second} are on different disks, so files cannot be moved between them yet."
+        f"{first} and {second} are on different disks, so this cannot be moved between them"
+        " here."
     )
     return text[0].upper() + text[1:]
 
@@ -129,30 +136,76 @@ def move_between_folders(src: Path, dst: Path) -> None:
         raise
 
 
-def file_sha256(path: Path) -> str:
-    """The sha256 of the regular file ``path`` (a link is refused, not followed)."""
+def file_sha256(path: Path, stop: Callable[[], bool] | None = None) -> str:
+    """The sha256 of the regular file ``path`` (a link is refused, not followed).
+    ``stop`` (looked at between chunks) true ends the reading, as a failure."""
     if not stat.S_ISREG(os.lstat(path).st_mode):
         raise OpFailed(f"{path.name} is not a plain file.")
     digest = hashlib.sha256()
     with open(path, "rb") as f:
         while chunk := f.read(_COPY_CHUNK):
             digest.update(chunk)
+            if stop is not None and stop():
+                raise OpFailed("stopped")
     return digest.hexdigest()
 
 
-def copy_picture(src: Path, dst: Path, sha256: str) -> None:
-    """Copy the rule picture ``src`` to the new file ``dst`` (exclusive create, fsync,
-    ``copy_file``), then check that ``dst`` has the size and sha256 of ``src`` and that
-    both are ``sha256`` (the hash journaled before). ``src`` is only read. On any
-    failure nothing is removed: ``dst`` may remain, ``src`` stays."""
-    if file_sha256(src) != sha256:
+def copy_verified(
+    src: Path,
+    dst: Path,
+    sha256: str,
+    limit: int | None = MAX_COPY_BYTES,
+    stop: Callable[[], bool] | None = None,
+    hash_source: bool = True,
+) -> None:
+    """Copy ``src`` to the new file ``dst`` (exclusive create, fsync, ``copy_file``),
+    then check that ``dst`` has the size and sha256 of ``src`` and that both are
+    ``sha256`` (the hash journaled before). ``src`` is only read. On any failure nothing
+    is removed: ``dst`` may remain, ``src`` stays. ``hash_source`` False: ``sha256`` was
+    read from ``src`` just before (a copy across disks), so ``src`` is not read a second
+    time; a change while copying still shows, as a copy that does not match."""
+    if hash_source and file_sha256(src, stop) != sha256:
         raise OpFailed(f"{src.name} changed since it was planned, so it is not copied.")
-    size = copy_file(src, dst)
-    if os.lstat(dst).st_size != size or file_sha256(dst) != sha256:
+    size = copy_file(src, dst, limit=limit, stop=stop)
+    if os.lstat(dst).st_size != size or file_sha256(dst, stop) != sha256:
         raise OpFailed(
             f"The copy {dst.name} does not match {src.name}. Both files stay where they are;"
             " dam never deletes: remove the copy yourself."
         )
+
+
+copy_picture = copy_verified  # a rule picture crossing disks
+
+TEMP_COPY_PREFIX = ".dam-copy-"  # a copy across disks before it is verified and named
+
+
+def copy_across(
+    src: Path, dst: Path, sha256: str, stop: Callable[[], bool] | None = None
+) -> None:
+    """Copy the archive file ``src`` to the new file ``dst`` in a folder on another disk:
+    written under a temporary name next to ``dst`` (``TEMP_COPY_PREFIX``), verified by
+    size and sha256 (``copy_verified``, no size cap), given the source's access and
+    modification times, and only then renamed to ``dst`` without overwriting. ``src`` is
+    only read. On any failure nothing is removed and the error names the temporary file
+    that may remain."""
+    temp = dst.parent / f"{TEMP_COPY_PREFIX}{secrets.token_hex(4)}-{dst.name}"
+    try:
+        copy_verified(src, temp, sha256, limit=None, stop=stop, hash_source=False)
+        st = os.stat(src)
+        os.utime(temp, ns=(st.st_atime_ns, st.st_mtime_ns))
+        rename_excl(temp, dst)
+    except (OSError, OpFailed) as e:
+        left = f" The unfinished copy {temp.name} may remain." if os.path.lexists(temp) else ""
+        raise OpFailed(f"{src.name} was not copied to {dst.name} ({e}).{left}") from None
+
+
+SF_DATALESS = 0x40000000  # macOS: a cloud file whose content is not on this computer
+
+
+def is_dataless(path: Path) -> bool:
+    """A cloud-drive file that is evicted (macOS ``SF_DATALESS``): reading it downloads
+    it. Always False where the flag does not exist."""
+    return bool(getattr(os.stat(path), "st_flags", 0) & SF_DATALESS)
 
 
 def remove_moved_picture(source: Path, areas_dir: Path, copy: Path, sha256: str) -> None:
@@ -188,16 +241,20 @@ def make_dir(p: Path) -> None:
     p.mkdir(parents=False, exist_ok=False)
 
 
-MAX_COPY_BYTES = 200 * 1024 * 1024  # one file copied into the archive (add / upload)
-_COPY_CHUNK = 1024 * 1024
-_COPY_FREE_MARGIN = 16 * 1024 * 1024  # left free on the disk after a copy
 
 
-def copy_file(src: Path, dst: Path, limit: int = MAX_COPY_BYTES) -> int:
+def copy_file(
+    src: Path,
+    dst: Path,
+    limit: int | None = MAX_COPY_BYTES,
+    stop: Callable[[], bool] | None = None,
+) -> int:
     """Copy the regular file ``src`` to the new file ``dst`` (created exclusively: an
     existing name, also a link, is an error, so nothing is ever overwritten); returns
     the bytes copied. ``src`` is only read. A file over ``limit`` bytes, or a disk
-    without room for it, is refused before ``dst`` is created.
+    without room for it, is refused before ``dst`` is created. ``limit`` None: no cap,
+    only the free-space check. ``stop`` (looked at between chunks) true ends the copy
+    there, as a failure.
 
     If the copy is cut short after ``dst`` was created (the disk filled up, the source
     shrank), a partial file stays: the app never deletes, so the error says so."""
@@ -205,7 +262,7 @@ def copy_file(src: Path, dst: Path, limit: int = MAX_COPY_BYTES) -> int:
         st = os.fstat(source.fileno())
         if not stat.S_ISREG(st.st_mode):
             raise OpFailed(f"{src.name} is not a regular file.")
-        if st.st_size > limit:
+        if limit is not None and st.st_size > limit:
             raise OpFailed(f"{src.name} is larger than {limit // (1024 * 1024)} MB.")
         if shutil.disk_usage(dst.parent).free < st.st_size + _COPY_FREE_MARGIN:
             raise OpFailed("There is not enough free space on the disk for this file.")
@@ -214,9 +271,11 @@ def copy_file(src: Path, dst: Path, limit: int = MAX_COPY_BYTES) -> int:
             try:
                 while chunk := source.read(_COPY_CHUNK):
                     copied += len(chunk)
-                    if copied > limit:
+                    if limit is not None and copied > limit:
                         raise OpFailed(f"{src.name} is larger than {limit // (1024 * 1024)} MB.")
                     target.write(chunk)
+                    if stop is not None and stop():
+                        raise OpFailed("stopped")
                 target.flush()
                 os.fsync(target.fileno())
             except (OSError, OpFailed) as e:

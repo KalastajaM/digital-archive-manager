@@ -321,11 +321,11 @@ def test_a_source_that_changed_since_the_plan_is_not_copied(
     real = primitives.file_sha256
     calls = []
 
-    def changing(path):
+    def changing(path, stop=None):
         calls.append(path)
         if len(calls) == 2:  # after the journal snapshot, before the copy
             path.write_bytes(b"edited meanwhile")
-        return real(path)
+        return real(path, stop)
 
     monkeypatch.setattr(primitives, "file_sha256", changing)
     result = move(app, ["old-1.png"])

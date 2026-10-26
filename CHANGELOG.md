@@ -43,9 +43,21 @@ All notable changes are listed here. The format follows
     with the same mark (find them with `is:disconnected`), and nothing is marked missing. dam checks about every
     30 seconds and picks the folder up again by itself. Changes to an unplugged folder are
     refused, and links in `##. Ongoing` and `##. Important` that lead into it are left alone.
-  - **Each folder has its own `##. To Delete`**, because a file cannot be moved to another disk
-    that way. Moving a file between folders on different disks is refused for now, with a
-    message that names both folders. A folder's label cannot be changed yet.
+  - **Each folder has its own `##. To Delete`**, because a file cannot be renamed onto
+    another disk.
+  - **Moving files to a folder on another disk** (drag, Move to…, Restore) copies each file,
+    checks the copy against the original (size and content), and only then moves the
+    original to the To Delete of its own folder: nothing is deleted. Tags, notes,
+    collections, tray items and locks follow the file. The preview says how many files are
+    copied, how big they are and how many are in the cloud only (downloaded first). The
+    move runs in the background with a progress dialog you can hide; **Stop** finishes the
+    file in hand, so every file is either moved or untouched. **Undo** puts the originals
+    back and moves the copies to To Delete. Whole folders cannot be moved yet.
+  - **Change label** (Settings, Archive folders) renames an extra folder's label. Every
+    path dam keeps under it changes with it: the index, the history (earlier changes can
+    still be undone), protected folders, folders kept from AI and the `folder` values in
+    your rules and filing codes, which are edited in place so your comments stay. Nothing on the disk
+    changes, and a snapshot is taken first.
   - Maintenance marks links into an unplugged or detached folder ("Folder not connected",
     "Folder detached") and lists a folder in the main folder that has the same name as an
     archive folder.
@@ -520,6 +532,9 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A file that gets its Google Drive id keeps its notes.** When Drive uploaded a file and
+  dam picked up its id, the file kept its tags but lost its notes, checklist, collection
+  and tray item places, lock, summary and fields. They now stay with it.
 - **Forgetting an archive folder** now says how many files it forgets, counting those no
   longer on the disk (a detached folder used to show 0). Files of a main-folder entry with
   the same name as the forgotten label no longer drop out of the index until the next full

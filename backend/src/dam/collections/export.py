@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import queue
 import re
 import shutil
@@ -29,6 +28,7 @@ from dam.core.fs import resolve
 from dam.core.paths import ArchivePaths, nfc
 from dam.index.content import MAX_BYTES
 from dam.index.repo import FileRecord
+from dam.ops.primitives import is_dataless
 from dam.pdfium import PDFIUM_LOCK
 from dam.services.errors import InvalidRequest, NotFound
 
@@ -42,7 +42,6 @@ MAX_PAGES = 2000
 MAX_IMAGE_PIXELS = 50_000_000
 MAX_NAME = 100
 PRUNE_AFTER_S = 86400
-SF_DATALESS = 0x40000000
 A4_W, A4_H = 1240, 1754  # A4 at 150 dpi
 _MARGIN = 100
 _TEXT_EXTS = {"txt", "csv", "xml"}
@@ -137,9 +136,7 @@ class _Skip(Exception):
     """A member that cannot go into the export; ``str(exc)`` is the reason."""
 
 
-def _is_dataless(path: Path) -> bool:
-    """A Drive file that is evicted (macOS SF_DATALESS): reading it would download it."""
-    return bool(getattr(os.stat(path), "st_flags", 0) & SF_DATALESS)
+_is_dataless = is_dataless  # a Drive file that is evicted (macOS SF_DATALESS)
 
 
 def _precheck(paths: ArchivePaths, rec: FileRecord) -> tuple[Path, int]:

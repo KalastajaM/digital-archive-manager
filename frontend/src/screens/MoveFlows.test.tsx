@@ -84,6 +84,26 @@ describe("move flows in Browse and the sidebar", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled());
   });
 
+  it("a move across disks says Copy and move, and hands over to the progress view", async () => {
+    const started: string[] = [];
+    const listen = (e: Event) => started.push((e as CustomEvent<string>).detail);
+    window.addEventListener("dam:copy-job-started", listen);
+    const copy = { kind: "copy_across", src: "b.pdf", dst: "13. Taxes/b.pdf", drive_id: "f2", note: null, size: 1, cloud_only: false };
+    const aside = { kind: "quarantine", src: "b.pdf", dst: "##. To Delete/b.pdf", drive_id: "f2", note: "copied to 13. Taxes/b.pdf" };
+    const { user } = setup({
+      "POST /api/browse/move/preview": { body: [copy, aside] },
+      "POST /api/browse/move": { body: { ...result([], "13. Taxes"), batch_id: "", job_id: "j9" } },
+    });
+    await screen.findByText("b.pdf");
+    drag(rowOf("b.pdf"), rowOf("13. Taxes"));
+    const confirm = await screen.findByRole("dialog", { name: "Move 1 file to 13. Taxes?" });
+    expect(within(confirm).getByText(/Copies 1 file \(1 bytes\) to another disk/)).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: "Copy and move" }));
+    await waitFor(() => expect(started).toEqual(["j9"]));
+    expect(screen.queryByText(/^Moved /)).toBeNull(); // the progress view says when it is done
+    window.removeEventListener("dam:copy-job-started", listen);
+  });
+
   it("the sidebar Inbox refuses a drop while a Browse move is running", async () => {
     const held = deferred<{ body: unknown }>();
     const { calls } = setup({ "POST /api/browse/move/preview": () => held.promise });

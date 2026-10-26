@@ -972,6 +972,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browse/move/jobs/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Latest Copy Job
+         * @description The latest move across disks of this run (a finished one too), else null.
+         */
+        get: operations["latest_copy_job_api_browse_move_jobs_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browse/move/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Copy Job */
+        get: operations["get_copy_job_api_browse_move_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browse/move/jobs/{job_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Copy Job
+         * @description End the move after the file being copied (it is finished, and its original goes
+         *     to To Delete); the files not reached stay where they are. Idempotent.
+         */
+        post: operations["stop_copy_job_api_browse_move_jobs__job_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browse/rename/preview": {
         parameters: {
             query?: never;
@@ -3237,6 +3295,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/archive-folders/{label}/relabel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Relabel Folder
+         * @description Change the folder's label: every stored path under it (index, journal, settings,
+         *     rules) is rewritten; nothing on disk changes. The dry run answers with what changes.
+         *     Applying closes the archive, changes it and opens it again (``dam serve`` only: 409
+         *     otherwise), after a snapshot. 409 while a job runs.
+         */
+        post: operations["relabel_folder_api_archive_folders__label__relabel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/candidates": {
         parameters: {
             query?: never;
@@ -3879,6 +3960,16 @@ export interface components {
             /** Files */
             files: number;
         };
+        /** ArchiveFolderRelabelIn */
+        ArchiveFolderRelabelIn: {
+            /** Label */
+            label: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
         /** ArchiveFoldersOut */
         ArchiveFoldersOut: {
             /** Folders */
@@ -4178,6 +4269,10 @@ export interface components {
             error: string | null;
             /** Index Error */
             index_error: string | null;
+            /** Stopped */
+            stopped?: boolean | null;
+            /** Job Id */
+            job_id?: string | null;
         };
         /**
          * BatchRowOut
@@ -4547,6 +4642,38 @@ export interface components {
             problems: string[];
             sync: components["schemas"]["SyncResultOut"] | null;
         };
+        /**
+         * CopyJobOut
+         * @description A move across disks running in the background (or finished): files and bytes
+         *     copied so far, the file being copied, and once it is over the batch (with its
+         *     ``batch_id`` for Undo; ``stopped`` and ``error`` when it ended early).
+         */
+        CopyJobOut: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "done" | "stopped" | "error";
+            /** Version */
+            version: number;
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+            /** Bytes Done */
+            bytes_done: number;
+            /** Bytes Total */
+            bytes_total: number;
+            /** Current */
+            current: string | null;
+            /** Elapsed S */
+            elapsed_s: number;
+            /** Error */
+            error: string | null;
+            result?: components["schemas"]["BatchResultOut"] | null;
+        };
         /** DetectedFieldsOut */
         DetectedFieldsOut: {
             /** Dates */
@@ -4730,6 +4857,10 @@ export interface components {
             error: string | null;
             /** Index Error */
             index_error: string | null;
+            /** Stopped */
+            stopped?: boolean | null;
+            /** Job Id */
+            job_id?: string | null;
             /** Carry Over */
             carry_over: components["schemas"]["CarryOverOut"][];
             /** Carry Errors */
@@ -4923,6 +5054,10 @@ export interface components {
             error: string | null;
             /** Index Error */
             index_error: string | null;
+            /** Stopped */
+            stopped?: boolean | null;
+            /** Job Id */
+            job_id?: string | null;
             /** Tag Error */
             tag_error: string | null;
             /** Untagged */
@@ -5947,6 +6082,10 @@ export interface components {
             error: string | null;
             /** Index Error */
             index_error: string | null;
+            /** Stopped */
+            stopped?: boolean | null;
+            /** Job Id */
+            job_id?: string | null;
             /** Unchanged */
             unchanged: string[];
         };
@@ -6009,7 +6148,7 @@ export interface components {
          * OpKind
          * @enum {string}
          */
-        OpKind: "rename" | "move" | "mkdir" | "symlink" | "unlink_symlink" | "quarantine" | "remove_empty_dir" | "copy" | "picture_to_quarantine" | "picture_back";
+        OpKind: "rename" | "move" | "mkdir" | "symlink" | "unlink_symlink" | "quarantine" | "remove_empty_dir" | "copy" | "picture_to_quarantine" | "picture_back" | "copy_across";
         /** OverviewOut */
         OverviewOut: {
             /** Inbox */
@@ -6282,6 +6421,39 @@ export interface components {
             /** Index Errors */
             index_errors: string[];
         };
+        /** RelabelFileOut */
+        RelabelFileOut: {
+            /** Name */
+            name: string;
+            /** Lines */
+            lines: number[];
+        };
+        /**
+         * RelabelOut
+         * @description What changing a folder's label changes (in a dry run: would change). ``counts``:
+         *     index entries (``files``), journal entries (``operations``), made folders and
+         *     maintenance entries set aside; ``files``: the settings and rule files edited, with
+         *     the lines that change. Nothing on disk changes.
+         */
+        RelabelOut: {
+            /** Label */
+            label: string;
+            /** New Label */
+            new_label: string;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Files */
+            files: components["schemas"]["RelabelFileOut"][];
+            /** Warnings */
+            warnings: string[];
+            /**
+             * Restart Needed
+             * @default false
+             */
+            restart_needed: boolean;
+        };
         /**
          * ReminderRule
          * @description Exactly one of ``days_before: N`` (N days before the date) or ``overdue: true``.
@@ -6409,6 +6581,10 @@ export interface components {
             drive_id: string | null;
             /** Note */
             note: string | null;
+            /** Size */
+            size?: number | null;
+            /** Cloud Only */
+            cloud_only?: boolean | null;
         };
         /**
          * RestoreBody
@@ -6956,7 +7132,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "manual" | "before-restore";
+            kind: "manual" | "before-restore" | "before-relabel";
             /** Imported */
             imported: boolean;
             /** Revision */
@@ -7558,6 +7734,10 @@ export interface components {
             error: string | null;
             /** Index Error */
             index_error: string | null;
+            /** Stopped */
+            stopped?: boolean | null;
+            /** Job Id */
+            job_id?: string | null;
             /** Follow Up Error */
             follow_up_error: string | null;
             /**
@@ -12746,6 +12926,286 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MoveResultOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    latest_copy_job_api_browse_move_jobs_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyJobOut"] | null;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_copy_job_api_browse_move_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyJobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    stop_copy_job_api_browse_move_jobs__job_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyJobOut"];
                 };
             };
             /** @description Bad Request */
@@ -24774,6 +25234,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FolderChangeOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    relabel_folder_api_archive_folders__label__relabel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveFolderRelabelIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelabelOut"];
                 };
             };
             /** @description Bad Request */

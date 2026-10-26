@@ -62,9 +62,12 @@ STATE_FILES = (
     "tray-defaults-dismissed.json",
 )
 MANUAL, BEFORE_RESTORE = "manual", "before-restore"
+BEFORE_RELABEL = "before-relabel"  # taken before an archive folder's label changes
 IMPORTED_SUFFIX = "-imported"
 MAX_IMPORT_BYTES = 2 * 1024**3
-_NAME = re.compile(r"dam-snapshot-\d{8}-\d{6}(?:-\d+)?(?:-before-restore)?(?:-imported)?\.zip")
+_NAME = re.compile(
+    r"dam-snapshot-\d{8}-\d{6}(?:-\d+)?(?:-before-restore|-before-relabel)?(?:-imported)?\.zip"
+)
 
 
 @dataclass(frozen=True)
@@ -210,7 +213,7 @@ def create_snapshot(
                 "files": files,
             }
             zf.writestr(MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=2))
-        suffix = "-before-restore" if kind == BEFORE_RESTORE else ""
+        suffix = f"-{kind}" if kind in (BEFORE_RESTORE, BEFORE_RELABEL) else ""
         name = _free_name(folder, now.strftime("%Y%m%d-%H%M%S"), suffix)
         rename_excl(zip_path, folder / name)
     log.info("snapshot %s taken (%s, revision %s)", name, kind, revision)

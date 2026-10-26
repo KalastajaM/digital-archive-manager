@@ -26,7 +26,7 @@ def check_origin(origin: str) -> str:
     return origin
 
 
-_RELOCATIONS = (OpKind.RENAME, OpKind.MOVE)
+_RELOCATIONS = (OpKind.RENAME, OpKind.MOVE, OpKind.COPY_ACROSS)  # a copy across: the file
 
 
 def check_destination_area(dest: str, paths: ArchivePaths) -> None:
