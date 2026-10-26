@@ -1265,8 +1265,14 @@ reminder. Ignoring changes nothing in the archive.
   back the collection memberships and a note that the batch created; tags, appended text
   and the other additions stay, and you can remove them by hand.
 - **Same name, different content** lists files whose names are the same (ignoring case)
-  but whose content differs. These are probably versions of a document, not copies, so
-  they are for review only: open them in Browse, or compare two side by side.
+  but whose content differs. These are probably versions of a document, or the same
+  document saved another way (a PDF exported twice, say). **Compare side by side** shows
+  two of them next to each other in the preview, with one zoom for both, and **Keep this
+  one** under each. Each file then has the same choices as an identical copy (leave, To
+  Delete, link), but every file starts as **leave**, so nothing happens until you choose.
+  The preview says the files are not copies. There is no bulk Apply for these: each name
+  is decided on its own. Suggested to keep: a file that is Important or locked, then one in
+  a numbered folder, then the newest.
 
 ### The other checks
 

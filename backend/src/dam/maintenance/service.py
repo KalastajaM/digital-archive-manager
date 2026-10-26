@@ -102,6 +102,15 @@ def _dups(n: int) -> str:
     return "1 duplicate" if n == 1 else f"{n} duplicates"
 
 
+# A duplicate group to resolve: (keep, copies to remove), with "name" third when the
+# files are versions that share a name rather than identical copies.
+Group = tuple[str, Sequence[str]] | tuple[str, Sequence[str], str]
+
+
+def _name_of(rec: FileRecord) -> str:
+    return fold_name(rec.name or PurePosixPath(rec.path).name)
+
+
 def _resolve_label(moved: int, linked: int) -> str:
     """The batch's title in Activity."""
     if not linked:
@@ -258,17 +267,18 @@ class MaintenanceService:
             raise InvalidRequest(f"{rec.path} {CHANGED}")
         return rec
 
-    def _pairs(self, groups: Sequence[tuple[str, Sequence[str]]]) -> list[_Pair]:
+    def _pairs(self, groups: Sequence[Group]) -> list[_Pair]:
         if not groups:
             raise InvalidRequest("No duplicates given")
-        keeps = [k for k, _ in groups]
-        removes = [r for _, rs in groups for r in rs]
+        keeps = [g[0] for g in groups]
+        removes = [r for g in groups for r in g[1]]
         every = [*keeps, *removes]
         if len(set(every)) != len(every):
             raise InvalidRequest("A file is named more than once (or is both kept and removed)")
         locks = LockIndex(self.locks)
         pairs = []
-        for keep_id, remove_ids in groups:
+        for keep_id, remove_ids, *rest in groups:
+            by_name = rest == ["name"]
             if not remove_ids:
                 raise InvalidRequest("A group needs at least one copy to remove")
             keep = self._file(keep_id)
@@ -281,7 +291,10 @@ class MaintenanceService:
                         f"{rec.path} is {WHY_LOCKED[why]}, so it is not removed: "
                         "keep it, or choose another copy to remove"
                     )
-                if not (rec.sha256 and rec.sha256 == keep.sha256 and rec.size == keep.size):
+                if by_name:
+                    if _name_of(rec) != _name_of(keep):
+                        raise InvalidRequest(f"{rec.path} does not have the name of {keep.path}")
+                elif not (rec.sha256 and rec.sha256 == keep.sha256 and rec.size == keep.size):
                     raise InvalidRequest(
                         f"{rec.path} is not known to be the same as {keep.path}: "
                         "run the duplicate check again"
@@ -292,14 +305,15 @@ class MaintenanceService:
 
     def resolve(
         self,
-        groups: Sequence[tuple[str, Sequence[str]]],
+        groups: Sequence[Group],
         action: str,
         carry_over: bool = True,
         origin: str = "ui",
         dry_run: bool = False,
         links: Collection[str] = (),
     ) -> ResolveResult:
-        """For each group ``(keep, [copies to remove])``: move the copies to ``##. To
+        """For each group ``(keep, [copies to remove])``, or ``(keep, [...], "name")`` for
+        versions of one document (the same name, other content): move the copies to ``##. To
         Delete`` (``action`` ``quarantine``) or, ``link``, also make a link to the kept
         copy where each one was. One batch, one Undo. ``carry_over``: add what the removed
         copies had to the kept one (listed in the result; applied unless ``dry_run``).
@@ -307,7 +321,8 @@ class MaintenanceService:
         is, so one batch can move some copies and link others.
 
         Refused (``InvalidRequest``, nothing happens): a copy that is Important or locked,
-        a file not known to have the same content (the check must have hashed both), a file
+        a file not known to have the same content (the check must have hashed both; for
+        versions, one with another name), a file
         that changed since it was scanned, a file in the app's own folders, and a link on
         Windows without Developer Mode."""
         check_origin(origin)

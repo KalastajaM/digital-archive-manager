@@ -1771,6 +1771,7 @@ export type MaintenanceKind = Schemas["MaintenanceStartIn"]["kind"];
 export type DuplicatesResult = Schemas["DuplicatesOut"];
 export type DupGroup = Schemas["DupGroupOut"];
 export type DupFile = Schemas["DupFileOut"];
+export type DupNameGroup = Schemas["NameGroupOut"];
 export type DuplicateEstimate = Schemas["DuplicateEstimateOut"];
 export type DuplicateResolveBody = Schemas["DuplicateResolveIn"];
 export type DuplicateResolveResult = Schemas["DuplicateResolveOut"];

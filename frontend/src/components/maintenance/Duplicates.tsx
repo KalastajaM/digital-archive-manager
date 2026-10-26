@@ -1,16 +1,17 @@
 /** Duplicates: the check for files with the same content (hashing only files that share a
  * size with another, saying first how much will be read), the groups with a copy to keep
- * and a choice of what to do with the others, and the same-name files with other content,
- * listed for review only. Moving copies to To Delete or replacing them with a link to the
+ * and a choice of what to do with the others, and the same-name files with other content
+ * (versions), which can be compared side by side and get the same choices, left in place
+ * until chosen otherwise. Moving copies to To Delete or replacing them with a link to the
  * kept copy is one previewed batch with one Undo. */
 import { CircleSlash2, Copy, FileSearch, Link as LinkIcon, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   ApiError,
   type CarryOver,
   type DupFile,
   type DupGroup,
+  type DupNameGroup,
   type DuplicateResolveBody,
   type DuplicateResolveResult,
   errorText,
@@ -28,6 +29,7 @@ import { type QLFile, useQuickLook } from "../useQuickLook";
 import { Card } from "../ui/Card";
 import { Segmented } from "../ui/Segmented";
 import { Tag } from "../ui/Tag";
+import { Compare } from "./Compare";
 import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
 import { foldedLine, ResetButton } from "./ListChecks";
@@ -50,13 +52,43 @@ const extOf = (path: string) => {
 
 const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
 
-type Pending = { body: DuplicateResolveBody; dry: DuplicateResolveResult; moved: number; linked: number };
+/** A group to resolve: identical copies (``content``) or files sharing a name with other
+ * content (``name``, versions of a document). */
+type Batch = {
+  key: string;
+  same: "content" | "name";
+  name: string;
+  files: DupFile[];
+  keep: string; // the suggested file to keep
+  size: number | null; // the copies' size (identical copies only)
+};
+
+const ofContent = (g: DupGroup): Batch => ({
+  key: g.sha256,
+  same: "content",
+  name: baseName(g.files[0].path),
+  files: g.files,
+  keep: g.keep,
+  size: g.size,
+});
+
+/** Versions: keep one that cannot be removed, then one in a numbered folder, then the newest. */
+const ofName = (g: DupNameGroup): Batch => {
+  const rank = { numbered: 0, other: 1, inbox: 2 } as const;
+  const best = [...g.files].sort(
+    (a, b) => Number(!a.locked) - Number(!b.locked) || rank[a.place] - rank[b.place] || (b.mtime ?? 0) - (a.mtime ?? 0),
+  )[0];
+  return { key: `name:${g.name}:${g.files[0].drive_id}`, same: "name", name: g.name, files: g.files, keep: best.drive_id, size: null };
+};
+
+type Noun = "duplicate" | "version";
+type Pending = { body: DuplicateResolveBody; dry: DuplicateResolveResult; moved: number; linked: number; noun: Noun };
 
 /** The toast after Apply: "Moved 1 duplicate to To Delete and replaced 1 with a link". */
-const doneWords = (moved: number, linked: number) =>
+const doneWords = (moved: number, linked: number, noun: Noun) =>
   moved === 0
-    ? `Replaced ${plural(linked, "duplicate")} with links`
-    : `Moved ${plural(moved, "duplicate")} to To Delete${linked > 0 ? ` and replaced ${linked} with a link` : ""}`;
+    ? `Replaced ${plural(linked, noun)} with links`
+    : `Moved ${plural(moved, noun)} to To Delete${linked > 0 ? ` and replaced ${linked} with a link` : ""}`;
 
 /** What the dry run says will be added to a kept copy, one line per kind. */
 export function carryLines(c: CarryOver): string[] {
@@ -99,11 +131,14 @@ function CarryOverList({ items, asked }: { items: CarryOver[]; asked: boolean })
  * replaced with a link to the kept copy. To Delete until chosen otherwise. */
 type Choice = "leave" | "quarantine" | "link";
 
+/** A copy not chosen for yet: identical copies go to To Delete, versions stay (they differ,
+ * so removing one is a decision made after comparing them). */
+const defaultChoice = (group: Batch): Choice => (group.same === "name" ? "leave" : "quarantine");
 /** The copies that could go: not the kept one and not Important or locked. */
-const candidatesOf = (group: DupGroup, keep: string) => group.files.filter((f) => f.drive_id !== keep && !f.locked);
+const candidatesOf = (group: Batch, keep: string) => group.files.filter((f) => f.drive_id !== keep && !f.locked);
 /** What a group's Apply does: the copies moved, and those of them replaced with a link. */
-const changesOf = (group: DupGroup, keep: string, choices: Record<string, Choice>) => {
-  const chosen = candidatesOf(group, keep).map((f) => ({ f, c: choices[f.drive_id] ?? "quarantine" }));
+const changesOf = (group: Batch, keep: string, choices: Record<string, Choice>) => {
+  const chosen = candidatesOf(group, keep).map((f) => ({ f, c: choices[f.drive_id] ?? defaultChoice(group) }));
   return {
     others: chosen.filter((x) => x.c !== "leave").map((x) => x.f.drive_id),
     links: chosen.filter((x) => x.c === "link").map((x) => x.f.drive_id),
@@ -197,6 +232,8 @@ function FileRow({
   );
 }
 
+/** A group with its Keep and choices. Identical copies have a tick for the bulk action;
+ * versions have Compare instead, and no bulk action (each is decided on its own). */
 function Group({
   group,
   keep,
@@ -209,31 +246,42 @@ function Group({
   onApply,
   onIgnore,
   onLook,
+  onCompare,
 }: {
-  group: DupGroup;
+  group: Batch;
   keep: string;
   choices: Record<string, Choice>;
-  included: boolean;
+  included?: boolean;
   busy: boolean;
   onKeep: (id: string) => void;
   onChoose: (id: string, choice: Choice) => void;
-  onInclude: () => void;
+  onInclude?: () => void;
   onApply: () => void;
   onIgnore: () => void;
   onLook: (id: string) => void;
+  onCompare?: () => void;
 }) {
   const { others, links } = changesOf(group, keep, choices);
-  const why = others.length === 0 ? "Every copy is left where it is" : undefined;
-  const name = baseName(group.files[0].path);
+  const why = others.length === 0 ? "Every file is left where it is" : undefined;
+  const name = group.name;
   return (
     <li className="dup-group">
       <header className="dup-group-head">
-        <label className="check">
-          <input type="checkbox" checked={included} onChange={onInclude} aria-label={`Include ${visible(name)} in the bulk action`} />
-          <strong>{visible(name)}</strong>
-        </label>
+        {onInclude ? (
+          <label className="check">
+            <input type="checkbox" checked={included} onChange={onInclude} aria-label={`Include ${visible(name)} in the bulk action`} />
+            <strong>{visible(name)}</strong>
+          </label>
+        ) : (
+          <>
+            <FileSearch size={14} aria-hidden="true" />
+            <strong>{visible(name)}</strong>
+          </>
+        )}
         <span className="hint">
-          {plural(group.files.length, "copy", "copies")} of {formatSize(group.size)}
+          {group.size === null
+            ? plural(group.files.length, "file")
+            : `${plural(group.files.length, "copy", "copies")} of ${formatSize(group.size)}`}
         </span>
         <IgnoreButton label={name} disabled={busy} onClick={onIgnore} />
       </header>
@@ -243,9 +291,9 @@ function Group({
             key={f.drive_id}
             file={f}
             groupName={name}
-            groupKey={group.sha256}
+            groupKey={group.key}
             keep={f.drive_id === keep}
-            choice={choices[f.drive_id] ?? "quarantine"}
+            choice={choices[f.drive_id] ?? defaultChoice(group)}
             onKeep={() => onKeep(f.drive_id)}
             onChoose={(c) => onChoose(f.drive_id, c)}
             onLook={() => onLook(f.drive_id)}
@@ -253,6 +301,11 @@ function Group({
         ))}
       </ul>
       <div className="dup-group-actions">
+        {onCompare && (
+          <button type="button" onClick={onCompare} aria-label={`Compare the files named ${visible(name)} side by side`}>
+            Compare side by side
+          </button>
+        )}
         <button type="button" disabled={busy || !!why} title={why} onClick={onApply}>
           Apply…
         </button>
@@ -275,6 +328,7 @@ export function Duplicates() {
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [carry, setCarry] = useState(true);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [comparing, setComparing] = useState<Batch | null>(null);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false); // synchronous: a second click sees it at once
   useBlockToastActions(busy || pending !== null);
@@ -290,13 +344,13 @@ export function Duplicates() {
     }
   }, [check.running, refetch]);
 
-  const keepOf = (g: DupGroup) => {
-    const chosen = keeps[g.sha256];
+  const keepOf = (g: Batch) => {
+    const chosen = keeps[g.key];
     return chosen && g.files.some((f) => f.drive_id === chosen) ? chosen : g.keep;
   };
-  const changesIn = (g: DupGroup) => changesOf(g, keepOf(g), choices);
-  const bodyFor = (groups: DupGroup[], dry_run: boolean): DuplicateResolveBody => ({
-    groups: groups.map((g) => ({ keep: keepOf(g), ...changesIn(g) })),
+  const changesIn = (g: Batch) => changesOf(g, keepOf(g), choices);
+  const bodyFor = (groups: Batch[], dry_run: boolean): DuplicateResolveBody => ({
+    groups: groups.map((g) => ({ keep: keepOf(g), ...changesIn(g), same: g.same })),
     action: "quarantine",
     carry_over: carry,
     dry_run,
@@ -314,7 +368,7 @@ export function Duplicates() {
     }
   };
 
-  const begin = (groups: DupGroup[]) => {
+  const begin = (groups: Batch[]) => {
     const usable = groups.filter((g) => changesIn(g).others.length > 0);
     if (usable.length === 0 || pending !== null) return;
     void guarded(async () => {
@@ -335,6 +389,7 @@ export function Duplicates() {
         dry,
         moved: body.groups.reduce((n, g) => n + g.others.length - (g.links?.length ?? 0), 0),
         linked: body.groups.reduce((n, g) => n + (g.links?.length ?? 0), 0),
+        noun: usable.every((g) => g.same === "name") ? "version" : "duplicate",
       });
     });
   };
@@ -360,7 +415,7 @@ export function Duplicates() {
         const target = { batchId: result.batch_id };
         toast({
           kind: complete ? "info" : "warning",
-          text: `${complete ? "" : "Partly applied: "}${doneWords(moved - linked, linked)}`,
+          text: `${complete ? "" : "Partly applied: "}${doneWords(moved - linked, linked, p.noun)}`,
           action: undoAction(() => {
             if (inFlight.current || undo.undoing.current || dialogOpen()) return;
             undo.open(target);
@@ -371,9 +426,10 @@ export function Duplicates() {
     });
   };
 
-  const groups = result?.groups ?? [];
+  const groups = (result?.groups ?? []).map(ofContent);
+  const versions = (result?.name_groups ?? []).map(ofName);
   // Quick Look moves through every file shown, identical copies first, then same-name files
-  const lookable = [...groups.flatMap((g) => g.files), ...(result?.name_groups ?? []).flatMap((g) => g.files)];
+  const lookable = [...groups, ...versions].flatMap((g) => g.files);
   const [lookAt, setLookAt] = useState(0);
   // opened by a row's button only: a Space on the page keeps scrolling it
   const byButton = useRef(false);
@@ -386,7 +442,7 @@ export function Duplicates() {
     quickLook.open();
     byButton.current = false;
   };
-  const includedGroups = groups.filter((g) => !excluded.has(g.sha256));
+  const includedGroups = groups.filter((g) => !excluded.has(g.key));
   const bulkCopies = includedGroups.reduce((n, g) => n + changesIn(g).others.length, 0);
   /** Every copy that can go in the ticked groups set to one choice. */
   const chooseAll = (c: Choice) =>
@@ -422,18 +478,19 @@ export function Duplicates() {
 
   const confirmView = (() => {
     if (!pending) return null;
-    const { moved, linked } = pending;
+    const { moved, linked, noun } = pending;
     const link = linked > 0;
     const n = moved + linked;
+    const differ = pending.body.groups.some((g) => g.same === "name");
     return (
       <ConfirmPlan
         planKey={snapshotKey(pending.body)}
         title={
           moved === 0
-            ? `Replace ${plural(n, "duplicate")} with links?`
+            ? `Replace ${plural(n, noun)} with links?`
             : linked === 0
-              ? `Move ${plural(n, "duplicate")} to To Delete?`
-              : `Apply ${plural(n, "change")} to duplicates?`
+              ? `Move ${plural(n, noun)} to To Delete?`
+              : `Apply ${plural(n, "change")} to ${noun}s?`
         }
         danger={moved > 0}
         confirmLabel={moved === 0 ? "Replace with links" : linked === 0 ? "Move to To Delete" : "Apply"}
@@ -442,6 +499,12 @@ export function Duplicates() {
         onConfirm={() => apply(pending)}
         onCancel={() => setPending(null)}
       >
+        {differ && (
+          <p className="notice" role="note">
+            {noun === "version" ? "These files are" : "Some of these files are"} not copies: their content differs from
+            the file you keep{link ? ", and a link opens the kept one instead" : ""}.
+          </p>
+        )}
         <p>
           {moved > 0 && "Each copy goes to To Delete, keeping its path. "}
           {link &&
@@ -534,17 +597,19 @@ export function Duplicates() {
               </ul>
             </details>
           )}
+          {(groups.length > 0 || versions.length > 0) && (
+            <label className="check">
+              <input type="checkbox" checked={carry} onChange={(e) => setCarry(e.target.checked)} />
+              Also add what the removed copies had (tags, collections, star, notes, checklist, tray items, From and
+              For) to the kept copy
+            </label>
+          )}
           <h4>Identical copies</h4>
           {groups.length === 0 ? (
             <p className="hint">No identical files found.</p>
           ) : (
             <>
               <div className="dup-bulk">
-                <label className="check">
-                  <input type="checkbox" checked={carry} onChange={(e) => setCarry(e.target.checked)} />
-                  Also add what the removed copies had (tags, collections, star, notes, checklist, tray items, From and
-                  For) to the kept copy
-                </label>
                 <div className="check-actions">
                   <button type="button" disabled={busy || bulkCopies === 0} onClick={() => begin(includedGroups)}>
                     Apply the ticked groups…
@@ -578,18 +643,18 @@ export function Duplicates() {
               <ul className="dup-groups">
                 {groups.map((g) => (
                   <Group
-                    key={g.sha256}
+                    key={g.key}
                     group={g}
                     keep={keepOf(g)}
                     choices={choices}
-                    included={!excluded.has(g.sha256)}
+                    included={!excluded.has(g.key)}
                     busy={busy || pending !== null}
-                    onKeep={(id) => setKeeps((k) => ({ ...k, [g.sha256]: id }))}
+                    onKeep={(id) => setKeeps((k) => ({ ...k, [g.key]: id }))}
                     onChoose={(id, c) => setChoices((now) => ({ ...now, [id]: c }))}
                     onInclude={() =>
                       setExcluded((s) => {
                         const next = new Set(s);
-                        if (!next.delete(g.sha256)) next.add(g.sha256);
+                        if (!next.delete(g.key)) next.add(g.key);
                         return next;
                       })
                     }
@@ -598,8 +663,8 @@ export function Duplicates() {
                     onIgnore={() =>
                       void ignore.ignore({
                         kind: "duplicates",
-                        key: g.sha256,
-                        label: baseName(g.files[0].path),
+                        key: g.key,
+                        label: g.name,
                         members: g.files.map((f) => f.drive_id),
                       })
                     }
@@ -610,19 +675,25 @@ export function Duplicates() {
           )}
           <h4>Same name, different content</h4>
           <p className="hint">
-            Probably versions of a document, not copies, so nothing here is offered for removal. Open them to compare.
+            Probably versions of a document, or the same document saved another way, so every file stays where it is
+            until you choose otherwise. Compare them side by side, then keep one and move or link the others.
           </p>
-          {result.name_groups.length === 0 ? (
+          {versions.length === 0 ? (
             <p className="hint">None found.</p>
           ) : (
             <ul className="dup-groups">
-              {result.name_groups.map((g) => (
-                <NameGroup
-                  key={g.name + g.files[0].drive_id}
-                  name={g.name}
-                  files={g.files}
-                  busy={ignore.busy}
+              {versions.map((g) => (
+                <Group
+                  key={g.key}
+                  group={g}
+                  keep={keepOf(g)}
+                  choices={choices}
+                  busy={busy || pending !== null || ignore.busy}
+                  onKeep={(id) => setKeeps((k) => ({ ...k, [g.key]: id }))}
+                  onChoose={(id, c) => setChoices((now) => ({ ...now, [id]: c }))}
+                  onApply={() => begin([g])}
                   onLook={look}
+                  onCompare={() => setComparing(g)}
                   onIgnore={() =>
                     void ignore.ignore({ kind: "versions", key: g.name, label: g.name, members: g.files.map((f) => f.drive_id) })
                   }
@@ -640,58 +711,15 @@ export function Duplicates() {
       {!check.running && <IgnoredList kinds={["duplicates", "versions"]} onChange={check.reload} />}
       {confirmView}
       {quickLook.view}
+      {comparing && (
+        <Compare
+          name={comparing.name}
+          files={comparing.files}
+          keep={keepOf(comparing)}
+          onKeep={(id) => setKeeps((k) => ({ ...k, [comparing.key]: id }))}
+          onClose={() => setComparing(null)}
+        />
+      )}
     </Card>
-  );
-}
-
-function NameGroup({
-  name,
-  files,
-  busy,
-  onIgnore,
-  onLook,
-}: {
-  name: string;
-  files: DupFile[];
-  busy: boolean;
-  onIgnore: () => void;
-  onLook: (id: string) => void;
-}) {
-  const [a, b] = files;
-  const sideBySide =
-    folderOf(a.path) !== folderOf(b.path)
-      ? `/browse?${new URLSearchParams({ left: folderOf(a.path), right: folderOf(b.path) })}`
-      : null;
-  return (
-    <li className="dup-group">
-      <header className="dup-group-head">
-        <FileSearch size={14} aria-hidden="true" />
-        <strong>{visible(name)}</strong>
-        <span className="hint">{plural(files.length, "file")}</span>
-        {sideBySide && (
-          <Link to={sideBySide} className="card-link" aria-label={`Compare ${visible(name)} side by side in Browse`}>
-            Compare side by side
-          </Link>
-        )}
-        <IgnoreButton label={name} disabled={busy} onClick={onIgnore} />
-      </header>
-      <ul className="dup-files">
-        {files.map((f) => (
-          <li key={f.drive_id} className="dup-file dup-file-plain">
-            <span className="dup-path">
-              <code title={visible(f.path)}>{visible(f.path)}</code>
-              <span className="hint">
-                {formatSize(f.size)}
-                {f.mtime !== null && `, ${shortDate(f.mtime)}`}
-              </span>
-            </span>
-            <span className="dup-actions">
-              <QuickLookButton onClick={() => onLook(f.drive_id)} />
-              <ShowInBrowse to={browseTo(f)} />
-            </span>
-          </li>
-        ))}
-      </ul>
-    </li>
   );
 }

@@ -312,6 +312,26 @@ def test_refuses_files_not_known_to_be_the_same(app, pair):
         resolve(app, remove=("id-other",))
 
 
+def test_versions_of_one_name_can_be_resolved_once_asked_for(app, fake_archive):
+    fake_archive.add(f"{BANKS}/CV.pdf", b"version-one", drive_id="id-v1")
+    fake_archive.add(f"{HOME}/cv.PDF", b"version-two-longer", drive_id="id-v2")
+    fake_archive.add(f"{HOME}/other.pdf", b"version-one", drive_id="id-other")
+    app.scan()
+    [group] = dup_result(app).name_groups
+    assert {f.drive_id for f in group.files} == {"id-v1", "id-v2"}
+    with pytest.raises(InvalidRequest, match="not known to be the same"):
+        app.maintenance.resolve([("id-v1", ["id-v2"])], "link")
+    result = app.maintenance.resolve([("id-v1", ["id-v2"], "name")], "link")
+    linked = fake_archive.root / HOME / "cv.PDF"
+    assert linked.is_symlink() and linked.read_bytes() == b"version-one"
+    assert (fake_archive.root / QUAR / HOME / "cv.PDF").read_bytes() == b"version-two-longer"
+    app.activity.undo(result.batch_id)
+    assert not linked.is_symlink() and linked.read_bytes() == b"version-two-longer"
+    # the name is what makes them versions: another name is refused
+    with pytest.raises(InvalidRequest, match="does not have the name"):
+        app.maintenance.resolve([("id-v1", ["id-other"], "name")], "quarantine")
+
+
 def test_refuses_a_file_changed_since_the_scan(app, pair):
     dup_result(app)
     path = pair.root / INBOX / "scan.pdf"

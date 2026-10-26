@@ -240,7 +240,7 @@ describe("Maintenance screen", () => {
     await user.click(screen.getByRole("button", { name: "Apply…" }));
     const dialog = await screen.findByRole("dialog", { name: "Apply 2 changes to duplicates?" });
     expect(posts(calls, "/api/maintenance/duplicates/resolve").map((c) => c.body)).toEqual([
-      { groups: [{ keep: "k1", others: ["d1", "d2"], links: ["d2"] }], action: "quarantine", carry_over: true, dry_run: true },
+      { groups: [{ keep: "k1", others: ["d1", "d2"], links: ["d2"], same: "content" }], action: "quarantine", carry_over: true, dry_run: true },
     ]);
     expect(dialog).toHaveTextContent("Tags: tax");
     expect(dialog).toHaveTextContent('Note added: "paid in June"');
@@ -272,7 +272,7 @@ describe("Maintenance screen", () => {
     await user.click(screen.getByRole("button", { name: "Apply…" }));
     const dialog = await screen.findByRole("dialog", { name: "Move 1 duplicate to To Delete?" });
     expect(posts(calls, "/api/maintenance/duplicates/resolve")[0].body).toEqual({
-      groups: [{ keep: "d2", others: ["k1"], links: [] }],
+      groups: [{ keep: "d2", others: ["k1"], links: [], same: "content" }],
       action: "quarantine",
       carry_over: true,
       dry_run: true,
@@ -310,7 +310,7 @@ describe("Maintenance screen", () => {
     await user.click(screen.getByRole("button", { name: "Apply the ticked groups…" }));
     await screen.findByRole("dialog", { name: "Replace 1 duplicate with links?" });
     expect((posts(calls, "/api/maintenance/duplicates/resolve")[0].body as { groups: unknown[] }).groups).toEqual([
-      { keep: "k2", others: ["e2"], links: ["e2"] },
+      { keep: "k2", others: ["e2"], links: ["e2"], same: "content" },
     ]);
   });
 
@@ -326,7 +326,7 @@ describe("Maintenance screen", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("lists the same names with other content as versions, for review only", async () => {
+  it("versions: left in place until chosen, compared side by side, then moved like copies", async () => {
     const result = {
       duplicates: {
         ...withDuplicates().duplicates.duplicates,
@@ -334,18 +334,34 @@ describe("Maintenance screen", () => {
         name_groups_total: 1,
       },
     };
-    const { user } = setup({}, { duplicates: result });
+    const { calls, user } = setup({}, { duplicates: result });
     await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
-    expect(await screen.findByText(/Probably versions of a document, not copies/)).toBeInTheDocument();
-    const compare = screen.getByRole("link", { name: "Compare Statement.pdf side by side in Browse" });
-    expect(compare).toHaveAttribute(
-      "href",
-      `/browse?${new URLSearchParams({ left: "10. Financial/Banks", right: "20. Home" })}`,
-    );
-    expect(screen.getAllByRole("button", { name: "Show in Browse" })).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: /^(Move|Replace)/ })).not.toBeInTheDocument();
+    expect(await screen.findByText(/Probably versions of a document/)).toBeInTheDocument();
+    const versions = screen.getByText("Statement.pdf", { selector: "strong" }).closest("li")!;
+    // nothing is chosen for a version: its Apply waits
+    expect(within(versions).getByRole("button", { name: "Apply…" })).toBeDisabled();
+    // Compare shows both files; keeping the right one there makes it the kept file
+    await user.click(within(versions).getByRole("button", { name: "Compare the files named Statement.pdf side by side" }));
+    const compare = await screen.findByRole("dialog", { name: "Compare: Statement.pdf" });
+    expect(within(compare).getByRole("region", { name: "Left" })).toHaveTextContent("10. Financial/Banks");
+    expect(within(compare).getByRole("region", { name: "Right" })).toHaveTextContent("20. Home");
+    await user.click(within(compare).getByRole("button", { name: "Keep this one" }));
+    expect(within(compare).getByRole("region", { name: "Right" })).toHaveTextContent("Kept");
+    await user.click(within(compare).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(within(versions).getByRole("button", { name: "To Delete" }));
+    await user.click(within(versions).getByRole("button", { name: "Apply…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Move 1 version to To Delete?" });
+    expect(dialog).toHaveTextContent("These files are not copies");
+    expect(posts(calls, "/api/maintenance/duplicates/resolve")[0].body).toEqual({
+      groups: [{ keep: "v2", others: ["v1"], links: [], same: "name" }],
+      action: "quarantine",
+      carry_over: true,
+      dry_run: true,
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     // Quick Look shows the file over the check, and only its button opens it
-    await user.click(screen.getAllByRole("button", { name: "Quick Look" })[1]);
+    await user.click(within(versions).getAllByRole("button", { name: "Quick Look" })[1]);
     expect(await screen.findByRole("dialog", { name: "Quick Look: statement.pdf" })).toBeInTheDocument();
     await user.keyboard("{ArrowLeft}");
     expect(await screen.findByRole("dialog", { name: "Quick Look: Statement.pdf" })).toBeInTheDocument();

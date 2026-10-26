@@ -2441,6 +2441,9 @@ class DuplicateChoiceIn(_In):
     # those of ``others`` replaced with a link whatever ``action`` says (one copy to To
     # Delete and another replaced with a link, in one batch)
     links: list[str] = Field(default_factory=list)
+    # ``name``: the files share a name, not their content (versions of one document,
+    # chosen after comparing them); ``content`` needs the check to have found them the same
+    same: Literal["content", "name"] = "content"
 
 
 class DuplicateResolveIn(_In):

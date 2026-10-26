@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Compare and resolve same-name files in Duplicates.** Files with the same name but
+  other content (versions of a document, or a PDF saved twice) now open side by side in
+  one window with **Compare side by side**, with **Keep this one** under each. They get
+  the same choices as identical copies (leave, To Delete, or replace with a link), but
+  each starts as leave and the preview says they are not copies. This replaces the old
+  link, which only opened the two folders in Browse.
 - **Quick Look in Duplicates.** The eye button on each copy, and on each same-name
   file, shows it in Quick Look without leaving Maintenance; ← and → move through the
   other files listed.
