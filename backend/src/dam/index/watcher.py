@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import ObservedWatch
 
 from dam.core.paths import ArchivePaths, OutsideArchiveError
 from dam.index.repo import FileRepo
@@ -79,12 +80,14 @@ class Watcher:
         self._observer = Observer()
         self._threads: list[threading.Thread] = []
         self._started = False
+        self._watches: dict[str, ObservedWatch] = {}  # folder label ("" = main) -> watch
+        self._primed = False  # the first refresh_watches() is the initial setup
 
     def start(self) -> None:
         if self._started:
             return
         self._started = True
-        self._observer.schedule(_Handler(self), str(self.paths.root), recursive=True)
+        self.refresh_watches()
         self._observer.start()
         for name, target in (
             ("debounce", self._debounce_loop),
@@ -93,6 +96,39 @@ class Watcher:
             t = threading.Thread(target=target, name=f"dam-watcher-{name}", daemon=True)
             t.start()
             self._threads.append(t)
+
+    def refresh_watches(self) -> list[str]:
+        """Watch every connected folder and drop the watch of one that went away.
+
+        Returns the labels of extra folders that were not watched before and are now (a disk
+        plugged back in); the caller rescans them. The first call only sets up the initial
+        watches and returns nothing. The main folder is watched once and never dropped here.
+        """
+        reconnected: list[str] = []
+        with self._lock:
+            first, self._primed = not self._primed, True
+            for folder in self.paths.folders:
+                label = folder.label  # "" for the main folder
+                watched = label in self._watches
+                if label and not self.paths.is_connected(folder.label):
+                    if watched:
+                        self._observer.unschedule(self._watches.pop(label))
+                        log.warning("archive folder '%s' went away; no longer watched", label)
+                    continue
+                if watched:
+                    continue
+                try:
+                    self._watches[label] = self._observer.schedule(
+                        _Handler(self), str(folder.root), recursive=True
+                    )
+                except OSError:
+                    if not label:
+                        raise
+                    log.warning("cannot watch archive folder '%s' (%s)", label, folder.root)
+                    continue
+                if label and not first:
+                    reconnected.append(label)
+        return reconnected
 
     def stop(self) -> None:
         self._stop.set()
@@ -172,7 +208,11 @@ class Watcher:
             self._wake.set()
 
     def _aborted(self, report: ScanReport | None) -> bool:
-        if report is None or not report.aborted:
+        if report is None:
+            return False
+        if report.offline:
+            log.warning("archive folders not connected: %s", ", ".join(report.offline))
+        if not report.aborted:
             return False
         log.warning("archive folder %s is not available; scan skipped, index kept", self.paths.root)
         return True
@@ -188,6 +228,12 @@ class Watcher:
     def _reconcile_loop(self) -> None:
         while not self._stop.wait(self.reconcile_every_s):
             try:
+                reconnected = self.refresh_watches()
+                for label in reconnected:
+                    # Changes made while the folder was away were never seen as events.
+                    report = scan(self.paths, self.repo, subtree=label)
+                    if not self._aborted(report):
+                        self._call_on_change()
                 report = scan(self.paths, self.repo)
             except Exception:
                 log.exception("watcher reconcile scan failed")

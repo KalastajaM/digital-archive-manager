@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+from pathlib import Path
 
 from dam.config import Settings
 from dam.core.paths import ArchivePaths
@@ -247,3 +248,53 @@ def test_file_dropped_into_a_code_folder_shows_in_the_inbox_with_its_code(app, f
     assert entry.record.drive_id == "b1"
     assert [h.code for h in entry.suggestion.codes] == ["P"]
     assert entry.suggestion.tray == "to-pay"
+
+
+# --- extra archive folders ----------------------------------------------------
+
+
+def setup_with_extra(fake_archive, engine, tmp_path):
+    from dam.config import ExtraFolder
+
+    extra = tmp_path / "disk" / "Archive 2000-2015"
+    (extra / "2009").mkdir(parents=True)
+    settings = Settings(
+        archive_root=fake_archive.root,
+        extra_folders=[ExtraFolder(label="Old years", path=extra)],
+    )
+    paths = ArchivePaths(fake_archive.root, settings)
+    return paths, FileRepo(engine, inbox=paths.inbox), extra
+
+
+def _watched(w):
+    return sorted(str(Path(watch.path).resolve()) for watch in w._watches.values())
+
+
+def test_refresh_watches_follows_connect_and_disconnect(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo)
+    try:
+        # Starting the observer is not needed: scheduling works on a stopped one.
+        assert w.refresh_watches() == []  # the first call only sets up the initial watches
+        both = sorted([str(paths.root), str(extra.resolve())])
+        assert _watched(w) == both
+        assert w.refresh_watches() == []
+
+        gone = extra.with_name("away")
+        os.rename(extra, gone)
+        assert w.refresh_watches() == []
+        assert _watched(w) == [str(paths.root)]
+
+        os.rename(gone, extra)
+        assert w.refresh_watches() == ["Old years"]
+        assert _watched(w) == both
+        assert w.refresh_watches() == []
+    finally:
+        w.stop()
+
+
+def test_change_in_extra_folder_is_noted(fake_archive, engine, tmp_path):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    w = Watcher(paths, repo)
+    w._note(str(extra.resolve() / "2009" / "a.pdf"))
+    assert w._pending == {"Old years/2009/a.pdf"}
