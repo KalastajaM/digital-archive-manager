@@ -713,3 +713,72 @@ def test_files_table_untouched_by_a_check_except_hashes(app, pair):
     with app.engine.connect() as conn:
         assert conn.execute(select(operations)).first() is None  # no journal rows
         assert conn.execute(select(files.c.sha256).where(files.c.sha256.is_not(None))).first()
+
+
+# --- extra archive folders that are not there ----------------------------------------------
+
+
+def test_broken_link_reason_offline(extra_folder, app, fake_archive, tmp_path):
+    target = extra_folder.add("2009/x.pdf", b"x", drive_id="x1")
+    (fake_archive.root / HOME).mkdir(exist_ok=True)
+    (fake_archive.root / HOME / "x.pdf").symlink_to(target)
+    (fake_archive.root / HOME / "dead.pdf").symlink_to(fake_archive.root / "gone" / "y.pdf")
+    app.scan()
+    assert [i.path for i in run(app, "broken_links").result.items] == [f"{HOME}/dead.pdf"]
+    os.rename(extra_folder.root, tmp_path / "unplugged")
+    app.scan()
+    result = run(app, "broken_links").result
+    assert [(i.path, i.reason) for i in result.items] == [
+        (f"{HOME}/dead.pdf", "broken"),
+        (f"{HOME}/x.pdf", "folder_not_connected"),
+    ]
+    assert result.total == 2
+
+
+def test_broken_link_reason_detached(extra_folder, app, app_paths, fake_archive):
+    from dam.app import App
+    from dam.archive_folders import detach_folder
+
+    target = extra_folder.add("2009/x.pdf", b"x", drive_id="x1")
+    (fake_archive.root / HOME).mkdir(exist_ok=True)
+    (fake_archive.root / HOME / "x.pdf").symlink_to(target)
+    app.scan()
+    detach_folder(app_paths, app.repo, "Old years", forget=False, dry_run=False)
+    os.rename(extra_folder.root, extra_folder.root.with_name("moved away"))  # gone too
+    again = App.create(app_paths.data_dir)
+    try:
+        again.scan()
+        [link] = run(again, "broken_links").result.items
+        assert (link.path, link.reason) == (f"{HOME}/x.pdf", "folder_detached")
+    finally:
+        again.close()
+
+
+def test_remove_links_refuses_a_link_into_an_unplugged_folder(
+    extra_folder, app, fake_archive, tmp_path
+):
+    target = extra_folder.add("2009/x.pdf", b"x", drive_id="x1")
+    (fake_archive.root / ONG / "Sauna").mkdir()
+    link = fake_archive.root / ONG / "Sauna" / "x.pdf"
+    link.symlink_to(target)
+    app.scan()
+    os.rename(extra_folder.root, tmp_path / "unplugged")
+    app.scan()
+    [found] = run(app, "broken_links").result.items
+    assert found.reason == "folder_not_connected"
+    with pytest.raises(InvalidRequest, match="'Old years' is not connected"):
+        app.maintenance.remove_links([found.drive_id], dry_run=True)
+    assert os.path.lexists(link)
+
+
+def test_label_clash_check(extra_folder, app, fake_archive):
+    assert run(app, "label_clashes").result.items == []
+    fake_archive.add("old YEARS/a.pdf", b"a")
+    app.scan()
+    result = run(app, "label_clashes").result
+    assert (result.items, result.total) == (["Old years"], 1)
+    with TestClient(create_api(app, None), base_url=BASE) as c:
+        job = c.post("/api/maintenance/jobs", json={"kind": "label_clashes"}, headers=H)
+        assert job.status_code == 200, job.text
+        body = poll(c, job.json()["job_id"])
+    assert body["label_clashes"] == {"items": ["Old years"], "total": 1}

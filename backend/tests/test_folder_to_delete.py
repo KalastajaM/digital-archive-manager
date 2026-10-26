@@ -82,9 +82,9 @@ def test_to_delete_waiting_lists_all_folders(extra_folder, app, fake_archive):
         (f"Old years/{QUAR}/2009/a.pdf", 40, False)
     ]
     assert (result.in_to_delete, result.in_to_delete_size) == (2, 30)
-    assert {f.path for f in _waiting(app, 0).items} == {
-        f"{QUAR}/{BANKS}/m.pdf",
-        f"Old years/{QUAR}/2009/a.pdf",
+    assert {(f.path, f.folder) for f in _waiting(app, 0).items} == {
+        (f"{QUAR}/{BANKS}/m.pdf", None),
+        (f"Old years/{QUAR}/2009/a.pdf", "Old years"),
     }
 
 

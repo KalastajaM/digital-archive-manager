@@ -20,7 +20,7 @@ from pathlib import PurePosixPath
 from sqlalchemy import Engine, select
 
 from dam.collections.service import CollectionService
-from dam.core.paths import ArchivePaths
+from dam.core.paths import ArchivePaths, not_connected_message
 from dam.db.tables import collection_members, collections
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.locks import LockService
@@ -39,7 +39,15 @@ from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
 
-KINDS = ("duplicates", "empty_folders", "broken_links", "references", "names", "waiting")
+KINDS = (
+    "duplicates",
+    "empty_folders",
+    "broken_links",
+    "references",
+    "names",
+    "waiting",
+    "label_clashes",
+)
 ACTIONS = ("quarantine", "link")
 LINK_UNAVAILABLE = (
     "Windows needs Developer Mode to make links: turn it on in Windows settings, or move the "
@@ -149,6 +157,8 @@ class MaintenanceService:
                 work = lambda ctx: checks.bad_references(ctx, paths, engine, self.tray_name)  # noqa: E731
             case "names":
                 work = lambda ctx: checks.bad_names(ctx, repo, paths, engine)  # noqa: E731
+            case "label_clashes":
+                work = lambda ctx: checks.label_clashes(ctx, repo, paths, engine)  # noqa: E731
             case _:
                 limit = checks.DEFAULT_DAYS if days is None else days
                 work = lambda ctx: checks.waiting_in_to_delete(  # noqa: E731
@@ -441,6 +451,7 @@ class MaintenanceService:
         if not drive_ids or len(set(drive_ids)) != len(drive_ids):
             raise InvalidRequest("Give each link once")
         ops = []
+        connected: dict[str, bool] = {}
         for drive_id in drive_ids:
             rec = self.repo.get(drive_id)
             if rec is None or rec.missing or rec.parked_at is not None:
@@ -454,6 +465,9 @@ class MaintenanceService:
                 )
             if os.path.exists(self.paths.abs(rec.path)):
                 raise InvalidRequest(f"{rec.path} leads somewhere: it is not a broken link")
+            offline = checks.link_into_offline(self.paths, rec.path, connected)
+            if offline is not None:  # not broken: its folder is unplugged
+                raise InvalidRequest(not_connected_message(self.paths.folder_of(offline)))
             ops.append(Op(OpKind.UNLINK_SYMLINK, rec.path, None))
         n = len(ops)
         name = PurePosixPath(ops[0].src).name if n == 1 else f"{n} broken links"

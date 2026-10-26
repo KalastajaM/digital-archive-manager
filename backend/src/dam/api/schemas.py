@@ -2137,7 +2137,13 @@ class DuplicateEstimateOut(BaseModel):
 
 
 MaintenanceKindIn = Literal[
-    "duplicates", "empty_folders", "broken_links", "references", "names", "waiting"
+    "duplicates",
+    "empty_folders",
+    "broken_links",
+    "references",
+    "names",
+    "waiting",
+    "label_clashes",
 ]
 
 
@@ -2205,6 +2211,9 @@ class BrokenLinkOut(BaseModel):
     path: str
     target: str | None
     inside: str | None
+    # broken: the target is gone; otherwise it is in an extra folder that is not
+    # connected now, or that is detached
+    reason: Literal["broken", "folder_not_connected", "folder_detached"]
 
 
 class BrokenLinksOut(BaseModel):
@@ -2247,6 +2256,7 @@ class WaitingFileOut(BaseModel):
     since: float
     days: int
     approximate: bool
+    folder: str | None  # the extra folder whose To Delete it is in (None: the main one)
 
 
 class WaitingOut(BaseModel):
@@ -2256,6 +2266,13 @@ class WaitingOut(BaseModel):
     total_size: int
     in_to_delete: int
     in_to_delete_size: int
+
+
+class LabelClashesOut(BaseModel):
+    """The archive folders whose label a top-level entry of the main folder also has."""
+
+    items: list[str]
+    total: int
 
 
 class MaintenanceJobOut(BaseModel):
@@ -2279,6 +2296,7 @@ class MaintenanceJobOut(BaseModel):
     references: BadReferencesOut | None = None
     names: BadNamesOut | None = None
     waiting: WaitingOut | None = None
+    label_clashes: LabelClashesOut | None = None
 
 
 class DuplicateChoiceIn(_In):

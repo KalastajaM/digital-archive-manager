@@ -1,8 +1,9 @@
 """The small maintenance lists: empty folders, broken links, collection and tray entries
-that point at missing files, names that do not follow the archive's convention, and what
-has waited in ``##. To Delete``. Each is a read of the index (empty folders and broken
-links also look at the disk with ``lstat``/listing, nothing is opened or downloaded) and
-changes nothing; the owner acts on a list through the usual previewed batches."""
+that point at missing files, names that do not follow the archive's convention, what
+has waited in ``##. To Delete``, and main-folder entries named like an archive folder.
+Each is a read of the index (empty folders, broken links and name clashes also look at
+the disk with ``lstat``/listing, nothing is opened or downloaded) and changes nothing;
+the owner acts on a list through the usual previewed batches."""
 
 from __future__ import annotations
 
@@ -13,12 +14,14 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from sqlalchemy import Engine, func, or_, select
 
+from dam.core.fs import readlink, resolve
 from dam.core.naming import matches_convention, parse_doc_date
-from dam.core.paths import ArchivePaths, nfc
+from dam.core.paths import ArchivePaths, OutsideArchiveError, _fold, nfc
 from dam.db.tables import (
     collection_members,
     collections,
@@ -57,6 +60,8 @@ class BrokenLink:
     path: str
     target: str | None
     inside: str | None  # the app's folder it is in (##. Ongoing / ##. Important), else None
+    # broken, or its target is in an extra folder that is not connected now / detached
+    reason: Literal["broken", "folder_not_connected", "folder_detached"] = "broken"
 
 
 @dataclass
@@ -105,6 +110,13 @@ class WaitingFile:
     since: float  # epoch seconds it was put there (or the nearest the app can tell)
     days: int
     approximate: bool  # no record of the move: the file's own change time
+    folder: str | None = None  # the extra folder's label whose To Delete it is in
+
+
+@dataclass
+class LabelClashes:
+    items: list[str] = field(default_factory=list)  # the archive folders' labels
+    total: int = 0
 
 
 @dataclass
@@ -183,7 +195,10 @@ def empty_folders(
 def broken_links(
     ctx: JobContext, repo: FileRepo, paths: ArchivePaths, engine: Engine
 ) -> BrokenLinks:
-    """Links (symbolic links in the index) whose target is gone."""
+    """Links (symbolic links in the index) whose target is gone, with why: an extra
+    folder that is not connected now or is detached is not a missing file."""
+    detached = [resolve(e.path) for e in paths.settings.extra_folders if not e.attached]
+    connected: dict[str, bool] = {}  # label -> connected, each root listed once
     with engine.connect() as conn:
         rows = conn.execute(
             select(files).where(*_live(files.c.is_link.is_(True))).order_by(files.c.path)
@@ -206,9 +221,79 @@ def broken_links(
         out.total += 1
         if len(out.items) < LIST_LIMIT:
             out.items.append(
-                BrokenLink(rec.drive_id, rec.path, rec.link_target, paths.in_publish_root(rec.path))
+                BrokenLink(
+                    rec.drive_id,
+                    rec.path,
+                    rec.link_target,
+                    paths.in_publish_root(rec.path),
+                    _why_broken(paths, rec.path, detached, connected),
+                )
             )
     ctx.progress(len(rows), len(rows))
+    return out
+
+
+def link_into_offline(paths: ArchivePaths, rel: str, connected: dict[str, bool]) -> str | None:
+    """The label of the extra folder the link ``rel`` points into when that folder is not
+    connected now, else None. ``connected`` caches each label's answer."""
+    target = _link_full(paths, rel)
+    if target is None:
+        return None
+    try:
+        label = paths.label_of(paths.rel(target))
+    except (OutsideArchiveError, OSError):
+        return None
+    if not label:
+        return None
+    if label not in connected:
+        connected[label] = paths.is_connected(label)
+    return None if connected[label] else label
+
+
+def _link_full(paths: ArchivePaths, rel: str) -> Path | None:
+    link = paths.abs(rel)
+    try:
+        raw = readlink(link)
+    except OSError:
+        return None
+    return Path(os.path.normpath(os.path.join(link.parent, raw)))
+
+
+def _why_broken(
+    paths: ArchivePaths, rel: str, detached: list[Path], connected: dict[str, bool]
+) -> Literal["broken", "folder_not_connected", "folder_detached"]:
+    if link_into_offline(paths, rel, connected) is not None:
+        return "folder_not_connected"
+    target = _link_full(paths, rel)
+    if target is not None:
+        full = resolve(target)
+        for root in detached:
+            if full == root or root in full.parents:
+                return "folder_detached"
+    return "broken"
+
+
+# --- main-folder entries named like an archive folder -----------------------------------------
+
+
+def label_clashes(
+    ctx: JobContext, repo: FileRepo, paths: ArchivePaths, engine: Engine
+) -> LabelClashes:
+    """The archive folders (attached or detached) whose label a top-level entry of the
+    main folder also has. That entry is not indexed (the archive folder wins); the owner
+    renames one of the two. Lists the main folder's top level only."""
+    try:
+        names = {_fold(n) for n in os.listdir(paths.root)}
+    except OSError:
+        names = set()
+    out = LabelClashes()
+    extras = paths.settings.extra_folders
+    for i, extra in enumerate(extras):
+        ctx.progress(i, len(extras), current=extra.label)
+        if _fold(extra.label) in names:
+            out.total += 1
+            out.items.append(extra.label)
+    ctx.progress(len(extras), len(extras))
     return out
 
 
@@ -469,7 +554,8 @@ def waiting_in_to_delete(
         if now - since > days * 86400:
             out.total += 1
             out.total_size += size
-            found.append(WaitingFile(rec.drive_id, rec.path, size, since, age, approx))
+            folder = paths.label_of(rec.path) or None
+            found.append(WaitingFile(rec.drive_id, rec.path, size, since, age, approx, folder))
     found.sort(key=lambda f: f.since)
     out.items = found[:LIST_LIMIT]
     ctx.progress(len(rows), len(rows))

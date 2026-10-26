@@ -599,7 +599,10 @@ class App:
         """Full-text search over names and extracted text, with ``name:value`` filters in
         ``query`` (``dam.query``); ``folder`` limits to a subtree, ``tags`` to files that have
         all of them (``tag_mode`` "any": at least one)."""
-        ctx = SearchContext(trays=lambda: [(t.id, t.name) for t in self.trays.defs()])
+        ctx = SearchContext(
+            trays=lambda: [(t.id, t.name) for t in self.trays.defs()],
+            disconnected=self.paths.disconnected_labels(),
+        )
         return search(
             self.engine,
             query,
