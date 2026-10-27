@@ -1,6 +1,6 @@
 """``marks`` on the file records the API returns: one ``MarkService.marks_for`` query per
 response, whatever the number of rows (never a query per row). The same helpers set
-``folder`` and ``connected`` (``_place``), with one look at the extra folders per
+``folder`` and ``connected`` (``place_rows``), with one look at the extra folders per
 response."""
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ def _dict(obj: Any) -> dict:
     return asdict(obj) if is_dataclass(obj) else dict(obj)
 
 
-def _place(app: App, rows: Iterable[dict]) -> None:
+def place_rows(app: App, rows: Iterable[dict]) -> None:
     """Set ``folder`` (the extra folder's label, None for the main folder) and
     ``connected`` on every record dict that has a ``path``; others are left as they are."""
     offline = set(app.paths.disconnected_labels(cached=True))
@@ -33,7 +33,7 @@ def with_marks(app: App, rows: Iterable[Any], key: str = "drive_id") -> list[dic
     """``rows`` (dataclasses or dicts) as dicts, each with its ``marks``, ``folder``
     and ``connected``."""
     out = [_dict(r) for r in rows]
-    _place(app, out)
+    place_rows(app, out)
     found = app.marks.marks_for([r[key] for r in out])
     for r in out:
         r["marks"] = found.get(r[key], [])
@@ -44,7 +44,7 @@ def with_record_marks(app: App, rows: Iterable[Any]) -> list[dict]:
     """``rows`` holding a file ``record`` (inbox entries, file detail) as dicts, the
     record with its ``marks``, ``folder`` and ``connected``."""
     out = [_dict(r) for r in rows]
-    _place(app, [r["record"] for r in out])
+    place_rows(app, [r["record"] for r in out])
     found = app.marks.marks_for([r["record"]["drive_id"] for r in out])
     for r in out:
         r["record"]["marks"] = found.get(r["record"]["drive_id"], [])
@@ -59,7 +59,7 @@ def collections_out(app: App, cols: Iterable[Any], extra: list[dict] | None = No
     if extra is not None:
         for c, more in zip(out, extra, strict=True):
             c.update(more)
-    _place(app, [m for c in out for m in c["members"]])
+    place_rows(app, [m for c in out for m in c["members"]])
     found = app.marks.marks_for([m["drive_id"] for c in out for m in c["members"]])
     for c in out:
         for m in c["members"]:

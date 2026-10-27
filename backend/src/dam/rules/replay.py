@@ -19,7 +19,7 @@ from time import perf_counter
 from sqlalchemy import Engine, select
 
 from dam.config import Person, SpecialFolders
-from dam.core.naming import _DATE_PREFIX, parse_doc_date
+from dam.core.naming import DATE_PREFIX, parse_doc_date
 from dam.core.paths import nfc
 from dam.db.tables import file_text, files
 from dam.extract.layout import Page1Layout, lines_in_zone
@@ -28,16 +28,16 @@ from dam.ops.guards import is_under
 from dam.rules.engine import (
     Area,
     TemplateError,
-    _matches,
-    _parent,
-    _render_folder,
-    _render_name,
     check,
     has_picture_zones,
     has_text_zones,
+    parent_folder,
     person_for,
     picture_match,
+    render_folder,
+    render_name,
     rule_areas,
+    rule_matches,
     rule_needs_person,
     stem_and_ext,
     suggest,
@@ -191,7 +191,7 @@ def without_folder(rule: Rule) -> Rule:
 def _replay_stem(rec: FileRecord) -> str:
     """The ``{stem}`` live filing gives, minus the date prefix and one separator."""
     stem, _, _ = stem_and_ext(rec)
-    if _DATE_PREFIX.match(stem):
+    if DATE_PREFIX.match(stem):
         stem = stem[8:]
         if stem.startswith(("_", " ", "-", ".")):
             stem = stem[1:]
@@ -210,11 +210,11 @@ def _rule_path(
     doc_date = parse_doc_date(name) or rec.doc_date
     stem = _replay_stem(rec)
     if rule.then.folder is not None:
-        folder = _render_folder(rule.then.folder, doc_date, stem, special, person, quarantines)
+        folder = render_folder(rule.then.folder, doc_date, stem, special, person, quarantines)
     else:
-        folder = _parent(rec.path)
+        folder = parent_folder(rec.path)
     if rule.then.name is not None:
-        new = _render_name(rule.then.name, doc_date, stem, ext, person) + (f".{ext}" if ext else "")
+        new = render_name(rule.then.name, doc_date, stem, ext, person) + (f".{ext}" if ext else "")
     else:
         new = name
     return f"{folder}/{new}" if folder else new
@@ -512,7 +512,9 @@ class ReplayRun:
             scores = self.pictures.rank(rule, can)
 
         def key(r: PlanRow) -> tuple[int, float, str]:
-            group = 0 if r.drive_id in mine else 1 if near and nfc(_parent(r.path)) == near else 2
+            group = (
+                0 if r.drive_id in mine else 1 if near and nfc(parent_folder(r.path)) == near else 2
+            )
             return (group, -scores.get(r.drive_id, -1.0), r.path)
 
         if mine or near or scores:
@@ -802,7 +804,7 @@ class ReplayRun:
             if not self.needs_text:  # the earlier rules look at the words: fetched for this one
                 folded = self._fold(self._fetch_texts([row.drive_id]).get(row.drive_id, ""))
             for r in self.earlier:
-                if _matches(r, rec, folded, None, layout, ctx, self.pictures)[0]:
+                if rule_matches(r, rec, folded, None, layout, ctx, self.pictures)[0]:
                     self.shadowed.append((row.drive_id, r.id))
                     break
 
@@ -1032,8 +1034,8 @@ def _why(
     if c.person_unknown:
         return "the document has no single person (address area)"
     if when.folder_is is not None:
-        # the folder test is first in _matches: failing it, nothing else was looked at
-        here = {nfc(_parent(rec.path)).casefold()}
+        # the folder test is first in rule_matches: failing it, nothing else was looked at
+        here = {nfc(parent_folder(rec.path)).casefold()}
         if inbox_alias is not None:
             here.add(nfc(inbox_alias).strip("/").casefold())
         want = nfc(when.folder_is).strip("/").casefold()
@@ -1091,7 +1093,7 @@ def explain(
     out: list[RuleExplain] = []
     for rule in rules:
         mine = f"rule:{rule.id}"
-        matched = _matches(rule, rec, folded, inbox_alias, layout, people, pictures)[0]
+        matched = rule_matches(rule, rec, folded, inbox_alias, layout, people, pictures)[0]
         wins = [
             label
             for label, source in (
@@ -1135,4 +1137,4 @@ def explain(
 
 def folder_of(path: str) -> str:
     """The folder a document is in (``""`` at the top)."""
-    return _parent(path)
+    return parent_folder(path)

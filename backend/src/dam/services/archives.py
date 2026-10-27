@@ -17,7 +17,7 @@ from typing import Protocol
 
 from dam import demo, setup
 from dam.config import AppPaths
-from dam.core.paths import _fold
+from dam.core.paths import fold_name
 from dam.profiles import MAIN_ID, MAIN_NAME, PALETTE, Locked, Profile, ProfileStore, ServeLock
 from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.services.launch import LaunchService, Runner, run_open
@@ -215,7 +215,7 @@ class ArchiveService:
             found = [
                 path
                 for name, path, _ in setup.current_extra_folder_entries(p.paths)
-                if _fold(name) == _fold(label)
+                if fold_name(name) == fold_name(label)
             ]
             if not found:
                 raise NotFound(f"This archive has no extra folder '{label}'.")

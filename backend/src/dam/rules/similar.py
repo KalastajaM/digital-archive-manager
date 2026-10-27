@@ -32,7 +32,7 @@ _STOP = frozenset(
 )
 
 
-def _tokens(stem: str, body: str) -> list[str]:
+def word_tokens(stem: str, body: str) -> list[str]:
     out: list[str] = []
     for source in (stem, body[:TEXT_CHARS]):
         for w in _WORD.findall(nfc(source)):
@@ -51,7 +51,7 @@ def _words(name: str, body: str, ext: str | None) -> list[str]:
     stem = fix_mojibake(name)
     if ext and stem.lower().endswith("." + ext.lower()):
         stem = stem[: -len(ext) - 1]
-    return _tokens(stem, body)
+    return word_tokens(stem, body)
 
 
 def similar_folder(

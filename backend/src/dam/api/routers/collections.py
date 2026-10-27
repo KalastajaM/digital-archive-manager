@@ -71,7 +71,7 @@ def _name(app: App, collection_id: int) -> str:
     return app.collections.get(collection_id).name
 
 
-def _synced(app: App, collection_id: int, label: str | None = None) -> dict:
+def synced(app: App, collection_id: int, label: str | None = None) -> dict:
     """Run the Ongoing sync after a change and report it with the collection.
     ``label``: what the user did, which titles the batch the sync journals."""
     result = app.collections.changed(label)
@@ -153,7 +153,7 @@ def rename_preview(app: AppDep, collection_id: int, body: NameBody) -> list:
 def rename(app: AppDep, collection_id: int, body: NameBody) -> dict:
     old = _name(app, collection_id)
     c = app.collections.set_name(collection_id, body.name, notify=False)
-    return _synced(app, collection_id, f"Renamed collection {old} to {c.name}")
+    return synced(app, collection_id, f"Renamed collection {old} to {c.name}")
 
 
 @router.patch("/{collection_id}/parent", response_model=CollectionChangeOut)
@@ -163,7 +163,7 @@ def set_parent(app: AppDep, collection_id: int, body: ParentBody) -> dict:
     it back reverses it. A cycle or a closed parent is refused."""
     c = app.collections.set_parent(collection_id, body.parent_id, notify=False)
     where = f"into {_name(app, body.parent_id)}" if body.parent_id is not None else "to the top"
-    return _synced(app, collection_id, f"Moved collection {c.name} {where}")
+    return synced(app, collection_id, f"Moved collection {c.name} {where}")
 
 
 @router.post("/{collection_id}/move", response_model=CollectionChangeOut)
@@ -178,7 +178,7 @@ def move(app: AppDep, collection_id: int, body: CollectionMoveBody) -> dict:
     )
     if c.parent_id != old.parent_id:
         where = f"into {_name(app, c.parent_id)}" if c.parent_id is not None else "to the top"
-        return _synced(app, collection_id, f"Moved collection {c.name} {where}")
+        return synced(app, collection_id, f"Moved collection {c.name} {where}")
     return {
         "collection": collection_out(app, c),
         "batch": None,
@@ -195,7 +195,7 @@ def add_members(app: AppDep, collection_id: int, body: DriveIdsBody) -> dict:
     require_editable(app, body.drive_ids)
     what = file_phrase(app, body.drive_ids)
     c = app.collections.add_members(collection_id, body.drive_ids, notify=False)
-    return _synced(app, collection_id, f"Added {what} to {c.name}")
+    return synced(app, collection_id, f"Added {what} to {c.name}")
 
 
 @router.post("/{collection_id}/members/remove", response_model=CollectionChangeOut)
@@ -204,7 +204,7 @@ def remove_member(app: AppDep, collection_id: int, body: DriveIdBody) -> dict:
     adding the member again reverses it). The batch that ran is returned."""
     what = file_phrase(app, [body.drive_id])
     c = app.collections.remove_member(collection_id, body.drive_id, notify=False)
-    return _synced(app, collection_id, f"Removed {what} from {c.name}")
+    return synced(app, collection_id, f"Removed {what} from {c.name}")
 
 
 @router.post("/{collection_id}/close/preview", response_model=list[ResolvedOpOut])
@@ -217,7 +217,7 @@ def close_preview(app: AppDep, collection_id: int) -> list:
 @router.post("/{collection_id}/close", response_model=CollectionChangeOut)
 def close(app: AppDep, collection_id: int) -> dict:
     c = app.collections.close(collection_id, notify=False)
-    return _synced(app, collection_id, f"Closed collection {c.name}")
+    return synced(app, collection_id, f"Closed collection {c.name}")
 
 
 @router.post("/{collection_id}/reopen/preview", response_model=list[ResolvedOpOut])
@@ -230,7 +230,7 @@ def reopen_preview(app: AppDep, collection_id: int) -> list:
 @router.post("/{collection_id}/reopen", response_model=CollectionChangeOut)
 def reopen(app: AppDep, collection_id: int) -> dict:
     c = app.collections.reopen(collection_id, notify=False)
-    return _synced(app, collection_id, f"Reopened collection {c.name}")
+    return synced(app, collection_id, f"Reopened collection {c.name}")
 
 
 @router.post("/{collection_id}/publish/preview", response_model=list[ResolvedOpOut])
@@ -244,19 +244,19 @@ def publish_preview(app: AppDep, collection_id: int, body: PublishBody) -> list:
 def publish(app: AppDep, collection_id: int, body: PublishBody) -> dict:
     c = app.collections.set_publish(collection_id, body.publisher, body.on, notify=False)
     verb = "Started publishing" if body.on else "Stopped publishing"
-    return _synced(app, collection_id, f"{verb} collection {c.name}")
+    return synced(app, collection_id, f"{verb} collection {c.name}")
 
 
 @router.patch("/{collection_id}/summary", response_model=CollectionChangeOut)
 def set_summary(app: AppDep, collection_id: int, body: SummaryBody) -> dict:
     app.collections.set_summary(collection_id, body.summary, notify=False)
-    return _synced(app, collection_id)
+    return synced(app, collection_id)
 
 
 @router.post("/{collection_id}/groups", response_model=CollectionChangeOut)
 def create_group(app: AppDep, collection_id: int, body: GroupCreateBody) -> dict:
     g = app.collections.create_group(collection_id, body.name, body.parent_id, notify=False)
-    return _synced(app, collection_id, f"Created group {g.name} in {_name(app, collection_id)}")
+    return synced(app, collection_id, f"Created group {g.name} in {_name(app, collection_id)}")
 
 
 @router.post("/{collection_id}/members/group", response_model=CollectionChangeOut)
@@ -264,9 +264,7 @@ def set_member_group(app: AppDep, collection_id: int, body: MemberGroupBody) -> 
     """Put files in a group (null: ungrouped), adding the ones not yet members."""
     what = file_phrase(app, body.drive_ids)
     app.collections.set_member_group(collection_id, body.drive_ids, body.group_id, notify=False)
-    return _synced(
-        app, collection_id, f"Moved {what} between groups in {_name(app, collection_id)}"
-    )
+    return synced(app, collection_id, f"Moved {what} between groups in {_name(app, collection_id)}")
 
 
 @groups_router.patch("/{group_id}", response_model=CollectionChangeOut)
@@ -279,7 +277,7 @@ def update_group(app: AppDep, group_id: int, body: GroupPatchBody) -> dict:
         summary=body.summary,
         notify=False,
     )
-    return _synced(app, g.collection_id)
+    return synced(app, g.collection_id)
 
 
 @groups_router.post("/{group_id}/remove", response_model=CollectionChangeOut)
@@ -287,4 +285,4 @@ def remove_group(app: AppDep, group_id: int) -> dict:
     """Child groups and members move to the parent; no membership is removed."""
     collection_id = app.collections.group(group_id).collection_id
     app.collections.remove_group(group_id, notify=False)
-    return _synced(app, collection_id)
+    return synced(app, collection_id)

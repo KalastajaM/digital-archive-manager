@@ -13,7 +13,7 @@ from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
 from dam.ops.jobs import CopyJobs
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
-from dam.ops.planner import _add_note
+from dam.ops.planner import add_note
 from dam.ops.primitives import can_make_links
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.errors import InvalidRequest, NotFound
@@ -555,7 +555,7 @@ class BrowseService:
                 text = f"{len(names)} {head} into it and will point to nothing"
             if len(names) <= 5:
                 text += ": " + ", ".join(names)
-            op.note = _add_note(op.note, text)
+            op.note = add_note(op.note, text)
 
     def move(
         self,

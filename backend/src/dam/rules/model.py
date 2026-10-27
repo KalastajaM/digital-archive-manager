@@ -328,7 +328,7 @@ def read_yaml(path: Path) -> tuple[yaml.Node | None, object]:
     return node, data
 
 
-def _load_file(path: Path) -> list[Rule]:
+def load_rule_file(path: Path) -> list[Rule]:
     """Parse one rules file; raise ``ValueError`` with a readable message on any problem."""
     node, data = read_yaml(path)
     if not isinstance(data, list):
@@ -372,7 +372,7 @@ def load_rules(rules_dir: Path) -> tuple[list[Rule], list[RuleError]]:
     owner: dict[str, str] = {}
     for path in files:
         try:
-            loaded = _load_file(path)
+            loaded = load_rule_file(path)
             local: dict[str, str] = {}
             for r in loaded:
                 first = owner.get(r.id) or local.get(r.id)

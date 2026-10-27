@@ -9,7 +9,7 @@ from typing import Protocol
 from dam.config import SpecialFolders
 from dam.core.naming import matches_convention
 from dam.index.repo import FileRecord, FileRepo
-from dam.rules.engine import CodeHit, Suggestion, TemplateError, _render_folder, _render_name
+from dam.rules.engine import CodeHit, Suggestion, TemplateError, render_folder, render_name
 
 from .model import FilingCode
 from .qr_model import QrRead
@@ -174,13 +174,13 @@ def apply_codes(
             put("tray", NO_TRAY, fc.code)
         elif fc.folder is not None:
             try:
-                folder = _render_folder(fc.folder, doc_date, stem, special, None, quarantines)
+                folder = render_folder(fc.folder, doc_date, stem, special, None, quarantines)
                 put("folder", folder, fc.code)
             except TemplateError:
                 errored = True
         if fc.name is not None and not conventional and not fc.as_suggested:
             try:
-                put("name", _render_name(fc.name, doc_date, stem, ext) + suffix, fc.code)
+                put("name", render_name(fc.name, doc_date, stem, ext) + suffix, fc.code)
             except TemplateError:
                 errored = True
         if fc.tray is not None and not fc.as_suggested:

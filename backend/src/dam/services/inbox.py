@@ -34,8 +34,8 @@ from dam.rules.draft import (
 )
 from dam.rules.engine import (
     Suggestion,
-    _parent,
     check,
+    parent_folder,
     person_for,
     stem_and_ext,
     suggest,
@@ -538,7 +538,7 @@ class InboxService:
                 self._want_layouts([drive_id])
             raise InvalidRequest("Page 1 of this document has not been read yet.")
         filed = not self._in_inbox(rec)
-        folder = _parent(rec.path) if filed else ""
+        folder = parent_folder(rec.path) if filed else ""
         name = rec.name or ""
         doc_date = parse_doc_date(name) or rec.doc_date
         frequency = make_doc_frequency(*self._frequency_counter())

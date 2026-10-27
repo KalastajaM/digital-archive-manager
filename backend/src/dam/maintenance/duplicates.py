@@ -19,7 +19,7 @@ from pathlib import Path
 
 from dam.core.paths import ArchivePaths, nfc
 from dam.index.repo import FileRecord, FileRepo
-from dam.index.scanner import _same
+from dam.index.scanner import same_mtime
 from dam.locks import IMPORTANT, LOCKED, LockService
 from dam.maintenance.jobs import JobContext
 from dam.ops.guards import is_under
@@ -198,7 +198,9 @@ def disk_matches(paths: ArchivePaths, rec: FileRecord) -> bool:
         st = os.lstat(paths.abs(rec.path))
     except OSError:
         return False
-    return stat.S_ISREG(st.st_mode) and st.st_size == rec.size and _same(st.st_mtime, rec.mtime)
+    return (
+        stat.S_ISREG(st.st_mode) and st.st_size == rec.size and same_mtime(st.st_mtime, rec.mtime)
+    )
 
 
 def find(

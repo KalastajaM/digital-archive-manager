@@ -36,7 +36,7 @@ from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
 from dam.rules.jobs import ReplayJobs
 from dam.rules.learned import rule_file, write_rules_file
-from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
+from dam.rules.model import LEARNED_FILE, Rule, RuleError, load_rule_file, load_rules
 from dam.rules.picture import AREAS_DIR, Pictures
 from dam.search import SearchContext, SearchHit, search
 from dam.services.activity import ActivityService
@@ -391,7 +391,7 @@ class App:
 
     def _rule_file_rules(self, path: Path) -> list[Rule]:
         try:
-            return _load_file(path) if path.exists() else []
+            return load_rule_file(path) if path.exists() else []
         except ValueError as e:
             raise InvalidRequest(f"{path.name} could not be read: {e}") from e
 

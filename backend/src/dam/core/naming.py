@@ -8,11 +8,11 @@ from pathlib import Path
 from dam.core.paths import nfc
 
 CONVENTION_RE = r"^\d{8}_.+"
-_DATE_PREFIX = re.compile(r"^([0-9]{4})([0-9]{2})([0-9]{2})(?=[_\- .])")
+DATE_PREFIX = re.compile(r"^([0-9]{4})([0-9]{2})([0-9]{2})(?=[_\- .])")
 
 
 def parse_doc_date(name: str) -> date | None:
-    m = _DATE_PREFIX.match(name)
+    m = DATE_PREFIX.match(name)
     if not m:
         return None
     try:
