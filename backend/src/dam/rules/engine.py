@@ -13,10 +13,11 @@ from typing import Literal
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
 from dam.core.paths import nfc
+from dam.core.text import fold
 from dam.extract.layout import ZONE_MARGIN, Box, Line, Page1Layout, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.rules.fields import DetectedFields, detect_fields
-from dam.rules.model import Rule, fold
+from dam.rules.model import Rule
 from dam.rules.people import PeopleContext, detect_people, person_line, pick_person
 from dam.rules.picture import Match, Pictures
 from dam.rules.timings import Timings

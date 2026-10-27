@@ -46,6 +46,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from dam.collections.publishers import PublisherRegistry
 from dam.config import SpecialFolders
 from dam.core.paths import nfc
+from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import (
     collection_groups,
@@ -135,10 +136,6 @@ class Collection:
     position: int = 0
 
 
-def _fold(name: str) -> str:
-    return nfc(name).casefold()
-
-
 # folded reserved name -> kind
 _RESERVED = {nfc(n).casefold(): k for k, n in BUILTINS.items()}
 # how the UI names each mark
@@ -203,7 +200,7 @@ def check_collection_name(name: object) -> str:
     for every place a collection is named (create, rename and its preview, filing
     from the inbox and its preview, Convert Ongoing)."""
     name = check_name(name)
-    kind = _RESERVED.get(_fold(name))
+    kind = _RESERVED.get(fold_name(name))
     if kind is not None:
         raise InvalidRequest(
             f"{BUILTINS[kind]!r} is built in: use the {MARK_LABELS[kind]} mark instead"
@@ -505,7 +502,7 @@ class CollectionService:
             return self._load(conn, [row])[0]
 
     def by_name(self, name: str) -> Collection | None:
-        fold = _fold(name.strip()) if isinstance(name, str) else ""
+        fold = fold_name(name.strip()) if isinstance(name, str) else ""
         with self.engine.connect() as conn:
             row = conn.execute(
                 select(collections).where(collections.c.name_fold == fold)
@@ -545,7 +542,7 @@ class CollectionService:
 
     @staticmethod
     def _name_taken(conn: Connection, name: str, exclude_id: int | None = None) -> bool:
-        query = select(collections.c.id).where(collections.c.name_fold == _fold(name))
+        query = select(collections.c.id).where(collections.c.name_fold == fold_name(name))
         if exclude_id is not None:
             query = query.where(collections.c.id != exclude_id)
         return conn.execute(query).first() is not None
@@ -607,7 +604,7 @@ class CollectionService:
         result = conn.execute(
             insert(collections).values(
                 name=name,
-                name_fold=_fold(name),
+                name_fold=fold_name(name),
                 created=time.time(),
                 publish={"ongoing": True},
                 parent_id=parent_id,
@@ -739,7 +736,7 @@ class CollectionService:
         name = check_collection_name(name)
         with write_tx(self.engine) as conn:
             row = conn.execute(
-                select(collections.c.id).where(collections.c.name_fold == _fold(name))
+                select(collections.c.id).where(collections.c.name_fold == fold_name(name))
             ).first()
             cid = row.id if row else self._insert(conn, name)
         if row is None and notify:
@@ -759,7 +756,7 @@ class CollectionService:
             conn.execute(
                 update(collections)
                 .where(collections.c.id == collection_id)
-                .values(name=name, name_fold=_fold(name))
+                .values(name=name, name_fold=fold_name(name))
             )
         if notify:
             self._changed()
@@ -1084,7 +1081,7 @@ class CollectionService:
     ) -> None:
         """No sibling under ``parent_id`` has ``name`` (folded). Enforced here, not by
         an index: SQLite treats NULL parents as distinct."""
-        fold = _fold(name)
+        fold = fold_name(name)
         if any(
             r.name_fold == fold for r in self._siblings(conn, collection_id, parent_id, exclude)
         ):
@@ -1138,7 +1135,7 @@ class CollectionService:
                 collection_id=collection_id,
                 parent_id=parent_id,
                 name=name,
-                name_fold=_fold(name),
+                name_fold=fold_name(name),
                 position=position,
                 created_by_batch=batch_id,
             )
@@ -1171,7 +1168,7 @@ class CollectionService:
                 self._groups_allowed(conn, collection_id)
                 group_id: int | None = None
                 for name in names:
-                    fold = _fold(name)
+                    fold = fold_name(name)
                     match = next(
                         (
                             r.id
@@ -1248,7 +1245,7 @@ class CollectionService:
             if name is not None or reparent:
                 self._check_free(conn, cid, target, name or row.name, exclude=group_id)
             if name is not None:
-                values.update(name=name, name_fold=_fold(name))
+                values.update(name=name, name_fold=fold_name(name))
             if summary is not None:
                 values["summary"] = summary
             if reparent:

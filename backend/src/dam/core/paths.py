@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from dam.config import Settings
 from dam.core.fs import listable, lists_nothing, resolve
+from dam.core.text import fold_name
 
 
 class OutsideArchiveError(ValueError):
@@ -23,10 +24,6 @@ def _not_plain(part: str) -> bool:
     """A component that is not one plain name on this platform: on Windows a backslash
     separates folders (so ``..\\x`` is an escape) and ``:`` makes a drive or stream."""
     return os.name == "nt" and ("\\" in part or ":" in part)
-
-
-def fold_name(s: str) -> str:
-    return nfc(s).casefold()
 
 
 @dataclass(frozen=True)

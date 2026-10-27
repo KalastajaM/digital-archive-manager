@@ -67,7 +67,7 @@ from dam.collections.convert import (
     unique_members,
 )
 from dam.collections.service import Collection, Group, Member, check_name
-from dam.core.paths import nfc
+from dam.core.text import fold_name
 from dam.ops.guards import fold_parts, join, parent
 from dam.ops.model import BatchResult
 from dam.services.errors import InvalidRequest
@@ -75,10 +75,6 @@ from dam.services.errors import InvalidRequest
 NOT_REMOVED = FOLDER_NOT_REMOVED
 UNTOUCHED = " is left untouched: same file as "
 ALREADY = " (already in Important)"
-
-
-def _fold(name: str) -> str:
-    return nfc(name).casefold()
 
 
 class ImportantConverter(Converter):
@@ -200,7 +196,11 @@ class ImportantConverter(Converter):
             at: int | None = None
             for name in path:
                 found = next(
-                    (g for g in groups if g.parent_id == at and _fold(g.name) == _fold(name)),
+                    (
+                        g
+                        for g in groups
+                        if g.parent_id == at and fold_name(g.name) == fold_name(name)
+                    ),
                     None,
                 )
                 if found is None:

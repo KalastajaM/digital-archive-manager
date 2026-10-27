@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from dam.core.text import fold
 from dam.index.repo import FileRecord
-from dam.rules.engine import fold, suggest
+from dam.rules.engine import suggest
 from dam.rules.model import Rule, load_rules
 
 INBOX = "##. Organize"

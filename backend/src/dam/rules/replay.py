@@ -21,6 +21,7 @@ from sqlalchemy import Engine, select
 from dam.config import Person, SpecialFolders
 from dam.core.naming import DATE_PREFIX, parse_doc_date
 from dam.core.paths import nfc
+from dam.core.text import fold
 from dam.db.tables import file_text, files
 from dam.extract.layout import Page1Layout, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
@@ -46,7 +47,7 @@ from dam.rules.engine import (
     zone_matches,
     zones_in_text,
 )
-from dam.rules.model import Rule, fold
+from dam.rules.model import Rule
 from dam.rules.people import PeopleContext
 from dam.rules.picture import Pictures
 from dam.rules.timings import Timings

@@ -22,6 +22,7 @@ from sqlalchemy import Connection, Engine, select, text, update
 
 from dam.codes.configfile import write_config_file
 from dam.config import AppPaths, load_settings
+from dam.core.text import fold_name
 from dam.core.yamledit import YamlEditError, replace_values
 from dam.db.tables import files, made_folders, maintenance_ignored, operations
 from dam.maintenance.ignored import GROUPS
@@ -38,17 +39,13 @@ _NAME_ONLY_SRC = {str(OpKind.COPY), str(OpKind.PICTURE_TO_QUARANTINE)}
 _NAME_ONLY_DST = {str(OpKind.PICTURE_BACK)}  # the name in the rules' picture folder
 
 
-def _fold(s: str) -> str:
-    return unicodedata.normalize("NFC", s).casefold()
-
-
 def swap(value: str | None, old: str, new: str) -> str | None:
     """``value`` with its first component ``old`` (folded) replaced by ``new``, or None
     when it does not start with ``old`` (an ``abs:`` path never does)."""
     if not value or value.startswith(ABS_TARGET):
         return None
     head, sep, rest = value.partition("/")
-    return new + sep + rest if _fold(head) == _fold(old) else None
+    return new + sep + rest if fold_name(head) == fold_name(old) else None
 
 
 @dataclass
@@ -97,7 +94,7 @@ def _settings_change(old: str, new: str) -> Callable:
     def change(path: tuple, value: str) -> str | None:
         match path:
             case ("extra_folders", int(), "label"):
-                return new if _fold(value) == _fold(old) else None
+                return new if fold_name(value) == fold_name(old) else None
             case ("protected_paths", int()) | ("ai", "exclude_folders", int()):
                 return swap(value, old, new)
         return None
@@ -233,10 +230,10 @@ def plan(app_paths: AppPaths, engine: Engine, old: str, new: str) -> RelabelPlan
     out.files = [e for e in edits if e is not None]
     root = load_settings(app_paths).archive_root
     try:
-        hidden = any(_fold(p.name) == _fold(old) for p in Path(root).iterdir())
+        hidden = any(fold_name(p.name) == fold_name(old) for p in Path(root).iterdir())
     except OSError:
         hidden = False
-    if hidden and _fold(old) != _fold(new):
+    if hidden and fold_name(old) != fold_name(new):
         out.warnings.append(
             f"The main folder has an entry named '{old}'. It was hidden behind the label and"
             " is indexed after the change."

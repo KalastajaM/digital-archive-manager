@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import Connection, Engine, delete, func, insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from dam.core.text import fold
 from dam.db.engine import write_tx
 from dam.db.tables import file_tags, files, tag_groups, tags
-from dam.rules.model import fold
 
 SIDEBAR_TAGS = 8
 

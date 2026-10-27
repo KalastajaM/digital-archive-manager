@@ -26,12 +26,13 @@ from sqlalchemy import Engine, select
 
 from dam.collections.service import CollectionService
 from dam.core.paths import ArchivePaths, not_connected_message
+from dam.core.text import fold_name
 from dam.db.tables import collection_members, collections
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.locks import LockService
 from dam.maintenance import checks, duplicates
 from dam.maintenance.duplicates import WHY_LOCKED, LockIndex
-from dam.maintenance.ignored import IgnoreList, fold_name
+from dam.maintenance.ignored import IgnoreList
 from dam.maintenance.jobs import Job, MaintenanceJobs
 from dam.notes import NotesService
 from dam.ops.executor import Executor

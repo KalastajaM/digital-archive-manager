@@ -12,8 +12,8 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import URL, Connection, Engine, create_engine, event
 
+from dam.core.text import fold
 from dam.db.tables import metadata
-from dam.rules.model import fold
 
 MIGRATIONS_DIR = Path(__file__).parents[3] / "migrations"
 
@@ -23,7 +23,7 @@ _warned_lock = threading.Lock()
 
 
 def _fold(value: str | None) -> str | None:
-    """NFKD, combining marks dropped, casefolded (``dam.rules.model.fold``; None stays None)."""
+    """NFKD, combining marks dropped, casefolded (``dam.core.text.fold``; None stays None)."""
     return None if value is None else fold(value)
 
 
