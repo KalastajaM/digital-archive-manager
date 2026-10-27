@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.naming import unique_name
-from dam.core.paths import ArchivePaths, not_connected_message
+from dam.core.paths import ArchivePaths, nfc, not_connected_message
 from dam.index.driveid import read_drive_id
 from dam.ops import primitives
 from dam.ops.guards import (
@@ -252,10 +252,20 @@ class _Sim:
         disk = self.disk_path(folder)
         if disk is None or not disk.is_dir():
             return None
+        # On a case-sensitive volume ``report.pdf`` and ``Report.pdf`` can both exist:
+        # prefer the exact spelling, then the same name in another normal form, and only
+        # then a name that differs in case.
+        best: tuple[int, str] | None = None
         for entry in disk.iterdir():
-            if fold_parts(entry.name) == want and self.kind(join(folder, entry.name)):
-                return entry.name
-        return None
+            n = entry.name
+            if fold_parts(n) != want or not self.kind(join(folder, n)):
+                continue
+            rank = 0 if n == name else 1 if nfc(n) == nfc(name) else 2
+            if rank == 0:
+                return n
+            if best is None or rank < best[0]:
+                best = (rank, n)
+        return best[1] if best else None
 
     def free_name(self, folder: str, name: str, exclude: str | None = None) -> str:
         """``unique_name`` against the disk folder plus entries simulated into it.

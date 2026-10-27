@@ -88,6 +88,11 @@ def test_no_date_at_all_keeps_clean_stem():
     assert s.doc_date is None and s.name == "a_b.pdf"
 
 
+def test_suggested_name_has_no_characters_windows_refuses():
+    s = suggest(rec('Kela: päätös? "v2" <x>|y*.pdf'), "", [])
+    assert s.name == "Kela_päätös_v2_x_y.pdf"
+
+
 def test_tags_union_and_first_folder_wins():
     r1 = rule("one", {"text_contains": ["a"]}, folder="F1", tags=["x", "y"])
     r2 = rule("two", {"text_contains": ["a"]}, folder="F2", tags=["y", "z"])

@@ -29,6 +29,11 @@ try:  # not installed on Windows
 except ImportError:  # pragma: no cover - platform dependent
     xattr = None
 
+try:  # POSIX only
+    import fcntl
+except ImportError:  # pragma: no cover - platform dependent
+    fcntl = None
+
 from dam.core.fs import readlink, resolve
 from dam.core.paths import nfc
 from dam.ops.identity import Identity, of_fd, of_stat
@@ -99,9 +104,51 @@ def _rename_exclusive(src: Path, dst: Path) -> bool:
     return False
 
 
+def sync_dir(folder: Path) -> None:
+    """Make a name just added to or taken out of ``folder`` survive a power cut: fsync
+    the folder itself (POSIX). Best effort: a folder that cannot be opened or synced
+    (some network and FAT volumes) is left as it is; Windows has no such call."""
+    if _is_windows():
+        return
+    try:
+        fd = os.open(folder, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _sync_parents(src: Path, dst: Path) -> None:
+    """``sync_dir`` for the folders a rename of ``src`` to ``dst`` changed."""
+    src_dir, dst_dir = Path(src).parent, Path(dst).parent
+    sync_dir(dst_dir)
+    if src_dir != dst_dir:
+        sync_dir(src_dir)
+
+
+def sync_file(fd: int) -> None:
+    """Flush a written file to the disk itself. On macOS ``fsync`` only reaches the
+    drive's cache, so ``F_FULLFSYNC`` is asked first; ``fsync`` where that is missing
+    or refused."""
+    full = getattr(fcntl, "F_FULLFSYNC", None) if sys.platform == "darwin" else None
+    if full is not None:
+        try:
+            fcntl.fcntl(fd, full)
+            return
+        except OSError:
+            pass
+    os.fsync(fd)
+
+
 def rename_excl(src: Path, dst: Path) -> None:
-    """Rename ``src`` to ``dst`` atomically, failing with FileExistsError if dst exists."""
+    """Rename ``src`` to ``dst`` atomically, failing with FileExistsError if dst exists.
+    The folders are synced afterwards (``sync_dir``)."""
     if _rename_exclusive(src, dst):
+        _sync_parents(src, dst)
         return
     # On Windows os.rename() itself never replaces an existing entry (it raises
     # FileExistsError), so the check below only gives the same error early.
@@ -114,6 +161,7 @@ def rename_excl(src: Path, dst: Path) -> None:
     if os.path.lexists(dst):
         raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(dst))
     os.rename(src, dst)
+    _sync_parents(src, dst)
 
 
 def rename_case_only(src: Path, dst: Path) -> None:
@@ -137,6 +185,7 @@ def rename_case_only(src: Path, dst: Path) -> None:
     # it. This needs a concurrent writer racing a case-only rename of the same name;
     # there is no exclusive variant (RENAME_EXCL reports EEXIST for the same entry).
     os.rename(src, dst)
+    sync_dir(dst.parent)
 
 
 DIFFERENT_DISKS = (
@@ -348,6 +397,7 @@ def same_disk(a: Path, b: Path) -> bool:
 
 def make_dir(p: Path) -> None:
     p.mkdir(parents=False, exist_ok=False)
+    sync_dir(p.parent)
 
 
 def has_room(folder: Path, size: int) -> bool:
@@ -398,7 +448,7 @@ def copy_file(
                     if stop is not None and stop():
                         raise OpFailed("stopped")
                 target.flush()
-                os.fsync(target.fileno())
+                sync_file(target.fileno())
             except (OSError, OpFailed) as e:
                 raise OpFailed(
                     f"The copy of {src.name} stopped part way ({e}); an incomplete file"

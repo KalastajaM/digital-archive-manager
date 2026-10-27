@@ -196,6 +196,8 @@ def _no_controls(s: str) -> str:
 
 def clean_stem(stem: str) -> str:
     s = _COPY_MARKER.sub("", _no_controls(nfc(stem)))
+    # characters Windows and cloud drives refuse (guards refuse them in new names)
+    s = re.sub(r'[<>:"|?*\\/]', "_", s)
     s = re.sub(r"\s+", "_", s)
     s = re.sub(r"^(?:~\$)+", "", s)
     s = re.sub(r"_+", "_", s)

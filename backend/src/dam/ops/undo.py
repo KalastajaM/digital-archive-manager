@@ -584,7 +584,10 @@ def pending(ex: Executor) -> list[JournalEntry]:
 
 
 def recover(ex: Executor) -> RecoveryResult:
-    """Settle every ``planned`` row from what is on disk (read only; never acts).
+    """Settle every ``planned`` row from what is on disk. It never moves, renames or
+    creates anything; the one change it makes is finishing a rule picture's move across
+    disks: dam's own copy in its settings folder is removed once the copy in the archive
+    is verified (``_picture_copy_happened``). No archive file is ever touched.
 
     ``done`` (+ index update, and the reverted original for an undo row) when the op
     evidently happened, ``failed`` with ``"interrupted before execution"`` when it

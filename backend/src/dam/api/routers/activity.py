@@ -75,5 +75,7 @@ def pending(app: AppDep) -> list:
 
 @router.post("/recovery", response_model=RecoveryResultOut)
 def recover(app: AppDep):
-    """Settle interrupted operations from the disk (reads only, never changes files)."""
+    """Settle interrupted operations from the disk. Archive files are never changed; an
+    interrupted move of a rule picture across disks is finished by removing dam's own
+    copy in its settings folder once the archive copy is verified."""
     return app.activity.recover()
