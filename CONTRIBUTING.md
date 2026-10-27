@@ -71,7 +71,10 @@ scripts/run-latest.sh --archive Demo -- --port 8766
 Stop it with Ctrl+C and run it again to update.
 
 For UI work run the backend with `DAM_DEV_ORIGIN=http://localhost:5173 uv run dam serve --no-open`
-and `npm run dev` in `frontend/`.
+and `npm run dev` in `frontend/`, then open the sign-in link `dam serve` prints
+(`http://localhost:8765/auth?t=...`). It signs the browser in on `localhost` and
+returns to the Vite page at `http://localhost:5173`; `dam open --print` prints the link
+again.
 
 ## Tests and lint
 
