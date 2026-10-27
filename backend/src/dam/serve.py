@@ -1,7 +1,8 @@
 """``dam serve``: run uvicorn on 127.0.0.1 with the background work around it.
 
 Background work (initial scan, watcher, content indexer, hourly reminder check) starts
-only once the server is listening, so a failed bind starts nothing. After every
+only once the server is listening, so a failed bind starts nothing. The content indexer
+runs as the ``extraction`` worker on the App's runner (``App.jobs``, ``dam.core.jobs``). After every
 successful scan (the initial one, and each watcher scan) the Ongoing links are synced in
 that same background thread, never in a request thread. Reminders are checked a minute
 after the start, then every hour. SIGINT and SIGTERM end the server
@@ -28,7 +29,7 @@ import signal
 import threading
 import time
 import webbrowser
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -41,6 +42,7 @@ from dam import setup
 from dam.api.auth import ApiTokenMiddleware, auth_url, hide_token_in_logs, load_token
 from dam.app import App
 from dam.config import AppPaths
+from dam.core.jobs import Worker
 from dam.errors import Conflict
 from dam.extract.picture import prune_page1_pictures
 from dam.index.watcher import Watcher
@@ -61,6 +63,7 @@ GRACEFUL_SHUTDOWN_S = 10  # a hung request cannot hold up shutdown longer than t
 _STARTED_POLL_S = 0.05
 REMIND_FIRST_S = 60  # the first reminder check, after the start
 REMIND_EVERY_S = 3600  # then hourly
+EXTRACTION = "extraction"  # the content indexer's worker on the App's runner
 
 
 @dataclass(eq=False)
@@ -70,13 +73,14 @@ class Background:
     stop_event: threading.Event
     wake: threading.Event
     scan_thread: threading.Thread
-    indexer_thread: threading.Thread
+    indexer: Worker  # the content indexer, on the App's runner (``App.jobs``)
     reminders_thread: threading.Thread
     _stopped: bool = field(default=False, init=False)
 
     @property
     def threads(self) -> list[threading.Thread]:
-        return [self.scan_thread, self.indexer_thread, self.reminders_thread]
+        indexer = [self.indexer.thread] if self.indexer.thread is not None else []
+        return [self.scan_thread, *indexer, self.reminders_thread]
 
     def stop(self) -> None:
         """Stop the indexer and the watcher and wait (briefly) for the threads.
@@ -87,7 +91,7 @@ class Background:
         if self._stopped:
             return
         self._stopped = True
-        _shutdown(self.app, self.watcher, self.stop_event, self.wake, self.threads)
+        _shutdown(self.app, self.watcher, self.stop_event, self.wake, self.threads, [self.indexer])
 
 
 def _shutdown(
@@ -96,13 +100,17 @@ def _shutdown(
     stop: threading.Event,
     wake: threading.Event,
     threads: list[threading.Thread],
+    workers: Sequence[Worker] = (),
 ) -> None:
     deadline = time.monotonic() + STOP_TIMEOUT_S
+    for worker in workers:
+        worker.stop()
     stop.set()
     wake.set()
     watcher.stop(timeout=STOP_TIMEOUT_S)
     app.content.close()
-    for t in threads:
+    joined = [*threads, *(w.thread for w in workers if w.thread and w.thread not in threads)]
+    for t in joined:
         if t.ident is None:
             continue  # never started
         t.join(max(0.0, min(JOIN_TIMEOUT_S, deadline - time.monotonic())))
@@ -203,13 +211,10 @@ def start_background(app: App) -> Background:
     Every scan (initial, watcher) wakes the idle indexer. If starting fails part-way,
     whatever already started is stopped before the error is re-raised.
     """
-    stop, wake = threading.Event(), threading.Event()
+    stop, wake = threading.Event(), threading.Event()  # every scan wakes the idle indexer
     app.wake_indexer = wake.set  # e.g. after files are queued for indexing again
     scan_thread = threading.Thread(
         target=_initial_scan, args=(app, wake, stop), name="dam-initial-scan", daemon=True
-    )
-    indexer_thread = threading.Thread(
-        target=app.content.run_forever, args=(stop, wake), name="dam-indexer", daemon=True
     )
     reminders_thread = threading.Thread(
         target=_reminders_loop, args=(app, stop), name="dam-reminders", daemon=True
@@ -220,16 +225,18 @@ def start_background(app: App) -> Background:
         on_change=lambda: _after_watcher_scan(app, wake, stop),
         own_changes=app.executor.own_changes,  # the echo of the app's own moves is not scanned
     )
-    threads = [scan_thread, indexer_thread, reminders_thread]
+    threads = [scan_thread, reminders_thread]
+    workers: list[Worker] = []
     try:
         scan_thread.start()
         watcher.start()
-        indexer_thread.start()
+        workers.append(app.jobs.run(EXTRACTION, app.content.run_forever, wake))
         reminders_thread.start()
     except BaseException:
-        _shutdown(app, watcher, stop, wake, threads)
+        _shutdown(app, watcher, stop, wake, threads, workers)
         raise
-    return Background(app, watcher, stop, wake, scan_thread, indexer_thread, reminders_thread)
+    [indexer] = workers
+    return Background(app, watcher, stop, wake, scan_thread, indexer, reminders_thread)
 
 
 class DamServer(uvicorn.Server):

@@ -20,6 +20,7 @@ from dam.collections.ongoing import OngoingPublisher
 from dam.collections.publishers import PublisherRegistry
 from dam.collections.service import CollectionService
 from dam.config import DEFAULTS_DIR, AppPaths, Person, Settings, load_settings
+from dam.core.jobs import Jobs
 from dam.core.paths import ArchivePaths
 from dam.db.engine import make_engine, migrate
 from dam.db.tables import files
@@ -398,6 +399,9 @@ class App:
     previews: PreviewService = field(init=False)
     ai: AIService = field(init=False)
     summaries: SummaryService = field(init=False)
+    # the background runner: the workers (``dam serve`` starts them) and their status;
+    # closing the App stops them
+    jobs: Jobs = field(init=False, default_factory=Jobs)
     # where the shipped default tray files live (tests point it elsewhere)
     defaults_dir: Path = field(init=False, default=DEFAULTS_DIR)
     # ends the background indexer's idle wait (``dam serve`` wires it); a no-op otherwise
@@ -790,5 +794,6 @@ class App:
         self.copy_jobs.close()
         self.replay_jobs.close()
         self.maintenance.close()
+        self.jobs.close()  # the workers end before what they use is closed
         self.content.close()
         self.engine.dispose()
