@@ -7,6 +7,7 @@ import { RecoveryPanel } from "./components/Recovery";
 import { hasBand } from "./components/archivePalette";
 import { EmptyState } from "./components/ui/EmptyState";
 import { Sidebar } from "./components/ui/Sidebar";
+import { LookToggle, useLookShortcut } from "./components/LookToggle";
 import { CopyJobProgress } from "./components/CopyJobProgress";
 import { groupDigits, plural } from "./format";
 import { visible } from "./text";
@@ -142,11 +143,13 @@ function useArchiveChrome(status: Status | undefined) {
 function Shell() {
   const status = useStatus();
   useArchiveChrome(status.data);
+  useLookShortcut();
   const band = hasBand(status.data?.archive, status.data?.profiles_count);
   const onActivity = useLocation().pathname === "/activity"; // it has its own panel
   const foot = (
     <>
       {status.data && <StatusBadge status={status.data} />}
+      <LookToggle />
       {status.isError && <p className="status-badge status-attention">{errorText(status.error)}</p>}
     </>
   );
