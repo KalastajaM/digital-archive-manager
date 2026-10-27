@@ -153,9 +153,7 @@ def test_without_an_id_the_file_is_found_by_its_path(client, app):
 def test_an_op_that_did_not_act_looks_for_the_file_where_it_was(client, app):
     app.repo.upsert(FileRecord(drive_id="d1", path="##. Organize/a.pdf"))
     for batch_id, state in (("failed", "failed"), ("undone", "undone")):
-        _op(
-            app, batch_id, "move", "##. Organize/a.pdf", "10. Financial/a.pdf", "d1", state=state
-        )
+        _op(app, batch_id, "move", "##. Organize/a.pdf", "10. Financial/a.pdf", "d1", state=state)
         assert _file_now(client, batch_id)["state"] == "here"
 
 
@@ -173,12 +171,97 @@ def test_a_folder_says_it_is_one(client, app):
     assert now["state"] == "here" and now["is_dir"] is True
 
 
-def test_ops_on_folders_made_removed_or_links_removed_name_no_file(client, app):
-    _op(app, "mk", "mkdir", None, "10. Financial/New", is_file=False)
+def test_ops_on_folders_removed_or_links_removed_name_nothing(client, app):
     _op(app, "rm", "remove_empty_dir", "##. Ongoing/Trip", None, is_file=False)
     _op(app, "ul", "unlink_symlink", "##. Ongoing/Trip/a.pdf", "10. Financial/a.pdf")
-    for batch_id in ("mk", "rm", "ul"):
+    for batch_id in ("rm", "ul"):
         assert _file_now(client, batch_id) is None
+
+
+def _dir(app, path):
+    app.repo.upsert(FileRecord(drive_id=f"dir:{path}", path=path, is_dir=True))
+
+
+def test_a_folder_made_is_here_while_it_is_there(client, app):
+    _dir(app, "10. Financial/New")
+    _op(app, "mk", "mkdir", None, "10. Financial/New", is_file=False)
+    assert _file_now(client, "mk") == {
+        "state": "here",
+        "path": "10. Financial/New",
+        "drive_id": "dir:10. Financial/New",
+        "is_dir": True,
+    }
+
+
+def test_a_folder_made_and_deleted_by_hand_is_missing(client, app):
+    _op(app, "mk", "mkdir", None, "10. Financial/New", is_file=False)
+    now = _file_now(client, "mk")
+    assert now["state"] == "missing" and now["path"] is None and now["is_dir"] is True
+
+
+def test_a_folder_without_an_id_is_followed_through_a_later_rename(client, app):
+    _dir(app, "10. Financial/Banks 2026")
+    _op(app, "a", "move", "Banks", "10. Financial/Banks", is_file=False)
+    _op(app, "b", "rename", "10. Financial/Banks", "10. Financial/Banks 2026", is_file=False)
+    now = _file_now(client, "a")
+    assert now["state"] == "moved" and now["path"] == "10. Financial/Banks 2026"
+    assert now["is_dir"] is True
+    assert _file_now(client, "b")["state"] == "here"
+
+
+def test_a_folder_is_followed_when_a_folder_above_it_moved(client, app):
+    _op(app, "a", "move", "Banks", "10. Financial/Banks", is_file=False)
+    _op(app, "b", "move", "10. Financial", "20. Home/Financial", is_file=False)
+    _op(app, "c", "rename", "20. Home/Financial", "20. Home/Fin", is_file=False)
+    _dir(app, "20. Home/Fin/Banks")
+    assert _file_now(client, "a")["path"] == "20. Home/Fin/Banks"
+    assert _file_now(client, "a")["state"] == "moved"
+
+
+def test_a_folder_marked_for_deletion_since_is_in_to_delete(client, app):
+    _dir(app, "##. To Delete/10. Financial/Banks")
+    _op(app, "a", "move", "Banks", "10. Financial/Banks", is_file=False)
+    _op(
+        app,
+        "b",
+        "quarantine",
+        "10. Financial/Banks",
+        "##. To Delete/10. Financial/Banks",
+        is_file=False,
+    )
+    assert _file_now(client, "a")["state"] == "to_delete"
+    assert _file_now(client, "b")["state"] == "here"
+
+
+def test_a_folder_deleted_by_hand_since_is_missing(client, app):
+    _op(app, "a", "move", "Banks", "10. Financial/Banks", is_file=False)
+    assert _file_now(client, "a")["state"] == "missing"
+
+
+def test_a_folder_moved_across_disks_names_the_copy(client, app):
+    _dir(app, "D2/Banks")
+    _op(app, "x", "quarantine", "D1/Banks", "##. To Delete/D1/Banks", is_file=False)
+    with write_tx(app.engine) as conn:
+        conn.execute(
+            operations.update().where(operations.c.batch_id == "x").values(copied_to="D2/Banks")
+        )
+    now = _file_now(client, "x")
+    assert now["state"] == "here" and now["path"] == "D2/Banks"
+
+
+def test_a_later_relocation_that_was_undone_does_not_count(client, app):
+    _dir(app, "10. Financial/Banks")
+    _op(app, "a", "move", "Banks", "10. Financial/Banks", is_file=False)
+    _op(
+        app,
+        "b",
+        "rename",
+        "10. Financial/Banks",
+        "10. Financial/Elsewhere",
+        is_file=False,
+        state="undone",
+    )
+    assert _file_now(client, "a")["state"] == "here"
 
 
 def test_recovery_rows_carry_no_file_now(client, app):

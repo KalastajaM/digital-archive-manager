@@ -10,7 +10,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from dam.app import App
-from dam.services.file_now import files_now
+from dam.services.file_now import files_now, later_relocations
 
 
 def _dict(obj: Any) -> dict:
@@ -103,7 +103,8 @@ def batches_out(app: App, batches: Iterable[Any]) -> list[dict]:
     ids = [op["drive_id"] for b in out for op in b["ops"] if op["drive_id"]]
     found = app.marks.marks_for(ids) if ids else {}
     ops = [op for b in out for op in b["ops"]]
-    for op, now in zip(ops, files_now(app.repo, app.paths.is_quarantined, ops), strict=True):
+    nows = files_now(app.repo, app.paths.is_quarantined, ops, later_relocations(app.engine))
+    for op, now in zip(ops, nows, strict=True):
         op["marks"] = found.get(op["drive_id"], []) if op["drive_id"] else []
         op["file_now"] = now
     return out

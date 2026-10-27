@@ -1210,10 +1210,11 @@ entry says what you did ("Filed Offer of Näkymä into 80. Misc", "Moved … to 
 says why if it cannot (for example when the file was changed or moved again since).
 **Expand all** / **Collapse all** sets whether entries show their operations.
 
-Each operation that names a file has a **Show in Browse** icon: Browse opens at the file's
-folder with the file selected and shown on the right (a folder opens itself). The journal
-keeps the paths as they were, so when the file is somewhere else now the operation says
-so: "now at …" when it was moved or renamed since, "marked for deletion since" when it
+Each operation that names a file or a folder (a folder moved, renamed, made or sent to To
+Delete) has a **Show in Browse** icon: Browse opens at the file's folder with the file
+selected and shown on the right, and a folder opens itself, showing its contents. The
+journal keeps the paths as they were, so when the file or folder is somewhere else now (it
+moved, or a folder above it did) the operation says so: "now at …" when it was moved or renamed since, "marked for deletion since" when it
 went to To Delete (the link then leads there), and "no longer in the archive", with no
 link, when it was deleted by hand or moved outside dam and not reconnected. Nothing
 changes when you look.

@@ -6,6 +6,7 @@
 import { ChevronsDownUp, ChevronsUpDown, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { errorText, forgetMaintenanceJobs } from "../api/client";
+import { useStyle } from "../appearance";
 import { Duplicates } from "../components/maintenance/Duplicates";
 import { BrokenLinks, EmptyFolders, LabelClashes, Missing, Names, UnfinishedCopies, Waiting } from "../components/maintenance/ListChecks";
 import { Moved } from "../components/maintenance/Moved";
@@ -27,6 +28,8 @@ export default function Maintenance() {
 function Screen() {
   const view = useMaintenanceView();
   const toast = useToast();
+  const [look] = useStyle();
+  const isNew = look === "new";
   // a new key mounts the checks afresh, with nothing to show once their jobs are forgotten
   const [round, setRound] = useState(0);
   const resetAll = () =>
@@ -37,9 +40,29 @@ function Screen() {
     <div className="maintenance-screen">
       <Toolbar
         title="Maintenance"
-        subtitle="Checks you start yourself"
+        subtitle={
+          isNew
+            ? "Checks you start yourself. Nothing here runs in the background, and every fix is previewed and can be undone."
+            : "Checks you start yourself"
+        }
         className="maintenance-toolbar"
         actions={
+          isNew ? (
+            <>
+              {view && (
+                <button type="button" className="quiet" onClick={() => view.setAll(!view.allFolded)}>
+                  {view.allFolded ? "Expand all" : "Collapse all"}
+                </button>
+              )}
+              <button
+                type="button"
+                data-tip="Reset all: forget every result, as if no check had run. Nothing in the archive changes."
+                onClick={resetAll}
+              >
+                Reset all
+              </button>
+            </>
+          ) : (
           <>
             {view && (
               <IconButton
@@ -55,6 +78,7 @@ function Screen() {
               onClick={resetAll}
             />
           </>
+          )
         }
       />
       <div className="maintenance-body" key={round}>

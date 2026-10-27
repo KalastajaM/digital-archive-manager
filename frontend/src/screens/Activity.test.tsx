@@ -760,6 +760,49 @@ describe("Activity search and filters", () => {
   });
 });
 
+describe("Activity: where each folder is now", () => {
+  const folder = (state: "here" | "moved" | "to_delete" | "missing", path: string | null) => ({
+    state,
+    path,
+    drive_id: path === null ? null : "f1",
+    is_dir: true,
+  });
+  const FOLDERS = batch("bf", [
+    row("bf", { id: 21, kind: "mkdir", src: null, dst: "10. Financial/New", is_file: false, file_now: folder("here", "10. Financial/New") }),
+    row("bf", { id: 22, seq: 1, kind: "rename", src: "10. Financial/Banks", dst: "10. Financial/Bank 2026", is_file: false, file_now: folder("moved", "20. Home/Bank 2026") }),
+    row("bf", { id: 23, seq: 2, kind: "mkdir", src: null, dst: "10. Financial/Gone", is_file: false, file_now: folder("missing", null) }),
+  ]);
+  const opRow = (path: string) => screen.getByText(path).closest("li") as HTMLElement;
+
+  async function open() {
+    api({ "GET /api/activity": { body: [FOLDERS] } });
+    renderWithProviders(<Activity />);
+    await screen.findByRole("article", { name: "Batch bf" });
+    await expandAll();
+  }
+
+  it("a folder made opens in Browse at the folder", async () => {
+    await open();
+    await userEvent.setup().click(within(opRow("10. Financial/New")).getByRole("button", { name: "Show in Browse" }));
+    expect(screen.getByLabelText("location").textContent).toBe("/browse?path=10.+Financial%2FNew");
+  });
+
+  it("a folder moved on since says where it is now and opens there", async () => {
+    await open();
+    const li = opRow("10. Financial/Banks");
+    expect(li).toHaveTextContent("now at 20. Home/Bank 2026");
+    await userEvent.setup().click(within(li).getByRole("button", { name: "Show in Browse" }));
+    expect(screen.getByLabelText("location").textContent).toBe("/browse?path=20.+Home%2FBank+2026");
+  });
+
+  it("a folder that is gone says so, with no link", async () => {
+    await open();
+    const li = opRow("10. Financial/Gone");
+    expect(li).toHaveTextContent("no longer in the archive");
+    expect(within(li).queryByRole("button", { name: "Show in Browse" })).not.toBeInTheDocument();
+  });
+});
+
 describe("Activity: where each file is now", () => {
   const now = (state: "here" | "moved" | "to_delete" | "missing", path: string | null, extra = {}) => ({
     state,
