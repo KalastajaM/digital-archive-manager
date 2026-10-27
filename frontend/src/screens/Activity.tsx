@@ -26,6 +26,7 @@ import { Budget } from "../components/ai/SendSheet";
 import { TASK_LABEL, useAIState } from "../components/ai/useAI";
 import { JournalList } from "../components/JournalList";
 import { RecoveryPanel } from "../components/Recovery";
+import { useStyle } from "../appearance";
 import { useBlockToastActions } from "../components/Toasts";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -225,6 +226,7 @@ function CollectionLink({ id, children }: { id: number; children: ReactNode }) {
 
 /** Where a batch came from, in words; the app is the default and says nothing. */
 const ORIGIN_WORD: Record<string, string> = { cli: "command line" };
+const NEW_ORIGIN_WORD: Record<string, string> = { ui: "You", cli: "CLI", workflow: "Auto" };
 
 /** Batches with more ops than this show them behind a "Show details" fold. */
 export const OPS_OPEN_MAX = 3;
@@ -259,7 +261,9 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded
   const sync = b.origin === "workflow";
   const [state, tone] = batchState(b);
   const collection = sync ? syncCollection(b.ops, collections, roots) : undefined;
-  const origin = ORIGIN_WORD[b.origin];
+  const [look] = useStyle();
+  // New names who made every change (a chip); Classic only the command line
+  const origin = look === "new" ? NEW_ORIGIN_WORD[b.origin] : ORIGIN_WORD[b.origin];
   const at = new Date(b.created * 1000);
   return (
     <article className="batch" aria-label={`Batch ${b.batch_id}`}>
@@ -290,7 +294,11 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded
           <Tag tone={tone} className="batch-state">
             {state}
           </Tag>
-          {origin && <span className="batch-origin">{origin}</span>}
+          {origin && (
+            <span className="batch-origin" data-origin={b.origin}>
+              {origin}
+            </span>
+          )}
           <time dateTime={at.toISOString()} title={`${longDay(at)}, ${clockTime(at)}`}>
             {clockTime(at)}
           </time>
@@ -614,6 +622,10 @@ function readExpandedDefault(): boolean {
 
 export default function Activity() {
   const [view, setView] = useState<View>("changes");
+  const [look] = useStyle();
+  const isNew = look === "new";
+  // New, in a narrow screen: the filters fold behind a "Filters N" button
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [params, setParams] = useSearchParams();
   const urlQ = params.get("q") ?? params.get("file") ?? "";
   const filters = {
@@ -647,6 +659,7 @@ export default function Activity() {
   const filter: ActivityFilter = { q: urlQ, kind: filters.kind, status: filters.status, origin: filters.origin, since };
   const filtered = Boolean(urlQ || filters.kind || filters.status || filters.origin || filters.when);
   const words = urlQ.split(/\s+/).filter(Boolean);
+  const filterCount = [filters.kind, filters.status, filters.origin, filters.when].filter(Boolean).length;
 
   // Cards start collapsed (or as "Expand all" last left them); a toggle overrides the
   // default for that card until the default is changed. A search shows every card open,
@@ -750,8 +763,9 @@ export default function Activity() {
     </div>
   );
   return (
-    <div className="activity">
+    <div className="activity" data-filters={filtersOpen ? "open" : undefined}>
       <Toolbar
+        className="activity-toolbar"
         title="Activity"
         subtitle={
           view === "changes" && count > 0
@@ -768,6 +782,16 @@ export default function Activity() {
               onClick={toggleAll}
             >
               {expandAll || searching ? "Collapse all" : "Expand all"}
+            </button>
+          )}
+          {isNew && view === "changes" && (
+            <button
+              type="button"
+              className="filters-toggle"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((o) => !o)}
+            >
+              Filters <span className="mono">{filterCount}</span>
             </button>
           )}
           <Segmented<View>

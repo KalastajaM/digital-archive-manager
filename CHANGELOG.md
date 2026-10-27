@@ -14,6 +14,15 @@ All notable changes are listed here. The format follows
   If the folder was moved or renamed since, or a folder above it was, the icon leads to its
   place now and the entry says "now at ...". A folder deleted by hand reads "no longer in
   the archive", with no link. Nothing changes when you look.
+- **The New look: Activity, Maintenance, Settings and the rest.** In New, Activity is a list of
+  hairline rows under day captions: who made the change (You, CLI, Auto), the title, its state,
+  the time in the fixed-width font and Undo, with the paths of each operation under it. In a
+  narrow window the four filters fold behind a **Filters N** button (N is how many are in
+  use). Maintenance shows its checks as one list of rows, with **Collapse all** and **Reset all**
+  as text buttons and a longer subtitle. Settings has a 200 px list on the left with **This
+  archive** and **This browser** groups, and the section beside it. Help, Tags, Ask, the
+  viewer window, the first-run screen and the archive sheets got the same type, hairlines and
+  fixed-width paths, so nothing in New looks unfinished. Classic is unchanged.
 - **Try the new look.** dam has a second look, **New**: calmer colours, a fixed-width font
   for figures and file names, and a darker mode with warm greys. For now only the colours,
   fonts and corners change; the screens themselves follow step by step. **Classic stays
