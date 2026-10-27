@@ -5,7 +5,8 @@ import os
 import stat
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
@@ -49,6 +50,7 @@ log = logging.getLogger(__name__)
 __all__ = ["Executor", "JournalEntry", "RecoveryResult"]
 
 UNDO_WAITS = "A move across disks is running. Undo when it has finished."
+BATCH_HELD = "The archive is being changed. Try again in a moment."
 
 _RELOCATE = _undo.RELOCATE
 _FAILURES = (OSError, OpFailed, GuardError, OutsideArchiveError)
@@ -111,6 +113,53 @@ def _outside_copy(rop: ResolvedOp) -> bool:
     return rop.kind is OpKind.COPY and rop.src is not None and rop.src.startswith(ABS_TARGET)
 
 
+class RunningBatches:
+    """The batches an executor is carrying out right now, from before the first op is
+    journaled until the last one has finished (or the batch stopped).
+
+    Undo refuses a running batch, recovery leaves its rows alone, and a change that
+    closes the archive or replaces its database holds ``held()`` around its check and
+    the change: no batch starts meanwhile (``begin`` answers ``Conflict``)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._ids: set[str] = set()
+        self._held = 0
+
+    def begin(self, batch_id: str) -> None:
+        with self._lock:
+            if self._held:
+                raise Conflict(BATCH_HELD)
+            self._ids.add(batch_id)
+
+    def end(self, batch_id: str) -> None:
+        with self._lock:
+            self._ids.discard(batch_id)
+
+    def running(self, batch_id: str | None = None) -> bool:
+        """``batch_id`` is running; without one: any batch is."""
+        with self._lock:
+            return bool(self._ids) if batch_id is None else batch_id in self._ids
+
+    @contextmanager
+    def frozen(self) -> Iterator[frozenset[str]]:
+        """The running batches, none starting or ending while inside (keep it short)."""
+        with self._lock:
+            yield frozenset(self._ids)
+
+    @contextmanager
+    def held(self) -> Iterator[None]:
+        """No batch starts while inside; may be nested. The caller checks ``running()``
+        inside, so the answer stays true until it is done."""
+        with self._lock:
+            self._held += 1
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._held -= 1
+
+
 class Executor:
     def __init__(
         self,
@@ -135,6 +184,9 @@ class Executor:
         # a move across disks runs in the background (``dam.ops.jobs``; set by the App):
         # undo waits for it, so it never lands between a copy and the move of its original
         self.copying: Callable[[], bool] = lambda: False
+        # the batches being carried out right now (undo, recovery and database swaps
+        # wait for them)
+        self.batches = RunningBatches()
 
     def preview(self, plan: Plan) -> list[ResolvedOp]:
         """Validate and resolve ``plan`` without touching the disk or the journal.
@@ -232,28 +284,32 @@ class Executor:
         A folder moved across disks (a final QUARANTINE with a ``tree``): Stop is not
         asked once its last file is copied, and that QUARANTINE first checks that the
         source still holds what was copied (``_check_tree``)."""
-        folder = _FolderRun.of(resolved)
-        for seq, rop in enumerate(resolved):
-            # the move of an original to To Delete right after its copy: always runs, and
-            # at once (a restore has copies only, so Stop works between those)
-            pair = (
-                seq > 0
-                and resolved[seq - 1].kind is OpKind.COPY_ACROSS
-                and rop.kind is OpKind.QUARANTINE
-                and fold_parts(rop.src) == fold_parts(resolved[seq - 1].src)
-            )
-            settled = folder is not None and folder.no_stop(seq)
-            if should_stop is not None and not pair and not settled and should_stop():
-                result.stopped = True
-                return result
-            if seq and self.throttle_ms and not pair and not self._in_publish_root(rop):
-                time.sleep(self.throttle_ms / 1000)  # outside the lock
-            with INDEX_LOCK:
-                if self._run_op(seq, rop, origin, result, undo_of, label, copied, folder):
+        self.batches.begin(result.batch_id)
+        try:
+            folder = _FolderRun.of(resolved)
+            for seq, rop in enumerate(resolved):
+                # the move of an original to To Delete right after its copy: always runs, and
+                # at once (a restore has copies only, so Stop works between those)
+                pair = (
+                    seq > 0
+                    and resolved[seq - 1].kind is OpKind.COPY_ACROSS
+                    and rop.kind is OpKind.QUARANTINE
+                    and fold_parts(rop.src) == fold_parts(resolved[seq - 1].src)
+                )
+                settled = folder is not None and folder.no_stop(seq)
+                if should_stop is not None and not pair and not settled and should_stop():
+                    result.stopped = True
                     return result
-            if progress is not None:
-                progress(rop, seq, len(resolved))
-        return result
+                if seq and self.throttle_ms and not pair and not self._in_publish_root(rop):
+                    time.sleep(self.throttle_ms / 1000)  # outside the lock
+                with INDEX_LOCK:
+                    if self._run_op(seq, rop, origin, result, undo_of, label, copied, folder):
+                        return result
+                if progress is not None:
+                    progress(rop, seq, len(resolved))
+            return result
+        finally:
+            self.batches.end(result.batch_id)
 
     def _in_publish_root(self, rop: ResolvedOp) -> bool:
         return rop.kind in _ONGOING_KINDS and self.paths.in_publish_root(rop.dst) is not None

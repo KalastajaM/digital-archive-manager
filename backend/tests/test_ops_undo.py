@@ -1,5 +1,8 @@
 import dataclasses
 import os
+import threading
+import time
+import types
 from pathlib import Path
 
 import pytest
@@ -12,6 +15,7 @@ from dam.core.paths import ArchivePaths
 from dam.db.tables import files, operations
 from dam.index.driveid import read_drive_id
 from dam.index.repo import FileRepo
+from dam.ops import executor as executor_mod
 from dam.ops import primitives
 from dam.ops.executor import Executor, JournalEntry
 from dam.ops.model import GuardError, Op, OpFailed, OpKind, Plan
@@ -453,6 +457,65 @@ def test_undo_refuses_batch_with_planned_rows(fake_archive, executor, engine, mo
     batch_id = journal(engine)[0]["batch_id"]
     with pytest.raises(OpFailed, match="recover"):
         executor.undo(batch_id)
+
+
+def test_undo_refuses_a_batch_still_running(fake_archive, engine, paths, monkeypatch):
+    """Between two throttled ops no row is ``planned``, yet the batch is still being
+    carried out: undo and its preview refuse it, and nothing is touched."""
+    ex = Executor(paths, engine, FileRepo(engine, inbox="##. Organize"), throttle_ms=1)
+    for i in range(3):
+        fake_archive.add(f"##. Organize/f{i}.pdf", content=b"x%d" % i, drive_id=f"id-{i}")
+    seen: list[list[str]] = []
+
+    def mid_batch(_seconds):  # the throttle between two ops, outside INDEX_LOCK
+        batch_id = journal(engine)[0]["batch_id"]
+        for attempt in (ex.preview_undo, ex.undo):
+            with pytest.raises(OpFailed, match="still being carried out"):
+                attempt(batch_id)
+        seen.append([r["state"] for r in journal(engine)])
+
+    monkeypatch.setattr(
+        executor_mod, "time", types.SimpleNamespace(sleep=mid_batch, time=time.time)
+    )
+    done = ex.apply(
+        plan(*(Op(K.MOVE, f"##. Organize/f{i}.pdf", "10. Financial/Banks") for i in range(3)))
+    )
+    assert done.failed is None and len(done.done) == 3
+    assert seen == [["done"], ["done", "done"]]  # refused at both gaps, nothing undone
+    assert [r["state"] for r in journal(engine)] == ["done"] * 3
+    # once it has finished, undo works as ever
+    monkeypatch.undo()
+    result = ex.undo(done.batch_id)
+    assert result.failed is None, result.error
+    assert [r["state"] for r in journal(engine, done.batch_id)] == ["undone"] * 3
+
+
+def test_recovery_leaves_an_op_in_flight_alone(fake_archive, executor, engine):
+    """While an op runs (a copy across disks can take minutes) its row is ``planned``:
+    it is not pending, and recovery from another thread does not settle it."""
+    fake_archive.add("##. Organize/a.pdf", drive_id="id-a")
+    real_act = executor._act
+    seen = {}
+
+    def in_flight(rop, copied=None):
+        assert [r["state"] for r in journal(engine)] == ["planned"]
+
+        def other_tab():
+            seen["pending"] = executor.pending()
+            seen["recovered"] = executor.recover().entries
+
+        t = threading.Thread(target=other_tab)
+        t.start()
+        t.join(10)
+        assert not t.is_alive()
+        real_act(rop, copied)
+
+    executor._act = in_flight
+    done = executor.apply(plan(Op(K.MOVE, "##. Organize/a.pdf", "10. Financial/Banks")))
+    assert done.failed is None, done.error
+    assert seen == {"pending": [], "recovered": []}
+    assert [(r["state"], r["error"]) for r in journal(engine)] == [("done", None)]
+    assert executor.pending() == []
 
 
 def test_undo_unknown_batch(executor):
