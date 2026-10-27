@@ -12,7 +12,7 @@ from dam import app as app_module
 from dam.app import BUILD_ORDER, App
 
 # what ``App.create`` has before the first group, and the App itself (``live``)
-BASE = {"settings", "app_paths", "paths", "engine", "live"}
+BASE = {"settings", "app_paths", "paths", "engine", "jobs", "live"}
 
 
 def _check_order(order) -> None:

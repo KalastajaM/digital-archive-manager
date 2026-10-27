@@ -4,8 +4,8 @@ A job is started, polled for its progress and the result so far, and stopped. Th
 pattern as the rule tests (``dam.rules.jobs``): one job runs in a thread of its own,
 there is one live job per kind (starting another ends the first), and a job nobody asks
 about for a while ends by itself, so a closed window cannot leave one reading files. The
-maintenance checks (``dam.maintenance.jobs``) and the moves across disks
-(``dam.ops.jobs``) run on it.
+maintenance checks (``dam.maintenance.jobs``) run on a set of their own, and the moves
+across disks (``dam.ops.jobs``) on the App's runner.
 
 A worker is background work that runs until it is stopped, in a thread of its own named
 after it: the content indexer (``extraction``). It gets a stop event and a wake event
@@ -327,10 +327,23 @@ class Jobs:
             job.stop()
         return len(gone)
 
-    def running(self) -> bool:
-        """A job runs (workers run all the time and do not count)."""
+    def running(self, kind: str | None = None) -> bool:
+        """A job (of ``kind``, when given) runs; workers run all the time and do not
+        count."""
         with self._lock:
-            return any(j.state == RUNNING for j in self._jobs.values())
+            return any(
+                j.state == RUNNING and (kind is None or j.kind == kind) for j in self._jobs.values()
+            )
+
+    def stop(self, kind: str) -> None:
+        """End the running jobs of ``kind`` and wait for each (briefly); they stay
+        listed, as stopped."""
+        with self._lock:
+            jobs = [j for j in self._jobs.values() if j.kind == kind and j.state == RUNNING]
+        for job in jobs:
+            job.stop()
+        for job in jobs:
+            job.join(2.0)
 
     def close(self, timeout: float = 2.0) -> None:
         """Stop every worker and job, then wait for each, at most ``timeout`` in all

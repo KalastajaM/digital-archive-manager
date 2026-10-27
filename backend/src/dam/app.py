@@ -125,7 +125,12 @@ class OpsParts:
 
 
 def build_ops(
-    settings: Settings, app_paths: AppPaths, paths: ArchivePaths, engine: Engine, repo: FileRepo
+    settings: Settings,
+    app_paths: AppPaths,
+    paths: ArchivePaths,
+    engine: Engine,
+    repo: FileRepo,
+    jobs: Jobs,
 ) -> OpsParts:
     executor = Executor(
         paths,
@@ -134,7 +139,7 @@ def build_ops(
         throttle_ms=settings.ops_throttle_ms,
         areas_dir=app_paths.config_dir / "rules" / AREAS_DIR,
     )
-    copy_jobs = CopyJobs()  # moves across disks that run in the background
+    copy_jobs = CopyJobs(jobs)  # moves across disks that run in the background
     executor.copying = copy_jobs.running
     return OpsParts(executor=executor, copy_jobs=copy_jobs)
 
@@ -364,6 +369,9 @@ class App:
     app_paths: AppPaths
     paths: ArchivePaths
     engine: Engine
+    # the background runner: the workers (``dam serve`` starts them), the moves across
+    # disks, and their status; closing the App stops them
+    jobs: Jobs
     index_parts: InitVar[IndexParts]
     ops_parts: InitVar[OpsParts]
     repo: FileRepo = field(init=False)
@@ -399,9 +407,6 @@ class App:
     previews: PreviewService = field(init=False)
     ai: AIService = field(init=False)
     summaries: SummaryService = field(init=False)
-    # the background runner: the workers (``dam serve`` starts them) and their status;
-    # closing the App stops them
-    jobs: Jobs = field(init=False, default_factory=Jobs)
     # where the shipped default tray files live (tests point it elsewhere)
     defaults_dir: Path = field(init=False, default=DEFAULTS_DIR)
     # ends the background indexer's idle wait (``dam serve`` wires it); a no-op otherwise
@@ -476,8 +481,9 @@ class App:
         try:
             migrate(engine)
             index = build_index(settings, app_paths, paths, engine)
-            ops = build_ops(settings, app_paths, paths, engine, index.repo)
-            return cls(settings, app_paths, paths, engine, index, ops)
+            jobs = Jobs()
+            ops = build_ops(settings, app_paths, paths, engine, index.repo, jobs)
+            return cls(settings, app_paths, paths, engine, jobs, index, ops)
         except BaseException:
             engine.dispose()
             raise

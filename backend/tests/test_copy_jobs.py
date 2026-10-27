@@ -37,7 +37,7 @@ def _wait(job, timeout: float = 10.0):
 
 def test_job_not_abandoned(monkeypatch):
     monkeypatch.setattr(core_jobs, "ABANDONED_S", 0.0)
-    jobs = CopyJobs()
+    jobs = CopyJobs(core_jobs.Jobs())
 
     def work(ctx):
         time.sleep(0.05)
@@ -48,7 +48,7 @@ def test_job_not_abandoned(monkeypatch):
 
 
 def test_second_job_conflicts():
-    jobs = CopyJobs()
+    jobs = CopyJobs(core_jobs.Jobs())
     release = threading.Event()
     first = jobs.start(lambda ctx: release.wait(5))
     with pytest.raises(Conflict) as e:
@@ -82,6 +82,7 @@ def test_stopped_job_says_how_far(across, monkeypatch):
         ask = kw.get("should_stop")
         if ask is None:  # the request's own planning, before the job starts
             return real(plan, **kw)
+
         def should_stop():  # stop once the first file's pair is done
             with across.engine.connect() as conn:
                 pair = conn.execute(
@@ -174,7 +175,10 @@ def test_progress_moves_within_a_large_file(across, monkeypatch):
     assert job.state == "done"
     # a.pdf (4 bytes) byte by byte while 0 files are done, then b.pdf on top of it
     assert [s for s in seen if s[0] == 0 and s[2] == "a.pdf"][1:] == [
-        (0, 1, "a.pdf"), (0, 2, "a.pdf"), (0, 3, "a.pdf"), (0, 4, "a.pdf")
+        (0, 1, "a.pdf"),
+        (0, 2, "a.pdf"),
+        (0, 3, "a.pdf"),
+        (0, 4, "a.pdf"),
     ]
     assert (1, 5, "b.pdf") in seen and seen[-1][:2] == (2, 6)
 
@@ -203,7 +207,7 @@ def test_an_unexpected_failure_names_its_type_only():
 
 
 def test_no_move_starts_while_held():
-    jobs = CopyJobs()
+    jobs = CopyJobs(core_jobs.Jobs())
     with jobs.held():
         with jobs.held():  # nested
             pass
@@ -228,3 +232,32 @@ def test_api_move_preview_has_method(client, across, fake_archive, extra_folder)
     again = client.post("/api/browse/move/preview", json=body).json()
     copy = next(op for op in again if op["kind"] == "copy_across")
     assert copy["method"] == "present"
+
+
+def test_moves_run_on_the_apps_runner(app):
+    release = threading.Event()
+    job = app.copy_jobs.start(lambda ctx: release.wait(5))
+    assert [(s.name, s.state) for s in app.jobs.status()] == [("copy_across", "running")]
+    assert app.jobs_running()
+    app.jobs.run("w", lambda stop, wake: stop.wait(5))
+    release.set()
+    _wait(job)
+    assert not app.copy_jobs.running()  # a worker is not a move
+    app.jobs.close()
+
+
+def test_closing_the_moves_ends_only_them():
+    jobs = core_jobs.Jobs()
+    copies = CopyJobs(jobs)
+    other = jobs.start("check", lambda ctx: core_jobs.time.sleep(0.2) or "ok", abandon=False)
+    move = copies.start(lambda ctx: _until(ctx.stopped))
+    copies.close()
+    assert move.view().state == "stopped" and not copies.running()
+    _wait(other)
+    assert other.state == "done"
+
+
+def _until(cond, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not cond() and time.monotonic() < deadline:
+        time.sleep(0.01)

@@ -1,6 +1,6 @@
 """Moves across disks run in the background: one at a time, with progress and Stop.
 
-The runner is the shared one (``dam.core.jobs``), with these differences from a check:
+The runner is the App's (``dam.core.jobs``, ``App.jobs``), with these differences from a check:
 a second move across disks is refused while one runs (it would end the first half way),
 a move does not end when nobody polls it (closing the window must not stop it), and a
 failed move keeps its reason in the error.
@@ -34,8 +34,10 @@ def reason(exc: Exception) -> str:
 
 
 class CopyJobs:
-    def __init__(self) -> None:
-        self._jobs = Jobs()
+    """The moves across disks, as jobs of kind ``COPY_KIND`` on ``jobs``."""
+
+    def __init__(self, jobs: Jobs) -> None:
+        self._jobs = jobs
         self._lock = threading.Lock()
         self._held = 0
 
@@ -45,7 +47,7 @@ class CopyJobs:
         with self._lock:
             if self._held:
                 raise Conflict(COPY_HELD)
-            if self._jobs.running():
+            if self._jobs.running(COPY_KIND):
                 raise Conflict(COPY_RUNNING)
             return self._jobs.start(COPY_KIND, work, abandon=False, describe=reason)
 
@@ -69,9 +71,9 @@ class CopyJobs:
         return self._jobs.latest(COPY_KIND)
 
     def running(self) -> bool:
-        return self._jobs.running()
+        return self._jobs.running(COPY_KIND)
 
     def close(self) -> None:
         """End the running move after its current file (the executor's
         ``cancel_copies`` ends a copy in progress)."""
-        self._jobs.close()
+        self._jobs.stop(COPY_KIND)
