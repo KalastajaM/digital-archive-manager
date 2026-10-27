@@ -18,6 +18,7 @@ from dam.collections.service import CollectionService, check_collection_name
 from dam.config import DEFAULT_ADDRESS_ZONE, Person, SpecialFolders
 from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchivePaths
+from dam.core.text import fold
 from dam.extract.layout import TEXT_LAYER, Page1Layout, check_box, lines_in_zone
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.notes import NotesService, check_note
@@ -44,7 +45,7 @@ from dam.rules.engine import (
 from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
 from dam.rules.learned import learned_ids
-from dam.rules.model import RESERVED_IDS, Rule, fold
+from dam.rules.model import RESERVED_IDS, Rule
 from dam.rules.offer import (
     RuleOffer,
     make_doc_frequency,

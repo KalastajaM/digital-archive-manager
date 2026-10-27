@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from sqlalchemy import Engine, delete, select
 from sqlalchemy.dialects.sqlite import insert
 
-from dam.core.paths import nfc
+from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import maintenance_ignored
 from dam.services.errors import InvalidRequest
@@ -46,10 +46,6 @@ class Ignored:
     key: str
     label: str
     created: float
-
-
-def fold_name(name: str) -> str:
-    return nfc(name).casefold()
 
 
 class IgnoreList:

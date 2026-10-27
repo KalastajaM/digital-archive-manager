@@ -10,7 +10,7 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
-from dam.core.paths import nfc
+from dam.core.text import fold_name
 from dam.ops.guards import join
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
 from dam.services import check_origin
@@ -20,10 +20,6 @@ if TYPE_CHECKING:
     from dam.app import App
 
 log = logging.getLogger(__name__)
-
-
-def _fold(name: str) -> str:
-    return nfc(name).casefold()
 
 
 def _inbox_subfolders(app: "App") -> list[str]:
@@ -38,21 +34,21 @@ def _inbox_subfolders(app: "App") -> list[str]:
 
 def missing_inbox_folders(app: "App") -> list[str]:
     """The codes' inbox folder names (table order) with no folder in the inbox."""
-    there = {_fold(n) for n in _inbox_subfolders(app)}
+    there = {fold_name(n) for n in _inbox_subfolders(app)}
     return [
         c.inbox_folder
         for c in app.codes
-        if c.inbox_folder is not None and _fold(c.inbox_folder) not in there
+        if c.inbox_folder is not None and fold_name(c.inbox_folder) not in there
     ]
 
 
 def stray_inbox_folders(app: "App") -> list[str]:
     """Folders directly in the inbox that are no code's inbox folder (hidden ones left
     out), by name. Files in them are not inbox files."""
-    ours = {_fold(c.inbox_folder) for c in app.codes if c.inbox_folder is not None}
+    ours = {fold_name(c.inbox_folder) for c in app.codes if c.inbox_folder is not None}
     return sorted(
-        (n for n in _inbox_subfolders(app) if not n.startswith(".") and _fold(n) not in ours),
-        key=_fold,
+        (n for n in _inbox_subfolders(app) if not n.startswith(".") and fold_name(n) not in ours),
+        key=fold_name,
     )
 
 

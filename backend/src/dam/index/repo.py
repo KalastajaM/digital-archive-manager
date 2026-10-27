@@ -28,6 +28,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.codes.qr_model import QrRead
 from dam.core.paths import nfc
+from dam.core.text import fold, fold_name
 from dam.db.engine import write_tx
 from dam.db.generation import WriteGeneration
 from dam.db.tables import (
@@ -53,7 +54,6 @@ from dam.db.tables import (
 )
 from dam.extract.base import ExtractedText
 from dam.extract.layout import Page1Layout
-from dam.rules.model import fold
 
 
 def ext_of(name: str, is_dir: bool | None) -> str | None:
@@ -90,11 +90,6 @@ _GIVEN_NOTES = (("note", notes), ("checklist", checklist_items))
 _STATUS_TABLES = ("files", "file_layouts", "file_text")
 
 T = TypeVar("T")
-
-
-def _folded(path: str) -> str:
-    """``path`` compared the way the disk does: NFC and case-insensitive."""
-    return nfc(path).casefold()
 
 
 @dataclass
@@ -253,7 +248,7 @@ class FileRepo:
     def __init__(self, engine: Engine, inbox: str) -> None:
         self.engine = engine
         self.inbox = nfc(inbox)
-        self._inbox_fold = _folded(self.inbox.strip("/"))
+        self._inbox_fold = fold_name(self.inbox.strip("/"))
         # a filing code's inbox folder (folded name) -> its code; set by ``App`` after
         # every load of the code table
         self.code_folders: dict[str, str] = {}
@@ -274,12 +269,12 @@ class FileRepo:
         """``path`` (archive-relative) is directly in the inbox folder or directly in a
         filing code's inbox folder (``<inbox>/To pay``), not deeper. Compared folded
         (NFC, case-insensitive), as the disk does."""
-        folder = _folded(path).rpartition("/")[0]
+        folder = fold_name(path).rpartition("/")[0]
         return folder == self._inbox_fold or self._code_of_folder(folder) is not None
 
     def inbox_code_of(self, path: str) -> str | None:
         """The code whose inbox folder directly holds ``path``, else None."""
-        return self._code_of_folder(_folded(path).rpartition("/")[0])
+        return self._code_of_folder(fold_name(path).rpartition("/")[0])
 
     def _code_of_folder(self, folded: str) -> str | None:
         above, _, name = folded.rpartition("/")

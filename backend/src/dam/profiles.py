@@ -35,6 +35,7 @@ import yaml
 from dam import setup
 from dam.config import AppPaths
 from dam.core.fs import open_nofollow, resolve
+from dam.core.text import fold_name
 from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 try:  # POSIX
@@ -111,10 +112,6 @@ def slugify(name: str) -> str:
     ascii_ = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     slug = re.sub(r"[^a-z0-9]+", "-", ascii_.lower()).strip("-")
     return slug[:40].strip("-") or "archive"
-
-
-def _folded(name: str) -> str:
-    return unicodedata.normalize("NFC", name).casefold()
 
 
 class ProfileStore:
@@ -206,9 +203,9 @@ class ProfileStore:
         for p in profiles:
             if p.id == text:
                 return p
-        wanted = _folded(text)
+        wanted = fold_name(text)
         for p in profiles:
-            if _folded(p.name) == wanted:
+            if fold_name(p.name) == wanted:
                 return p
         raise NotFound(f"There is no archive called '{key}'.")
 
@@ -256,7 +253,7 @@ class ProfileStore:
         self._save(profiles)
 
     def _unique_name(self, name: str, profiles: list[Profile], skip: str | None = None) -> None:
-        if any(_folded(p.name) == _folded(name) for p in profiles if p.id != skip):
+        if any(fold_name(p.name) == fold_name(name) for p in profiles if p.id != skip):
             raise Conflict(f"There is already an archive called '{name}'.")
 
     def check_new_name(self, name: str) -> str:

@@ -26,3 +26,22 @@ def test_no_module_imports_a_private_name_from_another_dam_module():
                 if _private(a.name)
             ]
     assert not offenders, "import a public name instead:\n" + "\n".join(offenders)
+
+
+def test_lower_layers_do_not_import_the_rules_package():
+    offenders = []
+    for layer in ("db", "index", "core"):
+        for path in sorted((SRC / layer).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    names = [node.module or ""] + [f"{node.module}.{a.name}" for a in node.names]
+                elif isinstance(node, ast.Import):
+                    names = [a.name for a in node.names]
+                else:
+                    continue
+                if any(n == "dam.rules" or n.startswith("dam.rules.") for n in names):
+                    offenders.append(f"{path.relative_to(SRC)}:{node.lineno}")
+    assert not offenders, "dam.db, dam.index and dam.core must not import dam.rules:\n" + "\n".join(
+        offenders
+    )

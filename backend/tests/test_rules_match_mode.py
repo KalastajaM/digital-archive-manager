@@ -3,9 +3,10 @@
 import pytest
 import yaml
 
+from dam.core.text import fold
 from dam.rules.engine import suggest, zone_matches
 from dam.rules.learned import write_rules_file
-from dam.rules.model import Rule, TermTest, fold, load_rules
+from dam.rules.model import Rule, TermTest, load_rules
 from dam.rules.replay import explain, replay
 from test_rules_zone import HEADER, INBOX, add, layout, rec
 

@@ -9,9 +9,9 @@ from datetime import date, datetime
 from sqlalchemy import Engine, select, text
 
 from dam.core.paths import nfc
+from dam.core.text import fold
 from dam.db.tables import collection_members, collections, file_assignments, files, tags
 from dam.query import Filter, date_span, extensions_of, parse_query
-from dam.rules.model import fold
 
 
 @dataclass

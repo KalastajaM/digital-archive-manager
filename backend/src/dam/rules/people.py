@@ -12,8 +12,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from dam.config import Person
+from dam.core.text import fold
 from dam.extract.layout import Box, Line, Page1Layout, lines_in_zone
-from dam.rules.model import fold
 
 # The address area is an approximation of the standard (see config.DEFAULT_ADDRESS_ZONE),
 # so people detection keeps its own, wider tolerance of 3 % of the page on every side.
