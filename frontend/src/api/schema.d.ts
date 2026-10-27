@@ -827,6 +827,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/maintenance/moved/reconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconnect Moved
+         * @description Reconnect files moved or renamed outside dam: what each old, missing index row had
+         *     (tags, notes, collections, tray items ...) moves to the file's new row, and the old
+         *     row goes. Database only: the archive is not touched, nothing is journaled, no Undo.
+         *     ``dry_run`` lists the pairs with what would move. 400: a pair that does not hold (see
+         *     ``MaintenanceService.reconnect``); 404: an unknown row.
+         */
+        post: operations["reconnect_moved_api_maintenance_moved_reconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browse": {
         parameters: {
             query?: never;
@@ -5905,7 +5929,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicates" | "versions" | "empty_folders" | "broken_links" | "references" | "names";
+            kind: "duplicates" | "versions" | "empty_folders" | "broken_links" | "references" | "names" | "moved";
             /** Key */
             key: string;
             /** Label */
@@ -5965,6 +5989,7 @@ export interface components {
             waiting?: components["schemas"]["WaitingOut"] | null;
             label_clashes?: components["schemas"]["LabelClashesOut"] | null;
             unfinished_copies?: components["schemas"]["UnfinishedCopiesOut"] | null;
+            moved?: components["schemas"]["MovedOut"] | null;
         };
         /** MaintenanceStartIn */
         MaintenanceStartIn: {
@@ -5972,7 +5997,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies";
+            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies" | "moved";
             /** Days */
             days?: number | null;
         };
@@ -6107,6 +6132,59 @@ export interface components {
             message?: string | null;
             /** Unchanged */
             unchanged: string[];
+        };
+        /** MovedChoiceIn */
+        MovedChoiceIn: {
+            /** Old */
+            old: string;
+            /** New */
+            new: string;
+        };
+        /**
+         * MovedOut
+         * @description ``unhashed``: missing files with something given whose content was never read,
+         *     so they cannot be compared; ``unreadable``: new files that could not be read;
+         *     ``complete`` false: the check was stopped before it read every candidate.
+         */
+        MovedOut: {
+            /** Items */
+            items: components["schemas"]["MovedPairOut"][];
+            /** Total */
+            total: number;
+            /** Unhashed */
+            unhashed: number;
+            /** Unreadable */
+            unreadable: number;
+            /** Complete */
+            complete: boolean;
+        };
+        /**
+         * MovedPairOut
+         * @description A file moved or renamed outside dam: its old, missing index row (with what the
+         *     owner gave it) and the new row the scan made where it is now. ``moves``: what would
+         *     move to the new row, counted by kind (tags, collections, tray_items, lock, from_for,
+         *     filing_code, summaries, fields, rule_outcomes, note, checklist). ``ambiguous``: the
+         *     content matches more than one file, so it is only listed.
+         */
+        MovedPairOut: {
+            /** Old Id */
+            old_id: string;
+            /** Old Path */
+            old_path: string;
+            /** New Id */
+            new_id: string;
+            /** New Path */
+            new_path: string;
+            /** Size */
+            size: number;
+            /** Same Ext */
+            same_ext: boolean;
+            /** Ambiguous */
+            ambiguous: boolean;
+            /** Moves */
+            moves: {
+                [key: string]: number;
+            };
         };
         /** NameBody */
         NameBody: {
@@ -6432,6 +6510,33 @@ export interface components {
         ReadNowOut: {
             /** Queued */
             queued: number;
+        };
+        /**
+         * ReconnectIn
+         * @description The pairs of "Moved outside dam" to reconnect; ``dry_run`` checks and lists them
+         *     with what would move, changing nothing.
+         */
+        ReconnectIn: {
+            /** Pairs */
+            pairs: components["schemas"]["MovedChoiceIn"][];
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /**
+         * ReconnectOut
+         * @description What was reconnected (or would be, for a dry run) and the pairs that could not be.
+         *     Database only: not in Activity, no Undo.
+         */
+        ReconnectOut: {
+            /** Dry Run */
+            dry_run: boolean;
+            /** Pairs */
+            pairs: components["schemas"]["MovedPairOut"][];
+            /** Errors */
+            errors: string[];
         };
         /** RecoveryResultOut */
         RecoveryResultOut: {
@@ -11433,7 +11538,7 @@ export interface operations {
     forget_api_maintenance_jobs_delete: {
         parameters: {
             query?: {
-                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies") | null;
+                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies" | "moved") | null;
             };
             header?: never;
             path?: never;
@@ -12204,6 +12309,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchResultOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    reconnect_moved_api_maintenance_moved_reconnect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconnectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconnectOut"];
                 };
             };
             /** @description Bad Request */

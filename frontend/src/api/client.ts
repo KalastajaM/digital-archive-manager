@@ -1843,6 +1843,9 @@ export type DuplicateEstimate = Schemas["DuplicateEstimateOut"];
 export type DuplicateResolveBody = Schemas["DuplicateResolveIn"];
 export type DuplicateResolveResult = Schemas["DuplicateResolveOut"];
 export type CarryOver = Schemas["CarryOverOut"];
+/** A file moved or renamed outside dam: its old, missing row and its new one. */
+export type MovedPair = Schemas["MovedPairOut"];
+export type ReconnectResult = Schemas["ReconnectOut"];
 
 /** What the duplicate check would read, from the index alone (nothing is opened). */
 export const useDuplicateEstimate = () =>
@@ -1891,6 +1894,19 @@ export const useResolveDuplicates = () => {
   return useMutation({
     mutationFn: (body: DuplicateResolveBody) =>
       post<DuplicateResolveResult>("/api/maintenance/duplicates/resolve", body),
+    onSettled: (_data, _error, body) => {
+      if (!body.dry_run) refresh();
+    },
+  });
+};
+
+/** Reconnect files moved or renamed outside dam: what the old, missing row had moves to
+ * the new one. Database only, so there is no Undo; a dry run lists what would move. */
+export const useReconnectMoved = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: { pairs: { old: string; new: string }[]; dry_run: boolean }) =>
+      post<ReconnectResult>("/api/maintenance/moved/reconnect", body),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },

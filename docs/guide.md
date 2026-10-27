@@ -1303,6 +1303,18 @@ reminder. Ignoring changes nothing in the archive.
   Explorer hide until you show hidden files. The original was never moved for them, so
   each is a spare copy you can remove yourself; dam never deletes. A copy shows up here
   after the next scan.
+- **Moved outside dam**: files that were renamed or moved in Finder (or File Explorer)
+  and so lost their tags, notes, collections, tray items, From and For and the rest. This
+  happens to files without a Google Drive id (on Windows and Linux, all files): dam knows
+  such a file by its place only, so after the move it sees a new file and marks the old
+  one missing. The check pairs a missing file that had something with a new file that has
+  nothing, when both have the same size and the same content. It reads the new files of a
+  matching size to compare them (Stop works as for duplicates); a missing file can only be
+  compared when dam read it before it moved. Each pair shows the old and the new place and
+  what would move. **Reconnect** (on a pair, or for the ticked pairs) shows a preview and
+  then gives the file back what it had. This changes only dam's own records, never the
+  files, so it is not in Activity and has no Undo. A file whose content matches more than
+  one file is listed but not reconnected, because dam cannot tell which one it is.
 
 ## Settings
 

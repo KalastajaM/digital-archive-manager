@@ -2297,6 +2297,7 @@ MaintenanceKindIn = Literal[
     "waiting",
     "label_clashes",
     "unfinished_copies",
+    "moved",
 ]
 
 
@@ -2310,7 +2311,7 @@ class MaintenanceForgetOut(BaseModel):
 
 
 IgnoreKindIn = Literal[
-    "duplicates", "versions", "empty_folders", "broken_links", "references", "names"
+    "duplicates", "versions", "empty_folders", "broken_links", "references", "names", "moved"
 ]
 
 
@@ -2463,6 +2464,57 @@ class UnfinishedCopiesOut(BaseModel):
     total_size: int
 
 
+class MovedPairOut(BaseModel):
+    """A file moved or renamed outside dam: its old, missing index row (with what the
+    owner gave it) and the new row the scan made where it is now. ``moves``: what would
+    move to the new row, counted by kind (tags, collections, tray_items, lock, from_for,
+    filing_code, summaries, fields, rule_outcomes, note, checklist). ``ambiguous``: the
+    content matches more than one file, so it is only listed."""
+
+    old_id: str
+    old_path: str
+    new_id: str
+    new_path: str
+    size: int
+    same_ext: bool
+    ambiguous: bool
+    moves: dict[str, int]
+
+
+class MovedOut(BaseModel):
+    """``unhashed``: missing files with something given whose content was never read,
+    so they cannot be compared; ``unreadable``: new files that could not be read;
+    ``complete`` false: the check was stopped before it read every candidate."""
+
+    items: list[MovedPairOut]
+    total: int
+    unhashed: int
+    unreadable: int
+    complete: bool
+
+
+class MovedChoiceIn(_In):
+    old: str
+    new: str
+
+
+class ReconnectIn(_In):
+    """The pairs of "Moved outside dam" to reconnect; ``dry_run`` checks and lists them
+    with what would move, changing nothing."""
+
+    pairs: list[MovedChoiceIn] = Field(max_length=10000)
+    dry_run: bool = False
+
+
+class ReconnectOut(BaseModel):
+    """What was reconnected (or would be, for a dry run) and the pairs that could not be.
+    Database only: not in Activity, no Undo."""
+
+    dry_run: bool
+    pairs: list[MovedPairOut]
+    errors: list[str]
+
+
 class CopyJobOut(BaseModel):
     """A move across disks running in the background (or finished): files and bytes
     copied so far, the file being copied, and once it is over the batch (with its
@@ -2504,6 +2556,7 @@ class MaintenanceJobOut(BaseModel):
     waiting: WaitingOut | None = None
     label_clashes: LabelClashesOut | None = None
     unfinished_copies: UnfinishedCopiesOut | None = None
+    moved: MovedOut | None = None
 
 
 class DuplicateChoiceIn(_In):
