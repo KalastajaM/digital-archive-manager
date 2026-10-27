@@ -360,7 +360,7 @@ runs):
 | `POST /api/archive-folders` `{label, path, dry_run}` | Adds a folder after the overlap, label and readable checks. |
 | `POST /api/archive-folders/{label}/detach` `{forget, dry_run}` | Detaches it. Its index rows are marked missing. With `forget` (also for a detached folder) the entry leaves the settings and its rows are removed together with the notes, checklists, collection and item places, summaries, fields, sender and person, and locks of those files; collections and items stay. |
 | `POST /api/archive-folders/{label}/attach` `{dry_run}` | Attaches a detached folder again, after the same checks as adding. |
-| `POST /api/archive-folders/{label}/relabel` `{label, dry_run}` | Gives the folder (attached or detached) a new label. Answers with `label`, `new_label`, `counts` (`files`: index rows, `operations`: journal rows, `made_folders`, `maintenance_ignored`), `files` (each settings or rule file edited, with the lines that change), `warnings` and `restart_needed`. See below. |
+| `POST /api/archive-folders/{label}/relabel` `{label, dry_run}` | Gives the folder (attached or detached) a new label. Answers with `label`, `new_label`, `counts` (`files`: index rows, `operations`: journal rows, `made_folders`, `maintenance_ignored`, `reconnects`), `files` (each settings or rule file edited, with the lines that change), `warnings` and `restart_needed`. See below. |
 
 Each answers with `label`, `path`, `files` and `restart_needed`; `dry_run` answers the
 same and writes nothing. A change takes effect at once (the server reopens the archive);
@@ -378,7 +378,8 @@ disk changes. Every value equal to the old label, or starting with `<old label>/
 the new label: `files.path`, `path_nfc` and the folder's own top row's `name`, the
 `file_fts` rows, `operations.src` and `dst` (except `abs:` paths and the plain file names a
 `copy` from outside or a rule picture keeps), `made_folders.rel`, and the keys of
-maintenance entries set aside (except duplicate and version groups). In `settings.yaml`:
+maintenance entries set aside (except duplicate and version groups), and the old row's path
+(and a top row's name) in each journaled reconnect. In `settings.yaml`:
 the folder's `extra_folders` label, and `protected_paths` and `ai.exclude_folders` entries
 under it. In `config/rules/*.yaml`: every `folder` and `folder_is` value under it (a
 template whose first part is a placeholder, like `{payee}/x`, is left alone), and the
@@ -1399,13 +1400,23 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   the old id (the tables above, plus `member_link_names`; notes and checklists by
   `target_id`) moves to the new id, then the old row goes with its text, FTS row and
   content reads (the new row has its own). It changes the database only: nothing in the
-  archive is touched, so it goes through no batch, is not journaled and has no Undo; the
-  preview says so. Afterwards the collections sync runs, so a published link follows the
-  file. 400 when a file is named twice, the old row is not missing or has nothing given,
+  archive is touched, so it goes through no batch and is not in Activity. In the same
+  transaction each pair is journaled in `reconnects` (migration 0039): the old `files`
+  row as JSON and, per table, the keys besides the file id of each row that moved.
+  Afterwards the collections sync runs, so a published link follows the file. 400 when a file is named twice, the old row is not missing or has nothing given,
   the new row is not a present regular file, is in the app's own folders, has something
   given or changed on disk since the scan, the stored hashes or sizes differ, or the pair
-  is ambiguous; 404 for an unknown id. The answer is `{dry_run, pairs, errors}` (`pairs`
-  with what moved). The AI call log keeps the old id: it is history.
+  is ambiguous; 404 for an unknown id. The answer is `{dry_run, pairs, errors, undo_id}`
+  (`pairs` with what moved; `undo_id` is null for a dry run or when nothing moved). The
+  AI call log keeps the old id: it is history.
+- `POST /api/maintenance/moved/undo {undo_id}` undoes a reconnect
+  (`FileRepo.undo_reconnect`, one transaction per pair): the old row is inserted again
+  from the journal, still missing and with `index_state` pending (its text and content
+  reads are not kept), with an FTS row for its name and path, and each journaled row
+  still on the new id moves back by its keys. What the file was given since stays on the
+  new id. A pair whose old id or old path is in use again, or whose new row is gone, is
+  left as it is and named in `errors`. The answer has the shape of a reconnect's, with
+  what moved back in `pairs`. 400 when it was undone already, 404 for an unknown id.
 - Empty folders and broken links elsewhere are marked for deletion with `POST
   /api/quarantine`, a name is fixed with `POST /api/browse/rename`: the existing previewed
   endpoints.

@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
+import uuid
 from collections.abc import Callable, Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
@@ -107,6 +108,8 @@ class ReconnectResult:
     dry_run: bool
     pairs: list[checks.MovedPair] = field(default_factory=list)  # reconnected (or would be)
     errors: list[str] = field(default_factory=list)
+    # what ``undo_reconnect`` takes to undo it (None: a dry run, or nothing reconnected)
+    undo_id: str | None = None
 
 
 def moved_key(pair: checks.MovedPair) -> str:
@@ -357,8 +360,9 @@ class MaintenanceService:
         """For each ``(old_id, new_id)`` the "Moved outside dam" check paired: move
         everything given to the file from its old, missing row to its new one and drop
         the old row (``FileRepo.reconnect``; one transaction per pair). Database only:
-        nothing in the archive changes, nothing is journaled and there is no Undo.
-        ``dry_run`` checks and lists the pairs with what would move.
+        nothing in the archive changes. Each pair is journaled (``reconnects``) under
+        one ``undo_id`` that ``undo_reconnect`` takes. ``dry_run`` checks and lists the
+        pairs with what would move.
 
         Refused (``InvalidRequest``, nothing happens): a file named twice, a pair whose
         old row is not missing or has nothing given, whose new row is not a present
@@ -373,20 +377,66 @@ class MaintenanceService:
         if dry_run:
             return ReconnectResult(True, found)
         result = ReconnectResult(False)
+        batch_id = uuid.uuid4().hex
         for pair in found:
             try:
-                pair.moves = self.repo.reconnect(pair.old_id, pair.new_id)
+                pair.moves = self.repo.reconnect(pair.old_id, pair.new_id, batch_id)
             except ValueError as e:  # changed since it was checked a moment ago
                 result.errors.append(f"{pair.new_path}: not reconnected ({e})")
                 continue
             log.info("reconnected %s to %s (%s)", pair.old_path, pair.new_path, pair.moves)
             result.pairs.append(pair)
+        if result.pairs:
+            result.undo_id = batch_id
+        self._collections_changed(result)
+        return result
+
+    def undo_reconnect(self, undo_id: str) -> ReconnectResult:
+        """Undo the reconnect ``reconnect`` returned ``undo_id`` for: each pair's old row
+        comes back (still missing) and gets back what moved to the new row and is still
+        there (``FileRepo.undo_reconnect``; one transaction per pair). What the file was
+        given since stays with it. Database only. A pair that can no longer be undone (its
+        old place or id is taken again, the new row is gone) is left as it is and said in
+        ``errors``. ``NotFound``: no such reconnect; ``InvalidRequest``: undone already."""
+        entries = self.repo.reconnects_of(undo_id)
+        if not entries:
+            raise NotFound(undo_id)
+        if all(undone for *_, undone in entries):
+            raise InvalidRequest("This reconnect was already undone")
+        result = ReconnectResult(False)
+        for entry_id, old_id, old_path, new_id, undone in entries:
+            if undone:
+                continue
+            new = self.repo.get(new_id)
+            new_path = new.path if new else ""
+            try:
+                moves = self.repo.undo_reconnect(entry_id)
+            except ValueError as e:
+                result.errors.append(f"{old_path}: not undone ({e})")
+                continue
+            log.info("undid the reconnect of %s to %s (%s)", old_path, new_path, moves)
+            result.pairs.append(
+                checks.MovedPair(
+                    old_id=old_id,
+                    old_path=old_path,
+                    new_id=new_id,
+                    new_path=new_path,
+                    size=(new.size or 0) if new else 0,
+                    same_ext=PurePosixPath(old_path).suffix.lower()
+                    == PurePosixPath(new_path).suffix.lower(),
+                    ambiguous=False,
+                    moves=moves,
+                )
+            )
+        self._collections_changed(result)
+        return result
+
+    def _collections_changed(self, result: ReconnectResult) -> None:
         if any(p.moves.get("collections") for p in result.pairs):
             try:
                 self.collections.changed()  # a published link follows the file
             except Exception:
                 log.warning("syncing the collections failed", exc_info=True)
-        return result
 
     # -- replacing or removing duplicates ---------------------------------------------------
 

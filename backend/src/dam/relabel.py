@@ -2,7 +2,8 @@
 
 Nothing on disk changes. Every stored path under the old label is rewritten: the index
 (``files`` and its search rows), the journal (so earlier changes stay undoable), the
-folders the app made, the maintenance entries set aside, the settings (the folder's
+folders the app made, the maintenance entries set aside, the journaled reconnects (so
+they stay undoable), the settings (the folder's
 entry, protected paths, folders kept from AI) and the rules' ``folder`` and
 ``folder_is`` values. The YAML files are edited value by value (``dam.core.yamledit``),
 so comments and layout stay. A snapshot of the database and the settings is taken
@@ -12,6 +13,7 @@ The archive must be closed while this runs (``Host.close_and_reopen``), or the s
 would write paths under the old label back.
 """
 
+import json
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -24,7 +26,7 @@ from dam.codes.configfile import write_config_file
 from dam.config import AppPaths, load_settings
 from dam.core.text import fold_name
 from dam.core.yamledit import YamlEditError, replace_values
-from dam.db.tables import files, made_folders, maintenance_ignored, operations
+from dam.db.tables import files, made_folders, maintenance_ignored, operations, reconnects
 from dam.maintenance.ignored import GROUPS
 from dam.ops.model import ABS_TARGET, OpFailed, OpKind, followed_json, read_followed
 from dam.rules.model import load_rule_file, rule_files
@@ -132,7 +134,13 @@ def _swap_followed(followed: str | None, old: str, new: str) -> str | None:
 
 def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
     """Rewrite (or, without ``write``, count) the stored paths under ``old``."""
-    counts = {"files": 0, "operations": 0, "made_folders": 0, "maintenance_ignored": 0}
+    counts = {
+        "files": 0,
+        "operations": 0,
+        "made_folders": 0,
+        "maintenance_ignored": 0,
+        "reconnects": 0,
+    }
     # the search rows by their rowid (drive_id is not indexed there), from file_fts_map
     fts = (
         dict(conn.execute(text("SELECT drive_id, fts_rowid FROM file_fts_map")).all())
@@ -208,6 +216,19 @@ def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
                     .where(maintenance_ignored.c.id == row_id)
                     .values(key=moved)
                 )
+    for row_id, old_row in conn.execute(select(reconnects.c.id, reconnects.c.old_row)).all():
+        row = json.loads(old_row)
+        moved = swap(row["path"], old, new)
+        if moved is None:
+            continue
+        counts["reconnects"] += 1
+        if write:
+            row["path"], row["path_nfc"] = moved, unicodedata.normalize("NFC", moved)
+            if "/" not in moved:
+                row["name"] = moved
+            conn.execute(
+                update(reconnects).where(reconnects.c.id == row_id).values(old_row=json.dumps(row))
+            )
     return counts
 
 

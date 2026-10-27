@@ -322,3 +322,96 @@ def test_api_moved_flow(app, moved):
         assert again.status_code == 404
         ignore = {"kind": "moved", "key": f"{old}>{new}", "label": "renamed.txt"}
         assert c.post("/api/maintenance/ignored", json=ignore, headers=H).status_code == 200
+
+
+# -- undoing a reconnect ----------------------------------------------------------------------
+
+
+def _owners(app) -> dict[str, set[str]]:
+    with app.engine.connect() as conn:
+        return {
+            what: set(conn.execute(select(column)).scalars()) for what, column in _BY_FILE.items()
+        }
+
+
+def test_undo_brings_the_old_row_and_everything_back(app, moved):
+    old, new, col = moved
+    _give_everything(app, old)
+    with app.engine.begin() as conn:
+        conn.execute(insert(item_files).values(item_id=_item(app), drive_id=old))
+        conn.execute(
+            insert(member_link_names).values(collection_id=col.id, drive_id=old, link_name="x")
+        )
+    index(app)
+    before = app.repo.get(old)
+    [pair] = run(app).items
+    done = app.maintenance.reconnect([(pair.old_id, pair.new_id)])
+    assert done.undo_id
+
+    undone = app.maintenance.undo_reconnect(done.undo_id)
+    assert undone.errors == [] and [(p.old_path, p.new_path) for p in undone.pairs] == [
+        (f"{BANKS}/a.txt", f"{HOME}/renamed.txt")
+    ]
+    back = app.repo.get(old)
+    assert back is not None and back.missing and back.path == before.path
+    assert (back.size, back.sha256) == (before.size, before.sha256)
+    for what, ids in _owners(app).items():
+        assert old in ids and new not in ids, what
+    assert app.tags.for_file(old) == ["tax"] and app.tags.for_file(new) == []
+    assert app.notes.get("file", old) == "n"
+    assert [h.drive_id for h in search(app.engine, "renamed")] == [new]
+    [again] = run(app).items  # the pair is listed again, as before the reconnect
+    assert (again.old_id, again.new_id) == (old, new)
+    with pytest.raises(InvalidRequest, match="already undone"):
+        app.maintenance.undo_reconnect(done.undo_id)
+
+
+def test_undo_keeps_what_the_file_was_given_since(app, moved):
+    old, new, col = moved
+    run(app)
+    done = app.maintenance.reconnect([(old, new)])
+    app.tags.set_for_file(new, ["later"])  # "tax" taken off and "later" given since
+    [p] = app.maintenance.undo_reconnect(done.undo_id).pairs
+    assert p.moves == {"collections": 1}  # what is moved back
+    assert app.tags.for_file(old) == [] and app.tags.for_file(new) == ["later"]
+    with app.engine.connect() as conn:
+        members = set(conn.execute(select(collection_members.c.drive_id)).scalars())
+    assert members == {old}
+
+
+def test_undo_is_refused_when_the_old_place_is_taken(app, moved, fake_archive):
+    old, new, _ = moved
+    run(app)
+    done = app.maintenance.reconnect([(old, new)])
+    fake_archive.add(f"{BANKS}/a.txt", b"another file", drive_id=None)
+    app.scan()
+    result = app.maintenance.undo_reconnect(done.undo_id)
+    assert result.pairs == [] and "a.txt" in result.errors[0]
+    assert app.repo.get(old) is None and app.tags.for_file(new) == ["tax"]
+
+
+def test_undo_of_an_unknown_reconnect_is_not_found(app):
+    from dam.errors import NotFound
+
+    with pytest.raises(NotFound):
+        app.maintenance.undo_reconnect("nope")
+
+
+def test_api_undo_of_a_reconnect(app, moved):
+    old, new, _ = moved
+    run(app)
+    with TestClient(create_api(app, None), base_url=BASE) as c:
+        choice = {"pairs": [{"old": old, "new": new}]}
+        dry = c.post(
+            "/api/maintenance/moved/reconnect", json={**choice, "dry_run": True}, headers=H
+        )
+        assert dry.json()["undo_id"] is None
+        done = c.post("/api/maintenance/moved/reconnect", json=choice, headers=H).json()
+        undo = {"undo_id": done["undo_id"]}
+        back = c.post("/api/maintenance/moved/undo", json=undo, headers=H)
+        assert back.status_code == 200, back.text
+        assert back.json()["errors"] == [] and back.json()["pairs"][0]["old_id"] == old
+        assert app.repo.get(old) is not None
+        assert c.post("/api/maintenance/moved/undo", json=undo, headers=H).status_code == 400
+        unknown = c.post("/api/maintenance/moved/undo", json={"undo_id": "x"}, headers=H)
+        assert unknown.status_code == 404

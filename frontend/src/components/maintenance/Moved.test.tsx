@@ -1,5 +1,5 @@
 /** "Moved outside dam": the pairs are listed with what would move, an ambiguous one is only
- * listed, Reconnect previews first (saying there is no Undo) and then applies. */
+ * listed, Reconnect previews first and then applies, and Undo in its message puts it back. */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -50,7 +50,7 @@ function setup(items: MovedPair[] = PAIRS, extra = {}) {
     "POST /api/maintenance/moved/reconnect": (call: Call) => {
       const body = call.body as { pairs: { old: string; new: string }[]; dry_run: boolean };
       const chosen = PAIRS.filter((p) => body.pairs.some((c) => c.old === p.old_id));
-      return { body: { dry_run: body.dry_run, pairs: chosen, errors: [] } };
+      return { body: { dry_run: body.dry_run, pairs: chosen, errors: [], undo_id: body.dry_run ? null : "u1" } };
     },
     ...extra,
   });
@@ -89,12 +89,14 @@ describe("Moved outside dam", () => {
     expect(screen.getByText(/1 missing file with tags or other things was never read/)).toBeInTheDocument();
   });
 
-  it("previews the chosen pairs, says there is no Undo, and applies them", async () => {
-    const { calls, user } = setup();
+  it("previews the chosen pairs, applies them, and Undo puts them back", async () => {
+    const { calls, user } = setup(PAIRS, {
+      "POST /api/maintenance/moved/undo": { body: { dry_run: false, pairs: PAIRS.slice(0, 2), errors: [], undo_id: null } },
+    });
     await screen.findByRole("list");
     await user.click(screen.getByRole("button", { name: "Reconnect 2 files…" }));
     const sheet = await screen.findByRole("dialog", { name: "Reconnect 2 files?" });
-    expect(within(sheet).getByText(/has\s+no Undo/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/Undo in\s+the message afterwards/)).toBeInTheDocument();
     expect(within(sheet).getByText("Moves the note.")).toBeInTheDocument();
     expect(reconnects(calls)).toHaveLength(1);
     expect(reconnects(calls)[0].body).toEqual({
@@ -107,6 +109,10 @@ describe("Moved outside dam", () => {
     await user.click(within(sheet).getByRole("button", { name: "Reconnect" }));
     expect(await screen.findByText("Reconnected 2 files")).toBeInTheDocument();
     expect(reconnects(calls)[1].body).toMatchObject({ dry_run: false });
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("Put 2 files back as they were")).toBeInTheDocument();
+    const undos = calls.filter((c) => c.method === "POST" && c.url === "/api/maintenance/moved/undo");
+    expect(undos.map((c) => c.body)).toEqual([{ undo_id: "u1" }]);
   });
 
   it("reconnects one pair from its row, and Cancel changes nothing", async () => {

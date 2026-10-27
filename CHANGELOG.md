@@ -13,8 +13,9 @@ All notable changes are listed here. The format follows
   tags, notes, collections, tray items and the rest: dam saw a new file and marked the
   old one missing. The new Maintenance check **Moved outside dam** pairs the two by size
   and content, shows what would move, and **Reconnect** gives the file back what it had.
-  Only dam's own records change, so there is no Undo, and the preview says so. A file
-  whose content matches more than one file is listed but left alone.
+  Only dam's own records change, and **Undo** in the message afterwards puts them back as
+  they were (what you gave the file since stays with it). A file whose content matches
+  more than one file is listed but left alone.
 - **Move a folder in Browse.** Drag a folder row onto a folder, the other pane or a
   breadcrumb, or use **Move to…** in its panel. On the same disk it is a rename. To a
   folder on another disk, dam copies and checks every file in the background, and only

@@ -1322,8 +1322,11 @@ reminder. Ignoring changes nothing in the archive.
   compared when dam read it before it moved. Each pair shows the old and the new place and
   what would move. **Reconnect** (on a pair, or for the ticked pairs) shows a preview and
   then gives the file back what it had. This changes only dam's own records, never the
-  files, so it is not in Activity and has no Undo. A file whose content matches more than
-  one file is listed but not reconnected, because dam cannot tell which one it is.
+  files, so it is not in Activity; **Undo** in the message afterwards puts the old,
+  missing file back with what it had, and leaves what you gave the file since with it.
+  Undo is refused for a file when another file is now indexed at its old place. A file
+  whose content matches more than one file is listed but not reconnected, because dam
+  cannot tell which one it is.
 
 ## Settings
 

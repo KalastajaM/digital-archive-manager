@@ -18,6 +18,7 @@ from sqlalchemy import (
     case,
     false,
     func,
+    insert,
     not_,
     or_,
     select,
@@ -49,6 +50,7 @@ from dam.db.tables import (
     items,
     member_link_names,
     notes,
+    reconnects,
     rule_outcomes,
     tags,
 )
@@ -85,6 +87,13 @@ _GIVEN = (
     ("rule_outcomes", rule_outcomes.c.drive_id),
 )
 _GIVEN_NOTES = (("note", notes), ("checklist", checklist_items))
+# Everything ``reconnect`` moves, as (what it counts as or "", the table, the column that
+# names the file); ``undo_reconnect`` moves the journaled rows back by their keys.
+_RECONNECTED = (
+    *((what, column.table, column) for what, column in _GIVEN),
+    ("", member_link_names, member_link_names.c.drive_id),
+    *((what, table, table.c.target_id) for what, table in _GIVEN_NOTES),
+)
 
 # the tables the kept status answers read (``FileRepo._kept_answer``)
 _STATUS_TABLES = ("files", "file_layouts", "file_text")
@@ -226,6 +235,20 @@ def _fts_clear_path(conn: Connection, drive_id: str) -> None:
     conn.execute(
         text(f"UPDATE file_fts SET path = '' WHERE rowid = {_FTS_ROWID}"), {"id": drive_id}
     )
+
+
+def _keys_besides(table, column) -> list:
+    """The primary key columns of ``table`` other than ``column`` (the file's id), which
+    name one of the file's rows there (none: the table has one row per file)."""
+    return [c for c in table.primary_key.columns if c is not column]
+
+
+def _of_file(table, column, drive_id: str):
+    """The rows of ``table`` that belong to the file ``drive_id`` (a note or checklist
+    names it as a target of kind "file")."""
+    if column is table.c.get("target_id"):
+        return and_(table.c.target_kind == "file", column == drive_id)
+    return column == drive_id
 
 
 def _chunks(drive_ids: Collection[str], size: int = 500) -> Iterator[list[str]]:
@@ -1151,7 +1174,7 @@ class FileRepo:
         with self._conn() as conn:
             return self._given_in(conn, list(dict.fromkeys(drive_ids)))
 
-    def reconnect(self, old_id: str, new_id: str) -> dict[str, int]:
+    def reconnect(self, old_id: str, new_id: str, batch_id: str) -> dict[str, int]:
         """The file indexed as ``old_id`` (flagged missing) is the one now indexed as
         ``new_id`` (moved or renamed outside the app, so the scanner gave it a new row):
         everything given to it (what ``rekey`` carries: tags, notes and checklists,
@@ -1161,7 +1184,9 @@ class FileRepo:
         barcode, QR and layout reads; the new row has its own). One transaction; returns
         what moved, counted as ``given``. ``ValueError`` (nothing changes) when the old
         row is not missing, the new one is not a present file, or the new one has
-        something given already. Database only: nothing on disk is touched."""
+        something given already. Database only: nothing on disk is touched. Journaled
+        in ``reconnects`` under ``batch_id`` (the old row and the keys of what moved) in
+        the same transaction, for ``undo_reconnect``."""
         with self._conn(write=True) as conn:
             old = conn.execute(
                 select(files.c.missing, files.c.parked_at).where(files.c.drive_id == old_id)
@@ -1185,16 +1210,111 @@ class FileRepo:
             if self._given_in(conn, [new_id]) or names_kept:
                 raise ValueError("the new row has something of its own")
             moved = self._given_in(conn, [old_id]).get(old_id, {})
-            for _, column in (*_GIVEN, ("", member_link_names.c.drive_id)):
-                conn.execute(update(column.table).where(column == old_id).values(drive_id=new_id))
-            for _, table in _GIVEN_NOTES:
+            row = conn.execute(select(files).where(files.c.drive_id == old_id)).mappings().one()
+            keys: dict[str, list[list]] = {}
+            for _, table, column in _RECONNECTED:
+                key_cols = _keys_besides(table, column)
+                found = conn.execute(
+                    select(column, *key_cols).where(_of_file(table, column, old_id))
+                )
+                if rows := [list(r)[1:] for r in found]:
+                    keys[table.name] = rows
                 conn.execute(
                     update(table)
-                    .where(table.c.target_kind == "file", table.c.target_id == old_id)
-                    .values(target_id=new_id)
+                    .where(_of_file(table, column, old_id))
+                    .values({column.key: new_id})
                 )
             self._delete_rows(conn, [old_id])
+            conn.execute(
+                insert(reconnects).values(
+                    batch_id=batch_id,
+                    old_id=old_id,
+                    new_id=new_id,
+                    old_row=json.dumps(
+                        {k: v.isoformat() if isinstance(v, date) else v for k, v in row.items()}
+                    ),
+                    moved=json.dumps(keys),
+                    created=time.time(),
+                )
+            )
         return moved
+
+    def reconnects_of(self, batch_id: str) -> list[tuple[int, str, str, str, bool]]:
+        """The pairs one ``reconnect`` call journaled as ``batch_id``: (journal id, old id,
+        the old row's path, new id, undone)."""
+        with self._conn() as conn:
+            return [
+                (r.id, r.old_id, json.loads(r.old_row)["path"], r.new_id, r.undone is not None)
+                for r in conn.execute(
+                    select(reconnects)
+                    .where(reconnects.c.batch_id == batch_id)
+                    .order_by(reconnects.c.id)
+                )
+            ]
+
+    def undo_reconnect(self, entry_id: int) -> dict[str, int]:
+        """Undo the reconnect journaled as ``entry_id``: the old row comes back as it was
+        (still missing; what was read from its content is not kept, so it reads as pending)
+        and the rows that moved to the new one and are still there move back to it. What
+        the file was given since stays with it. One transaction; returns what moved back,
+        counted as ``given``. ``ValueError`` (nothing changes) when it was undone already,
+        the old id is in use again, the old path is taken or the new row is gone. Database
+        only: nothing on disk is touched."""
+        with self._conn(write=True) as conn:
+            entry = conn.execute(select(reconnects).where(reconnects.c.id == entry_id)).first()
+            if entry is None:
+                raise ValueError("no such reconnect")
+            if entry.undone is not None:
+                raise ValueError("already undone")
+            row = json.loads(entry.old_row)
+            old_id, new_id = entry.old_id, entry.new_id
+            if (
+                conn.execute(select(files.c.drive_id).where(files.c.drive_id == new_id)).first()
+                is None
+            ):
+                raise ValueError("the file is no longer in the index")
+            taken = conn.execute(
+                select(files.c.drive_id).where(
+                    or_(
+                        files.c.drive_id == old_id,
+                        files.c.path == row["path"],
+                        files.c.path_nfc == nfc(row["path"]),
+                    )
+                )
+            ).first()
+            if taken is not None:
+                raise ValueError("another file is indexed at its old place now")
+            if row.get("doc_date"):
+                row["doc_date"] = date.fromisoformat(row["doc_date"])
+            row.update(
+                missing=True,
+                parked_at=None,
+                index_state="pending",
+                retry_at=None,
+                attempts=0,
+                last_error=None,
+            )
+            conn.execute(insert(files).values(row))
+            _fts_insert(conn, old_id, nfc(row["name"] or ""), nfc(row["path"]), "")
+            journaled = json.loads(entry.moved)
+            back: dict[str, int] = {}
+            for what, table, column in _RECONNECTED:
+                key_cols = _keys_besides(table, column)
+                for key in journaled.get(table.name, []):
+                    n = conn.execute(
+                        update(table)
+                        .where(
+                            _of_file(table, column, new_id),
+                            *(c == v for c, v in zip(key_cols, key, strict=True)),
+                        )
+                        .values({column.key: old_id})
+                    ).rowcount
+                    if n and what:
+                        back[what] = back.get(what, 0) + n
+            conn.execute(
+                update(reconnects).where(reconnects.c.id == entry_id).values(undone=time.time())
+            )
+        return back
 
     def mark_missing(
         self, seen_before: float, subtree: str = "", skipped: Sequence[str] = ()

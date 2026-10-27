@@ -81,6 +81,7 @@ EXPECTED_INDEXES = {
     "ix_operations_batch_id": ("operations", ["batch_id"]),
     "ix_file_tags_tag_id": ("file_tags", ["tag_id"]),  # 0033: files of a tag, by tag
     "ix_operations_planned": ("operations", ["state"]),  # 0037: planned rows only
+    "ix_reconnects_batch_id": ("reconnects", ["batch_id"]),  # 0039: undo of a reconnect
 }
 
 
