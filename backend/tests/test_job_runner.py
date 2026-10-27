@@ -7,7 +7,7 @@ import time
 import pytest
 
 from dam.core.jobs import DONE, ERROR, RUNNING, STOPPED, Jobs
-from dam.serve import EXTRACTION, start_background
+from dam.serve import EXTRACTION, SCAN, WATCHER, start_background
 
 
 def _wait_for(cond, timeout: float = 5.0) -> bool:
@@ -79,15 +79,17 @@ def test_close_waits_at_most_its_timeout_for_a_stuck_worker():
     worker.join(2)
 
 
-def test_the_content_indexer_runs_on_the_apps_runner_and_stops_with_it(app):
+def test_the_background_runs_on_the_apps_runner_and_stops_with_it(app):
     bg = start_background(app)
     try:
         worker = app.jobs.worker(EXTRACTION)
         assert worker is not None and worker is bg.indexer and worker.state == RUNNING
-        assert [s.name for s in app.jobs.status()] == [EXTRACTION]
+        assert [s.name for s in app.jobs.status()] == [SCAN, WATCHER, EXTRACTION]
+        assert _wait_for(lambda: bg.scan.state == DONE)  # the initial scan ends by itself
+        assert bg.watching.state == RUNNING
     finally:
         bg.stop()
-    assert worker.state == STOPPED
+    assert worker.state == bg.watching.state == STOPPED
     assert not any(t.is_alive() for t in bg.threads)
 
 

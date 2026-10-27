@@ -218,11 +218,13 @@ class Worker:
 
     @property
     def state(self) -> str:
+        """running; error (it raised); stopped (asked to) or done (it ended by itself,
+        as the initial scan does)."""
         if self.finished is None and self.thread is not None:
             return RUNNING
         if self.error is not None:
             return ERROR
-        return STOPPED
+        return STOPPED if self.stop_event.is_set() or self.thread is None else DONE
 
     def status(self) -> JobStatus:
         end = self.finished if self.finished is not None else time.monotonic()
