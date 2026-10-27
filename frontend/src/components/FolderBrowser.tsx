@@ -1,5 +1,5 @@
 import { ChevronRight, FolderPlus } from "lucide-react";
-import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ApiError, errorText, type Status, useCreateFolder, useFolders, useStatus } from "../api/client";
 import { visible } from "../text";
 import { Sheet } from "./ui/Sheet";
@@ -185,11 +185,11 @@ export function FolderBrowser({ value, onChoose, onCancel, refuse = NO_REFUSE }:
   const shown = rows.rows;
   const current = shown.find((r) => r.path === active) ?? shown[0] ?? null;
   const index = current ? shown.indexOf(current) : -1;
-  const rowId = (i: number) => `${ids}-row-${i}`;
+  const rowId = useCallback((i: number) => `${ids}-row-${i}`, [ids]);
 
   useEffect(() => {
     if (index >= 0) document.getElementById(rowId(index))?.scrollIntoView({ block: "nearest" });
-  }, [index]);
+  }, [index, rowId]);
   useEffect(() => {
     treeRef.current?.focus();
   }, []);
@@ -199,6 +199,7 @@ export function FolderBrowser({ value, onChoose, onCancel, refuse = NO_REFUSE }:
     const hit = shown.find((r) => fold(r.path).includes(needle) && !(specialOf(r.path, special, refuse)?.refused ?? false));
     if (hit) setActive(hit.path);
     // Deliberately keyed on the filter only: walking the results keeps the user's row.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shown, special and refuse are this render's, for this filter
   }, [needle]);
 
   const select = (path: string) => {

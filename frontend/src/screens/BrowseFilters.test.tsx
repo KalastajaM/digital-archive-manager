@@ -1,6 +1,6 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import type { SearchHit } from "../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
@@ -57,6 +57,7 @@ function setup(url: string) {
             <>
               <Browse />
               <Where />
+              <Link to="/browse?path=50.+Medical">Go to Medical</Link>
             </>
           }
         />
@@ -168,6 +169,15 @@ describe("The filter row and the address", () => {
     await user.type(box(), "kela");
     await waitFor(() => expect(where()).toBe("/browse?q=kela+tag%3Aa"));
     expect(box()).toHaveValue("kela");
+  });
+
+  it("a folder opened while the typed words wait to reach the address stays open", async () => {
+    const { user } = setup("/browse");
+    await user.type(box(), "kela");
+    // before the words reach the address (SEARCH_DEBOUNCE_MS)
+    await user.click(screen.getByRole("link", { name: "Go to Medical" }));
+    await waitFor(() => expect(where()).toContain("q=kela"));
+    expect(where()).toBe("/browse?path=50.+Medical&q=kela");
   });
 
   it("a search error from a bad value is shown", async () => {

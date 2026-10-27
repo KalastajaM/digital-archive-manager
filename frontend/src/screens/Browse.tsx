@@ -708,6 +708,7 @@ export default function Browse() {
     // address change this screen made itself on typing does not
     if (urlQ !== null && fromUrl.words !== wrote.current) setQuery(fromUrl.words);
     // only when the address was navigated to
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- urlQ and fromUrl are this render's address
   }, [location.key]);
   const filters: SearchFilter[] = params
     .getAll("tag")
@@ -763,7 +764,8 @@ export default function Browse() {
 
   const items: Record<PaneId, Item[]> = useMemo(
     () => ({ left: itemsOf("left"), right: split ? itemsOf("right") : [] }),
-    // itemsOf reads exactly these
+    // itemsOf reads exactly these (it is a new function each render, so not itself a dependency)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       listings.left.data,
       listings.right.data,
@@ -945,7 +947,8 @@ export default function Browse() {
     const next = new URLSearchParams(params);
     next.delete("select");
     setParams(next, { replace: true });
-    // runs for a new target or a new listing only
+    // runs for a new target or a new listing only; items, update and params are this render's
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectId, leftListed]);
   const listRef = useRef<Record<PaneId, HTMLUListElement | null>>({ left: null, right: null });
   const focusRow = useRef(false);
@@ -1033,9 +1036,12 @@ export default function Browse() {
       return visible(e instanceof ApiError && e.detail ? e.detail : errorText(e));
     }
   };
+  // Tried again whenever the pane moves or its listing comes in.
+  const leftPath = paths.left;
+  const rightPath = paths.right;
   useEffect(() => {
     if (!madeFolder) return;
-    if (parentOf(madeFolder.path) !== paths[madeFolder.pane]) {
+    if (parentOf(madeFolder.path) !== { left: leftPath, right: rightPath }[madeFolder.pane]) {
       setMadeFolder(null); // the pane went elsewhere before the listing came
       return;
     }
@@ -1043,7 +1049,8 @@ export default function Browse() {
     if (i < 0) return;
     update(madeFolder.pane, { ids: [], index: i, anchor: items[madeFolder.pane][i].drive_id, touched: true });
     setMadeFolder(null);
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- update is a new function each render
+  }, [madeFolder, leftPath, rightPath, items]);
 
   /** The files a drag or Move to… takes: the checked files of the pane, else the row
    * the user is on (once they chose one). A folder moves on its own, never with files:
@@ -1387,6 +1394,7 @@ export default function Browse() {
     if (lookAt === null) return;
     setLookAt(null);
     if (qlCurrent.current === lookAt) quickLook.open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per row button; quickLook is a new object each render
   }, [lookAt]);
 
   useKeydown((e) => {
@@ -1765,9 +1773,10 @@ export default function Browse() {
   };
   const addTags = (names: string[]) => addFilters(names.map((value) => ({ name: "tag" as const, value, negated: false })));
   // The words follow into the address as they are typed (replacing the entry, so Back is
-  // not filled with letters), and a ?tag= from an old link is moved into ?q=.
+  // not filled with letters), and a ?tag= from an old link is moved into ?q=. Keyed on
+  // the whole address, so a folder opened while the words wait is not undone by them.
+  const want = serializeQuery(q, filters);
   useEffect(() => {
-    const want = serializeQuery(q, filters);
     if (want === (urlQ ?? "") && !params.has("tag")) return;
     const timer = setTimeout(() => {
       const p = new URLSearchParams(params);
@@ -1778,8 +1787,7 @@ export default function Browse() {
       setParams(p, { replace: true });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-    // the address and the box are compared as they stand
-  }, [q, filtersKey, urlQ]);
+  }, [want, urlQ, params, setParams]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [onSuggestion, setOnSuggestion] = useState(-1); // the arrow keys' place in the list
