@@ -429,23 +429,27 @@ function ModeChoice({
   onChoose: (mode: DropMode) => void;
 }) {
   return (
-    <fieldset className="drop-modes" disabled={busy}>
-      <legend className="visually-hidden">How the files get there</legend>
-      {DROP_MODES.map((m) => (
-        <label key={m} className="drop-mode" data-off={modes[m] ? "" : undefined} data-mode={m}>
-          <input
-            type="radio"
-            name="drop-mode"
-            value={m}
-            checked={mode === m}
-            disabled={modes[m] !== null && mode !== m}
-            onChange={() => onChoose(m)}
-          />
-          <span className="drop-mode-name">{MODE_LABEL[m]}</span>
-          <span className="drop-mode-hint">{modes[m] ?? MODE_HINT[m]}</span>
-        </label>
-      ))}
-    </fieldset>
+    <>
+      <fieldset className="drop-modes" disabled={busy}>
+        <legend className="visually-hidden">How the files get there</legend>
+        {DROP_MODES.map((m) => (
+          <label key={m} className="drop-mode" data-off={modes[m] ? "" : undefined} data-mode={m}>
+            <input
+              type="radio"
+              name="drop-mode"
+              value={m}
+              checked={mode === m}
+              disabled={modes[m] !== null && mode !== m}
+              onChange={() => onChoose(m)}
+            />
+            <span className="drop-mode-name">{MODE_LABEL[m]}</span>
+            <span className="drop-mode-hint">{modes[m] ?? MODE_HINT[m]}</span>
+          </label>
+        ))}
+      </fieldset>
+      {/* the New look shows this line under the choices; Classic hides it (the key hints at the foot of Browse say it) */}
+      <p className="drop-mode-note">Holding ⌥ while dropping picks Copy.</p>
+    </>
   );
 }
 

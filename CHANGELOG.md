@@ -47,6 +47,20 @@ All notable changes are listed here. The format follows
   reference, amount, due date) with its own **Copy**, the barcode on white paper exactly as
   before, three short steps for paying with it, and **Copy barcode number** and **Done** in the
   footer. Classic is unchanged.
+- **The New look: Browse.** In New every pane header is one line: back and forward, the
+  path, and the tools. A long path drops its parents first (the whole path is the tooltip),
+  and a pane narrower than about 480 px folds its collection filter and Folders / Files into
+  one **View** menu. File names are set in the fixed-width font, sizes and dates sit right
+  aligned, a selected row has a calm fill, and the **Quick Look** eye shows at the row end
+  on hover. With two panes there is a divider between them (drag to resize, double-click to
+  reset, the place is kept), each pane is marked L or R, and the panes never stack. Under
+  about 1120 px the details panel moves behind a **Details** button that opens it over the
+  list; under about 760 px **Two panes**, **Swap panes** and **New folder** fold into a **...**
+  menu; and in a very narrow Browse the two panes become **L** and **R** tabs. A narrow pane
+  gives up its folder, size and date columns before the file name. The Move / Link / Copy
+  choice of a drop has each way's description under its name and the line "Holding ⌥ while
+  dropping picks Copy." on its own. Everything Browse did before is still there. Classic is
+  unchanged.
 - **Open a file from Activity.** Each operation in Activity that names a file has a
   **Show in Browse** icon that opens Browse at the file's folder with the file selected
   and shown on the right. When the file has been moved, renamed or marked for deletion

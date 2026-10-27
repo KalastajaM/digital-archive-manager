@@ -738,3 +738,260 @@
   align-items: center;
   justify-content: center;
 }
+
+/* ==== Browse: one pane with the details, or two panes side by side =========================
+ * Each pane is its own container: its header is one line (back and forward, the path, the
+ * tools) and the tools give way by the pane's width, whatever the window is. The screen is a
+ * container too (the main element), and gives way in a set order: the details panel leaves
+ * the row under ~1120px (a button opens it over the list), the wide header buttons fold into
+ * "..." under ~760px, and under ~640px the two panes become an L / R pair of tabs. The panes
+ * never stack: Classic's 900px rules are undone here. The dividers are remembered, and
+ * double-click resets them. (There is no folder tree in Browse: the sidebar and each pane's
+ * breadcrumb are the way around.) */
+[data-style="new"] main:has(> .browse) { container: browse / inline-size; }
+[data-style="new"] .app:has(.browse) .content { height: 100%; }
+[data-style="new"] .browse { background: var(--panel); }
+
+/* -- the header: one line -- */
+[data-style="new"] .browse-toolbar { flex-wrap: nowrap; gap: var(--sp-3); padding: 0 var(--sp-4) 0 var(--sp-5); align-content: normal; }
+[data-style="new"] .browse-toolbar .toolbar-lead { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; gap: var(--sp-2); }
+[data-style="new"] .browse-toolbar .toolbar-title { flex: none; }
+[data-style="new"] .browse-toolbar .toolbar-subtitle { font-family: var(--font-mono); font-size: var(--fs-xs); }
+[data-style="new"] .browse-toolbar .toolbar-actions { flex: none; flex-wrap: nowrap; margin-left: 0; }
+[data-style="new"] .browse-toolbar .toolbar-search { flex: 1 1 220px; min-width: 0; max-width: 380px; margin-left: var(--sp-2); }
+[data-style="new"] .browse-toolbar .toolbar-trailing { flex: none; margin-left: auto; justify-content: flex-end; flex-wrap: nowrap; }
+[data-style="new"] .browse .search { min-width: 0; }
+[data-style="new"] .browse .search .search-scope { flex: none; }
+[data-style="new"] .browse-toolbar .hdr-more,
+[data-style="new"] .browse-toolbar .details-button { display: none; }
+@container browse (max-width: 1120px) {
+  [data-style="new"] .browse-toolbar .details-button { display: inline-flex; }
+}
+@container browse (max-width: 880px) {
+  [data-style="new"] .browse-toolbar .toolbar-subtitle { display: none; }
+}
+@container browse (max-width: 760px) {
+  [data-style="new"] .browse-toolbar .hdr-wide { display: none; }
+  [data-style="new"] .browse-toolbar .hdr-more { display: inline-flex; }
+}
+@container browse (max-width: 640px) {
+  [data-style="new"] .browse-toolbar { padding-left: var(--sp-3); padding-right: var(--sp-3); gap: var(--sp-2); }
+  [data-style="new"] .browse-toolbar .toolbar-search { margin-left: 0; }
+  [data-style="new"] .browse .search .search-scope { display: none; }
+}
+
+/* -- the body: panes, dividers, details -- */
+[data-style="new"] .browse-main { background: var(--panel); }
+[data-style="new"] .browse-pane { container: pane / inline-size; border-top: 0; background: var(--panel); }
+[data-style="new"] .browse-pane ~ .browse-pane,
+[data-style="new"] .browse-main > .browse-preview { border-left: 1px solid var(--hairline); border-top: 0; }
+[data-style="new"] .browse-split .browse-main { grid-template-columns: minmax(260px, var(--split)) minmax(260px, 1fr); }
+[data-style="new"] .browse-main > .splitter { display: block; }
+[data-style="new"] .browse-split .browse-main > .splitter { left: clamp(260px, var(--split), calc(100% - 260px)); }
+[data-style="new"] .browse-main > .splitter::after { background: var(--hairline); }
+[data-style="new"] .browse-main > .splitter:hover::after,
+[data-style="new"] .browse-main > .splitter:focus-visible::after { background: var(--accent); }
+[data-style="new"] .pane-body { overflow-y: auto; }
+
+/* -- a pane's header -- */
+[data-style="new"] .pane-bar {
+  flex: none;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 10px;
+  white-space: nowrap;
+  background: var(--panel);
+  border-bottom: 1px solid var(--hairline);
+}
+[data-style="new"] .browse-split .browse-pane:not(.browse-pane-active) .pane-bar { opacity: 1; }
+[data-style="new"] .browse-pane-active .pane-bar { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+[data-style="new"] .pane-id {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--muted-2);
+}
+[data-style="new"] .browse-pane-active .pane-id { border-color: color-mix(in srgb, var(--accent) 35%, var(--panel)); color: var(--accent-hover); }
+[data-style="new"] .pane-bar .icon-button { flex: none; }
+/* the path gives up its parents first (their ellipsis, then nothing); the folder you are in keeps its name longest */
+[data-style="new"] .breadcrumb { flex: 1 1 0; min-width: 0; margin-left: var(--sp-1); }
+[data-style="new"] .breadcrumb ol { max-width: 100%; flex-wrap: nowrap; }
+[data-style="new"] .breadcrumb li { flex: 0 100 auto; min-width: 0; }
+[data-style="new"] .breadcrumb li:first-child { flex: 0 100 auto; }
+[data-style="new"] .breadcrumb li:last-child { flex: 0 1 auto; min-width: 8ch; }
+[data-style="new"] .breadcrumb li:only-child { min-width: 0; }
+[data-style="new"] .breadcrumb [aria-current="page"] { font-weight: 600; }
+[data-style="new"] .breadcrumb a:hover { color: var(--text); text-decoration: underline; }
+[data-style="new"] .pane-tools { flex: none; gap: 6px; }
+[data-style="new"] .pane-tools .menu-button { min-height: 26px; padding: 2px 8px; font-size: var(--fs-sm); }
+[data-style="new"] .pane-tools .pane-narrow { display: none; }
+@container pane (max-width: 480px) {
+  [data-style="new"] .pane-tools .pane-wide { display: none; }
+  [data-style="new"] .pane-tools .pane-narrow { display: inline-flex; }
+}
+
+/* -- the two panes as L / R tabs under ~640px -- */
+[data-style="new"] .pane-tabs { display: none; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--hairline); background: var(--panel-2); }
+[data-style="new"] .pane-tabs [role="tab"] {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted-2);
+  font-size: var(--fs-md);
+}
+[data-style="new"] .pane-tabs [role="tab"]:hover:not([aria-selected="true"]) { background: var(--hover); }
+[data-style="new"] .pane-tabs [role="tab"][aria-selected="true"] { background: var(--panel); box-shadow: var(--shadow-segment); color: var(--text); font-weight: 500; }
+@container browse (max-width: 640px) {
+  [data-style="new"] .pane-tabs { display: flex; }
+  [data-style="new"] .browse-split .browse-main { grid-template-columns: minmax(0, 1fr); }
+  [data-style="new"] .browse-split .browse-main > .splitter { display: none; }
+  [data-style="new"] .browse-split .browse-pane:not(.browse-pane-active) { display: none; }
+}
+
+/* -- the details panel: beside the list, or over it when the row is short -- */
+[data-style="new"] .browse-preview { background: var(--panel); padding: var(--sp-5) 18px var(--sp-6); }
+[data-style="new"] .browse-preview .file-meta-title h2 { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 500; }
+[data-style="new"] .details-scrim { display: none; }
+@container browse (max-width: 1120px) {
+  [data-style="new"] .browse:not(.browse-split) .browse-main { grid-template-columns: minmax(0, 1fr); }
+  [data-style="new"] .browse:not(.browse-split) .browse-main > .splitter { display: none; }
+  [data-style="new"] .browse:not(.browse-split) .browse-main > .browse-preview { display: none; }
+  [data-style="new"] .browse-main[data-details="open"] > .details-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+  }
+  [data-style="new"] .browse:not(.browse-split) .browse-main[data-details="open"] > .browse-preview {
+    display: block;
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(440px, 92%);
+    box-shadow: var(--shadow-pop);
+  }
+}
+
+/* Classic's narrow-window rules stack the panes and let the page scroll; New keeps the panes
+ * side by side and scrolling inside */
+@media (max-width: 900px) {
+  [data-style="new"] .app:has(.browse) .content { height: 100%; }
+  [data-style="new"] .pane-body { overflow-y: auto; }
+  [data-style="new"] .browse-main { grid-template-columns: minmax(300px, var(--split)) minmax(0, 1fr); }
+  [data-style="new"] .browse-split .browse-main { grid-template-columns: minmax(260px, var(--split)) minmax(260px, 1fr); }
+  [data-style="new"] .browse-split .browse-pane { --flat-cols: minmax(0, 2.4fr) minmax(0, 1fr) 84px 72px; }
+  [data-style="new"] .browse-split .entry-date,
+  [data-style="new"] .browse-split .entry-size,
+  [data-style="new"] .browse-split .flat-sort-date,
+  [data-style="new"] .browse-split .flat-sort-size { visibility: visible; }
+  [data-style="new"] .browse-split .browse-pane-grouped { --flat-cols: minmax(0, 1fr) 84px 72px; }
+}
+
+/* A narrow pane gives up its columns from the left: the folder, then the size, then the date;
+ * the name stays (the cells are hidden, and the grid has one column fewer each time) */
+@container pane (max-width: 500px) {
+  [data-style="new"] .pane-body { --flat-cols: minmax(0, 1fr) 84px 72px; }
+  [data-style="new"] .entry-folder,
+  [data-style="new"] .flat-sort-folder { display: none; }
+}
+@container pane (max-width: 400px) {
+  [data-style="new"] .pane-body { --flat-cols: minmax(0, 1fr) 84px; }
+  [data-style="new"] .entry-size,
+  [data-style="new"] .flat-sort-size { display: none; }
+}
+@container pane (max-width: 320px) {
+  [data-style="new"] .pane-body { --flat-cols: minmax(0, 1fr); }
+  [data-style="new"] .entry-date,
+  [data-style="new"] .flat-sort-date { display: none; }
+}
+
+/* -- the rows: names in the fixed-width face, figures right-aligned, a calm selection -- */
+[data-style="new"] .entries li { min-height: 34px; border-radius: var(--r-md); }
+[data-style="new"] .entries:where(:not(.browse-entries)) li:nth-child(even),
+[data-style="new"] .entries li.stripe { background: transparent; }
+[data-style="new"] .entries li:hover { background: var(--hover); }
+[data-style="new"] .entries li[aria-current="true"] { background: var(--hover); box-shadow: inset 2px 0 0 var(--accent); }
+[data-style="new"] .entries li.checked,
+[data-style="new"] .entries li.checked:hover { background: var(--selected); color: var(--text); }
+[data-style="new"] .browse .entries li.checked .entry-name { font-weight: 500; }
+[data-style="new"] .entries li.checked .entry-icon,
+[data-style="new"] .entries li.checked .entry-path,
+[data-style="new"] .entries li.checked .snippet,
+[data-style="new"] .entries li.checked .link-icon { color: var(--accent); opacity: 1; }
+[data-style="new"] .entries-flat li.checked .entry-col { color: var(--muted-2); opacity: 1; }
+[data-style="new"] .entries li input[type="checkbox"] { accent-color: var(--accent); }
+/* a name stays on its row and ends in an ellipsis (Classic lets the name drop under the icon) */
+[data-style="new"] .entries button.entry { min-height: 32px; font-weight: 400; flex-wrap: nowrap; }
+[data-style="new"] .browse .entries .entry-name { white-space: nowrap; }
+[data-style="new"] .browse .entries .entry-name { font-weight: 400; }
+[data-style="new"] .browse .entries button.entry:not(.entry-dir) .entry-name { font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .browse .entries button.entry.entry-dir .entry-name { font-weight: 500; }
+[data-style="new"] .entry-col { font-size: var(--fs-sm); }
+[data-style="new"] .entry-date,
+[data-style="new"] .entry-size { font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
+[data-style="new"] .flat-head { background: var(--panel); border-bottom-color: var(--hairline); }
+[data-style="new"] .flat-sort { font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.02em; color: var(--muted); }
+[data-style="new"] .flat-sort[aria-pressed="true"] { color: var(--text); }
+[data-style="new"] .list-head { color: var(--muted-2); border-bottom: 1px solid var(--hairline); }
+/* the Quick Look eye at the row end, on hover or focus, in both layouts */
+[data-style="new"] .entries.entries-flat li,
+[data-style="new"] .flat-head { grid-template-columns: var(--flat-check) minmax(0, 1fr) 22px; }
+[data-style="new"] .entries.entries-flat .entry-ql { margin-right: 0; }
+[data-style="new"] .entries .icon-button.entry-ql { color: var(--muted-2); }
+[data-style="new"] .entries li:hover .entry-ql,
+[data-style="new"] .entries .entry-ql:focus-visible { opacity: 1; }
+[data-style="new"] .entries.entries-flat li.group-head { background: var(--panel-2); border-radius: var(--r-sm); }
+[data-style="new"] .entries.entries-flat li.group-head { display: flex; }
+[data-style="new"] .tag-bar { background: var(--panel-2); border-bottom-color: var(--hairline); }
+[data-style="new"] .browse-filters { border-bottom-width: 1px; }
+[data-style="new"] .browse-keys { border-top-width: 1px; padding: 6px var(--sp-5); font-size: var(--fs-sm); }
+
+/* -- the Move / Link / Copy choice of a drop: the name, its real description under it, and the
+ * Option-key line on its own -- */
+[data-style="new"] .drop-modes { gap: 4px; margin-bottom: var(--sp-2); }
+[data-style="new"] .drop-mode {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 1px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+}
+[data-style="new"] .drop-mode input { grid-row: 1 / span 2; margin: 3px 0 0; accent-color: var(--accent); }
+[data-style="new"] .drop-mode-name,
+[data-style="new"] .drop-mode-hint { grid-column: 2; }
+[data-style="new"] .drop-mode-name { font-weight: 500; }
+[data-style="new"] .drop-mode:has(input:checked) {
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--panel));
+}
+[data-style="new"] .drop-mode-note { display: block; margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--muted); }
+
+/* The shown file's name (click to rename): up to two lines, then an ellipsis; the whole name is in the path under it */
+[data-style="new"] .browse-preview .file-meta-title h2 { min-width: 0; overflow-wrap: anywhere; }
+[data-style="new"] .browse-preview .file-meta-title .click-edit {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+}
+
+/* Quick Look: the name in the fixed-width face, hairline frame */
+[data-style="new"] .quicklook-title h2 { font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 500; }
+[data-style="new"] .quicklook-bar { border-bottom-width: 1px; }
+[data-style="new"] .quicklook-details { border-left-width: 1px; border-left-color: var(--hairline); }
+[data-style="new"] .quicklook-preview { background: var(--desk); }
