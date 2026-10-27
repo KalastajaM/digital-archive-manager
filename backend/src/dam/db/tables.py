@@ -554,3 +554,23 @@ reconnects = Table(
     Column("undone", Float, nullable=True),
     Index("ix_reconnects_batch_id", "batch_id"),
 )
+
+# One row per entry of ##. Ongoing or ##. Important whose new device number Maintenance's
+# "Left alone after a Drive restart" took over (migration 0040): the ``ongoing_entries``
+# row, its rel, kind and inode, and the device number before and after. Undo puts ``old_dev``
+# back while the entry still has ``new_dev`` and that inode; ``undone`` says when.
+readopted = Table(
+    "readopted",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("batch_id", Text, nullable=False),
+    Column("entry_id", Integer, nullable=False),
+    Column("rel", Text, nullable=False),
+    Column("kind", Text, nullable=False),  # link | folder
+    Column("st_ino", Text, nullable=False),
+    Column("old_dev", Text, nullable=False),
+    Column("new_dev", Text, nullable=False),
+    Column("created", Float, nullable=False),
+    Column("undone", Float, nullable=True),
+    Index("ix_readopted_batch_id", "batch_id"),
+)

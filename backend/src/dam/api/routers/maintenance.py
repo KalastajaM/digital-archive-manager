@@ -21,6 +21,9 @@ from dam.api.schemas import (
     MaintenanceJobOut,
     MaintenanceKindIn,
     MaintenanceStartIn,
+    ReadoptIn,
+    ReadoptOut,
+    ReadoptUndoIn,
     ReconnectIn,
     ReconnectOut,
     ReconnectUndoIn,
@@ -169,3 +172,23 @@ def undo_reconnect(app: AppDep, body: ReconnectUndoIn) -> dict:
     the new row; what the file was given since stays. A pair that cannot be undone any
     more is in ``errors``. 400: undone already; 404: no such reconnect."""
     return asdict(app.maintenance.undo_reconnect(body.undo_id))
+
+
+@router.post("/remounted/readopt", response_model=ReadoptOut)
+def readopt_remounted(app: AppDep, body: ReadoptIn) -> dict:
+    """Take over the new device number of the entries dam made in each of ``roots``
+    (``##. Ongoing``, ``##. Important``) after a Drive restart: only where the check
+    offers it (just the device number changed, the same way for every changed entry
+    under the root). Database only: nothing on disk changes; journaled for Undo (its
+    ``undo_id``), but not in Activity. Then the publishers sync. ``dry_run`` lists what
+    would be taken over. 400: no root, one that is not a publish root, or nothing to
+    take over."""
+    return asdict(app.maintenance.readopt(body.roots, dry_run=body.dry_run))
+
+
+@router.post("/remounted/undo", response_model=ReadoptOut)
+def undo_readopt(app: AppDep, body: ReadoptUndoIn) -> dict:
+    """Undo a take-over: each entry gets back the device number it was recorded with,
+    unless its record changed since (then it is in ``errors``). 400: undone already;
+    404: no such take-over."""
+    return asdict(app.maintenance.undo_readopt(body.undo_id))

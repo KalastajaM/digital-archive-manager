@@ -177,11 +177,14 @@ from dam.collections.ongoing.model import (
     wanted_name_of,
 )
 from dam.collections.ongoing.publisher import OngoingPublisher
+from dam.collections.ongoing.remount import RemountedEntry, RemountedRoot
 
 _REPLACED = REPLACED  # the name the tests and older imports use
 
 __all__ = [
     "OngoingPublisher",
+    "RemountedEntry",
+    "RemountedRoot",
     "log",
     "PUBLISHER_ID",
     "ORIGIN",

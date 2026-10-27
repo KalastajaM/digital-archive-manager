@@ -874,6 +874,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/maintenance/remounted/readopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Readopt Remounted
+         * @description Take over the new device number of the entries dam made in each of ``roots``
+         *     (``##. Ongoing``, ``##. Important``) after a Drive restart: only where the check
+         *     offers it (just the device number changed, the same way for every changed entry
+         *     under the root). Database only: nothing on disk changes; journaled for Undo (its
+         *     ``undo_id``), but not in Activity. Then the publishers sync. ``dry_run`` lists what
+         *     would be taken over. 400: no root, one that is not a publish root, or nothing to
+         *     take over.
+         */
+        post: operations["readopt_remounted_api_maintenance_remounted_readopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/remounted/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Readopt
+         * @description Undo a take-over: each entry gets back the device number it was recorded with,
+         *     unless its record changed since (then it is in ``errors``). 400: undone already;
+         *     404: no such take-over.
+         */
+        post: operations["undo_readopt_api_maintenance_remounted_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browse": {
         parameters: {
             query?: never;
@@ -6013,6 +6061,7 @@ export interface components {
             label_clashes?: components["schemas"]["LabelClashesOut"] | null;
             unfinished_copies?: components["schemas"]["UnfinishedCopiesOut"] | null;
             moved?: components["schemas"]["MovedOut"] | null;
+            remounted?: components["schemas"]["RemountedOut"] | null;
         };
         /** MaintenanceStartIn */
         MaintenanceStartIn: {
@@ -6020,7 +6069,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies" | "moved";
+            kind: "duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies" | "moved" | "remounted";
             /** Days */
             days?: number | null;
         };
@@ -6535,6 +6584,45 @@ export interface components {
             queued: number;
         };
         /**
+         * ReadoptIn
+         * @description The roots (``##. Ongoing``, ``##. Important``) whose new device number to take over;
+         *     ``dry_run`` lists what would be, changing nothing.
+         */
+        ReadoptIn: {
+            /** Roots */
+            roots: string[];
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run?: boolean;
+        };
+        /**
+         * ReadoptOut
+         * @description What was taken over (or would be, for a dry run) and the roots that could not be.
+         *     Database only, so not in Activity; ``undo_id`` (None for a dry run or when nothing was
+         *     taken over) undoes it with ``POST /api/maintenance/remounted/undo``. As the answer to
+         *     that undo: the entries put back, by root, and the ones that could not be.
+         */
+        ReadoptOut: {
+            /** Dry Run */
+            dry_run: boolean;
+            /** Roots */
+            roots: components["schemas"]["RemountedRootOut"][];
+            /** Errors */
+            errors: string[];
+            /** Undo Id */
+            undo_id?: string | null;
+        };
+        /**
+         * ReadoptUndoIn
+         * @description The ``undo_id`` a take-over returned.
+         */
+        ReadoptUndoIn: {
+            /** Undo Id */
+            undo_id: string;
+        };
+        /**
          * ReconnectIn
          * @description The pairs of "Moved outside dam" to reconnect; ``dry_run`` checks and lists them
          *     with what would move, changing nothing.
@@ -6636,6 +6724,50 @@ export interface components {
             };
             /** Skipped */
             skipped: string | null;
+        };
+        /**
+         * RemountedEntryOut
+         * @description An entry dam made in ``##. Ongoing`` or ``##. Important`` whose device number
+         *     changed: ``old_dev`` recorded, ``new_dev`` now (as text: a Windows file index does not
+         *     fit an integer).
+         */
+        RemountedEntryOut: {
+            /** Id */
+            id: number;
+            /** Rel */
+            rel: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "link" | "folder";
+            /** St Ino */
+            st_ino: string;
+            /** Old Dev */
+            old_dev: string;
+            /** New Dev */
+            new_dev: string;
+        };
+        /** RemountedOut */
+        RemountedOut: {
+            /** Roots */
+            roots: components["schemas"]["RemountedRootOut"][];
+        };
+        /**
+         * RemountedRootOut
+         * @description A publish root with entries left alone after a Drive restart. ``offered``: only the
+         *     device number changed, the same way for each of them, so it can be taken over; else
+         *     ``reason`` says why the root stays left alone.
+         */
+        RemountedRootOut: {
+            /** Root */
+            root: string;
+            /** Entries */
+            entries: components["schemas"]["RemountedEntryOut"][];
+            /** Offered */
+            offered: boolean;
+            /** Reason */
+            reason: string | null;
         };
         /**
          * RenameBody
@@ -11573,7 +11705,7 @@ export interface operations {
     forget_api_maintenance_jobs_delete: {
         parameters: {
             query?: {
-                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies" | "moved") | null;
+                kind?: ("duplicates" | "empty_folders" | "broken_links" | "references" | "names" | "waiting" | "label_clashes" | "unfinished_copies" | "moved" | "remounted") | null;
             };
             header?: never;
             path?: never;
@@ -12536,6 +12668,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconnectOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    readopt_remounted_api_maintenance_remounted_readopt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadoptIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadoptOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    undo_readopt_api_maintenance_remounted_undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadoptUndoIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadoptOut"];
                 };
             };
             /** @description Bad Request */

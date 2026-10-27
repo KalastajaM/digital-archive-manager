@@ -11,7 +11,7 @@ import { maintenancePolling } from "../components/maintenance/useMaintenanceJob"
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import Maintenance from "./Maintenance";
 
-const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes", "unfinished_copies", "moved"];
+const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes", "unfinished_copies", "moved", "remounted"];
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 
 const file = (id: string, path: string, over: Partial<DupFile> = {}): DupFile => ({
@@ -145,12 +145,12 @@ afterEach(() => {
 describe("Maintenance screen", () => {
   it("starts nothing by itself: every check waits for its button", async () => {
     const { calls } = setup();
-    for (const name of ["Duplicates", "Empty folders", "Broken links", "Collections and trays", "File names", "Waiting in To Delete", "Archive folder names", "Unfinished copies"]) {
+    for (const name of ["Duplicates", "Empty folders", "Broken links", "Collections and trays", "File names", "Waiting in To Delete", "Archive folder names", "Unfinished copies", "Left alone after a Drive restart"]) {
       expect(card(name)).toBeInTheDocument();
     }
     await screen.findByText(/Starting reads/);
     expect(calls.filter((c) => c.method === "POST")).toEqual([]);
-    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(9);
+    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(10);
   });
 
   it("says how much the duplicate check will read, with the Google Drive warning, before it starts", async () => {

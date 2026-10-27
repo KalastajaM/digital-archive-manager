@@ -25,6 +25,7 @@ from pathlib import PurePosixPath
 
 from sqlalchemy import Engine, select
 
+from dam.collections.ongoing import OngoingPublisher, RemountedRoot
 from dam.collections.service import CollectionService
 from dam.core.jobs import Job
 from dam.core.paths import ArchivePaths, not_connected_message
@@ -40,7 +41,7 @@ from dam.maintenance.ignored import IgnoreList
 from dam.maintenance.jobs import MaintenanceJobs
 from dam.notes import NotesService
 from dam.ops.executor import Executor
-from dam.ops.guards import is_under, parent
+from dam.ops.guards import fold_parts, is_under, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan
 from dam.ops.primitives import can_make_links
 from dam.services import check_disk_identity, check_origin
@@ -59,6 +60,7 @@ KINDS = (
     "label_clashes",
     "unfinished_copies",
     "moved",
+    "remounted",
 )
 ACTIONS = ("quarantine", "link")
 LINK_UNAVAILABLE = (
@@ -112,6 +114,23 @@ class ReconnectResult:
     undo_id: str | None = None
 
 
+@dataclass
+class Remounted:
+    """What "Left alone after a Drive restart" found: each publish root whose recorded
+    entries read as moved, and whether their new device number can be taken over."""
+
+    roots: list[RemountedRoot] = field(default_factory=list)
+
+
+@dataclass
+class ReadoptResult:
+    dry_run: bool
+    roots: list[RemountedRoot] = field(default_factory=list)  # taken over (or would be)
+    errors: list[str] = field(default_factory=list)
+    # what ``undo_readopt`` takes to undo it (None: a dry run, or nothing taken over)
+    undo_id: str | None = None
+
+
 def moved_key(pair: checks.MovedPair) -> str:
     """What a "Moved outside dam" pair is ignored as (``dam.maintenance.ignored``)."""
     return f"{pair.old_id}>{pair.new_id}"
@@ -161,8 +180,10 @@ class MaintenanceService:
         tray_name: Callable[[str], str],
         rescan: Callable[[str], object] | None = None,
         important_lock: AbstractContextManager | None = None,
+        ongoing: OngoingPublisher | None = None,
     ) -> None:
         self.paths = paths
+        self.ongoing = ongoing
         self.repo = repo
         self.engine = engine
         self.executor = executor
@@ -212,6 +233,8 @@ class MaintenanceService:
                 work = lambda ctx: checks.unfinished_copies(ctx, repo, paths, engine)  # noqa: E731
             case "moved":
                 work = lambda ctx: checks.moved(ctx, repo, paths, engine)  # noqa: E731
+            case "remounted":
+                work = lambda ctx: Remounted(self._publisher().remounted())  # noqa: E731
             case _:
                 limit = checks.DEFAULT_DAYS if days is None else days
                 work = lambda ctx: checks.waiting_in_to_delete(  # noqa: E731
@@ -437,6 +460,64 @@ class MaintenanceService:
                 self.collections.changed()  # a published link follows the file
             except Exception:
                 log.warning("syncing the collections failed", exc_info=True)
+
+    # -- taking over a new device number after a Drive remount ------------------------------
+
+    def _publisher(self) -> OngoingPublisher:
+        if self.ongoing is None:
+            raise InvalidRequest("The Ongoing publisher is not set up")
+        return self.ongoing
+
+    def readopt(self, roots: Sequence[str], dry_run: bool = False) -> ReadoptResult:
+        """Take over the new device number of the entries of each of ``roots`` (``##.
+        Ongoing``, ``##. Important``) that the "Left alone after a Drive restart" check
+        offers (``OngoingPublisher.readopt``): only the device number changed, the same
+        way for every changed entry under the root. Database only: nothing on disk
+        changes; journaled under one ``undo_id`` for ``undo_readopt``. Afterwards the
+        publishers sync, so the entries are kept up to date again. ``dry_run`` lists what
+        would be taken over. ``InvalidRequest``: no roots, one that is not a publish root,
+        or nothing offered under them."""
+        if not roots:
+            raise InvalidRequest("No folder given")
+        known = {fold_parts(r) for r in self.paths.publish_roots}
+        for root in roots:
+            if fold_parts(root) not in known:
+                raise InvalidRequest(f"{root!r} is not a publish root")
+        batch_id = uuid.uuid4().hex
+        found, errors = self._publisher().readopt(list(roots), batch_id, dry_run=dry_run)
+        if not found and not errors:
+            raise InvalidRequest(
+                "There is nothing to take over: no entry there has only a new device number"
+            )
+        result = ReadoptResult(dry_run, found, errors)
+        if dry_run or not found:
+            return result
+        result.undo_id = batch_id
+        log.info("took over a new device number for %s", ", ".join(r.root for r in found))
+        try:
+            self.collections.changed()  # the entries are the publisher's again: sync them
+        except Exception:
+            log.warning("syncing the collections failed", exc_info=True)
+        return result
+
+    def undo_readopt(self, undo_id: str) -> ReadoptResult:
+        """Put back the device number ``readopt`` replaced (``OngoingPublisher
+        .undo_readopt``); an entry whose record changed since is left as it is and said in
+        ``errors``. ``NotFound``: no such take-over; ``InvalidRequest``: undone already."""
+        publisher = self._publisher()
+        journaled = publisher.readopted_of(undo_id)
+        if not journaled:
+            raise NotFound(undo_id)
+        if all(undone for *_, undone in journaled):
+            raise InvalidRequest("This take-over was already undone")
+        entries, errors = publisher.undo_readopt(undo_id)
+        roots: list[RemountedRoot] = []
+        for root in self.paths.publish_roots:
+            mine = [e for e in entries if is_under(e.rel, root, strict=True)]
+            if mine:
+                roots.append(RemountedRoot(root, mine, offered=True))
+        log.info("undid taking over a new device number (%d entries)", len(entries))
+        return ReadoptResult(False, roots, errors)
 
     # -- replacing or removing duplicates ---------------------------------------------------
 
