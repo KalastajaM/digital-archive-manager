@@ -271,11 +271,17 @@ function StickerMarks(props: {
 /** The card's Trash (bin) button: the inbox owns the flow. */
 export type CardTrash = { run: () => void; busy: boolean };
 
-type Props = { entry: InboxEntry; filing: Filing; trash?: CardTrash };
+type Props = {
+  entry: InboxEntry;
+  filing: Filing;
+  trash?: CardTrash;
+  /** The New look's "Inbox N" button (the list is folded in a narrow window). */
+  lead?: ReactNode;
+};
 
 /** One inbox file: a toolbar with its name and the actions, the preview, and the
  * editable proposal as a narrow inspector beside it. */
-export default function ReviewCard({ entry, filing, trash }: Props) {
+export default function ReviewCard({ entry, filing, trash, lead }: Props) {
   const ids = useId();
   const [name, setName] = useState(entry.suggestion.name);
   const inbox = useInboxFolder();
@@ -467,6 +473,7 @@ export default function ReviewCard({ entry, filing, trash }: Props) {
   return (
     <article className="review-card" aria-label={`Review ${fileName}`}>
       <Toolbar
+        lead={lead}
         title={visible(fileName)}
         subtitle={inboxSubfolder && visible(inboxSubfolder)}
         actions={

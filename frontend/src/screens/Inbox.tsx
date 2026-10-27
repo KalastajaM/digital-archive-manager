@@ -1,6 +1,7 @@
 import { QrCode, Upload } from "lucide-react";
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useStyle } from "../appearance";
 import {
   archiveKey,
   errorText,
@@ -138,6 +139,15 @@ function CodeBadge({ codes }: { codes: InboxEntry["suggestion"]["codes"] }) {
 export default function Inbox() {
   const inbox = useInbox();
   const split = useSplitWidth(archiveKey("dam.inbox.listwidth"), { min: 220, max: 520, initial: 280, unit: "px" });
+  // The New look has a second divider, between the document and the filing panel (the
+  // panel's width, remembered like the list's); and below ~1000px the list folds behind
+  // an "Inbox N" button and opens over the card (``queueOpen``).
+  const [look] = useStyle();
+  const isNew = look === "new";
+  const panel = useSplitWidth(archiveKey("dam.inbox.panelwidth"), { min: 320, max: 640, initial: 360, unit: "px", edge: "end" });
+  const [queueOpen, setQueueOpen] = useState(false);
+  const queueButton = useRef<HTMLButtonElement>(null);
+  const queueId = useId();
   const trayList = useTrays().data?.trays ?? [];
   const toast = useToast();
   const status = useStatus();
@@ -403,7 +413,26 @@ export default function Inbox() {
     }
     setChecked(new Set());
     setSelectedId(id);
+    setQueueOpen(false); // a folded list closes on the pick
   };
+
+  // A folded list opened by its button takes the focus (on the current entry); closing it
+  // with Esc gives the focus back to the button.
+  const openQueue = (open: boolean) => {
+    setQueueOpen(open);
+    if (open) {
+      requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>("[data-inbox-entry][aria-current]")?.focus());
+    }
+  };
+  const queueWasOpen = useRef(false);
+  useEffect(() => {
+    if (queueWasOpen.current && !queueOpen) {
+      // the list is gone (closed, or a file was picked in it): the focus goes back to its button
+      const at = document.activeElement;
+      if (!at || at === document.body || listRef.current?.contains(at)) queueButton.current?.focus();
+    }
+    queueWasOpen.current = queueOpen;
+  }, [queueOpen]);
 
   useKeydown((e) => {
     if (e.key === "Escape" && isTyping(e.target)) {
@@ -475,9 +504,33 @@ export default function Inbox() {
   }
 
   const multi = checked.size > 0;
+  const queueLead = isNew ? (
+    <button
+      ref={queueButton}
+      type="button"
+      className="queue-button"
+      aria-expanded={queueOpen}
+      aria-controls={queueId}
+      title="Show the inbox list"
+      onClick={() => openQueue(!queueOpen)}
+    >
+      Inbox <span className="mono">{entries.length}</span>
+    </button>
+  ) : undefined;
   return (
-    <div className="inbox" ref={split.hostRef} style={split.hostStyle}>
-      <nav className="inbox-list" aria-label="Inbox" {...addFiles.drop.props}>
+    <div className="inbox" ref={split.hostRef} style={split.hostStyle} data-queue={queueOpen ? "open" : undefined}>
+      <nav
+        id={queueId}
+        className="inbox-list"
+        aria-label="Inbox"
+        {...addFiles.drop.props}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && queueOpen) {
+            e.stopPropagation();
+            openQueue(false);
+          }
+        }}
+      >
         <Toolbar
           title="Inbox"
           subtitle={plural(entries.length, "file")}
@@ -593,7 +646,13 @@ export default function Inbox() {
         <KeyHints hints={KEYS} />
       </nav>
       <Splitter split={split} label="Resize the list" />
-      <section className="inbox-card" aria-label="Review">
+      {isNew && queueOpen && <div className="queue-scrim" aria-hidden="true" onClick={() => setQueueOpen(false)} />}
+      <section
+        className="inbox-card"
+        aria-label="Review"
+        ref={isNew ? panel.hostRef : undefined}
+        style={isNew ? panel.hostStyle : undefined}
+      >
         {markedOpen ? (
           <MarkedBatch
             entries={entries}
@@ -606,9 +665,11 @@ export default function Inbox() {
               setSearch({});
             }}
             onClose={() => setSearch({})}
+            lead={queueLead}
           />
         ) : batch.length > 0 ? (
           <BatchCard
+            lead={queueLead}
             entries={batch}
             filing={filing}
             trash={{ run: trashTargets, busy: trash.busy }}
@@ -621,8 +682,12 @@ export default function Inbox() {
             entry={current}
             filing={filing}
             trash={{ run: trashTargets, busy: trash.busy }}
+            lead={queueLead}
           />
         ) : null}
+        {isNew && !markedOpen && (batch.length > 0 || current) && (
+          <Splitter split={panel} label="Resize the filing panel" />
+        )}
       </section>
       {picking && canAssign && (
         <CodePicker

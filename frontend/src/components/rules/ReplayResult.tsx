@@ -296,6 +296,17 @@ export function ReplayResult({
       <h4 id={`${id}-title`}>Test against your filed documents</h4>
       {pending && <p className="hint replay-stale">Testing the rule as it is now. The result below is of the rule before your last change.</p>}
       {replay.source && <SourceLine source={replay.source} />}
+      {replay.matched > 0 && (
+        // The New look's figure (Classic hides it): the same count as the sentence below
+        <div className="replay-figure" aria-hidden="true">
+          <span className="replay-figure-n">
+            {replay.same} / {replay.matched}
+          </span>
+          <span className="replay-bar">
+            <span style={{ width: `${(replay.same / replay.matched) * 100}%` }} />
+          </span>
+        </div>
+      )}
       {replay.matched === 0 ? (
         <p className="hint">
           {notChecked.length > 0

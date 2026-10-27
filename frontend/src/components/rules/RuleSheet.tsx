@@ -4,11 +4,13 @@
  * document somewhere else. */
 import { RotateCcw } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useStyle } from "../../appearance";
 import {
   type Area,
   areaPictureUrl,
   errorText,
   type PageBox,
+  type Replay,
   type Rule,
   type RuleDraft,
   type RuleIn,
@@ -32,6 +34,7 @@ import { TagInput } from "../TagInput";
 import { useToast } from "../Toasts";
 import { SamplePage } from "../zones/SamplePage";
 import { IconButton } from "../ui/IconButton";
+import { Segmented } from "../ui/Segmented";
 import { Sheet } from "../ui/Sheet";
 import { ReplayResult } from "./ReplayResult";
 import { useReplayJob } from "./useReplayJob";
@@ -98,6 +101,8 @@ const NAME_TIP =
 const AREAS_TIP = "The document needs a word or the picture in every area.";
 const PERSON_IN_FOLDER_TIP =
   "Puts {person} in the Folder, so each letter goes to the folder of its own person. It does not depend on Anyone or Only for: with Anyone, every person's letters are filed, each in their own folder; with Only for it is usually not needed, because the folder can simply name that person.";
+/** The patterns the Name can hold (see NAME_TIP): the New look offers them as chips. */
+const NAME_TOKENS = ["{year}", "{doc_date:%Y%m%d}", "{stem}", "{person}"] as const;
 const PAYEE_TIP = "The name filled in as the payee when this rule puts a bill in To pay.";
 const FOR_TIP =
   "Optional. Only for: the rule applies to letters for that person, as set on the document or found in its address area. {person} in the Folder or Name is filled in with the person of each letter.";
@@ -189,6 +194,11 @@ export function RuleSheet({
   const toast = useToast();
   const save = useSaveRule();
   const ids = useId();
+  // The New look: the proof sits in a column beside the form; in a narrow sheet it folds
+  // into a summary in the footer ("Show proof" opens it under the form).
+  const [look] = useStyle();
+  const isNew = look === "new";
+  const [proofOpen, setProofOpen] = useState(false);
 
   // plain words (anywhere in the text) and, apart from them, one group of words per area
   const [words, setWords] = useState<Word[]>(() =>
@@ -367,7 +377,18 @@ export function RuleSheet({
       : "Make a rule"
     : `${filed ? "Update" : "Edit"} rule ${initial.id}`;
 
-  const textField = (label: string, value: string, set: (v: string) => void, tip?: string) => (
+  /** A token chip puts its pattern into the field where the caret is (New look). */
+  const insertToken = (fieldId: string, value: string, set: (v: string) => void, token: string) => {
+    const el = document.getElementById(fieldId) as HTMLInputElement | null;
+    const from = el?.selectionStart ?? value.length;
+    const to = el?.selectionEnd ?? value.length;
+    set(value.slice(0, from) + token + value.slice(to));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(from + token.length, from + token.length);
+    });
+  };
+  const textField = (label: string, value: string, set: (v: string) => void, tip?: string, tokens?: readonly string[]) => (
     <div className="field rule-field">
       <div className="field-label-row">
         <label htmlFor={`${ids}-${label}`}>{label}</label>
@@ -379,6 +400,16 @@ export function RuleSheet({
         aria-describedby={tip ? `${ids}-${label}-tip` : undefined}
         onChange={(e) => set(e.target.value)}
       />
+      {isNew && tokens && (
+        <div className="rule-tokens" role="group" aria-label={`Insert into ${label.toLowerCase()}`}>
+          <span>Insert</span>
+          {tokens.map((t) => (
+            <button key={t} type="button" className="rule-token" onClick={() => insertToken(`${ids}-${label}`, value, set, t)}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
   const moreSummary = [
@@ -394,9 +425,17 @@ export function RuleSheet({
         open
         title={title}
         onClose={onClose}
-        className="rule-sheet"
+        className={proofOpen ? "rule-sheet proof-open" : "rule-sheet"}
         footer={
           <>
+            {isNew && hasCondition && (
+              <div className="proof-mini">
+                <ProofSummary replay={test.replay} />
+                <button type="button" aria-expanded={proofOpen} onClick={() => setProofOpen((open) => !open)}>
+                  {proofOpen ? "Hide proof" : "Show proof"}
+                </button>
+              </div>
+            )}
             {!hasCondition && (
               <span className="hint footer-start">
                 {emptyArea >= 0
@@ -636,7 +675,7 @@ export function RuleSheet({
               describedBy={`${ids}-folder-tip`}
             />
           </div>
-          {textField("Name", name, setName, NAME_TIP)}
+          {textField("Name", name, setName, NAME_TIP, NAME_TOKENS)}
           <div className="field">
             <label htmlFor={`${ids}-tags`}>Tags</label>
             <TagInput id={`${ids}-tags`} value={tags} onChange={setTags} />
@@ -700,6 +739,32 @@ export function RuleSheet({
   );
 }
 
+/** The proof in one line (New look, narrow sheet): whether the rule matches the document it
+ * was made from, how many filed documents would land where they are, and how many elsewhere. */
+function ProofSummary({ replay }: { replay: Replay | undefined }) {
+  if (!replay) return <span className="proof-line busy">Testing against your filed documents…</span>;
+  const source = replay.source?.matched;
+  const elsewhere = replay.different.length;
+  return (
+    <span className="proof-line">
+      {source === true && <span className="proof-ok">Matches this document</span>}
+      {source === false && <span className="proof-bad">Does not match this document</span>}
+      {replay.matched > 0 ? (
+        <>
+          <span className="mono proof-figure">
+            {replay.same} / {replay.matched}
+          </span>
+          <span className="proof-words">
+            filed documents land where they are{elsewhere > 0 ? ` · ${elsewhere} elsewhere` : ""}
+          </span>
+        </>
+      ) : (
+        <span className="proof-words">No filed document matches yet</span>
+      )}
+    </span>
+  );
+}
+
 /** One area of page 1: its words as chips (any ticked one is enough), a word to add and a
  * way to remove the area. */
 function AreaWords({
@@ -722,6 +787,8 @@ function AreaWords({
   onRemove: () => void;
 }) {
   const id = useId();
+  const [look] = useStyle();
+  const isNew = look === "new";
   const [adding, setAdding] = useState("");
   const add = () => {
     const w = adding.trim().toLowerCase();
@@ -764,17 +831,26 @@ function AreaWords({
         />
         <div className="rule-match">
           <label htmlFor={`${id}-match`}>Words match</label>
-          <select
-            id={`${id}-match`}
-            value={match}
-            aria-label={`How the words match in ${label.toLowerCase()}`}
-            aria-describedby={`${id}-match-tip`}
-            onChange={(e) => onMatch(e.target.value as Match)}
-          >
-            {MATCH_CHOICES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
+          {isNew ? (
+            <Segmented
+              ariaLabel={`How the words match in ${label.toLowerCase()}`}
+              options={MATCH_CHOICES}
+              value={match}
+              onChange={onMatch}
+            />
+          ) : (
+            <select
+              id={`${id}-match`}
+              value={match}
+              aria-label={`How the words match in ${label.toLowerCase()}`}
+              aria-describedby={`${id}-match-tip`}
+              onChange={(e) => onMatch(e.target.value as Match)}
+            >
+              {MATCH_CHOICES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          )}
           <InfoTip id={`${id}-match-tip`} tip={MATCH_TIP} />
         </div>
       </div>
