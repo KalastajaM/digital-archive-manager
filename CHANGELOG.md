@@ -166,6 +166,13 @@ All notable changes are listed here. The format follows
   other changes waited while it ran. The watcher now looks only at the files and folders
   that changed, and skips the changes dam made and indexed itself. Changes made outside
   dam at the same time are still picked up.
+- **The Inbox opens and refreshes faster with many files.** dam reads what each card
+  needs for all inbox files at once, and remembers where similar filed documents live
+  until a file is indexed, filed or moved, instead of searching the whole archive again
+  for every card each time the list loads (100 inbox files: under 0.1 seconds instead of
+  about 1.7). While several cards wait for page 1 to be read, the list reloads at most
+  once every 2 seconds, not once for each waiting card. Suggestions still change as soon
+  as a rule, a document's text or its page 1 does.
 - **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
   folder's name under the file's name; it names only a folder inside the inbox (such
   as a code's folder). In Maintenance, **Show in Browse** is an icon button (the

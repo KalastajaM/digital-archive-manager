@@ -13,6 +13,7 @@ from dam.bills.barcode import BarcodeError
 from dam.bills.barcode import parse as parse_barcode
 from dam.codes.apply import apply_codes, apply_ticks, codes_for, known_reads
 from dam.codes.model import FilingCode
+from dam.codes.qr_model import QrRead
 from dam.collections.service import CollectionService, check_collection_name
 from dam.config import DEFAULT_ADDRESS_ZONE, Person, SpecialFolders
 from dam.core.naming import parse_doc_date
@@ -56,7 +57,7 @@ from dam.rules.people import PeopleContext
 from dam.rules.picture import Pictures
 from dam.rules.replay import without_folder
 from dam.rules.similar import SOURCE as SIMILAR_SOURCE
-from dam.rules.similar import similar_folder
+from dam.rules.similar import SimilarFolders
 from dam.rules.state import load_state
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.area_pictures import AreaPictures
@@ -148,6 +149,18 @@ class InboxEntry:
 
 
 @dataclass
+class _Rows:
+    """The index rows ``_suggest`` reads for some files, read for all of them at once
+    (``InboxService._rows``): page-1 layouts, QR sticker reads, assigned codes and the
+    person each is assigned to. A file missing from a dict has none."""
+
+    layouts: dict[str, Page1Layout]
+    qr: dict[str, list[QrRead]]
+    codes: dict[str, str]
+    persons: dict[str, str | None]
+
+
+@dataclass
 class FileRequest:
     """File ``drive_id`` as ``folder/name`` and add ``tags``; then optionally create an
     item in ``tray`` (``tray_fields`` over the scan's prefill), add the file to the
@@ -235,11 +248,12 @@ class InboxService:
         self.pictures = pictures
         # cuts and keeps the crops of picture areas
         self._area_pictures = area_pictures
+        # "similar files" folders, kept until the index changes
+        self._similar = SimilarFolders(repo.engine)
 
-    def people_context(self, drive_id: str) -> PeopleContext:
-        return PeopleContext(
-            self._people(), tuple(self._address_zone()), self._assigned_person(drive_id)
-        )
+    def people_context(self, drive_id: str, rows: _Rows | None = None) -> PeopleContext:
+        person = self._assigned_person(drive_id) if rows is None else rows.persons.get(drive_id)
+        return PeopleContext(self._people(), tuple(self._address_zone()), person)
 
     def list(self) -> list[InboxEntry]:
         """Files directly in the inbox or in a filing code's inbox folder (no folders,
@@ -247,15 +261,21 @@ class InboxService:
         records = self.repo.inbox_files()
         records.sort(key=lambda r: r.mtime if r.mtime is not None else float("-inf"), reverse=True)
         tray_ids = [t.id for t in self.trays.defs()]
-        open_trays = self.trays.open_trays([r.drive_id for r in records])
+        ids = [r.drive_id for r in records]
+        open_trays = self.trays.open_trays(ids)
         entries = []
-        assigned = self._assignments.get([r.drive_id for r in records]) if self._assignments else {}
+        assigned = self._assignments.get(ids) if self._assignments else {}
+        # each file's rows in a few queries for all of them, not a few per file
+        texts, barcodes = self.repo.texts_for(ids), self.repo.barcodes_for(ids)
+        saved_fields = self.scan_fields.saved_for(ids)
+        persons = {i: a.person for i, a in assigned.items()} if self._assignments else None
+        rows = self._rows(ids, persons)
         for rec in records:
-            text = self.repo.text_for(rec.drive_id)
-            found = self._suggest(rec, text)
-            barcode = self.repo.barcode_for(rec.drive_id)
+            text = texts.get(rec.drive_id, "")
+            found = self._suggest(rec, text, rows)
+            barcode = barcodes.get(rec.drive_id)
             prefill = prefill_of(found.fields, found.payee, barcode)
-            detected, saved = detected_of(found, prefill), self.scan_fields.saved(rec.drive_id)
+            detected, saved = detected_of(found, prefill), saved_fields.get(rec.drive_id)
             entries.append(
                 InboxEntry(
                     rec,
@@ -736,10 +756,20 @@ class InboxService:
         alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
         return rec, self.repo.text_for(drive_id), alias
 
-    def _suggest(self, rec: FileRecord, text: str) -> Suggestion:
+    def _rows(self, ids: list[str], persons: dict[str, str | None] | None = None) -> _Rows:
+        """``_Rows`` for ``ids``; ``persons``: their assigned persons, if already read."""
+        if persons is None:
+            persons = {i: self._assigned_person(i) for i in ids}
+        repo = self.repo
+        return _Rows(repo.layouts_for(ids), repo.qrs_for(ids), repo.assigned_codes(ids), persons)
+
+    def _suggest(self, rec: FileRecord, text: str, rows: _Rows | None = None) -> Suggestion:
+        """What the rules, similar files and codes suggest for ``rec``. ``rows``: its index
+        rows when read with other files' (``list``), else they are read here."""
+        drive_id = rec.drive_id
         # a file in a code's inbox folder counts as in the inbox for ``folder_is``
         alias = self.special.inbox if self.repo.inbox_code_of(rec.path) is not None else None
-        layout = self.repo.layout_for(rec.drive_id)
+        layout = self.repo.layout_for(drive_id) if rows is None else rows.layouts.get(drive_id)
         found = suggest(
             rec,
             text,
@@ -747,7 +777,7 @@ class InboxService:
             self.special,
             inbox_alias=alias,
             layout=layout,
-            people=self.people_context(rec.drive_id),
+            people=self.people_context(drive_id, rows),
             pictures=self.pictures,
             quarantines=self.paths.quarantines,
         )
@@ -759,15 +789,19 @@ class InboxService:
             elif self._want_layouts is not None:
                 self._want_layouts([rec.drive_id])
         if found.folder is None and self._in_inbox(rec):
-            folder = similar_folder(self.repo.engine, rec.drive_id, rec.name or "", text, rec.ext)
+            folder = self._similar.folder(rec.drive_id, rec.name or "", text, rec.ext)
             if folder is not None:
                 found.folder = folder
                 found.folder_source = SIMILAR_SOURCE
                 found.sources.append(SIMILAR_SOURCE)
         # codes last: what a code sets beats the rules and similar files
         table = {c.code: c for c in self._codes()}
-        reads = known_reads(self.repo, rec, table)
-        hits = codes_for(self.repo, rec, table, reads)
+        if rows is None:
+            reads = known_reads(self.repo, rec, table)
+            hits = codes_for(self.repo, rec, table, reads)
+        else:
+            reads = known_reads(self.repo, rec, table, rows.qr.get(drive_id, []))
+            hits = codes_for(self.repo, rec, table, reads, assigned_code=rows.codes.get)
         if hits:
             stem, ext, name = stem_and_ext(rec)
             found = apply_codes(

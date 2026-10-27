@@ -1,5 +1,12 @@
 /** Typed JSON client for the dam API, plus TanStack Query hooks. */
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  type QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { components } from "./schema";
 
@@ -887,6 +894,28 @@ export const usePage1 = (driveId: string, enabled = true) =>
     },
   });
 
+/** Inbox reloads asked for by cards waiting for page 1, per query client: whether one ran
+ * in the last ``PAGE1_POLL_MS`` and whether another was asked for since. */
+const inboxReloads = new WeakMap<QueryClient, { asked: boolean }>();
+
+/** Reload the inbox list for a card whose page 1 was read. The list holds every card, so
+ * however many cards ask, it is reloaded at most once per ``PAGE1_POLL_MS``: the first ask
+ * reloads it at once, asks during the interval are served by one reload at its end. */
+function reloadInbox(client: QueryClient) {
+  const pending = inboxReloads.get(client);
+  if (pending) {
+    pending.asked = true;
+    return;
+  }
+  const state = { asked: false };
+  inboxReloads.set(client, state);
+  void client.invalidateQueries({ queryKey: keys.inbox });
+  setTimeout(() => {
+    inboxReloads.delete(client);
+    if (state.asked) reloadInbox(client);
+  }, PAGE1_POLL_MS);
+}
+
 /** A suggestion that waits for page 1 (``waiting_for_page1``) asks for it until it is read,
  * then reloads what the inbox and the file show (and keeps reloading for a while if it
  * still waits, for the picture of the page). */
@@ -896,7 +925,7 @@ export function useWaitForPage1(driveId: string, waiting: boolean) {
   const read = page.data?.read === true;
   useEffect(() => {
     if (!waiting || !read) return;
-    void client.invalidateQueries({ queryKey: keys.inbox });
+    reloadInbox(client);
     void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting, read]);
@@ -907,7 +936,7 @@ export function useWaitForPage1(driveId: string, waiting: boolean) {
     let tries = 0;
     const timer = setInterval(() => {
       tries += 1;
-      void client.invalidateQueries({ queryKey: keys.inbox });
+      reloadInbox(client);
       void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
       if (tries >= PAGE1_POLLS) clearInterval(timer);
     }, PAGE1_POLL_MS);
