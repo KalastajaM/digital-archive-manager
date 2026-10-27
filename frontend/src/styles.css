@@ -829,9 +829,11 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .entries { list-style: none; margin: 0; padding: 0 var(--sp-2); }
 .entries li { position: relative; display: flex; gap: var(--sp-1); align-items: center; border-radius: var(--r-md); padding: 0 0 0 var(--sp-2); -webkit-user-select: none; user-select: none; }
 .entry-check-spacer { flex: none; width: 13px; height: 13px; }
-.entries li:nth-child(even) { background: var(--panel-2); }
+.entries:where(:not(.browse-entries)) li:nth-child(even), .entries li.stripe { background: var(--panel-2); }
 .entries li:hover { background: var(--hover); }
 .entries li[aria-current="true"] { background: var(--selected); }
+/* Browse renders only the rows near the view; these stand in for the others */
+.entries li.entries-spacer, .entries li.entries-spacer:hover { padding: 0; background: none; }
 .entries li.checked { background: var(--selected-strong); color: var(--selected-strong-text); }
 .entries li.checked .entry-icon, .entries li.checked .entry-path, .entries li.checked .snippet, .entries li.checked .link-icon { color: inherit; opacity: 0.85; }
 /* A refused drag shows its reason on the target itself (a tooltip would need :hover,
@@ -852,7 +854,7 @@ main:has(> .browse) { padding: 0; min-height: 0; display: flex; }
 .drop-from-rows { margin: 0 0 var(--sp-2); }
 .entries li[data-drop="over"] { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); color: var(--text); }
 .entries li input { margin: 0; opacity: 0.35; transition: opacity var(--motion) var(--ease); }
-.entries li:hover input, .entries li input:checked, .entries li input:focus-visible, .entries:has(input:checked) input { opacity: 1; }
+.entries li:hover input, .entries li input:checked, .entries li input:focus-visible, .entries:has(input:checked) input, .entries.entries-checking input { opacity: 1; }
 .entries button.entry { flex: 1; text-align: left; border: none; background: transparent; box-shadow: none; color: inherit; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 4px 6px; min-width: 0; min-height: 26px; border-radius: var(--r-md); }
 .entries button.entry:hover:not(:disabled), .entries button.entry:active:not(:disabled) { background: transparent; }
 .entries button.entry:focus-visible { outline-offset: -2px; }

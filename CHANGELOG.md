@@ -154,6 +154,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Large folders scroll smoothly in Browse.** A folder, Files view or search with
+  hundreds or thousands of entries now builds only the rows near what you see, so
+  opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
+  view), Go to target, Quick Look and dragging work as before.
 - **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
   folder's name under the file's name; it names only a folder inside the inbox (such
   as a code's folder). In Maintenance, **Show in Browse** is an icon button (the
