@@ -44,6 +44,7 @@ import {
   setDragCollection,
   useDropTarget,
 } from "../../dnd";
+import { useStyle } from "../../appearance";
 import { plural } from "../../format";
 import { visible } from "../../text";
 import { changeToast } from "../collectionText";
@@ -68,6 +69,13 @@ import { positiveTags, readQuery, tagFilter } from "../../searchFilters";
 
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
+/** The tooltip of a row: in the New look a narrow window shows the sidebar as an icon rail
+ * (no labels), so every row names itself on hover. Classic has no row tooltips. */
+function useRowTitle(): (text: string) => string | undefined {
+  const [look] = useStyle();
+  return (text) => (look === "new" ? text : undefined);
+}
+
 type RowProps = {
   to: string;
   end?: boolean;
@@ -84,6 +92,7 @@ type RowProps = {
 /** One sidebar row: a NavLink named "Label (n)" so the count is read along with it. */
 function Row({ to, end, icon: Icon, label, count, badge, dropProps }: RowProps) {
   const n = badge || count || 0;
+  const title = useRowTitle();
   return (
     <li>
       <NavLink
@@ -91,6 +100,7 @@ function Row({ to, end, icon: Icon, label, count, badge, dropProps }: RowProps) 
         end={end}
         className="sidebar-row"
         aria-label={n ? `${label} (${n})` : label}
+        title={title(n ? `${label} (${n})` : label)}
         {...dropProps}
       >
         <Icon className="sidebar-icon" {...ICON} />
@@ -309,12 +319,14 @@ function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeP
   // (a drop line); in the middle it goes inside, as before
   const reorder = useReorderRow(order, c, target.props);
   const name = visible(c.name);
+  const title = useRowTitle();
   return (
     <li className="sidebar-tree-item">
       <NavLink
         to={`/collections/${c.id}`}
         className={children.length > 0 ? "sidebar-row sidebar-row-parent" : "sidebar-row"}
         aria-label={name}
+        title={title(name)}
         data-collection-id={c.id}
         draggable
         onDragStart={(e) => setDragCollection(e, c.id, c.name)}
@@ -383,9 +395,10 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
 function ImportantRow() {
   const important = useBuiltin("important");
   const n = important.data?.members.length ?? 0;
+  const title = useRowTitle();
   return (
     <li>
-      <NavLink to="/important" className="sidebar-row" draggable={false} aria-label={n ? `Important (${n})` : "Important"}>
+      <NavLink to="/important" className="sidebar-row" draggable={false} aria-label={n ? `Important (${n})` : "Important"} title={title(n ? `Important (${n})` : "Important")}>
         <span className="sidebar-icon sidebar-important" aria-hidden="true">
           <ImportantGlyph large />
         </span>
@@ -400,9 +413,10 @@ function ImportantRow() {
 function StarredRow() {
   const starred = useBuiltin("starred");
   const n = starred.data?.members.length ?? 0;
+  const title = useRowTitle();
   return (
     <li>
-      <NavLink to="/starred" className="sidebar-row" draggable={false} aria-label={n ? `Starred (${n})` : "Starred"}>
+      <NavLink to="/starred" className="sidebar-row" draggable={false} aria-label={n ? `Starred (${n})` : "Starred"} title={title(n ? `Starred (${n})` : "Starred")}>
         <span className="sidebar-icon sidebar-starred" aria-hidden="true">
           <StarGlyph size={16} />
         </span>
