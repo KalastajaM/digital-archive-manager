@@ -15,6 +15,13 @@ safety matter more than speed.
   and an undo path for any new kind of change.
 - **`backend/tests/test_no_delete.py` (the AST guard) must never be relaxed without
   discussion.** If you think it needs a new allowed call, open an issue first.
+- **The tests also check archive writes at run time.** An audit hook
+  (`backend/tests/archive_guard.py`) fails a test when anything outside `dam/ops`
+  creates, changes, renames or removes an entry in a `FakeArchive`, however it is called
+  (overwrites, `mkdir`, aliased imports, `getattr`, `mv` in a subprocess). Test code and
+  the few documented exceptions listed there (creating a new archive or the demo
+  archive) are allowed. Do not silence it; fix the code or, for a known bug, mark the
+  one test with `archive_write_allowed` and say why.
 - **Tests use temporary fake archives and must never touch a real archive** or a real
   data directory. Never point a test, script or example at your own documents.
 - Keep it local-first: no telemetry, no background network calls. AI calls happen only on
