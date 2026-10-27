@@ -160,6 +160,12 @@ All notable changes are listed here. The format follows
   50,000 now takes well under a second instead of about 16 seconds). The status check
   for interrupted changes is cheaper too. The first start after the update maps the
   existing search index once, which takes about a second for 50,000 files.
+- **Filing and moves no longer rescan the whole archive.** Filing a document from the
+  inbox into another folder, or moving files between folders or disks, used to make the
+  folder watcher scan every archive folder, including slow USB and network disks, and
+  other changes waited while it ran. The watcher now looks only at the files and folders
+  that changed, and skips the changes dam made and indexed itself. Changes made outside
+  dam at the same time are still picked up.
 - **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
   folder's name under the file's name; it names only a folder inside the inbox (such
   as a code's folder). In Maintenance, **Show in Browse** is an icon button (the

@@ -208,7 +208,12 @@ def start_background(app: App) -> Background:
     reminders_thread = threading.Thread(
         target=_reminders_loop, args=(app, stop), name="dam-reminders", daemon=True
     )
-    watcher = Watcher(app.paths, app.repo, on_change=lambda: _after_watcher_scan(app, wake, stop))
+    watcher = Watcher(
+        app.paths,
+        app.repo,
+        on_change=lambda: _after_watcher_scan(app, wake, stop),
+        own_changes=app.executor.own_changes,  # the echo of the app's own moves is not scanned
+    )
     threads = [scan_thread, indexer_thread, reminders_thread]
     try:
         scan_thread.start()

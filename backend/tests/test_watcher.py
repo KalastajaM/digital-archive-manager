@@ -3,11 +3,16 @@ import threading
 import time
 from pathlib import Path
 
+from watchdog.events import DirCreatedEvent, DirModifiedEvent, FileMovedEvent
+
 from dam.config import Settings
 from dam.core.paths import ArchivePaths
 from dam.index import watcher as watcher_mod
+from dam.index.own_changes import OwnChanges
 from dam.index.repo import FileRepo
-from dam.index.watcher import Watcher, _scope
+from dam.index.watcher import Watcher, _Handler, _scope, _scopes
+from dam.ops.executor import Executor
+from dam.ops.model import Op, OpKind, Plan
 
 
 def setup(fake_archive, engine):
@@ -65,7 +70,7 @@ def test_ignored_names_never_reach_pending_or_scan(fake_archive, engine, monkeyp
     w = Watcher(paths, repo, debounce_s=0.1, reconcile_every_s=3600)
     for name in (".DS_Store", "x.tmp", "~$doc.docx", ".tmp.driveupload/part"):
         w._note(str(fake_archive.root / "##. Organize" / name))
-    assert w._pending == set()
+    assert not w._pending
     w.start()
     try:
         fake_archive.add("##. Organize/.DS_Store", drive_id=None)
@@ -76,7 +81,7 @@ def test_ignored_names_never_reach_pending_or_scan(fake_archive, engine, monkeyp
         w.stop()
     for _, k in calls:
         assert not any(bad in k["subtree"] for bad in (".DS_Store", ".tmp", "~$"))
-    assert w._pending == set()
+    assert not w._pending
 
 
 def test_scan_exception_does_not_kill_watcher(fake_archive, engine, monkeypatch, caplog):
@@ -297,7 +302,7 @@ def test_change_in_extra_folder_is_noted(fake_archive, engine, tmp_path):
     paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
     w = Watcher(paths, repo)
     w._note(str(extra.resolve() / "2009" / "a.pdf"))
-    assert w._pending == {"Old years/2009/a.pdf"}
+    assert set(w._pending) == {"Old years/2009/a.pdf"}
 
 
 def test_refresh_watches_survives_events_while_toggling(fake_archive, engine, tmp_path):
@@ -464,3 +469,292 @@ def test_stop_waits_at_most_the_timeout_in_all(fake_archive, engine):
     w.stop(timeout=0.3)
     assert time.monotonic() - began < 2
     hold.set()
+
+
+# --- scoped scans and the app's own moves -------------------------------------
+
+
+def _main(rel):
+    return ""
+
+
+def _old_years(rel):
+    return "Old years" if rel.split("/")[0] == "Old years" else ""
+
+
+def test_scopes_scan_each_changed_path_not_their_common_folder():
+    assert _scopes(["##. Organize/a.pdf", "10. Financial/Banks/a.pdf"], _main) == [
+        "##. Organize/a.pdf",
+        "10. Financial/Banks/a.pdf",
+    ]
+    # a path inside another changed path is covered by that path's scan
+    assert _scopes(["a/b", "a/b/c.pdf", "a/b c.pdf", "a/b"], _main) == ["a/b", "a/b c.pdf"]
+    assert _scopes(["x.pdf"], _main) == ["x.pdf"]
+    assert _scopes(["x.pdf", "Old years/2009/a.pdf"], _old_years) == [
+        "Old years/2009/a.pdf",
+        "x.pdf",
+    ]
+
+
+def test_scopes_fall_back_per_root_for_many_paths():
+    many = [f"a/{i}/f.pdf" for i in range(51)]
+    assert _scopes(many, _main) == ["a"]
+    assert len(_scopes(many[:50], _main)) == 50
+    # spread over the main folder's top level: each top-level entry, never the whole archive
+    spread = [f"{i % 3}/{i}/f.pdf" for i in range(51)]
+    assert _scopes(spread, _main) == ["0", "1", "2"]
+    # two folders: each gets its own fallback, never one scan of every folder
+    both = [f"a/{i}.pdf" for i in range(30)] + [f"Old years/2009/{i}.pdf" for i in range(30)]
+    assert _scopes(both, _old_years) == ["Old years/2009", "a"]
+    assert "" not in _scopes([f"{i}.pdf" for i in range(60)], _main)
+
+
+def _unwatched(w):
+    """No folder watches: only the events a test notes itself reach the watcher."""
+    w.refresh_watches = lambda: []
+    return w
+
+
+def _recording(monkeypatch):
+    subtrees = []
+    monkeypatch.setattr(watcher_mod, "scan", lambda *a, **k: subtrees.append(k["subtree"]))
+    return subtrees
+
+
+def test_changes_in_two_top_level_folders_scan_two_scopes_not_the_root(
+    fake_archive, engine, monkeypatch
+):
+    paths, repo = setup(fake_archive, engine)
+    subtrees = _recording(monkeypatch)
+    fake_archive.add("10. Financial/Banks/a.pdf")  # the destination exists, the source not
+    w = _unwatched(Watcher(paths, repo, debounce_s=0.05, reconcile_every_s=3600))
+    w._note(str(fake_archive.root / "##. Organize" / "a.pdf"))
+    w._note(str(fake_archive.root / "10. Financial" / "Banks" / "a.pdf"))
+    w.start()
+    try:
+        assert wait_for(lambda: len(subtrees) >= 2)
+    finally:
+        w.stop()
+    # the path still on disk first, so a moved row is re-pathed before its old path's
+    # scan could mark it missing
+    assert subtrees == ["10. Financial/Banks/a.pdf", "##. Organize/a.pdf"]
+
+
+def test_changes_in_two_archive_folders_never_scan_every_folder(
+    fake_archive, engine, tmp_path, monkeypatch
+):
+    paths, repo, extra = setup_with_extra(fake_archive, engine, tmp_path)
+    subtrees = _recording(monkeypatch)
+    (extra / "2009" / "a.pdf").write_bytes(b"x")
+    w = _unwatched(Watcher(paths, repo, debounce_s=0.05, reconcile_every_s=3600))
+    w._note(str(fake_archive.root / "##. Organize" / "a.pdf"))
+    w._note(str(extra.resolve() / "2009" / "a.pdf"))
+    w.start()
+    try:
+        assert wait_for(lambda: len(subtrees) >= 2)
+    finally:
+        w.stop()
+    assert subtrees == ["Old years/2009/a.pdf", "##. Organize/a.pdf"]
+
+
+def test_filing_across_top_level_folders_keeps_the_index_right(fake_archive, engine):
+    fake_archive.add("##. Organize/a.pdf", drive_id="id-a")
+    paths, repo = setup(fake_archive, engine)
+    watcher_mod.scan(paths, repo)
+    (fake_archive.root / "20. Home").mkdir()
+    root = fake_archive.root
+    os.rename(root / "##. Organize" / "a.pdf", root / "20. Home" / "a.pdf")
+    w = _unwatched(Watcher(paths, repo, debounce_s=0.05, reconcile_every_s=3600))
+    w._note(str(root / "##. Organize" / "a.pdf"))
+    w._note(str(root / "20. Home" / "a.pdf"))
+    w._note(str(root / "20. Home"))
+    w.start()
+    try:
+        assert wait_for(lambda: repo.get("id-a").path == "20. Home/a.pdf")
+    finally:
+        w.stop()
+    assert repo.get("id-a").missing is False
+    assert repo.by_path("20. Home").is_dir
+
+
+def test_own_changes_expire():
+    now = [100.0]
+    own = OwnChanges(ttl_s=10, clock=lambda: now[0])
+    own.add(["##. Organize/a.pdf", "10. Financial/Banks/a.pdf"])
+    assert own.covers("##. Organize/a.pdf")
+    assert own.covers("10. Financial/Banks/a.pdf")
+    assert not own.covers("10. Financial/Banks/b.pdf")
+    assert not own.covers("10. Financial/Banks/a.pdf/inner")  # a file has nothing below it
+    # a folder whose listing changed only because of our own change
+    assert own.covers("10. Financial/Banks", dir_modified=True)
+    assert own.covers("##. Organize", dir_modified=True)
+    assert not own.covers("10. Financial/Banks")  # anything else that happened to it
+    assert not own.covers("10. Financial", dir_modified=True)
+    now[0] = 111.0
+    assert not own.covers("##. Organize/a.pdf")
+    assert not own.covers("##. Organize", dir_modified=True)
+
+
+def test_own_changes_of_a_folder_cover_its_subtree_only():
+    own = OwnChanges()
+    own.add(["10. Financial/Banks", "20. Old/Banks"], tree=True)
+    assert own.covers("20. Old/Banks/2019/a.pdf")
+    assert own.covers("10. Financial/Banks/a.pdf")
+    assert not own.covers("20. Old/Banks 2/a.pdf")
+    assert not own.covers("20. Old/Bank")
+    assert not own.covers("20. Old/other.pdf")
+    assert own.covers("20. Old", dir_modified=True)
+
+
+def test_handler_flags_only_a_bare_folder_listing_change(fake_archive, engine):
+    paths, repo = setup(fake_archive, engine)
+    noted = []
+    w = Watcher(paths, repo)
+    w._note = lambda path, dir_modified=False: noted.append((path, dir_modified))
+    h = _Handler(w)
+    h.on_any_event(DirModifiedEvent("/x/folder"))
+    h.on_any_event(DirCreatedEvent("/x/new"))
+    h.on_any_event(FileMovedEvent("/x/a.pdf", "/y/a.pdf"))
+    assert noted == [
+        ("/x/folder", True),
+        ("/x/new", False),
+        ("/x/a.pdf", False),
+        ("/y/a.pdf", False),
+    ]
+
+
+def test_executor_registers_the_paths_it_moved(fake_archive, engine):
+    fake_archive.add("##. Organize/a.pdf", drive_id="id-a")
+    paths, repo = setup(fake_archive, engine)
+    watcher_mod.scan(paths, repo)
+    own = OwnChanges()
+    executor = Executor(paths, engine, repo, own_changes=own)
+    result = executor.apply(
+        Plan(ops=[Op(OpKind.MOVE, "##. Organize/a.pdf", "10. Financial")], origin="cli")
+    )
+    assert result.failed is None
+    assert own.covers("##. Organize/a.pdf")
+    assert own.covers("10. Financial/a.pdf")
+    assert own.covers("10. Financial", dir_modified=True)
+    assert not own.covers("10. Financial/b.pdf")
+
+
+def test_executor_registers_a_moved_folder_with_everything_below_it(fake_archive, engine):
+    fake_archive.add("##. Organize/Statements/2019/a.pdf")
+    fake_archive.add("10. Financial/Statements 2/b.pdf")
+    paths, repo = setup(fake_archive, engine)
+    watcher_mod.scan(paths, repo)
+    own = OwnChanges()
+    executor = Executor(paths, engine, repo, own_changes=own)
+    result = executor.apply(
+        Plan(ops=[Op(OpKind.MOVE, "##. Organize/Statements", "10. Financial")], origin="cli")
+    )
+    assert result.failed is None
+    assert repo.by_path("10. Financial/Statements/2019/a.pdf") is not None
+    assert own.covers("10. Financial/Statements/2019/a.pdf")
+    assert own.covers("##. Organize/Statements/2019/a.pdf")
+    assert not own.covers("10. Financial/Statements 2/b.pdf")
+
+
+def test_executor_does_not_register_paths_it_leaves_to_the_scan(fake_archive, engine):
+    paths, repo = setup(fake_archive, engine)
+    own = OwnChanges()
+    executor = Executor(paths, engine, repo, own_changes=own)
+    result = executor.apply(Plan(ops=[Op(OpKind.MKDIR, None, "10. Financial/Home")], origin="cli"))
+    assert result.failed is None
+    assert not own.covers("10. Financial/Home")  # the index learns of it only from a scan
+    assert not own.covers("10. Financial", dir_modified=True)
+
+
+def test_events_for_own_moves_do_not_scan(fake_archive, engine, monkeypatch):
+    paths, repo = setup(fake_archive, engine)
+    subtrees = _recording(monkeypatch)
+    own = OwnChanges()
+    w = _unwatched(Watcher(paths, repo, debounce_s=0.05, reconcile_every_s=3600, own_changes=own))
+    own.add(["##. Organize/a.pdf", "10. Financial/Banks/a.pdf"])
+    own.add(["##. Organize/Folder", "10. Financial/Folder"], tree=True)
+    root = fake_archive.root
+    w._note(str(root / "##. Organize" / "a.pdf"))
+    w._note(str(root / "10. Financial" / "Banks" / "a.pdf"))
+    w._note(str(root / "##. Organize"), dir_modified=True)
+    w._note(str(root / "10. Financial" / "Banks"), dir_modified=True)
+    w._note(str(root / "10. Financial" / "Folder" / "sub" / "b.pdf"))  # moved with it
+    w.start()
+    try:
+        w._wake.set()
+        threading.Event().wait(0.5)
+    finally:
+        w.stop()
+    assert subtrees == []
+    assert not w._pending
+
+
+def test_events_noted_before_the_move_was_registered_are_dropped_too(
+    fake_archive, engine, monkeypatch
+):
+    paths, repo = setup(fake_archive, engine)
+    subtrees = _recording(monkeypatch)
+    own = OwnChanges()
+    w = _unwatched(Watcher(paths, repo, debounce_s=0.2, reconcile_every_s=3600, own_changes=own))
+    root = fake_archive.root
+    w._note(str(root / "##. Organize" / "a.pdf"))  # the event can beat the registration
+    w._note(str(root / "##. Organize"), dir_modified=True)
+    own.add(["##. Organize/a.pdf", "10. Financial/a.pdf"])
+    w.start()
+    try:
+        w._wake.set()
+        threading.Event().wait(0.6)
+    finally:
+        w.stop()
+    assert subtrees == []
+
+
+def test_external_changes_next_to_own_moves_are_still_scanned(fake_archive, engine, monkeypatch):
+    paths, repo = setup(fake_archive, engine)
+    subtrees = _recording(monkeypatch)
+    own = OwnChanges()
+    w = _unwatched(Watcher(paths, repo, debounce_s=0.05, reconcile_every_s=3600, own_changes=own))
+    own.add(["##. Organize/a.pdf", "10. Financial/Banks/a.pdf"])
+    root = fake_archive.root
+    w._note(str(root / "##. Organize" / "a.pdf"))  # own: dropped
+    w._note(str(root / "10. Financial" / "Banks" / "b.pdf"))  # a sibling someone added
+    w._note(str(root / "##. Organize"), dir_modified=True)  # own: dropped
+    w._note(str(root / "10. Financial" / "Banks"), dir_modified=True)  # own listing change ...
+    w._note(str(root / "10. Financial" / "Banks"))  # ... but also something else happened to it
+    w.start()
+    try:
+        assert wait_for(lambda: bool(subtrees))
+    finally:
+        w.stop()
+    assert subtrees == ["10. Financial/Banks"]
+
+
+def test_external_change_is_indexed_while_own_moves_are_skipped(fake_archive, engine, monkeypatch):
+    fake_archive.add("##. Organize/a.pdf", drive_id="id-a")
+    paths, repo = setup(fake_archive, engine)
+    watcher_mod.scan(paths, repo)
+    real_scan, subtrees = watcher_mod.scan, []
+
+    def recording_scan(*a, **k):
+        subtrees.append(k["subtree"])
+        return real_scan(*a, **k)
+
+    monkeypatch.setattr(watcher_mod, "scan", recording_scan)
+    own = OwnChanges()
+    executor = Executor(paths, engine, repo, own_changes=own)
+    w = Watcher(paths, repo, debounce_s=0.2, reconcile_every_s=3600, own_changes=own)
+    w.start()
+    try:
+        result = executor.apply(
+            Plan(ops=[Op(OpKind.MOVE, "##. Organize/a.pdf", "10. Financial")], origin="cli")
+        )
+        assert result.failed is None
+        fake_archive.add("##. Organize/new.pdf", drive_id="id-new")
+        assert wait_for(lambda: repo.by_path("##. Organize/new.pdf") is not None, 5)
+    finally:
+        w.stop()
+    assert repo.get("id-a").path == "10. Financial/a.pdf"
+    assert repo.get("id-a").missing is False
+    assert "" not in subtrees
+    assert "##. Organize/a.pdf" not in subtrees
+    assert "10. Financial/a.pdf" not in subtrees

@@ -21,6 +21,7 @@ from dam.db.engine import write_tx
 from dam.db.tables import made_folders, operations
 from dam.index.driveid import read_drive_id
 from dam.index.locks import COPYING, INDEX_LOCK
+from dam.index.own_changes import OwnChanges
 from dam.index.repo import FileRepo
 from dam.ops import identity, primitives
 from dam.ops import undo as _undo
@@ -168,8 +169,12 @@ class Executor:
         repo: FileRepo,
         throttle_ms: int = 0,
         areas_dir: Path | None = None,
+        own_changes: OwnChanges | None = None,
     ) -> None:
         self.paths = paths
+        # the paths of each relocation this executor indexed itself, so the watcher does
+        # not scan them again (``dam.index.own_changes``)
+        self.own_changes = own_changes if own_changes is not None else OwnChanges()
         # the rules' picture folder (config/rules/areas): the one place outside the archive
         # that PICTURE_TO_QUARANTINE takes a file from and PICTURE_BACK returns it to
         self.areas_dir = areas_dir
@@ -502,10 +507,12 @@ class Executor:
             if folder is not None:
                 folder.copied(rop, snap)
             try:
-                self._repoint_copy(rop)
+                repointed = self._repoint_copy(rop)
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
+            if repointed:  # the copy's final rename; a copy never indexed is left to a scan
+                self.own_changes.add([rop.dst])
         if rop.kind in _RELOCATE:
             try:
                 followed = None
@@ -523,9 +530,12 @@ class Executor:
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
+            moved = self.paths.join(rop.dst)
+            tree = moved.is_dir() and not moved.is_symlink()  # its rows moved along with it
+            self.own_changes.add([rop.src, rop.dst], tree=tree)
         return False
 
-    def _repoint_copy(self, rop: ResolvedOp) -> None:
+    def _repoint_copy(self, rop: ResolvedOp) -> bool:
         """The file was copied across disks: its index row now describes the copy, so
         everything given to it (tags, notes, collections, items, locks) follows. The row
         takes the copy's own Drive id if it has one; a row with a Drive id gets a fresh
@@ -533,11 +543,11 @@ class Executor:
         on disk and must not take the row back on the next scan."""
         rec = self.repo.by_path(rop.src)
         if rec is None:  # never indexed: the next scan finds the copy
-            return
+            return False
         if rop.method == primitives.PRESENT and self.repo.by_path(rop.dst) is not None:
             # the copy has its row (the earlier move's, which the owner's things follow);
             # the original's row goes to To Delete with the folder
-            return
+            return False
         new_id = read_drive_id(self.paths.abs(rop.dst))
         if new_id is None:
             local = rec.drive_id.startswith(LOCAL_ID_PREFIX)
@@ -545,6 +555,7 @@ class Executor:
         if new_id != rec.drive_id:
             self.repo.rekey(rec.drive_id, new_id)
         self.repo.update_path(rop.src, rop.dst)
+        return True
 
     def _follow_folder_rows(self, src: str, dst_root: str) -> list[list[str]]:
         """A folder was copied across disks to ``dst_root`` and goes to To Delete next:
