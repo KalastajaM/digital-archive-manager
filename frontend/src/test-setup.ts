@@ -27,8 +27,11 @@ if (typeof URL.createObjectURL !== "function") {
 Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
 
 import { afterEach } from "vitest";
+import { resetSignedOut } from "./api/client";
 
-// Forget keys a test pressed without releasing (keyboard.ts tracks held keys).
+// Forget keys a test pressed without releasing (keyboard.ts tracks held keys), and a 401
+// a test provoked (the page would stay on "not signed in").
 afterEach(() => {
   window.dispatchEvent(new Event("blur"));
+  resetSignedOut();
 });

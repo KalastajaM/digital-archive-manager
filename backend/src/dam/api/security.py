@@ -24,6 +24,10 @@ the Vite dev server to proxy ``/api`` with ``changeOrigin: true``: the proxy the
 ``Origin``, which this setting allows.
 
 Every response gets ``X-Content-Type-Options: nosniff``.
+
+These checks stop web pages, not other programs on the machine: ``dam serve`` also puts
+``dam.api.auth.ApiTokenMiddleware`` in front of everything, so ``/api`` answers only a
+signed-in browser or a client sending the token.
 """
 
 import json

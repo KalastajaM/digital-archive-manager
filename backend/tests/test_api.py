@@ -1107,7 +1107,9 @@ def test_serve_opens_browser_after_start(app_paths, fake_serve, tmp_path, monkey
     monkeypatch.setattr(serve_mod, "STATIC_DIR", built)
     events, _ = fake_serve
     assert serve_cmd(app_paths, "--port", "9124").exit_code == 0
-    assert events.index("start") < events.index(("open", "http://127.0.0.1:9124/"))
+    # the browser opens on the sign-in link, which then redirects to the start page
+    token = (app_paths.data_dir / "api-token").read_bytes().decode("ascii")
+    assert events.index("start") < events.index(("open", f"http://127.0.0.1:9124/auth?t={token}"))
 
 
 def test_serve_without_built_frontend_warns_and_does_not_open_browser(
@@ -1179,7 +1181,12 @@ def test_serve_shuts_down_cleanly_on_signal(app_paths, sig):
         deadline = time.monotonic() + 30
         while True:
             try:
-                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=1):
+                # the API answers only with the token (made by `dam serve` at the start)
+                token = (app_paths.data_dir / "api-token").read_bytes().decode("ascii")
+                status = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/status", headers={"X-Dam-Token": token}
+                )
+                with urllib.request.urlopen(status, timeout=1):
                     break
             except OSError:
                 assert proc.poll() is None, proc.communicate()
