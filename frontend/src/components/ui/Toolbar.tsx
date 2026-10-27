@@ -21,15 +21,18 @@ type Props = {
    * second (a narrow list column). The title is cut with an ellipsis only as a last resort,
    * and then it is whole in the tooltip. */
   stacked?: boolean;
+  /** Something before the title (the New look's "Inbox N" button that opens a folded list). */
+  lead?: ReactNode;
   /** Extra class and inline style for the header (a screen that sizes it to a column). */
   className?: string;
   style?: CSSProperties;
 };
 
 /** The unified toolbar at the top of a screen: title, subtitle, actions, search. */
-export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, trailing, stacked, className, style }: Props) {
+export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, trailing, stacked, lead: before, className, style }: Props) {
   const lead = (
     <>
+      {before}
       <div className="toolbar-title">
         {titleEditor ?? (
           <>

@@ -2,7 +2,7 @@
  * one confirmed batch (one undo). Each row shows exactly the request the server built
  * for it, and exactly that request is sent: nothing is recomputed here. A flagged row
  * (unclear, codes disagree, needs input) starts unticked and says why. */
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   type BatchRow,
   type CodeHit,
@@ -86,6 +86,8 @@ type Props = {
   /** Show this file in the Inbox form (closes the panel). */
   onOpen: (driveId: string) => void;
   onClose: () => void;
+  /** The New look's "Inbox N" button (the list is folded in a narrow window). */
+  lead?: ReactNode;
 };
 
 function Row({
@@ -166,7 +168,7 @@ function Row({
   );
 }
 
-export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) {
+export function MarkedBatch({ entries, trays, filing, onOpen, onClose, lead }: Props) {
   const batch = useMarkedBatch();
   const rows: BatchRow[] = batch.data ?? [];
   // The owner's own ticks; a row not touched yet is ticked unless it is flagged. Kept
@@ -197,6 +199,7 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
   return (
     <section className="batch-card marked-batch" aria-label="Marked files">
       <Toolbar
+        lead={lead}
         title="Marked files"
         subtitle={rows.length > 0 ? `${ticked.length} of ${rows.length} ticked` : undefined}
         actions={

@@ -99,6 +99,7 @@ export function LaunchButtons({ launch, tipSide, only, offline = false }: Props)
         <IconButton
           icon={<ExternalLink {...ICON} />}
           label="Open"
+          className="doc-wide"
           tipSide={tipSide}
           disabled={launch.busy || offline}
           disabledReason={reason}
@@ -108,6 +109,7 @@ export function LaunchButtons({ launch, tipSide, only, offline = false }: Props)
       <IconButton
         icon={<FolderSearch {...ICON} />}
         label={showInLabel()}
+        className="doc-wide"
         tipSide={tipSide}
         disabled={launch.busy || offline}
         disabledReason={reason}

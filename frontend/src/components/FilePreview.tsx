@@ -73,7 +73,7 @@ type Zoom = ReturnType<typeof useZoom>;
 
 /** ⤢: the document in the separate viewer window. */
 function OpenInWindow({ driveId }: { driveId: string }) {
-  return <IconButton icon={<Maximize2 />} label="Open in window" onClick={() => openViewer(driveId)} />;
+  return <IconButton icon={<Maximize2 />} label="Open in window" className="doc-wide" onClick={() => openViewer(driveId)} />;
 }
 
 /** Print: the PDF's pages (sharp: the widest render) or the image. A failure goes to
@@ -96,6 +96,7 @@ function PrintButton({ srcs, name }: { srcs: () => Iterable<string>; name: strin
     <IconButton
       icon={<Printer />}
       label="Print"
+      className="doc-wide"
       onClick={() => void print()}
       disabled={busy}
       disabledReason="Preparing to print…"

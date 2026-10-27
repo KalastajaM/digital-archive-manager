@@ -266,3 +266,289 @@
   [data-style="new"] .status-badge .status-line-button { width: 10px; height: 10px; border-radius: 50%; background: var(--green); font-size: 0; }
   [data-style="new"] .status-badge.status-attention .status-line-button { background: var(--orange); }
 }
+
+/* ==== The Inbox: queue | document | filing panel ==========================================
+ * Three panes with a divider between each (the list's and the panel's widths are remembered,
+ * double-click resets). The panes never stack: Classic's narrow-window rules (900px, 760px)
+ * are undone here. They give way in a set order by the width of the Inbox itself (the
+ * container below): under ~1000px the list folds behind an "Inbox N" button and opens over
+ * the card; the document's tools give way by the width of the toolbar they sit in. */
+[data-style="new"] main:has(> .inbox) { container: inbox / inline-size; }
+[data-style="new"] .app:has(.inbox) .content { height: 100%; }
+[data-style="new"] .inbox {
+  min-width: 0;
+  grid-template-columns: minmax(240px, var(--split)) minmax(0, 1fr);
+  background: var(--panel);
+}
+[data-style="new"] .inbox .splitter { display: block; }
+[data-style="new"] .inbox > .splitter { left: max(240px, var(--split)); }
+/* the panel's divider starts under the toolbar: that spans the document and the panel */
+[data-style="new"] .inbox-card { position: relative; background: var(--panel); }
+[data-style="new"] .inbox-card > .splitter { top: var(--toolbar-h); right: clamp(320px, var(--split), calc(100% - 320px)); }
+[data-style="new"] .queue-button { display: none; }
+[data-style="new"] .queue-scrim { display: none; }
+[data-style="new"] .queue-button { flex: none; min-height: 28px; padding: 3px 10px; gap: 6px; align-items: center; color: var(--text-2); }
+[data-style="new"] .queue-button .mono { color: var(--muted); }
+
+/* -- the queue -- */
+[data-style="new"] .inbox-list { min-width: 0; border-right: 1px solid var(--hairline); background: var(--panel); }
+[data-style="new"] .inbox-list .toolbar { height: auto; padding: 8px 12px 8px 16px; row-gap: 4px; }
+[data-style="new"] .inbox-list .toolbar-title { flex: 0 1 auto; }
+[data-style="new"] .inbox-list .toolbar-title h2 { font-size: var(--fs-xl); }
+[data-style="new"] .inbox-list .toolbar-subtitle { color: var(--muted); }
+/* the buttons and the status share what the title leaves, wrapping onto a row of their own
+   instead of running under the title; "Reading filing codes…" takes a line to itself */
+[data-style="new"] .inbox-list .toolbar-actions { flex: 1 1 0; min-width: 0; flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
+[data-style="new"] .inbox-list .reading-codes { order: -1; flex: 1 0 100%; text-align: right; }
+[data-style="new"] .inbox-list li { margin: 0 6px; border-radius: var(--r-lg); }
+[data-style="new"] .inbox-list li.highlighted { background: var(--selected); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent); }
+[data-style="new"] .inbox-list li.highlighted .entry-meta { color: var(--muted); opacity: 1; }
+[data-style="new"] .inbox-list li.highlighted .entry-chip.tag-red { background: var(--red-bg); color: var(--red-text); }
+[data-style="new"] .inbox-list li.highlighted .entry-chip.tag-orange { background: var(--orange-bg); color: var(--orange-text); }
+[data-style="new"] .inbox-list li.highlighted .entry-chip.tag-grey { background: var(--grey-bg); color: var(--grey-text); }
+[data-style="new"] .inbox-list li.highlighted .entry-chip.tag-blue { background: var(--blue-bg); color: var(--blue-text); }
+[data-style="new"] .inbox-list li.highlighted .entry-chip.tag-green { background: var(--green-bg); color: var(--green-text); }
+[data-style="new"] .inbox-list li.highlighted::before,
+[data-style="new"] .inbox-list li.highlighted + li::before { border-top-color: transparent; }
+[data-style="new"] .inbox-list .entry-name { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; }
+[data-style="new"] .inbox-list .entry-meta { font-family: var(--font-mono); font-size: 11.5px; }
+[data-style="new"] .inbox-list .thumb { border-radius: var(--r-sm); }
+[data-style="new"] .key-hints { border-top-width: 1px; }
+
+/* -- the document and the filing panel -- */
+[data-style="new"] .review-card .toolbar,
+[data-style="new"] .batch-card .toolbar { background: var(--panel); }
+[data-style="new"] .review-card .toolbar-title h2 { font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 500; letter-spacing: 0; }
+[data-style="new"] .review-body,
+[data-style="new"] .batch-body {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, var(--split), calc(100% - 320px));
+  grid-template-rows: minmax(0, 1fr);
+}
+/* the document lies on the Desk, as a sheet of paper */
+[data-style="new"] .review-body > .preview-pane { display: flex; overflow: auto; background: var(--desk); padding: 10px 16px 24px; }
+[data-style="new"] .preview-pane img { box-shadow: 0 1px 2px rgb(23 25 30 / 0.1), 0 8px 24px rgb(23 25 30 / 0.1); border-radius: 0; }
+[data-style="new"] .preview-pane .zoom-frame { background: transparent; }
+[data-style="new"] .review-body > .inspector,
+[data-style="new"] .batch-body > .inspector { overflow-y: auto; border-left: 1px solid var(--hairline); background: var(--panel); padding: var(--sp-4) 18px var(--sp-6); }
+[data-style="new"] .preview-toggle { display: none; }
+[data-style="new"] .preview-fill .zoom-frame { --zoom-max: 100%; max-height: none; }
+[data-style="new"] .batch-from,
+[data-style="new"] .batch-to { font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .inbox-plan { position: sticky; max-height: 45%; }
+[data-style="new"] .inbox-entries { max-height: none; }
+
+/* the zoom row: one joined group, then the tools; the tools that can wait go when the row is narrow */
+[data-style="new"] .zoom-controls { container: doc / inline-size; flex-wrap: nowrap; gap: 6px; margin-bottom: 8px; }
+[data-style="new"] .zoom-controls > button:not(.icon-button) { flex: none; margin-left: -1px; padding: 3px 9px; border-radius: 0; background: var(--panel); }
+[data-style="new"] .zoom-controls > button[aria-label="Zoom out"] { margin-left: 0; border-radius: var(--r-md) 0 0 var(--r-md); }
+[data-style="new"] .zoom-controls > button[aria-label="Zoom in"] { border-radius: 0 var(--r-md) var(--r-md) 0; }
+[data-style="new"] .zoom-controls .zoom-level,
+[data-style="new"] .zoom-controls .zoom-level:disabled { min-width: 3.4rem; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); opacity: 1; font-family: var(--font-mono); }
+[data-style="new"] .zoom-controls .icon-button { flex: none; margin-left: 0; background: var(--panel); border: 1px solid var(--border); }
+[data-style="new"] .zoom-controls .icon-button[aria-pressed="true"] { background: var(--selected); border-color: var(--accent); color: var(--accent); }
+@container doc (max-width: 380px) {
+  [data-style="new"] .zoom-controls .doc-wide { display: none; }
+}
+[data-style="new"] .box-note { font-size: var(--fs-sm); }
+
+/* Classic's narrow-window rules stack the panes; New keeps them side by side */
+@media (max-width: 900px) {
+  [data-style="new"] .review-body > .preview-pane,
+  [data-style="new"] .review-body.show-preview > .preview-pane { display: flex; max-height: none; overflow: auto; }
+  [data-style="new"] .review-body > .inspector,
+  [data-style="new"] .batch-body > .inspector { overflow-y: auto; border-left: 1px solid var(--hairline); }
+  [data-style="new"] .batch-names { max-height: none; }
+}
+@media (max-width: 760px) {
+  [data-style="new"] .app:has(.inbox) .content { height: 100%; }
+  [data-style="new"] .inbox { grid-template-columns: minmax(240px, var(--split)) minmax(0, 1fr); }
+  [data-style="new"] .review-body,
+  [data-style="new"] .batch-body { grid-template-columns: minmax(0, 1fr) clamp(320px, var(--split), calc(100% - 320px)); }
+  [data-style="new"] .inbox-plan { position: sticky; max-height: 45%; }
+}
+
+/* under ~1000px of Inbox the list folds behind its button and opens over the card */
+@container inbox (max-width: 1000px) {
+  [data-style="new"] .inbox { grid-template-columns: minmax(0, 1fr); }
+  [data-style="new"] .inbox > .splitter { display: none; }
+  [data-style="new"] .inbox-list { display: none; }
+  [data-style="new"] .queue-button { display: inline-flex; }
+  [data-style="new"] .queue-scrim { display: block; position: absolute; inset: 0; z-index: 5; background: color-mix(in srgb, var(--text) 10%, transparent); }
+  [data-style="new"] .inbox[data-queue="open"] .inbox-list {
+    display: flex;
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(320px, 92%);
+    box-shadow: var(--shadow-pop);
+  }
+}
+
+/* -- the filing panel's form -- */
+[data-style="new"] .inspector .field { margin-bottom: 18px; }
+[data-style="new"] .inspector .field label,
+[data-style="new"] .inspector .folder-picker label,
+[data-style="new"] .inspector .field-label { font-size: var(--fs-sm); color: var(--muted-2); margin-bottom: 4px; }
+[data-style="new"] .inspector input:not([type="checkbox"]):not([type="radio"]) { min-height: 32px; }
+[data-style="new"] .inspector input[id$="-name"] { font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .inspector hr { border-top-width: 1px; border-color: var(--hairline); margin: 4px 0 18px; }
+[data-style="new"] .inspector .detected-label { flex-basis: 6.5rem; font-size: var(--fs-sm); }
+[data-style="new"] .inspector .detected-value { font-family: var(--font-mono); font-size: 12.5px; }
+/* the trays: one even row of options (name over its key), the chosen one filled */
+[data-style="new"] .tray-segmented { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 2px; }
+[data-style="new"] .tray-segmented .segmented-option { flex-direction: column; gap: 1px; min-height: 44px; padding: 4px 2px; }
+[data-style="new"] .tray-segmented .segmented-key { order: 2; margin: 0; padding: 0; border: 0; background: transparent; font-size: 10.5px; line-height: 1.2; }
+[data-style="new"] .tray-segmented .segmented-option[aria-pressed="true"] { background: var(--accent-fill); color: var(--on-accent); }
+[data-style="new"] .tray-segmented .segmented-option[aria-pressed="true"] .segmented-key { color: inherit; opacity: 0.8; }
+
+/* ==== Draw a box: "Boxes on page N" takes the filing panel's place ==========================
+ * The panel is rendered under the page (as in Classic and in Browse); in the Inbox it is
+ * lifted over the filing panel's column, the form underneath keeps its state. */
+[data-style="new"] .page-box { border-style: solid; opacity: 1; border-radius: 3px; }
+[data-style="new"] .page-box-kept { border-style: solid; opacity: 1; }
+[data-style="new"] .page-box-number {
+  top: -20px;
+  left: -2px;
+  padding: 0 5px;
+  border-radius: 3px 3px 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 18px;
+}
+[data-style="new"] .review-body .box-panel {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: clamp(320px, var(--split), calc(100% - 320px));
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
+  border-left: 1px solid var(--hairline);
+  background: var(--panel);
+}
+[data-style="new"] .review-body .box-panel > p { margin: 0; padding: 0 18px 12px; }
+[data-style="new"] .box-panel-head { padding: 16px 18px 14px; margin: 0; border-bottom: 1px solid var(--hairline); }
+[data-style="new"] .box-panel-head strong { font-size: var(--fs-lg); font-weight: 600; }
+[data-style="new"] .box-kept { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; padding: 16px 18px 4px; gap: 12px; font-size: var(--fs-md); }
+[data-style="new"] .box-kept li { padding: 12px; border: 1px solid var(--hairline); border-radius: var(--r-xl); align-items: flex-start; flex-wrap: nowrap; }
+[data-style="new"] .box-kept-text { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+[data-style="new"] .box-kept-text > strong { flex: 1 1 auto; font-weight: 600; }
+[data-style="new"] .box-kept-text > :not(strong):not(.box-mode) { flex: 1 0 100%; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-2); }
+[data-style="new"] .box-kept-picture { max-height: 56px; border-radius: var(--r-md); }
+[data-style="new"] .box-actions { margin-top: auto; padding: 12px 18px 14px; border-top: 1px solid var(--hairline); background: var(--panel-2); }
+[data-style="new"] .box-actions button { min-height: 32px; font-size: var(--fs-md); }
+[data-style="new"] .box-panel > .error { margin: 0 18px 12px; }
+
+/* ==== The rule sheet: the rule on the left, the proof beside it =============================
+ * A wide sheet is two columns: "When a document matches" and "Then file it like this", and the
+ * proof in a column of its own. When the sheet itself measures under 900px the proof folds
+ * into a one-line summary in the footer; "Show proof" opens it under the form. */
+[data-style="new"] dialog.rule-sheet {
+  container: sheet / inline-size;
+  width: min(1180px, calc(100vw - 48px));
+  max-height: calc(100dvh - 56px);
+  margin: 28px auto auto;
+  padding: 0;
+  border-radius: 12px;
+}
+[data-style="new"] .rule-sheet .sheet-title { margin: 0; padding: 16px 22px; border-bottom: 1px solid var(--hairline); font-size: 18px; }
+[data-style="new"] .rule-sheet .sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: repeat(4, auto) 1fr;
+  align-content: stretch;
+  padding: 0;
+  background: linear-gradient(90deg, transparent calc(100% - 361px), var(--hairline) calc(100% - 361px) calc(100% - 360px), var(--panel-2) calc(100% - 360px));
+}
+[data-style="new"] .rule-sheet .sheet-body:not(:has(> .replay-result)):not(:has(> div.error)):not(:has(> p.busy)) { background: none; }
+[data-style="new"] .rule-sheet .sheet-body > * { grid-column: 1; }
+[data-style="new"] .rule-sheet .sheet-body > .rule-section { margin: 0 22px; gap: 14px; }
+[data-style="new"] .rule-sheet .sheet-body > .rule-section:first-child { margin-top: 20px; padding-bottom: 20px; }
+[data-style="new"] .rule-sheet .sheet-body > .rule-section + .rule-section { margin-top: 0; padding: 20px 0; border-top: 1px solid var(--hairline); }
+[data-style="new"] .rule-sheet .sheet-body > p { margin: 0 22px 16px; }
+[data-style="new"] .rule-sheet .rule-section-title { font-size: var(--fs-lg); font-weight: 600; }
+[data-style="new"] .rule-sheet .field { margin-bottom: 0; }
+[data-style="new"] .rule-sheet .field label,
+[data-style="new"] .rule-sheet .field-label { font-size: var(--fs-md); font-weight: 500; color: var(--text-2); margin-bottom: 4px; }
+[data-style="new"] .rule-sheet input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { min-height: 32px; }
+[data-style="new"] .rule-sheet input[id$="-Name"],
+[data-style="new"] .rule-sheet .folder-picker input { font-family: var(--font-mono); font-size: 12.5px; }
+/* the words: pills in the fixed-width face, the ticked ones tinted */
+[data-style="new"] .rule-word { padding: 2px 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-sm); }
+[data-style="new"] .rule-word[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--blue-bg); color: var(--accent-hover); }
+[data-style="new"] .rule-area { display: flex; flex-direction: column; gap: 8px; }
+[data-style="new"] .rule-area-head .link-button { color: var(--accent); }
+[data-style="new"] .rule-score { grid-template-columns: auto minmax(100px, 260px) 4ch auto; justify-content: start; }
+[data-style="new"] .rule-score input[type="range"] { accent-color: var(--accent); }
+[data-style="new"] .rule-score output { font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .rule-picture { border-radius: var(--r-md); border-color: var(--hairline); }
+/* the name's patterns: chips that put themselves into the field */
+[data-style="new"] .rule-tokens { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: var(--fs-sm); color: var(--muted); }
+[data-style="new"] .rule-token { min-height: 22px; padding: 0 6px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--panel-2); color: var(--text-2); font-family: var(--font-mono); font-size: 11.5px; font-weight: 400; }
+[data-style="new"] .rule-sheet .sheet-footer { flex-wrap: wrap; align-items: center; margin: 0; padding: 12px 22px; border-top: 1px solid var(--hairline); }
+[data-style="new"] .rule-sheet .sheet-footer button { min-height: 32px; }
+
+/* the proof column */
+[data-style="new"] .rule-sheet .sheet-body > .replay-result,
+[data-style="new"] .rule-sheet .sheet-body > div.error,
+[data-style="new"] .rule-sheet .sheet-body > p.busy {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  align-self: start;
+  margin: 0;
+  padding: 20px 22px;
+  border-radius: 0;
+  background: transparent;
+}
+[data-style="new"] .rule-sheet .replay-result h4 { margin: 0 0 var(--sp-3); font-size: var(--fs-lg); font-weight: 600; }
+[data-style="new"] .replay-source { margin: 0 0 var(--sp-3); padding: 10px 12px; border-radius: var(--r-lg); font-weight: 400; background: var(--grey-bg); color: var(--text-2); }
+[data-style="new"] .replay-source[data-state="matched"] { background: var(--green-bg); color: var(--green-text); }
+[data-style="new"] .replay-source[data-state="not-matched"] { background: var(--red-bg); color: var(--red-text); }
+[data-style="new"] .replay-figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 var(--sp-3); }
+[data-style="new"] .replay-figure-n { font-family: var(--font-mono); font-size: 28px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; }
+[data-style="new"] .replay-bar { display: block; flex: 1 0 100%; height: 6px; border-radius: 3px; overflow: hidden; background: var(--grey-bg); }
+[data-style="new"] .replay-bar > span { display: block; height: 100%; background: var(--green); }
+[data-style="new"] .replay-score,
+[data-style="new"] .replay-different { font-family: var(--font-mono); }
+
+/* the summary that stands in for the proof in a narrow sheet */
+[data-style="new"] .proof-mini { display: none; }
+[data-style="new"] .proof-line { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; white-space: nowrap; }
+[data-style="new"] .proof-ok { flex: none; color: var(--green-text); font-weight: 500; }
+[data-style="new"] .proof-ok::before { content: "\2713\00a0"; }
+[data-style="new"] .proof-bad { flex: none; color: var(--red-text); font-weight: 500; }
+[data-style="new"] .proof-figure { flex: none; }
+[data-style="new"] .proof-words { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+@container sheet (max-width: 900px) {
+  [data-style="new"] .rule-sheet .sheet-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; background: none; }
+  [data-style="new"] .rule-sheet .sheet-body > .replay-result,
+  [data-style="new"] .rule-sheet .sheet-body > div.error,
+  [data-style="new"] .rule-sheet .sheet-body > p.busy { display: none; grid-column: 1; grid-row: auto; border-top: 1px solid var(--hairline); background: var(--panel-2); }
+  [data-style="new"] .rule-sheet.proof-open .sheet-body > .replay-result,
+  [data-style="new"] .rule-sheet.proof-open .sheet-body > div.error { display: block; }
+  [data-style="new"] .rule-sheet.proof-open .sheet-body > p.busy { display: flex; }
+  [data-style="new"] .proof-mini {
+    display: flex;
+    align-items: center;
+    flex: 1 1 100%;
+    gap: 10px;
+    min-width: 0;
+    padding: 6px 6px 6px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    background: var(--panel-2);
+  }
+  [data-style="new"] .proof-mini button { flex: none; margin-left: auto; min-width: 0; }
+}
+/* the proof's paths are whole paths: they wrap (at slashes and spaces) instead of running off */
+[data-style="new"] .replay-path { white-space: normal; text-align: left; overflow-wrap: anywhere; }

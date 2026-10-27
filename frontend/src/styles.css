@@ -2191,6 +2191,7 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .rule-more { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
 .rule-more .hint { margin: 0; }
 .replay-result h4 { margin: 0 0 var(--sp-2); }
+.replay-figure { display: none; } /* the New look shows it (styles-new.css) */
 .rule-filed { margin: 0 0 var(--sp-3); }
 .replay-result { margin-top: var(--sp-3); padding: var(--sp-3); border-radius: var(--r-lg); background: var(--grey-bg); }
 .replay-result p { margin: 0 0 var(--sp-1); }

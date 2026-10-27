@@ -23,6 +23,21 @@ All notable changes are listed here. The format follows
   for urgent counts. Buttons, fields, segmented controls, tags, chips, menus, dialogs,
   toasts, tooltips and keys have the New look too, with blue focus rings, and thin scroll
   bars. Classic is unchanged.
+- **The New look: Inbox, Draw a box and the rule sheet.** In New the Inbox is three panes
+  with a divider between each: the list, the document on a grey desk, and the filing panel
+  (drag a divider to resize it, double-click to reset; both widths are kept). The panes no
+  longer stack in a narrow window. Under about 1000 px the list folds behind an **Inbox N**
+  button that opens it over the document (Esc closes it), and the document's smaller
+  tools (Print, Open, Show in Finder, Open in window) hide when its toolbar is narrow. The
+  chosen file in the list has a calm blue fill, file names, dates and figures are set in
+  the fixed-width font, the trays are one even row, and the title of the list no longer
+  runs into "Reading filing codes…". **Draw a box** shows "Boxes on page 1" in the filing
+  panel's place, with the box numbers on the page. In the rule sheet **Words match** is a
+  segmented control, the name has chips for its patterns ({year}, {doc_date:%Y%m%d},
+  {stem}, {person}) that put themselves into the field, and the proof stands in a column
+  beside the rule, with the share of filed documents that would land where they are as a
+  figure and a bar. When the sheet is under 900 px wide the proof folds into one line in
+  the footer, and **Show proof** opens it under the form. Classic is unchanged.
 - **Open a file from Activity.** Each operation in Activity that names a file has a
   **Show in Browse** icon that opens Browse at the file's folder with the file selected
   and shown on the right. When the file has been moved, renamed or marked for deletion

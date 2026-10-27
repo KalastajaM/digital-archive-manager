@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import {
   errorText,
   type FileRequest,
@@ -34,6 +34,8 @@ type Props = {
   onAdded?: (driveIds: string[]) => void;
   /** Trash for the whole batch (the inbox owns the flow). */
   trash?: CardTrash;
+  /** The New look's "Inbox N" button (the list is folded in a narrow window). */
+  lead?: ReactNode;
 };
 
 const ADDING_BUSY = "Still adding the files to the collections";
@@ -84,7 +86,7 @@ function commonFolder(entries: InboxEntry[]): string {
 /** Several files to one folder with shared tags, tray and collections; each keeps its
  * suggested name. No tray fields: each file's item is prefilled from its own scan by
  * the server (``tray_fields: {}``). No note. */
-export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
+export default function BatchCard({ entries, filing, onAdded, trash, lead }: Props) {
   const ids = useId();
   const [folder, setFolder] = useState(() => commonFolder(entries));
   const [folderEdited, setFolderEdited] = useState(false);
@@ -199,6 +201,7 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
   return (
     <article className="batch-card" aria-label={`Batch of ${count}`}>
       <Toolbar
+        lead={lead}
         title={`${count} selected`}
         subtitle="each keeps its suggested name"
         actions={
