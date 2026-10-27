@@ -1,9 +1,9 @@
 """``dam serve``: run uvicorn on 127.0.0.1 with the background work around it.
 
 Background work (initial scan, watcher, content indexer, hourly reminder check) starts
-only once the server is listening, so a failed bind starts nothing. The initial scan, the
-watcher and the content indexer run as workers on the App's runner (``App.jobs``,
-``dam.core.jobs``): ``scan``, ``watcher`` and ``extraction``. After every
+only once the server is listening, so a failed bind starts nothing. Each runs as a worker on
+the App's runner (``App.jobs``, ``dam.core.jobs``): ``scan``, ``watcher``,
+``extraction`` and ``reminders``. After every
 successful scan (the initial one, and each watcher scan) the Ongoing links are synced in
 that same background thread, never in a request thread. Reminders are checked a minute
 after the start, then every hour. SIGINT and SIGTERM end the server
@@ -65,9 +65,11 @@ _STARTED_POLL_S = 0.05
 REMIND_FIRST_S = 60  # the first reminder check, after the start
 REMIND_EVERY_S = 3600  # then hourly
 # the workers on the App's runner: the initial scan, the watcher, the content indexer
+# and the hourly reminder check
 SCAN = "scan"
 WATCHER = "watcher"
 EXTRACTION = "extraction"
+REMINDERS = "reminders"
 
 
 @dataclass(eq=False)
@@ -76,16 +78,17 @@ class Background:
     watcher: Watcher
     stop_event: threading.Event
     wake: threading.Event
-    # on the App's runner (``App.jobs``): the initial scan, the watcher, the content indexer
+    # on the App's runner (``App.jobs``): the initial scan, the watcher, the content
+    # indexer and the reminder check
     scan: Worker
     watching: Worker
     indexer: Worker
-    reminders_thread: threading.Thread
+    reminders: Worker
     _stopped: bool = field(default=False, init=False)
 
     @property
     def workers(self) -> list[Worker]:
-        return [self.scan, self.watching, self.indexer]
+        return [self.scan, self.watching, self.indexer, self.reminders]
 
     @property
     def scan_thread(self) -> threading.Thread:
@@ -93,9 +96,13 @@ class Background:
         return self.scan.thread
 
     @property
+    def reminders_thread(self) -> threading.Thread:
+        assert self.reminders.thread is not None
+        return self.reminders.thread
+
+    @property
     def threads(self) -> list[threading.Thread]:
-        workers = [w.thread for w in self.workers if w.thread is not None]
-        return [*workers, self.reminders_thread]
+        return [w.thread for w in self.workers if w.thread is not None]
 
     def stop(self) -> None:
         """Stop the indexer and the watcher and wait (briefly) for the threads.
@@ -106,7 +113,7 @@ class Background:
         if self._stopped:
             return
         self._stopped = True
-        _shutdown(self.app, self.stop_event, self.wake, [self.reminders_thread], self.workers)
+        _shutdown(self.app, self.stop_event, self.wake, [], self.workers)
 
 
 def _shutdown(
@@ -235,9 +242,6 @@ def start_background(app: App) -> Background:
     """
     stop, wake = threading.Event(), threading.Event()  # every scan wakes the idle indexer
     app.wake_indexer = wake.set  # e.g. after files are queued for indexing again
-    reminders_thread = threading.Thread(
-        target=_reminders_loop, args=(app, stop), name="dam-reminders", daemon=True
-    )
     watcher = Watcher(
         app.paths,
         app.repo,
@@ -251,14 +255,14 @@ def start_background(app: App) -> Background:
         watcher.start()
         workers.append(app.jobs.run(WATCHER, lambda stop, _wake: _watch(watcher, stop)))
         workers.append(app.jobs.run(EXTRACTION, app.content.run_forever, wake))
-        reminders_thread.start()
+        workers.append(app.jobs.run(REMINDERS, lambda stop, _wake: _reminders_loop(app, stop)))
     except BaseException:
         if len(workers) < 2:
             watcher.stop(timeout=STOP_TIMEOUT_S)  # no worker of its own stops it
-        _shutdown(app, stop, wake, [reminders_thread], workers)
+        _shutdown(app, stop, wake, [], workers)
         raise
-    scan, watching, indexer = workers
-    return Background(app, watcher, stop, wake, scan, watching, indexer, reminders_thread)
+    scan, watching, indexer, reminders = workers
+    return Background(app, watcher, stop, wake, scan, watching, indexer, reminders)
 
 
 class DamServer(uvicorn.Server):
