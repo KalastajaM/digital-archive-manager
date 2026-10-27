@@ -232,6 +232,29 @@ describe("Barcode", () => {
       expect(within(dialog).getByRole("button", { name: "Copy barcode number" })).toBeInTheDocument();
     });
 
+    it("in the New look, Pay mode gets the bill's title and amount, a Copy on each value and the steps", async () => {
+      document.documentElement.dataset.style = "new";
+      try {
+        const pay = [
+          { label: "Payee", value: "Northpower Oy", copy: { raw: "Northpower Oy", type: "text", label: "payee" } },
+          { label: "Amount", value: "84,20 €", copy: { raw: "84.20", type: "money", label: "amount" } },
+        ];
+        mockFetch({ "GET /api/items/7/barcode": { body: OK } });
+        const user = userEvent.setup();
+        renderWithProviders(<Barcode itemId={7} pay={pay} title="Electricity, September" />);
+        await user.click(await screen.findByRole("button", { name: /^Show large barcode/ }));
+        const dialog = screen.getByRole("dialog", { name: "Bank barcode" });
+        expect(within(dialog).getByRole("heading", { name: "Electricity, September" })).toBeInTheDocument();
+        expect(within(dialog).getAllByText("84,20 €")).toHaveLength(2); // the big total and its card
+        expect(within(dialog).getByRole("button", { name: "Copy payee" })).toBeInTheDocument();
+        expect(within(dialog).getByRole("button", { name: "Copy amount" })).toBeInTheDocument();
+        expect(within(dialog).getByRole("list", { name: "How to pay with the barcode" })).toBeInTheDocument();
+        expect(within(dialog).getByRole("button", { name: "Copy barcode number" })).toBeInTheDocument();
+      } finally {
+        delete document.documentElement.dataset.style;
+      }
+    });
+
     it("b opens Pay mode (not while typing or with a dialog open)", async () => {
       mockFetch({ "GET /api/items/7/barcode": { body: OK } });
       const user = userEvent.setup();

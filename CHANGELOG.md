@@ -38,6 +38,15 @@ All notable changes are listed here. The format follows
   beside the rule, with the share of filed documents that would land where they are as a
   figure and a bar. When the sheet is under 900 px wide the proof folds into one line in
   the footer, and **Show proof** opens it under the form. Classic is unchanged.
+- **The New look: Today and Pay mode.** In New, Today keeps its cards (fold them, drag them
+  by the header, move them with Alt+Up and Alt+Down, **Reset layout**) but sets them calmer:
+  hairline cards, a small date above the greeting, amounts, dates, IBANs and references in the
+  fixed-width font, and Due and Overdue as pills. The two columns stay side by side in a narrow
+  window and fold into one only when Today itself is very narrow. Pay mode (the large barcode)
+  fills the window: the bill's title and amount in large type, one card per value (IBAN,
+  reference, amount, due date) with its own **Copy**, the barcode on white paper exactly as
+  before, three short steps for paying with it, and **Copy barcode number** and **Done** in the
+  footer. Classic is unchanged.
 - **Open a file from Activity.** Each operation in Activity that names a file has a
   **Show in Browse** icon that opens Browse at the file's folder with the file selected
   and shown on the right. When the file has been moved, renamed or marked for deletion

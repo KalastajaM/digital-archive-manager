@@ -7,6 +7,7 @@
  * IBAN and due date in large type to check against the bill, and Copy barcode number. */
 import { Maximize2 } from "lucide-react";
 import { type CSSProperties, type RefObject, useEffect, useId, useRef, useState } from "react";
+import { useStyle } from "../appearance";
 import { isShortcut, useKeydown } from "../keyboard";
 import { errorText, type ItemBarcode, useItemBarcode, useItemUpdate } from "../api/client";
 import { fieldWord, formatDate, formatMoney } from "../format";
@@ -149,14 +150,20 @@ function FullSize({
   modules,
   updating,
   pay,
+  title,
   onClose,
 }: {
   code: string;
   modules: number[];
   updating: boolean;
   pay?: PayFact[];
+  /** The bill's title, for the New look's heading. */
+  title?: string;
   onClose: () => void;
 }) {
+  const [look] = useStyle();
+  const isNew = look === "new";
+  const amount = pay?.find((f) => f.copy?.type === "money");
   return (
     <Sheet
       open
@@ -172,12 +179,19 @@ function FullSize({
         </>
       }
     >
+      {isNew && title && (
+        <div className="pay-head">
+          <h3 className="pay-title">{visible(title)}</h3>
+          {amount && <span className="pay-total">{visible(amount.value)}</span>}
+        </div>
+      )}
       {pay && pay.length > 0 && (
         <dl className="pay-facts" aria-label="Payment details">
           {pay.map((f) => (
-            <div key={f.label} className="pay-fact">
+            <div key={f.label} className="pay-fact" data-kind={f.copy?.type}>
               <dt>{visible(f.label)}</dt>
               <dd>{visible(f.value)}</dd>
+              {isNew && f.copy && <CopyButton value={f.copy.raw} type={f.copy.type} label={f.copy.label} compact />}
             </div>
           ))}
         </dl>
@@ -188,6 +202,13 @@ function FullSize({
           <code className="barcode-code">{visible(code)}</code>
         </div>
       </div>
+      {isNew && (
+        <ol className="pay-steps" aria-label="How to pay with the barcode">
+          <li>In your banking app choose to pay with a barcode (in most Finnish banks: Pay, then Scan barcode).</li>
+          <li>Hold the phone about 15 to 25 cm from the screen.</li>
+          <li>Check the payee, amount and reference before you confirm.</li>
+        </ol>
+      )}
       <p className="hint">Scan it from the screen with your banking app.</p>
       <p className="hint barcode-full-status" role="status">
         {updating ? "Updating…" : ""}
@@ -249,7 +270,7 @@ function Mismatch({ itemId, barcode }: { itemId: number; barcode: ItemBarcode })
   );
 }
 
-export function Barcode({ itemId, pay }: { itemId: number; pay?: PayFact[] }) {
+export function Barcode({ itemId, pay, title }: { itemId: number; pay?: PayFact[]; title?: string }) {
   const query = useItemBarcode(itemId);
   const [fullSize, setFullSize] = useState(false);
   const canShow = !!query.data?.code && !!query.data?.modules;
@@ -298,6 +319,7 @@ export function Barcode({ itemId, pay }: { itemId: number; pay?: PayFact[] }) {
           modules={drawn.modules}
           updating={updating}
           pay={pay}
+          title={title}
           onClose={() => setFullSize(false)}
         />
       )}

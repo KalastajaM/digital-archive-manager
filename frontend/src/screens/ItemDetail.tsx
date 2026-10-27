@@ -857,7 +857,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>
         )}
         {kind === "bill" && tray && <PaymentDetails item={item} tray={tray} today={today} />}
-        {kind === "bill" && open && <Barcode itemId={item.id} pay={tray ? payFacts(item, tray) : undefined} />}
+        {kind === "bill" && open && <Barcode itemId={item.id} pay={tray ? payFacts(item, tray) : undefined} title={item.title} />}
         {item.state === "done" ? (
           <p className="item-done">
             Done{item.done_at !== null && (
