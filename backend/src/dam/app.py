@@ -4,7 +4,7 @@ import logging
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field, fields
 from pathlib import Path
 
 from sqlalchemy import Engine, func, select
@@ -20,6 +20,7 @@ from dam.collections.ongoing import OngoingPublisher
 from dam.collections.publishers import PublisherRegistry
 from dam.collections.service import CollectionService
 from dam.config import DEFAULTS_DIR, AppPaths, Person, Settings, load_settings
+from dam.core.jobs import Jobs
 from dam.core.paths import ArchivePaths
 from dam.db.engine import make_engine, migrate
 from dam.db.tables import files
@@ -78,22 +79,308 @@ JOBS_RUNNING = (
 BATCH_RUNNING = "A change is still being carried out. Try again when it has finished."
 
 
+# -- construction ------------------------------------------------------------------------
+# The App is built in groups, each by one function from explicit inputs: the file index,
+# the operation layer, the collections (which publish into the archive through it), then
+# the services. ``BUILD_ORDER`` lists them in the order ``App.create`` calls them, and
+# ``tests/test_app_wiring.py`` checks that every input of a group is made before it. The
+# services also get the App itself (``live``), only to read what changes while it runs
+# (settings, rules, trays, codes) and the few methods of the App they call back.
+
+
+@dataclass(frozen=True)
+class IndexParts:
+    """The file index: its rows, tags, the extractors and the content indexer."""
+
+    repo: FileRepo
+    tags: TagRepo
+    registry: ExtractorRegistry
+    content: ContentIndexer
+
+
+def build_index(
+    settings: Settings, app_paths: AppPaths, paths: ArchivePaths, engine: Engine
+) -> IndexParts:
+    repo = FileRepo(engine, inbox=settings.special_folders.inbox)
+    paths.has_rows = repo.has_live_under  # an empty mount with rows is not connected
+    registry = default_registry(settings.ocr_languages)
+    content = ContentIndexer(
+        paths,
+        repo,
+        engine,
+        registry,
+        settings.indexer_reads_per_minute,
+        ocr_languages=settings.ocr_languages,
+        cache_dir=app_paths.cache_dir,
+    )
+    return IndexParts(repo=repo, tags=TagRepo(engine), registry=registry, content=content)
+
+
+@dataclass(frozen=True)
+class OpsParts:
+    """The operation layer (the only writer to the archive) and its background copies."""
+
+    executor: Executor
+    copy_jobs: CopyJobs
+
+
+def build_ops(
+    settings: Settings,
+    app_paths: AppPaths,
+    paths: ArchivePaths,
+    engine: Engine,
+    repo: FileRepo,
+    jobs: Jobs,
+) -> OpsParts:
+    executor = Executor(
+        paths,
+        engine,
+        repo,
+        throttle_ms=settings.ops_throttle_ms,
+        areas_dir=app_paths.config_dir / "rules" / AREAS_DIR,
+    )
+    copy_jobs = CopyJobs(jobs)  # moves across disks that run in the background
+    executor.copying = copy_jobs.running
+    return OpsParts(executor=executor, copy_jobs=copy_jobs)
+
+
+@dataclass(frozen=True)
+class CollectionParts:
+    """Collections, marks and locks, and the publishers that mirror them in the archive."""
+
+    notes: NotesService
+    publishers: PublisherRegistry
+    collections: CollectionService
+    marks: MarkService
+    locks: LockService
+    ongoing: OngoingPublisher
+    convert: OngoingConverter
+    convert_important: ImportantConverter
+
+
+def build_collections(
+    settings: Settings, paths: ArchivePaths, engine: Engine, repo: FileRepo, executor: Executor
+) -> CollectionParts:
+    notes = NotesService(engine)
+    publishers = PublisherRegistry()
+    collections = CollectionService(
+        engine, repo, publishers, settings.special_folders, quarantines=paths.quarantines
+    )
+    marks = MarkService(collections)
+    # a locked file (Important, or locked by the owner) is not changed on disk
+    locks = LockService(engine, marks.important_paths)
+    executor.locks = locks
+    ongoing = OngoingPublisher(paths, repo, executor, collections)
+    publishers.register(ongoing)
+    convert = OngoingConverter(paths, repo, executor, collections, ongoing)
+    convert_important = ImportantConverter(paths, repo, executor, collections, ongoing)
+
+    # Collection changes made through the service re-sync every publisher right away, in
+    # the caller's thread, after the change has committed.
+    def sync_publishers(label: str | None = None) -> object:
+        return publishers.sync_all(label=label).get(ONGOING)
+
+    collections.on_change = sync_publishers
+    convert.sync_publishers = sync_publishers
+    convert_important.sync_publishers = sync_publishers
+    return CollectionParts(
+        notes=notes,
+        publishers=publishers,
+        collections=collections,
+        marks=marks,
+        locks=locks,
+        ongoing=ongoing,
+        convert=convert,
+        convert_important=convert_important,
+    )
+
+
+@dataclass(frozen=True)
+class ServiceParts:
+    """What the API and the commands use: one service per screen or task."""
+
+    trays: TrayService
+    scan_fields: ScanFieldService
+    rule_record: RuleRecord
+    tag_admin: TagAdmin
+    pictures: Pictures
+    replay_jobs: ReplayJobs
+    area_pictures: AreaPictures
+    assignments: AssignmentService
+    inbox: InboxService
+    layout: LayoutService
+    intake: IntakeService
+    browse: BrowseService
+    maintenance: MaintenanceService
+    activity: ActivityService
+    today: TodayService
+    launch: LaunchService
+    previews: PreviewService
+    ai: AIService
+    summaries: SummaryService
+
+
+def build_services(
+    app_paths: AppPaths,
+    paths: ArchivePaths,
+    engine: Engine,
+    index: IndexParts,
+    ops: OpsParts,
+    cols: CollectionParts,
+    live: "App",
+) -> ServiceParts:
+    special = live.settings.special_folders
+    repo, executor, content = index.repo, ops.executor, index.content
+    # an item's date changed: forget reminder records of occasions it no longer has
+    trays = TrayService(
+        engine,
+        lambda: live.tray_defs,
+        on_date_changed=lambda item_id: clear_unsent(engine, item_id),
+        # inbox is created below, with this TrayService
+        prefill_for=lambda drive_id: inbox.prefill_for(drive_id),
+    )
+    # inbox is created next, with this ScanFieldService
+    scan_fields = ScanFieldService(engine, lambda drive_id: inbox.detected_fields(drive_id))
+    rule_record = RuleRecord(engine)
+    # page-1 pictures (cache) and the crops of picture areas (the rules' folder)
+    pictures = Pictures(lambda: live.rules_dir, app_paths.cache_dir)
+    area_pictures = AreaPictures(
+        repo,
+        app_paths.cache_dir,
+        lambda: live.rules_dir,
+        want_layouts=lambda ids: content.want_layouts(ids),
+        executor=executor,
+    )
+    assignments = AssignmentService(engine, repo, lambda: live.settings.people)
+    inbox = InboxService(
+        paths,
+        repo,
+        index.tags,
+        executor,
+        lambda: live.rules,
+        special,
+        trays,
+        cols.collections,
+        cols.notes,
+        scan_fields,
+        lambda: live.codes,
+        rule_record=rule_record,
+        rules_dir=lambda: live.rules_dir,
+        data_dir=app_paths.data_dir,
+        want_layouts=lambda ids: content.want_layouts(ids),
+        layout_blocked=lambda drive_id: content.layout_blocked(drive_id),
+        people=lambda: live.settings.people,
+        address_zone=lambda: live.settings.address_zone,
+        assigned_person=assignments.person_of,
+        assignments=assignments,
+        pictures=pictures,
+        area_pictures=area_pictures,
+    )
+    layout = LayoutService(
+        paths,
+        executor,
+        app_paths,
+        reload_rules=live.reload_rules,
+        defaults_dir=lambda: live.defaults_dir,
+        rescan=live.scan,
+    )
+    browse = BrowseService(
+        repo,
+        executor,
+        special,
+        cols.collections.member_paths,
+        important=cols.marks.important_paths,
+        important_lock=cols.collections.important_lock,
+        rescan=live.scan,
+    )
+    browse.copy_jobs = ops.copy_jobs
+    maintenance = MaintenanceService(
+        paths,
+        repo,
+        engine,
+        executor,
+        cols.locks,
+        cols.collections,
+        index.tags,
+        cols.notes,
+        trays,
+        assignments,
+        tray_name=live.tray_name,
+        rescan=live.scan,
+        important_lock=cols.collections.important_lock,
+    )
+    activity = ActivityService(
+        executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing
+    )
+    today = TodayService(
+        trays,
+        lambda: live.tray_defs,
+        cols.collections,
+        cols.notes,
+        lambda: repo.counts()["inbox"],
+        repo,
+        paths.quarantines,
+        cols.convert.unmanaged_count,
+        inbox.list,
+        cols.convert_important.unmanaged_count,
+    )
+    # DAM_AI_FAKE=1 (demos, tests): a deterministic provider that counts as a key
+    provider = None
+    if os.environ.get("DAM_AI_FAKE") == "1":
+        from dam.ai.fake import FakeProvider, demo_reply
+
+        provider = FakeProvider(demo_reply, demo=True)
+    return ServiceParts(
+        trays=trays,
+        scan_fields=scan_fields,
+        rule_record=rule_record,
+        tag_admin=TagAdmin(engine),
+        pictures=pictures,
+        replay_jobs=ReplayJobs(),  # rule tests that run in the background
+        area_pictures=area_pictures,
+        assignments=assignments,
+        inbox=inbox,
+        layout=layout,
+        intake=IntakeService(paths, executor, rescan=live.scan),
+        browse=browse,
+        maintenance=maintenance,
+        activity=activity,
+        today=today,
+        launch=LaunchService(paths),
+        previews=PreviewService(paths, app_paths.cache_dir / "thumbs"),
+        ai=AIService(live, provider),
+        summaries=SummaryService(engine, repo),
+    )
+
+
+# the groups in the order they are built; a group's inputs are made by those before it
+BUILD_ORDER = (build_index, build_ops, build_collections, build_services)
+
+
+def _take(app: "App", parts: object) -> None:
+    """Set each part of a group on the App, under its own name."""
+    for f in fields(parts):  # type: ignore[arg-type]
+        setattr(app, f.name, getattr(parts, f.name))
+
+
 @dataclass(eq=False)
 class App:
     settings: Settings
     app_paths: AppPaths
     paths: ArchivePaths
     engine: Engine
-    repo: FileRepo
-    tags: TagRepo
-    tag_admin: TagAdmin = field(init=False)
-    executor: Executor
-    registry: ExtractorRegistry
-    content: ContentIndexer
-    trays: TrayService = field(init=False)
+    # the background runner: the workers (``dam serve`` starts them), the moves across
+    # disks, and their status; closing the App stops them
+    jobs: Jobs
+    index_parts: InitVar[IndexParts]
+    ops_parts: InitVar[OpsParts]
+    repo: FileRepo = field(init=False)
+    tags: TagRepo = field(init=False)
+    registry: ExtractorRegistry = field(init=False)
+    content: ContentIndexer = field(init=False)
+    executor: Executor = field(init=False)
+    copy_jobs: CopyJobs = field(init=False)
     notes: NotesService = field(init=False)
-    rule_record: RuleRecord = field(init=False)
-    assignments: AssignmentService = field(init=False)
     publishers: PublisherRegistry = field(init=False)
     collections: CollectionService = field(init=False)
     marks: MarkService = field(init=False)
@@ -101,10 +388,17 @@ class App:
     ongoing: OngoingPublisher = field(init=False)
     convert: OngoingConverter = field(init=False)
     convert_important: ImportantConverter = field(init=False)
-    inbox: InboxService = field(init=False)
+    trays: TrayService = field(init=False)
+    scan_fields: ScanFieldService = field(init=False)
+    rule_record: RuleRecord = field(init=False)
+    tag_admin: TagAdmin = field(init=False)
     pictures: Pictures = field(init=False)
     replay_jobs: ReplayJobs = field(init=False)
     area_pictures: AreaPictures = field(init=False)
+    assignments: AssignmentService = field(init=False)
+    inbox: InboxService = field(init=False)
+    layout: LayoutService = field(init=False)
+    intake: IntakeService = field(init=False)
     browse: BrowseService = field(init=False)
     maintenance: MaintenanceService = field(init=False)
     activity: ActivityService = field(init=False)
@@ -113,9 +407,6 @@ class App:
     previews: PreviewService = field(init=False)
     ai: AIService = field(init=False)
     summaries: SummaryService = field(init=False)
-    scan_fields: ScanFieldService = field(init=False)
-    layout: LayoutService = field(init=False)
-    intake: IntakeService = field(init=False)
     # where the shipped default tray files live (tests point it elsewhere)
     defaults_dir: Path = field(init=False, default=DEFAULTS_DIR)
     # ends the background indexer's idle wait (``dam serve`` wires it); a no-op otherwise
@@ -130,153 +421,25 @@ class App:
     # process. ``dam serve`` sets ``skipped`` on it when its latest check was skipped.
     last_reminders: RemindResult | None = field(init=False, default=None)
 
-    def __post_init__(self) -> None:
-        special = self.settings.special_folders
-        # an item's date changed: forget reminder records of occasions it no longer has
-        self.trays = TrayService(
-            self.engine,
-            lambda: self.tray_defs,
-            on_date_changed=lambda item_id: clear_unsent(self.engine, item_id),
-            # self.inbox is created below, with this TrayService
-            prefill_for=lambda drive_id: self.inbox.prefill_for(drive_id),
-        )
-        self.notes = NotesService(self.engine)
-        self.publishers = PublisherRegistry()
-        self.collections = CollectionService(
-            self.engine, self.repo, self.publishers, special, quarantines=self.paths.quarantines
-        )
-        self.marks = MarkService(self.collections)
-        # a locked file (Important, or locked by the owner) is not changed on disk
-        self.locks = LockService(self.engine, self.marks.important_paths)
-        self.executor.locks = self.locks
-        self.ongoing = OngoingPublisher(self.paths, self.repo, self.executor, self.collections)
-        self.publishers.register(self.ongoing)
-        self.convert = OngoingConverter(
-            self.paths, self.repo, self.executor, self.collections, self.ongoing
-        )
-        # Collection changes made through the service re-sync every publisher right
-        # away, in the caller's thread, after the change has committed.
-        self.convert_important = ImportantConverter(
-            self.paths, self.repo, self.executor, self.collections, self.ongoing
-        )
-        self.collections.on_change = self.sync_publishers
-        self.convert.sync_publishers = self.sync_publishers
-        self.convert_important.sync_publishers = self.sync_publishers
-        # self.inbox is created next, with this ScanFieldService
-        self.scan_fields = ScanFieldService(
-            self.engine, lambda drive_id: self.inbox.detected_fields(drive_id)
-        )
-        self.rule_record = RuleRecord(self.engine)
-        self.tag_admin = TagAdmin(self.engine)
-        # page-1 pictures (cache) and the crops of picture areas (the rules' folder)
-        self.pictures = Pictures(lambda: self.rules_dir, self.app_paths.cache_dir)
-        self.replay_jobs = ReplayJobs()  # rule tests that run in the background
-        self.copy_jobs = CopyJobs()  # moves across disks that run in the background
-        self.area_pictures = AreaPictures(
-            self.repo,
-            self.app_paths.cache_dir,
-            lambda: self.rules_dir,
-            want_layouts=lambda ids: self.content.want_layouts(ids),
-            executor=self.executor,
-        )
-        self.assignments = AssignmentService(self.engine, self.repo, lambda: self.settings.people)
-        self.inbox = InboxService(
-            self.paths,
-            self.repo,
-            self.tags,
-            self.executor,
-            lambda: self.rules,
-            special,
-            self.trays,
-            self.collections,
-            self.notes,
-            self.scan_fields,
-            lambda: self.codes,
-            rule_record=self.rule_record,
-            rules_dir=lambda: self.rules_dir,
-            data_dir=self.app_paths.data_dir,
-            want_layouts=lambda ids: self.content.want_layouts(ids),
-            layout_blocked=lambda drive_id: self.content.layout_blocked(drive_id),
-            people=lambda: self.settings.people,
-            address_zone=lambda: self.settings.address_zone,
-            assigned_person=self.assignments.person_of,
-            assignments=self.assignments,
-            pictures=self.pictures,
-            area_pictures=self.area_pictures,
-        )
-        self.layout = LayoutService(
-            self.paths,
-            self.executor,
-            self.app_paths,
-            reload_rules=self.reload_rules,
-            defaults_dir=lambda: self.defaults_dir,
-            rescan=self.scan,
-        )
-        self.intake = IntakeService(self.paths, self.executor, rescan=self.scan)
-        self.browse = BrowseService(
-            self.repo,
-            self.executor,
-            special,
-            self.collections.member_paths,
-            important=self.marks.important_paths,
-            important_lock=self.collections.important_lock,
-            rescan=self.scan,
-        )
-        self.browse.copy_jobs = self.copy_jobs
-        self.executor.copying = self.copy_jobs.running
-        self.maintenance = MaintenanceService(
-            self.paths,
-            self.repo,
-            self.engine,
-            self.executor,
-            self.locks,
-            self.collections,
-            self.tags,
-            self.notes,
-            self.trays,
-            self.assignments,
-            tray_name=self._tray_name,
-            rescan=self.scan,
-            important_lock=self.collections.important_lock,
-        )
-        self.activity = ActivityService(
-            self.executor,
-            self.trays,
-            self.collections,
-            self.notes,
-            self.rule_record,
-            self.ongoing,
-        )
-        self.today = TodayService(
-            self.trays,
-            lambda: self.tray_defs,
-            self.collections,
-            self.notes,
-            lambda: self.repo.counts()["inbox"],
-            self.repo,
-            self.paths.quarantines,
-            self.convert.unmanaged_count,
-            self.inbox.list,
-            self.convert_important.unmanaged_count,
+    def __post_init__(self, index_parts: IndexParts, ops_parts: OpsParts) -> None:
+        _take(self, index_parts)
+        _take(self, ops_parts)
+        cols = build_collections(self.settings, self.paths, self.engine, self.repo, self.executor)
+        _take(self, cols)
+        _take(
+            self,
+            build_services(
+                self.app_paths, self.paths, self.engine, index_parts, ops_parts, cols, self
+            ),
         )
         self.wake_indexer = lambda: None
-        self.launch = LaunchService(self.paths)
-        self.previews = PreviewService(self.paths, self.app_paths.cache_dir / "thumbs")
         self.content.barcode_trays = self.barcode_trays
         self.content.thumbs = self.pictures.thumbs
         self.content.page1_backfill = lambda: self.settings.page1_backfill
         self.content.page1_fast_per_minute = lambda: self.settings.page1_text_reads_per_minute
-        # DAM_AI_FAKE=1 (demos, tests): a deterministic provider that counts as a key
-        provider = None
-        if os.environ.get("DAM_AI_FAKE") == "1":
-            from dam.ai.fake import FakeProvider, demo_reply
-
-            provider = FakeProvider(demo_reply, demo=True)
-        self.ai = AIService(self, provider)
-        self.summaries = SummaryService(self.engine, self.repo)
         self.reload_rules()
 
-    def _tray_name(self, tray_id: str) -> str:
+    def tray_name(self, tray_id: str) -> str:
         return next((t.name for t in self.tray_defs if t.id == tray_id), tray_id)
 
     def barcode_trays(self) -> list[str]:
@@ -317,34 +480,10 @@ class App:
         engine = make_engine(app_paths.db_path)
         try:
             migrate(engine)
-            repo = FileRepo(engine, inbox=settings.special_folders.inbox)
-            paths.has_rows = repo.has_live_under  # an empty mount with rows is not connected
-            registry = default_registry(settings.ocr_languages)
-            return cls(
-                settings=settings,
-                app_paths=app_paths,
-                paths=paths,
-                engine=engine,
-                repo=repo,
-                tags=TagRepo(engine),
-                executor=Executor(
-                    paths,
-                    engine,
-                    repo,
-                    throttle_ms=settings.ops_throttle_ms,
-                    areas_dir=app_paths.config_dir / "rules" / AREAS_DIR,
-                ),
-                registry=registry,
-                content=ContentIndexer(
-                    paths,
-                    repo,
-                    engine,
-                    registry,
-                    settings.indexer_reads_per_minute,
-                    ocr_languages=settings.ocr_languages,
-                    cache_dir=app_paths.cache_dir,
-                ),
-            )
+            index = build_index(settings, app_paths, paths, engine)
+            jobs = Jobs()
+            ops = build_ops(settings, app_paths, paths, engine, index.repo, jobs)
+            return cls(settings, app_paths, paths, engine, jobs, index, ops)
         except BaseException:
             engine.dispose()
             raise
@@ -661,5 +800,6 @@ class App:
         self.copy_jobs.close()
         self.replay_jobs.close()
         self.maintenance.close()
+        self.jobs.close()  # the workers end before what they use is closed
         self.content.close()
         self.engine.dispose()

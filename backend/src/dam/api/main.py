@@ -170,44 +170,57 @@ def create_api(
         host if isinstance(host, Reopener) else None,
         pending=lambda: bool(app.activity.pending()),
     )
-    for module in (
-        system,
-        inbox,
-        layout,
-        files,
-        locks,
-        maintenance,
-        browse,
-        activity,
-        today,
-        trays,
-        items,
-        collections,
-        marks,
-        notes,
-        ongoing,
-        important,
-        export,
-        ai,
-        assignments,
-        codes,
-        rules,
-        archives_router,
-        snapshots_router,
-        folders,
-        setup,
-        settings,
-        tags,
-    ):
+    for module in ROUTERS:
         api.include_router(module.router)
     api.include_router(collections.groups_router)  # /api/collection-groups
     add_error_handlers(api)
     if static_dir is not None and (static_dir / "index.html").is_file():
         mount_frontend(api, static_dir)
-    if archives is not None:
-        api.add_middleware(ArchiveGuardMiddleware, archive_id=archives.current_id)
-    api.add_middleware(UnlockTokenMiddleware)
-    # Added last = outermost: the host/origin checks run before anything else.
-    api.add_middleware(InternalErrorMiddleware, logs_dir=app.app_paths.logs_dir)
-    api.add_middleware(LocalOnlyMiddleware)
+    archive_id = archives.current_id if archives is not None else None
+    add_middlewares(api, app.app_paths.logs_dir, archive_id)
     return api
+
+
+# every router's module, in the order they are included
+ROUTERS = (
+    system,
+    inbox,
+    layout,
+    files,
+    locks,
+    maintenance,
+    browse,
+    activity,
+    today,
+    trays,
+    items,
+    collections,
+    marks,
+    notes,
+    ongoing,
+    important,
+    export,
+    ai,
+    assignments,
+    codes,
+    rules,
+    archives_router,
+    snapshots_router,
+    folders,
+    setup,
+    settings,
+    tags,
+)
+
+
+def add_middlewares(api: FastAPI, logs_dir: Path, archive_id: str | None) -> None:
+    """The middleware, outermost first: the host and origin checks, then the handler of
+    unexpected errors, the unlock token, and (with ``archive_id``, the server's current
+    archive) the guard against requests naming another archive. Each ``add_middleware``
+    wraps what was added before, so they are added innermost first."""
+    if archive_id is not None:
+        api.add_middleware(ArchiveGuardMiddleware, archive_id=archive_id)
+    api.add_middleware(UnlockTokenMiddleware)
+    api.add_middleware(InternalErrorMiddleware, logs_dir=logs_dir)
+    # Added last = outermost: the host/origin checks run before anything else.
+    api.add_middleware(LocalOnlyMiddleware)

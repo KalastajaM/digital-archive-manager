@@ -48,7 +48,7 @@ const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "
 function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
   const calls = mockFetch({
     "GET /api/index/errors": (call) => ({
-      body: call.url.includes("all=1")
+      body: call.url.includes("all=true")
         ? page([...ERRORS, UNSUPPORTED], 3, [{ ext: "mp3", count: 1 }])
         : page(ERRORS),
     }),
@@ -222,7 +222,7 @@ describe("Index errors sheet", () => {
     expect(dialog).toHaveTextContent("These can't be read for text; the files themselves are fine");
     await user.click(toggle);
     await waitFor(() => expect(rows(dialog)).toHaveLength(3));
-    expect(calls.some((c) => c.url === "/api/index/errors?all=1&limit=200")).toBe(true);
+    expect(calls.some((c) => c.url === "/api/index/errors?all=true&limit=200")).toBe(true);
     expect(rows(dialog)[2]).toHaveTextContent("song.mp3");
     expect(rows(dialog)[2]).toHaveTextContent("Not readable");
     // Retry all still retries the errors only
@@ -258,7 +258,7 @@ describe("Index errors sheet", () => {
   it("a long list says how many more are not shown, and sums the unsupported files by type", async () => {
     const { user } = setup({
       "GET /api/index/errors": (call) => ({
-        body: call.url.includes("all=1")
+        body: call.url.includes("all=true")
           ? page([...ERRORS, UNSUPPORTED], 1_623, [
               { ext: "heic", count: 1_240 },
               { ext: "mov", count: 380 },

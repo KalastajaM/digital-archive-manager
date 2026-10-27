@@ -337,7 +337,9 @@ def test_dam_open_prints_the_link_of_the_running_server(app_paths):
 def test_dam_open_opens_the_browser(app_paths, monkeypatch):
     load_token(app_paths.data_dir)
     opened = []
-    monkeypatch.setattr(cli_main.webbrowser, "open", lambda url: opened.append(url) or True)
+    import webbrowser
+
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url) or True)
     lock = ServeLock(app_paths.data_dir)
     lock.acquire()
     lock.publish(8799)

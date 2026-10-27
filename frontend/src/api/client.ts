@@ -2,6 +2,7 @@
 import {
   keepPreviousData,
   type QueryClient,
+  skipToken,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -9,6 +10,7 @@ import {
 } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { components } from "./schema";
+import { buildUrl, type CallArgs, type Operation, type PathOf, type ResponseOf } from "./typed";
 
 type Schemas = components["schemas"];
 export type InboxEntry = Schemas["InboxEntryOut"];
@@ -344,6 +346,44 @@ export const patch = <T>(path: string, body: unknown) => request<T>("PATCH", pat
 export const put = <T>(path: string, body: unknown) => request<T>("PUT", path, body);
 export const del = <T>(path: string) => request<T>("DELETE", path);
 
+// Typed calls by OpenAPI path (``typed.ts``): the path's parameters, query, body and
+// answer come from ``schema.d.ts``, so a call that does not match the API fails to
+// compile. ``apiGet("/api/maintenance/jobs/{job_id}", { path: { job_id } })`` answers a
+// ``MaintenanceJobOut``. The ``path``/``query`` casts only widen to what ``buildUrl`` takes.
+type UrlParts = Parameters<typeof buildUrl>;
+const urlOf = (template: string, options?: { path?: unknown; query?: unknown }) =>
+  buildUrl(template, options?.path as UrlParts[1], options?.query as UrlParts[2]);
+
+export const apiGet = <P extends PathOf<"get">>(path: P, ...[options]: CallArgs<P, "get">) =>
+  request<ResponseOf<Operation<P, "get">>>("GET", urlOf(path, options), undefined, options?.signal);
+
+export const apiPost = <P extends PathOf<"post">>(path: P, ...[options]: CallArgs<P, "post">) =>
+  request<ResponseOf<Operation<P, "post">>>(
+    "POST",
+    urlOf(path, options),
+    (options as { body?: unknown } | undefined)?.body,
+    options?.signal,
+  );
+
+export const apiPut = <P extends PathOf<"put">>(path: P, ...[options]: CallArgs<P, "put">) =>
+  request<ResponseOf<Operation<P, "put">>>(
+    "PUT",
+    urlOf(path, options),
+    (options as { body?: unknown } | undefined)?.body,
+    options?.signal,
+  );
+
+export const apiPatch = <P extends PathOf<"patch">>(path: P, ...[options]: CallArgs<P, "patch">) =>
+  request<ResponseOf<Operation<P, "patch">>>(
+    "PATCH",
+    urlOf(path, options),
+    (options as { body?: unknown } | undefined)?.body,
+    options?.signal,
+  );
+
+export const apiDelete = <P extends PathOf<"delete">>(path: P, ...[options]: CallArgs<P, "delete">) =>
+  request<ResponseOf<Operation<P, "delete">>>("DELETE", urlOf(path, options), undefined, options?.signal);
+
 /** True for the error a cancelled request throws (a changed key, a closed screen): not
  * a failure to show. */
 export const isAbort = (e: unknown) => typeof e === "object" && e !== null && (e as { name?: unknown }).name === "AbortError";
@@ -373,7 +413,7 @@ export const thumbUrl = (driveId: string, width: ThumbWidth = 1200) => `${fileUr
 
 /** The start of a text-like file (404 for other types). */
 export const fetchTextPreview = (driveId: string, signal?: AbortSignal) =>
-  get<TextPreview>(`${fileUrl(driveId)}/text`, signal);
+  apiGet("/api/files/{drive_id}/text", { path: { drive_id: driveId }, signal });
 
 /** Open the file in its default macOS app, or show it in Finder (204; 409 for apps and
  * scripts, 404 when it is gone, 501 off macOS). Plain calls, not mutations: previews
@@ -417,10 +457,10 @@ const keys = {
 const enc = encodeURIComponent;
 
 export const useInbox = () =>
-  useQuery({ queryKey: keys.inbox, queryFn: () => get<InboxEntry[]>("/api/inbox") });
+  useQuery({ queryKey: keys.inbox, queryFn: () => apiGet("/api/inbox") });
 
 export const useFolders = (enabled = true) =>
-  useQuery({ queryKey: keys.folders, queryFn: () => get<string[]>("/api/folders"), enabled });
+  useQuery({ queryKey: keys.folders, queryFn: () => apiGet("/api/folders"), enabled });
 
 const knowArchive = <T extends { archive?: { id: string } | null }>(status: T): T => {
   if (status.archive) setActiveArchive(status.archive.id);
@@ -430,7 +470,7 @@ const knowArchive = <T extends { archive?: { id: string } | null }>(status: T): 
 export const useStatus = () =>
   useQuery({
     queryKey: keys.status,
-    queryFn: async ({ signal }) => knowArchive(await get<Status>("/api/status", signal)),
+    queryFn: async ({ signal }) => knowArchive(await apiGet("/api/status", { signal })),
     refetchInterval: 5000,
   });
 
@@ -440,7 +480,7 @@ export const useConfigured = () =>
   useQuery({
     queryKey: keys.configured,
     queryFn: async () =>
-      knowArchive(await get<{ configured?: boolean; archive?: Status["archive"]; profiles_count?: number }>("/api/status")),
+      knowArchive(await apiGet("/api/status")),
     staleTime: Infinity,
   });
 
@@ -453,7 +493,7 @@ export const useArchives = (enabled = true) =>
   useQuery({
     queryKey: archivesKey,
     queryFn: async () => {
-      const list = await get<Archives>("/api/archives");
+      const list = await apiGet("/api/archives");
       setActiveArchive(list.current);
       return list;
     },
@@ -462,17 +502,17 @@ export const useArchives = (enabled = true) =>
 
 /** Add an archive (it is not opened). ``demo_folder``: build the demo archive there. */
 export const addArchive = (name: string, color: string | null, demo_folder?: string) =>
-  post<Archive>("/api/archives", { name, color, ...(demo_folder ? { demo_folder } : {}) });
+  apiPost("/api/archives", { body: { name, color, ...(demo_folder ? { demo_folder } : {}) } });
 
 /** Open another archive in this server (409 when another window has it). */
-export const switchArchive = (id: string) => post<ArchiveSwitched>(`/api/archives/${enc(id)}/switch`);
+export const switchArchive = (id: string) => apiPost("/api/archives/{archive_id}/switch", { path: { archive_id: id } });
 
 export const updateArchive = (id: string, change: { name?: string; color?: string }) =>
-  patch<Archive>(`/api/archives/${enc(id)}`, change);
+  apiPatch("/api/archives/{archive_id}", { path: { archive_id: id }, body: change });
 
 /** Remove an archive from the list; no folder is deleted. */
 export const forgetArchive = (id: string, switch_to?: string) =>
-  post<ArchiveForgotten>(`/api/archives/${enc(id)}/forget`, switch_to ? { switch_to } : {});
+  apiPost("/api/archives/{archive_id}/forget", { path: { archive_id: id }, body: switch_to ? { switch_to } : {} });
 
 /** Show the archive's data folder or archive folder in Finder / Explorer. */
 export const revealArchive = (id: string, what: "data" | "archive" | "extra", label?: string) =>
@@ -483,13 +523,13 @@ export const revealArchive = (id: string, what: "data" | "archive" | "extra", la
 const snapshotsKey = ["snapshots"] as const;
 
 /** This archive's snapshots (newest first) and the folder they are in. */
-export const useSnapshots = () => useQuery({ queryKey: snapshotsKey, queryFn: () => get<Snapshots>("/api/snapshots") });
+export const useSnapshots = () => useQuery({ queryKey: snapshotsKey, queryFn: () => apiGet("/api/snapshots") });
 
 /** Take a snapshot of the database and settings now. */
 export const useCreateSnapshot = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: () => post<Snapshot>("/api/snapshots"),
+    mutationFn: () => apiPost("/api/snapshots"),
     onSettled: () => client.invalidateQueries({ queryKey: snapshotsKey }),
   });
 };
@@ -523,68 +563,68 @@ export const useImportSnapshot = () => {
  * another archive folder (this archive's folders are kept). The archive closes and opens
  * again, so the page reloads after. */
 export const restoreSnapshot = (name: string, snapshot_current: boolean, other_folder_ok: boolean) =>
-  post<SnapshotRestored>(`/api/snapshots/${enc(name)}/restore`, { snapshot_current, other_folder_ok });
+  apiPost("/api/snapshots/{name}/restore", { path: { name }, body: { snapshot_current, other_folder_ok } });
 
 /** Show the snapshots folder in Finder / Explorer. */
 export const revealSnapshots = () => post<void>("/api/snapshots/reveal");
 
 export const archiveFoldersKey = ["archive-folders"] as const;
 export const useArchiveFolders = () =>
-  useQuery({ queryKey: archiveFoldersKey, queryFn: () => get<Schemas["ArchiveFoldersOut"]>("/api/archive-folders") });
+  useQuery({ queryKey: archiveFoldersKey, queryFn: () => apiGet("/api/archive-folders") });
 
 /** Attach a folder under ``label`` (``dry_run``: only check it). */
 export const addArchiveFolder = (label: string, path: string, dry_run: boolean) =>
-  post<FolderChange>("/api/archive-folders", { label, path, dry_run });
+  apiPost("/api/archive-folders", { body: { label, path, dry_run } });
 
 /** Take a folder out of the archive (nothing on the disk changes); ``forget`` also drops
  * the tags, notes and collection places of its files. ``dry_run``: only count them. */
 export const detachArchiveFolder = (label: string, forget: boolean, dry_run = false) =>
-  post<FolderChange>(`/api/archive-folders/${enc(label)}/detach`, { forget, dry_run });
+  apiPost("/api/archive-folders/{label}/detach", { path: { label }, body: { forget, dry_run } });
 
 export const attachArchiveFolder = (label: string) =>
-  post<FolderChange>(`/api/archive-folders/${enc(label)}/attach`, { dry_run: false });
+  apiPost("/api/archive-folders/{label}/attach", { path: { label }, body: { dry_run: false } });
 
 export type Relabel = Schemas["RelabelOut"];
 /** Change an extra folder's label (``dry_run``: only say what changes). Every stored path
  * under it is rewritten; nothing on the disk changes. */
 export const relabelArchiveFolder = (label: string, newLabel: string, dry_run: boolean) =>
-  post<Relabel>(`/api/archive-folders/${enc(label)}/relabel`, { label: newLabel, dry_run });
+  apiPost("/api/archive-folders/{label}/relabel", { path: { label }, body: { label: newLabel, dry_run } });
 
 export const useSetupCandidates = () =>
   useQuery({
     queryKey: keys.setupCandidates,
-    queryFn: ({ signal }) => get<SetupCandidates>("/api/setup/candidates", signal),
+    queryFn: ({ signal }) => apiGet("/api/setup/candidates", { signal }),
     staleTime: Infinity,
   });
 
 /** Check a folder path (nothing changes on disk). */
-export const checkSetupPath = (path: string) => post<SetupCheck>("/api/setup/validate", { path });
+export const checkSetupPath = (path: string) => apiPost("/api/setup/validate", { body: { path } });
 
 /** Save the archive folder; ``create`` makes that one missing folder first. With a
  * ``layout`` (start a new archive): also writes the special folder names to the settings
  * and makes the layout's folders, as one batch you can undo. */
 export const saveSetup = (archive_root: string, create: boolean, layout?: LayoutBody) =>
-  post<SetupResult>("/api/setup", layout ? { archive_root, create, layout } : { archive_root, create });
+  apiPost("/api/setup", { body: layout ? { archive_root, create, layout } : { archive_root, create } });
 
 /** The folders a new archive at ``path`` would get (nothing changes on disk). */
 export const previewSetupLayout = (path: string, layout: LayoutBody) =>
-  post<LayoutPreview>("/api/setup/layout-preview", { path, layout });
+  apiPost("/api/setup/layout-preview", { body: { path, layout } });
 
 /** The starter layouts and the special folders (inside the running app). */
 export const useLayoutTemplates = (enabled = true) =>
   useQuery({
     queryKey: ["layout-templates"],
-    queryFn: ({ signal }) => get<LayoutTemplates>("/api/layout/templates", signal),
+    queryFn: ({ signal }) => apiGet("/api/layout/templates", { signal }),
     staleTime: Infinity,
     enabled,
   });
 
 /** Every folder of the layout and which would be made (nothing changes on disk). */
-export const previewLayout = (layout: LayoutBody) => post<LayoutPreview>("/api/layout/preview", layout);
+export const previewLayout = (layout: LayoutBody) => apiPost("/api/layout/preview", { body: layout });
 
 /** What a new folder would do (nothing changes on disk); refused names are a 400. */
 export const previewNewFolder = (parent: string, name: string) =>
-  post<ResolvedOp[]>("/api/folders/new/preview", { parent, name });
+  apiPost("/api/folders/new/preview", { body: { parent, name } });
 
 /** Show an archive folder in Finder / Explorer / the file manager. */
 export const revealFolder = (path: string) => post<void>("/api/folders/reveal", { path });
@@ -605,7 +645,7 @@ export async function uploadToInbox(file: File): Promise<BatchResult> {
 /** What filing these requests would do (nothing changes on disk). */
 export const usePreview = () =>
   useMutation({
-    mutationFn: (requests: FileRequest[]) => post<ResolvedOp[]>("/api/inbox/preview", requests),
+    mutationFn: (requests: FileRequest[]) => apiPost("/api/inbox/preview", { body: requests }),
   });
 
 function useRefresh() {
@@ -634,7 +674,7 @@ export const useFileIt = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: ({ requests, via }: { requests: FileRequest[]; via: Via }) =>
-      post<FileItResult>("/api/inbox/file", { requests, dry_run: false, via } satisfies FileBody),
+      apiPost("/api/inbox/file", { body: { requests, dry_run: false, via } satisfies FileBody }),
     onSettled: refresh,
   });
 };
@@ -643,7 +683,7 @@ export const useFileIt = () => {
 export const useCreateLayout = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (layout: LayoutBody) => post<LayoutResult>("/api/layout", layout),
+    mutationFn: (layout: LayoutBody) => apiPost("/api/layout", { body: layout }),
     onSettled: refresh,
   });
 };
@@ -653,7 +693,7 @@ export const useCreateFolder = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: ({ parent, name }: { parent: string; name: string }) =>
-      post<BatchResult>("/api/folders/new", { parent, name }),
+      apiPost("/api/folders/new", { body: { parent, name } }),
     onSettled: refresh,
   });
 };
@@ -668,7 +708,7 @@ export const useUndo = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (batchId: string) =>
-      post<UndoResult>(`/api/activity/${encodeURIComponent(batchId)}/undo`),
+      apiPost("/api/activity/{batch_id}/undo", { path: { batch_id: batchId } }),
     onSettled: refresh,
   });
 };
@@ -678,7 +718,7 @@ export const useUndo = () => {
 export const useUndoPreview = (batchId: string) =>
   useQuery({
     queryKey: ["undo-preview", batchId],
-    queryFn: () => post<ResolvedOp[]>(`/api/activity/${encodeURIComponent(batchId)}/undo/preview`),
+    queryFn: () => apiPost("/api/activity/{batch_id}/undo/preview", { path: { batch_id: batchId } }),
     retry: false,
     gcTime: 0,
     staleTime: 0,
@@ -691,11 +731,7 @@ export const useUndoPreview = (batchId: string) =>
 export const useBrowse = (path: string, enabled = true, collection: number | null = null) =>
   useQuery({
     queryKey: collection === null ? [...keys.browse, path] : [...keys.browse, path, { collection }],
-    queryFn: ({ signal }) =>
-      get<DirEntry[]>(
-        `/api/browse?path=${encodeURIComponent(path)}${collection === null ? "" : `&collection=${collection}`}`,
-        signal,
-      ),
+    queryFn: ({ signal }) => apiGet("/api/browse", { query: { path, collection }, signal }),
     enabled,
   });
 
@@ -716,9 +752,8 @@ export const useBrowseFiles = (
   useQuery({
     queryKey: [...keys.browse, "files", path, { collection, sort, dir }],
     queryFn: ({ signal }) => {
-      const p = new URLSearchParams({ path, sort, dir, limit: String(FLAT_LIMIT) });
-      if (collection !== null) p.set("collection", String(collection));
-      return get<FlatFiles>(`/api/browse/files?${p}`, signal);
+      const query = { path, sort, dir, limit: FLAT_LIMIT, collection };
+      return apiGet("/api/browse/files", { query, signal });
     },
     enabled,
   });
@@ -728,17 +763,15 @@ export const useBrowseFiles = (
  * filters (else every one). Up to the API's 500 hits, so
  * sorting the results by a column sorts (nearly) every match, not just the best 50. */
 export const searchFiles = (q: string, folder?: string, tagMode: "all" | "any" = "all", signal?: AbortSignal) => {
-  const params = new URLSearchParams({ q, limit: "500" });
-  if (folder) params.set("folder", folder);
-  if (tagMode === "any") params.set("tag_mode", "any");
-  return get<SearchHit[]>(`/api/search?${params}`, signal);
+  const query = { q, limit: 500, folder: folder || undefined, tag_mode: tagMode === "any" ? tagMode : undefined };
+  return apiGet("/api/search", { query, signal });
 };
 
 /** Moves into ``##. To Delete`` (mirrored path); a dry run only resolves the plan. */
 export const useQuarantine = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (body: QuarantineBody) => post<BatchResult>("/api/quarantine", body),
+    mutationFn: (body: QuarantineBody) => apiPost("/api/quarantine", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -750,7 +783,7 @@ export const useQuarantine = () => {
 export const useRestore = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (body: RestoreBody) => post<BatchResult>("/api/restore", body),
+    mutationFn: (body: RestoreBody) => apiPost("/api/restore", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -760,14 +793,14 @@ export const useRestore = () => {
 /** What moving these files into ``folder`` would do (nothing changes on disk). */
 export const useMovePreview = () =>
   useMutation({
-    mutationFn: (body: MoveBody) => post<ResolvedOp[]>("/api/browse/move/preview", body),
+    mutationFn: (body: MoveBody) => apiPost("/api/browse/move/preview", { body }),
   });
 
 /** Move files (names kept) into ``folder``: journaled, so the batch can be undone. */
 export const useMoveFiles = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (body: MoveBody) => post<MoveResult>("/api/browse/move", body),
+    mutationFn: (body: MoveBody) => apiPost("/api/browse/move", { body }),
     onSettled: refresh,
   });
 };
@@ -775,23 +808,23 @@ export const useMoveFiles = () => {
 /** A move across disks running in the background (``POST /api/browse/move`` answered
  * with a ``job_id``): files and bytes copied so far, and the batch once it is over. */
 export type CopyJob = Schemas["CopyJobOut"];
-export const getCopyJob = (jobId: string) => get<CopyJob>(`/api/browse/move/jobs/${enc(jobId)}`);
+export const getCopyJob = (jobId: string) => apiGet("/api/browse/move/jobs/{job_id}", { path: { job_id: jobId } });
 /** The latest move across disks of this run (null when there was none). */
-export const latestCopyJob = () => get<CopyJob | null>("/api/browse/move/jobs/latest");
+export const latestCopyJob = () => apiGet("/api/browse/move/jobs/latest");
 /** Stop after the file being copied (it is finished and its original goes to To Delete). */
-export const stopCopyJob = (jobId: string) => post<CopyJob>(`/api/browse/move/jobs/${enc(jobId)}/stop`, {});
+export const stopCopyJob = (jobId: string) => apiPost("/api/browse/move/jobs/{job_id}/stop", { path: { job_id: jobId } });
 
 /** One file's new name in a folder (its own: a rename; another: a move with that name). */
 export const useRenamePreview = () =>
   useMutation({
-    mutationFn: (body: RenameBody) => post<ResolvedOp[]>("/api/browse/rename/preview", body),
+    mutationFn: (body: RenameBody) => apiPost("/api/browse/rename/preview", { body }),
   });
 
 /** Rename (and maybe move) one file: journaled, so the batch can be undone. */
 export const useRenameFile = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (body: RenameBody) => post<MoveResult>("/api/browse/rename", body),
+    mutationFn: (body: RenameBody) => apiPost("/api/browse/rename", { body }),
     onSettled: refresh,
   });
 };
@@ -817,10 +850,9 @@ export const useActivity = (filter: ActivityFilter = {}) =>
     queryKey: [...keys.activity, filter],
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) => {
-      const params = new URLSearchParams({ limit: String(ACTIVITY_PAGE + 1) });
-      for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") params.set(k, String(v));
-      if (pageParam) params.set("before", pageParam);
-      return get<BatchSummary[]>(`/api/activity?${params}`, signal);
+      const given = Object.entries(filter).filter(([, v]) => v !== "");
+      const query = { limit: ACTIVITY_PAGE + 1, ...Object.fromEntries(given), before: pageParam ?? undefined };
+      return apiGet("/api/activity", { query, signal });
     },
     getNextPageParam: (last) => (last.length > ACTIVITY_PAGE ? last[ACTIVITY_PAGE - 1].batch_id : undefined),
     select: (data) => data.pages.flatMap((page) => page.slice(0, ACTIVITY_PAGE)),
@@ -828,12 +860,12 @@ export const useActivity = (filter: ActivityFilter = {}) =>
 
 /** Journal rows of interrupted operations (settled by POST /api/recovery). */
 export const usePendingRecovery = () =>
-  useQuery({ queryKey: keys.recovery, queryFn: () => get<JournalEntry[]>("/api/recovery") });
+  useQuery({ queryKey: keys.recovery, queryFn: () => apiGet("/api/recovery") });
 
 export const useRecovery = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: () => post<RecoveryResult>("/api/recovery"),
+    mutationFn: () => apiPost("/api/recovery"),
     onSettled: refresh,
   });
 };
@@ -845,7 +877,7 @@ export const useRecovery = () => {
 export const useToday = () =>
   useQuery({
     queryKey: keys.today,
-    queryFn: ({ signal }) => get<Today>("/api/today", signal),
+    queryFn: ({ signal }) => apiGet("/api/today", { signal }),
     refetchInterval: (query) => ((query.state.data?.reading_codes ?? 0) > 0 ? 3000 : false),
   });
 
@@ -870,17 +902,17 @@ export function useTodayFollowsInbox(status: Status | undefined) {
 
 /** Tray definitions in order, plus the tray files that were skipped. */
 export const useTrays = (enabled = true) =>
-  useQuery({ queryKey: keys.trays, queryFn: () => get<Trays>("/api/trays"), enabled });
+  useQuery({ queryKey: keys.trays, queryFn: () => apiGet("/api/trays"), enabled });
 
 export const useItems = (trayId: string, state: ItemState = "open") =>
   useQuery({
     queryKey: [...keys.items, "tray", trayId, state],
-    queryFn: ({ signal }) => get<TrayItem[]>(`/api/trays/${enc(trayId)}/items?state=${state}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/trays/{tray_id}/items", { path: { tray_id: trayId }, query: { state }, signal }),
     enabled: trayId !== "", // no tray yet (the definitions are loading)
   });
 
 export const useItem = (id: number) =>
-  useQuery({ queryKey: [...keys.items, id], queryFn: () => get<Item>(`/api/items/${id}`) });
+  useQuery({ queryKey: [...keys.items, id], queryFn: () => apiGet("/api/items/{item_id}", { path: { item_id: id } }) });
 
 /** The item's files with their path and state (missing, in the quarantine folder). */
 export const useItemFiles = (id: number) => useQuery(itemFilesQuery(id));
@@ -888,7 +920,7 @@ export const useItemFiles = (id: number) => useQuery(itemFilesQuery(id));
 /** The item's files query (also fetched fresh by "Mark paid & file it…"). */
 export const itemFilesQuery = (id: number) => ({
   queryKey: [...keys.items, id, "files"],
-  queryFn: ({ signal }: { signal?: AbortSignal }) => get<ItemFile[]>(`/api/items/${id}/files`, signal),
+  queryFn: ({ signal }: { signal?: AbortSignal }) => apiGet("/api/items/{item_id}/files", { path: { item_id: id }, signal }),
 });
 
 /** The item's bank barcode, built from its current fields (under the item's key, so
@@ -896,14 +928,14 @@ export const itemFilesQuery = (id: number) => ({
 export const useItemBarcode = (id: number) =>
   useQuery({
     queryKey: [...keys.items, id, "barcode"],
-    queryFn: ({ signal }) => get<ItemBarcode>(`/api/items/${id}/barcode`, signal),
+    queryFn: ({ signal }) => apiGet("/api/items/{item_id}/barcode", { path: { item_id: id }, signal }),
   });
 
 /** The item's events, oldest first. */
 export const useItemHistory = (id: number) =>
   useQuery({
     queryKey: [...keys.items, id, "history"],
-    queryFn: ({ signal }) => get<ItemEvent[]>(`/api/items/${id}/history`, signal),
+    queryFn: ({ signal }) => apiGet("/api/items/{item_id}/history", { path: { item_id: id }, signal }),
   });
 
 /** The open items, collections and note of one file. */
@@ -911,7 +943,7 @@ export const useItemHistory = (id: number) =>
 export const useFileDetail = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId],
-    queryFn: ({ signal }) => get<FileDetail>(`/api/files/${enc(driveId)}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}", { path: { drive_id: driveId }, signal }),
     enabled: enabled && driveId !== "",
   });
 
@@ -919,7 +951,7 @@ export const useFileDetail = (driveId: string, enabled = true) =>
 export const useFileSuggestions = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId, "suggestions"],
-    queryFn: ({ signal }) => get<FileSuggestions>(`/api/files/${enc(driveId)}/suggestions`, signal),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/suggestions", { path: { drive_id: driveId }, signal }),
     enabled,
   });
 
@@ -934,7 +966,7 @@ const PAGE1_POLLS = 15;
 export const usePage1 = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId, "page1"],
-    queryFn: ({ signal }) => get<Page1>(`/api/files/${enc(driveId)}/page1`, signal),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/page1", { path: { drive_id: driveId }, signal }),
     enabled: enabled && driveId !== "",
     refetchInterval: (query) => {
       const page = query.state.data;
@@ -997,14 +1029,14 @@ export function useWaitForPage1(driveId: string, waiting: boolean) {
 export const usePage1Lines = () =>
   useMutation({
     mutationFn: ({ driveId, box }: { driveId: string; box: PageBox }) =>
-      post<Page1>(`/api/files/${enc(driveId)}/page1/lines`, { box }),
+      apiPost("/api/files/{drive_id}/page1/lines", { path: { drive_id: driveId }, body: { box } }),
   });
 
 /** The rule the boxes drawn on page 1 start from, one area per box (a 400 says why not). */
 export const useDraftZone = () =>
   useMutation({
     mutationFn: (body: { drive_id: string; boxes: PageBox[]; picture_boxes?: PageBox[]; sender?: string | null }) =>
-      post<ZoneDraft>("/api/rules/draft-zone", body),
+      apiPost("/api/rules/draft-zone", { body }),
   });
 
 /** The picture of a box on page 1, cut from the document's page-1 picture (nothing is
@@ -1013,19 +1045,19 @@ export const useDraftZone = () =>
 export const useAreaPicture = () =>
   useMutation({
     mutationFn: ({ driveId, box, save = false, ruleId }: { driveId: string; box: PageBox; save?: boolean; ruleId?: string }) =>
-      post<AreaPicture>("/api/rules/area-picture", { drive_id: driveId, box, save, rule_id: ruleId ?? null }),
+      apiPost("/api/rules/area-picture", { body: { drive_id: driveId, box, save, rule_id: ruleId ?? null } }),
   });
 
 /** The senders in use, with the number of documents each has. */
 export const useSenders = (enabled = true) =>
-  useQuery({ queryKey: keys.senders, queryFn: () => get<Sender[]>("/api/senders"), enabled });
+  useQuery({ queryKey: keys.senders, queryFn: () => apiGet("/api/senders"), enabled });
 
 /** Set From and/or For on documents: a field left out stays, ``null`` clears it. */
 export const usePutAssignments = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: { drive_ids: string[]; sender?: string | null; person?: string | null }) =>
-      put<Assignment[]>("/api/assignments", body),
+      apiPut("/api/assignments", { body }),
     onSettled: () => {
       // the suggestion's {person} and the chips change with it
       void client.invalidateQueries({ queryKey: keys.inbox });
@@ -1037,13 +1069,13 @@ export const usePutAssignments = () => {
 
 /** The people list and the address area. */
 export const usePeople = (enabled = true) =>
-  useQuery({ queryKey: keys.people, queryFn: () => get<People>("/api/settings/people"), enabled });
+  useQuery({ queryKey: keys.people, queryFn: () => apiGet("/api/settings/people"), enabled });
 
 /** Save the people list (and the address area when given); a 400 says why not. */
 export const useSavePeople = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { people: Person[]; address_zone?: PageBox }) => put<People>("/api/settings/people", body),
+    mutationFn: (body: { people: Person[]; address_zone?: PageBox }) => apiPut("/api/settings/people", { body }),
     onSuccess: (saved) => client.setQueryData(keys.people, saved),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.people });
@@ -1057,7 +1089,7 @@ export const useSavePeople = () => {
 export const usePage1Backfill = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (enabled: boolean) => put<{ enabled: boolean }>("/api/settings/page1-backfill", { enabled }),
+    mutationFn: (enabled: boolean) => apiPut("/api/settings/page1-backfill", { body: { enabled } }),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.status });
       void client.invalidateQueries({ queryKey: keys.indexErrors });
@@ -1071,7 +1103,7 @@ export const usePage1Speed = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (readsPerMinute: number) =>
-      put<{ reads_per_minute: number }>("/api/settings/page1-speed", { reads_per_minute: readsPerMinute }),
+      apiPut("/api/settings/page1-speed", { body: { reads_per_minute: readsPerMinute } }),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.status });
       void client.invalidateQueries({ queryKey: keys.indexErrors });
@@ -1084,7 +1116,7 @@ export const usePage1Speed = () => {
 export const useTagSuggestions = (prefix: string, limit: number, enabled = true) =>
   useQuery({
     queryKey: ["tags", "suggestions", prefix, limit],
-    queryFn: ({ signal }) => get<{ name: string; files: number }[]>(`/api/tags?${new URLSearchParams({ prefix, limit: String(limit) })}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/tags", { query: { prefix, limit }, signal }),
     enabled,
     placeholderData: keepPreviousData,
     staleTime: 10_000,
@@ -1095,7 +1127,7 @@ export const usePutFileTags = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ driveId, tags }: { driveId: string; tags: string[] }) =>
-      put<{ tags: string[] }>(`/api/files/${enc(driveId)}/tags`, { tags }),
+      apiPut("/api/files/{drive_id}/tags", { path: { drive_id: driveId }, body: { tags } }),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.file });
       void client.invalidateQueries({ queryKey: keys.browse });
@@ -1122,13 +1154,13 @@ const TAG_QUERIES = ["tags"] as const;
 export const useAllTags = (query = "") =>
   useQuery({
     queryKey: ["tags", "all", query],
-    queryFn: ({ signal }) => get<TagList>(`/api/tags/all?${new URLSearchParams({ query })}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/tags/all", { query: { query }, signal }),
     placeholderData: keepPreviousData,
   });
 
 /** The sidebar's tags: pinned first, then the most recently used (at most eight). */
 export const useSidebarTags = () =>
-  useQuery({ queryKey: ["tags", "sidebar"], queryFn: () => get<SidebarTag[]>("/api/tags/sidebar") });
+  useQuery({ queryKey: ["tags", "sidebar"], queryFn: () => apiGet("/api/tags/sidebar") });
 
 /** The calls that change tags; each tag change answers how to undo it. */
 export const useTagActions = () => {
@@ -1150,7 +1182,7 @@ export const useTagActions = () => {
     rename: (name: string, newName: string) => run<TagChange>("/api/tags/rename", { name, new_name: newName }),
     /** What a merge would do (changes nothing). */
     previewMerge: (sources: string[], into: string) =>
-      post<TagMergePlan>("/api/tags/merge", { sources, into, dry_run: true }),
+      apiPost("/api/tags/merge", { body: { sources, into, dry_run: true } }),
     merge: (sources: string[], into: string) => run<TagMergePlan>("/api/tags/merge", { sources, into, dry_run: false }),
     remove: (name: string) => run<TagChange>("/api/tags/delete", { name }),
     pin: (names: string[], pinned: boolean) => run<TagChange>("/api/tags/pin", { names, pinned }),
@@ -1168,7 +1200,7 @@ export const useTagActions = () => {
 export const useFileLinks = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.fileLinks, driveId],
-    queryFn: ({ signal }) => get<FileLinks>(`/api/files/${enc(driveId)}/links`, signal),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/links", { path: { drive_id: driveId }, signal }),
     enabled,
   });
 
@@ -1187,7 +1219,7 @@ export const useItemDone = () => {
   const refresh = useRefreshTrays();
   return useMutation({
     mutationFn: ({ id, fields }: { id: number; fields: Record<string, unknown> }) =>
-      post<Item>(`/api/items/${id}/done`, { fields }),
+      apiPost("/api/items/{item_id}/done", { path: { item_id: id }, body: { fields } }),
     onSettled: refresh,
   });
 };
@@ -1195,7 +1227,7 @@ export const useItemDone = () => {
 export const useItemReopen = () => {
   const refresh = useRefreshTrays();
   return useMutation({
-    mutationFn: (id: number) => post<Item>(`/api/items/${id}/reopen`),
+    mutationFn: (id: number) => apiPost("/api/items/{item_id}/reopen", { path: { item_id: id } }),
     onSettled: refresh,
   });
 };
@@ -1205,7 +1237,7 @@ export const useItemUpdate = () => {
   const refresh = useRefreshTrays();
   return useMutation({
     mutationFn: ({ id, ...body }: { id: number } & Schemas["ItemPatchBody"]) =>
-      patch<Item>(`/api/items/${id}`, body),
+      apiPatch("/api/items/{item_id}", { path: { item_id: id }, body }),
     onSettled: refresh,
   });
 };
@@ -1240,7 +1272,7 @@ export const useMergeItem = () => {
   const refresh = useRefreshQuick();
   return useMutation({
     mutationFn: ({ id, source }: { id: number; source: number }) =>
-      post<Item>(`/api/items/${id}/merge`, { item_id: source }),
+      apiPost("/api/items/{item_id}/merge", { path: { item_id: id }, body: { item_id: source } }),
     onSettled: refresh,
   });
 };
@@ -1248,7 +1280,7 @@ export const useMergeItem = () => {
 export const useUndoMergeItem = () => {
   const refresh = useRefreshQuick();
   return useMutation({
-    mutationFn: (id: number) => post<Item>(`/api/items/${id}/undo-merge`),
+    mutationFn: (id: number) => apiPost("/api/items/{item_id}/undo-merge", { path: { item_id: id } }),
     onSettled: refresh,
   });
 };
@@ -1272,7 +1304,7 @@ export const useQuickPutInTray = () => {
   return useMutation({
     /** With ``fields`` (one file; an AI suggestion's, exactly as shown): those values
      * instead of the scan prefill, with the same "already in" and folder checks. */
-    mutationFn: (body: Schemas["QuickBody"]) => post<QuickResult>("/api/items/quick", body),
+    mutationFn: (body: Schemas["QuickBody"]) => apiPost("/api/items/quick", { body }),
     onSettled: refresh,
   });
 };
@@ -1290,7 +1322,7 @@ export const useDiscardItem = () => {
 export const useMoveItem = () => {
   const refresh = useRefreshQuick();
   return useMutation({
-    mutationFn: ({ id, tray }: { id: number; tray: string }) => post<Item>(`/api/items/${id}/move`, { tray }),
+    mutationFn: ({ id, tray }: { id: number; tray: string }) => apiPost("/api/items/{item_id}/move", { path: { item_id: id }, body: { tray } }),
     onSettled: refresh,
   });
 };
@@ -1299,7 +1331,7 @@ export const useMoveItem = () => {
 export const useUndoMoveItem = () => {
   const refresh = useRefreshQuick();
   return useMutation({
-    mutationFn: (id: number) => post<Item>(`/api/items/${id}/undo-move`),
+    mutationFn: (id: number) => apiPost("/api/items/{item_id}/undo-move", { path: { item_id: id } }),
     onSettled: refresh,
   });
 };
@@ -1318,7 +1350,7 @@ export const useCreateItem = () => {
   const refresh = useRefreshTrays();
   return useMutation({
     mutationFn: (body: Omit<Schemas["ItemCreateBody"], "fields"> & { fields?: Record<string, unknown> }) =>
-      post<Item>("/api/items", body),
+      apiPost("/api/items", { body }),
     onSettled: refresh,
   });
 };
@@ -1328,7 +1360,7 @@ export const useCreateItem = () => {
 export const useCollections = (state: CollectionState = "open", enabled = true) =>
   useQuery({
     queryKey: [...keys.collections, "list", state],
-    queryFn: ({ signal }) => get<CollectionRow[]>(`/api/collections?state=${state}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/collections", { query: { state }, signal }),
     enabled,
   });
 
@@ -1337,7 +1369,7 @@ export const useCollections = (state: CollectionState = "open", enabled = true) 
 export const useCollectionsWithMarked = (enabled = true) =>
   useQuery({
     queryKey: [...keys.collections, "list", "all", "builtin"],
-    queryFn: ({ signal }) => get<CollectionRow[]>("/api/collections?state=all&builtin=true", signal),
+    queryFn: ({ signal }) => apiGet("/api/collections", { query: { state: "all", builtin: true }, signal }),
     enabled,
   });
 
@@ -1346,7 +1378,7 @@ export const useCollectionsWithMarked = (enabled = true) =>
 export const useBuiltin = (kind: Mark) =>
   useQuery({
     queryKey: [...keys.collections, "builtin", kind],
-    queryFn: ({ signal }) => get<Collection>(`/api/marks/collection/${kind}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/marks/collection/{kind}", { path: { kind }, signal }),
   });
 
 /** Sent on ``window`` after a mark changes, for lists outside the query cache (search). */
@@ -1417,7 +1449,7 @@ export const useMark = () => {
 export const useCollection = (id: number) =>
   useQuery({
     queryKey: [...keys.collections, id],
-    queryFn: ({ signal }) => get<Collection>(`/api/collections/${id}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/collections/{collection_id}", { path: { collection_id: id }, signal }),
   });
 
 /** A new collection: a name (at the top), or a name inside an open ``parent_id``. */
@@ -1426,7 +1458,7 @@ export const useCreateCollection = () => {
   const sync = useRefresh(); // a child of a published parent gets a folder in ##. Ongoing
   return useMutation({
     mutationFn: (body: string | { name: string; parent_id: number }) =>
-      post<Collection>("/api/collections", typeof body === "string" ? { name: body } : body),
+      apiPost("/api/collections", { body: typeof body === "string" ? { name: body } : body }),
     onSettled: (_data, _error, body) => {
       refresh();
       if (typeof body !== "string") sync();
@@ -1442,7 +1474,7 @@ export const useSetCollectionParent = () => {
   const refresh = useRefresh(); // moves folders in ##. Ongoing: Activity and Browse too
   return useMutation({
     mutationFn: ({ id, parent_id }: { id: number; parent_id: number | null }) =>
-      patch<CollectionChange>(`/api/collections/${id}/parent`, { parent_id }),
+      apiPatch("/api/collections/{collection_id}/parent", { path: { collection_id: id }, body: { parent_id } }),
     onSettled: refresh,
   });
 };
@@ -1455,7 +1487,7 @@ export const useMoveCollectionOrder = () => {
   const refresh = useRefresh(); // a new parent moves folders in ##. Ongoing
   return useMutation({
     mutationFn: ({ id, ...place }: { id: number } & ({ before_id: number } | { after_id: number })) =>
-      post<CollectionChange>(`/api/collections/${id}/move`, place),
+      apiPost("/api/collections/{collection_id}/move", { path: { collection_id: id }, body: place }),
     onSettled: refresh,
   });
 };
@@ -1469,8 +1501,8 @@ export const useCollectionMembers = () => {
       change: { id: number; add: string[] } | { id: number; remove: string },
     ): Promise<CollectionChange> =>
       "add" in change
-        ? post<CollectionChange>(`/api/collections/${change.id}/members`, { drive_ids: change.add })
-        : post<CollectionChange>(`/api/collections/${change.id}/members/remove`, { drive_id: change.remove }),
+        ? apiPost("/api/collections/{collection_id}/members", { path: { collection_id: change.id }, body: { drive_ids: change.add } })
+        : apiPost("/api/collections/{collection_id}/members/remove", { path: { collection_id: change.id }, body: { drive_id: change.remove } }),
     onSettled: refresh,
   });
 };
@@ -1480,7 +1512,7 @@ export const useCollectionMembers = () => {
 export const useCollectionAttention = (id: number) =>
   useQuery({
     queryKey: [...keys.collections, id, "attention"],
-    queryFn: ({ signal }) => get<MemberAttention[]>(`/api/collections/${id}/attention`, signal),
+    queryFn: ({ signal }) => apiGet("/api/collections/{collection_id}/attention", { path: { collection_id: id }, signal }),
   });
 
 /** Groups and summaries. Each runs the Ongoing sync (groups are subfolders there, so
@@ -1551,7 +1583,7 @@ export const useCollectionChange = () => {
   return useMutation({
     mutationFn: (change: CollectionAction) => {
       if (change.action === "rename") {
-        return patch<CollectionChange>(`/api/collections/${change.id}`, { name: change.name });
+        return apiPatch("/api/collections/{collection_id}", { path: { collection_id: change.id }, body: { name: change.name } });
       }
       const [path, body] = collectionRoute(change, false);
       return post<CollectionChange>(path, body);
@@ -1565,7 +1597,7 @@ export const useCollectionChange = () => {
 export const useExport = () =>
   useMutation({
     mutationFn: ({ id, ...body }: { id: number } & Schemas["ExportBody"]) =>
-      post<ExportResult>(`/api/collections/${id}/export`, body),
+      apiPost("/api/collections/{collection_id}/export", { path: { collection_id: id }, body }),
   });
 
 /** Where the built export downloads from (a same-origin link with ``download``). */
@@ -1576,7 +1608,7 @@ export const exportUrl = (token: string) => `/api/exports/${enc(token)}`;
 export const useNote = (kind: NoteKind, target: string) =>
   useQuery({
     queryKey: [...keys.notes, kind, target],
-    queryFn: ({ signal }) => get<{ text: string }>(`/api/notes/${kind}/${enc(target)}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/notes/{kind}/{target}", { path: { kind, target }, signal }),
   });
 
 /** Store a note (trimmed); blank text removes it. */
@@ -1584,7 +1616,7 @@ export const useSetNote = () => {
   const refresh = useRefreshTrays();
   return useMutation({
     mutationFn: ({ kind, target, text }: { kind: NoteKind; target: string; text: string }) =>
-      put<{ text: string }>(`/api/notes/${kind}/${enc(target)}`, { text }),
+      apiPut("/api/notes/{kind}/{target}", { path: { kind, target }, body: { text } }),
     onSettled: refresh,
   });
 };
@@ -1596,7 +1628,7 @@ export const useAppendNote = () => {
   const refresh = useRefreshTrays();
   return useMutation({
     mutationFn: ({ kind, target, text }: { kind: NoteKind; target: string; text: string }) =>
-      post<{ text: string }>(`/api/notes/${kind}/${enc(target)}/append`, { text }),
+      apiPost("/api/notes/{kind}/{target}/append", { path: { kind, target }, body: { text } }),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.notes });
       return refresh();
@@ -1607,7 +1639,7 @@ export const useAppendNote = () => {
 export const useChecklist = (kind: NoteKind, target: string) =>
   useQuery({
     queryKey: [...keys.checklist, kind, target],
-    queryFn: ({ signal }) => get<ChecklistItem[]>(`/api/checklist/${kind}/${enc(target)}`, signal),
+    queryFn: ({ signal }) => apiGet("/api/checklist/{kind}/{target}", { path: { kind, target }, signal }),
   });
 
 export type ChecklistChange =
@@ -1638,17 +1670,17 @@ export const useChecklistChange = () => {
 // -- converting ##. Ongoing -------------------------------------------------------
 
 export const useOngoingEntries = () =>
-  useQuery({ queryKey: keys.ongoing, queryFn: () => get<OngoingEntry[]>("/api/ongoing/entries") });
+  useQuery({ queryKey: keys.ongoing, queryFn: () => apiGet("/api/ongoing/entries") });
 
 export const useConvertPreview = () =>
-  useMutation({ mutationFn: (body: ConvertBody) => post<ConvertPlan>("/api/ongoing/preview", body) });
+  useMutation({ mutationFn: (body: ConvertBody) => apiPost("/api/ongoing/preview", { body }) });
 
 /** Apply exactly the previewed ``body`` plus its ``fingerprint``. */
 export const useConvert = () => {
   const refresh = useRefresh(); // moves files and changes ##. Ongoing
   return useMutation({
     mutationFn: (body: ConvertBody & { fingerprint: string }) =>
-      post<ConvertResult>("/api/ongoing/convert", body),
+      apiPost("/api/ongoing/convert", { body }),
     onSettled: refresh,
   });
 };
@@ -1658,17 +1690,17 @@ export const useConvert = () => {
 export type ImportantConvertBody = Schemas["ImportantConvertBody"];
 
 export const useImportantEntries = () =>
-  useQuery({ queryKey: keys.important, queryFn: () => get<OngoingEntry[]>("/api/important/entries") });
+  useQuery({ queryKey: keys.important, queryFn: () => apiGet("/api/important/entries") });
 
 export const useImportantPreview = () =>
-  useMutation({ mutationFn: (body: ImportantConvertBody) => post<ConvertPlan>("/api/important/preview", body) });
+  useMutation({ mutationFn: (body: ImportantConvertBody) => apiPost("/api/important/preview", { body }) });
 
 /** Apply exactly the previewed ``body`` plus its ``fingerprint``. */
 export const useImportantConvert = () => {
   const refresh = useRefresh(); // moves files and changes ##. Important
   return useMutation({
     mutationFn: (body: ImportantConvertBody & { fingerprint: string }) =>
-      post<ConvertResult>("/api/important/convert", body),
+      apiPost("/api/important/convert", { body }),
     onSettled: refresh,
   });
 };
@@ -1682,7 +1714,8 @@ export const INDEX_ERRORS_LIMIT = 200;
 export const useIndexErrors = (all: boolean, enabled = true) =>
   useQuery({
     queryKey: [...keys.indexErrors, all],
-    queryFn: ({ signal }) => get<IndexProblems>(`/api/index/errors?${all ? "all=1&" : ""}limit=${INDEX_ERRORS_LIMIT}`, signal),
+    queryFn: ({ signal }) =>
+      apiGet("/api/index/errors", { query: { all: all || undefined, limit: INDEX_ERRORS_LIMIT }, signal }),
     enabled,
   });
 
@@ -1691,7 +1724,7 @@ export const useIndexErrors = (all: boolean, enabled = true) =>
 export const useIndexSummary = () =>
   useQuery({
     queryKey: [...keys.indexErrors, "summary"],
-    queryFn: ({ signal }) => get<IndexSummary>("/api/index/summary?limit=1", signal),
+    queryFn: ({ signal }) => apiGet("/api/index/summary", { query: { limit: 1 }, signal }),
     refetchInterval: 15_000, // the page-1 pass moves on while the sheet is open
   });
 
@@ -1699,7 +1732,7 @@ export const useIndexSummary = () =>
 export const useRetryIndex = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (driveIds: string[]) => post<{ queued: number }>("/api/index/retry", { drive_ids: driveIds }),
+    mutationFn: (driveIds: string[]) => apiPost("/api/index/retry", { body: { drive_ids: driveIds } }),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.indexErrors });
       void client.invalidateQueries({ queryKey: keys.status });
@@ -1712,11 +1745,12 @@ export const useRetryIndex = () => {
 export const useTrayDefaults = (trayId: string, paths: string[] | null, enabled = true) =>
   useQuery({
     queryKey: [...keys.trayDefaults, trayId, paths],
-    queryFn: ({ signal }) => {
-      const q = new URLSearchParams({ dismissed: "1" });
-      for (const p of paths ?? []) q.append("paths", p);
-      return get<TrayDefaultsDiff>(`/api/trays/${enc(trayId)}/defaults-diff?${q}`, signal);
-    },
+    queryFn: ({ signal }) =>
+      apiGet("/api/trays/{tray_id}/defaults-diff", {
+        path: { tray_id: trayId },
+        query: { dismissed: true, paths: paths ?? [] },
+        signal,
+      }),
     enabled: enabled && trayId !== "" && (paths === null || paths.length > 0),
     placeholderData: (previous) => previous, // keep the sheet steady while a new subset loads
   });
@@ -1768,7 +1802,7 @@ export const useTrayDefaultsChange = () => {
 export const useAIStatus = () =>
   useQuery({
     queryKey: [...keys.ai, "status"],
-    queryFn: ({ signal }) => get<AIStatus>("/api/ai/status", signal),
+    queryFn: ({ signal }) => apiGet("/api/ai/status", { signal }),
     staleTime: 60_000,
   });
 
@@ -1776,7 +1810,7 @@ export const useAIStatus = () =>
 export const useAIPrepare = () =>
   useMutation({
     mutationFn: ({ task, params }: { task: AITask; params: Record<string, unknown> }) =>
-      post<AIPrepared>(`/api/ai/${enc(task)}/prepare`, { params }),
+      apiPost("/api/ai/{task}/prepare", { path: { task }, body: { params } }),
   });
 
 /** Send exactly the prepared payload (by its token); the month's spend changes. */
@@ -1784,7 +1818,7 @@ export const useAIRun = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ task, token }: { task: AITask; token: string }) =>
-      post<AIRunResult>(`/api/ai/${enc(task)}/run`, { token }),
+      apiPost("/api/ai/{task}/run", { path: { task }, body: { token } }),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.ai }),
   });
 };
@@ -1793,14 +1827,14 @@ export const useAIRun = () => {
 export const useAILog = (limit = 200) =>
   useQuery({
     queryKey: [...keys.ai, "log", limit],
-    queryFn: () => get<{ rows: AILogRow[] }>(`/api/ai/log?limit=${limit}`).then((r) => r.rows),
+    queryFn: () => apiGet("/api/ai/log", { query: { limit } }).then((r) => r.rows),
   });
 
 /** The on/off switch (``<data dir>/ai-state.json``, as ``dam ai --on/--off``). */
 export const useAISwitch = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (enabled: boolean) => post<AIStatus>("/api/ai/state", { enabled }),
+    mutationFn: (enabled: boolean) => apiPost("/api/ai/state", { body: { enabled } }),
     onSuccess: (status) => client.setQueryData([...keys.ai, "status"], status),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.ai }),
   });
@@ -1811,7 +1845,7 @@ export const useAISwitch = () => {
 export const useAIExcludeFolders = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (folders: string[]) => put<AIStatus>("/api/ai/exclude-folders", { folders }),
+    mutationFn: (folders: string[]) => apiPut("/api/ai/exclude-folders", { body: { folders } }),
     onSuccess: (status) => client.setQueryData([...keys.ai, "status"], status),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.ai }),
   });
@@ -1819,12 +1853,12 @@ export const useAIExcludeFolders = () => {
 
 /** The File N marked rows (dry runs on the server, nothing changes). */
 export const useMarkedBatch = () =>
-  useQuery({ queryKey: keys.markedBatch, queryFn: () => get<BatchRow[]>("/api/filing-codes/batch") });
+  useQuery({ queryKey: keys.markedBatch, queryFn: () => apiGet("/api/filing-codes/batch") });
 
 /** The filing codes table, the entries of the file that were skipped (``problems``) and
  * codes that look like each other (``warnings``). */
 export const useFilingCodes = () =>
-  useQuery({ queryKey: keys.filingCodes, queryFn: () => get<FilingCodes>("/api/filing-codes") });
+  useQuery({ queryKey: keys.filingCodes, queryFn: () => apiGet("/api/filing-codes") });
 
 /** Give inbox files a filing code, as if a sticker were on them (``code`` null: take it
  * away). Only dam's index changes, so there is no preview and no journal entry. */
@@ -1832,7 +1866,7 @@ export const useAssignCode = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ driveIds, code }: { driveIds: string[]; code: string | null }) =>
-      put<{ drive_ids: string[]; code: string | null }>("/api/filing-codes/assigned", { drive_ids: driveIds, code }),
+      apiPut("/api/filing-codes/assigned", { body: { drive_ids: driveIds, code } }),
     onSettled: () => {
       // the rows' suggestions, the marked batch below them, and Today's count
       void client.invalidateQueries({ queryKey: keys.inbox });
@@ -1846,7 +1880,7 @@ export const useSaveFilingCodes = () => {
   const client = useQueryClient();
   const refresh = useRefresh(); // the inbox rows and Today read the codes
   return useMutation({
-    mutationFn: (codes: FilingCode[]) => put<FilingCodes>("/api/filing-codes", codes),
+    mutationFn: (codes: FilingCode[]) => apiPut("/api/filing-codes", { body: codes }),
     onSuccess: (saved) => client.setQueryData(keys.filingCodes, saved),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.filingCodes }); // also the folders below it
@@ -1876,23 +1910,24 @@ export type ReconnectResult = Schemas["ReconnectOut"];
 export const useDuplicateEstimate = () =>
   useQuery({
     queryKey: ["maintenance", "estimate"],
-    queryFn: ({ signal }) => get<DuplicateEstimate>("/api/maintenance/duplicates/estimate", signal),
+    queryFn: ({ signal }) => apiGet("/api/maintenance/duplicates/estimate", { signal }),
     gcTime: 0,
   });
 
 export const startMaintenanceJob = (kind: MaintenanceKind, days?: number) =>
-  post<MaintenanceJob>("/api/maintenance/jobs", { kind, days: days ?? null });
-export const getMaintenanceJob = (id: string) => get<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}`);
+  apiPost("/api/maintenance/jobs", { body: { kind, days: days ?? null } });
+export const getMaintenanceJob = (id: string) => apiGet("/api/maintenance/jobs/{job_id}", { path: { job_id: id } });
 export const latestMaintenanceJob = (kind: MaintenanceKind) =>
-  get<MaintenanceJob | null>(`/api/maintenance/jobs/latest/${enc(kind)}`);
-export const stopMaintenanceJob = (id: string) => post<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}/stop`);
+  apiGet("/api/maintenance/jobs/latest/{kind}", { path: { kind } });
+export const stopMaintenanceJob = (id: string) =>
+  apiPost("/api/maintenance/jobs/{job_id}/stop", { path: { job_id: id } });
 /** A result entry the owner ignores (``dam.maintenance.ignored`` has the keys per kind). */
 export type MaintenanceIgnored = Schemas["MaintenanceIgnoredOut"];
 export type IgnoreKind = Schemas["MaintenanceIgnoreIn"]["kind"];
 const ignoredKey = ["maintenance", "ignored"];
 
 export const useMaintenanceIgnored = () =>
-  useQuery({ queryKey: ignoredKey, queryFn: () => get<MaintenanceIgnored[]>("/api/maintenance/ignored") });
+  useQuery({ queryKey: ignoredKey, queryFn: () => apiGet("/api/maintenance/ignored") });
 
 /** Ignore an entry, or stop ignoring one (by its id). Nothing in the archive changes. */
 export const useMaintenanceIgnore = () => {
@@ -1902,15 +1937,15 @@ export const useMaintenanceIgnore = () => {
       change: { kind: IgnoreKind; key: string; label: string; members?: string[] } | { stop: number },
     ): Promise<MaintenanceIgnored | null> =>
       "stop" in change
-        ? del(`/api/maintenance/ignored/${change.stop}`).then(() => null)
-        : post<MaintenanceIgnored>("/api/maintenance/ignored", change),
+        ? apiDelete("/api/maintenance/ignored/{ignored_id}", { path: { ignored_id: change.stop } }).then(() => null)
+        : apiPost("/api/maintenance/ignored", { body: change }),
     onSettled: () => qc.invalidateQueries({ queryKey: ignoredKey }),
   });
 };
 
 /** Reset: forget the checks of ``kind`` (every kind when left out) and their results. */
 export const forgetMaintenanceJobs = (kind?: MaintenanceKind) =>
-  del<{ forgotten: number }>(`/api/maintenance/jobs${kind ? `?${new URLSearchParams({ kind })}` : ""}`);
+  apiDelete("/api/maintenance/jobs", { query: { kind } });
 
 /** Move the chosen copies to To Delete, or replace them with a link to the copy kept
  * (one batch); a dry run lists the operations and what is carried over. */
@@ -1918,7 +1953,7 @@ export const useResolveDuplicates = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (body: DuplicateResolveBody) =>
-      post<DuplicateResolveResult>("/api/maintenance/duplicates/resolve", body),
+      apiPost("/api/maintenance/duplicates/resolve", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -1932,7 +1967,7 @@ export const useReconnectMoved = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (body: { pairs: { old: string; new: string }[]; dry_run: boolean }) =>
-      post<ReconnectResult>("/api/maintenance/moved/reconnect", body),
+      apiPost("/api/maintenance/moved/reconnect", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -1943,7 +1978,7 @@ export const useReconnectMoved = () => {
 export const useUndoReconnect = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (undo_id: string) => post<ReconnectResult>("/api/maintenance/moved/undo", { undo_id }),
+    mutationFn: (undo_id: string) => apiPost("/api/maintenance/moved/undo", { body: { undo_id } }),
     onSettled: () => refresh(),
   });
 };
@@ -1953,7 +1988,7 @@ export const useRemoveBrokenLinks = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (body: { drive_ids: string[]; dry_run: boolean }) =>
-      post<BatchResult>("/api/maintenance/links/remove", body),
+      apiPost("/api/maintenance/links/remove", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -1964,7 +1999,7 @@ export const useRemoveBrokenLinks = () => {
 
 /** The rules in order, the files that were skipped (``errors``) and the offer state. */
 export const useRules = (enabled = true) =>
-  useQuery({ queryKey: keys.rules, queryFn: () => get<RulesData>("/api/rules"), enabled });
+  useQuery({ queryKey: keys.rules, queryFn: () => apiGet("/api/rules"), enabled });
 
 /** Test a rule in the background (one test per ``sheet``: an earlier one for it is ended). */
 export const startReplayJob = (body: {
@@ -1975,37 +2010,38 @@ export const startReplayJob = (body: {
   nearDriveId?: string | null;
   sourceDriveId?: string | null;
 }) =>
-  post<ReplayJob>("/api/rules/replay/jobs", {
+  apiPost("/api/rules/replay/jobs", { body: {
     rule: body.rule,
     sheet: body.sheet,
     replaces: body.replaces ?? null,
     place_above: body.placeAbove ?? null,
     near_drive_id: body.nearDriveId ?? null,
     source_drive_id: body.sourceDriveId ?? null,
-  });
+  } });
 
 /** The state of a background test and its result so far; with ``since`` (the version
  * already held) the result is null while nothing is new. */
 export const getReplayJob = (id: string, since?: number) =>
-  get<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}${since !== undefined ? `?since=${since}` : ""}`);
+  apiGet("/api/rules/replay/jobs/{job_id}", { path: { job_id: id }, query: { since } });
 
 /** End a background test where it is; what it found so far stays. */
-export const stopReplayJob = (id: string) => post<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}/stop`);
+export const stopReplayJob = (id: string) => apiPost("/api/rules/replay/jobs/{job_id}/stop", { path: { job_id: id } });
 
 /** Queue page 1 of the documents a background test waits for to be read now (one at a
  * time, ahead of everything else); the test picks them up as they arrive. */
-export const readReplayJobNow = (id: string) => post<{ queued: number }>(`/api/rules/replay/jobs/${enc(id)}/read-now`);
+export const readReplayJobNow = (id: string) => apiPost("/api/rules/replay/jobs/{job_id}/read-now", { path: { job_id: id } });
 
 /** End a background test and forget it (the sheet that asked for it closed). */
-export const dropReplayJob = (id: string) => del<ReplayJob>(`/api/rules/replay/jobs/${enc(id)}`);
+export const dropReplayJob = (id: string) => apiDelete("/api/rules/replay/jobs/{job_id}", { path: { job_id: id } });
 
 /** The areas of the rule being tested on one document (matched lines, the best place and
  * score of a picture area, why one did not match), to draw them on its page 1. */
 export const useAreasFor = (rule: RuleIn | undefined, driveId: string, enabled = true) =>
   useQuery({
     queryKey: ["areas-for", driveId, JSON.stringify(rule)],
-    queryFn: () => post<{ areas: Area[] }>("/api/rules/areas-for", { rule, drive_id: driveId }),
-    enabled: enabled && rule !== undefined,
+    queryFn:
+      rule === undefined ? skipToken : () => apiPost("/api/rules/areas-for", { body: { rule, drive_id: driveId } }),
+    enabled,
   });
 
 /** Which rules match a document and why not (their areas, with the score of a picture
@@ -2013,7 +2049,7 @@ export const useAreasFor = (rule: RuleIn | undefined, driveId: string, enabled =
 export const useRuleExplain = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId, "explain"],
-    queryFn: () => post<RuleExplain[]>("/api/rules/explain", { drive_id: driveId }),
+    queryFn: () => apiPost("/api/rules/explain", { body: { drive_id: driveId } }),
     enabled,
   });
 
@@ -2023,8 +2059,8 @@ export const useSaveRule = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ rule, replaces, placeAbove }: { rule: RuleIn; replaces?: string | null; placeAbove?: string | null }) => {
-      const query = replaces ? `?replaces=${enc(replaces)}` : placeAbove ? `?place_above=${enc(placeAbove)}` : "";
-      return put<RulesData>(`/api/rules/${enc(rule.id)}${query}`, rule);
+      const query = replaces ? { replaces } : placeAbove ? { place_above: placeAbove } : {};
+      return apiPut("/api/rules/{rule_id}", { path: { rule_id: rule.id }, query, body: rule });
     },
     onSuccess: (saved) => client.setQueryData(keys.rules, saved),
     onSettled: () => {
@@ -2043,7 +2079,7 @@ export const useQuarantineUnusedPictures = () => {
   const client = useQueryClient();
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (body: UnusedPicturesBody) => post<BatchResult>("/api/rules/unused-pictures/quarantine", body),
+    mutationFn: (body: UnusedPicturesBody) => apiPost("/api/rules/unused-pictures/quarantine", { body }),
     onSettled: (_data, _error, body) => {
       if (body.dry_run) return;
       refresh();
@@ -2055,7 +2091,7 @@ export const useQuarantineUnusedPictures = () => {
 export const useDeleteRule = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => del<RulesData>(`/api/rules/${enc(id)}`),
+    mutationFn: (id: string) => apiDelete("/api/rules/{rule_id}", { path: { rule_id: id } }),
     onSuccess: (saved) => client.setQueryData(keys.rules, saved),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
   });
@@ -2066,7 +2102,7 @@ export const useMoveRule = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id, delta }: { id: string; delta: number }) =>
-      post<RulesData>(`/api/rules/${enc(id)}/move`, { delta }),
+      apiPost("/api/rules/{rule_id}/move", { path: { rule_id: id }, body: { delta } }),
     onSuccess: (saved) => client.setQueryData(keys.rules, saved),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
   });
@@ -2074,13 +2110,13 @@ export const useMoveRule = () => {
 
 /** Which rules match a document and which of them wins. */
 export const useExplain = () =>
-  useMutation({ mutationFn: (driveId: string) => post<RuleExplain[]>("/api/rules/explain", { drive_id: driveId }) });
+  useMutation({ mutationFn: (driveId: string) => apiPost("/api/rules/explain", { body: { drive_id: driveId } }) });
 
 /** Turn the offers on or off, or forget the declined word sets. */
 export const useRulesState = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { offer?: boolean | null; clear_declined?: boolean }) => put<RulesState>("/api/rules/state", body),
+    mutationFn: (body: { offer?: boolean | null; clear_declined?: boolean }) => apiPut("/api/rules/state", { body }),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
   });
 };
@@ -2089,7 +2125,7 @@ export const useRulesState = () => {
 export const useDeclineRule = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (words: string[]) => post<RulesState>("/api/rules/state/decline", { words }),
+    mutationFn: (words: string[]) => apiPost("/api/rules/state/decline", { body: { words } }),
     onSettled: () => void client.invalidateQueries({ queryKey: keys.rules }),
   });
 };
@@ -2098,18 +2134,18 @@ export const useDeclineRule = () => {
 export const useCodeFolders = () =>
   useQuery({
     queryKey: [...keys.filingCodes, "folders"],
-    queryFn: ({ signal }) => get<CodeFolders>("/api/filing-codes/folders", signal),
+    queryFn: ({ signal }) => apiGet("/api/filing-codes/folders", { signal }),
   });
 
 /** What "Create inbox folders" would do (nothing changes on disk). */
-export const previewCodeFolders = () => post<ResolvedOp[]>("/api/filing-codes/folders/preview");
+export const previewCodeFolders = () => apiPost("/api/filing-codes/folders/preview");
 
 /** Make the missing code folders in the inbox (one batch, undoable from Activity). */
 export const useCreateCodeFolders = () => {
   const client = useQueryClient();
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: () => post<BatchResult>("/api/filing-codes/folders"),
+    mutationFn: () => apiPost("/api/filing-codes/folders"),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.filingCodes });
       refresh();
@@ -2120,14 +2156,14 @@ export const useCreateCodeFolders = () => {
 const sheetsKey = [...keys.filingCodes, "sheets"];
 
 /** The sticker sheet layouts: the built-ins, then the saved custom one (id ``custom``). */
-export const useSheetLayouts = () => useQuery({ queryKey: sheetsKey, queryFn: () => get<SheetLayout[]>("/api/filing-codes/sheets") });
+export const useSheetLayouts = () => useQuery({ queryKey: sheetsKey, queryFn: () => apiGet("/api/filing-codes/sheets") });
 
 /** Save the custom sheet layout (the old file is kept as a backup); a 400 says why not
  * (too small for a sticker, beyond an A4 page). */
 export const useSaveCustomSheet = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (layout: SheetLayoutIn) => put<SheetLayout>("/api/filing-codes/sheets/custom", layout),
+    mutationFn: (layout: SheetLayoutIn) => apiPut("/api/filing-codes/sheets/custom", { body: layout }),
     onSettled: () => void client.invalidateQueries({ queryKey: sheetsKey }),
   });
 };
@@ -2159,7 +2195,7 @@ const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];
 export const useFileSummary = (driveId: string) =>
   useQuery({
     queryKey: summaryKey(driveId),
-    queryFn: ({ signal }) => get<FileSummaries>(`/api/files/${enc(driveId)}/summary`, signal),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/summary", { path: { drive_id: driveId }, signal }),
   });
 
 /** Save a summary: ``source: "ai"`` is "Use this summary", ``"user"`` the user's own
@@ -2177,7 +2213,7 @@ export const usePutFileSummary = () => {
       summary: string;
       key_facts?: string[];
       replace?: boolean;
-    }) => put<FileSummaries>(`/api/files/${enc(driveId)}/summary`, body),
+    }) => apiPut("/api/files/{drive_id}/summary", { path: { drive_id: driveId }, body }),
     onSuccess: (saved, { driveId }) => client.setQueryData(summaryKey(driveId), saved),
   });
 };
@@ -2188,7 +2224,7 @@ const fileFieldsKey = (driveId: string) => [...keys.fileFields, driveId];
 export const useFileFields = (driveId: string) =>
   useQuery({
     queryKey: fileFieldsKey(driveId),
-    queryFn: ({ signal }) => get<ScanFields>(`/api/files/${enc(driveId)}/fields`, signal),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/fields", { path: { drive_id: driveId }, signal }),
   });
 
 /** What changing a file's scan fields refreshes: the inbox entry (its fields and the
@@ -2206,7 +2242,7 @@ export const usePutFileFields = () => {
   const changed = useFieldsChange();
   return useMutation({
     mutationFn: ({ driveId, fields }: { driveId: string; fields: ScanField[] }) =>
-      put<ScanFields>(`/api/files/${enc(driveId)}/fields`, { fields }),
+      apiPut("/api/files/{drive_id}/fields", { path: { drive_id: driveId }, body: { fields } }),
     onSuccess: (saved, { driveId }) => changed(saved, driveId),
   });
 };
@@ -2215,7 +2251,7 @@ export const usePutFileFields = () => {
 export const useResetFileFields = () => {
   const changed = useFieldsChange();
   return useMutation({
-    mutationFn: (driveId: string) => del<ScanFields>(`/api/files/${enc(driveId)}/fields`),
+    mutationFn: (driveId: string) => apiDelete("/api/files/{drive_id}/fields", { path: { drive_id: driveId } }),
     onSuccess: (saved, driveId) => changed(saved, driveId),
   });
 };
@@ -2250,7 +2286,7 @@ export const LOCKED_REASON = "This file is locked. Unlock it to change it.";
 export const useLocks = () =>
   useQuery({
     queryKey: keys.locks,
-    queryFn: ({ signal }) => get<Locks>("/api/locks", signal),
+    queryFn: ({ signal }) => apiGet("/api/locks", { signal }),
     staleTime: 30_000,
   });
 
@@ -2357,12 +2393,12 @@ export function useFileLock(driveId: string, marks?: readonly Mark[], path?: str
     error: state.error,
     lock: () =>
       call(async () => {
-        await post<LockState>(`/api/files/${enc(driveId)}/lock`);
+        await apiPost("/api/files/{drive_id}/lock", { path: { drive_id: driveId } });
         await refresh();
       }),
     unlock: (mode) =>
       call(async () => {
-        const answer = await post<LockState>(`/api/files/${enc(driveId)}/unlock`, { mode });
+        const answer = await apiPost("/api/files/{drive_id}/unlock", { path: { drive_id: driveId }, body: { mode } });
         if (mode === "now" && answer.token) {
           unlockTokens.set(driveId, answer.token);
           unlocksChanged();

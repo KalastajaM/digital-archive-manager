@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "test": "vitest",
     "typecheck": "tsc -b --noEmit",
-    "gen:api": "node scripts/gen-api.mjs && openapi-typescript openapi.json -o src/api/schema.d.ts",
+    "gen:api": "node scripts/gen-api.mjs && openapi-typescript openapi.json -o src/api/schema.d.ts && openapi-typescript openapi.json --default-non-nullable false -o src/api/schema-input.d.ts",
     "lint": "eslint .",
     "coverage": "vitest run --coverage"
   },

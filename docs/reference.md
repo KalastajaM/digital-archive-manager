@@ -1612,7 +1612,7 @@ be tested against a fake archive:
 ```sh
 cd backend && uv run pytest -q -W error && uv run ruff check .
 cd frontend && npm test -- --run
-cd frontend && npm run gen:api     # regenerate src/api/schema.d.ts after API changes
+cd frontend && npm run gen:api     # regenerate src/api/schema.d.ts and schema-input.d.ts after API changes
 ```
 
 Tests use temporary fake archives and never touch a real one. For UI work, run the

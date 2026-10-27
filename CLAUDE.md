@@ -26,7 +26,7 @@ The contributor rules apply to agents in full, above all the safety rules:
 - **Changelog:** every user-visible change gets an entry under `## [Unreleased]` in
   `CHANGELOG.md` (Keep a Changelog sections), in plain words from the user's view.
 - **After API changes** run `npm run gen:api` in `frontend/` and commit the regenerated
-  `src/api/schema.d.ts`.
+  `src/api/schema.d.ts` and `src/api/schema-input.d.ts`.
 - **Before calling work done** run the full check from CONTRIBUTING:
   `uv run ruff check . && uv run pytest -q -W error` in `backend/`, and
   `npm test -- --run && npm run build` in `frontend/`.

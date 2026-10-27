@@ -215,7 +215,7 @@ def test_archives_list_names_a_command_that_holds_an_archive(run, base, fake_arc
 
 
 def test_the_reminder_job_is_per_archive(run, base, tmp_path, monkeypatch):
-    import dam.cli.main as cli_main
+    from dam.cli.main import remind_cmds as cli_main
 
     other = FakeArchive(tmp_path / "other")
     assert (
@@ -231,7 +231,7 @@ def test_the_reminder_job_is_per_archive(run, base, tmp_path, monkeypatch):
 
 
 def test_a_single_archive_keeps_the_old_reminder_command(run, base, monkeypatch):
-    import dam.cli.main as cli_main
+    from dam.cli.main import remind_cmds as cli_main
 
     monkeypatch.setattr(cli_main, "_platform", lambda: "linux")
     r = run("remind", "--install")
