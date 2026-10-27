@@ -272,6 +272,30 @@ export class NetworkError extends Error {
   }
 }
 
+/** What the API says (401) to a browser that is not signed in; the page then shows it
+ * instead of the app. Signing in happens outside the page: ``dam serve`` and ``dam open``
+ * open a link that sets an HttpOnly cookie, which the browser sends by itself. */
+export const NOT_SIGNED_IN =
+  "This page is not signed in to dam. Open dam with `dam serve` (or `dam open` if it is already running) and it signs this browser in.";
+let signedOut = false;
+const signedOutListeners = new Set<() => void>();
+const setSignedOut = (value: boolean) => {
+  if (signedOut === value) return;
+  signedOut = value;
+  for (const l of signedOutListeners) l();
+};
+/** Back to "signed in" (tests). */
+export const resetSignedOut = () => setSignedOut(false);
+/** Whether the API answered 401: this browser is not signed in. */
+export const useSignedOut = () =>
+  useSyncExternalStore(
+    (listener) => {
+      signedOutListeners.add(listener);
+      return () => signedOutListeners.delete(listener);
+    },
+    () => signedOut,
+  );
+
 async function request<T>(method: Method, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   // the temporary unlocks this page holds: the server accepts a change to a locked file
@@ -301,6 +325,7 @@ async function request<T>(method: Method, path: string, body?: unknown, signal?:
 }
 
 async function failure(response: Response): Promise<ApiError> {
+  if (response.status === 401) setSignedOut(true);
   let detail = "";
   let code: string | null = null;
   try {

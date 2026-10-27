@@ -15,6 +15,11 @@ are stopped, and only then the other's start, so two archives' background work n
 at the same time and never on one database. A per-archive lock file (``ServeLock``)
 keeps a second process from serving the same archive. ``Host.reopen`` opens the same
 archive afresh the same way (its archive folders changed), keeping the lock it holds.
+
+Every request first passes ``ApiTokenMiddleware`` (``dam.api.auth``): the API answers
+only a browser signed in with the token (or a client sending it), and the browser is
+opened on the sign-in link ``/auth?t=<token>``. The token is the same for every archive
+the server can switch to (it lives beside ``archives.yaml``).
 """
 
 import dataclasses
@@ -33,6 +38,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from dam import setup
+from dam.api.auth import ApiTokenMiddleware, auth_url, hide_token_in_logs, load_token
 from dam.app import App
 from dam.config import AppPaths
 from dam.errors import Conflict
@@ -526,7 +532,20 @@ class Host:
             cur.lock.release()
 
 
-def serve(app: App, api: FastAPI, port: int, open_browser: bool, host: Host | None = None) -> None:
+def _token_base(host: Host, data_dir: Path) -> Path:
+    """Where the API token lives: beside ``archives.yaml`` (the data folder when the
+    server knows no archive list)."""
+    return host.store.base if host.store is not None else data_dir
+
+
+def serve(
+    app: App,
+    api: FastAPI,
+    port: int,
+    open_browser: bool,
+    host: Host | None = None,
+    token: str | None = None,
+) -> None:
     """Run the server until it stops; background work runs only while it is listening.
 
     Returns normally after SIGINT/SIGTERM. The background is stopped on every way out
@@ -534,18 +553,24 @@ def serve(app: App, api: FastAPI, port: int, open_browser: bool, host: Host | No
     archive opened later by a switch is closed here). Our signal handlers are removed
     once the server has stopped, so a second signal during ``background.stop()``
     force-quits: SIGINT raises KeyboardInterrupt (the App is still closed on the way
-    out), SIGTERM kills the process at once.
+    out), SIGTERM kills the process at once. ``token``: the API token (default: the one
+    beside the archive list, made on first use); the browser opens its sign-in link.
     """
-    url = f"http://127.0.0.1:{port}/"
     host = host or Host(port=port)
     host.port = port
+    token = token or load_token(_token_base(host, app.app_paths.data_dir))
+    url = auth_url(port, token)
     board = Switchboard(api)
     # the archives service travels with a reopen (``Host.reopen``)
     archives = getattr(api.state, "archives", None)
     host.attach(board, Opened(None, api, app, owns_app=False, archives=archives))
+    hide_token_in_logs()
     server = DamServer(
         uvicorn.Config(
-            board, host="127.0.0.1", port=port, timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S
+            ApiTokenMiddleware(board, token),
+            host="127.0.0.1",
+            port=port,
+            timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S,
         )
     )
     lock = threading.Lock()
@@ -588,19 +613,26 @@ def serve_setup(
     open_browser: bool,
     host: Host | None = None,
     archives: ArchiveService | None = None,
+    token: str | None = None,
 ) -> None:
     """Run the setup-mode server (no archive folder yet). When the user chooses a
     folder, the same server switches to the normal app and starts the background work,
-    no restart needed. Returns after SIGINT/SIGTERM; closes whatever it opened."""
+    no restart needed. Returns after SIGINT/SIGTERM; closes whatever it opened. The
+    browser opens the sign-in link, as with ``serve``."""
     host = host or Host(static_dir=static_dir, port=port)
     host.static_dir, host.port = static_dir, port
+    token = token or load_token(_token_base(host, app_paths.data_dir))
     first = Opened(None, None, None, True, archives, paths=app_paths)  # type: ignore[arg-type]
     first.api = host.setup_api(app_paths, archives, first)
     board = Switchboard(first.api)
     host.attach(board, first)
+    hide_token_in_logs()
     server = DamServer(
         uvicorn.Config(
-            board, host="127.0.0.1", port=port, timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S
+            ApiTokenMiddleware(board, token),
+            host="127.0.0.1",
+            port=port,
+            timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S,
         )
     )
 
@@ -611,7 +643,7 @@ def serve_setup(
             time.sleep(_STARTED_POLL_S)
         host.start_background()
         if open_browser:
-            webbrowser.open(f"http://127.0.0.1:{port}/")
+            webbrowser.open(auth_url(port, token))
 
     starter = threading.Thread(target=when_started, name="dam-after-start", daemon=True)
     starter.start()
