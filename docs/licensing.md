@@ -17,5 +17,13 @@ under **GPL-3.0**.
 - `extract-msg` is also in the backend `dev` dependency group so the tests can cover
   `.msg` handling. Do not move it into the core dependencies.
 
+## Bundled fonts
+
+The New look uses **IBM Plex Sans** and **IBM Plex Mono**, packaged by
+[Fontsource](https://fontsource.org) (`@fontsource/ibm-plex-sans`,
+`@fontsource/ibm-plex-mono`) and bundled into the frontend build. Both are licensed under
+the **SIL Open Font License 1.1** (OFL), which allows bundling and redistribution with
+software. Nothing is fetched from a font service at runtime.
+
 Other dependencies keep their own licences; check them with your usual tooling before
 redistributing a bundle.

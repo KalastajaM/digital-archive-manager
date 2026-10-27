@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Try the new look.** dam has a second look, **New**: calmer colours, a fixed-width font
+  for figures and file names, and a darker mode with warm greys. For now only the colours,
+  fonts and corners change; the screens themselves follow step by step. **Classic stays
+  the default** and looks exactly as before. Switch in three ways: **Settings, Appearance,
+  Look**; the small **Look: Classic / New** switch at the bottom of the sidebar; or
+  **Ctrl+Alt+L** anywhere (not while typing in a field). The choice is kept in this
+  browser. The sidebar switch and the shortcut are temporary and go once New is complete.
 - **Open a file from Activity.** Each operation in Activity that names a file has a
   **Show in Browse** icon that opens Browse at the file's folder with the file selected
   and shown on the right. When the file has been moved, renamed or marked for deletion

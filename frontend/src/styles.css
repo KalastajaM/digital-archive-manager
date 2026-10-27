@@ -229,6 +229,11 @@ a.sidebar-section-title[aria-current="page"] { color: var(--text); }
 .sidebar-foot { padding: var(--sp-3) var(--sp-2) 0; border-top: 0.5px solid var(--hairline); margin-top: var(--sp-2); }
 .status-badge { margin: 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.4; cursor: default; }
 .status-badge.status-attention { color: var(--orange-text); }
+/* The temporary Look switch in the sidebar footer (see components/LookToggle.tsx). */
+.look-toggle { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.look-toggle-label { flex: none; color: var(--muted); font-size: var(--fs-xs); }
+.look-toggle .segmented { flex: 1; min-width: 0; }
+.look-toggle .segmented-option { flex: 1; padding: 0 var(--sp-2); font-size: var(--fs-xs); white-space: nowrap; }
 
 .content { min-width: 0; min-height: 0; height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
 main { flex: 1; padding: var(--sp-4) var(--sp-5); min-width: 0; }
@@ -2431,3 +2436,27 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
   .print-sheet img { display: block; width: 100%; height: auto; max-height: 98vh; object-fit: contain; break-after: page; }
   .print-sheet img:last-child { break-after: auto; }
 }
+
+/* ---- Settings → Appearance → Look ------------------------------------------------------ */
+.look-choice { border: 0; margin: 0 0 var(--sp-5); padding: 0; min-width: 0; }
+.look-choice legend { padding: 0; margin-bottom: var(--sp-2); font-weight: 600; }
+.look-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); max-width: 520px; }
+.look-card { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-lg); cursor: pointer; min-width: 0; }
+.look-card[data-checked] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.look-card-text { display: grid; grid-template-columns: auto 1fr; column-gap: var(--sp-2); align-items: start; }
+.look-card-text input { margin: 2px 0 0; }
+.look-card-name { font-weight: 500; }
+.look-card-hint { grid-column: 2; margin: 0; }
+/* The two previews draw each look in its own fixed colours, whichever look is on. */
+.look-preview { display: flex; height: 96px; border-radius: var(--r-md); overflow: hidden; border: 1px solid #dcdce0; background: #fbfbfd; }
+.look-preview-side { width: 28%; background: #ededf0; border-right: 1px solid #dcdce0; }
+.look-preview-main { flex: 1; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
+.look-preview-title { height: 8px; width: 50%; background: #1d1d1f; border-radius: 2px; }
+.look-preview-card { height: 28px; background: #ffffff; border: 1px solid #dcdce0; border-radius: 8px; }
+.look-preview-bar { height: 10px; width: 40%; background: #0a84ff; border-radius: 3px; }
+.look-card[data-look="new"] .look-preview { background: #ffffff; border-color: #e3e1da; }
+.look-card[data-look="new"] .look-preview-side { background: #f4f3ef; border-color: #e3e1da; }
+.look-card[data-look="new"] .look-preview-title { background: #17191e; }
+.look-card[data-look="new"] .look-preview-card { border-color: #e3e1da; border-radius: 6px; }
+.look-card[data-look="new"] .look-preview-bar { background: #234a7a; }
+.look-choice + h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); font-weight: 600; }

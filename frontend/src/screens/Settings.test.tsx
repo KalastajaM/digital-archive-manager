@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { navigation } from "../api/client";
-import { APPEARANCE_KEY } from "../appearance";
+import { APPEARANCE_KEY, STYLE_KEY } from "../appearance";
 import { forgetKeptEdits } from "../components/codes/FilingCodes";
 import { mockFetch, renderWithProviders } from "../test-utils";
 import Settings from "./Settings";
@@ -28,6 +28,7 @@ function setup(path: string) {
 beforeEach(() => {
   forgetKeptEdits();
   localStorage.clear();
+  delete document.documentElement.dataset.style;
 });
 
 describe("Settings", () => {
@@ -206,6 +207,22 @@ describe("Settings", () => {
     expect(localStorage.getItem(APPEARANCE_KEY)).toBe("dark");
     await user.click(within(appearance).getByRole("button", { name: "Light" }));
     expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  it("Appearance offers the Look: Classic is on, New applies at once and Classic returns", async () => {
+    const user = setup("/settings/appearance");
+    const appearance = await screen.findByRole("region", { name: "Appearance" });
+    const classic = within(appearance).getByRole("radio", { name: /Classic/ });
+    const fresh = within(appearance).getByRole("radio", { name: /New/ });
+    expect(classic).toBeChecked();
+    expect(within(appearance).getByText("The look you know. Here until the new look has everything.")).toBeInTheDocument();
+    await user.click(fresh);
+    expect(document.documentElement.dataset.style).toBe("new");
+    expect(localStorage.getItem(STYLE_KEY)).toBe("new");
+    expect(fresh).toBeChecked();
+    await user.click(classic);
+    expect(document.documentElement.dataset.style).toBe("classic");
+    expect(localStorage.getItem(STYLE_KEY)).toBeNull();
   });
 });
 

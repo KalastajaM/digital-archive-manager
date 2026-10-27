@@ -1,0 +1,25 @@
+/* The New look: rules that tokens cannot give. Every selector sits under
+ * [data-style="new"], so Classic is untouched. Colours, fonts and radii come from the
+ * tokens in theme.css. */
+
+/* Resizing rule: a control's text never wraps. */
+[data-style="new"] button,
+[data-style="new"] select,
+[data-style="new"] kbd,
+[data-style="new"] [role="radio"],
+[data-style="new"] [role="tab"] {
+  white-space: nowrap;
+}
+
+/* Names truncate with an ellipsis (and a title tooltip, see overflowTitles.ts). */
+[data-style="new"] .trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Figures and file names set in the fixed-width face. */
+[data-style="new"] .mono {
+  font-family: var(--font-mono);
+}

@@ -112,6 +112,7 @@
   --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.15), 0 0 0 0.5px rgb(0 0 0 / 0.08);
   --highlight: rgb(255 255 255 / 0.3); /* the inner top edge of a glossy mark */
   --backdrop: rgb(0 0 0 / 0.22);
+  --desk: var(--panel-2); /* behind a document preview */
 }
 
 :root[data-theme="dark"] {
@@ -175,4 +176,132 @@
   :root {
     --motion: 0ms;
   }
+}
+
+/* ---- The New look --------------------------------------------------------------------
+ * <html data-style="new"> (Settings → Appearance → Look; public/appearance.js sets it
+ * before the first paint). Every token above gets a value here; Classic is untouched.
+ * The dark block comes second and sets every token again (it is more specific), so no
+ * light value leaks into dark. Contrast of the text tokens on their surfaces is
+ * checked at 4.5:1 or better (numbers in the pull request that added this).
+ * IBM Plex is bundled (src/fonts.css) and only referenced here, so Classic never loads it. */
+:root[data-style="new"] {
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f4f3ef; /* Shelf */
+  --field: #ffffff;
+  --sidebar-bg: #f4f3ef;
+  --sidebar-sel: #e4e9f1;
+  --hover: rgb(23 25 30 / 0.05);
+  --selected: #e4e9f1;
+  --selected-strong: #234a7a;
+  --selected-strong-text: #ffffff;
+  --selected-strong-muted: rgb(255 255 255 / 0.8);
+  --desk: #e9e7e1;
+
+  --text: #17191e;
+  --text-2: #2f333a;
+  --muted: #5f646d;
+  --muted-2: #474c55;
+
+  --border: #d4d1c8;
+  --border-strong: #b6b2a6;
+  --hairline: #e3e1da;
+  --separator: #e3e1da;
+  --meter-track: #e3e1da;
+
+  --accent: #234a7a;
+  --accent-fill: #234a7a;
+  --accent-hover: #1a3a63;
+  --on-accent: #ffffff;
+  --paper: #ffffff;
+  --barcode-ink: #000000;
+  --accent-soft: rgb(35 74 122 / 0.1);
+  --focus-ring: rgb(35 74 122 / 0.4);
+
+  --red: #c8372d;
+  --red-text: #9b2318;
+  --red-bg: #fae3df;
+  --orange: #b06a00;
+  --orange-text: #7a4300;
+  --orange-bg: #faebd3;
+  --green: #2f7d46;
+  --green-text: #25613a;
+  --green-bg: #e2f0e5;
+  --blue-text: #234a7a;
+  --blue-bg: #e4e9f1;
+  --grey-text: #5f646d;
+  --grey-bg: #eeece6;
+
+  --shadow-card: 0 0 0 1px #e3e1da;
+  --shadow-button: none;
+  --shadow-pop: 0 6px 18px rgb(23 25 30 / 0.12), 0 0 0 1px #d4d1c8;
+  --shadow-sheet: 0 16px 48px rgb(23 25 30 / 0.2), 0 0 0 1px #d4d1c8;
+  --shadow-toast: 0 6px 18px rgb(23 25 30 / 0.14), 0 0 0 1px #d4d1c8;
+  --shadow-field: none;
+  --shadow-segment: 0 1px 2px rgb(23 25 30 / 0.08);
+  --highlight: rgb(255 255 255 / 0.2);
+  --backdrop: rgb(23 25 30 / 0.28);
+}
+
+:root[data-style="new"][data-theme="dark"] {
+  --bg: #1a1917;
+  --panel: #232220;
+  --panel-2: #2b2a27;
+  --field: #1a1917;
+  --sidebar-bg: #201f1d;
+  --sidebar-sel: #2c3a52;
+  --hover: rgb(255 255 255 / 0.06);
+  --selected: #2a3750;
+  --selected-strong: #3a68a5;
+  --selected-strong-text: #ffffff;
+  --selected-strong-muted: rgb(255 255 255 / 0.82);
+  --desk: #141311;
+
+  --text: #ecebe4;
+  --text-2: #cfccc3;
+  --muted: #a39f95;
+  --muted-2: #b8b4a9;
+
+  --border: #3d3b37;
+  --border-strong: #55524c;
+  --hairline: #34322f;
+  --separator: #34322f;
+  --meter-track: #3d3b37;
+
+  --accent: #8db0e3;
+  --accent-fill: #3a68a5;
+  --accent-hover: #aac5ee;
+  --accent-soft: rgb(141 176 227 / 0.16);
+  --focus-ring: rgb(141 176 227 / 0.55);
+
+  --red: #e5675a;
+  --red-text: #ff9086;
+  --red-bg: rgb(229 103 90 / 0.18);
+  --orange: #d9953a;
+  --orange-text: #f0b86a;
+  --orange-bg: rgb(217 149 58 / 0.18);
+  --green: #4aa365;
+  --green-text: #84d29a;
+  --green-bg: rgb(74 163 101 / 0.18);
+  --blue-text: #9dbceb;
+  --blue-bg: rgb(141 176 227 / 0.16);
+  --grey-text: #a39f95;
+  --grey-bg: rgb(255 255 255 / 0.08);
+
+  --shadow-card: 0 0 0 1px #34322f;
+  --shadow-pop: 0 6px 18px rgb(0 0 0 / 0.5), 0 0 0 1px #3d3b37;
+  --shadow-sheet: 0 16px 48px rgb(0 0 0 / 0.6), 0 0 0 1px #3d3b37;
+  --shadow-toast: 0 6px 18px rgb(0 0 0 / 0.5), 0 0 0 1px #3d3b37;
+  --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.5);
+  --highlight: rgb(255 255 255 / 0.14);
+  --backdrop: rgb(0 0 0 / 0.55);
 }
