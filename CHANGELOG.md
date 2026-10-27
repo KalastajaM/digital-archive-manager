@@ -14,6 +14,15 @@ All notable changes are listed here. The format follows
   since, the operation says where it is now and the icon leads there; a file deleted by
   hand (or moved outside dam and not reconnected) reads "no longer in the archive" and
   has no link.
+- **Keep ##. Ongoing and ##. Important up to date after a Google Drive restart.** When
+  Google Drive for desktop restarts, the links and folders dam made there can come back
+  with a new device number, and dam then left them alone for good ("looks different from
+  before"). The new Maintenance check **Left alone after a Drive restart** lists them.
+  When only the device number changed, the same way for every one of them, **Take over**
+  shows a preview and then lets dam keep them up to date again; nothing on disk changes,
+  and **Undo** in the message afterwards puts the old numbers back. Anything else (a new
+  inode number, entries from more than one device) stays left alone and the check says
+  why.
 - **Reconnect files moved outside dam.** A file without a Google Drive id (on Windows and
   Linux, every file) that you renamed or moved in Finder or File Explorer used to lose its
   tags, notes, collections, tray items and the rest: dam saw a new file and marked the

@@ -1417,6 +1417,24 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   new id. A pair whose old id or old path is in use again, or whose new row is gone, is
   left as it is and named in `errors`. The answer has the shape of a reconnect's, with
   what moved back in `pairs`. 400 when it was undone already, 404 for an unknown id.
+- The `remounted` check ("Left alone after a Drive restart", `OngoingPublisher.remounted`)
+  lists, per publish root (`##. Ongoing`, `##. Important`), the `ongoing_entries` whose
+  state is `moved` (same kind and, for a link, the same readlink value, but another
+  dev/ino, so the sync leaves their tree alone). A root is `offered` only when every such
+  entry kept its `st_ino`, is on the device the root is on now, and all were recorded on
+  one device; else `reason` names what does not hold. Each entry: `id`, `rel`, `kind`,
+  `st_ino`, `old_dev`, `new_dev` (text, as in the table).
+- `POST /api/maintenance/remounted/readopt {roots, dry_run?}` takes over the new device
+  number of each offered root's entries (`OngoingPublisher.readopt`, under `sync_lock`, one
+  transaction per root: an entry whose row changed since leaves its root as it was, named
+  in `errors`). Each entry is journaled in `readopted` (migration 0040: the entry's id,
+  rel, kind and inode, the old and the new device number). Database only, not in
+  Activity; afterwards the collections sync runs. The answer is `{dry_run, roots, errors,
+  undo_id}`. 400 for no root, one that is not a publish root, or nothing to take over.
+- `POST /api/maintenance/remounted/undo {undo_id}` puts each journaled entry's old device
+  number back while its row still has the new one and the same inode; one that changed
+  since is named in `errors`. Every journal row of the take-over is marked undone. 400
+  when it was undone already, 404 for an unknown id.
 - Empty folders and broken links elsewhere are marked for deletion with `POST
   /api/quarantine`, a name is fixed with `POST /api/browse/rename`: the existing previewed
   endpoints.

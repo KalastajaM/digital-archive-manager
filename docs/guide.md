@@ -1335,6 +1335,19 @@ reminder. Ignoring changes nothing in the archive.
   Undo is refused for a file when another file is now indexed at its old place. A file
   whose content matches more than one file is listed but not reconnected, because dam
   cannot tell which one it is.
+- **Left alone after a Drive restart**: the links and folders dam made in ##. Ongoing and
+  ##. Important that it now leaves alone because they look different from before. dam
+  knows each entry it made by its device and inode number. When Google Drive for desktop
+  restarts, its folder can get a new device number, and then every entry looks like
+  something else and is no longer kept up to date. The check lists, per folder, the
+  entries that kept their place, kind and inode number but have another device number.
+  When only the device number changed, the same way for every one of them, and they are
+  on the same device as the folder itself, **Take over** shows a preview and then records
+  the new number, after which dam keeps them up to date again. Nothing on disk changes,
+  it is not in Activity, and **Undo** in the message afterwards puts the old numbers back.
+  A folder where an entry also has a new inode number, or whose entries came from more
+  than one device, stays left alone and the check says why: dam cannot then be sure the
+  entries are still its own.
 
 ## Settings
 
