@@ -224,6 +224,34 @@ describe("Settings", () => {
     expect(document.documentElement.dataset.style).toBe("classic");
     expect(localStorage.getItem(STYLE_KEY)).toBeNull();
   });
+
+  it("Reset layout forgets the pane widths and Today's cards for every archive, and Undo brings them back", async () => {
+    localStorage.setItem("dam.browse.listwidth", "60");
+    localStorage.setItem("dam.inbox.panelwidth.other", "500");
+    localStorage.setItem("dam.today.layout.v1", '{"order":["a"],"collapsed":{}}');
+    localStorage.setItem("dam.browse.split", "1"); // one pane or two is not a width: it stays
+    const user = setup("/settings/appearance");
+    const appearance = await screen.findByRole("region", { name: "Appearance" });
+    expect(within(appearance).getByText(/remembered in this browser, per screen/)).toBeInTheDocument();
+    await user.click(within(appearance).getByRole("button", { name: "Reset layout" }));
+    expect(localStorage.getItem("dam.browse.listwidth")).toBeNull();
+    expect(localStorage.getItem("dam.inbox.panelwidth.other")).toBeNull();
+    expect(localStorage.getItem("dam.today.layout.v1")).toBeNull();
+    expect(localStorage.getItem("dam.browse.split")).toBe("1");
+    expect(await screen.findByText(/Layout reset/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(localStorage.getItem("dam.browse.listwidth")).toBe("60");
+    expect(localStorage.getItem("dam.inbox.panelwidth.other")).toBe("500");
+    expect(localStorage.getItem("dam.today.layout.v1")).toBe('{"order":["a"],"collapsed":{}}');
+  });
+
+  it("Reset layout says so when there is nothing to reset", async () => {
+    const user = setup("/settings/appearance");
+    const appearance = await screen.findByRole("region", { name: "Appearance" });
+    await user.click(within(appearance).getByRole("button", { name: "Reset layout" }));
+    expect(await screen.findByText(/Nothing to reset/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
 });
 
 const archivesBody = { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true };

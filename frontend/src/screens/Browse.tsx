@@ -1,17 +1,20 @@
 import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, PanelRight } from "lucide-react";
 import {
+  cloneElement,
   type DragEvent,
   Fragment,
   type MouseEvent,
   type ReactNode,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useStyle } from "../appearance";
+import { hiddenCrumbs } from "../crumbs";
 import {
   archiveKey,
   ApiError,
@@ -279,6 +282,31 @@ function Breadcrumb({
 }) {
   const parts = path ? path.split("/") : [];
   const [look] = useStyle();
+  const isNew = look === "new";
+  const nav = useRef<HTMLElement>(null);
+  const measure = useRef<HTMLOListElement>(null);
+  // New: how many leading steps are folded into the "…" menu (0: the whole path is shown)
+  const [hidden, setHidden] = useState(0);
+  useLayoutEffect(() => {
+    const box = nav.current;
+    const ruler = measure.current;
+    if (!isNew || !box || !ruler) {
+      setHidden(0);
+      return;
+    }
+    const fit = () => {
+      const items = Array.from(ruler.children) as HTMLElement[];
+      const more = items[0]?.offsetWidth ?? 0;
+      const widths = items.slice(1).map((li) => li.offsetWidth);
+      const gap = Number.parseFloat(getComputedStyle(ruler).columnGap) || 0;
+      setHidden(hiddenCrumbs(widths, more, gap, box.clientWidth));
+    };
+    fit();
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(fit);
+    watch.observe(box);
+    return () => watch.disconnect();
+  }, [isNew, path]);
   const link = (to: string, label: string) => (
     <Crumb drop={drop(to)}>
       {(props) => (
@@ -306,16 +334,43 @@ function Breadcrumb({
       )}
     </Crumb>
   );
+  // every step: the root, then each folder; the last one is where the pane is
+  const steps = [{ to: "", label: "Archive" }, ...parts.map((part, i) => ({ to: parts.slice(0, i + 1).join("/"), label: visible(part) }))];
+  const folded = Math.min(hidden, steps.length - 1);
   return (
-    // New: a path too long for the pane drops its parents first; the whole path is the tooltip
-    <nav className="breadcrumb" aria-label="Breadcrumb" title={look === "new" ? visible(path) || "Archive" : undefined}>
+    // New: a path too long for the pane folds its parents into one "…" menu (each step in it
+    // takes a drop too); the whole path is the tooltip
+    <nav ref={nav} className="breadcrumb" aria-label="Breadcrumb" title={isNew ? visible(path) || "Archive" : undefined}>
       <ol>
-        <li>{parts.length === 0 ? current("", "Archive") : link("", "Archive")}</li>
-        {parts.map((part, i) => {
-          const here = parts.slice(0, i + 1).join("/");
-          return <li key={here}>{i === parts.length - 1 ? current(here, visible(part)) : link(here, visible(part))}</li>;
-        })}
+        {folded > 0 && (
+          <li className="breadcrumb-more">
+            <Menu
+              label="Parent folders"
+              icon={<Ellipsis />}
+              align="start"
+              entries={steps.slice(0, folded).map((step) => ({
+                label: step.label,
+                onSelect: () => go(step.to),
+                wrap: (button) => <Crumb drop={drop(step.to)}>{(props) => cloneElement(button, props)}</Crumb>,
+              }))}
+            />
+          </li>
+        )}
+        {steps.slice(folded).map((step, i, shown) => (
+          <li key={step.to}>{i === shown.length - 1 ? current(step.to, step.label) : link(step.to, step.label)}</li>
+        ))}
       </ol>
+      {isNew && (
+        // the natural width of every step, off screen, to know how many fit
+        <ol className="breadcrumb-ruler" aria-hidden="true" ref={measure}>
+          <li className="breadcrumb-more">
+            <span className="icon-button" />
+          </li>
+          {steps.map((step) => (
+            <li key={step.to}>{step.label}</li>
+          ))}
+        </ol>
+      )}
     </nav>
   );
 }
@@ -1978,7 +2033,7 @@ export default function Browse() {
               />
             )}
             {isNew && !split && (
-              // under ~1120px the details panel leaves the row and opens over the list from here
+              // under ~760px the details panel leaves the row and opens over the list from here
               <IconButton
                 icon={<PanelRight />}
                 label="Details"

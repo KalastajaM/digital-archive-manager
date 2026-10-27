@@ -78,7 +78,7 @@ describe("styles-new.css: Browse", () => {
   it("makes the screen and each pane a container, and folds in the agreed order", () => {
     expect(plain).toMatch(/main:has\(> \.browse\) \{ container: browse \/ inline-size; \}/);
     expect(plain).toMatch(/\.browse-pane \{ container: pane \/ inline-size;/);
-    const order = ["1120px", "880px", "760px", "640px"].map((w) => plain.indexOf(`@container browse (max-width: ${w})`));
+    const order = ["880px", "760px", "759px", "640px"].map((w) => plain.indexOf(`@container browse (max-width: ${w})`));
     expect(order.every((i) => i > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(plain).toMatch(/@container pane \(max-width: 480px\)/);

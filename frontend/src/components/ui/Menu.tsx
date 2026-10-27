@@ -1,5 +1,8 @@
 import {
   type CSSProperties,
+  Fragment,
+  type HTMLAttributes,
+  type ReactElement,
   type KeyboardEvent,
   type ReactNode,
   useEffect,
@@ -26,6 +29,8 @@ export type MenuEntry =
       icon?: ReactNode;
       /** Nesting level (a tree in a menu): indents the entry, 0 is flush. */
       indent?: number;
+      /** Wraps the entry's button (to make it a drop target, say). */
+      wrap?: (button: ReactElement<HTMLAttributes<HTMLButtonElement>>) => ReactNode;
     }
   | "separator";
 
@@ -114,6 +119,9 @@ export function Menu({ label, icon, entries, align = "start", className, text, t
     if (e.key !== "Tab") e.preventDefault();
   };
 
+  const wrapEntry = (entry: Exclude<MenuEntry, "separator">, i: number, button: ReactElement<HTMLAttributes<HTMLButtonElement>>) =>
+    entry.wrap ? <Fragment key={i}>{entry.wrap(button)}</Fragment> : button;
+
   return (
     <span ref={wrap} className={className ? `menu-wrap ${className}` : "menu-wrap"}>
       <button
@@ -150,39 +158,43 @@ export function Menu({ label, icon, entries, align = "start", className, text, t
               entry === "separator" ? (
                 <div key={i} role="separator" className="menu-separator" />
               ) : (
-                <button
-                  key={i}
-                  type="button"
-                  role={entry.checked === undefined ? "menuitem" : "menuitemcheckbox"}
-                  aria-checked={entry.checked}
-                  className="menu-item"
-                  disabled={entry.disabled}
-                  aria-describedby={entry.disabled && entry.reason ? `${menuId}-why-${i}` : undefined}
-                  tabIndex={-1}
-                  style={entry.indent ? { paddingLeft: `calc(4px + ${entry.indent} * 14px)` } : undefined}
-                  onClick={() => {
-                    close(true);
-                    entry.onSelect();
-                  }}
-                >
-                  <span className="menu-check" aria-hidden="true">
-                    {entry.checked ? "✓" : ""}
-                  </span>
-                  {entry.icon && (
-                    <span className="menu-item-icon" aria-hidden="true">
-                      {entry.icon}
+                wrapEntry(
+                  entry,
+                  i,
+                  <button
+                    key={i}
+                    type="button"
+                    role={entry.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+                    aria-checked={entry.checked}
+                    className="menu-item"
+                    disabled={entry.disabled}
+                    aria-describedby={entry.disabled && entry.reason ? `${menuId}-why-${i}` : undefined}
+                    tabIndex={-1}
+                    style={entry.indent ? { paddingLeft: `calc(4px + ${entry.indent} * 14px)` } : undefined}
+                    onClick={() => {
+                      close(true);
+                      entry.onSelect();
+                    }}
+                  >
+                    <span className="menu-check" aria-hidden="true">
+                      {entry.checked ? "✓" : ""}
                     </span>
-                  )}
-                  {entry.swatch && <span className="menu-swatch" style={{ background: entry.swatch }} aria-hidden="true" />}
-                  <span className="menu-item-text">
-                    {entry.label}
-                    {entry.disabled && entry.reason && (
-                      <span id={`${menuId}-why-${i}`} className="menu-reason" aria-hidden="true">
-                        {entry.reason}
+                    {entry.icon && (
+                      <span className="menu-item-icon" aria-hidden="true">
+                        {entry.icon}
                       </span>
                     )}
-                  </span>
-                </button>
+                    {entry.swatch && <span className="menu-swatch" style={{ background: entry.swatch }} aria-hidden="true" />}
+                    <span className="menu-item-text">
+                      {entry.label}
+                      {entry.disabled && entry.reason && (
+                        <span id={`${menuId}-why-${i}`} className="menu-reason" aria-hidden="true">
+                          {entry.reason}
+                        </span>
+                      )}
+                    </span>
+                  </button>,
+                )
               ),
             )}
           </div>,

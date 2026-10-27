@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -155,6 +155,23 @@ describe("App shell", () => {
     await screen.findByText(/1 tray file errors/);
     const badge = screen.getByTestId("status-line");
     expect(badge).toHaveAttribute("title", "bad.yaml: line 1: id: required");
+  });
+
+  it("the status line is its own tooltip in the New look, where the icon rail shrinks it to a dot", async () => {
+    mockFetch({ "GET /api/status": { body: STATUS }, ...BASE });
+    renderApp();
+    const badge = await screen.findByTestId("status-line");
+    expect(badge).not.toHaveAttribute("title"); // Classic: the text is all there is
+    cleanup();
+    document.documentElement.dataset.style = "new";
+    try {
+      mockFetch({ "GET /api/status": { body: STATUS }, ...BASE });
+      renderApp();
+      const line = await screen.findByTestId("status-line");
+      expect(line).toHaveAttribute("title", line.textContent);
+    } finally {
+      delete document.documentElement.dataset.style;
+    }
   });
 
   it("shows a banner when the archive folder is not available", async () => {

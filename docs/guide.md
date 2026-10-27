@@ -1376,7 +1376,10 @@ each area, grouped by what it applies to; one section shows at a time.
     import one, and restore one. See [Snapshots](#snapshots).
 - **This browser** (every archive alike):
   - **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at
-    once, and is remembered by this browser (another browser starts on Auto).
+    once, and is remembered by this browser (another browser starts on Auto). **Look**
+    switches between Classic and New. **Layout, Reset layout** forgets the pane widths
+    you dragged and the order of the cards on Today (both are remembered in this browser,
+    per screen), with an Undo.
 
 ### Snapshots
 
