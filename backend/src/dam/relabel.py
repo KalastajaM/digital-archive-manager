@@ -30,7 +30,10 @@ from dam.rules.model import _load_file as load_rule_file
 from dam.rules.model import rule_files
 from dam.snapshots import BEFORE_RELABEL, create_snapshot
 
-INTERRUPTED = "An operation was interrupted. Run dam recover first, then change the label."
+INTERRUPTED = (
+    "An operation was interrupted. Run recovery first (Run recovery in the app, or "
+    "dam recover), then change the label."
+)
 # journal sources that are a file's name only (it came from outside the archive)
 _NAME_ONLY_SRC = {str(OpKind.COPY), str(OpKind.PICTURE_TO_QUARANTINE)}
 _NAME_ONLY_DST = {str(OpKind.PICTURE_BACK)}  # the name in the rules' picture folder

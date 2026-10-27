@@ -78,7 +78,7 @@ class SnapshotService:
             raise Conflict("This window cannot restore a snapshot. Start dam with `dam serve`.")
         if self.pending():
             raise Conflict(
-                "An operation was interrupted and is not finished. Run `dam recover` "
+                "An operation was interrupted and is not finished. Use Run recovery "
                 "before restoring, so its record is not lost."
             )
         with _LOCK:

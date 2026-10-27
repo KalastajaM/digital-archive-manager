@@ -564,6 +564,15 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A `dam` command no longer changes an archive the app has open.** Commands that
+  change the archive, its index or its settings (`dam scan`, `index`, `file`, `move`,
+  `quarantine`, `add`, `undo`, `recover`, `init`, the stars and Important marks,
+  `ongoing sync` and `ai --on`/`--off`) now refuse while the app has that
+  archive open, and say on which port: do it in the app, or close the app first. Two
+  such commands also wait for each other: the second says which one is running. The app
+  likewise refuses to open an archive while such a command runs. Commands that only
+  read (`inbox`, `search`, `activity`, dry runs and the listings) still work, and
+  `dam archives list` shows an archive a command is busy with.
 - **A change still being carried out is left alone.** Undo (from another tab, say) is
   refused until the change has finished, instead of reverting its first files while the
   rest still moved. The Recovery banner no longer shows for a file being moved right now

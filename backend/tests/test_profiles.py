@@ -3,6 +3,8 @@ forget, the isolation rules, the per-profile server lock and reminder agent."""
 
 import hashlib
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -329,6 +331,64 @@ def test_root_problems_flags_a_hand_edited_overlap(base, tmp_path):
 # -- one server per profile --------------------------------------------------------------
 
 
+HOLD_LOCK = """
+import sys
+from pathlib import Path
+from dam.profiles import ServeLock
+lock = ServeLock(Path(sys.argv[1]))
+lock.acquire(command="dam scan")
+sys.stdout.write("held\\n")
+sys.stdout.flush()
+sys.stdin.read()  # hold it until the parent closes stdin
+"""
+
+
+def test_serve_lock_refuses_another_process_until_it_exits(tmp_path):
+    """The lock is the OS's: a second process is refused while the first lives, and the
+    folder is free again once it has exited (no stale lock file to clean up)."""
+    data = mk(tmp_path / "data")
+    holder = subprocess.Popen(
+        [sys.executable, "-c", HOLD_LOCK, str(data)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    try:
+        assert holder.stdout is not None and holder.stdout.readline().strip() == b"held"
+        assert ServeLock.holder(data) == {"port": None, "command": "dam scan"}
+        mine = ServeLock(data)
+        with pytest.raises(Locked) as caught:
+            mine.acquire(8766)
+        assert caught.value.command == "dam scan"
+        assert "A dam command (dam scan) is changing this archive" in str(caught.value)
+    finally:
+        assert holder.stdin is not None
+        holder.stdin.close()
+        holder.wait(30)
+        assert holder.stdout is not None
+        holder.stdout.close()
+    assert holder.returncode == 0
+    assert ServeLock.holder(data) is None
+    mine.acquire(8766)  # the lock file is still there, but nobody holds it
+    assert mine.held
+    mine.release()
+
+
+def test_serve_json_says_who_holds_the_lock(tmp_path):
+    import json
+
+    data = mk(tmp_path / "data")
+    lock = ServeLock(data)
+    lock.acquire(command="dam file")
+    info = json.loads((data / "serve.json").read_text(encoding="utf-8"))
+    assert info["kind"] == "cli" and info["command"] == "dam file" and info["port"] is None
+    lock.release()
+    lock.acquire()
+    lock.publish(8766)
+    info = json.loads((data / "serve.json").read_text(encoding="utf-8"))
+    assert info["kind"] == "serve" and info["port"] == 8766 and "command" not in info
+    lock.release()
+
+
 def test_serve_lock_is_exclusive_per_profile(tmp_path):
     one, two = mk(tmp_path / "one"), mk(tmp_path / "two")
     first = ServeLock(one)
@@ -337,7 +397,7 @@ def test_serve_lock_is_exclusive_per_profile(tmp_path):
     with pytest.raises(Locked) as caught:
         other.acquire(8767)
     assert caught.value.port == 8766 and "8766" in str(caught.value)
-    assert ServeLock.holder(one) == {"port": 8766}
+    assert ServeLock.holder(one) == {"port": 8766, "command": None}
     assert ServeLock.holder(two) is None  # another profile is free
     second = ServeLock(two)
     second.acquire(8767)

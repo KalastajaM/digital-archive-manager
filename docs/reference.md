@@ -247,6 +247,24 @@ Each served archive holds a lock file in its data folder (`serve.lock`); a secon
 `dam serve` (or a switch in the app) for an archive that is already open somewhere else
 is refused and tells you the port.
 
+Commands that change an archive hold the same lock while they run, so the app and a
+command (or two commands) never write one archive at the same time. `serve.json` beside
+the lock says who holds it: `kind` `serve` with the `port`, or `kind` `cli` with the
+`command` (`dam file`). A command is refused while the app has the archive open ("This
+archive is open in the app on port 8766. Do this there, or close the app first.";
+`dam recover` points to Run recovery in the app instead), and the app or another command
+is refused while a command runs ("A dam command (dam scan) is changing this archive
+right now. Wait for it to finish, then try again."). `dam archives list` shows either.
+Commands that hold the lock: `scan`, `index`, `errors --retry` and
+`--retry-unsupported`, `file`, `quarantine`, `move` and `add` (each not with
+`--dry-run`), `undo`, `recover`, `init` (also through `archives add`), `star`, `unstar`, `important`
+(marking), `unimportant`, `ongoing sync` (not with `--dry-run`) and `ai --on`/`--off`.
+The others only read, or change only the archive list (`archives switch`, `rename`,
+`color`, `forget`) or the system keychain, and run alongside the app. `dam remind` also
+runs alongside it, so the daily job sends while the app is open: it only marks
+reminders as sent in the database. While another process has the archive, commands do
+not warn about interrupted operations: they may be changes under way there.
+
 **Keeping them apart**: two archives cannot have the same archive folder, nested folders
 (one inside the other), or an archive folder inside any archive's data folder. `dam init`,
 `dam archives add` and the first-run screen refuse such a folder with the reason (paths are
@@ -315,7 +333,7 @@ are not found.
 
 **Changing a label** (`relabel`, `dam.relabel`). The new label passes the rules for a new
 one, except that the folder's own old label does not count as taken (a change of case is
-allowed). Refused while a journal row is still `planned` (run `dam recover`). Nothing on
+allowed). Refused while a journal row is still `planned` (Run recovery in the app). Nothing on
 disk changes. Every value equal to the old label, or starting with `<old label>/`, becomes
 the new label: `files.path`, `path_nfc` and the folder's own top row's `name`, the
 `file_fts` rows, `operations.src` and `dst` (except `abs:` paths and the plain file names a
@@ -385,7 +403,7 @@ archive's is a 409 unless `other_folder_ok` is true; then `archive_root` and
 `extra_folders` in the unpacked `settings.yaml` are set to the open archive's (the index
 stores paths relative to the archive folders, so the rest still fits). The unpacked
 database is then migrated to the current revision. It is refused while an interrupted
-operation waits for `dam recover`, and while a maintenance check or rule replay runs.
+operation waits for recovery (Run recovery), and while a maintenance check or rule replay runs.
 With `snapshot_current` a `before-restore` snapshot is taken next. Then the server closes
 the archive (`Host.close_and_reopen`: background work stopped, App closed), writes the
 unpacked database into the live `dam.sqlite` with the backup API (one transaction, no file
@@ -1422,7 +1440,8 @@ Every command logs to `<data dir>/logs/dam.log`: INFO and up, rotated at 5 MB wi
 files kept (`dam.log.1` ... `dam.log.3`). Warnings and errors also go to stderr.
 Internal-error tracebacks go to the log file only.
 
-If a previous run was interrupted, commands warn you to run `dam recover`.
+If a previous run was interrupted, commands warn you to run `dam recover` (not while the
+app or another command has the archive; `dam serve` points to Run recovery in the app).
 
 ## Cloud drives
 
