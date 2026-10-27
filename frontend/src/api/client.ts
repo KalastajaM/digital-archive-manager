@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { components } from "./schema";
+import { buildUrl, type CallArgs, type Operation, type PathOf, type ResponseOf } from "./typed";
 
 type Schemas = components["schemas"];
 export type InboxEntry = Schemas["InboxEntryOut"];
@@ -343,6 +344,28 @@ export const post = <T>(path: string, body?: unknown, signal?: AbortSignal) => r
 export const patch = <T>(path: string, body: unknown) => request<T>("PATCH", path, body);
 export const put = <T>(path: string, body: unknown) => request<T>("PUT", path, body);
 export const del = <T>(path: string) => request<T>("DELETE", path);
+
+// Typed calls by OpenAPI path (``typed.ts``): the path's parameters, query, body and
+// answer come from ``schema.d.ts``, so a call that does not match the API fails to
+// compile. ``apiGet("/api/maintenance/jobs/{job_id}", { path: { job_id } })`` answers a
+// ``MaintenanceJobOut``. The ``path``/``query`` casts only widen to what ``buildUrl`` takes.
+type UrlParts = Parameters<typeof buildUrl>;
+const urlOf = (template: string, options?: { path?: unknown; query?: unknown }) =>
+  buildUrl(template, options?.path as UrlParts[1], options?.query as UrlParts[2]);
+
+export const apiGet = <P extends PathOf<"get">>(path: P, ...[options]: CallArgs<Operation<P, "get">, "get">) =>
+  request<ResponseOf<Operation<P, "get">>>("GET", urlOf(path, options), undefined, options?.signal);
+
+export const apiPost = <P extends PathOf<"post">>(path: P, ...[options]: CallArgs<Operation<P, "post">, "post">) =>
+  request<ResponseOf<Operation<P, "post">>>(
+    "POST",
+    urlOf(path, options),
+    (options as { body?: unknown } | undefined)?.body,
+    options?.signal,
+  );
+
+export const apiDelete = <P extends PathOf<"delete">>(path: P, ...[options]: CallArgs<Operation<P, "delete">, "delete">) =>
+  request<ResponseOf<Operation<P, "delete">>>("DELETE", urlOf(path, options), undefined, options?.signal);
 
 /** True for the error a cancelled request throws (a changed key, a closed screen): not
  * a failure to show. */
@@ -1876,23 +1899,24 @@ export type ReconnectResult = Schemas["ReconnectOut"];
 export const useDuplicateEstimate = () =>
   useQuery({
     queryKey: ["maintenance", "estimate"],
-    queryFn: ({ signal }) => get<DuplicateEstimate>("/api/maintenance/duplicates/estimate", signal),
+    queryFn: ({ signal }) => apiGet("/api/maintenance/duplicates/estimate", { signal }),
     gcTime: 0,
   });
 
 export const startMaintenanceJob = (kind: MaintenanceKind, days?: number) =>
-  post<MaintenanceJob>("/api/maintenance/jobs", { kind, days: days ?? null });
-export const getMaintenanceJob = (id: string) => get<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}`);
+  apiPost("/api/maintenance/jobs", { body: { kind, days: days ?? null } });
+export const getMaintenanceJob = (id: string) => apiGet("/api/maintenance/jobs/{job_id}", { path: { job_id: id } });
 export const latestMaintenanceJob = (kind: MaintenanceKind) =>
-  get<MaintenanceJob | null>(`/api/maintenance/jobs/latest/${enc(kind)}`);
-export const stopMaintenanceJob = (id: string) => post<MaintenanceJob>(`/api/maintenance/jobs/${enc(id)}/stop`);
+  apiGet("/api/maintenance/jobs/latest/{kind}", { path: { kind } });
+export const stopMaintenanceJob = (id: string) =>
+  apiPost("/api/maintenance/jobs/{job_id}/stop", { path: { job_id: id } });
 /** A result entry the owner ignores (``dam.maintenance.ignored`` has the keys per kind). */
 export type MaintenanceIgnored = Schemas["MaintenanceIgnoredOut"];
 export type IgnoreKind = Schemas["MaintenanceIgnoreIn"]["kind"];
 const ignoredKey = ["maintenance", "ignored"];
 
 export const useMaintenanceIgnored = () =>
-  useQuery({ queryKey: ignoredKey, queryFn: () => get<MaintenanceIgnored[]>("/api/maintenance/ignored") });
+  useQuery({ queryKey: ignoredKey, queryFn: () => apiGet("/api/maintenance/ignored") });
 
 /** Ignore an entry, or stop ignoring one (by its id). Nothing in the archive changes. */
 export const useMaintenanceIgnore = () => {
@@ -1902,15 +1926,15 @@ export const useMaintenanceIgnore = () => {
       change: { kind: IgnoreKind; key: string; label: string; members?: string[] } | { stop: number },
     ): Promise<MaintenanceIgnored | null> =>
       "stop" in change
-        ? del(`/api/maintenance/ignored/${change.stop}`).then(() => null)
-        : post<MaintenanceIgnored>("/api/maintenance/ignored", change),
+        ? apiDelete("/api/maintenance/ignored/{ignored_id}", { path: { ignored_id: change.stop } }).then(() => null)
+        : apiPost("/api/maintenance/ignored", { body: change }),
     onSettled: () => qc.invalidateQueries({ queryKey: ignoredKey }),
   });
 };
 
 /** Reset: forget the checks of ``kind`` (every kind when left out) and their results. */
 export const forgetMaintenanceJobs = (kind?: MaintenanceKind) =>
-  del<{ forgotten: number }>(`/api/maintenance/jobs${kind ? `?${new URLSearchParams({ kind })}` : ""}`);
+  apiDelete("/api/maintenance/jobs", { query: { kind } });
 
 /** Move the chosen copies to To Delete, or replace them with a link to the copy kept
  * (one batch); a dry run lists the operations and what is carried over. */
@@ -1918,7 +1942,7 @@ export const useResolveDuplicates = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (body: DuplicateResolveBody) =>
-      post<DuplicateResolveResult>("/api/maintenance/duplicates/resolve", body),
+      apiPost("/api/maintenance/duplicates/resolve", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -1932,7 +1956,7 @@ export const useReconnectMoved = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (body: { pairs: { old: string; new: string }[]; dry_run: boolean }) =>
-      post<ReconnectResult>("/api/maintenance/moved/reconnect", body),
+      apiPost("/api/maintenance/moved/reconnect", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -1943,7 +1967,7 @@ export const useReconnectMoved = () => {
 export const useUndoReconnect = () => {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (undo_id: string) => post<ReconnectResult>("/api/maintenance/moved/undo", { undo_id }),
+    mutationFn: (undo_id: string) => apiPost("/api/maintenance/moved/undo", { body: { undo_id } }),
     onSettled: () => refresh(),
   });
 };
@@ -1953,7 +1977,7 @@ export const useRemoveBrokenLinks = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (body: { drive_ids: string[]; dry_run: boolean }) =>
-      post<BatchResult>("/api/maintenance/links/remove", body),
+      apiPost("/api/maintenance/links/remove", { body }),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
