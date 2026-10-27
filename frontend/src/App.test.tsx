@@ -202,3 +202,24 @@ describe("App shell", () => {
     expect(post.credentials).toBe("same-origin");
   });
 });
+
+describe("not signed in", () => {
+  it("a 401 from the API replaces the app with a page that says how to sign in", async () => {
+    const notSignedIn = { status: 401, body: { error: "not signed in", code: "not_signed_in" } };
+    mockFetch({ "GET /api/status": notSignedIn, ...BASE });
+    renderApp("/inbox");
+    expect(await screen.findByText("Not signed in")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This page is not signed in to dam. Open dam with `dam serve` (or `dam open` if it is already running) and it signs this browser in.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+
+  it("the viewer window shows the same page", async () => {
+    mockFetch({ "GET /api/files/f1": { status: 401, body: { error: "not signed in" } } });
+    renderApp("/viewer/f1");
+    expect(await screen.findByText("Not signed in")).toBeInTheDocument();
+  });
+});
