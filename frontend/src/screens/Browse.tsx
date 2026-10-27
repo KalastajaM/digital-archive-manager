@@ -28,6 +28,7 @@ import {
 } from "../api/client";
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
+import { WindowedList } from "../components/WindowedList";
 import { notConnected } from "../components/FileLaunch";
 import type { PreviewFile } from "../components/FilePreview";
 import { BUILTIN_LABEL, MarkIcons } from "../components/MarkIcons";
@@ -355,6 +356,11 @@ type RowProps = {
   onContextMenu?: (e: MouseEvent) => void;
   /** A file row: the Quick Look button at its right end, shown on hover. */
   onQuickLook?: () => void;
+  /** The row's place in the pane's items: focus finds the row by it. */
+  row: number;
+  /** An even line of the list: shaded (the list renders only the rows near the view, so
+   * ``nth-child`` cannot tell). */
+  stripe: boolean;
 };
 
 /** One listed entry. Files drag (with the selection), unless their area keeps them. */
@@ -374,10 +380,12 @@ function EntryRow({
   dropProps,
   onContextMenu,
   onQuickLook,
+  row,
+  stripe,
 }: RowProps) {
   const driveRoot = item.is_dir && item.folder != null && !item.path.includes("/"); // an extra folder's own root
   const Icon = driveRoot ? HardDrive : item.is_dir ? Folder : File;
-  const cls = [checked && "checked", item.is_dir && "entry-row-dir"].filter(Boolean).join(" ");
+  const cls = [checked && "checked", item.is_dir && "entry-row-dir", stripe && "stripe"].filter(Boolean).join(" ");
   const main = (
     <>
       <Icon className="entry-icon" size={16} strokeWidth={1.5} aria-hidden="true" />
@@ -398,6 +406,7 @@ function EntryRow({
   return (
     <li
       className={cls || undefined}
+      data-row={row}
       aria-current={current ? "true" : undefined}
       draggable={dragIds || onDragStart ? true : undefined}
       onDragStart={
@@ -1218,7 +1227,9 @@ export default function Browse() {
   useEffect(() => {
     if (!focusRow.current) return;
     focusRow.current = false;
-    listRef.current[act]?.querySelectorAll<HTMLButtonElement>("button.entry")[index]?.focus();
+    // by the row's place, not the DOM's: a long list renders only the rows near the view
+    // (and always the current one)
+    listRef.current[act]?.querySelector<HTMLButtonElement>(`li[data-row="${index}"] button.entry`)?.focus();
   }, [index, act, sel.view]);
 
   // The viewer window (if it follows the selection) shows the file the user is on.
@@ -1490,6 +1501,8 @@ export default function Browse() {
     const onFiles = split && act === pane ? filesOf(pane) : [];
     const marked = onFiles.length === 1 ? onFiles[0] : null;
     const fileRows = rows.filter((it) => !it.is_dir);
+    const checkedIds = new Set(s.ids); // a big folder: no list scan per row
+    const checkedFiles = fileRows.filter((it) => checkedIds.has(it.drive_id)).length;
     // What the list shows: the rows, with a header row before each folder's files when
     // grouped. ``i`` is the row's place in ``rows`` (the headers are not rows).
     let next = 0;
@@ -1499,9 +1512,12 @@ export default function Browse() {
           ...(foldedFolders.has(g.folder) ? [] : g.files).map((f) => ({ header: null, item: f, i: next++ })),
         ])
       : rows.map((item, i) => ({ header: null, item, i }));
+    const pin = s.touched ? listed.findIndex((entry) => entry.item !== null && entry.i === s.index) : -1;
+    // the new folder's row is the list's first line
+    const stripeOf = (pos: number) => (pos + (nameRow ? 1 : 0)) % 2 === 1;
     const selectAllBox = (
       <SelectAll
-        checked={fileRows.filter((it) => s.ids.includes(it.drive_id)).length}
+        checked={checkedFiles}
         total={fileRows.length}
         onChange={() => selectAll(pane)}
       />
@@ -1612,23 +1628,31 @@ export default function Browse() {
             </p>
           )}
           {body ?? (
-            <ul
-              ref={(el) => {
+            <WindowedList
+              entries={listed}
+              keyOf={(entry) => (entry.header ? `group:${entry.header.folder}` : entry.item.drive_id)}
+              pin={pin >= 0 ? pin : null}
+              listRef={(el) => {
                 listRef.current[pane] = el;
               }}
-              className={columns ? (byFolders ? "entries entries-flat entries-grouped" : "entries entries-flat") : "entries"}
+              className={
+                "entries browse-entries" +
+                (columns ? " entries-flat" : "") +
+                (byFolders ? " entries-grouped" : "") +
+                // a checked row may be out of view: every row shows its checkbox then
+                (checkedFiles > 0 ? " entries-checking" : "")
+              }
               aria-label={isSearch ? "Search results" : flat ? "Files" : "Folder contents"}
-            >
-              {nameRow && (
-                <NewFolderRow onCreate={(name) => makeFolder(nameRow, name)} onCancel={() => setNaming(null)} />
-              )}
-              {listed.map((entry) => {
+              head={
+                nameRow && <NewFolderRow onCreate={(name) => makeFolder(nameRow, name)} onCancel={() => setNaming(null)} />
+              }
+              render={(entry, pos) => {
                 if (entry.header) {
                   const g = entry.header;
                   const label = g.folder === "" ? "Archive" : visible(g.folder);
                   const open = !foldedFolders.has(g.folder);
                   return (
-                    <li key={`group:${g.folder}`} className="group-head">
+                    <li key={`group:${g.folder}`} className={stripeOf(pos) ? "group-head stripe" : "group-head"}>
                       <button
                         type="button"
                         className="group-fold"
@@ -1657,11 +1681,13 @@ export default function Browse() {
                 const row = {
                   item,
                   current: i === s.index && s.touched,
-                  checked: s.ids.includes(item.drive_id),
+                  checked: checkedIds.has(item.drive_id),
                   columns,
                   noFolder: byFolders,
                   onToggle: () => toggle(pane, item.drive_id),
                   onClick: (e: MouseEvent) => clickRow(pane, e, i),
+                  row: i,
+                  stripe: stripeOf(pos),
                 };
                 if (item.is_dir) {
                   const onContextMenu = (e: MouseEvent) => {
@@ -1702,8 +1728,8 @@ export default function Browse() {
                     onQuickLook={split ? () => quickLookRow(pane, i) : undefined}
                   />
                 );
-              })}
-            </ul>
+              }}
+            />
           )}
           {flat && body === null && total > rows.length && (
             <p className="hint flat-more" role="status">

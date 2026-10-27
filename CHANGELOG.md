@@ -161,6 +161,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Large folders scroll smoothly in Browse.** A folder, Files view or search with
+  hundreds or thousands of entries now builds only the rows near what you see, so
+  opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
+  view), Go to target, Quick Look and dragging work as before.
 - **dam needs Python 3.14 or newer.** It never ran on 3.13 (the code relies on how 3.14
   reads type hints), so the stated minimum now says so. `uv` installs the right Python
   by itself.
