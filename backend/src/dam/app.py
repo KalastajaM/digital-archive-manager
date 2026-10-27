@@ -308,6 +308,7 @@ def build_services(
         tray_name=live.tray_name,
         rescan=live.scan,
         important_lock=cols.collections.important_lock,
+        ongoing=cols.ongoing,
     )
     activity = ActivityService(
         executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing

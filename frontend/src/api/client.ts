@@ -1905,6 +1905,9 @@ export type CarryOver = Schemas["CarryOverOut"];
 /** A file moved or renamed outside dam: its old, missing row and its new one. */
 export type MovedPair = Schemas["MovedPairOut"];
 export type ReconnectResult = Schemas["ReconnectOut"];
+/** A publish root whose entries dam left alone after a Drive restart (a new device number). */
+export type RemountedRoot = Schemas["RemountedRootOut"];
+export type ReadoptResult = Schemas["ReadoptOut"];
 
 /** What the duplicate check would read, from the index alone (nothing is opened). */
 export const useDuplicateEstimate = () =>
@@ -1979,6 +1982,28 @@ export const useUndoReconnect = () => {
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (undo_id: string) => apiPost("/api/maintenance/moved/undo", { body: { undo_id } }),
+    onSettled: () => refresh(),
+  });
+};
+
+/** Take over the new device number of the entries dam made in ``##. Ongoing`` or ``##.
+ * Important`` after a Drive restart. Database only; a dry run lists what would be taken
+ * over, and the answer's ``undo_id`` undoes it with ``useUndoReadopt``. */
+export const useReadoptRemounted = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: { roots: string[]; dry_run: boolean }) => apiPost("/api/maintenance/remounted/readopt", { body }),
+    onSettled: (_data, _error, body) => {
+      if (!body.dry_run) refresh();
+    },
+  });
+};
+
+/** Undo a take-over: the entries get back the device number they were recorded with. */
+export const useUndoReadopt = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (undo_id: string) => apiPost("/api/maintenance/remounted/undo", { body: { undo_id } }),
     onSettled: () => refresh(),
   });
 };

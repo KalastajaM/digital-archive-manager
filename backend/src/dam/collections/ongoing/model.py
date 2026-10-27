@@ -20,7 +20,8 @@ from dam.ops.model import BatchResult, Op, ResolvedOp
 if TYPE_CHECKING:
     from dam.collections.service import Collection
 
-log = logging.getLogger(__name__)
+# every part of the package logs under its name, as when it was one module
+log = logging.getLogger("dam.collections.ongoing")
 
 PUBLISHER_ID = "ongoing"
 ORIGIN = "workflow"

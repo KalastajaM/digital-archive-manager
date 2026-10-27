@@ -30,6 +30,7 @@ MaintenanceKindIn = Literal[
     "label_clashes",
     "unfinished_copies",
     "moved",
+    "remounted",
 ]
 
 
@@ -225,6 +226,60 @@ class MovedOut(BaseModel):
     complete: bool
 
 
+class RemountedEntryOut(BaseModel):
+    """An entry dam made in ``##. Ongoing`` or ``##. Important`` whose device number
+    changed: ``old_dev`` recorded, ``new_dev`` now (as text: a Windows file index does not
+    fit an integer)."""
+
+    id: int
+    rel: str
+    kind: Literal["link", "folder"]
+    st_ino: str
+    old_dev: str
+    new_dev: str
+
+
+class RemountedRootOut(BaseModel):
+    """A publish root with entries left alone after a Drive restart. ``offered``: only the
+    device number changed, the same way for each of them, so it can be taken over; else
+    ``reason`` says why the root stays left alone."""
+
+    root: str
+    entries: list[RemountedEntryOut]
+    offered: bool
+    reason: str | None
+
+
+class RemountedOut(BaseModel):
+    roots: list[RemountedRootOut]
+
+
+class ReadoptIn(StrictIn):
+    """The roots (``##. Ongoing``, ``##. Important``) whose new device number to take over;
+    ``dry_run`` lists what would be, changing nothing."""
+
+    roots: list[str] = Field(min_length=1, max_length=10)
+    dry_run: bool = False
+
+
+class ReadoptOut(BaseModel):
+    """What was taken over (or would be, for a dry run) and the roots that could not be.
+    Database only, so not in Activity; ``undo_id`` (None for a dry run or when nothing was
+    taken over) undoes it with ``POST /api/maintenance/remounted/undo``. As the answer to
+    that undo: the entries put back, by root, and the ones that could not be."""
+
+    dry_run: bool
+    roots: list[RemountedRootOut]
+    errors: list[str]
+    undo_id: str | None = None
+
+
+class ReadoptUndoIn(StrictIn):
+    """The ``undo_id`` a take-over returned."""
+
+    undo_id: str = Field(max_length=100)
+
+
 class MovedChoiceIn(StrictIn):
     old: str
     new: str
@@ -298,6 +353,7 @@ class MaintenanceJobOut(BaseModel):
     label_clashes: LabelClashesOut | None = None
     unfinished_copies: UnfinishedCopiesOut | None = None
     moved: MovedOut | None = None
+    remounted: RemountedOut | None = None
 
 
 class DuplicateChoiceIn(StrictIn):

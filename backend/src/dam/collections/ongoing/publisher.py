@@ -44,9 +44,10 @@ from dam.collections.ongoing.model import (
 )
 from dam.collections.ongoing.planning import PlanningMixin
 from dam.collections.ongoing.records import RecordsMixin
+from dam.collections.ongoing.remount import RemountMixin
 
 
-class OngoingPublisher(DesiredMixin, RecordsMixin, PlanningMixin, LayoutsMixin):
+class OngoingPublisher(DesiredMixin, RecordsMixin, PlanningMixin, LayoutsMixin, RemountMixin):
     id = PUBLISHER_ID
 
     def __init__(
