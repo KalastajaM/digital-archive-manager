@@ -211,7 +211,7 @@ def test_migration_0024_keeps_existing_rows(tmp_path: Path):
         ).all()
         made = conn.execute(text("SELECT rel, st_dev, st_ino, st_birth FROM made_folders")).all()
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == "0037"
+    assert version == "0038"
     assert [tuple(r) for r in rows] == [
         ("##. Ongoing/A", "folder", None, "16777221", "9223372036854775807", None, 2.0, "text"),
         ("##. Ongoing/A/x.pdf", "link", "../x.pdf", "1", "2", None, 3.0, "text"),

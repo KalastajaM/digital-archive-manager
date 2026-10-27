@@ -16,7 +16,7 @@ from conftest import FakeArchive
 from dam import setup, snapshots
 from dam.app import BATCH_RUNNING
 from dam.config import AppPaths
-from dam.db.engine import MIGRATIONS_DIR, make_engine, write_tx
+from dam.db.engine import MIGRATIONS_DIR, build_reference, make_engine, write_tx
 from dam.errors import Conflict, InvalidRequest
 from dam.ops.executor import BATCH_HELD
 from dam.ops.model import Op, OpKind, Plan
@@ -676,3 +676,31 @@ def test_reveal_snapshots_folder_uses_the_injected_runner(served):
     assert seen == [["/usr/bin/open", str((paths.data_dir / "snapshots").resolve())]]
     service.runner = lambda args: 1  # the system opener fails
     assert post(c, "/api/snapshots/reveal").status_code == 409
+
+
+def test_a_snapshot_another_build_of_dam_made_is_refused(served, tmp_path):
+    host, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+    other_db = tmp_path / "other.sqlite"
+    build_reference(other_db, "0022")  # another build's 0023 adds no table; this one's does
+    con = sqlite3.connect(other_db)
+    with con:
+        con.execute("UPDATE alembic_version SET version_num = '0023'")
+    con.close()
+    other = "dam-snapshot-20200102-000000.zip"
+
+    def to_other(member, data):
+        if member == "dam.sqlite":
+            data = other_db.read_bytes()
+        if member == "manifest.json":
+            manifest = json.loads(data)
+            manifest["revision"] = "0023"
+            data = json.dumps(manifest).encode("utf-8")
+        yield member, data
+
+    _rezip(paths.data_dir / "snapshots" / name, paths.data_dir / "snapshots" / other, to_other)
+    app = host.current.app
+    r = post(c, f"/api/snapshots/{other}/restore", {"snapshot_current": False})
+    assert r.status_code == 409, r.text
+    assert "made by another build of dam" in r.text and "made_folders" in r.text
+    assert host.current.app is app  # never closed

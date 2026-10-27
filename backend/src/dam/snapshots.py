@@ -43,7 +43,6 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePosixPath
 
 import yaml
-from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
@@ -53,9 +52,9 @@ from sqlalchemy import Engine, event
 
 from dam import settings_write
 from dam.config import AppPaths, ExtraFolder, Settings, load_settings
-from dam.db.engine import MIGRATIONS_DIR, make_engine, migrate, write_tx
+from dam.db.engine import MIGRATIONS_DIR, build_reference, make_engine, migrate
 from dam.db.tables import metadata
-from dam.errors import Conflict, InvalidRequest, NotFound
+from dam.errors import Conflict, ForeignDatabase, InvalidRequest, NotFound
 from dam.ops.primitives import rename_excl
 
 log = logging.getLogger(__name__)
@@ -419,15 +418,7 @@ def _foreign_objects(db: Path, revision: str, work: Path) -> str | None:
     ``revision`` (a trigger, a view, an unknown or changed table), or None. Compared
     with a fresh database migrated to that revision."""
     reference = work / ".reference.sqlite"
-    config = Config()
-    config.set_main_option("script_location", str(MIGRATIONS_DIR))
-    engine = make_engine(reference)
-    try:
-        with write_tx(engine) as connection:
-            config.attributes["connection"] = connection
-            command.upgrade(config, revision)
-    finally:
-        engine.dispose()
+    build_reference(reference, revision)
     known = {name: sql for kind, name, sql in _objects(reference) if kind == "table"}
     for kind, name, sql in _objects(db):
         if kind in ("trigger", "view"):
@@ -458,6 +449,8 @@ def _migrate_and_compare(db: Path) -> None:
     try:
         try:
             migrate(engine, backup=False)  # a copy being checked
+        except ForeignDatabase as e:
+            raise Conflict(f"The snapshot was made by another build of dam: {e.reason}.") from e
         except Exception as e:
             raise InvalidRequest(f"The snapshot's database could not be updated: {e}") from e
         with engine.connect() as connection:
