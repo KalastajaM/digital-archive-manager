@@ -526,3 +526,13 @@ maintenance_ignored = Table(
     Column("created", Float, nullable=False),
     UniqueConstraint("kind", "key", name="uq_maintenance_ignored_kind_key"),
 )
+
+# Facts about the database itself (0038). ``app``: whose migrations it follows
+# (``dam.db.engine.APP_ID``), checked before migrating so a database another build of
+# dam stamped with the same revision numbers is never taken for this one's.
+dam_meta = Table(
+    "dam_meta",
+    metadata,
+    Column("key", Text, primary_key=True),
+    Column("value", Text, nullable=False),
+)
