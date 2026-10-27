@@ -881,6 +881,14 @@ All notable changes are listed here. The format follows
 
 ### Security
 
+- **Only your browser and dam commands can use the app's local server now.** Before,
+  any program on the computer (another user's too) could read your documents from dam's
+  local address.
+  `dam serve` now opens the browser through a sign-in link that leaves a cookie in that
+  browser, and the server answers only that browser (and `dam` commands). A page opened
+  without signing in, such as an old bookmark in another browser, says how to open it:
+  run `dam serve`, or `dam open` if dam is already running. With `--no-open` the sign-in
+  link is printed instead.
 - **Importing and restoring a snapshot checks more.** A snapshot file can come from
   anywhere, so dam now refuses one with entry names that would land outside its
   temporary folder on Windows (drive letters, `:` streams, device names such as `NUL`),

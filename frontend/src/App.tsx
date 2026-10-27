@@ -1,7 +1,7 @@
-import { CircleAlert, FileQuestion } from "lucide-react";
+import { CircleAlert, FileQuestion, KeyRound } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
-import { errorText, type Status, useConfigured, useStatus } from "./api/client";
+import { errorText, NOT_SIGNED_IN, type Status, useConfigured, useSignedOut, useStatus } from "./api/client";
 import { useIndexErrorsSheet } from "./components/IndexErrors";
 import { RecoveryPanel } from "./components/Recovery";
 import { hasBand } from "./components/archivePalette";
@@ -83,9 +83,25 @@ function NotFound() {
   );
 }
 
+/** The whole page while the API answers 401: this browser is not signed in, and the
+ * page says how to sign it in (no token is ever handled here). */
+function NotSignedIn() {
+  return (
+    <main className="not-signed-in">
+      <EmptyState
+        icon={<KeyRound size={40} strokeWidth={1.25} />}
+        title="Not signed in"
+        hint={NOT_SIGNED_IN}
+      />
+    </main>
+  );
+}
+
 /** The viewer window has no sidebar or status polling: just the document. */
 export default function App() {
   const viewer = useLocation().pathname.startsWith("/viewer/");
+  const signedOut = useSignedOut();
+  if (signedOut) return <NotSignedIn />;
   if (viewer) {
     return (
       <Suspense fallback={null}>

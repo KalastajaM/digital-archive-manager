@@ -423,6 +423,9 @@ dialog.sheet[open] { animation: sheet-in var(--motion) var(--ease); }
 .empty-state-title { margin: 0; font-size: var(--fs-lg); font-weight: 600; color: var(--text-2); }
 .empty-state-hint { margin: 0; font-size: var(--fs-sm); }
 .empty-state-action { margin-top: var(--sp-3); }
+/* the whole page when the API answers 401 (this browser is not signed in) */
+.not-signed-in { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.not-signed-in .empty-state-hint { max-width: 32rem; }
 
 /* ---- Banners and toasts ----------------------------------------------------------- */
 .banner {
