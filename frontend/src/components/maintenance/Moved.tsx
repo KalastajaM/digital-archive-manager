@@ -2,14 +2,14 @@
  * Explorer gets a new index row, and its tags, notes, collections and the rest stay on the
  * old, missing one. The check pairs the two by size and content; Reconnect moves it all to
  * the new row after a preview. It changes only the app's own records, so it is not in
- * Activity and has no Undo, and the preview says so. A file whose content matches more
- * than one file is only listed. */
+ * Activity; Undo in the message afterwards puts the old rows back. A file whose content
+ * matches more than one file is only listed. */
 import { FileSearch } from "lucide-react";
 import { useState } from "react";
-import { type MovedPair, useReconnectMoved } from "../../api/client";
+import { type MovedPair, useReconnectMoved, useUndoReconnect } from "../../api/client";
 import { formatSize, plural } from "../../format";
 import { visible } from "../../text";
-import { useBlockToastActions, useToast } from "../Toasts";
+import { undoAction, useBlockToastActions, useToast } from "../Toasts";
 import { Sheet } from "../ui/Sheet";
 import { Tag } from "../ui/Tag";
 import { IgnoreButton, useIgnore } from "./Ignore";
@@ -42,10 +42,11 @@ export function movesText(moves: Record<string, number>) {
 export function Moved() {
   const check = useMaintenanceJob("moved");
   const reconnect = useReconnectMoved();
+  const undoReconnect = useUndoReconnect();
   const toast = useToast();
   const ignore = useIgnore(check.reload);
   const [preview, setPreview] = useState<MovedPair[] | null>(null);
-  useBlockToastActions(reconnect.isPending || preview !== null);
+  useBlockToastActions(reconnect.isPending || undoReconnect.isPending || preview !== null);
   const result = check.job?.moved ?? null;
   const items = result?.items ?? [];
   const offered = items.filter((p) => !p.ambiguous);
@@ -65,11 +66,28 @@ export function Moved() {
     reconnect
       .mutateAsync(body(pairs, false))
       .then((done) => {
-        if (done.pairs.length > 0) toast({ kind: "info", text: `Reconnected ${plural(done.pairs.length, "file")}` });
+        const undoId = done.undo_id;
+        if (done.pairs.length > 0)
+          toast({
+            kind: "info",
+            text: `Reconnected ${plural(done.pairs.length, "file")}`,
+            action: undoId ? undoAction(() => undo(undoId)) : undefined,
+          });
         if (done.errors.length > 0) toast({ kind: "error", text: visible(done.errors.join("; ")) });
         check.reload();
       })
       .catch((e) => toast({ kind: "error", text: `Not reconnected: ${visible(refusal(e))}` }));
+  };
+
+  const undo = (undoId: string) => {
+    undoReconnect
+      .mutateAsync(undoId)
+      .then((back) => {
+        if (back.pairs.length > 0) toast({ kind: "info", text: `Put ${plural(back.pairs.length, "file")} back as they were` });
+        if (back.errors.length > 0) toast({ kind: "error", text: visible(back.errors.join("; ")) });
+        check.reload();
+      })
+      .catch((e) => toast({ kind: "error", text: `Not undone: ${visible(refusal(e))}` }));
   };
 
   return (
@@ -188,8 +206,8 @@ export function Moved() {
             ))}
           </ul>
           <p>
-            This changes only the app&apos;s own records: the files stay where they are. It is not listed in Activity and has
-            no Undo.
+            This changes only the app&apos;s own records: the files stay where they are. It is not listed in Activity; Undo in
+            the message afterwards puts it back.
           </p>
         </Sheet>
       )}

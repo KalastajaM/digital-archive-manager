@@ -23,6 +23,7 @@ from dam.api.schemas import (
     MaintenanceStartIn,
     ReconnectIn,
     ReconnectOut,
+    ReconnectUndoIn,
 )
 from dam.app import App
 from dam.core.jobs import Job
@@ -153,9 +154,18 @@ def remove_links(app: AppDep, body: LinkRemoveIn):
 def reconnect_moved(app: AppDep, body: ReconnectIn) -> dict:
     """Reconnect files moved or renamed outside dam: what each old, missing index row had
     (tags, notes, collections, tray items ...) moves to the file's new row, and the old
-    row goes. Database only: the archive is not touched, nothing is journaled, no Undo.
-    ``dry_run`` lists the pairs with what would move. 400: a pair that does not hold (see
-    ``MaintenanceService.reconnect``); 404: an unknown row."""
+    row goes. Database only: the archive is not touched. Journaled for Undo (its
+    ``undo_id``), but not in Activity. ``dry_run`` lists the pairs with what would move.
+    400: a pair that does not hold (see ``MaintenanceService.reconnect``); 404: an
+    unknown row."""
     return asdict(
         app.maintenance.reconnect([(p.old, p.new) for p in body.pairs], dry_run=body.dry_run)
     )
+
+
+@router.post("/moved/undo", response_model=ReconnectOut)
+def undo_reconnect(app: AppDep, body: ReconnectUndoIn) -> dict:
+    """Undo a reconnect: each old row comes back with what moved from it and is still on
+    the new row; what the file was given since stays. A pair that cannot be undone any
+    more is in ``errors``. 400: undone already; 404: no such reconnect."""
+    return asdict(app.maintenance.undo_reconnect(body.undo_id))

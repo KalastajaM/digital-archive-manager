@@ -840,11 +840,34 @@ export interface paths {
          * Reconnect Moved
          * @description Reconnect files moved or renamed outside dam: what each old, missing index row had
          *     (tags, notes, collections, tray items ...) moves to the file's new row, and the old
-         *     row goes. Database only: the archive is not touched, nothing is journaled, no Undo.
-         *     ``dry_run`` lists the pairs with what would move. 400: a pair that does not hold (see
-         *     ``MaintenanceService.reconnect``); 404: an unknown row.
+         *     row goes. Database only: the archive is not touched. Journaled for Undo (its
+         *     ``undo_id``), but not in Activity. ``dry_run`` lists the pairs with what would move.
+         *     400: a pair that does not hold (see ``MaintenanceService.reconnect``); 404: an
+         *     unknown row.
          */
         post: operations["reconnect_moved_api_maintenance_moved_reconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/moved/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Reconnect
+         * @description Undo a reconnect: each old row comes back with what moved from it and is still on
+         *     the new row; what the file was given since stays. A pair that cannot be undone any
+         *     more is in ``errors``. 400: undone already; 404: no such reconnect.
+         */
+        post: operations["undo_reconnect_api_maintenance_moved_undo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6528,7 +6551,9 @@ export interface components {
         /**
          * ReconnectOut
          * @description What was reconnected (or would be, for a dry run) and the pairs that could not be.
-         *     Database only: not in Activity, no Undo.
+         *     Database only, so not in Activity; ``undo_id`` (None for a dry run or when nothing was
+         *     reconnected) undoes it with ``POST /api/maintenance/moved/undo``. As the answer to
+         *     that undo: the pairs put back, with what moved back, and the ones that could not be.
          */
         ReconnectOut: {
             /** Dry Run */
@@ -6537,6 +6562,16 @@ export interface components {
             pairs: components["schemas"]["MovedPairOut"][];
             /** Errors */
             errors: string[];
+            /** Undo Id */
+            undo_id?: string | null;
+        };
+        /**
+         * ReconnectUndoIn
+         * @description The ``undo_id`` a reconnect returned.
+         */
+        ReconnectUndoIn: {
+            /** Undo Id */
+            undo_id: string;
         };
         /** RecoveryResultOut */
         RecoveryResultOut: {
@@ -12395,6 +12430,102 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ReconnectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconnectOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    undo_reconnect_api_maintenance_moved_undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconnectUndoIn"];
             };
         };
         responses: {

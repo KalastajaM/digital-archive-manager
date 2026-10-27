@@ -1926,7 +1926,8 @@ export const useResolveDuplicates = () => {
 };
 
 /** Reconnect files moved or renamed outside dam: what the old, missing row had moves to
- * the new one. Database only, so there is no Undo; a dry run lists what would move. */
+ * the new one. Database only; a dry run lists what would move, and the answer's
+ * ``undo_id`` undoes it with ``useUndoReconnect``. */
 export const useReconnectMoved = () => {
   const refresh = useRefresh();
   return useMutation({
@@ -1935,6 +1936,15 @@ export const useReconnectMoved = () => {
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
+  });
+};
+
+/** Undo a reconnect: the old, missing rows come back with what moved from them. */
+export const useUndoReconnect = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (undo_id: string) => post<ReconnectResult>("/api/maintenance/moved/undo", { undo_id }),
+    onSettled: () => refresh(),
   });
 };
 

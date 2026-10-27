@@ -2508,11 +2508,20 @@ class ReconnectIn(_In):
 
 class ReconnectOut(BaseModel):
     """What was reconnected (or would be, for a dry run) and the pairs that could not be.
-    Database only: not in Activity, no Undo."""
+    Database only, so not in Activity; ``undo_id`` (None for a dry run or when nothing was
+    reconnected) undoes it with ``POST /api/maintenance/moved/undo``. As the answer to
+    that undo: the pairs put back, with what moved back, and the ones that could not be."""
 
     dry_run: bool
     pairs: list[MovedPairOut]
     errors: list[str]
+    undo_id: str | None = None
+
+
+class ReconnectUndoIn(_In):
+    """The ``undo_id`` a reconnect returned."""
+
+    undo_id: str = Field(max_length=100)
 
 
 class CopyJobOut(BaseModel):

@@ -526,3 +526,21 @@ maintenance_ignored = Table(
     Column("created", Float, nullable=False),
     UniqueConstraint("kind", "key", name="uq_maintenance_ignored_kind_key"),
 )
+
+# One row per pair reconnected by Maintenance's "Moved outside dam" (migration 0039): the
+# old row's ``files`` columns as JSON, and ``moved`` as JSON {table: [[key, ...], ...]},
+# the keys (besides the file's id) of each row that moved from ``old_id`` to ``new_id``.
+# Undo moves those rows back and brings the old row back; ``undone`` says when.
+reconnects = Table(
+    "reconnects",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("batch_id", Text, nullable=False),
+    Column("old_id", Text, nullable=False),
+    Column("new_id", Text, nullable=False),
+    Column("old_row", Text, nullable=False),
+    Column("moved", Text, nullable=False),
+    Column("created", Float, nullable=False),
+    Column("undone", Float, nullable=True),
+    Index("ix_reconnects_batch_id", "batch_id"),
+)

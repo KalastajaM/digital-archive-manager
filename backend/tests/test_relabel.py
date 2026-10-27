@@ -1,5 +1,7 @@
 """Changing an extra folder's label rewrites every stored path under it."""
 
+import json
+
 import pytest
 import yaml
 from sqlalchemy import select, text
@@ -9,7 +11,7 @@ from dam.app import App
 from dam.config import load_settings
 from dam.core.yamledit import YamlEditError
 from dam.db.engine import make_engine
-from dam.db.tables import made_folders, operations
+from dam.db.tables import made_folders, operations, reconnects
 from dam.ops.model import OpFailed
 from dam.snapshots import list_snapshots
 
@@ -115,6 +117,35 @@ def test_made_folders_rewritten(app_paths, engine, archive):
     _apply(app_paths, engine)
     with engine.connect() as conn:
         assert conn.execute(select(made_folders.c.rel)).scalar_one() == "Archive disk/new"
+
+
+def test_reconnects_rewritten(app_paths, engine, archive):
+    """A reconnect journaled before the relabel brings the old row back under the new
+    label when it is undone."""
+    row = {
+        "drive_id": "local:o",
+        "path": "Old years/2009/c.pdf",
+        "path_nfc": "Old years/2009/c.pdf",
+    }
+    top = {"drive_id": "local:t", "path": "Old years", "path_nfc": "Old years", "name": "Old years"}
+    with engine.begin() as conn:
+        for i, old in enumerate((row, top)):
+            conn.execute(
+                reconnects.insert().values(
+                    batch_id="b",
+                    old_id=old["drive_id"],
+                    new_id=f"local:n{i}",
+                    old_row=json.dumps(old),
+                    moved="{}",
+                    created=1.0,
+                )
+            )
+    plan = _apply(app_paths, engine)
+    assert plan.counts["reconnects"] == 2
+    with engine.connect() as conn:
+        rows = [json.loads(r) for r in conn.execute(select(reconnects.c.old_row)).scalars()]
+    assert rows[0]["path"] == rows[0]["path_nfc"] == "Archive disk/2009/c.pdf"
+    assert rows[1]["path"] == rows[1]["name"] == "Archive disk"
 
 
 def test_settings_failure_rolls_db_back(app_paths, engine, archive, monkeypatch):
