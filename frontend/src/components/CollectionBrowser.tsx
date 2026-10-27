@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { errorText, useCollections } from "../api/client";
 import { visible } from "../text";
 import { childrenOf, pathLabel } from "./collectionTree";
@@ -31,10 +31,13 @@ export function CollectionBrowser({ onChoose, onCancel }: Props) {
   const list = useMemo(() => (query.data ?? []).filter((c) => c.kind == null && c.state === "open"), [query.data]);
   const kids = useMemo(() => childrenOf(list), [list]);
   const byId = useMemo(() => new Map(list.map((c) => [c.id, c])), [list]);
-  const parentOf = (id: number) => {
-    const p = byId.get(id)?.parent_id;
-    return p != null && byId.has(p) ? p : null;
-  };
+  const parentOf = useCallback(
+    (id: number) => {
+      const p = byId.get(id)?.parent_id;
+      return p != null && byId.has(p) ? p : null;
+    },
+    [byId],
+  );
 
   const needle = fold(filter.trim());
   const rows = useMemo((): Row[] => {
@@ -56,15 +59,15 @@ export function CollectionBrowser({ onChoose, onCancel }: Props) {
     };
     (kids.get(null) ?? []).forEach((c) => visit(c.id, 1));
     return out;
-  }, [list, kids, byId, expanded, needle]);
+  }, [list, kids, byId, parentOf, expanded, needle]);
 
   const current = rows.find((r) => r.id === active) ?? rows[0] ?? null;
   const index = current ? rows.indexOf(current) : -1;
-  const rowId = (i: number) => `${ids}-row-${i}`;
+  const rowId = useCallback((i: number) => `${ids}-row-${i}`, [ids]);
 
   useEffect(() => {
     if (index >= 0) document.getElementById(rowId(index))?.scrollIntoView?.({ block: "nearest" });
-  }, [index]);
+  }, [index, rowId]);
   useEffect(() => {
     treeRef.current?.focus();
   }, []);
@@ -74,6 +77,7 @@ export function CollectionBrowser({ onChoose, onCancel }: Props) {
     const hit = rows.find((r) => fold(pathLabel(byId.get(r.id)!)).includes(needle));
     if (hit) setActive(hit.id);
     // Deliberately keyed on the filter only: walking the results keeps the user's row.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rows and byId are this render's, for this filter
   }, [needle]);
 
   const setOpen = (id: number, open: boolean) =>

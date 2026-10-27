@@ -527,6 +527,16 @@ maintenance_ignored = Table(
     UniqueConstraint("kind", "key", name="uq_maintenance_ignored_kind_key"),
 )
 
+# Facts about the database itself (0038). ``app``: whose migrations it follows
+# (``dam.db.engine.APP_ID``), checked before migrating so a database another build of
+# dam stamped with the same revision numbers is never taken for this one's.
+dam_meta = Table(
+    "dam_meta",
+    metadata,
+    Column("key", Text, primary_key=True),
+    Column("value", Text, nullable=False),
+)
+
 # One row per pair reconnected by Maintenance's "Moved outside dam" (migration 0039): the
 # old row's ``files`` columns as JSON, and ``moved`` as JSON {table: [[key, ...], ...]},
 # the keys (besides the file's id) of each row that moved from ``old_id`` to ``new_id``.

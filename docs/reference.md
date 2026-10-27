@@ -105,6 +105,35 @@ with the `DAM_DATA_DIR` environment variable or `dam --data-dir <dir> ...` (the 
 before the command). To keep a test archive apart from your real one, add a second archive
 instead of juggling data folders.
 
+**Database updates.** At start dam brings `dam.sqlite` to its newest migration revision.
+Before a pending update it saves a consistent copy next to it,
+`dam.sqlite.before-<old>-to-<new>.bak` (a taken name gets `-2`, `-3`, ...; nothing is
+overwritten). Afterwards it compares the tables with what this version expects and, if
+they differ, logs a warning once and keeps working.
+
+Revision ids are bare numbers (`0023`), and an earlier private build of dam numbers its
+own migrations the same way, so before updating dam checks whose database it is. Table
+`dam_meta` (migration 0038, also in every new database) holds `app = dam-public`:
+
+- marked `dam-public`: updated as above;
+- marked as another app: refused;
+- not marked (made before 0038, or by another build): dam migrates a scratch database
+  in a temporary folder to the same revision with its own migrations and compares
+  tables and columns (indexes, types and defaults aside; the differences a briefly
+  shipped 0017 left, which migrations 0018 and 0021 heal, are allowed at 0017 to
+  0020). If they match, the database
+  is marked as dam-public's in the same transaction as the update (adopted, once). If
+  not, or if the revision is not one dam knows, it is refused.
+
+A refused database is not written to and gets no backup: dam stops with
+`error: dam will not open the database <path>: <why>`, naming the data folder and saying
+another build of dam most likely made it (exit code 1; when you switch archives in the
+app, it logs the refusal and stays on the archive it had). Give this dam its own data folder with `--data-dir`, or open the
+database with the build that made it. Snapshot restore and import run the same check on
+the unpacked copy and refuse another build's snapshot with a 409. A database from
+another build whose tables and columns happen to match this dam's at the same revision
+cannot be told apart this way, and is adopted.
+
 On first use `config/settings.yaml`, `config/rules/`, `config/trays/` and
 `config/filing_codes.yaml` are seeded from `defaults/`. The defaults contain nothing personal and **no archive folder**: dam never
 guesses where your documents are. You choose the folder once, either on the app's

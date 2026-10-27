@@ -7,7 +7,7 @@
  * never an older one that happened to arrive last. A response never replaces text typed
  * after it was sent, and "Saved" shows only while the draft is what was stored. On an
  * error the draft stays, so the user's text is never lost. */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { errorText } from "../api/client";
 
 export type SaveStatus = { kind: "saving" } | { kind: "saved" } | { kind: "error"; text: string } | null;
@@ -33,10 +33,10 @@ export function useAutoSave<T>(server: T, save: (value: T) => Promise<T>) {
     };
   }, []);
 
-  const setDraft = (box: Box<T> | null) => {
+  const setDraft = useCallback((box: Box<T> | null) => {
     draftRef.current = box;
     setDraftState(box);
-  };
+  }, []);
   const shown = draft ? draft.value : server;
 
   // The server's value changed to something else than we stored: forget what we stored.
@@ -47,7 +47,7 @@ export function useAutoSave<T>(server: T, save: (value: T) => Promise<T>) {
   // Once the server has caught up with the draft, show the server's value again.
   useEffect(() => {
     if (draft && Object.is(draft.value, server) && sending.current === null) setDraft(null);
-  }, [draft, server]);
+  }, [draft, server, setDraft]);
 
   const change = (value: T) => {
     setDraft({ value });

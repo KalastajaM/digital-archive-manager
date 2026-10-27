@@ -32,6 +32,16 @@ class Conflict(InvalidRequest):
     """The request is valid but the target's state does not allow it (HTTP 409)."""
 
 
+class ForeignDatabase(Conflict):
+    """The database was made or migrated by another app (another build of dam): it is
+    refused, and left as it is, instead of being migrated as if it were this app's.
+    ``reason``: what gave it away, in a few words."""
+
+    def __init__(self, message: str, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class TooLarge(InvalidRequest):
     """A file is over the size limit for adding it to the archive (HTTP 413)."""
 
