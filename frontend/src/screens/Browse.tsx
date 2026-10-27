@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Eye, File, Folder, FolderPlus, HardDrive } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, PanelRight } from "lucide-react";
 import {
   type DragEvent,
   Fragment,
@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { useStyle } from "../appearance";
 import {
   archiveKey,
   ApiError,
@@ -164,6 +165,9 @@ function writeSplit(split: boolean) {
 /** The list's share of the width with one pane, in percent (this browser only). */
 export const LIST_WIDTH_KEY = "dam.browse.listwidth";
 const LIST_SPLIT = { min: 25, max: 75, initial: 45 };
+/** Two panes (New look): the left pane's share, dragged on the divider between them. */
+export const PANES_WIDTH_KEY = "dam.browse.panesplit";
+const PANES_SPLIT = { min: 25, max: 75, initial: 50 };
 
 const NONE: Set<string> = new Set();
 
@@ -274,6 +278,7 @@ function Breadcrumb({
   drop: (to: string) => DropProps;
 }) {
   const parts = path ? path.split("/") : [];
+  const [look] = useStyle();
   const link = (to: string, label: string) => (
     <Crumb drop={drop(to)}>
       {(props) => (
@@ -302,7 +307,8 @@ function Breadcrumb({
     </Crumb>
   );
   return (
-    <nav className="breadcrumb" aria-label="Breadcrumb">
+    // New: a path too long for the pane drops its parents first; the whole path is the tooltip
+    <nav className="breadcrumb" aria-label="Breadcrumb" title={look === "new" ? visible(path) || "Archive" : undefined}>
       <ol>
         <li>{parts.length === 0 ? current("", "Archive") : link("", "Archive")}</li>
         {parts.map((part, i) => {
@@ -634,6 +640,13 @@ export default function Browse() {
   const [gone, setGone] = useState<Set<string>>(NONE);
   // One pane: the list's share of the width, dragged on the splitter (remembered here).
   const listSplit = useSplitWidth(archiveKey(LIST_WIDTH_KEY), LIST_SPLIT);
+  // The New look: a remembered divider between the two panes, a "View" menu and an L / R
+  // tab pair that the stylesheet shows when the room is short, and the details panel behind
+  // a button when it is too narrow to sit beside the list. Classic renders none of them.
+  const [look] = useStyle();
+  const isNew = look === "new";
+  const panesSplit = useSplitWidth(archiveKey(PANES_WIDTH_KEY), PANES_SPLIT);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const act: PaneId = split ? active : "left";
   const shown: PaneId[] = split ? PANES : ["left"];
   const flatOf = (pane: PaneId) => panes[pane].view === "files";
@@ -1546,6 +1559,11 @@ export default function Browse() {
         onFocusCapture={() => setActive(pane)}
       >
         <div className="pane-bar">
+          {isNew && split && (
+            <span className="pane-id mono" aria-hidden="true">
+              {pane === "left" ? "L" : "R"}
+            </span>
+          )}
           <IconButton
             icon={<ChevronLeft />}
             label="Back"
@@ -1573,10 +1591,11 @@ export default function Browse() {
               text={state.collection === null ? "Collection" : filterName(state.collection)}
               icon={null}
               align="end"
-              className={state.collection === null ? undefined : "menu-active"}
+              className={state.collection === null ? "pane-wide" : "pane-wide menu-active"}
               entries={filterEntries(pane)}
             />
             <Segmented<PaneView>
+              className="pane-wide"
               ariaLabel="View"
               value={state.view}
               onChange={(view) => setPane(pane, { view })}
@@ -1585,6 +1604,22 @@ export default function Browse() {
                 { value: "files", label: "Files", title: "Every file below this folder, without the folders" },
               ]}
             />
+            {isNew && (
+              // a pane narrower than ~480px folds its collection filter and view into this one menu
+              <Menu
+                label="View"
+                text="View"
+                icon={null}
+                align="end"
+                className={state.collection === null ? "pane-narrow" : "pane-narrow menu-active"}
+                entries={[
+                  { label: "Folders", checked: state.view === "folders", onSelect: () => setPane(pane, { view: "folders" }) },
+                  { label: "Files", checked: state.view === "files", onSelect: () => setPane(pane, { view: "files" }) },
+                  "separator",
+                  ...filterEntries(pane),
+                ]}
+              />
+            )}
           </div>
         </div>
         {isSearch && filters.length > 0 && (
@@ -1733,7 +1768,7 @@ export default function Browse() {
                     dragIds={dragIds}
                     dragPaths={dragPaths}
                     dragSpecial={dragSpecial}
-                    onQuickLook={split ? () => quickLookRow(pane, i) : undefined}
+                    onQuickLook={split || isNew ? () => quickLookRow(pane, i) : undefined}
                   />
                 );
               }}
@@ -1908,17 +1943,51 @@ export default function Browse() {
               icon={<Columns2 />}
               label="Two panes"
               pressed={split}
+              className={isNew ? "hdr-wide" : undefined}
               onClick={toggleSplit}
             />
-            {split && <IconButton icon={<ArrowLeftRight />} label="Swap panes" onClick={swapPanes} />}
+            {split && (
+              <IconButton icon={<ArrowLeftRight />} label="Swap panes" className={isNew ? "hdr-wide" : undefined} onClick={swapPanes} />
+            )}
             <IconButton
               icon={<FolderPlus />}
               label="New folder"
               shortcut="⇧⌘N"
+              className={isNew ? "hdr-wide" : undefined}
               disabled={newFolderWhy(act) !== null || naming !== null || locked}
               disabledReason={newFolderWhy(act) ?? undefined}
               onClick={startNewFolder}
             />
+            {isNew && (
+              // under ~760px of Browse the three buttons above fold into this menu
+              <Menu
+                label="More: panes and folders"
+                icon={<Ellipsis />}
+                align="start"
+                className="hdr-more"
+                entries={[
+                  { label: split ? "One pane" : "Two panes", onSelect: toggleSplit },
+                  { label: "Swap panes", onSelect: swapPanes, disabled: !split },
+                  {
+                    label: "New folder",
+                    onSelect: startNewFolder,
+                    disabled: newFolderWhy(act) !== null || naming !== null || locked,
+                    reason: newFolderWhy(act) ?? undefined,
+                  },
+                ]}
+              />
+            )}
+            {isNew && !split && (
+              // under ~1120px the details panel leaves the row and opens over the list from here
+              <IconButton
+                icon={<PanelRight />}
+                label="Details"
+                tip={detailsOpen ? "Hide details" : "Show details"}
+                pressed={detailsOpen}
+                className="details-button"
+                onClick={() => setDetailsOpen((o) => !o)}
+              />
+            )}
           </>
         }
         search={searchBox}
@@ -2002,15 +2071,42 @@ export default function Browse() {
           ))}
       </div>
       )}
+      {isNew && split && (
+        // narrower than ~640px the two panes become these two tabs, one pane at a time
+        <div className="pane-tabs" role="tablist" aria-label="Panes">
+          {PANES.map((pane) => (
+            <button
+              key={pane}
+              type="button"
+              role="tab"
+              className="trunc"
+              aria-selected={act === pane}
+              title={visible(paths[pane]) || "Archive"}
+              onClick={() => setActive(pane)}
+            >
+              {pane === "left" ? "L" : "R"} · {visible(paths[pane].split("/").at(-1) ?? "") || "Archive"}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         className="browse-main"
-        ref={listSplit.hostRef}
-        style={split ? undefined : listSplit.hostStyle}
+        ref={isNew && split ? panesSplit.hostRef : listSplit.hostRef}
+        style={split ? (isNew ? panesSplit.hostStyle : undefined) : listSplit.hostStyle}
+        data-details={isNew && !split && detailsOpen ? "open" : undefined}
       >
-        {shown.map(renderPane)}
+        {isNew
+          ? shown.map((pane, i) => (
+              <Fragment key={pane}>
+                {i === 1 && <Splitter split={panesSplit} label="Resize the two panes" />}
+                {renderPane(pane)}
+              </Fragment>
+            ))
+          : shown.map(renderPane)}
         {!split && (
           <>
             <Splitter split={listSplit} label="Resize the list" />
+            {isNew && detailsOpen && <div className="details-scrim" aria-hidden="true" onClick={() => setDetailsOpen(false)} />}
             <section className="browse-preview" aria-label="Preview">
               {previewed ? (
                 <FilePanel

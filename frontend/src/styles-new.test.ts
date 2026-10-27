@@ -73,3 +73,30 @@ describe("styles-new.css: Today and Pay mode", () => {
     expect(plain).toMatch(/\.pay-facts \{[^}]*flex-wrap: wrap/);
   });
 });
+
+describe("styles-new.css: Browse", () => {
+  it("makes the screen and each pane a container, and folds in the agreed order", () => {
+    expect(plain).toMatch(/main:has\(> \.browse\) \{ container: browse \/ inline-size; \}/);
+    expect(plain).toMatch(/\.browse-pane \{ container: pane \/ inline-size;/);
+    const order = ["1120px", "880px", "760px", "640px"].map((w) => plain.indexOf(`@container browse (max-width: ${w})`));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(plain).toMatch(/@container pane \(max-width: 480px\)/);
+  });
+
+  it("keeps the panes side by side where Classic stacks them at 900px", () => {
+    const block = plain.slice(plain.indexOf('@media (max-width: 900px) {\n  [data-style="new"] .app:has(.browse)')).split(/\n\}\n/)[0];
+    expect(block).toContain('[data-style="new"] .browse-main { grid-template-columns: minmax(300px, var(--split)) minmax(0, 1fr); }');
+    expect(block).toContain('[data-style="new"] .app:has(.browse) .content { height: 100%; }');
+    expect(block).not.toMatch(/grid-template-columns: 1fr;/);
+  });
+
+  it("drops the parents of a path first, and the folder you are in last", () => {
+    expect(plain).toMatch(/\.breadcrumb li \{ flex: 0 100 auto; min-width: 0; \}/);
+    expect(plain).toMatch(/\.breadcrumb li:last-child \{ flex: 0 1 auto; min-width: 8ch; \}/);
+  });
+
+  it("shows the drop sheet's Option-key line, which Classic hides", () => {
+    expect(plain).toMatch(/\.drop-mode-note \{ display: block;/);
+  });
+});

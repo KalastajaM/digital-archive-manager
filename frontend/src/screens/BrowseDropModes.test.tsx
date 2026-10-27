@@ -164,6 +164,16 @@ describe("Move / Link / Copy on a drop", () => {
     expect(posts(calls, "/api/browse/move/preview").map((c) => c.body)).toEqual([{ drive_ids: ["fx"], folder: BANKS }]);
   });
 
+  it("says in a line of its own that holding Option picks Copy (shown by the New look)", async () => {
+    setup(one("10. Financial"), { "POST /api/browse/move/preview": byMode });
+    await screen.findByText("x.pdf");
+    dropOn(rowOf(listing(), "Banks"), dragFrom(rowOf(listing(), "x.pdf")));
+    const dialog = await screen.findByRole("dialog", { name: `Move 1 file to ${BANKS}?` });
+    const note = within(dialog).getByText("Holding ⌥ while dropping picks Copy.");
+    expect(note).toHaveClass("drop-mode-note");
+    expect(note.tagName).toBe("P");
+  });
+
   it("choosing Link previews it again, applies the link and offers Undo", async () => {
     const { calls, user } = setup(one("10. Financial"), {
       "POST /api/browse/move/preview": byMode,
