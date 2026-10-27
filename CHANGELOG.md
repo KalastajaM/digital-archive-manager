@@ -15,6 +15,14 @@ All notable changes are listed here. The format follows
   Look**; the small **Look: Classic / New** switch at the bottom of the sidebar; or
   **Ctrl+Alt+L** anywhere (not while typing in a field). The choice is kept in this
   browser. The sidebar switch and the shortcut are temporary and go once New is complete.
+- **The New look: sidebar and controls.** In New the sidebar has a warm grey background,
+  small-caps section captions with the fold chevron in front, a blue fill for the current
+  page, counts in the fixed-width font, and urgent counts (Today) as a red pill. Pinned tags
+  keep showing first in the Tags section. In a window 960 px wide or narrower the sidebar
+  becomes a 60 px icon rail: icons only, the name and count on hover, and a small badge
+  for urgent counts. Buttons, fields, segmented controls, tags, chips, menus, dialogs,
+  toasts, tooltips and keys have the New look too, with blue focus rings, and thin scroll
+  bars. Classic is unchanged.
 - **Open a file from Activity.** Each operation in Activity that names a file has a
   **Show in Browse** icon that opens Browse at the file's folder with the file selected
   and shown on the right. When the file has been moved, renamed or marked for deletion

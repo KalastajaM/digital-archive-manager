@@ -23,3 +23,246 @@
 [data-style="new"] .mono {
   font-family: var(--font-mono);
 }
+
+/* ==== Shared controls =====================================================================
+ * `:where([data-style="new"])` has no specificity of its own, so these rules tie with the
+ * element rules in styles.css (and lose to every class rule there that resets a control:
+ * icon buttons, menu items, segmented options and so on keep their own look). The sheet is
+ * loaded after styles.css, so on a tie the New rule wins. */
+:where([data-style="new"]) :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+:where([data-style="new"]) button {
+  min-height: 28px;
+  padding: 3px 12px;
+  border: 1px solid var(--border);
+  font-weight: 500;
+  color: var(--text-2);
+}
+:where([data-style="new"]) button:hover:not(:disabled) { background: var(--panel-2); border-color: var(--border-strong); }
+:where([data-style="new"]) button:active:not(:disabled) { background: var(--hover); }
+:where([data-style="new"]) button.primary { border-color: transparent; color: var(--on-accent); font-weight: 600; }
+:where([data-style="new"]) button.primary:hover:not(:disabled) { border-color: transparent; }
+/* Quiet: no border until hovered. */
+:where([data-style="new"]) button.quiet,
+:where([data-style="new"]) button.link-button { border-color: transparent; background: transparent; color: var(--text-2); }
+:where([data-style="new"]) button.quiet:hover:not(:disabled) { background: var(--hover); }
+:where([data-style="new"]) a.button-link { min-height: 28px; padding: 3px 12px; border: 1px solid var(--border); font-weight: 500; color: var(--text-2); }
+:where([data-style="new"]) a.button-link:hover { border-color: var(--border-strong); }
+:where([data-style="new"]) a.button-link.primary { border-color: transparent; color: var(--on-accent); font-weight: 600; }
+:where([data-style="new"]) input:not([type="checkbox"]):not([type="radio"]),
+:where([data-style="new"]) select,
+:where([data-style="new"]) textarea {
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+}
+:where([data-style="new"]) textarea { min-height: 0; }
+:where([data-style="new"]) input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus),
+:where([data-style="new"]) select:hover:not(:focus),
+:where([data-style="new"]) textarea:hover:not(:focus) { border-color: var(--border-strong); }
+:where([data-style="new"]) input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+:where([data-style="new"]) select:focus-visible,
+:where([data-style="new"]) textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+:where([data-style="new"]) select { padding-right: 24px; }
+
+/* Icon buttons: a quiet square with a fill on hover. */
+[data-style="new"] .icon-button { color: var(--text-2); }
+[data-style="new"] .icon-button:active:not(:disabled),
+[data-style="new"] .icon-button[aria-pressed="true"] { background: var(--selected); color: var(--accent); }
+
+/* Segmented control */
+[data-style="new"] .segmented { padding: 2px; border-radius: var(--r-md); background: var(--grey-bg); }
+[data-style="new"] .segmented-option { border-radius: var(--r-sm); font-size: var(--fs-sm); }
+[data-style="new"] .segmented-option[aria-pressed="true"] { color: var(--accent-hover); font-weight: 600; }
+
+/* Status pills (Due, Overdue, Paid, Not recognised) and the other small tags */
+[data-style="new"] .tag { padding: 2px 7px; border-radius: var(--r-sm); font-size: var(--fs-sm); line-height: 1.35; }
+/* Chips are pills with a hairline; "+ Tag" is the dashed one. */
+[data-style="new"] .chip { padding-left: 10px; border: 1px solid var(--border); background: transparent; }
+[data-style="new"] .tag-add { border: 1px dashed var(--border-strong); padding: 2px 10px; font-weight: 400; color: var(--text-2); }
+[data-style="new"] .tag-add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: transparent; }
+
+/* Cards, banners, empty states */
+[data-style="new"] .card { border-radius: var(--r-lg); }
+[data-style="new"] .card-header h3 { color: var(--text); }
+[data-style="new"] .banner { border: 1px solid color-mix(in srgb, var(--orange) 30%, transparent); border-radius: var(--r-lg); }
+[data-style="new"] .banner-action { border-color: var(--border); }
+[data-style="new"] .empty-state-title { font-size: var(--fs-lg); }
+[data-style="new"] .error,
+[data-style="new"] .notice { border-radius: var(--r-md); }
+
+/* Sheets and dialogs: no blur behind, hairline footer */
+[data-style="new"] dialog.sheet::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-style="new"] .sheet-title { font-weight: 600; }
+[data-style="new"] .sheet-footer { border-top-width: 1px; }
+
+/* Menus, popovers, context menus: a calm hover fill, not the macOS strong selection */
+[data-style="new"] .menu,
+[data-style="new"] .popover { border-radius: var(--r-lg); }
+[data-style="new"] .menu-item:hover:not(:disabled),
+[data-style="new"] .menu-item:focus-visible { background: var(--selected); color: var(--accent-hover); }
+[data-style="new"] .menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+[data-style="new"] .menu-separator { height: 1px; }
+
+/* Toasts */
+[data-style="new"] .toast { border-radius: var(--r-lg); }
+
+/* Tooltips: ink on paper, inverted */
+[data-style="new"] [data-tip]::after { background: var(--text); color: var(--bg); box-shadow: none; }
+
+/* Keys */
+[data-style="new"] kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-bottom-width: 1px;
+  border-radius: var(--r-sm);
+  padding: 0 4px;
+  line-height: 16px;
+}
+
+/* Toolbars and split-pane dividers */
+[data-style="new"] .toolbar { border-bottom-width: 1px; }
+[data-style="new"] .toolbar-title h2 { font-weight: 600; letter-spacing: -0.01em; }
+[data-style="new"] .splitter:hover::after,
+[data-style="new"] .splitter:focus-visible::after { width: 2px; left: 3.5px; }
+[data-style="new"] .splitter-end:hover::after,
+[data-style="new"] .splitter-end:focus-visible::after { left: auto; right: 3.5px; }
+
+/* Thin scroll bars in the warm greys */
+[data-style="new"] * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+/* Figures, dates, sizes, paths and counts in the fixed-width face (only classes that
+ * already mark such values; names are left to the screens). */
+[data-style="new"] .today-amount,
+[data-style="new"] .tray-row-amount,
+[data-style="new"] .bill-amount,
+[data-style="new"] .entry-date,
+[data-style="new"] .entry-size,
+[data-style="new"] .entry-path,
+[data-style="new"] .field-date,
+[data-style="new"] .current-path,
+[data-style="new"] .tag-row-count,
+[data-style="new"] .sidebar-count,
+[data-style="new"] .sidebar-badge,
+[data-style="new"] .barcode-code {
+  font-family: var(--font-mono);
+}
+
+/* ==== The shell: sidebar and content ======================================================= */
+[data-style="new"] .sidebar {
+  container: side / inline-size;
+  padding: var(--sp-3) 10px var(--sp-2);
+  gap: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-right: 1px solid var(--hairline);
+}
+[data-style="new"] .sidebar-brand { padding: 0 0 var(--sp-3); }
+[data-style="new"] .archive-button { padding: 6px 8px; margin: 0; border-radius: var(--r-md); font-weight: 600; color: var(--text); }
+[data-style="new"] .archive-dot { width: 18px; height: 18px; border-radius: 5px; box-shadow: none; }
+[data-style="new"] .sidebar-section { margin-top: var(--sp-4); }
+[data-style="new"] .sidebar-section-head { padding-right: 0; flex-direction: row; }
+/* Caption: small caps, with the fold chevron before it (always shown, as drawn). */
+[data-style="new"] .sidebar-section-title {
+  padding: 0 4px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 24px;
+}
+[data-style="new"] .sidebar-section-fold {
+  position: static;
+  order: -1;
+  translate: none;
+  opacity: 1;
+  width: 20px;
+  height: 24px;
+  margin-left: 2px;
+  color: var(--muted);
+}
+[data-style="new"] .sidebar-section-count { font-size: var(--fs-xs); }
+[data-style="new"] .sidebar-row {
+  gap: 10px;
+  min-height: var(--sidebar-row-h);
+  padding: 0 8px;
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  font-weight: 450;
+}
+[data-style="new"] .sidebar-row:hover { background: var(--hover); }
+[data-style="new"] .sidebar-row[aria-current="page"],
+[data-style="new"] .sidebar-row.active { background: var(--sidebar-sel); color: var(--accent-hover); font-weight: 600; }
+[data-style="new"] .sidebar-icon { color: var(--muted); }
+[data-style="new"] .sidebar-row[aria-current="page"] .sidebar-icon,
+[data-style="new"] .sidebar-row.active .sidebar-icon { color: var(--accent); }
+[data-style="new"] .sidebar-important { color: var(--red-text); }
+[data-style="new"] .sidebar-starred { color: var(--orange); }
+[data-style="new"] .sidebar-count { font-size: var(--fs-sm); padding: 0 5px; line-height: 18px; }
+/* An urgent count is a status pill in the Overdue colours. */
+[data-style="new"] .sidebar-badge {
+  min-width: 0;
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  background: var(--red-bg);
+  color: var(--red-text);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  line-height: 18px;
+}
+[data-style="new"] .sidebar-children { padding-left: 14px; }
+/* Built-in collections (Important, Starred) are set apart from the user's own. */
+[data-style="new"] .sidebar-list > li:has(> a > .sidebar-starred) {
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+[data-style="new"] .sidebar-disclosure { color: var(--muted); }
+[data-style="new"] .sidebar-foot { padding: var(--sp-3) 6px 0; border-top-width: 1px; }
+[data-style="new"] .status-badge { font-size: var(--fs-sm); }
+[data-style="new"] .status-badge .status-line-button { min-height: 0; padding: 0; border: 0; background: transparent; font-weight: 400; color: inherit; }
+[data-style="new"] .status-badge .status-line-button:hover:not(:disabled) { background: transparent; color: var(--text); }
+
+/* Drag-and-drop highlights keep their Classic meaning, in the accent. */
+[data-style="new"] .sidebar-row[data-drop="over"] { color: var(--text); }
+
+/* ==== The icon rail: a narrow window, or a sidebar narrower than 120px ===================
+ * The grid column shrinks to 60px at 960px and below; the sidebar measures itself (container
+ * query), so a rail looks the same however it got narrow. Icons only, titles on hover,
+ * and only urgent counts as small badges. */
+@media (max-width: 960px) {
+  :root[data-style="new"] { --sidebar-w: 60px; }
+}
+@container side (max-width: 120px) {
+  [data-style="new"] .sidebar-label,
+  [data-style="new"] .sidebar-section-title,
+  [data-style="new"] .sidebar-section-count,
+  [data-style="new"] .sidebar-count,
+  [data-style="new"] .archive-name,
+  [data-style="new"] .archive-chevron,
+  [data-style="new"] .sidebar-children > li > .sidebar-disclosure,
+  [data-style="new"] .sidebar-tree-item > .sidebar-disclosure,
+  [data-style="new"] .look-toggle { display: none !important; }
+  [data-style="new"] .sidebar-row { position: relative; justify-content: center; padding: 0 !important; }
+  [data-style="new"] .sidebar-badge { position: absolute; top: 0; right: 2px; min-width: 0; padding: 0 3px; font-size: 10px; line-height: 14px; }
+  [data-style="new"] .sidebar-children { padding-left: 0; }
+  [data-style="new"] .sidebar-section { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--hairline); }
+  [data-style="new"] .sidebar-section-head { justify-content: center; }
+  [data-style="new"] .sidebar-section-fold { margin: 0; width: 100%; height: 18px; }
+  [data-style="new"] .archive-button { justify-content: center; padding: 6px 0; }
+  [data-style="new"] .sidebar-list > li:has(> a > .sidebar-starred) { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+  [data-style="new"] .sidebar-foot { padding: var(--sp-2) 0 0; text-align: center; }
+  /* the status line becomes one dot: green, or orange when something needs a look */
+  [data-style="new"] .status-badge { display: flex; justify-content: center; }
+  [data-style="new"] .status-badge .status-line-button { width: 10px; height: 10px; border-radius: 50%; background: var(--green); font-size: 0; }
+  [data-style="new"] .status-badge.status-attention .status-line-button { background: var(--orange); }
+}
