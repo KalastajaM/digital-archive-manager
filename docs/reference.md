@@ -164,6 +164,15 @@ cd backend && uv run dam serve          # scans, watches and indexes in the back
 
 Options: `--port N` (default `server_port`, 8765), `--no-open`. Ctrl+C stops it cleanly.
 
+`dam serve` opens the browser on a sign-in link, `http://127.0.0.1:<port>/auth?t=<token>`,
+which signs that browser in and redirects to the start page (so the token is not left in
+the address bar or the history). With `--no-open` it prints that link once instead. Only
+a signed-in browser can use the app: see **Local-only API** under
+[Safety model in detail](#safety-model-in-detail). `dam open` opens the link for the
+`dam serve` that is running (it reads the port from `serve.json`); `dam open --print`
+prints it. A bookmark to `http://127.0.0.1:<port>/` keeps working in a browser that is
+signed in; in another browser the page says **Not signed in** and how to sign in.
+
 If the archive folder is not there (the cloud drive not running or signed out, or a wrong
 `archive_root`), every command except `dam openapi`, `dam remind`, `dam trays` and
 `dam collections` (which read only the database) stops with exit `1` and says so;
@@ -199,6 +208,7 @@ API and does not open the browser.
 | `dam undo BATCH-ID [--yes]` | Revert a batch |
 | `dam recover` | Settle operations interrupted by a crash (reads the disk, changes no archive files) |
 | `dam openapi` | Print the API's OpenAPI schema |
+| `dam open [--print]` | Open the running app in the browser and sign the browser in; `--print` prints the sign-in link instead. Changes nothing; exit `1` when no `dam serve` is running |
 | `dam trays [--tray ID] [--done]` | List the items in each tray |
 | `dam collections [--closed]` | List collections with member count and `##. Ongoing` status |
 | `dam ongoing sync [--dry-run]` | Bring `##. Ongoing` in line with the open collections |
@@ -245,7 +255,8 @@ dam --archive Test serve --port 8766   # the Test archive, side by side
 
 Each served archive holds a lock file in its data folder (`serve.lock`); a second
 `dam serve` (or a switch in the app) for an archive that is already open somewhere else
-is refused and tells you the port.
+is refused and tells you the port. The sign-in cookie carries the port in its name
+(`dam_auth_<port>`), so signing in to one server never signs the browser out of another.
 
 Commands that change an archive hold the same lock while they run, so the app and a
 command (or two commands) never write one archive at the same time. `serve.json` beside
@@ -1231,8 +1242,9 @@ The user guide's "What dam never does" gives the short version. The details:
   `GET /api/locks` answers `{files: [{drive_id, reason}], folders: [path]}`. The
   command line has no way to unlock, so `dam file`, `dam quarantine` and the like refuse a
   locked file; unlock it in the app first. Locking is not journaled (it changes nothing in
-  the archive). It is a catch against mistakes, not a security boundary: anything that can
-  call the local API can unlock.
+  the archive). It is a catch against mistakes, not a security boundary: whatever is
+  signed in to the local API (your browser, or a program that has read the token file)
+  can unlock.
 - **`##. Ongoing` ownership.** The app owns an entry only if it still is the exact thing
   it created (the identity above). An entry you made yourself, or one that was replaced,
   is never touched, never adopted and never deleted. If a name is taken by something
@@ -1246,6 +1258,22 @@ The user guide's "What dam never does" gives the short version. The details:
   (`POST /api/snapshots/import`), which take `application/octet-stream` and pass the same
   host and origin checks. The UI is served with a strict CSP. Other
   web pages cannot read or change your archive.
+- **Signed-in API.** The checks above stop web pages, not other programs on the same
+  computer, which can all reach `127.0.0.1`. So every request under `/api` (file
+  contents, page images, exports, sticker sheets, snapshots, and every change) also
+  needs a secret token: the cookie `dam_auth_<port>` or the header `X-Dam-Token`;
+  without it the answer is `401` with a plain message (`code: "not_signed_in"`), and the
+  UI shows a full-page **Not signed in** with what to do. The start page and its assets
+  need no token. The token (`secrets.token_urlsafe(32)`) is made on first use in
+  `api-token` beside `archives.yaml`, so one token serves every archive the server can
+  switch to; on macOS and Linux the file is mode `0600` (a looser mode is tightened
+  again); on Windows it relies on the permissions of the user profile folder, which only
+  you and administrators can read. `GET /auth?t=<token>` compares it in constant time,
+  sets the cookie (`HttpOnly`, `SameSite=Strict`, `Path=/`, one year) and redirects (303)
+  to `/`. The token is never logged (the access log shows `t=<hidden>`). Anything that
+  can read your user files (the token file, or the browser's cookies) can still use the
+  API: this keeps out other user accounts, sandboxed apps and web pages, not a program
+  that runs as you with access to your files.
 - **The database only.** Trays, items, notes, checklists, reminders, collections, stars,
   locks and tags live in `dam.sqlite` in the data folder. Nothing about them is written into the
   archive; the only archive writes for them are links and folders in `##. Ongoing` /
@@ -1530,5 +1558,8 @@ cd backend && DAM_DEV_ORIGIN=http://localhost:5173 uv run dam serve --no-open
 cd frontend && npm run dev         # http://localhost:5173
 ```
 
-`DAM_DEV_ORIGIN` lets the API accept the dev server's `Origin`. Details in
+`DAM_DEV_ORIGIN` lets the API accept the dev server's `Origin`. With it set, the printed
+sign-in link names `localhost` (`http://localhost:8765/auth?t=...`) and `/auth` redirects
+to the dev server: the cookie is then on `localhost`, which the browser also sends to
+port 5173, and the Vite proxy passes it to the API. Details in
 `frontend/README.md` and [CONTRIBUTING.md](../CONTRIBUTING.md).
