@@ -134,7 +134,7 @@ def _shell_target(event: str, args: tuple) -> str | None:
     """The archive path a mutating command names, if any."""
     if event == "os.system":
         try:
-            words = shlex.split(os.fsdecode(args[0]))
+            words = _split(os.fsdecode(args[0]))
         except (ValueError, TypeError):
             words = str(args[0]).split()
         cwd = None
@@ -142,7 +142,7 @@ def _shell_target(event: str, args: tuple) -> str | None:
         _executable, argv, cwd, _env = args
         if isinstance(argv, (str, bytes, os.PathLike)):
             try:
-                words = shlex.split(os.fsdecode(argv))
+                words = _split(os.fsdecode(argv))
             except ValueError:
                 words = os.fsdecode(argv).split()
         else:
@@ -161,6 +161,15 @@ def _shell_target(event: str, args: tuple) -> str | None:
     if cwd is not None and _in_archive(cwd):
         return _in_archive(cwd)
     return None
+
+
+def _split(line: str) -> list[str]:
+    """A command line in words. Windows hands Popen's audit hook one joined string
+    with backslash paths, which POSIX splitting would mangle."""
+    if os.name != "nt":
+        return shlex.split(line)
+    words = shlex.split(line, posix=False)
+    return [w[1:-1] if len(w) > 1 and w[0] == w[-1] == '"' else w for w in words]
 
 
 def _offender():
