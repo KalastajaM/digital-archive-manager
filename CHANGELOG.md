@@ -593,6 +593,9 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A folder opened while typing a search stays open.** Opening a folder in Browse within
+  a quarter second of typing in the search box could put you back in the folder you came
+  from once the words reached the address.
 - **A clear message when dam cannot be reached.** If dam has stopped, screens now say
   that dam is not running or cannot be reached, instead of the browser's "Failed to fetch".
 - **Switching folders or searching quickly no longer leaves old work running.** A listing,

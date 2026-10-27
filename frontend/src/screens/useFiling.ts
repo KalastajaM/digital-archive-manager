@@ -1,7 +1,7 @@
 /** Preview → (confirm) → apply. Owned by the Inbox, so a result always has somewhere to
  * go: switching entries is blocked while a call is in flight, and the error, plan and
  * confirm outlive the review card that started them. */
-import { type RefObject, useRef, useState } from "react";
+import { type RefObject, useCallback, useRef, useState } from "react";
 import {
   errorText,
   type FileItResult,
@@ -244,6 +244,10 @@ export function useFiling(
     onApplied(result, complete, snapshot.requests);
   }
 
+  // Stable, so a card can clear the plan from an effect keyed on its own selection.
+  const clearPlan = useCallback(() => setPlan(null), []);
+  const dismissMessage = useCallback(() => setMessage(null), []);
+
   return {
     busy,
     inFlight,
@@ -252,13 +256,13 @@ export function useFiling(
     /** The message for a card showing these files, if it concerns any of them. */
     messageFor: (ids: string[]) =>
       message && message.ids.some((id) => ids.includes(id)) ? message : null,
-    dismissMessage: () => setMessage(null),
+    dismissMessage,
     confirm,
     /** The inline plan, only while it still matches the form exactly. */
     planFor: (requests: FileRequest[] | null) =>
       plan && sameRequests(plan.requests, requests) ? plan : null,
     setError,
-    clearPlan: () => setPlan(null),
+    clearPlan,
 
     cancel: () => setConfirm(null),
     preview: (requests: FileRequest[]) =>

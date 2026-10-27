@@ -176,10 +176,10 @@ export function MarkedBatch({ entries, trays, filing, onOpen, onClose }: Props) 
   const ticked: FileRequest[] = rows.filter(isTicked).map((r) => r.request);
   // Previews and the confirm are dropped unless they match exactly these requests.
   filing.form.current = ticked;
+  const { clearPlan } = filing;
   useEffect(() => {
-    filing.clearPlan();
-    // once, when the panel opens: a plan from the form does not apply here
-  }, []);
+    clearPlan(); // once, when the panel opens: a plan from the form does not apply here
+  }, [clearPlan]);
 
   const tick = (row: BatchRow) => {
     if (filing.busy || !tickable(row)) return;

@@ -148,6 +148,7 @@ function MergeSheet({
       current = false;
     };
     // the preview follows the chosen tag only
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sources is fixed while the sheet is open; preview is a new function each render
   }, [into]);
   const go = async () => {
     setBusy(true);
@@ -301,7 +302,7 @@ export default function Tags() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [dropOn, setDropOn] = useState<number | "none" | null>(null);
 
-  const tags = list.data?.tags ?? [];
+  const tags = useMemo(() => list.data?.tags ?? [], [list.data]);
   const groups = list.data?.groups ?? [];
   const known = useMemo(() => new Set(tags.map((t) => t.name)), [tags]);
   // a tag that is gone (renamed, merged) is no longer ticked

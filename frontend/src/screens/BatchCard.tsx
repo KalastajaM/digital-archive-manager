@@ -107,11 +107,11 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
     setTried(false);
     if (!folderEdited) setFolder(commonFolder(entries));
   }
+  const { clearPlan } = filing;
   useEffect(() => {
-    // A different selection: the old plan no longer applies.
-    filing.clearPlan();
-    // Deliberately keyed on the selection only.
-  }, [selection]);
+    // A different selection: the old plan no longer applies (clearPlan is stable).
+    clearPlan();
+  }, [selection, clearPlan]);
 
   // The chips: each file's suggested folder (when they differ, one each) and every
   // suggested tag; the batch shares one folder and one tag list.
