@@ -10,7 +10,7 @@ from dam.ai import guard
 from dam.ai.fake import FakeProvider
 from dam.api import create_api
 from dam.config import load_settings
-from dam.services.errors import Conflict, InvalidRequest
+from dam.errors import Conflict, InvalidRequest
 
 BASE = "http://127.0.0.1:8765"
 LOCAL_ORIGIN = {"Origin": BASE}

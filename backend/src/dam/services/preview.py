@@ -21,8 +21,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from dam.core.paths import ArchivePaths, OutsideArchiveError
+from dam.errors import NotFound
 from dam.index.repo import FileRecord
-from dam.services.errors import NotFound
 from dam.services.launch import resolve_inside
 
 log = logging.getLogger(__name__)

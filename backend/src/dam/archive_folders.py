@@ -17,9 +17,9 @@ from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.fs import listable
 from dam.core.paths import ArchiveFolder, ArchivePaths, fold_name, folder_connected
 from dam.db.engine import make_engine
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FileRepo
 from dam.profiles import ProfileStore, related, root_conflict
-from dam.services.errors import InvalidRequest, NotFound
 
 MAIN_FOLDER = "the main folder"
 

@@ -20,9 +20,9 @@ from dam.ai import guard
 from dam.ai.tasks import Built, register
 from dam.ai.tasks._common import digest, language, rules_point_excluded, shorten
 from dam.core.paths import nfc
+from dam.errors import InvalidRequest
 from dam.ops.guards import parent
 from dam.search import ranked
-from dam.services.errors import InvalidRequest
 
 if TYPE_CHECKING:
     from dam.app import App

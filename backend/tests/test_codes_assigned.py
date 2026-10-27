@@ -6,7 +6,7 @@ from dam.codes.assigned import assign_code
 from dam.codes.batch import marked_rows
 from dam.codes.qr_model import QrRead
 from dam.config import SpecialFolders
-from dam.services.errors import InvalidRequest, NotFound
+from dam.errors import InvalidRequest, NotFound
 from test_api import LOCAL_ORIGIN, make_client
 from test_codes_apply import add_in
 from test_codes_qr_batch import file_rows, stick

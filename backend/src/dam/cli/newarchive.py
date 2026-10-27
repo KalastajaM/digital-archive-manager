@@ -7,7 +7,7 @@ import typer
 from dam import layouts
 from dam import setup as dam_setup
 from dam.config import DEFAULTS_DIR, SpecialFolders
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 from dam.services.layout import layout_label, spec_from_input
 
 

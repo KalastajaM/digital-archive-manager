@@ -55,9 +55,9 @@ from dam.db.tables import (
     files,
     member_link_names,
 )
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.index.repo import FileRecord, FileRepo
 from dam.ops.guards import is_ds_store_name
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 log = logging.getLogger(__name__)
 

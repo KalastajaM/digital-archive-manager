@@ -18,9 +18,9 @@ from dam.api import create_api
 from dam.collections.convert_important import NOT_REMOVED
 from dam.core.fs import readlink, realpath
 from dam.db.tables import collection_groups, ongoing_entries, operations
+from dam.errors import InvalidRequest, StalePreview
 from dam.index.driveid import DRIVE_ID_XATTR, read_drive_id
 from dam.ops.model import GuardError
-from dam.services.errors import InvalidRequest, StalePreview
 
 IMP = "##. Important"
 ONG = "##. Ongoing"

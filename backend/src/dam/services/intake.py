@@ -13,12 +13,12 @@ from pathlib import Path
 
 from dam.core.fs import realpath
 from dam.core.paths import ArchivePaths, nfc
+from dam.errors import InvalidRequest, TooLarge
 from dam.ops.executor import Executor
 from dam.ops.guards import is_ds_store_name
 from dam.ops.model import ABS_TARGET, BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
 from dam.ops.primitives import MAX_COPY_BYTES
 from dam.services import check_origin
-from dam.services.errors import InvalidRequest, TooLarge
 
 _WINDOWS_BAD = re.compile(r'[\x00-\x1f\x7f<>:"|?*]')
 _RESERVED = frozenset(

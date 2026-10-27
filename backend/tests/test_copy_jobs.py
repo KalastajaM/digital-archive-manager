@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from dam.api import create_api
+from dam.core import jobs as core_jobs
 from dam.db.tables import operations
-from dam.maintenance import jobs as maintenance_jobs
+from dam.errors import Conflict
 from dam.ops import primitives
 from dam.ops.jobs import COPY_HELD, COPY_RUNNING, CopyJobs, reason
 from dam.ops.model import GuardError, OpFailed
-from dam.services.errors import Conflict
 
 BANKS = "10. Financial/Banks"
 QUAR = "##. To Delete"
@@ -36,7 +36,7 @@ def _wait(job, timeout: float = 10.0):
 
 
 def test_job_not_abandoned(monkeypatch):
-    monkeypatch.setattr(maintenance_jobs, "ABANDONED_S", 0.0)
+    monkeypatch.setattr(core_jobs, "ABANDONED_S", 0.0)
     jobs = CopyJobs()
 
     def work(ctx):
@@ -162,13 +162,13 @@ def test_api_latest_is_null_without_jobs(client):
 def test_progress_moves_within_a_large_file(across, monkeypatch):
     monkeypatch.setattr(primitives, "_COPY_CHUNK", 1)
     seen = []
-    real = maintenance_jobs.Job.set_progress
+    real = core_jobs.Job.set_progress
 
     def record(self, done, total, bytes_done, bytes_total, current):
         seen.append((done, bytes_done, current))
         real(self, done, total, bytes_done, bytes_total, current)
 
-    monkeypatch.setattr(maintenance_jobs.Job, "set_progress", record)
+    monkeypatch.setattr(core_jobs.Job, "set_progress", record)
     result = across.browse.move(["id-a", "id-b"], "Old years/2010", origin="ui")
     job = _wait(across.copy_jobs.get(result.job_id))
     assert job.state == "done"

@@ -45,3 +45,63 @@ def test_lower_layers_do_not_import_the_rules_package():
     assert not offenders, "dam.db, dam.index and dam.core must not import dam.rules:\n" + "\n".join(
         offenders
     )
+
+
+# The packages and modules above the engine: the interfaces, the services and the feature
+# packages built on them. dam.core, dam.db, dam.index and dam.ops sit below all of them.
+HIGHER = (
+    "ai",
+    "api",
+    "app",
+    "archive_folders",
+    "cli",
+    "collections",
+    "demo",
+    "layouts",
+    "maintenance",
+    "notes",
+    "profiles",
+    "query",
+    "relabel",
+    "reminders",
+    "rules",
+    "search",
+    "serve",
+    "services",
+    "settings_write",
+    "setup",
+    "snapshots",
+    "trays",
+)
+
+
+def _imported(node: ast.Import | ast.ImportFrom, path: Path) -> list[str]:
+    """The dotted modules an import statement names (relative imports resolved)."""
+    if isinstance(node, ast.Import):
+        return [a.name for a in node.names]
+    module = node.module or ""
+    if node.level:
+        package = list(path.relative_to(SRC.parent).with_suffix("").parts)[: -node.level]
+        module = ".".join(package + ([module] if module else []))
+    return [module] + [f"{module}.{a.name}" for a in node.names]
+
+
+def test_engine_layers_do_not_import_higher_layers():
+    offenders = []
+    for layer in ("core", "db", "index", "ops"):
+        for path in sorted((SRC / layer).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):  # function-local imports too
+                if not isinstance(node, (ast.Import, ast.ImportFrom)):
+                    continue
+                hits = {
+                    name
+                    for name in _imported(node, path)
+                    for high in HIGHER
+                    if name == f"dam.{high}" or name.startswith(f"dam.{high}.")
+                }
+                offenders += [f"{path.relative_to(SRC)}:{node.lineno} imports {h}" for h in hits]
+    assert not offenders, (
+        "dam.core, dam.db, dam.index and dam.ops must not import higher layers:\n"
+        + "\n".join(sorted(offenders))
+    )

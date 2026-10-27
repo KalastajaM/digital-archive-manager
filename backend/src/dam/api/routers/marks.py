@@ -14,7 +14,7 @@ from dam.api.deps import AppDep, require_editable
 from dam.api.marks import collection_out
 from dam.api.routers.collections import file_phrase, synced
 from dam.api.schemas import CollectionChangeOut, CollectionOut, MarkBody
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 router = APIRouter(prefix="/api/marks", tags=["marks"])
 

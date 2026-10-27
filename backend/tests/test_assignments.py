@@ -5,13 +5,13 @@ import pytest
 from sqlalchemy import text
 
 from dam.config import Person
+from dam.errors import InvalidRequest, NotFound
 from dam.extract.base import ExtractedText
 from dam.extract.layout import Line, Page1Layout
 from dam.index.scanner import scan
 from dam.rules.model import Rule
 from dam.rules.replay import NOT_READ, replay
 from dam.services.assignments import UNSET
-from dam.services.errors import InvalidRequest, NotFound
 from test_api import LOCAL_ORIGIN, make_client, post
 
 INBOX = "##. Organize"

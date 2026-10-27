@@ -8,7 +8,7 @@ from sqlalchemy import insert, text
 
 from dam.api import create_api
 from dam.db.tables import files
-from dam.services.errors import NotFound
+from dam.errors import NotFound
 
 ONG = "##. Ongoing"
 QUAR = "##. To Delete"
@@ -137,7 +137,7 @@ def test_flat_date_sort(app, fake_archive, tree):
 
 
 def test_flat_bad_sort_refused(app, tree):
-    from dam.services.errors import InvalidRequest
+    from dam.errors import InvalidRequest
 
     with pytest.raises(InvalidRequest):
         app.browse.files_below(HOME, sort="colour")

@@ -1,4 +1,5 @@
-"""Errors services raise for problems the caller caused (interfaces report them as such).
+"""Errors services and the ops layer raise for problems the caller caused (interfaces
+report them as such).
 
 Anything else escaping a service is a bug or an environment failure, not a user error.
 """

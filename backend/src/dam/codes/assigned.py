@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from dam.services.errors import InvalidRequest, NotFound
+from dam.errors import InvalidRequest, NotFound
 
 if TYPE_CHECKING:
     from dam.app import App

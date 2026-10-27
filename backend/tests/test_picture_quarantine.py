@@ -8,10 +8,10 @@ import pytest
 from sqlalchemy import select, update
 
 from dam.db.tables import operations
+from dam.errors import InvalidRequest
 from dam.ops import primitives
 from dam.ops.model import GuardError, Op, OpFailed, OpKind, Plan
 from dam.rules.model import Rule
-from dam.services.errors import InvalidRequest
 from test_api import LOCAL_ORIGIN, make_client, post
 
 QUARANTINE = "##. To Delete"

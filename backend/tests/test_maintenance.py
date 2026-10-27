@@ -14,11 +14,11 @@ from sqlalchemy import select
 
 from dam.api import create_api
 from dam.db.tables import files, operations
+from dam.errors import InvalidRequest
 from dam.maintenance import duplicates
 from dam.maintenance.checks import suggest_name
 from dam.ops.model import GuardError, OpKind
 from dam.ops.primitives import TEMP_COPY_PREFIX
-from dam.services.errors import InvalidRequest
 from dam.trays.model import load_trays
 
 INBOX = "##. Organize"

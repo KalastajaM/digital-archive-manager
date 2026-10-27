@@ -161,7 +161,7 @@ def test_launch_command_per_platform(platform, reveal, expected):
 
 
 def test_launch_unknown_platform_is_not_supported(app, fake_archive):
-    from dam.services.errors import NotSupported
+    from dam.errors import NotSupported
 
     fake_archive.add("10. Financial/Banks/s.pdf", drive_id="s1")
     app.scan()
@@ -193,7 +193,7 @@ def test_windows_explorer_exit_1_is_not_a_failure(app, fake_archive):
     app.launch.platform = "win32"
     app.launch.runner = lambda args: 1
     app.launch.reveal(app.repo.get("s1"))  # explorer reports 1 on success
-    from dam.services.errors import Conflict
+    from dam.errors import Conflict
 
     with pytest.raises(Conflict):
         app.launch.open(app.repo.get("s1"))
@@ -201,7 +201,7 @@ def test_windows_explorer_exit_1_is_not_a_failure(app, fake_archive):
 
 @pytest.mark.parametrize("name", ["setup.exe", "run.bat", "x.ps1", "l.lnk", "a.desktop"])
 def test_launcher_types_are_never_opened(app, fake_archive, name):
-    from dam.services.errors import Conflict
+    from dam.errors import Conflict
 
     fake_archive.add(f"10. Financial/Banks/{name}", drive_id="p1")
     app.scan()

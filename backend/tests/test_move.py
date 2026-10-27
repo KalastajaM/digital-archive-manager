@@ -11,9 +11,9 @@ from dam.api import create_api
 from dam.cli.main import app as cli
 from dam.core.fs import readlink
 from dam.db.tables import operations
+from dam.errors import InvalidRequest, NotFound
 from dam.ops.model import OpKind
 from dam.ops.planner import COLLISION_NOTE
-from dam.services.errors import InvalidRequest, NotFound
 
 INBOX = "##. Organize"
 ONG = "##. Ongoing"

@@ -18,9 +18,9 @@ from typing import TYPE_CHECKING, Literal
 
 from dam.codes.apply import CodeHit, unclear_boxes
 from dam.core.paths import OutsideArchiveError
+from dam.errors import InvalidRequest, NotFound
 from dam.ops.guards import fold_parts
 from dam.ops.model import GuardError, OpKind, ResolvedOp
-from dam.services.errors import InvalidRequest, NotFound
 from dam.services.inbox import FileRequest
 
 if TYPE_CHECKING:

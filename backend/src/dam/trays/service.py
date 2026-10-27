@@ -38,8 +38,8 @@ from dam.db.tables import (
     notes,
     reminders_sent,
 )
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.notes import NOTE_MAX, NotesService
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.trays.model import FIELD_TYPES, FieldDef, TrayDef
 
 log = logging.getLogger(__name__)

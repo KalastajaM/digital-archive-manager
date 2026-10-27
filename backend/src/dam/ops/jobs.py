@@ -1,6 +1,6 @@
 """Moves across disks run in the background: one at a time, with progress and Stop.
 
-The runner is the maintenance checks' (``dam.maintenance.jobs``), with these differences:
+The runner is the shared one (``dam.core.jobs``), with these differences from a check:
 a second move across disks is refused while one runs (it would end the first half way),
 a move does not end when nobody polls it (closing the window must not stop it), and a
 failed move keeps its reason in the error.
@@ -15,9 +15,9 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from dam.maintenance.jobs import Job, JobContext, MaintenanceJobs
+from dam.core.jobs import Job, JobContext, Jobs
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.ops.model import GuardError, OpFailed
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 COPY_KIND = "copy_across"
 COPY_RUNNING = "A move across disks is running. Wait for it to finish or stop it."
@@ -35,7 +35,7 @@ def reason(exc: Exception) -> str:
 
 class CopyJobs:
     def __init__(self) -> None:
-        self._jobs = MaintenanceJobs()
+        self._jobs = Jobs()
         self._lock = threading.Lock()
         self._held = 0
 

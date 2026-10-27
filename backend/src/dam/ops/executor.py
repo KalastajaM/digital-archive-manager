@@ -19,7 +19,8 @@ from dam.core.fs import readlink
 from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
 from dam.db.engine import write_tx
 from dam.db.tables import made_folders, operations
-from dam.index.driveid import read_drive_id
+from dam.errors import Conflict
+from dam.index.driveid import LOCAL_ID_PREFIX, read_drive_id
 from dam.index.locks import COPYING, INDEX_LOCK
 from dam.index.own_changes import OwnChanges
 from dam.index.repo import FileRepo
@@ -40,8 +41,6 @@ from dam.ops.model import (
 )
 from dam.ops.planner import Planner, list_tree, tree_key, tree_of
 from dam.ops.undo import JournalEntry, RecoveryResult
-from dam.services import LOCAL_ID_PREFIX
-from dam.services.errors import Conflict
 
 if TYPE_CHECKING:
     from dam.locks import LockService

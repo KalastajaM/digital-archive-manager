@@ -12,6 +12,7 @@ import yaml
 
 from dam import setup
 from dam.config import AppPaths
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.profiles import (
     MAIN_ID,
     Locked,
@@ -22,7 +23,6 @@ from dam.profiles import (
     slugify,
 )
 from dam.reminders import launchd
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 
 def mk(*parts: Path | str) -> Path:

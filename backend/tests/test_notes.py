@@ -2,8 +2,8 @@ import pytest
 from sqlalchemy import func, select
 
 from dam.db.tables import checklist_items, notes
+from dam.errors import InvalidRequest, NotFound
 from dam.notes import CHECK_MAX, NOTE_MAX, ChecklistItem, NotesService
-from dam.services.errors import InvalidRequest, NotFound
 
 
 @pytest.fixture

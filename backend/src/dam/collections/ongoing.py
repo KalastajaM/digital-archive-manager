@@ -169,12 +169,12 @@ from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import collections as collections_table
 from dam.db.tables import ongoing_entries, ongoing_switched, operations
+from dam.errors import ArchiveUnavailable, InvalidRequest, NotFound
 from dam.index.scanner import is_ignored
 from dam.ops import identity, primitives
 from dam.ops.guards import fold_parts, is_ds_store_name, is_under, join, parent, validate
 from dam.ops.identity import Identity
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
-from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotFound
 
 if TYPE_CHECKING:
     from dam.collections.service import Collection, CollectionService

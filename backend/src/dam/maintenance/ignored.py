@@ -25,7 +25,7 @@ from sqlalchemy.dialects.sqlite import insert
 from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import maintenance_ignored
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 KINDS = (
     "duplicates",

@@ -55,8 +55,8 @@ from dam import settings_write
 from dam.config import AppPaths, ExtraFolder, Settings, load_settings
 from dam.db.engine import MIGRATIONS_DIR, make_engine, migrate, write_tx
 from dam.db.tables import metadata
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.ops.primitives import rename_excl
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 log = logging.getLogger(__name__)
 

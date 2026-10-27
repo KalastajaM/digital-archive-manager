@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 from dam.api import create_api
 from dam.codes.batch import marked_rows
 from dam.config import SpecialFolders
+from dam.errors import InvalidRequest
 from dam.ops.model import GuardError
-from dam.services.errors import InvalidRequest
 from test_api import BASE, LOCAL_ORIGIN
 from test_codes_apply import add_in
 from test_inbox import NORTHPOWER_BILL, add_rule

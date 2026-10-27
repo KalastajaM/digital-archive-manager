@@ -9,9 +9,10 @@ import stat
 from typing import TYPE_CHECKING
 
 from dam.core.paths import ArchivePaths
+from dam.errors import InvalidRequest
+from dam.index.driveid import LOCAL_ID_PREFIX
 from dam.ops.guards import is_under
 from dam.ops.model import OpKind, ResolvedOp
-from dam.services.errors import InvalidRequest
 
 if TYPE_CHECKING:
     from dam.index.repo import FileRepo
@@ -39,9 +40,6 @@ def check_destination_area(dest: str, paths: ArchivePaths) -> None:
     for area in (*paths.quarantines, paths.ongoing):
         if is_under(dest, area):
             raise InvalidRequest(f"Files cannot be moved into {area}.")
-
-
-LOCAL_ID_PREFIX = "local:"  # the scanner's id for an entry without a Drive id xattr
 
 
 def _twin_of_another(repo: "FileRepo", rop: ResolvedOp) -> bool:

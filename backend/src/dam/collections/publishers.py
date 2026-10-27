@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Protocol
 
-from dam.services.errors import NotFound
+from dam.errors import NotFound
 
 if TYPE_CHECKING:
     from dam.ops.model import ResolvedOp

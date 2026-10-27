@@ -8,6 +8,7 @@ except ImportError:  # pragma: no cover - platform dependent
     xattr = None
 
 DRIVE_ID_XATTR = "com.google.drivefs.item-id#S"
+LOCAL_ID_PREFIX = "local:"  # the scanner's id for an entry without a Drive id xattr
 
 
 def read_drive_id(path: Path) -> str | None:

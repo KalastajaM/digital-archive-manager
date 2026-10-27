@@ -25,8 +25,8 @@ from dam.api.schemas import (
     ReconnectOut,
 )
 from dam.app import App
-from dam.maintenance.jobs import Job
-from dam.services.errors import NotFound
+from dam.core.jobs import Job
+from dam.errors import NotFound
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 

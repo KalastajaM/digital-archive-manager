@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 
 from dam.config import SpecialFolders
 from dam.core.paths import nfc
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FLAT_SORTS, FileRecord, FileRepo
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_ds_store_name, is_under, parent
@@ -16,7 +17,6 @@ from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
 from dam.ops.planner import add_note
 from dam.ops.primitives import can_make_links
 from dam.services import check_destination_area, check_disk_identity, check_origin
-from dam.services.errors import InvalidRequest, NotFound
 from dam.services.links import link_target
 
 log = logging.getLogger(__name__)

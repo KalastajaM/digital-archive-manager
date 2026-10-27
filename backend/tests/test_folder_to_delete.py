@@ -8,8 +8,8 @@ from sqlalchemy import select
 
 from dam.core.paths import ArchivePaths
 from dam.db.tables import operations
+from dam.errors import InvalidRequest
 from dam.ops.model import OpKind
-from dam.services.errors import InvalidRequest
 
 QUAR = "##. To Delete"
 BANKS = "10. Financial/Banks"

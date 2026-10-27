@@ -24,7 +24,7 @@ from sqlalchemy import select
 from dam.collections.service import Collection, CollectionService
 from dam.core.paths import nfc
 from dam.db.tables import collection_members, collections, files
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 # the order marks are listed in
 KINDS = ("starred", "important")

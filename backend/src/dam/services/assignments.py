@@ -17,8 +17,8 @@ from dam.config import Person
 from dam.core.paths import nfc
 from dam.db.engine import write_tx
 from dam.db.tables import file_assignments
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FileRepo
-from dam.services.errors import InvalidRequest, NotFound
 
 OWNER = "owner"
 FILING = "filing"
