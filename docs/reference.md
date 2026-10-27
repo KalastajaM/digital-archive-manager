@@ -119,7 +119,9 @@ own migrations the same way, so before updating dam checks whose database it is.
 - marked as another app: refused;
 - not marked (made before 0038, or by another build): dam migrates a scratch database
   in a temporary folder to the same revision with its own migrations and compares
-  tables and columns (indexes, types and defaults aside). If they match, the database
+  tables and columns (indexes, types and defaults aside; the differences a briefly
+  shipped 0017 left, which migrations 0018 and 0021 heal, are allowed at 0017 to
+  0020). If they match, the database
   is marked as dam-public's in the same transaction as the update (adopted, once). If
   not, or if the revision is not one dam knows, it is refused.
 
