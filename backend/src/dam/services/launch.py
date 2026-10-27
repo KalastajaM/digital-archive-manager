@@ -19,8 +19,8 @@ from pathlib import Path
 
 from dam.core.fs import resolve
 from dam.core.paths import ArchiveFolder, ArchivePaths, OutsideArchiveError, not_connected_message
+from dam.errors import Conflict, NotFound, NotSupported
 from dam.index.repo import FileRecord
-from dam.services.errors import Conflict, NotFound, NotSupported
 
 log = logging.getLogger(__name__)
 

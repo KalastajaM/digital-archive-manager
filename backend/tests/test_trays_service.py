@@ -14,7 +14,7 @@ from dam.db.tables import (
     notes,
     reminders_sent,
 )
-from dam.services.errors import InvalidRequest, NotFound
+from dam.errors import InvalidRequest, NotFound
 from dam.trays.model import TrayDef, load_trays
 from dam.trays.service import REMOVED_TRAY_NAME, TrayService
 

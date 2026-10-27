@@ -21,9 +21,9 @@ from dam.collections.service import CollectionService, check_collection_name
 from dam.config import SpecialFolders
 from dam.db.engine import MIGRATIONS_DIR, migrate, write_tx
 from dam.db.tables import collections, files, notes, operations
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FileRepo
 from dam.ops.model import OpKind, Plan
-from dam.services.errors import InvalidRequest, NotFound
 
 INBOX = "##. Organize"
 BANKS = "10. Financial/Banks"

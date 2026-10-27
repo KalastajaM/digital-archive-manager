@@ -12,9 +12,9 @@ from dam.codes.configfile import write_config_file
 from dam.collections.service import check_collection_name
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.text import fold
+from dam.errors import InvalidRequest
 from dam.rules.engine import TemplateError, check_template
 from dam.rules.model import read_yaml
-from dam.services.errors import InvalidRequest
 
 _CODE_RE = re.compile(r"^[A-Za-z0-9]{1,4}$")
 LABEL_MAX = 24  # fits a sticker and a chip

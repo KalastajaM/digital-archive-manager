@@ -16,7 +16,7 @@ from typing import Protocol, runtime_checkable
 
 from dam import snapshots
 from dam.config import AppPaths
-from dam.services.errors import Conflict, NotFound
+from dam.errors import Conflict, NotFound
 from dam.services.launch import LaunchService, Runner, run_open
 
 _LOCK = threading.Lock()  # one snapshot, import or restore at a time in this process

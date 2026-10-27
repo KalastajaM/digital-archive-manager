@@ -36,7 +36,7 @@ from dam import setup
 from dam.config import AppPaths
 from dam.core.fs import open_nofollow, resolve
 from dam.core.text import fold_name
-from dam.services.errors import Conflict, InvalidRequest, NotFound
+from dam.errors import Conflict, InvalidRequest, NotFound
 
 try:  # POSIX
     import fcntl

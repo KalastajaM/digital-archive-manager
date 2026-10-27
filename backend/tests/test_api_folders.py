@@ -12,10 +12,10 @@ from dam import archive_folders
 from dam.api import create_api
 from dam.app import BATCH_RUNNING, JOBS_RUNNING, App
 from dam.config import load_settings
+from dam.errors import Conflict
 from dam.ops.jobs import COPY_HELD
 from dam.profiles import ProfileStore, ServeLock
 from dam.serve import Host, Switchboard
-from dam.services.errors import Conflict
 
 PORT = 8798
 BASE = f"http://127.0.0.1:{PORT}"

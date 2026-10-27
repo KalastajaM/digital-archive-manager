@@ -8,11 +8,11 @@ from sqlalchemy import func, select
 from conftest import posix_permissions
 from dam.app import App
 from dam.db.tables import collection_members, files, notes, operations
+from dam.errors import InvalidRequest
 from dam.extract.base import ExtractedText
 from dam.index.scanner import scan
 from dam.ops.executor import Executor
 from dam.ops.model import BatchResult, GuardError, OpKind
-from dam.services.errors import InvalidRequest
 from dam.services.inbox import FileRequest
 
 INBOX = "##. Organize"
@@ -384,7 +384,7 @@ def test_app_index_reads_page_1_only_for_inbox_and_wanted_files(app, fake_archiv
 
 
 def test_service_errors_are_typed(app, fake_archive):
-    from dam.services.errors import InvalidRequest, NotFound
+    from dam.errors import InvalidRequest, NotFound
 
     with pytest.raises(NotFound):
         app.inbox.suggestion("nope")
@@ -402,7 +402,7 @@ def test_service_errors_are_typed(app, fake_archive):
 
 def test_browse_resolve(app, fake_archive, tmp_path, monkeypatch):
     from dam.core.paths import OutsideArchiveError
-    from dam.services.errors import NotFound
+    from dam.errors import NotFound
 
     path = fake_archive.add(f"{BANKS}/a.pdf", drive_id="id-a")
     fake_archive.add(f"{BANKS}/gone.pdf", drive_id="id-g")
@@ -467,7 +467,7 @@ def test_quarantine_via_browse_when_quarantine_folder_absent(app, fake_archive):
 @pytest.mark.parametrize("kind", ["absent", "file"])
 def test_app_create_refuses_unavailable_archive_root(tmp_path, kind):
     from dam.config import AppPaths
-    from dam.services.errors import ArchiveUnavailable, InvalidRequest
+    from dam.errors import ArchiveUnavailable, InvalidRequest
 
     root = tmp_path / "no-archive"
     if kind == "file":

@@ -18,8 +18,8 @@ from typing import Protocol
 from dam import demo, setup
 from dam.config import AppPaths
 from dam.core.paths import fold_name
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.profiles import MAIN_ID, MAIN_NAME, PALETTE, Locked, Profile, ProfileStore, ServeLock
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.services.launch import LaunchService, Runner, run_open
 
 log = logging.getLogger(__name__)

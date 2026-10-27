@@ -19,6 +19,7 @@ from dam.config import DEFAULT_ADDRESS_ZONE, Person, SpecialFolders
 from dam.core.naming import parse_doc_date
 from dam.core.paths import ArchivePaths
 from dam.core.text import fold
+from dam.errors import InvalidRequest, NotFound
 from dam.extract.layout import TEXT_LAYER, Page1Layout, check_box, lines_in_zone
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.notes import NotesService, check_note
@@ -63,7 +64,6 @@ from dam.rules.state import load_state
 from dam.services import check_destination_area, check_disk_identity, check_origin
 from dam.services.area_pictures import AreaPictures
 from dam.services.assignments import Assignment, AssignmentService
-from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService, detected_of, prefill_from
 from dam.trays.service import TrayService

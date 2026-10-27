@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING, Any
 from dam.ai import cache, guard, keys, log
 from dam.ai.provider import AIProvider, AIResult, ProviderError
 from dam.ai.tasks import TASKS, AITask, Built
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.ops.guards import fold_parts
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.setup import write_ai_exclude_folders
 
 if TYPE_CHECKING:

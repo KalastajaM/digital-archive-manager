@@ -28,9 +28,9 @@ from dam.api.schemas import (
     TextPreviewOut,
 )
 from dam.app import App
+from dam.errors import InvalidRequest, NotFound
 from dam.extract.layout import check_box, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
-from dam.services.errors import InvalidRequest, NotFound
 from dam.services.inbox import normalise_tags
 from dam.services.links import NO_LINK_PREVIEW, link_target
 from dam.services.preview import (

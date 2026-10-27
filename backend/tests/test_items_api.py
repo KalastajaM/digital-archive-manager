@@ -8,9 +8,9 @@ from sqlalchemy import func, select
 
 from dam.api import create_api
 from dam.db.tables import checklist_items, item_events, item_files, items, notes, reminders_sent
+from dam.errors import InvalidRequest
 from dam.extract.base import ExtractedText
 from dam.index.scanner import scan
-from dam.services.errors import InvalidRequest
 
 BASE = "http://127.0.0.1:8765"
 LOCAL_ORIGIN = {"Origin": BASE}

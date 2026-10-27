@@ -10,9 +10,9 @@ from sqlalchemy import text
 
 from dam.api import create_api
 from dam.db.engine import MIGRATIONS_DIR, make_engine, migrate, write_tx
+from dam.errors import InvalidRequest
 from dam.extract.base import ExtractedText
 from dam.index.scanner import scan
-from dam.services.errors import InvalidRequest
 from dam.services.inbox import FileRequest
 from dam.services.scan_fields import check_fields
 

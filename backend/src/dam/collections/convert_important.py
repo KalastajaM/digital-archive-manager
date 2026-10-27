@@ -68,9 +68,9 @@ from dam.collections.convert import (
 )
 from dam.collections.service import Collection, Group, Member, check_name
 from dam.core.text import fold_name
+from dam.errors import InvalidRequest
 from dam.ops.guards import fold_parts, join, parent
 from dam.ops.model import BatchResult
-from dam.services.errors import InvalidRequest
 
 NOT_REMOVED = FOLDER_NOT_REMOVED
 UNTOUCHED = " is left untouched: same file as "

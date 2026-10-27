@@ -11,10 +11,10 @@ import os
 from typing import TYPE_CHECKING
 
 from dam.core.text import fold_name
+from dam.errors import InvalidRequest
 from dam.ops.guards import join
 from dam.ops.model import BatchResult, Op, OpKind, Plan, ResolvedOp
 from dam.services import check_origin
-from dam.services.errors import InvalidRequest
 
 if TYPE_CHECKING:
     from dam.app import App

@@ -10,11 +10,11 @@ from dam.collections.ongoing import OngoingPublisher
 from dam.collections.service import CollectionService
 from dam.core.text import fold
 from dam.db.tables import operations
+from dam.errors import InvalidRequest, NotFound
 from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.ops.model import BatchResult, ResolvedOp
 from dam.ops.undo import ACTED, SYNC_ORIGIN, JournalEntry, RecoveryResult, entries
-from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleRecord
 from dam.trays.service import TrayService
 

@@ -9,7 +9,7 @@ serve`` under launchd) must not hang a request.
 import threading
 from collections.abc import Callable
 
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 SERVICE = "dam-anthropic"
 ACCOUNT = "api-key"

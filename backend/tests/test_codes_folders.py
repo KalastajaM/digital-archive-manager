@@ -12,8 +12,8 @@ from dam.codes.folders import (
     stray_inbox_folders,
 )
 from dam.config import SpecialFolders
+from dam.errors import InvalidRequest
 from dam.ops.model import GuardError, Op, OpKind, Plan
-from dam.services.errors import InvalidRequest
 from test_api import BASE, LOCAL_ORIGIN
 
 INBOX = SpecialFolders().inbox

@@ -16,9 +16,9 @@ from dam.collections.service import SUMMARY_MAX, CollectionService
 from dam.config import SpecialFolders
 from dam.db.engine import MIGRATIONS_DIR, migrate, write_tx
 from dam.db.tables import collection_groups, collection_members, files
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FileRepo
 from dam.ops.model import Plan
-from dam.services.errors import InvalidRequest, NotFound
 
 
 @pytest.fixture

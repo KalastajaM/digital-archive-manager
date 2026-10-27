@@ -14,7 +14,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.db.engine import write_tx
 from dam.db.tables import checklist_items, notes
-from dam.services.errors import InvalidRequest, NotFound
+from dam.errors import InvalidRequest, NotFound
 
 KINDS = ("file", "collection", "item")
 NOTE_MAX = 10_000

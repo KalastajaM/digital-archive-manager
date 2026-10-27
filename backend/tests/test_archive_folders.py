@@ -17,11 +17,11 @@ from dam.archive_folders import (
 )
 from dam.config import AppPaths, load_settings
 from dam.core.paths import ArchivePaths
+from dam.errors import InvalidRequest
 from dam.index.repo import FileRecord, TagRepo
 from dam.ops.guards import check_not_label
 from dam.ops.model import GuardError, Op, OpKind, Plan
 from dam.profiles import ProfileStore
-from dam.services.errors import InvalidRequest
 
 
 def paths_of(app_paths: AppPaths) -> tuple[ArchivePaths, object]:

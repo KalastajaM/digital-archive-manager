@@ -15,11 +15,11 @@ from dam.api import create_api
 from dam.collections.convert import NOT_REMOVED, Entry, EntryItem
 from dam.core.fs import readlink, realpath
 from dam.db.tables import ongoing_entries, operations
+from dam.errors import InvalidRequest
 from dam.index.driveid import DRIVE_ID_XATTR
 from dam.ops import executor as executor_module
 from dam.ops import primitives
 from dam.ops.model import BatchResult, GuardError, OpFailed, OpKind, ResolvedOp
-from dam.services.errors import InvalidRequest
 
 ONG = "##. Ongoing"
 FAMILY = "40. Family"

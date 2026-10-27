@@ -26,11 +26,11 @@ from PIL import Image, ImageDraw, ImageFont
 from dam.config import AppPaths
 from dam.core.fs import resolve
 from dam.core.paths import ArchivePaths, nfc
+from dam.errors import InvalidRequest, NotFound
 from dam.index.content import MAX_BYTES
 from dam.index.repo import FileRecord
 from dam.ops.primitives import is_dataless
 from dam.pdfium import PDFIUM_LOCK
-from dam.services.errors import InvalidRequest, NotFound
 
 log = logging.getLogger(__name__)
 

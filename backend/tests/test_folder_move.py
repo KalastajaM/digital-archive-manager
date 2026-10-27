@@ -4,10 +4,10 @@ import shutil
 
 import pytest
 
+from dam.errors import InvalidRequest
 from dam.ops.model import GuardError, OpKind
 from dam.ops.planner import COLLISION_NOTE
 from dam.services import check_disk_identity
-from dam.services.errors import InvalidRequest
 
 HOME = "20. Home"
 MISC = "80. Misc"

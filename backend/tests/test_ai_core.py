@@ -24,7 +24,7 @@ from dam.api import create_api
 from dam.cli.main import app as cli
 from dam.db.engine import write_tx
 from dam.db.tables import ai_cache, ai_calls, file_text
-from dam.services.errors import Conflict, InvalidRequest, NotFound
+from dam.errors import Conflict, InvalidRequest, NotFound
 
 BASE = "http://127.0.0.1:8765"
 LOCAL_ORIGIN = {"Origin": BASE}

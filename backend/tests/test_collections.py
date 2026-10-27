@@ -5,9 +5,9 @@ from dam.collections.publishers import PublisherRegistry
 from dam.collections.service import CollectionService
 from dam.config import SpecialFolders
 from dam.db.tables import collection_members, collections, files
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import PARKED, FileRepo
 from dam.ops.model import Plan
-from dam.services.errors import InvalidRequest, NotFound
 
 
 @pytest.fixture

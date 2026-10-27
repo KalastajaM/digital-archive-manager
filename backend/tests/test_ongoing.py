@@ -17,11 +17,11 @@ from dam.core.fs import readlink
 from dam.db.engine import write_tx
 from dam.db.tables import collection_members, ongoing_entries, operations
 from dam.db.tables import collections as collections_table
+from dam.errors import InvalidRequest
 from dam.index.driveid import DRIVE_ID_XATTR
 from dam.ops import identity, primitives
 from dam.ops.guards import validate
 from dam.ops.model import GuardError, Op, OpFailed, OpKind, Plan
-from dam.services.errors import InvalidRequest
 from fsswap import recreate_dir
 
 HOLDS_1 = "contains 1 item not created by the app, so it was left as it is."

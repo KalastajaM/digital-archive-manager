@@ -25,23 +25,25 @@ from pathlib import PurePosixPath
 from sqlalchemy import Engine, select
 
 from dam.collections.service import CollectionService
+from dam.core.jobs import Job
 from dam.core.paths import ArchivePaths, not_connected_message
 from dam.core.text import fold_name
 from dam.db.tables import collection_members, collections
+from dam.errors import InvalidRequest, NotFound
+from dam.index.driveid import LOCAL_ID_PREFIX
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.locks import LockService
 from dam.maintenance import checks, duplicates
 from dam.maintenance.duplicates import WHY_LOCKED, LockIndex
 from dam.maintenance.ignored import IgnoreList
-from dam.maintenance.jobs import Job, MaintenanceJobs
+from dam.maintenance.jobs import MaintenanceJobs
 from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.ops.guards import is_under, parent
 from dam.ops.model import BatchResult, Op, OpKind, Plan
 from dam.ops.primitives import can_make_links
-from dam.services import LOCAL_ID_PREFIX, check_disk_identity, check_origin
+from dam.services import check_disk_identity, check_origin
 from dam.services.assignments import UNSET, AssignmentService
-from dam.services.errors import InvalidRequest, NotFound
 from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)

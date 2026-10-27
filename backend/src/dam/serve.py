@@ -41,12 +41,12 @@ from dam import setup
 from dam.api.auth import ApiTokenMiddleware, auth_url, hide_token_in_logs, load_token
 from dam.app import App
 from dam.config import AppPaths
+from dam.errors import Conflict
 from dam.extract.picture import prune_page1_pictures
 from dam.index.watcher import Watcher
 from dam.profiles import Profile, ProfileStore, ServeLock
 from dam.reminders.notify import RemindResult, run_reminders
 from dam.services.archives import ArchiveService
-from dam.services.errors import Conflict
 
 ASGIApp = Callable[[dict, Callable, Callable], object]
 

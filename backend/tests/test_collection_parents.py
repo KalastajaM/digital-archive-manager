@@ -14,9 +14,9 @@ from dam.collections.service import CollectionService
 from dam.config import SpecialFolders
 from dam.db.engine import MIGRATIONS_DIR, migrate, write_tx
 from dam.db.tables import files
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.index.repo import FileRepo
 from dam.ops.model import Plan
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 
 @pytest.fixture

@@ -7,8 +7,8 @@ from pathlib import Path
 
 from dam import layouts, setup
 from dam.config import DEFAULTS_DIR, AppPaths, SpecialFolders
+from dam.errors import Conflict, InvalidRequest
 from dam.ops.model import GuardError, OpKind, ResolvedOp
-from dam.services.errors import Conflict, InvalidRequest
 from dam.services.layout import LayoutOutcome, layout_label, spec_from_input
 
 log = logging.getLogger(__name__)

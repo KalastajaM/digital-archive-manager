@@ -20,8 +20,8 @@ from sqlalchemy.dialects.sqlite import insert
 
 from dam.db.engine import write_tx
 from dam.db.tables import file_fields
+from dam.errors import InvalidRequest
 from dam.rules.engine import Suggestion
-from dam.services.errors import InvalidRequest
 from dam.trays.model import FIELD_TYPES
 
 # field kind -> the tray field type that parses and normalises its value

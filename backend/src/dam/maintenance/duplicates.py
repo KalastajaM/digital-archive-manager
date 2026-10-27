@@ -17,11 +17,11 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from dam.core.jobs import JobContext
 from dam.core.paths import ArchivePaths, nfc
 from dam.index.repo import FileRecord, FileRepo
 from dam.index.scanner import same_mtime
 from dam.locks import IMPORTANT, LOCKED, LockService
-from dam.maintenance.jobs import JobContext
 from dam.ops.guards import is_under
 
 CHUNK = 1 << 20

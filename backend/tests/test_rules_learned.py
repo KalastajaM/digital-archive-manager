@@ -1,7 +1,7 @@
 import pytest
 
+from dam.errors import InvalidRequest, NotFound
 from dam.rules.model import LEARNED_FILE, Rule, load_rules
-from dam.services.errors import InvalidRequest, NotFound
 
 
 def _write(app, name, text):

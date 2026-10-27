@@ -25,9 +25,9 @@ from dam.db.tables import (
     notes,
     rule_outcomes,
 )
+from dam.errors import InvalidRequest
 from dam.maintenance import duplicates
 from dam.search import search
-from dam.services.errors import InvalidRequest
 
 BANKS = "10. Financial/Banks"
 HOME = "20. Home"

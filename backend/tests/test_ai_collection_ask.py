@@ -13,7 +13,7 @@ from dam.ai.fake import FakeProvider
 from dam.ai.tasks import TASKS
 from dam.ai.tasks.ask_archive import ask_query, snippet, terms
 from dam.db.tables import ai_cache, ai_calls
-from dam.services.errors import Conflict, InvalidRequest, NotFound
+from dam.errors import Conflict, InvalidRequest, NotFound
 
 BANKS = "10. Financial/Banks"
 HOME = "20. Home/Insurance"

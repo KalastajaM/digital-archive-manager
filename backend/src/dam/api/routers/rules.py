@@ -34,6 +34,7 @@ from dam.api.schemas import (
 )
 from dam.app import App
 from dam.codes.model import format_validation
+from dam.errors import InvalidRequest, NotFound
 from dam.rules import state as rules_state
 from dam.rules.jobs import ReplayJob
 from dam.rules.learned import learned_ids, rule_file
@@ -41,7 +42,6 @@ from dam.rules.model import LEARNED_FILE, RESERVED_IDS, Rule
 from dam.rules.picture import DEFAULT_MIN_SCORE
 from dam.rules.replay import ReplayRun, StaleCursor, explain, folder_of, replay, without_folder
 from dam.services.area_pictures import check_pictures_exist
-from dam.services.errors import InvalidRequest, NotFound
 from dam.services.rule_record import RuleStats
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])

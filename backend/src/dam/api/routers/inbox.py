@@ -18,8 +18,8 @@ from dam.api.schemas import (
     InboxEntryOut,
     ResolvedOpOut,
 )
+from dam.errors import InvalidRequest, TooLarge
 from dam.ops.primitives import MAX_COPY_BYTES
-from dam.services.errors import InvalidRequest, TooLarge
 from dam.services.inbox import FileRequest
 from dam.services.intake import LIMIT_MB
 

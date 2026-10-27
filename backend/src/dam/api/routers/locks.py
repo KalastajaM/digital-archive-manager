@@ -9,8 +9,8 @@ from fastapi import APIRouter
 from dam.api.deps import AppDep, live_record
 from dam.api.schemas import LocksOut, LockStateOut, UnlockIn
 from dam.app import App
+from dam.errors import Conflict, InvalidRequest
 from dam.locks import IDLE_SECONDS, IMPORTANT, IMPORTANT_FOR_NOW
-from dam.services.errors import Conflict, InvalidRequest
 
 router = APIRouter(prefix="/api", tags=["locks"])
 

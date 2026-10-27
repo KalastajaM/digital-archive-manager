@@ -292,7 +292,7 @@ def test_openapi_works_unconfigured(bare):
 
 
 def test_app_create_refuses_unconfigured(bare):
-    from dam.services.errors import NotConfigured
+    from dam.errors import NotConfigured
 
     with pytest.raises(NotConfigured):
         App.create(bare.data_dir)

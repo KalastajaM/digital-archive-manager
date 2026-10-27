@@ -8,12 +8,12 @@ import unicodedata
 import pytest
 import xattr
 
+from dam.errors import InvalidRequest
 from dam.index.driveid import DRIVE_ID_XATTR
 from dam.ops import primitives
 from dam.ops.model import GuardError, Op, OpFailed, OpKind, Plan
 from dam.ops.planner import COLLISION_NOTE
 from dam.ops.primitives import PRESENT, different_disks_message
-from dam.services.errors import InvalidRequest
 
 HOME = "20. Home"
 SRC = f"{HOME}/2009"

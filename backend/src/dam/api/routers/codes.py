@@ -26,7 +26,7 @@ from dam.codes import folders, sheets
 from dam.codes.assigned import assign_code
 from dam.codes.batch import marked_rows
 from dam.codes.model import FilingCode, confusable_with, format_validation
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 router = APIRouter(prefix="/api/filing-codes", tags=["filing-codes"])
 

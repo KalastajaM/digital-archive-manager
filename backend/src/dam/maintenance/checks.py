@@ -25,6 +25,7 @@ from typing import Literal
 from sqlalchemy import Engine, func, or_, select
 
 from dam.core.fs import readlink, resolve
+from dam.core.jobs import JobContext
 from dam.core.naming import matches_convention, parse_doc_date
 from dam.core.paths import ArchivePaths, OutsideArchiveError, fold_name, nfc
 from dam.db.tables import (
@@ -36,13 +37,12 @@ from dam.db.tables import (
     items,
     operations,
 )
+from dam.index.driveid import LOCAL_ID_PREFIX
 from dam.index.repo import FileRecord, FileRepo
 from dam.maintenance import duplicates
 from dam.maintenance.duplicates import NUMBERED, own_folders
-from dam.maintenance.jobs import JobContext
 from dam.ops.guards import is_under, touches_protected
 from dam.ops.primitives import TEMP_COPY_PREFIX
-from dam.services import LOCAL_ID_PREFIX
 
 LIST_LIMIT = 500  # rows listed per check; the total is always counted
 FINDER_CACHE = {".ds_store"}  # what an "empty" folder may still hold

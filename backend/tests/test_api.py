@@ -539,7 +539,7 @@ def test_cache_hits_bypass_the_render_limit(client, app, fake_archive):
 
 
 def test_vanished_file_is_404(app, fake_archive):
-    from dam.services.errors import NotFound
+    from dam.errors import NotFound
 
     path = make_text_pdf(fake_archive.add(f"{BANKS}/doc.pdf", drive_id="p1"))
     app.scan()

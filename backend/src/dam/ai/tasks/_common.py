@@ -6,9 +6,9 @@ from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 from dam.ai import guard
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FileRecord
 from dam.ops.guards import is_under
-from dam.services.errors import InvalidRequest, NotFound
 
 if TYPE_CHECKING:
     from dam.app import App

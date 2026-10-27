@@ -7,9 +7,9 @@ from sqlalchemy import select
 
 from dam.api import create_api
 from dam.db.tables import operations
+from dam.errors import InvalidRequest, NotFound
 from dam.ops.model import OpKind
 from dam.ops.planner import COLLISION_NOTE
-from dam.services.errors import InvalidRequest, NotFound
 
 INBOX = "##. Organize"
 ONG = "##. Ongoing"

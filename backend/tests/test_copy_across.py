@@ -185,7 +185,7 @@ def test_no_throttle_between_copy_and_its_original(across, monkeypatch):
 
 
 def test_undo_refused_while_a_copy_job_runs(across):
-    from dam.services.errors import Conflict
+    from dam.errors import Conflict
 
     result = _move(across, "a.pdf")
     across.executor.copying = lambda: True
