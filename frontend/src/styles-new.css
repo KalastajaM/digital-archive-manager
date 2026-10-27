@@ -995,3 +995,266 @@
 [data-style="new"] .quicklook-bar { border-bottom-width: 1px; }
 [data-style="new"] .quicklook-details { border-left-width: 1px; border-left-color: var(--hairline); }
 [data-style="new"] .quicklook-preview { background: var(--desk); }
+
+/* ==== Collections: header, groups, notes and the selected file's panel ======================
+ * The page is a container (the main element). Its header is one line: the title truncates,
+ * and the subtitle gives way before it; the file actions sit over the side panel, as in
+ * Classic. In a set order by the page's own width: under ~900px the side panel leaves the
+ * row and opens over the list from a "File details" button (with the file's actions on top
+ * of it), under ~760px Show folder and Export fold into the "..." menu. The two columns
+ * never stack: Classic's 900px rules are undone below. The divider is remembered, and
+ * double-click resets it. Starred and Important are the same page. */
+[data-style="new"] main:has(> .collection-page) { container: coll / inline-size; }
+[data-style="new"] .collection { background: var(--panel); }
+
+/* -- the header: one line -- */
+[data-style="new"] .collection-toolbar { flex-wrap: nowrap; align-content: normal; gap: 0; padding: 0; }
+[data-style="new"] .collection-toolbar .toolbar-lead {
+  flex: 0 0 calc(100% - var(--split));
+  max-width: calc(100% - var(--split));
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  gap: var(--sp-3);
+  padding: 8px var(--sp-3) 8px var(--sp-5);
+}
+[data-style="new"] .collection-toolbar .toolbar-title { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; }
+[data-style="new"] .collection-toolbar .toolbar-title h2 { flex: 0 1 auto; min-width: 0; font-size: 20px; font-weight: 600; }
+[data-style="new"] .collection-toolbar .toolbar-subtitle { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+[data-style="new"] .collection-toolbar .toolbar-lead .toolbar-actions { flex: none; margin-left: 0; }
+[data-style="new"] .collection-toolbar .toolbar-trailing {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  align-self: stretch;
+  align-content: center;
+  margin-left: 0;
+  padding: 6px var(--sp-3);
+  justify-content: flex-start;
+  border-left: 1px solid var(--hairline);
+}
+[data-style="new"] .collection-toolbar .details-button,
+[data-style="new"] .collection-cols > .details-scrim,
+[data-style="new"] .collection-cols > .inspector-bar { display: none; }
+
+/* -- the page: the list, the divider, the side panel -- */
+[data-style="new"] .collection-cols { grid-template-columns: minmax(0, 1fr) var(--split); }
+[data-style="new"] .collection-cols > .splitter { display: block; }
+[data-style="new"] .collection-body { display: flex; flex-direction: column; gap: 18px; padding: 20px 20px var(--sp-8); }
+[data-style="new"] .collection-body > * { margin-top: 0; margin-bottom: 0; max-width: none; }
+[data-style="new"] .collection-where { font-size: var(--fs-sm); }
+[data-style="new"] .collection-caption { font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0; color: var(--text); }
+[data-style="new"] .collection-summary { background: var(--panel-2); border: 1px solid var(--hairline); border-radius: var(--r-xl); }
+[data-style="new"] .collection-inspector { overflow-y: auto; background: var(--panel-2); border-left: 1px solid var(--hairline); padding: 18px; }
+[data-style="new"] .collection-inspector .file-meta-title h2 { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+
+/* -- groups and files: one bordered card, file names in the fixed-width face -- */
+[data-style="new"] .collection-members { max-height: none; margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-xl); background: var(--panel); }
+[data-style="new"] .group-tree { padding: 4px; }
+[data-style="new"] .group-header { margin-top: 2px; padding: 2px 4px 2px 0; border-radius: var(--r-md); background: var(--panel-2); min-height: 32px; }
+[data-style="new"] .group-body > .group > .group-header { margin-top: 2px; }
+[data-style="new"] .group-toggle { min-height: 28px; border: 0; background: transparent; color: var(--text); }
+[data-style="new"] .group-toggle:hover:not(:disabled) { background: transparent; border: 0; }
+[data-style="new"] .group-name { font-weight: 600; }
+[data-style="new"] .group-count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-xs); }
+[data-style="new"] .group-header .group-menu { margin-left: 0; }
+[data-style="new"] .group-summary-text,
+[data-style="new"] .group-summary input { font-size: var(--fs-sm); }
+[data-style="new"] .member { border-radius: var(--r-md); }
+[data-style="new"] .member[aria-current="true"] { background: var(--selected); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+[data-style="new"] .member[aria-current="true"] .member-icon { color: var(--accent); opacity: 1; }
+[data-style="new"] .member[aria-current="true"] .member-folder,
+[data-style="new"] .member[aria-current="true"].member-gone .entry-name { color: var(--muted-2); opacity: 1; }
+[data-style="new"] .member[aria-current="true"] .tag-red { background: var(--red-bg); color: var(--red-text); }
+[data-style="new"] .member[aria-current="true"] .tag-orange { background: var(--orange-bg); color: var(--orange-text); }
+[data-style="new"] .member[aria-current="true"] .tag-grey { background: var(--grey-bg); color: var(--grey-text); }
+[data-style="new"] .member[aria-current="true"] .tag-blue { background: var(--blue-bg); color: var(--blue-text); }
+[data-style="new"] .member[aria-current="true"] .tag-green { background: var(--green-bg); color: var(--green-text); }
+[data-style="new"] .member[aria-current="true"] .mark-starred, [data-style="new"] .tray-items > li[aria-current="true"] .mark-starred { color: var(--orange); }
+[data-style="new"] .member[aria-current="true"] .mark-important, [data-style="new"] .tray-items > li[aria-current="true"] .mark-important { color: var(--red-text); }
+[data-style="new"] .member-row { min-height: 32px; border: 0; background: transparent; }
+[data-style="new"] .member-text { flex-wrap: nowrap; }
+[data-style="new"] .member-text .entry-name { flex: 0 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .member-text .entry-name.member-dir { font-family: inherit; font-weight: 500; }
+[data-style="new"] .member-folder { flex: 0 100 auto; font-family: var(--font-mono); font-size: 11.5px; }
+[data-style="new"] .member-note { font-size: var(--fs-sm); }
+/* the status pills share what the name leaves and end in an ellipsis; they are never cut off by the row */
+[data-style="new"] .member-tags { flex: 0 1 auto; min-width: 0; max-width: 60%; }
+[data-style="new"] .member-tags .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* -- notes and checklist: side by side while there is room -- */
+[data-style="new"] .collection-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; border-top: 0; padding-top: 0; }
+[data-style="new"] .collection-notes > * { min-width: 0; margin-top: 0; }
+
+/* -- the folding order -- */
+@container coll (max-width: 900px) {
+  [data-style="new"] .collection-cols { grid-template-columns: minmax(0, 1fr); }
+  [data-style="new"] .collection-cols > .splitter { display: none; }
+  [data-style="new"] .collection-cols > .collection-inspector { display: none; }
+  [data-style="new"] .collection-toolbar .toolbar-trailing { display: none; }
+  [data-style="new"] .collection-toolbar .toolbar-lead { flex: 1 1 auto; max-width: none; padding-right: var(--sp-4); }
+  [data-style="new"] .collection-toolbar .details-button { display: inline-flex; }
+  [data-style="new"] .collection-cols[data-details="open"] > .details-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+  }
+  [data-style="new"] .collection-cols[data-details="open"] > .collection-inspector {
+    display: block;
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(440px, 92%);
+    padding-top: 62px;
+    box-shadow: var(--shadow-pop);
+  }
+  [data-style="new"] .collection-cols[data-details="open"] > .inspector-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: center;
+    position: absolute;
+    z-index: 7;
+    top: 0;
+    right: 0;
+    width: min(440px, 92%);
+    box-sizing: border-box;
+    min-height: 50px;
+    padding: 6px var(--sp-3);
+    border-bottom: 1px solid var(--hairline);
+    background: var(--panel);
+  }
+}
+@container coll (max-width: 760px) {
+  [data-style="new"] .collection-toolbar .hdr-wide { display: none; }
+}
+
+/* Classic's narrow-window rules stack the columns and let the page scroll; New keeps them
+ * and scrolls inside */
+@media (max-width: 900px) {
+  [data-style="new"] .app:has(.collection-page) .content,
+  [data-style="new"] .app:has(.collections-index) .content { height: 100%; }
+  [data-style="new"] .collection-body { overflow-y: auto; }
+  [data-style="new"] .collection-inspector { overflow-y: auto; border-left: 1px solid var(--hairline); border-top: 0; }
+  [data-style="new"] .collection { min-height: 0; }
+  [data-style="new"] .collection-cols { min-height: 0; flex: 1; }
+}
+
+/* -- the index of collections -- */
+[data-style="new"] .collections-index .toolbar { padding: 0 var(--sp-5); }
+[data-style="new"] .collection-list { border: 1px solid var(--hairline); border-radius: var(--r-xl); box-shadow: none; }
+[data-style="new"] .collection-list .collection-children-list { border: 0; }
+[data-style="new"] .collection-list > li + li::before { border-top-width: 1px; }
+[data-style="new"] .collection-children-list::before { border-top-width: 1px; }
+[data-style="new"] .collection-row-title { font-weight: 500; }
+[data-style="new"] .collection-row-meta { font-family: var(--font-mono); font-size: var(--fs-xs); }
+[data-style="new"] .new-collection-row { border: 1px solid var(--hairline); border-radius: var(--r-lg); }
+
+/* ==== Trays: the list, the divider, the item ===============================================
+ * The header is the two panes' header: the tray's name, count, Add file and Open / Done sit
+ * over the list (as drawn, the name on a line of its own with the controls), the open item's
+ * file actions over the item. The list is as wide as the divider says (remembered,
+ * double-click resets) and the panes never stack: Classic's 900px rules are undone below.
+ * The item takes two columns (the details, then the document beside them) when its pane is
+ * wide, and one when it is not. */
+[data-style="new"] main:has(> .trays) { container: trays / inline-size; }
+[data-style="new"] .trays { background: var(--panel); }
+[data-style="new"] .trays-toolbar { flex-wrap: nowrap; align-content: normal; gap: 0; padding: 0; }
+[data-style="new"] .trays-toolbar .toolbar-lead {
+  flex: 0 0 var(--split);
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  align-content: center;
+  align-self: stretch;
+  gap: 8px 10px;
+  padding: 12px var(--sp-4);
+  border-right: 1px solid var(--hairline);
+}
+[data-style="new"] .trays-toolbar .toolbar-title { flex: 1 1 0; min-width: 0; }
+[data-style="new"] .trays-toolbar .toolbar-title h2 { flex: 0 1 auto; font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; }
+[data-style="new"] .trays-toolbar .toolbar-subtitle { font-family: var(--font-mono); font-size: var(--fs-sm); }
+/* the buttons join the title's line, the Open / Done choice takes a line of its own */
+[data-style="new"] .trays-toolbar .toolbar-lead .toolbar-actions { display: contents; }
+[data-style="new"] .trays-toolbar .tray-add-file { order: 2; margin-left: auto; min-height: 28px; padding: 3px 10px; font-size: var(--fs-sm); }
+[data-style="new"] .trays-toolbar .segmented { order: 3; flex: 1 1 100%; display: flex; }
+[data-style="new"] .trays-toolbar .segmented-option { flex: 1 1 0; justify-content: center; }
+[data-style="new"] .trays-toolbar .toolbar-trailing { flex: 1 1 0; min-width: 0; margin-left: 0; padding: 8px var(--sp-4); }
+
+[data-style="new"] .trays-main { grid-template-columns: var(--split) minmax(0, 1fr); }
+[data-style="new"] .trays-main > .splitter { display: block; }
+[data-style="new"] .trays-list { border-right: 1px solid var(--hairline); }
+
+/* -- the rows: a calm selection, names that end in an ellipsis, figures in the fixed-width face -- */
+[data-style="new"] .tray-items { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+[data-style="new"] .tray-items > li { margin: 0; border-radius: var(--r-lg); }
+[data-style="new"] .tray-items > li + li::before { display: none; }
+[data-style="new"] .tray-items > li[aria-current="true"] {
+  background: var(--selected);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+[data-style="new"] .tray-row { padding: 10px 12px; gap: var(--sp-2); }
+[data-style="new"] .tray-row-title,
+[data-style="new"] .tray-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+[data-style="new"] .tray-row-title { font-weight: 500; }
+[data-style="new"] .tray-row-side { min-width: 0; }
+[data-style="new"] .tray-row-amount,
+[data-style="new"] .tray-row-age { font-family: var(--font-mono); font-size: var(--fs-sm); }
+[data-style="new"] .tray-row-age { font-size: var(--fs-xs); }
+[data-style="new"] li[aria-current="true"] .tray-row-sub,
+[data-style="new"] li[aria-current="true"] .tray-row-age,
+[data-style="new"] li[aria-current="true"] .row-icons,
+[data-style="new"] li[aria-current="true"] .tray-row-done { color: var(--muted); opacity: 1; }
+
+/* -- the item -- */
+[data-style="new"] .trays-detail { container: tdetail / inline-size; background: var(--panel); padding: 22px 26px var(--sp-8); }
+[data-style="new"] .item-detail { max-width: none; }
+[data-style="new"] .item-header h2 { font-size: 20px; font-weight: 600; overflow-wrap: normal; }
+/* the title (click to rename): up to two lines, then an ellipsis */
+[data-style="new"] .item-header .editable-title { min-width: 0; }
+[data-style="new"] .item-header .editable-title-text { min-width: 0; overflow-wrap: anywhere; }
+[data-style="new"] .item-header .click-edit {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+}
+[data-style="new"] .item-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+[data-style="new"] .item-file { font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .bill-amount { font-size: var(--fs-2xl); font-weight: 500; }
+/* Check by / Waiting for, and Mark done: one panel */
+[data-style="new"] .item-fields { align-items: flex-end; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-xl); background: var(--panel-2); }
+[data-style="new"] .item-fields .field-date input[type="date"],
+[data-style="new"] .item-fields .field-money input { font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .item-done-buttons { margin-top: 0; }
+[data-style="new"] .item-fields .field-text { flex: 1 1 14rem; }
+[data-style="new"] .fact-value { font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .fact > * { border-bottom-width: 1px; }
+[data-style="new"] .item-files-line { font-size: var(--fs-sm); }
+[data-style="new"] .item-dated .checklist { box-shadow: none; border: 1px solid var(--hairline); border-radius: var(--r-xl); }
+[data-style="new"] .history { font-size: var(--fs-sm); }
+@container tdetail (min-width: 780px) {
+  [data-style="new"] .item-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-rows: repeat(6, auto) 1fr;
+    column-gap: 28px;
+    align-content: start;
+  }
+  [data-style="new"] .item-detail > .file-view-block { display: block; min-width: 0; grid-column: 1; }
+  [data-style="new"] .item-detail > .file-view-block[data-block="header"] { grid-column: 1 / -1; }
+  [data-style="new"] .item-detail > .file-view-block[data-block="preview"] { grid-column: 2; grid-row: 2 / 8; }
+}
+
+/* Classic's narrow-window rules stack the panes and let the page scroll; New keeps the panes
+ * side by side and scrolls inside */
+@media (max-width: 900px) {
+  [data-style="new"] .app:has(.trays) .content { height: 100%; }
+  [data-style="new"] .trays-main { grid-template-columns: var(--split) minmax(0, 1fr); }
+  [data-style="new"] .tray-items { max-height: none; }
+  [data-style="new"] .trays-detail { overflow-y: auto; padding: 22px 26px var(--sp-8); }
+}
