@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { errorText, MARKS_CHANGED, type SearchHit, searchFiles } from "../api/client";
+import { errorText, isAbort, MARKS_CHANGED, type SearchHit, searchFiles } from "../api/client";
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
@@ -11,6 +11,7 @@ export function useSearch(query: string, folder = "", reload = 0, tagMode: "all"
   const [results, setResults] = useState<{ key: string; hits: SearchHit[] } | null>(null);
   const [error, setError] = useState<{ key: string; text: string } | null>(null);
   const latest = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
   // A mark changed: the hits are fetched again, so their ★ / ! icons follow.
   const [marked, setMarked] = useState(0);
   useEffect(() => {
@@ -18,20 +19,25 @@ export function useSearch(query: string, folder = "", reload = 0, tagMode: "all"
     window.addEventListener(MARKS_CHANGED, bump);
     return () => window.removeEventListener(MARKS_CHANGED, bump);
   }, []);
+  useEffect(() => () => inFlight.current?.abort(), []); // leaving the screen
   const mode = tagMode;
   const key = `${query}\n${folder}\n${mode}`;
   useEffect(() => {
     if (!query) {
       latest.current++; // whatever is still on its way is now stale
+      inFlight.current?.abort();
       return;
     }
     const timer = setTimeout(async () => {
       const seq = ++latest.current;
+      inFlight.current?.abort(); // the server need not finish a search nobody waits for
+      const controller = new AbortController();
+      inFlight.current = controller;
       try {
-        const hits = await searchFiles(query, folder || undefined, mode);
+        const hits = await searchFiles(query, folder || undefined, mode, controller.signal);
         if (seq === latest.current) setResults({ key, hits });
       } catch (e) {
-        if (seq === latest.current) setError({ key, text: errorText(e) });
+        if (seq === latest.current && !isAbort(e)) setError({ key, text: errorText(e) });
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);

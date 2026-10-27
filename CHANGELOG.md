@@ -586,6 +586,13 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A clear message when dam cannot be reached.** If dam has stopped, screens now say
+  that dam is not running or cannot be reached, instead of the browser's "Failed to fetch".
+- **Switching folders or searching quickly no longer leaves old work running.** A listing,
+  search or preview you have moved away from is cancelled instead of finishing in the
+  background.
+- **Screen readers announce the folder tree.** Collection groups, folders and files are now
+  a tree with levels and open or closed states.
 - **The right file is moved when two names differ only in case.** On a case-sensitive
   disk (Linux, or a Mac disk formatted that way) a folder can hold both `report.pdf` and
   `Report.pdf`; a move or rename of one could pick the other. dam now takes the exact
