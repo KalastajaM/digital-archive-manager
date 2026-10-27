@@ -111,8 +111,8 @@ jobs:
         working-directory: frontend
       - run: npm run gen:api
         working-directory: frontend
-      - name: Fail when schema.d.ts is stale
-        run: git diff --exit-code -- frontend/src/api/schema.d.ts
+      - name: Fail when schema.d.ts or schema-input.d.ts is stale
+        run: git diff --exit-code -- frontend/src/api/schema.d.ts frontend/src/api/schema-input.d.ts
 
   # One check to require in branch protection: it passes when every job that ran passed
   # (skipped ones count as passed), so a PR that skips a part never waits for it.

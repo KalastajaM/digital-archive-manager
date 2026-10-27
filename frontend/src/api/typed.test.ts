@@ -25,6 +25,7 @@ describe("buildUrl", () => {
       "/api/x?q=%C3%A9%26&n=2&tag=a&tag=b&on=true",
     );
     expect(buildUrl("/api/x", undefined, { gone: undefined })).toBe("/api/x");
+    expect(buildUrl("/api/x", undefined, { path: "10. Financial/Banks" })).toBe("/api/x?path=10.%20Financial%2FBanks");
   });
 
   it("refuses a template whose parameter has no value", () => {
@@ -77,6 +78,10 @@ describe("apiGet, apiPost and apiDelete", () => {
       void apiPost("/api/maintenance/moved/undo");
       // @ts-expect-error the body has the wrong shape
       void apiPost("/api/maintenance/moved/undo", { body: { undo: "u1" } });
+      // a field the server has a default for may be left out (``schema-input.d.ts``)
+      void apiPost("/api/maintenance/jobs", { body: { kind: "moved" } });
+      // @ts-expect-error a field without a default may not
+      void apiPost("/api/maintenance/jobs", { body: { days: 3 } });
     };
     expect(never).toBeTypeOf("function");
   });
