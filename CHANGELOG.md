@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Open a folder from Activity.** Operations in Activity that name a folder (a folder moved
+  on one disk or to another disk, renamed, made, or sent to To Delete) now have the same
+  **Show in Browse** icon as files: Browse opens at that folder with its contents shown.
+  If the folder was moved or renamed since, or a folder above it was, the icon leads to its
+  place now and the entry says "now at ...". A folder deleted by hand reads "no longer in
+  the archive", with no link. Nothing changes when you look.
 - **Try the new look.** dam has a second look, **New**: calmer colours, a fixed-width font
   for figures and file names, and a darker mode with warm greys. For now only the colours,
   fonts and corners change; the screens themselves follow step by step. **Classic stays
