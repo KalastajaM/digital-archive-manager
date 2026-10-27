@@ -112,7 +112,10 @@ export function WindowedList<T>({ entries, keyOf, pin, render, head, listRef, cl
     );
   }
 
-  // measure the rendered rows; a changed height renders the window again
+  // measure the rendered rows; a changed height renders the window again. This runs
+  // after every render, since any row's content may change its height, and it sets
+  // state only when a height changed, so it settles
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const list = ul.current;
     if (!windowed || !list) return;
