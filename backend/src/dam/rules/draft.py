@@ -14,7 +14,7 @@ from pathlib import PurePosixPath
 from dam.core.paths import nfc
 from dam.rules.engine import check_template, clean_stem
 from dam.rules.model import RESERVED_IDS
-from dam.rules.similar import _tokens
+from dam.rules.similar import word_tokens
 
 MAX_WORDS = 6
 MAX_FREQUENCY = 0.3  # share of filed documents containing a word; above it, it is noise
@@ -187,7 +187,7 @@ def draft_rule(
     Without ``filed_folder`` / ``filed_name`` (a document still in the inbox) the draft has
     no folder / name. ``person``: the document's person, proposed as ``{person}`` where
     the folder path has a part with that name."""
-    words = [w for w in _tokens("", text) if doc_frequency(w) <= MAX_FREQUENCY][:MAX_WORDS]
+    words = [w for w in word_tokens("", text) if doc_frequency(w) <= MAX_FREQUENCY][:MAX_WORDS]
     if not words:
         return None
     pick = min(range(len(words)), key=lambda i: (doc_frequency(words[i]), i))

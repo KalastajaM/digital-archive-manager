@@ -26,8 +26,7 @@ from dam.core.yamledit import YamlEditError, replace_values
 from dam.db.tables import files, made_folders, maintenance_ignored, operations
 from dam.maintenance.ignored import GROUPS
 from dam.ops.model import ABS_TARGET, OpFailed, OpKind, followed_json, read_followed
-from dam.rules.model import _load_file as load_rule_file
-from dam.rules.model import rule_files
+from dam.rules.model import load_rule_file, rule_files
 from dam.snapshots import BEFORE_RELABEL, create_snapshot
 
 INTERRUPTED = (

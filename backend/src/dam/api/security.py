@@ -37,7 +37,7 @@ import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from dam.locks import _TOKENS, UNLOCK_HEADER, parse_tokens
+from dam.locks import UNLOCK_HEADER, UNLOCK_TOKENS, parse_tokens
 from dam.logging_setup import log_internal_error
 
 log = logging.getLogger(__name__)
@@ -194,11 +194,11 @@ class UnlockTokenMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        reset = _TOKENS.set(parse_tokens(_headers(scope).get(UNLOCK_HEADER)))
+        reset = UNLOCK_TOKENS.set(parse_tokens(_headers(scope).get(UNLOCK_HEADER)))
         try:
             await self.app(scope, receive, send)
         finally:
-            _TOKENS.reset(reset)
+            UNLOCK_TOKENS.reset(reset)
 
 
 class InternalErrorMiddleware:

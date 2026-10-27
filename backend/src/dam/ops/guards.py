@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
 from dam.core.foldernames import portable_name_problem
-from dam.core.paths import ArchivePaths, OutsideArchiveError, _fold, nfc, not_connected_message
+from dam.core.paths import ArchivePaths, OutsideArchiveError, fold_name, nfc, not_connected_message
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind
 from dam.ops.primitives import DS_STORE
 
@@ -261,8 +261,8 @@ def check_not_label(paths: ArchivePaths, rel: str) -> None:
     label: the label would hide it (Browse shows the extra folder there). Detached
     entries count too: their index rows stay under the label."""
     parts = PurePosixPath(rel).parts
-    reserved = {_fold(e.label) for e in paths.settings.extra_folders}
-    if len(parts) == 1 and _fold(parts[0]) in reserved:
+    reserved = {fold_name(e.label) for e in paths.settings.extra_folders}
+    if len(parts) == 1 and fold_name(parts[0]) in reserved:
         raise GuardError(f"'{parts[0]}' is the name of an archive folder. Choose another name.")
 
 

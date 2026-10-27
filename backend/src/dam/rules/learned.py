@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from dam.codes.configfile import write_config_file
-from dam.rules.model import LEARNED_FILE, Rule, _load_file, rule_files
+from dam.rules.model import LEARNED_FILE, Rule, load_rule_file, rule_files
 
 
 def rules_text(rules: list[Rule]) -> str:
@@ -22,7 +22,7 @@ def write_rules_file(path: Path, rules: list[Rule]) -> None:
     one is read back and the old one restored if it does not match."""
 
     def verify() -> bool:
-        return _load_file(path) == rules
+        return load_rule_file(path) == rules
 
     write_config_file(path, rules_text(rules), verify)
 
@@ -31,7 +31,7 @@ def rule_file(rules_dir: Path, rule_id: str) -> Path | None:
     """The file that holds the loaded rule ``rule_id`` (the first one in load order)."""
     for path in rule_files(rules_dir):
         try:
-            if any(r.id == rule_id for r in _load_file(path)):
+            if any(r.id == rule_id for r in load_rule_file(path)):
                 return path
         except (ValueError, RecursionError, MemoryError):
             continue  # a bad file loads nothing
@@ -44,6 +44,6 @@ def learned_ids(rules_dir: Path) -> set[str]:
     if not path.is_file():
         return set()
     try:
-        return {r.id for r in _load_file(path)}
+        return {r.id for r in load_rule_file(path)}
     except (ValueError, RecursionError, MemoryError):
         return set()

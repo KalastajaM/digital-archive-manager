@@ -12,7 +12,7 @@ from fastapi import APIRouter
 
 from dam.api.deps import AppDep, require_editable
 from dam.api.marks import collection_out
-from dam.api.routers.collections import _synced, file_phrase
+from dam.api.routers.collections import file_phrase, synced
 from dam.api.schemas import CollectionChangeOut, CollectionOut, MarkBody
 from dam.services.errors import InvalidRequest
 
@@ -37,7 +37,7 @@ def star(app: AppDep, body: MarkBody) -> dict:
     require_editable(app, body.drive_ids)
     what = file_phrase(app, body.drive_ids)
     c = app.marks.star(body.drive_ids, notify=False)
-    return _synced(app, c.id, f"Starred {what}")
+    return synced(app, c.id, f"Starred {what}")
 
 
 @router.post("/unstar", response_model=CollectionChangeOut)
@@ -45,7 +45,7 @@ def unstar(app: AppDep, body: MarkBody) -> dict:
     _no_group(body)
     what = file_phrase(app, body.drive_ids)
     c = app.marks.unstar(body.drive_ids, notify=False)
-    return _synced(app, c.id, f"Removed the star from {what}")
+    return synced(app, c.id, f"Removed the star from {what}")
 
 
 @router.post("/important", response_model=CollectionChangeOut)
@@ -56,7 +56,7 @@ def important(app: AppDep, body: MarkBody) -> dict:
     require_editable(app, body.drive_ids)
     what = file_phrase(app, body.drive_ids)
     c = app.marks.mark_important(body.drive_ids, body.group, notify=False)
-    return _synced(app, c.id, f"Marked {what} as important")
+    return synced(app, c.id, f"Marked {what} as important")
 
 
 @router.post("/unimportant", response_model=CollectionChangeOut)
@@ -64,4 +64,4 @@ def unimportant(app: AppDep, body: MarkBody) -> dict:
     _no_group(body)
     what = file_phrase(app, body.drive_ids)
     c = app.marks.unmark_important(body.drive_ids, notify=False)
-    return _synced(app, c.id, f"Removed {what} from Important")
+    return synced(app, c.id, f"Removed {what} from Important")

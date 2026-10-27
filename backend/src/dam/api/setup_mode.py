@@ -14,8 +14,8 @@ from fastapi import FastAPI
 from dam import layouts, setup
 from dam.api.main import (
     ERROR_RESPONSES,
-    _add_error_handlers,
-    _mount_frontend,
+    add_error_handlers,
+    mount_frontend,
 )
 from dam.api.routers import archives as archives_router
 from dam.api.routers import setup as setup_router
@@ -69,9 +69,9 @@ def create_setup_api(
     def not_yet(rest: str) -> dict:
         raise Conflict(setup.NOT_CONFIGURED)
 
-    _add_error_handlers(api)
+    add_error_handlers(api)
     if static_dir is not None and (static_dir / "index.html").is_file():
-        _mount_frontend(api, static_dir)
+        mount_frontend(api, static_dir)
     if archives is not None:
         api.add_middleware(ArchiveGuardMiddleware, archive_id=archives.current_id)
     api.add_middleware(InternalErrorMiddleware, logs_dir=app_paths.logs_dir)

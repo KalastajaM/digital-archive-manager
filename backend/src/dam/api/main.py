@@ -102,7 +102,7 @@ def _error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
 
-def _add_error_handlers(api: FastAPI) -> None:
+def add_error_handlers(api: FastAPI) -> None:
     for exc_type, status in ERROR_STATUS.items():
 
         def handler(request: Request, exc: Exception, status: int = status) -> JSONResponse:
@@ -130,7 +130,7 @@ def _add_error_handlers(api: FastAPI) -> None:
     api.add_exception_handler(RequestValidationError, validation_error)
 
 
-def _mount_frontend(api: FastAPI, static_dir: Path) -> None:
+def mount_frontend(api: FastAPI, static_dir: Path) -> None:
     """Serve the built frontend; unknown non-API paths get index.html (SPA routing)."""
     root = static_dir.resolve()
     index = root / "index.html"
@@ -201,9 +201,9 @@ def create_api(
     ):
         api.include_router(module.router)
     api.include_router(collections.groups_router)  # /api/collection-groups
-    _add_error_handlers(api)
+    add_error_handlers(api)
     if static_dir is not None and (static_dir / "index.html").is_file():
-        _mount_frontend(api, static_dir)
+        mount_frontend(api, static_dir)
     if archives is not None:
         api.add_middleware(ArchiveGuardMiddleware, archive_id=archives.current_id)
     api.add_middleware(UnlockTokenMiddleware)

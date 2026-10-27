@@ -26,7 +26,7 @@ from sqlalchemy import Engine, func, or_, select
 
 from dam.core.fs import readlink, resolve
 from dam.core.naming import matches_convention, parse_doc_date
-from dam.core.paths import ArchivePaths, OutsideArchiveError, _fold, nfc
+from dam.core.paths import ArchivePaths, OutsideArchiveError, fold_name, nfc
 from dam.db.tables import (
     collection_members,
     collections,
@@ -305,14 +305,14 @@ def label_clashes(
     main folder also has. That entry is not indexed (the archive folder wins); the owner
     renames one of the two. Lists the main folder's top level only."""
     try:
-        names = {_fold(n) for n in os.listdir(paths.root)}
+        names = {fold_name(n) for n in os.listdir(paths.root)}
     except OSError:
         names = set()
     out = LabelClashes()
     extras = paths.settings.extra_folders
     for i, extra in enumerate(extras):
         ctx.progress(i, len(extras), current=extra.label)
-        if _fold(extra.label) in names:
+        if fold_name(extra.label) in names:
             out.total += 1
             out.items.append(extra.label)
     ctx.progress(len(extras), len(extras))
