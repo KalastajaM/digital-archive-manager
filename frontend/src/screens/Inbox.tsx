@@ -160,7 +160,7 @@ export default function Inbox() {
     setLastApplied((last) => (last?.batchId === batchId ? null : last)),
   );
 
-  const entries: InboxEntry[] = inbox.data ?? [];
+  const entries: InboxEntry[] = useMemo(() => inbox.data ?? [], [inbox.data]);
   const found = entries.findIndex((e) => e.record.drive_id === selectedId);
   const index = found >= 0 ? found : 0;
   const current = entries[index] as InboxEntry | undefined;
@@ -296,14 +296,15 @@ export default function Inbox() {
   const names = useRef(new Map<string, string>());
   for (const e of entries) names.current.set(e.record.drive_id, e.record.name ?? e.record.path);
   const message = filing.message;
+  const { dismissMessage } = filing;
   useEffect(() => {
     if (!message || !inbox.data) return;
     const present = new Set(inbox.data.map((e) => e.record.drive_id));
     if (message.ids.some((id) => present.has(id))) return;
     const files = message.ids.map((id) => names.current.get(id) ?? id).join(", ");
     toast({ kind: message.kind === "error" ? "error" : "info", text: `${files}: ${message.text}` });
-    filing.dismissMessage();
-  }, [message, inbox.data]); // keyed on the message and the list only
+    dismissMessage();
+  }, [message, inbox.data, toast, dismissMessage]); // toast and dismissMessage are stable
 
   // The list scrolls on its own: keep the selected entry in view as j/k move it.
   const listRef = useRef<HTMLUListElement>(null);

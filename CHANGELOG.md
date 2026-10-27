@@ -161,6 +161,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Large folders scroll smoothly in Browse.** A folder, Files view or search with
+  hundreds or thousands of entries now builds only the rows near what you see, so
+  opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
+  view), Go to target, Quick Look and dragging work as before.
 - **dam needs Python 3.14 or newer.** It never ran on 3.13 (the code relies on how 3.14
   reads type hints), so the stated minimum now says so. `uv` installs the right Python
   by itself.
@@ -593,6 +597,9 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A folder opened while typing a search stays open.** Opening a folder in Browse within
+  a quarter second of typing in the search box could put you back in the folder you came
+  from once the words reached the address.
 - **A clear message when dam cannot be reached.** If dam has stopped, screens now say
   that dam is not running or cannot be reached, instead of the browser's "Failed to fetch".
 - **Switching folders or searching quickly no longer leaves old work running.** A listing,

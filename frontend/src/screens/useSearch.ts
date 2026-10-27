@@ -41,7 +41,7 @@ export function useSearch(query: string, folder = "", reload = 0, tagMode: "all"
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [query, folder, reload, marked, mode]);
+  }, [query, folder, reload, marked, mode, key]);
   return {
     hits: results?.key === key ? results.hits : null,
     error: error?.key === key && results?.key !== key ? error.text : null,

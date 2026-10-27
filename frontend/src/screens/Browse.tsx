@@ -28,6 +28,7 @@ import {
 } from "../api/client";
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
+import { WindowedList } from "../components/WindowedList";
 import { notConnected } from "../components/FileLaunch";
 import type { PreviewFile } from "../components/FilePreview";
 import { BUILTIN_LABEL, MarkIcons } from "../components/MarkIcons";
@@ -355,6 +356,11 @@ type RowProps = {
   onContextMenu?: (e: MouseEvent) => void;
   /** A file row: the Quick Look button at its right end, shown on hover. */
   onQuickLook?: () => void;
+  /** The row's place in the pane's items: focus finds the row by it. */
+  row: number;
+  /** An even line of the list: shaded (the list renders only the rows near the view, so
+   * ``nth-child`` cannot tell). */
+  stripe: boolean;
 };
 
 /** One listed entry. Files drag (with the selection), unless their area keeps them. */
@@ -374,10 +380,12 @@ function EntryRow({
   dropProps,
   onContextMenu,
   onQuickLook,
+  row,
+  stripe,
 }: RowProps) {
   const driveRoot = item.is_dir && item.folder != null && !item.path.includes("/"); // an extra folder's own root
   const Icon = driveRoot ? HardDrive : item.is_dir ? Folder : File;
-  const cls = [checked && "checked", item.is_dir && "entry-row-dir"].filter(Boolean).join(" ");
+  const cls = [checked && "checked", item.is_dir && "entry-row-dir", stripe && "stripe"].filter(Boolean).join(" ");
   const main = (
     <>
       <Icon className="entry-icon" size={16} strokeWidth={1.5} aria-hidden="true" />
@@ -398,6 +406,7 @@ function EntryRow({
   return (
     <li
       className={cls || undefined}
+      data-row={row}
       aria-current={current ? "true" : undefined}
       draggable={dragIds || onDragStart ? true : undefined}
       onDragStart={
@@ -699,6 +708,7 @@ export default function Browse() {
     // address change this screen made itself on typing does not
     if (urlQ !== null && fromUrl.words !== wrote.current) setQuery(fromUrl.words);
     // only when the address was navigated to
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- urlQ and fromUrl are this render's address
   }, [location.key]);
   const filters: SearchFilter[] = params
     .getAll("tag")
@@ -754,7 +764,8 @@ export default function Browse() {
 
   const items: Record<PaneId, Item[]> = useMemo(
     () => ({ left: itemsOf("left"), right: split ? itemsOf("right") : [] }),
-    // itemsOf reads exactly these
+    // itemsOf reads exactly these (it is a new function each render, so not itself a dependency)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       listings.left.data,
       listings.right.data,
@@ -936,7 +947,8 @@ export default function Browse() {
     const next = new URLSearchParams(params);
     next.delete("select");
     setParams(next, { replace: true });
-    // runs for a new target or a new listing only
+    // runs for a new target or a new listing only; items, update and params are this render's
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectId, leftListed]);
   const listRef = useRef<Record<PaneId, HTMLUListElement | null>>({ left: null, right: null });
   const focusRow = useRef(false);
@@ -1024,9 +1036,12 @@ export default function Browse() {
       return visible(e instanceof ApiError && e.detail ? e.detail : errorText(e));
     }
   };
+  // Tried again whenever the pane moves or its listing comes in.
+  const leftPath = paths.left;
+  const rightPath = paths.right;
   useEffect(() => {
     if (!madeFolder) return;
-    if (parentOf(madeFolder.path) !== paths[madeFolder.pane]) {
+    if (parentOf(madeFolder.path) !== { left: leftPath, right: rightPath }[madeFolder.pane]) {
       setMadeFolder(null); // the pane went elsewhere before the listing came
       return;
     }
@@ -1034,7 +1049,8 @@ export default function Browse() {
     if (i < 0) return;
     update(madeFolder.pane, { ids: [], index: i, anchor: items[madeFolder.pane][i].drive_id, touched: true });
     setMadeFolder(null);
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- update is a new function each render
+  }, [madeFolder, leftPath, rightPath, items]);
 
   /** The files a drag or Move to… takes: the checked files of the pane, else the row
    * the user is on (once they chose one). A folder moves on its own, never with files:
@@ -1218,7 +1234,9 @@ export default function Browse() {
   useEffect(() => {
     if (!focusRow.current) return;
     focusRow.current = false;
-    listRef.current[act]?.querySelectorAll<HTMLButtonElement>("button.entry")[index]?.focus();
+    // by the row's place, not the DOM's: a long list renders only the rows near the view
+    // (and always the current one)
+    listRef.current[act]?.querySelector<HTMLButtonElement>(`li[data-row="${index}"] button.entry`)?.focus();
   }, [index, act, sel.view]);
 
   // The viewer window (if it follows the selection) shows the file the user is on.
@@ -1376,6 +1394,7 @@ export default function Browse() {
     if (lookAt === null) return;
     setLookAt(null);
     if (qlCurrent.current === lookAt) quickLook.open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per row button; quickLook is a new object each render
   }, [lookAt]);
 
   useKeydown((e) => {
@@ -1490,6 +1509,8 @@ export default function Browse() {
     const onFiles = split && act === pane ? filesOf(pane) : [];
     const marked = onFiles.length === 1 ? onFiles[0] : null;
     const fileRows = rows.filter((it) => !it.is_dir);
+    const checkedIds = new Set(s.ids); // a big folder: no list scan per row
+    const checkedFiles = fileRows.filter((it) => checkedIds.has(it.drive_id)).length;
     // What the list shows: the rows, with a header row before each folder's files when
     // grouped. ``i`` is the row's place in ``rows`` (the headers are not rows).
     let next = 0;
@@ -1499,9 +1520,12 @@ export default function Browse() {
           ...(foldedFolders.has(g.folder) ? [] : g.files).map((f) => ({ header: null, item: f, i: next++ })),
         ])
       : rows.map((item, i) => ({ header: null, item, i }));
+    const pin = s.touched ? listed.findIndex((entry) => entry.item !== null && entry.i === s.index) : -1;
+    // the new folder's row is the list's first line
+    const stripeOf = (pos: number) => (pos + (nameRow ? 1 : 0)) % 2 === 1;
     const selectAllBox = (
       <SelectAll
-        checked={fileRows.filter((it) => s.ids.includes(it.drive_id)).length}
+        checked={checkedFiles}
         total={fileRows.length}
         onChange={() => selectAll(pane)}
       />
@@ -1612,23 +1636,31 @@ export default function Browse() {
             </p>
           )}
           {body ?? (
-            <ul
-              ref={(el) => {
+            <WindowedList
+              entries={listed}
+              keyOf={(entry) => (entry.header ? `group:${entry.header.folder}` : entry.item.drive_id)}
+              pin={pin >= 0 ? pin : null}
+              listRef={(el) => {
                 listRef.current[pane] = el;
               }}
-              className={columns ? (byFolders ? "entries entries-flat entries-grouped" : "entries entries-flat") : "entries"}
+              className={
+                "entries browse-entries" +
+                (columns ? " entries-flat" : "") +
+                (byFolders ? " entries-grouped" : "") +
+                // a checked row may be out of view: every row shows its checkbox then
+                (checkedFiles > 0 ? " entries-checking" : "")
+              }
               aria-label={isSearch ? "Search results" : flat ? "Files" : "Folder contents"}
-            >
-              {nameRow && (
-                <NewFolderRow onCreate={(name) => makeFolder(nameRow, name)} onCancel={() => setNaming(null)} />
-              )}
-              {listed.map((entry) => {
+              head={
+                nameRow && <NewFolderRow onCreate={(name) => makeFolder(nameRow, name)} onCancel={() => setNaming(null)} />
+              }
+              render={(entry, pos) => {
                 if (entry.header) {
                   const g = entry.header;
                   const label = g.folder === "" ? "Archive" : visible(g.folder);
                   const open = !foldedFolders.has(g.folder);
                   return (
-                    <li key={`group:${g.folder}`} className="group-head">
+                    <li key={`group:${g.folder}`} className={stripeOf(pos) ? "group-head stripe" : "group-head"}>
                       <button
                         type="button"
                         className="group-fold"
@@ -1657,11 +1689,13 @@ export default function Browse() {
                 const row = {
                   item,
                   current: i === s.index && s.touched,
-                  checked: s.ids.includes(item.drive_id),
+                  checked: checkedIds.has(item.drive_id),
                   columns,
                   noFolder: byFolders,
                   onToggle: () => toggle(pane, item.drive_id),
                   onClick: (e: MouseEvent) => clickRow(pane, e, i),
+                  row: i,
+                  stripe: stripeOf(pos),
                 };
                 if (item.is_dir) {
                   const onContextMenu = (e: MouseEvent) => {
@@ -1702,8 +1736,8 @@ export default function Browse() {
                     onQuickLook={split ? () => quickLookRow(pane, i) : undefined}
                   />
                 );
-              })}
-            </ul>
+              }}
+            />
           )}
           {flat && body === null && total > rows.length && (
             <p className="hint flat-more" role="status">
@@ -1739,9 +1773,10 @@ export default function Browse() {
   };
   const addTags = (names: string[]) => addFilters(names.map((value) => ({ name: "tag" as const, value, negated: false })));
   // The words follow into the address as they are typed (replacing the entry, so Back is
-  // not filled with letters), and a ?tag= from an old link is moved into ?q=.
+  // not filled with letters), and a ?tag= from an old link is moved into ?q=. Keyed on
+  // the whole address, so a folder opened while the words wait is not undone by them.
+  const want = serializeQuery(q, filters);
   useEffect(() => {
-    const want = serializeQuery(q, filters);
     if (want === (urlQ ?? "") && !params.has("tag")) return;
     const timer = setTimeout(() => {
       const p = new URLSearchParams(params);
@@ -1752,8 +1787,7 @@ export default function Browse() {
       setParams(p, { replace: true });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-    // the address and the box are compared as they stand
-  }, [q, filtersKey, urlQ]);
+  }, [want, urlQ, params, setParams]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [onSuggestion, setOnSuggestion] = useState(-1); // the arrow keys' place in the list
