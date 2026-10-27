@@ -598,8 +598,10 @@ def recover(ex: Executor) -> RecoveryResult:
     result = RecoveryResult()
     settled: set[int] = set()
     for e in pending(ex):
-        # The executor holds INDEX_LOCK for one whole op, journal row to finish: under
-        # it no op is half-way, so a row still planned (read again) was interrupted.
+        # The executor holds INDEX_LOCK for one whole op, journal row to finish (a copy
+        # across disks lets go of it while the file is written, but its batch is running
+        # then): under it no op of a batch that is not running is half-way, so a row
+        # still planned (read again) was interrupted.
         with INDEX_LOCK:
             again = entries(ex, operations.c.id == e.id, operations.c.state == "planned")
             if not again or ex.batches.running(e.batch_id):

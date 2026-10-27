@@ -113,12 +113,8 @@ def test_replaced_source_stops_the_batch(across, fake_archive):
 
 
 def test_change_during_copy_stops_the_batch(across, fake_archive, monkeypatch):
-    real = primitives.file_sha256
-    calls = []
-
-    def changing(path, stop=None):  # the snapshot reads one hash, the copy another
-        calls.append(path)
-        return real(path) if len(calls) == 1 else "0" * 64
+    def changing(path, stop=None):  # the copy read back differs from what was read
+        return "0" * 64
 
     monkeypatch.setattr(primitives, "file_sha256", changing)
     result = _move(across, "a.pdf")
