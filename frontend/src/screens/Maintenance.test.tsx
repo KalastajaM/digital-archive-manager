@@ -11,7 +11,7 @@ import { maintenancePolling } from "../components/maintenance/useMaintenanceJob"
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import Maintenance from "./Maintenance";
 
-const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes", "unfinished_copies"];
+const KINDS = ["duplicates", "empty_folders", "broken_links", "references", "names", "waiting", "label_clashes", "unfinished_copies", "moved"];
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 
 const file = (id: string, path: string, over: Partial<DupFile> = {}): DupFile => ({
@@ -150,7 +150,7 @@ describe("Maintenance screen", () => {
     }
     await screen.findByText(/Starting reads/);
     expect(calls.filter((c) => c.method === "POST")).toEqual([]);
-    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(8);
+    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(9);
   });
 
   it("says how much the duplicate check will read, with the Google Drive warning, before it starts", async () => {

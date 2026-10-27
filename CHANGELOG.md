@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Reconnect files moved outside dam.** A file without a Google Drive id (on Windows and
+  Linux, every file) that you renamed or moved in Finder or File Explorer used to lose its
+  tags, notes, collections, tray items and the rest: dam saw a new file and marked the
+  old one missing. The new Maintenance check **Moved outside dam** pairs the two by size
+  and content, shows what would move, and **Reconnect** gives the file back what it had.
+  Only dam's own records change, so there is no Undo, and the preview says so. A file
+  whose content matches more than one file is listed but left alone.
 - **Move a folder in Browse.** Drag a folder row onto a folder, the other pane or a
   breadcrumb, or use **Move to…** in its panel. On the same disk it is a rename. To a
   folder on another disk, dam copies and checks every file in the background, and only

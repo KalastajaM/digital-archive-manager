@@ -72,7 +72,7 @@ from `backend/`.
 |---|---|---|---|
 | Install, index, search, file, undo, collections, export, reminders by e-mail | yes | yes | yes |
 | OCR of scans and photos | Apple Vision (no Finnish) | Tesseract, optional | Tesseract, optional |
-| Google Drive item ids (`xattr`) | yes | no: files keep a local identity | no (no Drive client) |
+| Google Drive item ids (`xattr`) | yes | no: files keep a local identity (moved or renamed outside dam, Maintenance reconnects them) | no (no Drive client) |
 | Open / Show in folder | `open`, `open -R` | default app, Explorer | `xdg-open` (reveal opens the folder) |
 | Quick Look thumbnails of any file | yes | no: PDF pages and images still render | no: same |
 | Desktop notifications | yes | not yet | not yet |
@@ -1292,8 +1292,8 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   out), `known` those with a stored sha256, `to_read_*` what the check would open. Reading a
   file kept online-only in Google Drive for desktop downloads it.
 - `POST /api/maintenance/jobs {kind, days?}` starts a check (`duplicates`, `empty_folders`,
-  `broken_links`, `references`, `names`, `waiting`, `label_clashes` or
-  `unfinished_copies`; `days` only for `waiting`, default
+  `broken_links`, `references`, `names`, `waiting`, `label_clashes`,
+  `unfinished_copies` or `moved`; `days` only for `waiting`, default
   30) and ends an earlier job of that kind. `GET /api/maintenance/jobs/{job_id}` answers
   the progress (`state` running, done, stopped or error; `done`/`total`, `bytes_done`/
   `bytes_total`, `current`) and, once it is not running, `result` as the field named after
@@ -1311,7 +1311,7 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   are left out of every result read, with the totals lowered. Keys per `kind`:
   `duplicates` the sha256, `versions` the name (folded), `empty_folders`, `broken_links`
   and `names` the drive id, `references` `"<collection|tray>-<owner id>-<item id>-<drive
-  id>"`. For `duplicates` and `versions`, `members` (required) are the group's drive ids;
+  id>"`, `moved` `"<old drive id>><new drive id>"`. For `duplicates` and `versions`, `members` (required) are the group's drive ids;
   the group stays out only while all its files are among them.
 - The `references` check gives a missing file's `path` as last seen: its index row's
   path, else the latest done journal operation for its drive id (null when neither
@@ -1352,6 +1352,31 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   `##. Ongoing` or `##. Important` with the existing `unlink_symlink` operation (400 for a
   link anywhere else, or one that leads somewhere). Its undo needs the link's target to
   exist, so it is refused for these.
+- The `moved` check ("Moved outside dam") finds files with a `local:` id (no Drive id,
+  so the scanner matches them by path only) that were renamed or moved outside the app:
+  the scan made a new row and flagged the old one missing, and what the owner gave the
+  file stayed on the old row. It pairs a missing row that has something given (tags,
+  collection places, tray item files, a lock, From and For, the filing code, summaries,
+  edited fields, rule outcomes, a note or checklist entries) with a present row that has
+  none, outside the app's own folders, of the same size (above zero) and sha256. The
+  missing row needs a stored sha256 (`unhashed` counts those without); a present row
+  without one is hashed as the duplicate check hashes (stored back, cancellable, with
+  progress; `unreadable` counts failures). A content shared by more than one missing or
+  more than one present row makes its pairs `ambiguous`. Each pair (`old_id`, `old_path`,
+  `new_id`, `new_path`, `size`, `same_ext`, `ambiguous`, `moves`: what would move, counted
+  by kind) drops out of a result on a read once it no longer holds.
+- `POST /api/maintenance/moved/reconnect {pairs: [{old, new}], dry_run?}` reconnects
+  pairs (`FileRepo.reconnect`, one transaction per pair): every row naming the file by
+  the old id (the tables above, plus `member_link_names`; notes and checklists by
+  `target_id`) moves to the new id, then the old row goes with its text, FTS row and
+  content reads (the new row has its own). It changes the database only: nothing in the
+  archive is touched, so it goes through no batch, is not journaled and has no Undo; the
+  preview says so. Afterwards the collections sync runs, so a published link follows the
+  file. 400 when a file is named twice, the old row is not missing or has nothing given,
+  the new row is not a present regular file, is in the app's own folders, has something
+  given or changed on disk since the scan, the stored hashes or sizes differ, or the pair
+  is ambiguous; 404 for an unknown id. The answer is `{dry_run, pairs, errors}` (`pairs`
+  with what moved). The AI call log keeps the old id: it is history.
 - Empty folders and broken links elsewhere are marked for deletion with `POST
   /api/quarantine`, a name is fixed with `POST /api/browse/rename`: the existing previewed
   endpoints.

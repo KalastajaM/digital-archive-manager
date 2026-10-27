@@ -70,6 +70,22 @@ PARKED = "/parked/"  # no archive-relative path starts with "/"
 _COUNTED = (files.c.is_dir.is_not(True), files.c.is_link.is_not(True), files.c.parked_at.is_(None))
 
 
+# What the owner (or a filing) gave a file, by its id, as ``FileRepo.given`` counts it:
+# the rows ``FileRepo.reconnect`` moves to another row (``member_link_names``, a name
+# remembered for a published link, moves too but is not counted).
+_GIVEN = (
+    ("tags", file_tags.c.drive_id),
+    ("collections", collection_members.c.drive_id),
+    ("tray_items", item_files.c.drive_id),
+    ("lock", file_locks.c.drive_id),
+    ("from_for", file_assignments.c.drive_id),
+    ("filing_code", file_assigned_codes.c.drive_id),
+    ("summaries", file_summaries.c.drive_id),
+    ("fields", file_fields.c.drive_id),
+    ("rule_outcomes", rule_outcomes.c.drive_id),
+)
+_GIVEN_NOTES = (("note", notes), ("checklist", checklist_items))
+
 # the tables the kept status answers read (``FileRepo._kept_answer``)
 _STATUS_TABLES = ("files", "file_layouts", "file_text")
 
@@ -1114,6 +1130,76 @@ class FileRepo:
                 text("UPDATE file_fts_map SET drive_id = :new WHERE drive_id = :old"),
                 {"new": new_id, "old": old_id},
             )
+
+    @staticmethod
+    def _given_in(conn: Connection, drive_ids: Sequence[str]) -> dict[str, dict[str, int]]:
+        out: dict[str, dict[str, int]] = {}
+        for i in range(0, len(drive_ids), 500):
+            chunk = drive_ids[i : i + 500]
+            for what, column in _GIVEN:
+                for drive_id, n in conn.execute(
+                    select(column, func.count()).where(column.in_(chunk)).group_by(column)
+                ):
+                    out.setdefault(drive_id, {})[what] = n
+            for what, table in _GIVEN_NOTES:
+                for drive_id, n in conn.execute(
+                    select(table.c.target_id, func.count())
+                    .where(table.c.target_kind == "file", table.c.target_id.in_(chunk))
+                    .group_by(table.c.target_id)
+                ):
+                    out.setdefault(drive_id, {})[what] = n
+        return out
+
+    def given(self, drive_ids: Collection[str]) -> dict[str, dict[str, int]]:
+        """What the owner (or a filing) gave each of ``drive_ids``, counted by kind (the
+        keys of ``_GIVEN`` and ``_GIVEN_NOTES``); a file with nothing is left out."""
+        with self._conn() as conn:
+            return self._given_in(conn, list(dict.fromkeys(drive_ids)))
+
+    def reconnect(self, old_id: str, new_id: str) -> dict[str, int]:
+        """The file indexed as ``old_id`` (flagged missing) is the one now indexed as
+        ``new_id`` (moved or renamed outside the app, so the scanner gave it a new row):
+        everything given to it (what ``rekey`` carries: tags, notes and checklists,
+        collection and tray item places, the name its published link keeps, summaries,
+        fields, sender and person, locks, rule outcomes, the filing code) moves to
+        ``new_id``, and the old row goes with what was read from its content (text, fts,
+        barcode, QR and layout reads; the new row has its own). One transaction; returns
+        what moved, counted as ``given``. ``ValueError`` (nothing changes) when the old
+        row is not missing, the new one is not a present file, or the new one has
+        something given already. Database only: nothing on disk is touched."""
+        with self._conn(write=True) as conn:
+            old = conn.execute(
+                select(files.c.missing, files.c.parked_at).where(files.c.drive_id == old_id)
+            ).first()
+            new = conn.execute(
+                select(files.c.missing, files.c.parked_at, files.c.is_dir, files.c.is_link).where(
+                    files.c.drive_id == new_id
+                )
+            ).first()
+            if old is None or not old.missing or old.parked_at is not None:
+                raise ValueError("the old row is not missing")
+            if new is None or new.missing or new.parked_at is not None:
+                raise ValueError("the new row is not a present file")
+            if new.is_dir or new.is_link:
+                raise ValueError("the new row is not a regular file")
+            names_kept = conn.execute(
+                select(member_link_names.c.drive_id)
+                .where(member_link_names.c.drive_id == new_id)
+                .limit(1)
+            ).first()
+            if self._given_in(conn, [new_id]) or names_kept:
+                raise ValueError("the new row has something of its own")
+            moved = self._given_in(conn, [old_id]).get(old_id, {})
+            for _, column in (*_GIVEN, ("", member_link_names.c.drive_id)):
+                conn.execute(update(column.table).where(column == old_id).values(drive_id=new_id))
+            for _, table in _GIVEN_NOTES:
+                conn.execute(
+                    update(table)
+                    .where(table.c.target_kind == "file", table.c.target_id == old_id)
+                    .values(target_id=new_id)
+                )
+            self._delete_rows(conn, [old_id])
+        return moved
 
     def mark_missing(
         self, seen_before: float, subtree: str = "", skipped: Sequence[str] = ()
