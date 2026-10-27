@@ -14,8 +14,11 @@ from fastapi.testclient import TestClient
 import dam.serve as serve_mod
 from conftest import FakeArchive
 from dam import setup, snapshots
+from dam.app import BATCH_RUNNING
 from dam.config import AppPaths
 from dam.db.engine import MIGRATIONS_DIR, make_engine, write_tx
+from dam.ops.executor import BATCH_HELD
+from dam.ops.model import Op, OpKind, Plan
 from dam.profiles import ProfileStore, ServeLock
 from dam.serve import Host, Switchboard
 from dam.services.errors import Conflict
@@ -380,6 +383,35 @@ def test_restore_is_refused_without_a_host_or_with_an_interrupted_operation(tmp_
     interrupted = SnapshotService(paths, Folders(None), Reopen(), pending=lambda: True)
     with pytest.raises(Conflict, match="dam recover"):
         interrupted.restore("dam-snapshot-20200101-000000.zip", snapshot_current=False)
+
+
+def test_restore_waits_for_a_running_batch_and_holds_new_ones(served, monkeypatch):
+    """A batch carried out in another request keeps journaling: the database is not
+    replaced under it. While the restore runs, no batch starts."""
+    host, c, _ = served
+    name = post(c, "/api/snapshots").json()["name"]
+    assert post(c, "/api/collections", {"name": "After snapshot"}).status_code == 200
+    app = host.current.app
+    app.executor.batches.begin("running-batch")
+    r = post(c, f"/api/snapshots/{name}/restore", {"snapshot_current": False})
+    assert r.status_code == 409 and r.json()["error"] == BATCH_RUNNING
+    assert host.current.app is app and "After snapshot" in collection_names(c)
+    app.executor.batches.end("running-batch")
+
+    seen = []
+    real = snapshots.apply_restore
+
+    def restore_and_try_a_batch(*args):
+        with pytest.raises(Conflict) as e:
+            app.executor.apply(Plan([Op(OpKind.MKDIR, None, "10. Financial/New")], origin="ui"))
+        seen.append(str(e.value))
+        return real(*args)
+
+    monkeypatch.setattr(snapshots, "apply_restore", restore_and_try_a_batch)
+    r = post(c, f"/api/snapshots/{name}/restore", {"snapshot_current": False})
+    assert r.status_code == 200, r.text
+    assert seen == [BATCH_HELD]
+    assert "After snapshot" not in collection_names(c)
 
 
 def test_import_takes_only_a_raw_file_body(served):

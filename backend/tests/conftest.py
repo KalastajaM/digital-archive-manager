@@ -13,7 +13,7 @@ xattr_shim.install()  # before anything imports xattr (not on Windows; Linux nee
 
 import xattr
 import yaml
-from sqlalchemy import Engine
+from sqlalchemy import Connection, Engine, text
 
 from dam.config import AppPaths, SpecialFolders
 from dam.db.engine import make_engine, migrate
@@ -73,6 +73,26 @@ def pytest_collection_modifyitems(config, items):
             item.module.__name__ in _LINK_MODULES or "symlink" in source or ".link(" in source
         ):
             item.add_marker(no_links)
+
+
+def put_fts_row(conn: Connection, drive_id: str, name: str, path: str, body: str) -> None:
+    """Write the FTS row of ``drive_id`` (replacing any) with its ``file_fts_map`` entry,
+    as the repo does."""
+    conn.execute(
+        text(
+            "DELETE FROM file_fts WHERE rowid IN "
+            "(SELECT fts_rowid FROM file_fts_map WHERE drive_id = :d)"
+        ),
+        {"d": drive_id},
+    )
+    conn.execute(
+        text("INSERT INTO file_fts(drive_id, name, path, text) VALUES (:d, :n, :p, :t)"),
+        {"d": drive_id, "n": name, "p": path, "t": body},
+    )
+    conn.execute(
+        text("INSERT OR REPLACE INTO file_fts_map VALUES (:d, last_insert_rowid())"),
+        {"d": drive_id},
+    )
 
 
 class FakeArchive:

@@ -25,7 +25,7 @@ from dam.api.schemas import (
     FolderChangeOut,
     RelabelOut,
 )
-from dam.app import JOBS_RUNNING, App
+from dam.app import App
 from dam.archive_folders import FolderChange
 from dam.services.archives import ArchiveService
 from dam.services.errors import Conflict
@@ -35,12 +35,11 @@ router = APIRouter(prefix="/api/archive-folders", tags=["archive-folders"])
 
 @contextmanager
 def _not_busy(app: App) -> Iterator[None]:
-    """409 before anything is written while a job runs that a reopen would end; inside,
-    no move across disks starts (it would be refused), so the answer holds until the
+    """409 before anything is written while a job runs that a reopen would end, or a
+    batch of changes that would journal into the closed database; inside, no move
+    across disks or batch starts (it would be refused), so the answer holds until the
     change is done."""
-    with app.copy_jobs.held():
-        if app.jobs_running():
-            raise Conflict(JOBS_RUNNING)
+    with app.held():
         yield
 
 

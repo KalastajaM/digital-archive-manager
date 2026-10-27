@@ -158,6 +158,12 @@ All notable changes are listed here. The format follows
   hundreds or thousands of entries now builds only the rows near what you see, so
   opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
   view), Go to target, Quick Look and dragging work as before.
+- **Faster indexing and folder moves on large archives.** Updating the search index for
+  one file no longer reads the whole index, so the first indexing of a large archive
+  and moving a whole folder are much faster (a folder of 300 files in an archive of
+  50,000 now takes well under a second instead of about 16 seconds). The status check
+  for interrupted changes is cheaper too. The first start after the update maps the
+  existing search index once, which takes about a second for 50,000 files.
 - **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
   folder's name under the file's name; it names only a folder inside the inbox (such
   as a code's folder). In Maintenance, **Show in Browse** is an icon button (the
@@ -562,6 +568,12 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A change still being carried out is left alone.** Undo (from another tab, say) is
+  refused until the change has finished, instead of reverting its first files while the
+  rest still moved. The Recovery banner no longer shows for a file being moved right now
+  (a long copy across disks), so Recover cannot mark it as needing a manual check. A
+  snapshot restore, a new label for an archive folder, and detaching or forgetting one
+  wait until the change has finished, so its history is not lost.
 - **A file that gets its Google Drive id keeps its notes.** When Drive uploaded a file and
   dam picked up its id, the file kept its tags but lost its notes, checklist, collection
   and tray item places, lock, summary and fields. They now stay with it.

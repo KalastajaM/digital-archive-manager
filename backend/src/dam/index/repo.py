@@ -117,6 +117,37 @@ class IndexProblem:
     retry_at: float | None
 
 
+# FTS rows are found by rowid through ``file_fts_map``: ``file_fts.drive_id`` is
+# UNINDEXED, so a ``WHERE drive_id = ...`` on it reads the whole table.
+_FTS_ROWID = "(SELECT fts_rowid FROM file_fts_map WHERE drive_id = :id)"
+
+
+def _fts_insert(conn: Connection, drive_id: str, name: str, path: str, body: str) -> None:
+    """Add the FTS row of ``drive_id`` and map it (the caller removed any earlier one)."""
+    conn.execute(
+        text("INSERT INTO file_fts(drive_id, name, path, text) VALUES (:id, :name, :path, :text)"),
+        {"id": drive_id, "name": name, "path": path, "text": body},
+    )
+    conn.execute(
+        text(
+            "INSERT OR REPLACE INTO file_fts_map(drive_id, fts_rowid) "
+            "VALUES (:id, last_insert_rowid())"
+        ),
+        {"id": drive_id},
+    )
+
+
+def _fts_delete(conn: Connection, drive_id: str) -> None:
+    conn.execute(text(f"DELETE FROM file_fts WHERE rowid = {_FTS_ROWID}"), {"id": drive_id})
+    conn.execute(text("DELETE FROM file_fts_map WHERE drive_id = :id"), {"id": drive_id})
+
+
+def _fts_clear_path(conn: Connection, drive_id: str) -> None:
+    conn.execute(
+        text(f"UPDATE file_fts SET path = '' WHERE rowid = {_FTS_ROWID}"), {"id": drive_id}
+    )
+
+
 def _record(row) -> FileRecord:
     data = {c: row._mapping[c] for c in _COLUMNS}
     data["is_dir"] = bool(data["is_dir"])
@@ -791,7 +822,7 @@ class FileRepo:
             )
             conn.execute(file_layouts.delete().where(file_layouts.c.drive_id == drive_id))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
-            conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
+            _fts_delete(conn, drive_id)
             conn.execute(files.delete().where(files.c.drive_id == drive_id))
 
     def _drop_stale(self, conn: Connection, rel: str, keep_id: str) -> int:
@@ -840,9 +871,7 @@ class FileRepo:
                     .where(files.c.drive_id == drive_id)
                     .values(path=tomb, path_nfc=tomb, missing=True, parked_at=time.time())
                 )
-                conn.execute(
-                    text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": drive_id}
-                )
+                _fts_clear_path(conn, drive_id)
 
     def has_attachments(self, drive_id: str) -> bool:
         """The owner gave the file something: a tag, a note or checklist entry, a place in
@@ -911,7 +940,11 @@ class FileRepo:
                     .values(target_id=new_id)
                 )
             conn.execute(
-                text("UPDATE file_fts SET drive_id = :new WHERE drive_id = :old"),
+                text(f"UPDATE file_fts SET drive_id = :new WHERE rowid = {_FTS_ROWID}"),
+                {"new": new_id, "id": old_id},
+            )
+            conn.execute(
+                text("UPDATE file_fts_map SET drive_id = :new WHERE drive_id = :old"),
                 {"new": new_id, "old": old_id},
             )
 
@@ -1222,7 +1255,7 @@ class FileRepo:
                 values["sha256"] = sha256
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
-            conn.execute(text("DELETE FROM file_fts WHERE drive_id = :id"), {"id": drive_id})
+            _fts_delete(conn, drive_id)
             if extracted and extracted.page1 is not None:
                 sha = (
                     sha256
@@ -1241,13 +1274,7 @@ class FileRepo:
                         ocr_used=extracted.ocr_used,
                     )
                 )
-            conn.execute(
-                text(
-                    "INSERT INTO file_fts(drive_id, name, path, text) "
-                    "VALUES (:id, :name, :path, :text)"
-                ),
-                {"id": drive_id, "name": nfc(row.name), "path": nfc(row.path), "text": body},
-            )
+            _fts_insert(conn, drive_id, nfc(row.name), nfc(row.path), body)
         return True
 
     @staticmethod
@@ -1255,16 +1282,11 @@ class FileRepo:
         """Set the FTS name/path of ``drive_id``, adding a row (empty text) if it has none."""
         params = {"id": drive_id, "name": nfc(name), "path": nfc(path)}
         updated = conn.execute(
-            text("UPDATE file_fts SET name = :name, path = :path WHERE drive_id = :id"), params
+            text(f"UPDATE file_fts SET name = :name, path = :path WHERE rowid = {_FTS_ROWID}"),
+            params,
         ).rowcount
         if not updated:
-            conn.execute(
-                text(
-                    "INSERT INTO file_fts(drive_id, name, path, text) "
-                    "VALUES (:id, :name, :path, '')"
-                ),
-                params,
-            )
+            _fts_insert(conn, drive_id, params["name"], params["path"], "")
 
     def index_name(self, drive_id: str) -> None:
         """Make ``drive_id`` findable by name/path before its content is indexed.
@@ -1300,7 +1322,7 @@ class FileRepo:
                 .where(files.c.drive_id == other)
                 .values(path=tomb, path_nfc=tomb, missing=True, parked_at=now)
             )
-            conn.execute(text("UPDATE file_fts SET path = '' WHERE drive_id = :id"), {"id": other})
+            _fts_clear_path(conn, other)
 
     def update_path(self, old_rel: str, new_rel: str, *, recursive: bool = True) -> None:
         """Move the record at ``old_rel`` (and, for folders, its descendants) to ``new_rel``.
