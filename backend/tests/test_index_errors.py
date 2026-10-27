@@ -53,6 +53,19 @@ def test_failing_extractor_stores_its_reason(app, fake_archive):
     assert reason == "ValueError: the parser fell over"
 
 
+def test_dam_index_skips_a_file_whose_read_stopped_dam(app, fake_archive):
+    from dam.index.content import READING_STOPPED
+
+    fake_archive.add(f"{BANKS}/x.txt", content=b"hello", drive_id="t1")
+    app.scan()
+    app.repo.mark_reading("t1")  # left over from a run that was killed mid-read
+    assert app.index() == 0
+    assert state_of(app, "t1")[:2] == ("error", READING_STOPPED)
+    assert app.retry_index(["t1"]) == 1
+    assert app.index() == 1
+    assert state_of(app, "t1")[:2] == ("indexed", None)
+
+
 def test_badzip_is_unsupported_with_reason(app, fake_archive):
     fake_archive.add(f"{BANKS}/letter.docx", content=b"not a zip at all", drive_id="w1")
     app.scan()

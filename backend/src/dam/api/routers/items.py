@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Response
 
 from dam.api.deps import AppDep, live_record, require_editable
-from dam.api.marks import _place, collections_out
+from dam.api.marks import collections_out, place_rows
 from dam.api.schemas import (
     DoneBody,
     DriveIdBody,
@@ -98,7 +98,7 @@ def item_files(app: AppDep, item_id: int) -> list:
     item = app.trays.get(item_id)
     marks = app.marks.marks_for(item.files)
     rows = file_rows(app, item.files, app.today.file_info(item), marks)
-    _place(app, rows)
+    place_rows(app, rows)
     return rows
 
 
@@ -107,7 +107,7 @@ def file_rows(
 ) -> list[dict]:
     """``ItemFileOut`` rows for an item's files and their ``file_info``; ``marks``: a
     ``marks_for`` answer holding them (one query for the whole response). The caller
-    sets ``folder`` / ``connected`` once over the whole response (``_place``)."""
+    sets ``folder`` / ``connected`` once over the whole response (``place_rows``)."""
     return [
         {
             "drive_id": drive_id,

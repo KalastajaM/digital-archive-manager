@@ -130,6 +130,39 @@ def test_open_refuses_apps_and_scripts(app, client, calls, fake_archive, name):
     assert calls == [["/usr/bin/open", "-R", str(path.resolve())]]
 
 
+WEB = (
+    "Won't open web pages, SVG or XML files from the archive, as their scripts would run "
+    "in the browser. Use Show in Finder"
+)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["p.html", "p.HTM", "p.xhtml", "logo.svg", "logo.svgz", "data.xml", "saved.webarchive",
+     "mail.mht", "mail.mhtml"],
+)  # fmt: skip
+def test_open_refuses_web_pages_and_svg(app, client, calls, fake_archive, name):
+    path = fake_archive.add(f"{BANKS}/{name}", drive_id="w1")
+    app.scan()
+    r = post(client, "/api/files/w1/open")
+    assert r.status_code == 409
+    assert r.json() == {"error": WEB}
+    assert calls == []
+    assert post(client, "/api/files/w1/reveal").status_code == 204
+    assert calls == [["/usr/bin/open", "-R", str(path.resolve())]]
+
+
+def test_open_refuses_a_link_to_a_web_page(app, client, calls, fake_archive):
+    fake_archive.add(f"{BANKS}/page.html", drive_id="w1")
+    fake_archive.link(f"{BANKS}/page.pdf", f"{BANKS}/page.html")
+    app.scan()
+    link = app.repo.by_path(f"{BANKS}/page.pdf")
+    r = post(client, f"/api/files/{link.drive_id}/open")
+    assert r.status_code == 409
+    assert r.json() == {"error": WEB}
+    assert calls == []
+
+
 WIDENED = [
     ".jar",
     ".prefpane",

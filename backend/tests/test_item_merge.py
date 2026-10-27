@@ -18,8 +18,8 @@ from dam.db.tables import (
     notes,
     reminders_sent,
 )
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.notes import NOTE_MAX, NotesService
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 from dam.trays.model import load_trays
 from dam.trays.service import TrayService
 

@@ -19,8 +19,8 @@ from pathlib import Path
 
 from dam.core.fs import resolve
 from dam.core.paths import ArchiveFolder, ArchivePaths, OutsideArchiveError, not_connected_message
+from dam.errors import Conflict, NotFound, NotSupported
 from dam.index.repo import FileRecord
-from dam.services.errors import Conflict, NotFound, NotSupported
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +53,15 @@ RUNNABLE_EXTS = frozenset(
         ".desktop", ".appimage", ".run", ".deb", ".rpm", ".flatpakref", ".snap",
     }
 )  # fmt: skip
+# never opened from the archive either: the default app is a browser, which would run
+# the page's scripts as a local file (Show in Finder still works)
+WEB_EXTS = frozenset(
+    {".html", ".htm", ".xhtml", ".svg", ".svgz", ".xml", ".webarchive", ".mht", ".mhtml"}
+)
+NO_WEB = (
+    "Won't open web pages, SVG or XML files from the archive, as their scripts would run "
+    "in the browser. Use Show in Finder"
+)
 NO_APPS = "Won't open apps or scripts from the archive — use Show in Finder"
 NO_FOLDERS = "Won't open folders from the archive — use Show in Finder"
 NO_LINK_TARGET = "Won't open a link to outside the archive or to nothing — use Show in Finder"
@@ -144,6 +153,15 @@ def _runnable(
     return stat.S_ISREG(st.st_mode) and bool(st.st_mode & 0o111)
 
 
+def _web(rec: FileRecord, real: Path, via: FileRecord | None = None) -> bool:
+    """A web page, SVG or XML file by the record's or the resolved name, or the name
+    of the link ``via`` that led here."""
+    names = [rec.name or "", real.name]
+    if via is not None:
+        names.append(via.name or "")
+    return any(Path(n).suffix.lower() in WEB_EXTS for n in names)
+
+
 class LaunchService:
     def __init__(
         self, paths: ArchivePaths, runner: Runner = run_open, platform: str = sys.platform
@@ -154,8 +172,8 @@ class LaunchService:
 
     def open(self, rec: FileRecord) -> None:
         """Open ``rec`` in its default app (``/usr/bin/open <path>``); ``Conflict`` for
-        folders, apps, scripts, installers, anything inside such a bundle and any
-        executable file."""
+        folders, apps, scripts, installers, anything inside such a bundle, any
+        executable file, and web pages, SVG and XML files."""
         self._run(rec, [])
 
     def reveal(self, rec: FileRecord) -> None:
@@ -220,6 +238,8 @@ class LaunchService:
                 raise Conflict(NO_APPS)  # before the folder rule: an .app is a folder
             if rec.is_dir or real.is_dir():
                 raise Conflict(NO_FOLDERS)
+            if _web(rec, real, via):
+                raise Conflict(NO_WEB)
         self._launch(rec, flags, real)
 
     def command(self, reveal: bool, path: Path) -> list[str]:

@@ -2,14 +2,14 @@
 the rules and similar files; what they leave unset keeps the earlier suggestion."""
 
 import dataclasses
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from datetime import date
 from typing import Protocol
 
 from dam.config import SpecialFolders
 from dam.core.naming import matches_convention
 from dam.index.repo import FileRecord, FileRepo
-from dam.rules.engine import CodeHit, Suggestion, TemplateError, _render_folder, _render_name
+from dam.rules.engine import CodeHit, Suggestion, TemplateError, render_folder, render_name
 
 from .model import FilingCode
 from .qr_model import QrRead
@@ -26,6 +26,7 @@ def codes_for(
     rec: FileRecord,
     known: Collection[str] | None = None,
     qr: list[QrRead] | None = None,
+    assigned_code: Callable[[str], str | None] | None = None,
 ) -> list[CodeHit]:
     """The codes found for ``rec``: the code the owner assigned to an inbox file in the
     app, then the code whose inbox folder holds it, then one hit per code read from a QR
@@ -33,8 +34,10 @@ def codes_for(
     sticker code not in ``known`` (the loaded table, compared case-insensitively) is
     ignored; without ``known`` none is. A code found in the folder and on a sticker is
     one code with two hits. An assigned code that is in ``known`` overrides the others:
-    they are kept, marked ``overridden``, so the owner sees what was found."""
+    they are kept, marked ``overridden``, so the owner sees what was found.
+    ``assigned_code``: looks up the code the owner assigned (default: in the index)."""
     repo = app_or_repo if isinstance(app_or_repo, FileRepo) else app_or_repo.repo
+    lookup = repo.assigned_code if assigned_code is None else assigned_code
     hits: list[CodeHit] = []
     code = repo.inbox_code_of(rec.path)
     if code is not None:
@@ -42,7 +45,7 @@ def codes_for(
     for read in known_reads(repo, rec, known, qr):
         if not any(h.via == "qr" and h.code == read.code.upper() for h in hits):
             hits.append(CodeHit(read.code.upper(), "qr", raw=read.code))
-    assigned = repo.assigned_code(rec.drive_id) if repo.in_inbox_path(rec.path) else None
+    assigned = lookup(rec.drive_id) if repo.in_inbox_path(rec.path) else None
     if assigned is None:
         return hits
     if known is not None and assigned.upper() in {k.upper() for k in known}:
@@ -171,13 +174,13 @@ def apply_codes(
             put("tray", NO_TRAY, fc.code)
         elif fc.folder is not None:
             try:
-                folder = _render_folder(fc.folder, doc_date, stem, special, None, quarantines)
+                folder = render_folder(fc.folder, doc_date, stem, special, None, quarantines)
                 put("folder", folder, fc.code)
             except TemplateError:
                 errored = True
         if fc.name is not None and not conventional and not fc.as_suggested:
             try:
-                put("name", _render_name(fc.name, doc_date, stem, ext) + suffix, fc.code)
+                put("name", render_name(fc.name, doc_date, stem, ext) + suffix, fc.code)
             except TemplateError:
                 errored = True
         if fc.tray is not None and not fc.as_suggested:

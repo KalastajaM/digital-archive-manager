@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from dam.core.text import fold
 from dam.index.repo import FileRecord
-from dam.rules.engine import fold, suggest
+from dam.rules.engine import suggest
 from dam.rules.model import Rule, load_rules
 
 INBOX = "##. Organize"
@@ -86,6 +87,11 @@ def test_doc_date_falls_back_to_mtime_local():
 def test_no_date_at_all_keeps_clean_stem():
     s = suggest(rec("a b.pdf"), "", [])
     assert s.doc_date is None and s.name == "a_b.pdf"
+
+
+def test_suggested_name_has_no_characters_windows_refuses():
+    s = suggest(rec('Kela: päätös? "v2" <x>|y*.pdf'), "", [])
+    assert s.name == "Kela_päätös_v2_x_y.pdf"
 
 
 def test_tags_union_and_first_folder_wins():

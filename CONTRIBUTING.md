@@ -15,6 +15,13 @@ safety matter more than speed.
   and an undo path for any new kind of change.
 - **`backend/tests/test_no_delete.py` (the AST guard) must never be relaxed without
   discussion.** If you think it needs a new allowed call, open an issue first.
+- **The tests also check archive writes at run time.** An audit hook
+  (`backend/tests/archive_guard.py`) fails a test when anything outside `dam/ops`
+  creates, changes, renames or removes an entry in a `FakeArchive`, however it is called
+  (overwrites, `mkdir`, aliased imports, `getattr`, `mv` in a subprocess). Test code and
+  the few documented exceptions listed there (creating a new archive or the demo
+  archive) are allowed. Do not silence it; fix the code or, for a known bug, mark the
+  one test with `archive_write_allowed` and say why.
 - **Tests use temporary fake archives and must never touch a real archive** or a real
   data directory. Never point a test, script or example at your own documents.
 - Keep it local-first: no telemetry, no background network calls. AI calls happen only on
@@ -22,7 +29,7 @@ safety matter more than speed.
 
 ## Dev setup
 
-You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.13+ itself) and Node as
+You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.14+ itself) and Node as
 in `frontend/.nvmrc`.
 
 **macOS:** `brew install uv` and `brew install nvm` (or any Node manager), then
@@ -64,7 +71,10 @@ scripts/run-latest.sh --archive Demo -- --port 8766
 Stop it with Ctrl+C and run it again to update.
 
 For UI work run the backend with `DAM_DEV_ORIGIN=http://localhost:5173 uv run dam serve --no-open`
-and `npm run dev` in `frontend/`.
+and `npm run dev` in `frontend/`, then open the sign-in link `dam serve` prints
+(`http://localhost:8765/auth?t=...`). It signs the browser in on `localhost` and
+returns to the Vite page at `http://localhost:5173`; `dam open --print` prints the link
+again.
 
 ## Tests and lint
 
@@ -75,7 +85,11 @@ before opening a pull request.
 cd backend && uv run ruff check . && uv run pytest -q -W error
 cd frontend && npm test -- --run && npm run build
 cd frontend && npm run gen:api     # after API changes, commit the regenerated schema
+cd frontend && npm run lint        # react-hooks rules; CI fails on errors, not warnings
 ```
+
+Coverage (not run in CI, no thresholds): `cd backend && uv run pytest --cov=dam --cov-report=term-missing`
+and `cd frontend && npm run coverage`.
 
 ## Commits
 

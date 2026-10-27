@@ -121,6 +121,19 @@ def test_status(client, app, fake_archive):
     }
 
 
+def test_status_counts_change_right_after_a_write(client, app, fake_archive):
+    fake_archive.add(f"{INBOX}/a.pdf", drive_id="id-1")
+    app.scan()
+    first = client.get("/api/status").json()
+    assert client.get("/api/status").json() == first  # kept between polls
+    app.repo.set_index_state("id-1", "indexed")
+    fake_archive.add(f"{INBOX}/b.pdf", drive_id="id-2")
+    app.scan()
+    now = client.get("/api/status").json()
+    assert (now["files"], now["inbox_count"], now["indexed"]) == (2, 2, 1)
+    assert (first["files"], first["inbox_count"], first["indexed"]) == (1, 1, 0)
+
+
 def test_status_reports_archive_unavailable(client, app, fake_archive, tmp_path):
     os.rename(fake_archive.root, tmp_path / "archive-away")
     try:
@@ -504,7 +517,11 @@ def test_at_most_two_renders_hold_file_bytes(client, app, fake_archive, monkeypa
     deadline = time.monotonic() + 5
     while active[0] < 2 and time.monotonic() < deadline:
         time.sleep(0.01)
-    time.sleep(0.3)  # give a third render every chance to start
+    # Give a third render every chance to start: stop at once if the peak passes 2 (the
+    # bug), else when the window is over.
+    window = time.monotonic() + 0.3
+    while peak[0] <= 2 and time.monotonic() < window:
+        time.sleep(0.01)
     assert peak[0] == 2
     release.set()
     for t in threads:
@@ -522,7 +539,7 @@ def test_cache_hits_bypass_the_render_limit(client, app, fake_archive):
 
 
 def test_vanished_file_is_404(app, fake_archive):
-    from dam.services.errors import NotFound
+    from dam.errors import NotFound
 
     path = make_text_pdf(fake_archive.add(f"{BANKS}/doc.pdf", drive_id="p1"))
     app.scan()
@@ -967,11 +984,23 @@ def test_start_background_and_stop(app, fake_archive):
     bg.stop()  # idempotent
 
 
-def test_watcher_change_wakes_indexer(app, fake_archive):
+def test_watcher_change_wakes_indexer(app, fake_archive, monkeypatch):
+    # The indexer clears `wake` before each pass, so once a pass finds nothing to do any
+    # later wake ends its idle wait: wait for such a pass instead of sleeping.
+    idle_pass = threading.Event()
+    real_step = app.content.step
+
+    def step():
+        count = real_step()
+        if not count:
+            idle_pass.set()
+        return count
+
+    monkeypatch.setattr(app.content, "step", step)
     bg = start_background(app)
     try:
         bg.scan_thread.join(10)
-        time.sleep(0.2)  # the indexer is now idle (nothing pending)
+        assert idle_pass.wait(10)  # the indexer is now idle (nothing pending)
         fake_archive.add(f"{INBOX}/late.txt", content=b"late", drive_id="late-1")
         bg.watcher._note(str(fake_archive.root / INBOX / "late.txt"))
         deadline = time.monotonic() + 15
@@ -1078,7 +1107,9 @@ def test_serve_opens_browser_after_start(app_paths, fake_serve, tmp_path, monkey
     monkeypatch.setattr(serve_mod, "STATIC_DIR", built)
     events, _ = fake_serve
     assert serve_cmd(app_paths, "--port", "9124").exit_code == 0
-    assert events.index("start") < events.index(("open", "http://127.0.0.1:9124/"))
+    # the browser opens on the sign-in link, which then redirects to the start page
+    token = (app_paths.data_dir / "api-token").read_bytes().decode("ascii")
+    assert events.index("start") < events.index(("open", f"http://127.0.0.1:9124/auth?t={token}"))
 
 
 def test_serve_without_built_frontend_warns_and_does_not_open_browser(
@@ -1117,7 +1148,7 @@ def test_serve_warns_about_pending_recovery(app_paths, fake_serve, monkeypatch):
 
     monkeypatch.setattr(ActivityService, "pending", lambda self: ["x"])
     r = serve_cmd(app_paths, "--no-open")
-    assert r.exit_code == 0 and "dam recover" in r.stderr
+    assert r.exit_code == 0 and "Run recovery in the app" in r.stderr
 
 
 def _free_port() -> int:
@@ -1150,7 +1181,12 @@ def test_serve_shuts_down_cleanly_on_signal(app_paths, sig):
         deadline = time.monotonic() + 30
         while True:
             try:
-                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=1):
+                # the API answers only with the token (made by `dam serve` at the start)
+                token = (app_paths.data_dir / "api-token").read_bytes().decode("ascii")
+                status = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/status", headers={"X-Dam-Token": token}
+                )
+                with urllib.request.urlopen(status, timeout=1):
                     break
             except OSError:
                 assert proc.poll() is None, proc.communicate()

@@ -11,10 +11,10 @@ from sqlalchemy import select
 
 from dam.api import create_api
 from dam.db.tables import operations
+from dam.errors import InvalidRequest
 from dam.ops import primitives
 from dam.ops.model import GuardError, Op, OpKind, Plan
 from dam.ops.planner import COLLISION_NOTE
-from dam.services.errors import InvalidRequest
 
 INBOX = "##. Organize"
 ONG = "##. Ongoing"

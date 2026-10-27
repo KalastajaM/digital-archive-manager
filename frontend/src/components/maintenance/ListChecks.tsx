@@ -33,9 +33,9 @@ import { ShowInBrowse } from "./ShowInBrowse";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
 import { useFold } from "./view";
 
-const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
+export const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
 const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
-const browseTo = (path: string, driveId: string) =>
+export const browseTo = (path: string, driveId: string) =>
   `/browse?${new URLSearchParams({ path: folderOf(path), select: driveId })}`;
 
 /** What a folded check card shows in place of its body. */
@@ -64,7 +64,7 @@ export function ResetButton({ check, title, busy = false }: { check: Check; titl
 
 /** A check's card: what it looks for, its button, progress with Stop, and the result.
  * Folded, it shows one line: what the check found, or that it has not run. */
-function CheckCard({
+export function CheckCard({
   title,
   icon,
   kind,
@@ -138,7 +138,7 @@ function CheckCard({
 }
 
 /** Ticks on a list of ids (all ticked at first). */
-function useTicks(ids: string[]) {
+export function useTicks(ids: string[]) {
   const [off, setOff] = useState<Set<string>>(new Set());
   const ticked = ids.filter((id) => !off.has(id));
   return {
@@ -155,7 +155,7 @@ function useTicks(ids: string[]) {
   };
 }
 
-function Capped({ shown, total }: { shown: number; total: number }) {
+export function Capped({ shown, total }: { shown: number; total: number }) {
   return total > shown ? (
     <p className="hint">
       Showing {groupDigits(shown)} of {groupDigits(total)}.
@@ -222,7 +222,7 @@ export function EmptyFolders() {
   );
 }
 
-function ListHead({ count, all, onAll, what }: { count: string; all: boolean; onAll: (on: boolean) => void; what: string }) {
+export function ListHead({ count, all, onAll, what }: { count: string; all: boolean; onAll: (on: boolean) => void; what: string }) {
   return (
     <div className="check-head">
       <label className="check">

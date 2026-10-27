@@ -165,15 +165,16 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.core.fs import readlink, resolve
 from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
+from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import collections as collections_table
 from dam.db.tables import ongoing_entries, ongoing_switched, operations
+from dam.errors import ArchiveUnavailable, InvalidRequest, NotFound
 from dam.index.scanner import is_ignored
 from dam.ops import identity, primitives
 from dam.ops.guards import fold_parts, is_ds_store_name, is_under, join, parent, validate
 from dam.ops.identity import Identity
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
-from dam.services.errors import ArchiveUnavailable, InvalidRequest, NotFound
 
 if TYPE_CHECKING:
     from dam.collections.service import Collection, CollectionService
@@ -384,10 +385,6 @@ def _items(n: int) -> str:
     return f"{n} item" if n == 1 else f"{n} items"
 
 
-def _fold(name: str) -> str:
-    return nfc(name).casefold()
-
-
 def _kind(p: Path) -> str | None:
     """link, dir, file or None (nothing there). Never follows a link."""
     try:
@@ -407,11 +404,11 @@ def _split(name: str) -> tuple[str, str]:
 def first_free(name: str, taken: set[str]) -> str:
     """``name``, or ``<stem>_<n><suffix>`` (n = 2, 3, ...): the first whose NFC casefold
     is not in ``taken``. Same rule as ``dam.core.naming.unique_name``."""
-    if _fold(name) not in taken:
+    if fold_name(name) not in taken:
         return name
     stem, suffix = _split(name)
     n = 2
-    while _fold(f"{stem}_{n}{suffix}") in taken:
+    while fold_name(f"{stem}_{n}{suffix}") in taken:
         n += 1
     return f"{stem}_{n}{suffix}"
 
@@ -434,7 +431,7 @@ def _link_names(
     out: dict[str, tuple[str, str]] = {}
     for target, base in wanted:
         name = first_free(base, used)
-        used.add(_fold(name))
+        used.add(fold_name(name))
         out[name] = (target, base)
     return out
 
@@ -615,13 +612,13 @@ class OngoingPublisher:
             for name, (target, base) in _link_names(targets.get(group_id, []), taken).items():
                 links[join(at, name)] = target
                 node.links[name] = _Link(target, base, c.id)
-                taken.add(_fold(name))
+                taken.add(fold_name(name))
             for g in by_parent.get(group_id, []):
                 if g.id in seen_groups:  # never (the service refuses cycles); never loop
                     continue
                 seen_groups.add(g.id)
                 name = first_free(g.name, taken)
-                taken.add(_fold(name))
+                taken.add(fold_name(name))
                 folders.append(join(at, name))
                 node.folders[name] = walk(g.id, join(at, name), set(), g.name)
             return node
@@ -633,7 +630,7 @@ class OngoingPublisher:
                 continue
             seen.add(kid.id)
             name = first_free(kid.name, taken)
-            taken.add(_fold(name))
+            taken.add(fold_name(name))
             path = join(prefix, name)
             owners[path] = kid.id
             live = self._live(kid)
@@ -978,7 +975,7 @@ class OngoingPublisher:
         else:
             gone = self._take_down_node(g, tree)
         if gone:
-            g.vacates.add(_fold(PurePosixPath(top.rel).name))
+            g.vacates.add(fold_name(PurePosixPath(top.rel).name))
         return gone
 
     def _reconcile(self, g: _Share, node: _Node, want: _Want) -> None:
@@ -1008,13 +1005,13 @@ class OngoingPublisher:
                 claimed.add(match)
             else:
                 g.removals.append(Op(OpKind.UNLINK_SYMLINK, rec.rel, None))
-                vacated.add(_fold(name))
+                vacated.add(fold_name(name))
         # A wanted folder keeps an owned subfolder of the same name, else one named
         # a ``first_free`` variant of it (what an earlier collision gave), else one
         # named a variant of its base name (a child's folder that a group's wanted
         # name has since overtaken, or the other way round); never the other way
         # round, so a folder is not kept under a name a member wants.
-        link_names = {_fold(n) for n in want.links}
+        link_names = {fold_name(n) for n in want.links}
         kept: dict[str, str] = {}  # wanted folder name -> owned folder name
         for how in ("same", "variant", "base"):
             for wanted_name, sub in want.folders.items():
@@ -1028,21 +1025,21 @@ class OngoingPublisher:
                     elif how == "variant":
                         ok = _is_variant(name, wanted_name)
                     else:
-                        ok = _is_variant(name, sub.base) and _fold(name) not in link_names
+                        ok = _is_variant(name, sub.base) and fold_name(name) not in link_names
                     if ok:
                         kept[wanted_name] = name
                         break
         for name, child in node.folders.items():
             # taken down on this folder's behalf: a leftover is its owner's problem too
             if name not in kept.values() and self._take_down_node(g, child, node):
-                vacated.add(_fold(name))
-        taken = {_fold(n) for n in [*node.links, *node.folders, *node.foreign]} - vacated
+                vacated.add(fold_name(name))
+        taken = {fold_name(n) for n in [*node.links, *node.folders, *node.foreign]} - vacated
         pairs: list[tuple[Op, int]] = []
         for i, (_, link) in enumerate(wanted):
             if i in claimed:
                 continue
             name = first_free(link.base, taken)
-            taken.add(_fold(name))
+            taken.add(fold_name(name))
             pairs.append(
                 (Op(OpKind.SYMLINK, link.target, join(node.rec.rel, name), exact=True), link.owner)
             )
@@ -1056,7 +1053,7 @@ class OngoingPublisher:
                 self._reconcile(g, node.folders[kept[wanted_name]], sub)
                 continue
             name = first_free(sub.base or wanted_name, taken)
-            taken.add(_fold(name))
+            taken.add(fold_name(name))
             if nfc(name) != nfc(sub.base or wanted_name):
                 g.suffixed.append((join(node.rec.rel, wanted_name), join(node.rec.rel, name)))
             g.creations += self._checked(g, self._subtree(join(node.rec.rel, name), sub))
@@ -1125,11 +1122,11 @@ class OngoingPublisher:
             if top.kind == "link" and self._same_target(top.rel, want.target):
                 return
             self._take_down(g, top, tree)
-            g.vacates.discard(_fold(PurePosixPath(top.rel).name))  # recreated right here
+            g.vacates.discard(fold_name(PurePosixPath(top.rel).name))  # recreated right here
             g.creations += self._checked(g, self._creation(top.rel, want, c.id))
         elif top.kind == "link":
             self._take_down(g, top, tree)
-            g.vacates.discard(_fold(PurePosixPath(top.rel).name))
+            g.vacates.discard(fold_name(PurePosixPath(top.rel).name))
             g.creations += self._checked(g, self._creation(top.rel, want, c.id))
         else:
             self._reconcile(g, tree, _Want.of(want, c.id))
@@ -1198,14 +1195,14 @@ class OngoingPublisher:
                 shares.append(_Share(root, tree, skipped=True, left_alone=str(e)))
         # Fresh top-level names: everything on disk is taken except names this plan
         # vacates (their removals run first), plus the names handed out here.
-        taken = {_fold(n) for n in os.listdir(ongoing)}
+        taken = {fold_name(n) for n in os.listdir(ongoing)}
         for g in shares:
             taken -= g.vacates
         for g in shares:
             if g.fresh is None:
                 continue
             name = first_free(g.collection.name, taken)
-            taken.add(_fold(name))
+            taken.add(fold_name(name))
             g.creations += self._checked(
                 g, self._creation(join(self.paths.ongoing, name), g.fresh, g.collection.id)
             )
@@ -1275,14 +1272,14 @@ class OngoingPublisher:
                 claimed.add(match)
             else:
                 g.removals.append(Op(OpKind.UNLINK_SYMLINK, r.rel, None))
-                g.vacates.add(_fold(name))
+                g.vacates.add(fold_name(name))
         names = set(taken) - g.vacates
         pairs: list[tuple[Op, int]] = []
         for i, link in enumerate(wanted):
             if i in claimed:
                 continue
             name = first_free(link.base, names)
-            names.add(_fold(name))
+            names.add(fold_name(name))
             pairs.append(
                 (Op(OpKind.SYMLINK, link.target, join(self.paths.ongoing, name), exact=True), c.id)
             )
@@ -1349,7 +1346,7 @@ class OngoingPublisher:
         for n in nodes.values():
             self._list(n)
         node.blocker = None  # the root is never removed, so nothing can block that
-        node.foreign = [n for n in node.foreign if _fold(n) not in vacated]
+        node.foreign = [n for n in node.foreign if fold_name(n) not in vacated]
         links: dict[str, str] = {}
         folders: list[str] = []
         owners: dict[str, int] = {}
@@ -1473,7 +1470,7 @@ class OngoingPublisher:
                 except OSError:
                     owned = True
                 if owned:
-                    out[_fold(PurePosixPath(r.rel).name)] = r.collection_id
+                    out[fold_name(PurePosixPath(r.rel).name)] = r.collection_id
         return out
 
     def layout_after(self, c: Collection, vacated: list[str]) -> Layout:
@@ -1512,8 +1509,8 @@ class OngoingPublisher:
         except _LeftAlone as e:  # the sync leaves this tree alone: so does this
             raise InvalidRequest(f"{c.name!r} cannot be converted yet. {e}") from None
         if g.fresh is not None:
-            taken = {_fold(n) for n in os.listdir(ongoing)}
-            taken -= {_fold(PurePosixPath(v).name) for v in vacated}
+            taken = {fold_name(n) for n in os.listdir(ongoing)}
+            taken -= {fold_name(PurePosixPath(v).name) for v in vacated}
             taken -= g.vacates
             name = first_free(root.name, taken)
             g.creations += self._checked(
@@ -1573,8 +1570,8 @@ class OngoingPublisher:
         take down first (the converter then leaves the layout to the next sync)."""
         ongoing = self._ongoing_dir()
         all_recs, _ = self._located()
-        taken = {_fold(n) for n in os.listdir(ongoing)}
-        taken -= {_fold(PurePosixPath(v).name) for v in vacated}
+        taken = {fold_name(n) for n in os.listdir(ongoing)}
+        taken -= {fold_name(PurePosixPath(v).name) for v in vacated}
         try:
             g = self._star_share(c, all_recs, taken)
         except _LeftAlone as e:
@@ -1595,7 +1592,7 @@ class OngoingPublisher:
                 " other. Check the folder settings."
             )
         self._root_dir(root)
-        names = frozenset(_fold(PurePosixPath(v).name) for v in vacated)
+        names = frozenset(fold_name(PurePosixPath(v).name) for v in vacated)
         try:
             g = self._important_share(c, root, names)
         except _LeftAlone as e:

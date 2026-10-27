@@ -7,6 +7,7 @@ What an entry is keyed by, per kind (the API sends the key; ``versions`` is fold
 - ``versions``: a name shared by files with different content, with their drive ids
 - ``empty_folders``, ``broken_links``, ``names``: the drive id
 - ``references``: ``"<collection|tray>-<owner id>-<item id or empty>-<drive id>"``
+- ``moved``: ``"<old drive id>><new drive id>"``, a pair of "Moved outside dam"
 
 A group stays ignored while every file in it was among ``members``; a new copy (or a
 new file with the name) makes it show again. Nothing in the archive changes here."""
@@ -21,12 +22,20 @@ from dataclasses import dataclass
 from sqlalchemy import Engine, delete, select
 from sqlalchemy.dialects.sqlite import insert
 
-from dam.core.paths import nfc
+from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import maintenance_ignored
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
-KINDS = ("duplicates", "versions", "empty_folders", "broken_links", "references", "names")
+KINDS = (
+    "duplicates",
+    "versions",
+    "empty_folders",
+    "broken_links",
+    "references",
+    "names",
+    "moved",
+)
 GROUPS = ("duplicates", "versions")
 
 
@@ -37,10 +46,6 @@ class Ignored:
     key: str
     label: str
     created: float
-
-
-def fold_name(name: str) -> str:
-    return nfc(name).casefold()
 
 
 class IgnoreList:

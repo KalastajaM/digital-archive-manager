@@ -11,9 +11,9 @@ from pathlib import Path, PurePosixPath
 # listable and is_ignored are re-exported
 from dam.core.fs import is_ignored, listable, lists_nothing, readlink  # noqa: F401
 from dam.core.naming import parse_doc_date
-from dam.core.paths import ArchiveFolder, ArchivePaths, _fold, folder_connected, nfc
+from dam.core.paths import ArchiveFolder, ArchivePaths, fold_name, folder_connected, nfc
 from dam.index.driveid import read_drive_id
-from dam.index.locks import INDEX_LOCK
+from dam.index.locks import COPYING, INDEX_LOCK
 from dam.index.repo import FileRecord, FileRepo, ext_of
 
 # One scan at a time: the watcher, reconcile timer and CLI share the DB with the executor.
@@ -54,7 +54,7 @@ class _Item:
     link_target: str | None
 
 
-def _same(a: float | None, b: float | None) -> bool:
+def same_mtime(a: float | None, b: float | None) -> bool:
     return a is not None and b is not None and abs(a - b) < 1e-6
 
 
@@ -158,7 +158,7 @@ class _Scan:
             and disk_id
             and at_path.drive_id.startswith("local:")
             and at_path.size == size
-            and _same(at_path.mtime, mtime)
+            and same_mtime(at_path.mtime, mtime)
         ):
             repo.rekey(at_path.drive_id, disk_id)
             report.rekeyed += 1
@@ -169,7 +169,7 @@ class _Scan:
             and not disk_id
             and (
                 at_path.drive_id.startswith("local:")
-                or (at_path.size == size and _same(at_path.mtime, mtime))
+                or (at_path.size == size and same_mtime(at_path.mtime, mtime))
             )
         ):
             current = at_path
@@ -202,7 +202,7 @@ class _Scan:
             report.added += 1
             return
 
-        changed = not is_dir and not (current.size == size and _same(current.mtime, mtime))
+        changed = not is_dir and not (current.size == size and same_mtime(current.mtime, mtime))
         if changed or current.is_link != is_link or current.link_target != link_target:
             fresh = FileRecord(
                 drive_id=current.drive_id,
@@ -255,6 +255,8 @@ def _connected(repo: FileRepo, folder: ArchiveFolder) -> bool:
 def _index_start(s: _Scan, start: Path) -> bool | None:
     """Index the entry at ``start`` itself. True: a folder to walk; False: a file, or
     really gone; None: it cannot be read, so nothing may be concluded."""
+    if start.name in COPYING:  # a copy across disks being written: not a file yet
+        return None
     try:
         st = os.lstat(start)
     except (FileNotFoundError, NotADirectoryError):
@@ -294,9 +296,9 @@ def _walk(s: _Scan, start: Path, clash_folds: frozenset[str] = frozenset()) -> b
                 continue
             items: list[_Item] = []
             for e in entries:
-                if is_ignored(e.name):
+                if is_ignored(e.name) or e.name in COPYING:
                     continue
-                if directory == start and _fold(e.name) in clash_folds:
+                if directory == start and fold_name(e.name) in clash_folds:
                     s.report.clashes.append(e.name)
                     continue
                 rel = f"{dir_rel}/{e.name}" if dir_rel else e.name
@@ -335,8 +337,8 @@ def _scan_all(s: _Scan) -> ScanReport:
     unplugged disk never looks like deleted files."""
     paths, repo, report = s.paths, s.repo, s.report
     # A detached folder's rows stay under its label, so a main entry there is a clash too.
-    labels = frozenset(_fold(extra.label) for extra in paths.settings.extra_folders)
-    own_rows = [r for r in repo.list_dir("") if _fold(r.path) not in labels]
+    labels = frozenset(fold_name(extra.label) for extra in paths.settings.extra_folders)
+    own_rows = [r for r in repo.list_dir("") if fold_name(r.path) not in labels]
     if own_rows and lists_nothing(paths.root):
         # A mount that lists nothing while the index has top-level rows is not "all deleted".
         report.aborted = True
@@ -358,8 +360,8 @@ def _scan_all(s: _Scan) -> ScanReport:
         if not listable(folder.root):  # this folder went away during the walk
             report.offline.append(folder.label)
             report.skipped.append(folder.label)
-    attached = {_fold(label) for label in paths.extra_labels}
-    detached = [e.label for e in paths.settings.extra_folders if _fold(e.label) not in attached]
+    attached = {fold_name(label) for label in paths.extra_labels}
+    detached = [e.label for e in paths.settings.extra_folders if fold_name(e.label) not in attached]
     for label in detached:
         # Kept out of the walk, and its rows marked missing again: a scan that still ran
         # with the folder attached (the App before a reopen) may have marked them seen.
@@ -377,9 +379,9 @@ def _scan_subtree(s: _Scan, wanted: str) -> ScanReport:
     """Only ``wanted`` (a file or folder); leaves tombstones for the next full scan."""
     paths, repo, report = s.paths, s.repo, s.report
     parts = PurePosixPath(wanted).parts
-    attached = {_fold(label) for label in paths.extra_labels}
+    attached = {fold_name(label) for label in paths.extra_labels}
     if any(
-        _fold(extra.label) == _fold(parts[0]) and _fold(extra.label) not in attached
+        fold_name(extra.label) == fold_name(parts[0]) and fold_name(extra.label) not in attached
         for extra in paths.settings.extra_folders
     ):  # a detached folder: on disk this would be a clashing main-folder entry
         report.aborted = True

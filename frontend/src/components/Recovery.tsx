@@ -5,12 +5,15 @@ import { visible } from "../text";
 import { JournalList } from "./JournalList";
 import { ConfirmPlan } from "./PlanPreview";
 
-/** What POST /api/recovery does (dam.ops.undo.recover): it only reads the disk. */
+/** What POST /api/recovery does (dam.ops.undo.recover): it reads the disk and changes no
+ * archive file. */
 export const RECOVERY_EXPLAINED =
   "Recovery checks the disk for each interrupted operation and records in the journal " +
   "whether it happened (done) or not (failed, or “needs manual check” when the disk " +
   "does not say). For operations that did happen it also updates the index to the new " +
-  "path. It moves, renames or deletes no files.";
+  "path. It moves, renames or deletes no files in your archive. The one exception: a " +
+  "rule picture interrupted while it moved to another disk is finished by removing " +
+  "dam's own copy in its settings folder, once the copy in the archive is verified.";
 
 function RecoveryReport({ result }: { result: RecoveryResult }) {
   if (result.entries.length === 0 && result.index_errors.length === 0) {
@@ -101,7 +104,7 @@ export function RecoveryPanel({ count, entries }: { count: number; entries?: Jou
             <strong>
               {count} interrupted operation{count === 1 ? "" : "s"} found.
             </strong>{" "}
-            Recovery reads the disk to settle them; it never changes files.
+            Recovery reads the disk to settle them; it never changes files in your archive.
           </p>
         ) : (
           <p>

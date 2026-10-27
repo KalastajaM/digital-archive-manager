@@ -1,5 +1,12 @@
 /** Typed JSON client for the dam API, plus TanStack Query hooks. */
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  type QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { components } from "./schema";
 
@@ -257,7 +264,39 @@ export const forgetUnlocks = () => {
   unlocksChanged();
 };
 
-async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+/** The server could not be reached (stopped, or the connection dropped). */
+export class NetworkError extends Error {
+  constructor() {
+    super("dam is not running or cannot be reached. Start it again and reload this page.");
+    this.name = "NetworkError";
+  }
+}
+
+/** What the API says (401) to a browser that is not signed in; the page then shows it
+ * instead of the app. Signing in happens outside the page: ``dam serve`` and ``dam open``
+ * open a link that sets an HttpOnly cookie, which the browser sends by itself. */
+export const NOT_SIGNED_IN =
+  "This page is not signed in to dam. Open dam with `dam serve` (or `dam open` if it is already running) and it signs this browser in.";
+let signedOut = false;
+const signedOutListeners = new Set<() => void>();
+const setSignedOut = (value: boolean) => {
+  if (signedOut === value) return;
+  signedOut = value;
+  for (const l of signedOutListeners) l();
+};
+/** Back to "signed in" (tests). */
+export const resetSignedOut = () => setSignedOut(false);
+/** Whether the API answered 401: this browser is not signed in. */
+export const useSignedOut = () =>
+  useSyncExternalStore(
+    (listener) => {
+      signedOutListeners.add(listener);
+      return () => signedOutListeners.delete(listener);
+    },
+    () => signedOut,
+  );
+
+async function request<T>(method: Method, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   // the temporary unlocks this page holds: the server accepts a change to a locked file
   // only with the token it issued for it (see "Locks" below)
@@ -265,18 +304,28 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   const sendsBody = method !== "GET" && method !== "DELETE";
   if (sendsBody) headers["Content-Type"] = "application/json";
   if (method !== "GET" && activeArchive) headers["X-Dam-Archive"] = activeArchive;
-  const response = await fetch(path, {
-    method,
-    headers,
-    credentials: "same-origin",
-    body: sendsBody ? JSON.stringify(body ?? {}) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers,
+      credentials: "same-origin",
+      body: sendsBody ? JSON.stringify(body ?? {}) : undefined,
+      signal,
+    });
+  } catch (e) {
+    // fetch rejects with a TypeError when the server cannot be reached at all (an
+    // abort is a DOMException and passes through for the caller to ignore)
+    if (e instanceof TypeError) throw new NetworkError();
+    throw e;
+  }
   if (!response.ok) throw await failure(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
 async function failure(response: Response): Promise<ApiError> {
+  if (response.status === 401) setSignedOut(true);
   let detail = "";
   let code: string | null = null;
   try {
@@ -289,11 +338,15 @@ async function failure(response: Response): Promise<ApiError> {
   return new ApiError(response.status, detail, code);
 }
 
-export const get = <T>(path: string) => request<T>("GET", path);
-export const post = <T>(path: string, body?: unknown) => request<T>("POST", path, body);
+export const get = <T>(path: string, signal?: AbortSignal) => request<T>("GET", path, undefined, signal);
+export const post = <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("POST", path, body, signal);
 export const patch = <T>(path: string, body: unknown) => request<T>("PATCH", path, body);
 export const put = <T>(path: string, body: unknown) => request<T>("PUT", path, body);
 export const del = <T>(path: string) => request<T>("DELETE", path);
+
+/** True for the error a cancelled request throws (a changed key, a closed screen): not
+ * a failure to show. */
+export const isAbort = (e: unknown) => typeof e === "object" && e !== null && (e as { name?: unknown }).name === "AbortError";
 
 /** Message to show for any thrown value. */
 export const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -319,7 +372,8 @@ export type ThumbWidth = 600 | 1200 | 2000;
 export const thumbUrl = (driveId: string, width: ThumbWidth = 1200) => `${fileUrl(driveId)}/thumb.png?width=${width}`;
 
 /** The start of a text-like file (404 for other types). */
-export const fetchTextPreview = (driveId: string) => get<TextPreview>(`${fileUrl(driveId)}/text`);
+export const fetchTextPreview = (driveId: string, signal?: AbortSignal) =>
+  get<TextPreview>(`${fileUrl(driveId)}/text`, signal);
 
 /** Open the file in its default macOS app, or show it in Finder (204; 409 for apps and
  * scripts, 404 when it is gone, 501 off macOS). Plain calls, not mutations: previews
@@ -376,7 +430,7 @@ const knowArchive = <T extends { archive?: { id: string } | null }>(status: T): 
 export const useStatus = () =>
   useQuery({
     queryKey: keys.status,
-    queryFn: async () => knowArchive(await get<Status>("/api/status")),
+    queryFn: async ({ signal }) => knowArchive(await get<Status>("/api/status", signal)),
     refetchInterval: 5000,
   });
 
@@ -499,7 +553,7 @@ export const relabelArchiveFolder = (label: string, newLabel: string, dry_run: b
 export const useSetupCandidates = () =>
   useQuery({
     queryKey: keys.setupCandidates,
-    queryFn: () => get<SetupCandidates>("/api/setup/candidates"),
+    queryFn: ({ signal }) => get<SetupCandidates>("/api/setup/candidates", signal),
     staleTime: Infinity,
   });
 
@@ -520,7 +574,7 @@ export const previewSetupLayout = (path: string, layout: LayoutBody) =>
 export const useLayoutTemplates = (enabled = true) =>
   useQuery({
     queryKey: ["layout-templates"],
-    queryFn: () => get<LayoutTemplates>("/api/layout/templates"),
+    queryFn: ({ signal }) => get<LayoutTemplates>("/api/layout/templates", signal),
     staleTime: Infinity,
     enabled,
   });
@@ -637,9 +691,10 @@ export const useUndoPreview = (batchId: string) =>
 export const useBrowse = (path: string, enabled = true, collection: number | null = null) =>
   useQuery({
     queryKey: collection === null ? [...keys.browse, path] : [...keys.browse, path, { collection }],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       get<DirEntry[]>(
         `/api/browse?path=${encodeURIComponent(path)}${collection === null ? "" : `&collection=${collection}`}`,
+        signal,
       ),
     enabled,
   });
@@ -660,10 +715,10 @@ export const useBrowseFiles = (
 ) =>
   useQuery({
     queryKey: [...keys.browse, "files", path, { collection, sort, dir }],
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       const p = new URLSearchParams({ path, sort, dir, limit: String(FLAT_LIMIT) });
       if (collection !== null) p.set("collection", String(collection));
-      return get<FlatFiles>(`/api/browse/files?${p}`);
+      return get<FlatFiles>(`/api/browse/files?${p}`, signal);
     },
     enabled,
   });
@@ -672,11 +727,11 @@ export const useBrowseFiles = (
  * ``folder`` limits it to that subtree; ``tagMode`` "any": at least one of the ``tag:``
  * filters (else every one). Up to the API's 500 hits, so
  * sorting the results by a column sorts (nearly) every match, not just the best 50. */
-export const searchFiles = (q: string, folder?: string, tagMode: "all" | "any" = "all") => {
+export const searchFiles = (q: string, folder?: string, tagMode: "all" | "any" = "all", signal?: AbortSignal) => {
   const params = new URLSearchParams({ q, limit: "500" });
   if (folder) params.set("folder", folder);
   if (tagMode === "any") params.set("tag_mode", "any");
-  return get<SearchHit[]>(`/api/search?${params}`);
+  return get<SearchHit[]>(`/api/search?${params}`, signal);
 };
 
 /** Moves into ``##. To Delete`` (mirrored path); a dry run only resolves the plan. */
@@ -761,11 +816,11 @@ export const useActivity = (filter: ActivityFilter = {}) =>
   useInfiniteQuery({
     queryKey: [...keys.activity, filter],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => {
+    queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams({ limit: String(ACTIVITY_PAGE + 1) });
       for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") params.set(k, String(v));
       if (pageParam) params.set("before", pageParam);
-      return get<BatchSummary[]>(`/api/activity?${params}`);
+      return get<BatchSummary[]>(`/api/activity?${params}`, signal);
     },
     getNextPageParam: (last) => (last.length > ACTIVITY_PAGE ? last[ACTIVITY_PAGE - 1].batch_id : undefined),
     select: (data) => data.pages.flatMap((page) => page.slice(0, ACTIVITY_PAGE)),
@@ -790,7 +845,7 @@ export const useRecovery = () => {
 export const useToday = () =>
   useQuery({
     queryKey: keys.today,
-    queryFn: () => get<Today>("/api/today"),
+    queryFn: ({ signal }) => get<Today>("/api/today", signal),
     refetchInterval: (query) => ((query.state.data?.reading_codes ?? 0) > 0 ? 3000 : false),
   });
 
@@ -820,7 +875,7 @@ export const useTrays = (enabled = true) =>
 export const useItems = (trayId: string, state: ItemState = "open") =>
   useQuery({
     queryKey: [...keys.items, "tray", trayId, state],
-    queryFn: () => get<TrayItem[]>(`/api/trays/${enc(trayId)}/items?state=${state}`),
+    queryFn: ({ signal }) => get<TrayItem[]>(`/api/trays/${enc(trayId)}/items?state=${state}`, signal),
     enabled: trayId !== "", // no tray yet (the definitions are loading)
   });
 
@@ -833,7 +888,7 @@ export const useItemFiles = (id: number) => useQuery(itemFilesQuery(id));
 /** The item's files query (also fetched fresh by "Mark paid & file it…"). */
 export const itemFilesQuery = (id: number) => ({
   queryKey: [...keys.items, id, "files"],
-  queryFn: () => get<ItemFile[]>(`/api/items/${id}/files`),
+  queryFn: ({ signal }: { signal?: AbortSignal }) => get<ItemFile[]>(`/api/items/${id}/files`, signal),
 });
 
 /** The item's bank barcode, built from its current fields (under the item's key, so
@@ -841,14 +896,14 @@ export const itemFilesQuery = (id: number) => ({
 export const useItemBarcode = (id: number) =>
   useQuery({
     queryKey: [...keys.items, id, "barcode"],
-    queryFn: () => get<ItemBarcode>(`/api/items/${id}/barcode`),
+    queryFn: ({ signal }) => get<ItemBarcode>(`/api/items/${id}/barcode`, signal),
   });
 
 /** The item's events, oldest first. */
 export const useItemHistory = (id: number) =>
   useQuery({
     queryKey: [...keys.items, id, "history"],
-    queryFn: () => get<ItemEvent[]>(`/api/items/${id}/history`),
+    queryFn: ({ signal }) => get<ItemEvent[]>(`/api/items/${id}/history`, signal),
   });
 
 /** The open items, collections and note of one file. */
@@ -856,7 +911,7 @@ export const useItemHistory = (id: number) =>
 export const useFileDetail = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId],
-    queryFn: () => get<FileDetail>(`/api/files/${enc(driveId)}`),
+    queryFn: ({ signal }) => get<FileDetail>(`/api/files/${enc(driveId)}`, signal),
     enabled: enabled && driveId !== "",
   });
 
@@ -864,7 +919,7 @@ export const useFileDetail = (driveId: string, enabled = true) =>
 export const useFileSuggestions = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId, "suggestions"],
-    queryFn: () => get<FileSuggestions>(`/api/files/${enc(driveId)}/suggestions`),
+    queryFn: ({ signal }) => get<FileSuggestions>(`/api/files/${enc(driveId)}/suggestions`, signal),
     enabled,
   });
 
@@ -879,13 +934,35 @@ const PAGE1_POLLS = 15;
 export const usePage1 = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.file, driveId, "page1"],
-    queryFn: () => get<Page1>(`/api/files/${enc(driveId)}/page1`),
+    queryFn: ({ signal }) => get<Page1>(`/api/files/${enc(driveId)}/page1`, signal),
     enabled: enabled && driveId !== "",
     refetchInterval: (query) => {
       const page = query.state.data;
       return page && !page.read && !page.unavailable && query.state.dataUpdateCount < PAGE1_POLLS ? PAGE1_POLL_MS : false;
     },
   });
+
+/** Inbox reloads asked for by cards waiting for page 1, per query client: whether one ran
+ * in the last ``PAGE1_POLL_MS`` and whether another was asked for since. */
+const inboxReloads = new WeakMap<QueryClient, { asked: boolean }>();
+
+/** Reload the inbox list for a card whose page 1 was read. The list holds every card, so
+ * however many cards ask, it is reloaded at most once per ``PAGE1_POLL_MS``: the first ask
+ * reloads it at once, asks during the interval are served by one reload at its end. */
+function reloadInbox(client: QueryClient) {
+  const pending = inboxReloads.get(client);
+  if (pending) {
+    pending.asked = true;
+    return;
+  }
+  const state = { asked: false };
+  inboxReloads.set(client, state);
+  void client.invalidateQueries({ queryKey: keys.inbox });
+  setTimeout(() => {
+    inboxReloads.delete(client);
+    if (state.asked) reloadInbox(client);
+  }, PAGE1_POLL_MS);
+}
 
 /** A suggestion that waits for page 1 (``waiting_for_page1``) asks for it until it is read,
  * then reloads what the inbox and the file show (and keeps reloading for a while if it
@@ -896,7 +973,7 @@ export function useWaitForPage1(driveId: string, waiting: boolean) {
   const read = page.data?.read === true;
   useEffect(() => {
     if (!waiting || !read) return;
-    void client.invalidateQueries({ queryKey: keys.inbox });
+    reloadInbox(client);
     void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting, read]);
@@ -907,7 +984,7 @@ export function useWaitForPage1(driveId: string, waiting: boolean) {
     let tries = 0;
     const timer = setInterval(() => {
       tries += 1;
-      void client.invalidateQueries({ queryKey: keys.inbox });
+      reloadInbox(client);
       void client.invalidateQueries({ queryKey: [...keys.file, driveId, "suggestions"] });
       if (tries >= PAGE1_POLLS) clearInterval(timer);
     }, PAGE1_POLL_MS);
@@ -1007,7 +1084,7 @@ export const usePage1Speed = () => {
 export const useTagSuggestions = (prefix: string, limit: number, enabled = true) =>
   useQuery({
     queryKey: ["tags", "suggestions", prefix, limit],
-    queryFn: () => get<{ name: string; files: number }[]>(`/api/tags?${new URLSearchParams({ prefix, limit: String(limit) })}`),
+    queryFn: ({ signal }) => get<{ name: string; files: number }[]>(`/api/tags?${new URLSearchParams({ prefix, limit: String(limit) })}`, signal),
     enabled,
     placeholderData: keepPreviousData,
     staleTime: 10_000,
@@ -1045,7 +1122,7 @@ const TAG_QUERIES = ["tags"] as const;
 export const useAllTags = (query = "") =>
   useQuery({
     queryKey: ["tags", "all", query],
-    queryFn: () => get<TagList>(`/api/tags/all?${new URLSearchParams({ query })}`),
+    queryFn: ({ signal }) => get<TagList>(`/api/tags/all?${new URLSearchParams({ query })}`, signal),
     placeholderData: keepPreviousData,
   });
 
@@ -1091,7 +1168,7 @@ export const useTagActions = () => {
 export const useFileLinks = (driveId: string, enabled = true) =>
   useQuery({
     queryKey: [...keys.fileLinks, driveId],
-    queryFn: () => get<FileLinks>(`/api/files/${enc(driveId)}/links`),
+    queryFn: ({ signal }) => get<FileLinks>(`/api/files/${enc(driveId)}/links`, signal),
     enabled,
   });
 
@@ -1251,7 +1328,7 @@ export const useCreateItem = () => {
 export const useCollections = (state: CollectionState = "open", enabled = true) =>
   useQuery({
     queryKey: [...keys.collections, "list", state],
-    queryFn: () => get<CollectionRow[]>(`/api/collections?state=${state}`),
+    queryFn: ({ signal }) => get<CollectionRow[]>(`/api/collections?state=${state}`, signal),
     enabled,
   });
 
@@ -1260,7 +1337,7 @@ export const useCollections = (state: CollectionState = "open", enabled = true) 
 export const useCollectionsWithMarked = (enabled = true) =>
   useQuery({
     queryKey: [...keys.collections, "list", "all", "builtin"],
-    queryFn: () => get<CollectionRow[]>("/api/collections?state=all&builtin=true"),
+    queryFn: ({ signal }) => get<CollectionRow[]>("/api/collections?state=all&builtin=true", signal),
     enabled,
   });
 
@@ -1269,7 +1346,7 @@ export const useCollectionsWithMarked = (enabled = true) =>
 export const useBuiltin = (kind: Mark) =>
   useQuery({
     queryKey: [...keys.collections, "builtin", kind],
-    queryFn: () => get<Collection>(`/api/marks/collection/${kind}`),
+    queryFn: ({ signal }) => get<Collection>(`/api/marks/collection/${kind}`, signal),
   });
 
 /** Sent on ``window`` after a mark changes, for lists outside the query cache (search). */
@@ -1340,7 +1417,7 @@ export const useMark = () => {
 export const useCollection = (id: number) =>
   useQuery({
     queryKey: [...keys.collections, id],
-    queryFn: () => get<Collection>(`/api/collections/${id}`),
+    queryFn: ({ signal }) => get<Collection>(`/api/collections/${id}`, signal),
   });
 
 /** A new collection: a name (at the top), or a name inside an open ``parent_id``. */
@@ -1403,7 +1480,7 @@ export const useCollectionMembers = () => {
 export const useCollectionAttention = (id: number) =>
   useQuery({
     queryKey: [...keys.collections, id, "attention"],
-    queryFn: () => get<MemberAttention[]>(`/api/collections/${id}/attention`),
+    queryFn: ({ signal }) => get<MemberAttention[]>(`/api/collections/${id}/attention`, signal),
   });
 
 /** Groups and summaries. Each runs the Ongoing sync (groups are subfolders there, so
@@ -1499,7 +1576,7 @@ export const exportUrl = (token: string) => `/api/exports/${enc(token)}`;
 export const useNote = (kind: NoteKind, target: string) =>
   useQuery({
     queryKey: [...keys.notes, kind, target],
-    queryFn: () => get<{ text: string }>(`/api/notes/${kind}/${enc(target)}`),
+    queryFn: ({ signal }) => get<{ text: string }>(`/api/notes/${kind}/${enc(target)}`, signal),
   });
 
 /** Store a note (trimmed); blank text removes it. */
@@ -1530,7 +1607,7 @@ export const useAppendNote = () => {
 export const useChecklist = (kind: NoteKind, target: string) =>
   useQuery({
     queryKey: [...keys.checklist, kind, target],
-    queryFn: () => get<ChecklistItem[]>(`/api/checklist/${kind}/${enc(target)}`),
+    queryFn: ({ signal }) => get<ChecklistItem[]>(`/api/checklist/${kind}/${enc(target)}`, signal),
   });
 
 export type ChecklistChange =
@@ -1605,7 +1682,7 @@ export const INDEX_ERRORS_LIMIT = 200;
 export const useIndexErrors = (all: boolean, enabled = true) =>
   useQuery({
     queryKey: [...keys.indexErrors, all],
-    queryFn: () => get<IndexProblems>(`/api/index/errors?${all ? "all=1&" : ""}limit=${INDEX_ERRORS_LIMIT}`),
+    queryFn: ({ signal }) => get<IndexProblems>(`/api/index/errors?${all ? "all=1&" : ""}limit=${INDEX_ERRORS_LIMIT}`, signal),
     enabled,
   });
 
@@ -1614,7 +1691,7 @@ export const useIndexErrors = (all: boolean, enabled = true) =>
 export const useIndexSummary = () =>
   useQuery({
     queryKey: [...keys.indexErrors, "summary"],
-    queryFn: () => get<IndexSummary>("/api/index/summary?limit=1"),
+    queryFn: ({ signal }) => get<IndexSummary>("/api/index/summary?limit=1", signal),
     refetchInterval: 15_000, // the page-1 pass moves on while the sheet is open
   });
 
@@ -1635,10 +1712,10 @@ export const useRetryIndex = () => {
 export const useTrayDefaults = (trayId: string, paths: string[] | null, enabled = true) =>
   useQuery({
     queryKey: [...keys.trayDefaults, trayId, paths],
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       const q = new URLSearchParams({ dismissed: "1" });
       for (const p of paths ?? []) q.append("paths", p);
-      return get<TrayDefaultsDiff>(`/api/trays/${enc(trayId)}/defaults-diff?${q}`);
+      return get<TrayDefaultsDiff>(`/api/trays/${enc(trayId)}/defaults-diff?${q}`, signal);
     },
     enabled: enabled && trayId !== "" && (paths === null || paths.length > 0),
     placeholderData: (previous) => previous, // keep the sheet steady while a new subset loads
@@ -1691,7 +1768,7 @@ export const useTrayDefaultsChange = () => {
 export const useAIStatus = () =>
   useQuery({
     queryKey: [...keys.ai, "status"],
-    queryFn: () => get<AIStatus>("/api/ai/status"),
+    queryFn: ({ signal }) => get<AIStatus>("/api/ai/status", signal),
     staleTime: 60_000,
   });
 
@@ -1791,12 +1868,15 @@ export type DuplicateEstimate = Schemas["DuplicateEstimateOut"];
 export type DuplicateResolveBody = Schemas["DuplicateResolveIn"];
 export type DuplicateResolveResult = Schemas["DuplicateResolveOut"];
 export type CarryOver = Schemas["CarryOverOut"];
+/** A file moved or renamed outside dam: its old, missing row and its new one. */
+export type MovedPair = Schemas["MovedPairOut"];
+export type ReconnectResult = Schemas["ReconnectOut"];
 
 /** What the duplicate check would read, from the index alone (nothing is opened). */
 export const useDuplicateEstimate = () =>
   useQuery({
     queryKey: ["maintenance", "estimate"],
-    queryFn: () => get<DuplicateEstimate>("/api/maintenance/duplicates/estimate"),
+    queryFn: ({ signal }) => get<DuplicateEstimate>("/api/maintenance/duplicates/estimate", signal),
     gcTime: 0,
   });
 
@@ -1839,6 +1919,19 @@ export const useResolveDuplicates = () => {
   return useMutation({
     mutationFn: (body: DuplicateResolveBody) =>
       post<DuplicateResolveResult>("/api/maintenance/duplicates/resolve", body),
+    onSettled: (_data, _error, body) => {
+      if (!body.dry_run) refresh();
+    },
+  });
+};
+
+/** Reconnect files moved or renamed outside dam: what the old, missing row had moves to
+ * the new one. Database only, so there is no Undo; a dry run lists what would move. */
+export const useReconnectMoved = () => {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: { pairs: { old: string; new: string }[]; dry_run: boolean }) =>
+      post<ReconnectResult>("/api/maintenance/moved/reconnect", body),
     onSettled: (_data, _error, body) => {
       if (!body.dry_run) refresh();
     },
@@ -1995,7 +2088,7 @@ export const useDeclineRule = () => {
 export const useCodeFolders = () =>
   useQuery({
     queryKey: [...keys.filingCodes, "folders"],
-    queryFn: () => get<CodeFolders>("/api/filing-codes/folders"),
+    queryFn: ({ signal }) => get<CodeFolders>("/api/filing-codes/folders", signal),
   });
 
 /** What "Create inbox folders" would do (nothing changes on disk). */
@@ -2056,7 +2149,7 @@ const summaryKey = (driveId: string) => [...keys.ai, "summary", driveId];
 export const useFileSummary = (driveId: string) =>
   useQuery({
     queryKey: summaryKey(driveId),
-    queryFn: () => get<FileSummaries>(`/api/files/${enc(driveId)}/summary`),
+    queryFn: ({ signal }) => get<FileSummaries>(`/api/files/${enc(driveId)}/summary`, signal),
   });
 
 /** Save a summary: ``source: "ai"`` is "Use this summary", ``"user"`` the user's own
@@ -2085,7 +2178,7 @@ const fileFieldsKey = (driveId: string) => [...keys.fileFields, driveId];
 export const useFileFields = (driveId: string) =>
   useQuery({
     queryKey: fileFieldsKey(driveId),
-    queryFn: () => get<ScanFields>(`/api/files/${enc(driveId)}/fields`),
+    queryFn: ({ signal }) => get<ScanFields>(`/api/files/${enc(driveId)}/fields`, signal),
   });
 
 /** What changing a file's scan fields refreshes: the inbox entry (its fields and the
@@ -2147,7 +2240,7 @@ export const LOCKED_REASON = "This file is locked. Unlock it to change it.";
 export const useLocks = () =>
   useQuery({
     queryKey: keys.locks,
-    queryFn: () => get<Locks>("/api/locks"),
+    queryFn: ({ signal }) => get<Locks>("/api/locks", signal),
     staleTime: 30_000,
   });
 

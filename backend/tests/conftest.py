@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import archive_guard
 import xattr_shim
 
 xattr_shim.install()  # before anything imports xattr (not on Windows; Linux needs a prefix)
@@ -19,6 +20,8 @@ from dam.config import AppPaths, SpecialFolders
 from dam.db.engine import make_engine, migrate
 from dam.index.driveid import DRIVE_ID_XATTR
 from dam.ops import primitives
+
+archive_guard.install()  # one audit hook for the session: archive writes come from dam/ops
 
 needs_dir_fd = pytest.mark.skipif(
     not primitives._HAS_DIR_FD,
@@ -61,6 +64,14 @@ def _source(item) -> str:
 _MAC_ONLY_WORDS = ("launchd", "osascript")
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "archive_write_allowed(*places, reason): let these non-ops places "
+        '("dam/<file>.py:<function>") write to the fake archive in this test (a known bug)',
+    )
+
+
 def pytest_collection_modifyitems(config, items):
     mac_only = pytest.mark.skip(reason="macOS only (launchd, osascript)")
     no_links = pytest.mark.skip(reason="needs the Windows symlink privilege (Developer Mode)")
@@ -99,6 +110,7 @@ class FakeArchive:
     def __init__(self, root: Path) -> None:
         self.root = root
         self._counter = 0
+        archive_guard.register(root)
         root.mkdir(parents=True, exist_ok=True)
         folders = SpecialFolders()
         for name in (folders.inbox, folders.ongoing, folders.important, folders.quarantine):
@@ -121,6 +133,21 @@ class FakeArchive:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.symlink_to(self.root / target_rel)
         return path
+
+
+@pytest.fixture(autouse=True)
+def _archive_write_guard(request: pytest.FixtureRequest):
+    """Every ``FakeArchive`` of the test is watched; a write to it from outside dam/ops
+    fails the test even if the code under test swallowed the AssertionError."""
+    allowed = frozenset(
+        place for mark in request.node.iter_markers("archive_write_allowed") for place in mark.args
+    )
+    archive_guard.reset(allowed)
+    yield
+    violations = archive_guard.state.violations
+    archive_guard.reset()
+    if violations:
+        pytest.fail("\n".join(dict.fromkeys(violations)), pytrace=False)
 
 
 @pytest.fixture(autouse=True)
@@ -265,3 +292,32 @@ def _no_real_anthropic_client(monkeypatch: pytest.MonkeyPatch) -> None:
         raise AssertionError("tests must never construct anthropic.Anthropic")
 
     monkeypatch.setattr(anthropic.Anthropic, "__init__", refuse)
+
+
+@pytest.fixture
+def freeze_today(monkeypatch: pytest.MonkeyPatch):
+    """``freeze_today(day)``: ``date.today()`` returns ``day`` in the modules that ask for
+    today's date, so a test cannot flip with the calendar or across midnight. Returns
+    ``day``."""
+    import datetime
+
+    from dam.api.routers import collections, today, trays
+    from dam.rules import fields
+    from dam.services import today as today_service
+    from dam.trays import service
+
+    def freeze(day: datetime.date) -> datetime.date:
+        class _Meta(type):
+            def __instancecheck__(cls, obj):  # real dates still count as dates
+                return isinstance(obj, datetime.date)
+
+        class FrozenDate(datetime.date, metaclass=_Meta):
+            @classmethod
+            def today(cls):
+                return day
+
+        for module in (collections, today, trays, fields, service, today_service):
+            monkeypatch.setattr(module, "date", FrozenDate)
+        return day
+
+    return freeze

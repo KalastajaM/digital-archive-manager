@@ -5,7 +5,8 @@ import stat
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
-from dam.core.paths import ArchivePaths, OutsideArchiveError, _fold, nfc, not_connected_message
+from dam.core.foldernames import portable_name_problem
+from dam.core.paths import ArchivePaths, OutsideArchiveError, fold_name, nfc, not_connected_message
 from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind
 from dam.ops.primitives import DS_STORE
 
@@ -119,6 +120,7 @@ def _check_copy_within(op: Op, paths: ArchivePaths) -> None:
         raise GuardError(f"{src!r} is in one of the app's own folders and cannot be copied")
     name = op.name if op.name is not None else PurePosixPath(src).name
     _check_name(name)
+    _check_new_name(name, PurePosixPath(src).name)
     _check_not_ds_store(name)
     if name.startswith(".") or name != name.strip() or "\\" in name:
         raise GuardError(f"{name!r} is not a usable file name")
@@ -148,6 +150,7 @@ def _check_copy(op: Op, paths: ArchivePaths) -> None:
     if op.name is None:
         raise GuardError("COPY needs a file name")
     _check_name(op.name)
+    _check_new_name(op.name)  # a new name in the archive, whatever the file was called
     _check_not_ds_store(op.name)
     if op.name.startswith(".") or op.name != op.name.strip() or "\\" in op.name:
         raise GuardError(f"{op.name!r} is not a usable file name")
@@ -241,13 +244,25 @@ def _check_name(name: str) -> None:
         raise GuardError(f"{name!r} is not a valid name.")
 
 
+def _check_new_name(name: str, old: str | None = None) -> None:
+    """A name an op gives an entry must also work on Windows and cloud drives (archives
+    are often synced there), on every platform. Only a new name is checked: ``old``,
+    the name the entry has now, is left alone, so files that already carry such a name
+    still move and copy."""
+    if old is not None and nfc(name) == nfc(old):
+        return
+    problem = portable_name_problem(name)
+    if problem is not None:
+        raise GuardError(problem)
+
+
 def check_not_label(paths: ArchivePaths, rel: str) -> None:
     """A top-level entry of the main folder may not be named like an extra folder's
     label: the label would hide it (Browse shows the extra folder there). Detached
     entries count too: their index rows stay under the label."""
     parts = PurePosixPath(rel).parts
-    reserved = {_fold(e.label) for e in paths.settings.extra_folders}
-    if len(parts) == 1 and _fold(parts[0]) in reserved:
+    reserved = {fold_name(e.label) for e in paths.settings.extra_folders}
+    if len(parts) == 1 and fold_name(parts[0]) in reserved:
         raise GuardError(f"'{parts[0]}' is the name of an archive folder. Choose another name.")
 
 
@@ -379,6 +394,8 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
     match op.kind:
         case OpKind.RENAME:
             _check_name(op.dst)
+            if not _is_restore(op, restore):  # undo gives back the name it had
+                _check_new_name(op.dst, PurePosixPath(src).name)
             _check_not_ds_store(op.dst)
             check_not_label(paths, join(parent(src), op.dst))
             canonical(join(parent(src), op.dst), paths)
@@ -389,6 +406,8 @@ def validate(op: Op, paths: ArchivePaths, *, restore: bool = False) -> None:
             if paths.is_root(folder) and not _is_restore(op, restore):
                 raise GuardError("Files cannot go directly in the archive folder.")
             final = join(folder, op.name or PurePosixPath(src).name)
+            if op.name is not None and not _is_restore(op, restore):
+                _check_new_name(op.name, PurePosixPath(src).name)
             _check_not_ds_store(PurePosixPath(final).name)
             canonical(final, paths)
             check_not_label(paths, final)

@@ -41,11 +41,11 @@ IMPORTANT_FOR_NOW = "An Important file can only be unlocked for now."
 
 # the unlock tokens of the request being served (set by the API middleware; tests use
 # ``with_tokens``)
-_TOKENS: ContextVar[tuple[str, ...]] = ContextVar("dam_unlock_tokens", default=())
+UNLOCK_TOKENS: ContextVar[tuple[str, ...]] = ContextVar("dam_unlock_tokens", default=())
 
 
 def request_tokens() -> tuple[str, ...]:
-    return _TOKENS.get()
+    return UNLOCK_TOKENS.get()
 
 
 def parse_tokens(header: str | None) -> tuple[str, ...]:
@@ -59,11 +59,11 @@ def parse_tokens(header: str | None) -> tuple[str, ...]:
 @contextmanager
 def with_tokens(tokens: Iterable[str]) -> Iterator[None]:
     """Run the block as a request that carries these unlock tokens."""
-    reset = _TOKENS.set(tuple(tokens))
+    reset = UNLOCK_TOKENS.set(tuple(tokens))
     try:
         yield
     finally:
-        _TOKENS.reset(reset)
+        UNLOCK_TOKENS.reset(reset)
 
 
 @dataclass(frozen=True)

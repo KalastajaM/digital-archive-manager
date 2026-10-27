@@ -21,8 +21,8 @@ from dam import setup
 from dam.bills.barcode import build as build_barcode
 from dam.bills.barcode import modules
 from dam.config import AppPaths, SpecialFolders
+from dam.errors import InvalidRequest
 from dam.index.driveid import DRIVE_ID_XATTR
-from dam.services.errors import InvalidRequest
 
 TEXT = "Kotihoito lasku 123,45 EUR"
 

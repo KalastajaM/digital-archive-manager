@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Reconnect files moved outside dam.** A file without a Google Drive id (on Windows and
+  Linux, every file) that you renamed or moved in Finder or File Explorer used to lose its
+  tags, notes, collections, tray items and the rest: dam saw a new file and marked the
+  old one missing. The new Maintenance check **Moved outside dam** pairs the two by size
+  and content, shows what would move, and **Reconnect** gives the file back what it had.
+  Only dam's own records change, so there is no Undo, and the preview says so. A file
+  whose content matches more than one file is listed but left alone.
 - **Move a folder in Browse.** Drag a folder row onto a folder, the other pane or a
   breadcrumb, or use **Move to…** in its panel. On the same disk it is a rename. To a
   folder on another disk, dam copies and checks every file in the background, and only
@@ -158,12 +165,34 @@ All notable changes are listed here. The format follows
   hundreds or thousands of entries now builds only the rows near what you see, so
   opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
   view), Go to target, Quick Look and dragging work as before.
+- **dam needs Python 3.14 or newer.** It never ran on 3.13 (the code relies on how 3.14
+  reads type hints), so the stated minimum now says so. `uv` installs the right Python
+  by itself.
+- **Browse and the status bar stay fast on large archives.** Opening a folder in
+  Browse reads only that folder's entries instead of going through every file in the
+  archive (about 30 ms down to under 1 ms for a folder in an archive of 200,000 files).
+  The status bar, which checks every five seconds, now reuses its counts until a file
+  actually changes, so an idle app no longer counts the whole archive each time. The
+  app also loads less up front: the code for Help is fetched only when Help opens.
 - **Faster indexing and folder moves on large archives.** Updating the search index for
   one file no longer reads the whole index, so the first indexing of a large archive
   and moving a whole folder are much faster (a folder of 300 files in an archive of
   50,000 now takes well under a second instead of about 16 seconds). The status check
   for interrupted changes is cheaper too. The first start after the update maps the
   existing search index once, which takes about a second for 50,000 files.
+- **Filing and moves no longer rescan the whole archive.** Filing a document from the
+  inbox into another folder, or moving files between folders or disks, used to make the
+  folder watcher scan every archive folder, including slow USB and network disks, and
+  other changes waited while it ran. The watcher now looks only at the files and folders
+  that changed, and skips the changes dam made and indexed itself. Changes made outside
+  dam at the same time are still picked up.
+- **The Inbox opens and refreshes faster with many files.** dam reads what each card
+  needs for all inbox files at once, and remembers where similar filed documents live
+  until a file is indexed, filed or moved, instead of searching the whole archive again
+  for every card each time the list loads (100 inbox files: under 0.1 seconds instead of
+  about 1.7). While several cards wait for page 1 to be read, the list reloads at most
+  once every 2 seconds, not once for each waiting card. Suggestions still change as soon
+  as a rule, a document's text or its page 1 does.
 - **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
   folder's name under the file's name; it names only a folder inside the inbox (such
   as a code's folder). In Maintenance, **Show in Browse** is an icon button (the
@@ -568,6 +597,51 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **A clear message when dam cannot be reached.** If dam has stopped, screens now say
+  that dam is not running or cannot be reached, instead of the browser's "Failed to fetch".
+- **Switching folders or searching quickly no longer leaves old work running.** A listing,
+  search or preview you have moved away from is cancelled instead of finishing in the
+  background.
+- **Screen readers announce the folder tree.** Collection groups, folders and files are now
+  a tree with levels and open or closed states.
+- **The right file is moved when two names differ only in case.** On a case-sensitive
+  disk (Linux, or a Mac disk formatted that way) a folder can hold both `report.pdf` and
+  `Report.pdf`; a move or rename of one could pick the other. dam now takes the exact
+  name first.
+- **A change that could not be recorded now says so.** If the activity log could not be
+  written right after a file was moved or renamed (the database busy, or its disk full),
+  the batch failed with a bare error and nothing said the file had moved. It now stops
+  there and says the change was made but not recorded, and to use **Run recovery**
+  (`dam recover`) so it is recorded and can be undone.
+- **New names that Windows or a cloud drive would refuse are refused.** Renaming,
+  moving or copying a file to a name such as `CON.pdf` or `AUX.txt`, a name ending in a
+  dot or a space, or one with `< > : " | ? *` or control characters now stops with a
+  plain message on every platform, as New folder already did, because archives are
+  often synced to Windows or a cloud drive. Files that already have such names still
+  move and copy as before.
+- **The database is backed up before it is updated.** When a new version of dam
+  updates the layout of `dam.sqlite`, it first saves a copy next to it
+  (`dam.sqlite.before-<old>-to-<new>.bak`). If the database still differs from what this
+  version expects afterwards, dam says so once in its log and on the command line, and
+  keeps working.
+- **A large file moved to another disk no longer holds up the app.** While a move across
+  disks copied a big file (to a USB or network disk, or a cloud-only file being
+  downloaded), filing, other moves, undo and the folder watcher waited until that file was
+  done, for minutes. They now go on while it is copied. The file is read once instead of
+  twice, the progress bar moves from the start of the file, and closing the app ends the
+  copy right away instead of after the file was first read through. If the file is
+  changed or replaced while it is being copied, the copy is not given its name, the
+  original stays where it was, and the unfinished copy is listed in Maintenance as
+  before.
+- **A `dam` command no longer changes an archive the app has open.** Commands that
+  change the archive, its index or its settings (`dam scan`, `index`, `file`, `move`,
+  `quarantine`, `add`, `undo`, `recover`, `init`, the stars and Important marks,
+  `ongoing sync` and `ai --on`/`--off`) now refuse while the app has that
+  archive open, and say on which port: do it in the app, or close the app first. Two
+  such commands also wait for each other: the second says which one is running. The app
+  likewise refuses to open an archive while such a command runs. Commands that only
+  read (`inbox`, `search`, `activity`, dry runs and the listings) still work, and
+  `dam archives list` shows an archive a command is busy with.
 - **A change still being carried out is left alone.** Undo (from another tab, say) is
   refused until the change has finished, instead of reverting its first files while the
   rest still moved. The Recovery banner no longer shows for a file being moved right now
@@ -808,6 +882,36 @@ All notable changes are listed here. The format follows
 - A plan with a single step is shown as a sentence, not a numbered list.
 - Text that is cut off shows in full on hover; folder paths are shortened in the middle,
   keeping the last folder.
+
+### Security
+
+- **Only your browser and dam commands can use the app's local server now.** Before,
+  any program on the computer (another user's too) could read your documents from dam's
+  local address.
+  `dam serve` now opens the browser through a sign-in link that leaves a cookie in that
+  browser, and the server answers only that browser (and `dam` commands). A page opened
+  without signing in, such as an old bookmark in another browser, says how to open it:
+  run `dam serve`, or `dam open` if dam is already running. With `--no-open` the sign-in
+  link is printed instead.
+- **Importing and restoring a snapshot checks more.** A snapshot file can come from
+  anywhere, so dam now refuses one with entry names that would land outside its
+  temporary folder on Windows (drive letters, `:` streams, device names such as `NUL`),
+  one that would unpack to far more than it looks (more than 10,000 entries, more than
+  16 GB, more than the free disk space, or an entry packed unusually small), and one
+  whose database holds triggers, views or tables dam never makes, or does not match
+  dam's own database layout (for example a snapshot from an older app that used the
+  same version numbers). A restore now always keeps this archive's own folders, its
+  protected paths and the folders never sent to AI; a snapshot can add protected paths
+  or excluded folders but no longer remove them, or add a folder to the archive.
+- **A crafted document can no longer take dam down.** A Word, Excel, PowerPoint, Pages,
+  Numbers or Keynote file that would unpack to more than 512 MB, holds more than 10,000
+  parts, or has a part packed unusually small is marked as unreadable instead of
+  being read into memory. If reading a file still stops dam (for example it runs out of
+  memory), that file is listed as an error on the next start and skipped, rather than
+  stopping dam again on every start, until you retry it.
+- **Open no longer hands web pages to the browser.** Open refuses `.html`, `.htm`,
+  `.xhtml`, `.svg`, `.svgz`, `.xml`, `.webarchive`, `.mht` and `.mhtml` files from the
+  archive, as their scripts would run in the browser; Show in Finder still works.
 
 ## [0.1.0] - Unreleased
 

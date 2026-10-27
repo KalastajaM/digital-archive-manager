@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 FILTER_NAMES = (
     "name",

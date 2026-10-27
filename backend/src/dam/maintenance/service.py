@@ -5,7 +5,12 @@ Replacing or removing duplicates only builds a ``Plan``: QUARANTINE moves the co
 ``##. To Delete`` (never a delete) and, to replace it with a link, a SYMLINK at its old
 path to the copy kept. The executor runs it, so the guards, the journal and Undo are the
 ones every change has. What the removed copies had (tags, collections, notes ...) is added
-to the kept copy afterwards; it is only ever added, never overwritten."""
+to the kept copy afterwards; it is only ever added, never overwritten.
+
+Reconnecting a file moved or renamed outside dam changes the database only (the file is
+already where it is): what its old, missing index row had moves to its new row in one
+transaction. It is not an operation on the archive, so it is not in Activity and has no
+Undo; the preview says so."""
 
 from __future__ import annotations
 
@@ -20,14 +25,18 @@ from pathlib import PurePosixPath
 from sqlalchemy import Engine, select
 
 from dam.collections.service import CollectionService
+from dam.core.jobs import Job
 from dam.core.paths import ArchivePaths, not_connected_message
+from dam.core.text import fold_name
 from dam.db.tables import collection_members, collections
+from dam.errors import InvalidRequest, NotFound
+from dam.index.driveid import LOCAL_ID_PREFIX
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 from dam.locks import LockService
 from dam.maintenance import checks, duplicates
 from dam.maintenance.duplicates import WHY_LOCKED, LockIndex
-from dam.maintenance.ignored import IgnoreList, fold_name
-from dam.maintenance.jobs import Job, MaintenanceJobs
+from dam.maintenance.ignored import IgnoreList
+from dam.maintenance.jobs import MaintenanceJobs
 from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.ops.guards import is_under, parent
@@ -35,7 +44,6 @@ from dam.ops.model import BatchResult, Op, OpKind, Plan
 from dam.ops.primitives import can_make_links
 from dam.services import check_disk_identity, check_origin
 from dam.services.assignments import UNSET, AssignmentService
-from dam.services.errors import InvalidRequest, NotFound
 from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
@@ -49,6 +57,7 @@ KINDS = (
     "waiting",
     "label_clashes",
     "unfinished_copies",
+    "moved",
 )
 ACTIONS = ("quarantine", "link")
 LINK_UNAVAILABLE = (
@@ -91,6 +100,18 @@ class CarryOver:
 class ResolveResult(BatchResult):
     carry_over: list[CarryOver] = field(default_factory=list)
     carry_errors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ReconnectResult:
+    dry_run: bool
+    pairs: list[checks.MovedPair] = field(default_factory=list)  # reconnected (or would be)
+    errors: list[str] = field(default_factory=list)
+
+
+def moved_key(pair: checks.MovedPair) -> str:
+    """What a "Moved outside dam" pair is ignored as (``dam.maintenance.ignored``)."""
+    return f"{pair.old_id}>{pair.new_id}"
 
 
 @dataclass
@@ -186,6 +207,8 @@ class MaintenanceService:
                 work = lambda ctx: checks.label_clashes(ctx, repo, paths, engine)  # noqa: E731
             case "unfinished_copies":
                 work = lambda ctx: checks.unfinished_copies(ctx, repo, paths, engine)  # noqa: E731
+            case "moved":
+                work = lambda ctx: checks.moved(ctx, repo, paths, engine)  # noqa: E731
             case _:
                 limit = checks.DEFAULT_DAYS if days is None else days
                 work = lambda ctx: checks.waiting_in_to_delete(  # noqa: E731
@@ -208,6 +231,8 @@ class MaintenanceService:
             result = self._still_there(result, sized=True)
         elif job.kind == "waiting":
             result = self._still_there(result, waiting=True)
+        elif job.kind == "moved":
+            result = self._still_moved(result)
         return job.kind, self._not_ignored(job.kind, result)
 
     def _not_ignored(self, kind: str, result):
@@ -232,6 +257,8 @@ class MaintenanceService:
             )
         elif kind in ("empty_folders", "broken_links", "names"):
             key = lambda r: r.drive_id  # noqa: E731
+        elif kind == "moved":
+            key = moved_key
         else:
             return result
         items, n = drop(kind, result.items, key)
@@ -259,6 +286,107 @@ class MaintenanceService:
             out.in_to_delete = max(0, result.in_to_delete - len(gone))
             out.in_to_delete_size = max(0, result.in_to_delete_size - size)
         return out
+
+    def _still_moved(self, result: checks.Moved) -> checks.Moved:
+        """A copy of a "Moved outside dam" result without the pairs that no longer hold:
+        the old row is back, reconnected or gone, the new file moved on or was given
+        something of its own."""
+        given = self.repo.given([i for p in result.items for i in (p.old_id, p.new_id)])
+        kept = []
+        for pair in result.items:
+            old, new = self.repo.get(pair.old_id), self.repo.get(pair.new_id)
+            if (
+                old is not None
+                and old.missing
+                and old.parked_at is None
+                and new is not None
+                and not new.missing
+                and new.parked_at is None
+                and new.path == pair.new_path
+                and pair.new_id not in given
+            ):
+                kept.append(pair)
+        gone = len(result.items) - len(kept)
+        if not gone:
+            return result
+        return dataclasses.replace(result, items=kept, total=max(0, result.total - gone))
+
+    # -- reconnecting files moved outside dam ---------------------------------------------------
+
+    def _moved_pair(self, old_id: str, new_id: str) -> checks.MovedPair:
+        old, new = self.repo.get(old_id), self.repo.get(new_id)
+        if old is None:
+            raise NotFound(old_id)
+        if new is None:
+            raise NotFound(new_id)
+        if not (old_id.startswith(LOCAL_ID_PREFIX) and new_id.startswith(LOCAL_ID_PREFIX)):
+            raise InvalidRequest("Only files without a Drive id are reconnected")
+        if not old.missing or old.parked_at is not None:
+            raise InvalidRequest(f"{old.path} is not missing")
+        if new.missing or new.parked_at is not None:
+            raise InvalidRequest(f"{new.path} is not in the archive")
+        if new.is_dir or new.is_link:
+            raise InvalidRequest(f"{new.path} is not a regular file")
+        if any(is_under(new.path, area) for area in duplicates.own_folders(self.paths)):
+            raise InvalidRequest(f"{new.path} is in one of the app's own folders")
+        if not duplicates.disk_matches(self.paths, new):
+            raise InvalidRequest(f"{new.path} {CHANGED}")
+        given = self.repo.given([old_id, new_id])
+        if new_id in given:
+            raise InvalidRequest(f"{new.path} has tags, notes or other things of its own")
+        if old_id not in given:
+            raise InvalidRequest(f"{old.path} has nothing to reconnect")
+        if not (old.sha256 and old.sha256 == new.sha256 and old.size == new.size):
+            raise InvalidRequest(
+                f"{new.path} is not known to be the same file as {old.path}: run the check again"
+            )
+        like = checks.moved_pairs_like(
+            self.repo, self.paths, self.engine, old.size or 0, old.sha256
+        )
+        pair = next((p for p in like if (p.old_id, p.new_id) == (old_id, new_id)), None)
+        if pair is None:
+            raise InvalidRequest(f"{new.path} {CHANGED}")
+        if pair.ambiguous:
+            raise InvalidRequest(
+                f"{old.path} has the content of more than one file (or shares it with "
+                "another missing file), so it is not reconnected"
+            )
+        return pair
+
+    def reconnect(self, pairs: Sequence[tuple[str, str]], dry_run: bool = False) -> ReconnectResult:
+        """For each ``(old_id, new_id)`` the "Moved outside dam" check paired: move
+        everything given to the file from its old, missing row to its new one and drop
+        the old row (``FileRepo.reconnect``; one transaction per pair). Database only:
+        nothing in the archive changes, nothing is journaled and there is no Undo.
+        ``dry_run`` checks and lists the pairs with what would move.
+
+        Refused (``InvalidRequest``, nothing happens): a file named twice, a pair whose
+        old row is not missing or has nothing given, whose new row is not a present
+        file, has something of its own or changed since it was scanned, files not known
+        to have the same content, and an ambiguous pair."""
+        if not pairs:
+            raise InvalidRequest("No files given")
+        every = [i for pair in pairs for i in pair]
+        if len(set(every)) != len(every):
+            raise InvalidRequest("A file is named more than once")
+        found = [self._moved_pair(old_id, new_id) for old_id, new_id in pairs]
+        if dry_run:
+            return ReconnectResult(True, found)
+        result = ReconnectResult(False)
+        for pair in found:
+            try:
+                pair.moves = self.repo.reconnect(pair.old_id, pair.new_id)
+            except ValueError as e:  # changed since it was checked a moment ago
+                result.errors.append(f"{pair.new_path}: not reconnected ({e})")
+                continue
+            log.info("reconnected %s to %s (%s)", pair.old_path, pair.new_path, pair.moves)
+            result.pairs.append(pair)
+        if any(p.moves.get("collections") for p in result.pairs):
+            try:
+                self.collections.changed()  # a published link follows the file
+            except Exception:
+                log.warning("syncing the collections failed", exc_info=True)
+        return result
 
     # -- replacing or removing duplicates ---------------------------------------------------
 

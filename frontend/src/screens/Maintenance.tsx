@@ -8,6 +8,7 @@ import { useState } from "react";
 import { errorText, forgetMaintenanceJobs } from "../api/client";
 import { Duplicates } from "../components/maintenance/Duplicates";
 import { BrokenLinks, EmptyFolders, LabelClashes, Missing, Names, UnfinishedCopies, Waiting } from "../components/maintenance/ListChecks";
+import { Moved } from "../components/maintenance/Moved";
 import { MaintenanceView, useMaintenanceView } from "../components/maintenance/view";
 import { useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
@@ -64,6 +65,7 @@ function Screen() {
         <Waiting />
         <LabelClashes />
         <UnfinishedCopies />
+        <Moved />
       </div>
     </div>
   );

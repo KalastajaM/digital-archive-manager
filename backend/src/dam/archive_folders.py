@@ -15,11 +15,11 @@ from dam import settings_write
 from dam.config import AppPaths, ExtraFolder, Settings, load_settings
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.fs import listable
-from dam.core.paths import ArchiveFolder, ArchivePaths, _fold, folder_connected
+from dam.core.paths import ArchiveFolder, ArchivePaths, fold_name, folder_connected
 from dam.db.engine import make_engine
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FileRepo
 from dam.profiles import ProfileStore, related, root_conflict
-from dam.services.errors import InvalidRequest, NotFound
 
 MAIN_FOLDER = "the main folder"
 
@@ -42,7 +42,7 @@ class FolderChange:
 
 def _taken(label: str, settings: Settings) -> bool:
     """Detached entries count: attaching them again must stay possible."""
-    return any(_fold(e.label) == _fold(label) for e in settings.extra_folders)
+    return any(fold_name(e.label) == fold_name(label) for e in settings.extra_folders)
 
 
 def check_label(label: str, paths: ArchivePaths, settings: Settings) -> str | None:
@@ -65,7 +65,7 @@ def _main_clash(label: str, paths: ArchivePaths) -> str | None:
             names = [entry.name for entry in entries]
     except OSError:
         names = []
-    if any(_fold(name) == _fold(label) for name in names):
+    if any(fold_name(name) == fold_name(label) for name in names):
         return (
             f"'{label}' is already the name of a folder in the main folder. Choose another label."
         )
@@ -145,7 +145,7 @@ def _context(app_paths: AppPaths) -> tuple[Settings, ArchivePaths]:
 
 def _entry(settings: Settings, label: str) -> ExtraFolder:
     for extra in settings.extra_folders:
-        if _fold(extra.label) == _fold(label):
+        if fold_name(extra.label) == fold_name(label):
             return extra
     raise NotFound(f"There is no archive folder labelled '{label}'.")
 
@@ -312,9 +312,9 @@ def _relabel_problem(new: str, target: ExtraFolder, paths: ArchivePaths, setting
     if clean == target.label:
         return "That is already the folder's label."
     others = [e for e in settings.extra_folders if e is not target]
-    if any(_fold(e.label) == _fold(clean) for e in others):
+    if any(fold_name(e.label) == fold_name(clean) for e in others):
         return f"There is already an archive folder labelled '{clean}'. Choose another label."
-    if _fold(clean) == _fold(target.label):
+    if fold_name(clean) == fold_name(target.label):
         return None
     return _main_clash(clean, paths)
 

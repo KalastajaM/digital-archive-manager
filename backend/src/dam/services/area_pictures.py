@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image, ImageStat
 
 from dam.codes.configfile import write_config_bytes
+from dam.errors import InvalidRequest, NotFound
 from dam.extract.layout import Box, check_box
 from dam.extract.picture import picture_path
 from dam.index.repo import FileRepo
@@ -19,7 +20,6 @@ from dam.ops.model import ABS_TARGET, BatchResult, Op, OpKind, Plan
 from dam.rules.model import Rule
 from dam.rules.picture import AREAS_DIR, PictureError, crop_file, cut_crop, png_bytes
 from dam.services import check_origin
-from dam.services.errors import InvalidRequest, NotFound
 
 _NOT_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 MAX_PER_RULE = 99

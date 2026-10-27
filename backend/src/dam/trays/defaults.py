@@ -42,8 +42,8 @@ from pathlib import Path
 
 import yaml
 
+from dam.errors import Conflict, InvalidRequest, NotFound, StalePreview
 from dam.rules.model import MAX_CONFIG_BYTES, read_yaml
-from dam.services.errors import Conflict, InvalidRequest, NotFound, StalePreview
 from dam.trays.model import load_tray_text
 
 log = logging.getLogger(__name__)

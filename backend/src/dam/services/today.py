@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Literal
 
 from dam.collections.service import CollectionService
 from dam.core.paths import nfc
+from dam.errors import ArchiveUnavailable
 from dam.index.repo import FileRecord, FileRepo
 from dam.notes import NotesService
 from dam.ops.guards import is_under
-from dam.services.errors import ArchiveUnavailable
 from dam.trays.model import FIELD_TYPES, TrayDef
 from dam.trays.service import Item, TrayService
 

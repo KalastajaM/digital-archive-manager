@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from dam.config import Settings
 from dam.core.fs import listable, lists_nothing, resolve
+from dam.core.text import fold_name
 
 
 class OutsideArchiveError(ValueError):
@@ -23,10 +24,6 @@ def _not_plain(part: str) -> bool:
     """A component that is not one plain name on this platform: on Windows a backslash
     separates folders (so ``..\\x`` is an escape) and ``:`` makes a drive or stream."""
     return os.name == "nt" and ("\\" in part or ":" in part)
-
-
-def _fold(s: str) -> str:
-    return nfc(s).casefold()
 
 
 @dataclass(frozen=True)
@@ -89,17 +86,17 @@ class ArchivePaths:
         parts = PurePosixPath(inner).parts
         if not parts:
             return True
-        first = _fold(parts[0])
-        return all(_fold(extra.label) != first for extra in self.settings.extra_folders)
+        first = fold_name(parts[0])
+        return all(fold_name(extra.label) != first for extra in self.settings.extra_folders)
 
     def label_of(self, rel: str) -> str:
         """The extra folder's label ``rel`` lies at or under, else ``""``."""
         parts = PurePosixPath(rel).parts
         if not parts:
             return ""
-        first = _fold(parts[0])
+        first = fold_name(parts[0])
         for f in self.folders[1:]:
-            if _fold(f.label) == first:
+            if fold_name(f.label) == first:
                 return f.label
         return ""
 
@@ -161,9 +158,9 @@ class ArchivePaths:
     def is_quarantined(self, rel: str, strict: bool = False) -> bool:
         """``rel`` is one of the ``##. To Delete`` folders or inside one (``strict``:
         inside only)."""
-        parts = PurePosixPath(_fold(rel)).parts
+        parts = PurePosixPath(fold_name(rel)).parts
         for q in self.quarantines:
-            qp = PurePosixPath(_fold(q)).parts
+            qp = PurePosixPath(fold_name(q)).parts
             if parts[: len(qp)] == qp and not (strict and len(parts) == len(qp)):
                 return True
         return False
@@ -178,9 +175,9 @@ class ArchivePaths:
     def in_publish_root(self, rel: str) -> str | None:
         """The publish root ``rel`` lies strictly inside (never the root itself), or
         None."""
-        parts = PurePosixPath(_fold(rel)).parts
+        parts = PurePosixPath(fold_name(rel)).parts
         for root in self.publish_roots:
-            rp = PurePosixPath(_fold(root)).parts
+            rp = PurePosixPath(fold_name(root)).parts
             if len(parts) > len(rp) and parts[: len(rp)] == rp:
                 return root
         return None
@@ -240,9 +237,9 @@ class ArchivePaths:
         return len(PurePosixPath(rel).parts) == 1
 
     def is_protected(self, rel: str) -> bool:
-        parts = PurePosixPath(_fold(rel)).parts
+        parts = PurePosixPath(fold_name(rel)).parts
         for prot in self.settings.protected_paths:
-            pp = PurePosixPath(_fold(prot)).parts
+            pp = PurePosixPath(fold_name(prot)).parts
             if parts[: len(pp)] == pp:
                 return True
         return False

@@ -140,7 +140,8 @@ def test_a_test_nobody_asks_about_ends_by_itself(fake, jobs, monkeypatch):
     rule = bigfake.rules()["d_text_area"]
     gate = threading.Event()
     job = jobs.start("s", make_run(fake, rule, gate))
-    time.sleep(0.4)  # nobody polls
+    # nobody polls: wait until the job counts as abandoned
+    assert wait_for(lambda: time.monotonic() - job.seen > jobs_module.ABANDONED_S)
     gate.set()
     job.join(10)
     assert job.state == "stopped"

@@ -42,7 +42,7 @@ the result says why.
 binding preview: ``apply`` runs only the exact plan ``preview`` showed (its
 ``fingerprint`` over the resolved ops, the members, the notes and the target).
 
-``_Converter`` holds what both converters share: reading a root's entries, checking
+``Converter`` holds what both converters share: reading a root's entries, checking
 links and index rows, the destination rules, the fingerprint and the apply skeleton
 (the publisher's ``sync_lock`` held from planning until the created entries are
 recorded). The subclasses decide what an entry's ops are and what is saved.
@@ -65,12 +65,12 @@ from dam.collections.ongoing import OngoingPublisher
 from dam.collections.service import Collection, Member, check_collection_name, check_link_name
 from dam.core.fs import readlink
 from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
+from dam.errors import InvalidRequest, NotFound, StalePreview
 from dam.index.scanner import is_ignored
 from dam.ops import primitives
 from dam.ops.guards import canonical, fold_parts, is_under, join
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
 from dam.ops.planner import COLLISION_NOTE
-from dam.services.errors import InvalidRequest, NotFound, StalePreview
 
 if TYPE_CHECKING:
     from dam.collections.ongoing import Layout, SyncResult
@@ -183,7 +183,7 @@ class _Member:
 
 
 @dataclass
-class _Built:
+class ConvertBuilt:
     entry: Entry
     name: str
     existing: Collection | None
@@ -209,7 +209,7 @@ def _same_op(op: Op, rop: ResolvedOp) -> bool:
     return op.kind is rop.kind and fold_parts(op.src) == fold_parts(rop.src)
 
 
-class _Converter:
+class Converter:
     """What the Ongoing and the Important converter share. ``root`` is the publish
     root whose top-level entries are converted; a link's target may not lie in any
     of ``_refused_roots`` (the targets there are the app's or the user's unconverted
@@ -523,7 +523,7 @@ class _Converter:
             raise InvalidRequest(f"{entry.rel}: {EMPTY}")
         return entry
 
-    def _guarded_build(self, rel: str, build: Callable[[], _Built]) -> _Built:
+    def _guarded_build(self, rel: str, build: Callable[[], ConvertBuilt]) -> ConvertBuilt:
         """``build()``; a read error (other than "not there") is a refusal."""
         try:
             return build()
@@ -534,7 +534,7 @@ class _Converter:
                 f"{rel} cannot be converted, because it could not be read: {e}"
             ) from None
 
-    def _link_member(self, built: _Built, link: str, group: tuple[str, ...] = ()) -> _Member:
+    def _link_member(self, built: ConvertBuilt, link: str, group: tuple[str, ...] = ()) -> _Member:
         """UNLINK the user's link ``link``; its target becomes a member."""
         p = self.paths.abs(link)
         target, _, problem = self._link(p)
@@ -559,7 +559,7 @@ class _Converter:
         return m
 
     def _move_member(
-        self, built: _Built, src: str, dest: str, group: tuple[str, ...] = ()
+        self, built: ConvertBuilt, src: str, dest: str, group: tuple[str, ...] = ()
     ) -> _Member:
         """MOVE the real file (or folder) ``src`` into ``dest``; it becomes a member."""
         rec = self._indexed(src)
@@ -611,7 +611,7 @@ class _Converter:
         return None
 
     def _remove_emptied(
-        self, built: _Built, entry_rel: str, dirs: list[str]
+        self, built: ConvertBuilt, entry_rel: str, dirs: list[str]
     ) -> set[tuple[str, ...]]:
         """REMOVE_EMPTY_DIR (deepest first) every folder of the entry that the planned
         ops leave empty (nothing but a genuine Finder ``.DS_Store``); a folder that
@@ -651,11 +651,11 @@ class _Converter:
         except GuardError as e:
             raise InvalidRequest(f"This cannot be converted: {e}") from None
 
-    def _layout(self, built: _Built, vacated: list[str]) -> Layout:
+    def _layout(self, built: ConvertBuilt, vacated: list[str]) -> Layout:
         """The publisher's ops for the collection as it will be (reads only)."""
         raise NotImplementedError
 
-    def _resolve(self, built: _Built, vacated: list[str]) -> None:
+    def _resolve(self, built: ConvertBuilt, vacated: list[str]) -> None:
         """Resolve the conversion (collision suffixes), then plan the publisher's
         layout for the collection as it will be, and resolve the whole batch."""
         own = self._preview(built.ops) if built.ops else []
@@ -691,12 +691,12 @@ class _Converter:
         built.notes += built.problems
 
     @staticmethod
-    def _renamed(built: _Built, layout: list[ResolvedOp]) -> list[str]:
+    def _renamed(built: ConvertBuilt, layout: list[ResolvedOp]) -> list[str]:
         """A note per shortcut whose link, as the batch resolves it, is not at the
         shortcut's own name (a name the publisher cannot use, or a real collision,
         ``_2``), and per moved file linked under another name than its own."""
         out = []
-        for m in _unique(built.members):
+        for m in unique_members(built.members):
             link = next(
                 (
                     r
@@ -716,8 +716,8 @@ class _Converter:
         return out
 
     @staticmethod
-    def _plan(built: _Built) -> ConvertPlan:
-        unique = _unique(built.members)
+    def _plan(built: ConvertBuilt) -> ConvertPlan:
+        unique = unique_members(built.members)
         members = [m.dst for m in unique]
         groups = ["/".join(m.group) for m in unique]
         link_names = [m.link_name or "" for m in unique]
@@ -742,14 +742,14 @@ class _Converter:
 
     # --- applying -------------------------------------------------------------------------
 
-    def _save(self, built: _Built, batch: BatchResult) -> tuple[Collection | None, list[str]]:
+    def _save(self, built: ConvertBuilt, batch: BatchResult) -> tuple[Collection | None, list[str]]:
         """Save what the batch did (memberships tagged with it, so undo removes
         them): the collection, or None when nothing was saved, and notes (a file
         that was a member already is left as it was: its membership is not the
         batch's to undo). Runs under ``sync_lock``, reading the members then."""
         raise NotImplementedError
 
-    def _done_ids(self, built: _Built, batch: BatchResult) -> list[str]:
+    def _done_ids(self, built: ConvertBuilt, batch: BatchResult) -> list[str]:
         """The members whose op completed, one per drive id."""
         return list(
             dict.fromkeys(
@@ -758,23 +758,23 @@ class _Converter:
         )
 
     @staticmethod
-    def _split_new(built: _Built, ids: list[str], members: list[Member]) -> tuple[list, list]:
+    def _split_new(built: ConvertBuilt, ids: list[str], members: list[Member]) -> tuple[list, list]:
         """``ids`` that are not members yet, and notes for the ones that are."""
         have = {m.drive_id for m in members}
-        by_id = {m.drive_id: m for m in _unique(built.members)}
+        by_id = {m.drive_id: m for m in unique_members(built.members)}
         new = [d for d in ids if d not in have]
         notes = [f"{by_id[d].dst}{ALREADY_MEMBER}" for d in ids if d in have]
         return new, notes
 
     @staticmethod
-    def _link_names(built: _Built, ids: list[str]) -> dict[str, str]:
-        by_id = {m.drive_id: m for m in _unique(built.members)}
+    def _link_names(built: ConvertBuilt, ids: list[str]) -> dict[str, str]:
+        by_id = {m.drive_id: m for m in unique_members(built.members)}
         return {d: by_id[d].link_name for d in ids if by_id[d].link_name}
 
     def _apply(
         self,
         rel: str,
-        build: Callable[[], _Built],
+        build: Callable[[], ConvertBuilt],
         fingerprint: str,
         label: str | None = None,
     ) -> ConvertResult:
@@ -840,7 +840,7 @@ class _Converter:
         return result
 
 
-class OngoingConverter(_Converter):
+class OngoingConverter(Converter):
     @property
     def root(self) -> str:
         return self.paths.ongoing
@@ -849,20 +849,20 @@ class OngoingConverter(_Converter):
 
     def _build(
         self, rel: str, collection: str, destination: str | None, star: bool, to_inbox: bool
-    ) -> _Built:
+    ) -> ConvertBuilt:
         return self._guarded_build(
             rel, lambda: self._plan_build(rel, collection, destination, star, to_inbox)
         )
 
     def _plan_build(
         self, rel: str, collection: str, destination: str | None, star: bool, to_inbox: bool
-    ) -> _Built:
+    ) -> ConvertBuilt:
         entry = self._top_entry(rel)
         if star:
             if entry.kind == "folder":
                 raise InvalidRequest(f"{entry.rel} {STAR_FOLDER}")
             existing = self.collections.builtin("starred")
-            built = _Built(entry, existing.name, existing, [], [], star=True)
+            built = ConvertBuilt(entry, existing.name, existing, [], [], star=True)
         else:
             cname = check_collection_name(collection)
             existing = self.collections.by_name(cname)
@@ -870,7 +870,7 @@ class OngoingConverter(_Converter):
                 raise InvalidRequest(
                     f"The collection {existing.name!r} is closed. Reopen it first."
                 )
-            built = _Built(entry, existing.name if existing else cname, existing, [], [])
+            built = ConvertBuilt(entry, existing.name if existing else cname, existing, [], [])
         vacated: list[str] = []
         if entry.kind == "link":
             self._link_member(built, entry.rel)
@@ -896,7 +896,7 @@ class OngoingConverter(_Converter):
         self._resolve(built, vacated)
         return built
 
-    def _plan_folder(self, built: _Built, entry: Entry, dest: str) -> bool:
+    def _plan_folder(self, built: ConvertBuilt, entry: Entry, dest: str) -> bool:
         """UNLINK the links deeper inside (while still in Ongoing: no link ever moves
         into the archive), MOVE every child, then UNLINK the links directly in it,
         then REMOVE_EMPTY_DIR the folder when that can succeed. True when the folder
@@ -919,7 +919,7 @@ class OngoingConverter(_Converter):
         built.ops.append(Op(OpKind.REMOVE_EMPTY_DIR, entry.rel, None))
         return True
 
-    def _plan_folder_to_inbox(self, built: _Built, entry: Entry, inbox: str) -> bool:
+    def _plan_folder_to_inbox(self, built: ConvertBuilt, entry: Entry, inbox: str) -> bool:
         """Every link inside becomes a member (UNLINKed, as above), every real file at
         any depth is MOVEd flat into the inbox (``_2`` on a clash) to be filed one by
         one, then every folder left empty (deepest first) is REMOVE_EMPTY_DIRed. True
@@ -931,12 +931,12 @@ class OngoingConverter(_Converter):
             self._move_member(built, f, inbox)
         return fold_parts(entry.rel) in self._remove_emptied(built, entry.rel, dirs)
 
-    def _layout(self, built: _Built, vacated: list[str]) -> Layout:
+    def _layout(self, built: ConvertBuilt, vacated: list[str]) -> Layout:
         if built.star:
             return self.ongoing.star_layout_after(self._after(built), vacated)
         return self.ongoing.layout_after(self._after(built), vacated)
 
-    def _after(self, built: _Built) -> Collection:
+    def _after(self, built: ConvertBuilt) -> Collection:
         """The collection as it will be once the conversion has run."""
         base = built.existing or Collection(
             id=0,
@@ -950,7 +950,7 @@ class OngoingConverter(_Converter):
         have = {m.drive_id for m in base.members}
         new = [
             Member(m.drive_id, m.dst, m.is_dir, missing=False, link_name=m.link_name)
-            for m in _unique(built.members)
+            for m in unique_members(built.members)
             if m.drive_id not in have
         ]
         return dataclasses.replace(base, members=[*base.members, *new])
@@ -983,7 +983,7 @@ class OngoingConverter(_Converter):
         to_inbox: bool = False,
     ) -> ConvertResult:
         """Convert ``rel`` in one journaled batch: exactly the previewed plan
-        (``fingerprint``), re-planned from the disk now (see ``_Converter._apply``)."""
+        (``fingerprint``), re-planned from the disk now (see ``Converter._apply``)."""
         name = rel.rsplit("/", 1)[-1]
         label = f"Starred {name}" if star else f"Converted {rel} into {collection}"
         return self._apply(
@@ -993,7 +993,7 @@ class OngoingConverter(_Converter):
             label,
         )
 
-    def _save(self, built: _Built, batch: BatchResult) -> tuple[Collection | None, list[str]]:
+    def _save(self, built: ConvertBuilt, batch: BatchResult) -> tuple[Collection | None, list[str]]:
         """Members whose op completed and are not members yet, tagged with the batch
         (undo removes them). A new collection is created only when there is
         something to put in it."""
@@ -1011,7 +1011,7 @@ class OngoingConverter(_Converter):
         return c, notes
 
 
-def _unique(members: list[_Member]) -> list[_Member]:
+def unique_members(members: list[_Member]) -> list[_Member]:
     """One per drive id (two links to one target are one member): the first, or a
     later one whose name is the file's own (so the one link is named after the
     file whenever a duplicate was)."""

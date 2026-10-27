@@ -7,8 +7,8 @@ import re
 from typing import Any
 
 from dam.config import AISettings
+from dam.errors import InvalidRequest
 from dam.ops.guards import fold_parts, is_under
-from dam.services.errors import InvalidRequest
 
 # text limits (spec §2.2 and the plan's Global Constraints)
 DOC_CHARS = 12_000  # per document (filing, summaries)

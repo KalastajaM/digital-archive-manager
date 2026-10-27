@@ -18,11 +18,11 @@ from dam import layouts
 from dam.config import DEFAULTS_DIR, AppPaths, SpecialFolders
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.paths import ArchivePaths
+from dam.errors import InvalidRequest
 from dam.ops.executor import Executor
 from dam.ops.guards import canonical, fold_parts, is_under, join
 from dam.ops.model import BatchResult, GuardError, Op, OpKind, Plan, ResolvedOp
 from dam.services import check_origin
-from dam.services.errors import InvalidRequest
 
 log = logging.getLogger(__name__)
 

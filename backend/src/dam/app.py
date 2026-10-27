@@ -23,6 +23,13 @@ from dam.config import DEFAULTS_DIR, AppPaths, Person, Settings, load_settings
 from dam.core.paths import ArchivePaths
 from dam.db.engine import make_engine, migrate
 from dam.db.tables import files
+from dam.errors import (
+    ArchiveUnavailable,
+    Conflict,
+    InvalidRequest,
+    NotConfigured,
+    NotFound,
+)
 from dam.extract.base import ExtractorRegistry, default_registry
 from dam.index.content import ContentIndexer
 from dam.index.repo import FileRepo, TagRepo
@@ -36,20 +43,13 @@ from dam.reminders.engine import clear_unsent
 from dam.reminders.notify import RemindResult
 from dam.rules.jobs import ReplayJobs
 from dam.rules.learned import rule_file, write_rules_file
-from dam.rules.model import LEARNED_FILE, Rule, RuleError, _load_file, load_rules
+from dam.rules.model import LEARNED_FILE, Rule, RuleError, load_rule_file, load_rules
 from dam.rules.picture import AREAS_DIR, Pictures
 from dam.search import SearchContext, SearchHit, search
 from dam.services.activity import ActivityService
 from dam.services.area_pictures import AreaPictures
 from dam.services.assignments import AssignmentService
 from dam.services.browse import BrowseService
-from dam.services.errors import (
-    ArchiveUnavailable,
-    Conflict,
-    InvalidRequest,
-    NotConfigured,
-    NotFound,
-)
 from dam.services.inbox import InboxService
 from dam.services.intake import IntakeService
 from dam.services.launch import LaunchService
@@ -391,7 +391,7 @@ class App:
 
     def _rule_file_rules(self, path: Path) -> list[Rule]:
         try:
-            return _load_file(path) if path.exists() else []
+            return load_rule_file(path) if path.exists() else []
         except ValueError as e:
             raise InvalidRequest(f"{path.name} could not be read: {e}") from e
 
@@ -583,6 +583,8 @@ class App:
         then read bank barcodes (``ContentIndexer.run_barcodes_once``) and page-1 layouts
         (``run_layouts_once``) the same way. The layout pass reads only the inbox and the
         wanted files here, never the whole archive: the background pass does the rest."""
+        # a file whose read stopped dam last time (``dam index`` or the app) is skipped
+        self.content.recover_interrupted()
         # Hard cap: a file is attempted at most about once per call, so never more than
         # the number of rows, even if a failing file were somehow picked again.
         with self.engine.connect() as conn:

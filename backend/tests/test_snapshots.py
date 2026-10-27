@@ -17,11 +17,11 @@ from dam import setup, snapshots
 from dam.app import BATCH_RUNNING
 from dam.config import AppPaths
 from dam.db.engine import MIGRATIONS_DIR, make_engine, write_tx
+from dam.errors import Conflict, InvalidRequest
 from dam.ops.executor import BATCH_HELD
 from dam.ops.model import Op, OpKind, Plan
 from dam.profiles import ProfileStore, ServeLock
 from dam.serve import Host, Switchboard
-from dam.services.errors import Conflict
 from dam.services.snapshots import SnapshotService
 from dam.snapshots import Folders
 
@@ -381,7 +381,7 @@ def test_restore_is_refused_without_a_host_or_with_an_interrupted_operation(tmp_
             return change()
 
     interrupted = SnapshotService(paths, Folders(None), Reopen(), pending=lambda: True)
-    with pytest.raises(Conflict, match="dam recover"):
+    with pytest.raises(Conflict, match="Use Run recovery"):
         interrupted.restore("dam-snapshot-20200101-000000.zip", snapshot_current=False)
 
 
@@ -420,3 +420,259 @@ def test_import_takes_only_a_raw_file_body(served):
     for kind in ("text/plain", "multipart/form-data; boundary=x"):
         r = c.post("/api/snapshots/import", content=b"x", headers={**ORIGIN, "Content-Type": kind})
         assert r.status_code == 415
+
+
+# -- crafted or foreign snapshot files ----------------------------------------------------
+
+
+def _snapshot_with(paths: Path, name: str, target: Path, change) -> bytes:
+    _rezip(paths.data_dir / "snapshots" / name, target, change)
+    return target.read_bytes()
+
+
+def _nothing_left(paths, *names) -> None:
+    assert sorted(p.name for p in (paths.data_dir / "snapshots").iterdir()) == sorted(names)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "config/C:/x.txt",  # a drive on Windows
+        "config/C:x",  # drive-relative on Windows
+        "config/a:b",  # an alternate data stream on Windows
+        "config/nul.yaml",  # a device on Windows
+        "config/CON",
+        "config/rules/x. ",  # Windows drops the trailing dot and space
+    ],
+)
+def test_import_refuses_drive_stream_and_device_names_on_every_platform(served, bad):
+    _, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+
+    def add_bad(member, data):
+        yield member, data
+        if member == "manifest.json":
+            yield bad, b"x"
+
+    r = upload(c, _snapshot_with(paths, name, paths.data_dir.parent / "bad.zip", add_bad))
+    assert r.status_code == 400, r.text
+    assert "unsafe entry" in r.json()["error"]
+    _nothing_left(paths, name)
+
+
+def test_import_refuses_too_many_entries(served, monkeypatch):
+    _, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+
+    def many(member, data):
+        yield member, data
+        if member == "manifest.json":
+            for n in range(20):
+                yield f"config/extra-{n}.yaml", b"x: 1\n"
+
+    data = _snapshot_with(paths, name, paths.data_dir.parent / "many.zip", many)
+    monkeypatch.setattr(snapshots, "MAX_MEMBERS", 15)
+    r = upload(c, data)
+    assert r.status_code == 400 and "more than 15 entries" in r.json()["error"]
+    _nothing_left(paths, name)
+
+
+def test_import_refuses_an_entry_packed_far_smaller_than_it_unpacks(served):
+    _, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+
+    def bomb(member, data):
+        yield member, data
+        if member == "manifest.json":
+            yield "config/zeros.yaml", b"\0" * (8 * 1024**2), zipfile.ZIP_DEFLATED
+
+    r = upload(c, _snapshot_with(paths, name, paths.data_dir.parent / "bomb.zip", bomb))
+    assert r.status_code == 400 and "packed unusually small" in r.json()["error"]
+    _nothing_left(paths, name)
+
+
+def test_import_refuses_more_than_the_unpacked_limit_from_the_declared_sizes(served, monkeypatch):
+    _, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+    data = (paths.data_dir / "snapshots" / name).read_bytes()
+    monkeypatch.setattr(snapshots, "MAX_UNPACKED_BYTES", 1000)
+    r = upload(c, data)
+    assert r.status_code == 400 and "more than a dam snapshot can hold" in r.json()["error"]
+    _nothing_left(paths, name)
+
+
+def _declare_size(zip_bytes: bytes, member: str, size: int) -> bytes:
+    """``zip_bytes`` with ``member``'s uncompressed size given as ``size`` in its local
+    header and its central directory entry (the data stays as it is)."""
+    out = bytearray(zip_bytes)
+    encoded = member.encode("utf-8")
+    for signature, size_at, name_at in ((b"PK\x03\x04", 22, 30), (b"PK\x01\x02", 24, 46)):
+        start = 0
+        while (at := out.find(signature, start)) >= 0:
+            if out[at + name_at : at + name_at + len(encoded)] == encoded:
+                out[at + size_at : at + size_at + 4] = size.to_bytes(4, "little")
+            start = at + 4
+    return bytes(out)
+
+
+def test_import_refuses_an_entry_that_holds_more_than_it_declares(served):
+    _, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+
+    def big(member, data):
+        yield member, data
+        if member == "manifest.json":
+            yield "config/big.yaml", bytes(range(256)) * 4096  # 1 MiB, stored
+
+    data = _snapshot_with(paths, name, paths.data_dir.parent / "lying.zip", big)
+    r = upload(c, _declare_size(data, "config/big.yaml", 10))
+    assert r.status_code == 400, r.text
+    _nothing_left(paths, name)
+
+
+def test_unpacking_counts_the_bytes_it_writes_not_the_declared_size(tmp_path):
+    """A zip reader that hands over more than the declared size is cut off there."""
+
+    class Endless:
+        def __init__(self):
+            self.given = 0
+
+        def read(self, n):
+            self.given += n
+            return b"x" * n
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    class Zip:
+        def open(self, _info):
+            return Endless()
+
+    info = zipfile.ZipInfo("config/lying.yaml")
+    info.file_size = 10
+    dest = tmp_path / "lying.yaml"
+    with pytest.raises(InvalidRequest, match="more than a dam snapshot can hold"):
+        snapshots._copy_member(Zip(), info, dest, room=10**9)
+    assert dest.stat().st_size <= 10
+    info.file_size = 10**9
+    with pytest.raises(InvalidRequest, match="more than a dam snapshot can hold"):
+        snapshots._copy_member(Zip(), info, tmp_path / "room.yaml", room=3 * 1024**2)
+    assert (tmp_path / "room.yaml").stat().st_size <= 3 * 1024**2
+
+
+def test_a_restore_keeps_this_archives_folders_and_protections(served):
+    """A snapshot with the same main folder cannot add folders to the archive (``/``,
+    the data folder) or drop protected paths or AI-excluded folders."""
+    host, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+    before = host.current.app.settings
+    assert before.extra_folders == [] and before.protected_paths
+    crafted = "dam-snapshot-20200505-000000.zip"
+
+    def widen(member, data):
+        if member == "config/settings.yaml":
+            raw = yaml.safe_load(data)
+            raw["extra_folders"] = [
+                {"label": "Everything", "path": "/", "attached": True},
+                {"label": "Data", "path": str(paths.data_dir), "attached": True},
+            ]
+            raw["protected_paths"] = ["Added by snapshot"]
+            raw["ai"] = {**(raw.get("ai") or {}), "exclude_folders": []}
+            data = yaml.safe_dump(raw).encode("utf-8")
+        yield member, data
+
+    _rezip(paths.data_dir / "snapshots" / name, paths.data_dir / "snapshots" / crafted, widen)
+    info = {s["name"]: s for s in c.get("/api/snapshots").json()["snapshots"]}[crafted]
+    assert info["other_folder"] is False  # same main folder: no question asked
+    r = post(c, f"/api/snapshots/{crafted}/restore", {"snapshot_current": False})
+    assert r.status_code == 200, r.text
+    assert r.json()["kept_folders"] is True
+    after = host.current.app.settings
+    assert after.archive_root == before.archive_root
+    assert after.extra_folders == []
+    assert after.protected_paths == [*before.protected_paths, "Added by snapshot"]
+    assert after.ai.exclude_folders == before.ai.exclude_folders
+
+
+def _with_db(paths, name: str, target: str, tmp_path: Path, sql: list[str]) -> None:
+    """Snapshot ``target`` in the folder: ``name`` with ``sql`` run on its database."""
+    db = tmp_path / "crafted.sqlite"
+    with zipfile.ZipFile(paths.data_dir / "snapshots" / name) as zf:
+        db.write_bytes(zf.read("dam.sqlite"))
+    con = sqlite3.connect(db)
+    for statement in sql:
+        con.execute(statement)
+    con.commit()
+    con.close()
+
+    def swap(member, data):
+        yield member, (db.read_bytes() if member == "dam.sqlite" else data)
+
+    _rezip(paths.data_dir / "snapshots" / name, paths.data_dir / "snapshots" / target, swap)
+
+
+@pytest.mark.parametrize(
+    ("sql", "message"),
+    [
+        (
+            ["CREATE TRIGGER t AFTER INSERT ON notes BEGIN DELETE FROM files; END"],
+            "holds a trigger (t)",
+        ),
+        (["CREATE VIEW v AS SELECT * FROM files"], "holds a view (v)"),
+        (["CREATE TABLE stranger (x)"], "table dam does not know (stranger)"),
+    ],
+)
+def test_a_database_with_objects_dam_never_makes_is_refused(served, tmp_path, sql, message):
+    host, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+    crafted = "dam-snapshot-20200606-000000.zip"
+    _with_db(paths, name, crafted, tmp_path, sql)
+    app = host.current.app
+    r = post(c, f"/api/snapshots/{crafted}/restore", {"snapshot_current": False})
+    assert r.status_code == 409 and message in r.json()["error"], r.text
+    assert host.current.app is app
+    r = upload(c, (paths.data_dir / "snapshots" / crafted).read_bytes())
+    assert r.status_code == 409 and message in r.json()["error"]
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        ["ALTER TABLE notes ADD COLUMN private_app TEXT"],
+        ["DROP TABLE checklist_items"],
+    ],
+)
+def test_a_database_with_a_known_revision_but_another_layout_is_refused(served, tmp_path, sql):
+    """Bare revision ids are shared with an older app: the id alone does not make a
+    snapshot dam's."""
+    host, c, paths = served
+    name = post(c, "/api/snapshots").json()["name"]
+    foreign = "dam-snapshot-20200707-000000.zip"
+    _with_db(paths, name, foreign, tmp_path, sql)
+    info = {s["name"]: s for s in c.get("/api/snapshots").json()["snapshots"]}[foreign]
+    assert info["problem"] is None  # the manifest's revision is known
+    app = host.current.app
+    r = post(c, f"/api/snapshots/{foreign}/restore", {"snapshot_current": True})
+    assert r.status_code == 409, r.text
+    assert (
+        r.json()["error"] == "This snapshot was not made by this version of dam's database layout."
+    )
+    assert host.current.app is app
+    assert not any("before-restore" in p.name for p in (paths.data_dir / "snapshots").iterdir())
+    r = upload(c, (paths.data_dir / "snapshots" / foreign).read_bytes())
+    assert r.status_code == 409
+
+
+def test_reveal_snapshots_folder_uses_the_injected_runner(served):
+    host, c, paths = served
+    seen: list[list[str]] = []
+    service = host.current.api.state.snapshots
+    service.runner = lambda args: seen.append(args) or 0
+    service.platform = "darwin"
+    assert post(c, "/api/snapshots/reveal").status_code == 204
+    assert seen == [["/usr/bin/open", str((paths.data_dir / "snapshots").resolve())]]
+    service.runner = lambda args: 1  # the system opener fails
+    assert post(c, "/api/snapshots/reveal").status_code == 409

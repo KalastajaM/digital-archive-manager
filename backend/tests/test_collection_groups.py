@@ -16,9 +16,9 @@ from dam.collections.service import SUMMARY_MAX, CollectionService
 from dam.config import SpecialFolders
 from dam.db.engine import MIGRATIONS_DIR, migrate, write_tx
 from dam.db.tables import collection_groups, collection_members, files
+from dam.errors import InvalidRequest, NotFound
 from dam.index.repo import FileRepo
 from dam.ops.model import Plan
-from dam.services.errors import InvalidRequest, NotFound
 
 
 @pytest.fixture
@@ -444,7 +444,7 @@ def test_group_routes(client, app, api_files, fake_archive):
     assert row["summary"] == "Sauna build" and [g["name"] for g in row["groups"]] == ["Plans"]
 
 
-def test_collection_attention(client, app, api_files, fake_archive):
+def test_collection_attention(client, app, api_files, fake_archive, freeze_today):
     """Per member, in one request: its open tray items (with their urgency) and whether
     it is still in the inbox. Members with neither are left out."""
     fake_archive.add("##. Organize/scan.pdf", drive_id="f3")
@@ -458,7 +458,7 @@ def test_collection_attention(client, app, api_files, fake_archive):
         f"/api/collections/{cid}/members",
         {"drive_ids": ["f1", "f2", "f3", "f4", "f5"]},
     )
-    due = (date.today() - timedelta(days=2)).isoformat()
+    due = (freeze_today(date(2026, 10, 26)) - timedelta(days=2)).isoformat()
     item = send(
         client,
         "POST",

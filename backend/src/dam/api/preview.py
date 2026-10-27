@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pypdfium2
 
+from dam.errors import NotFound
 from dam.index.content import MAX_BYTES
 from dam.index.repo import FileRecord
 from dam.pdfium import PDFIUM_LOCK
-from dam.services.errors import NotFound
 
 log = logging.getLogger(__name__)
 

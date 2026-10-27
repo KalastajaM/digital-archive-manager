@@ -59,29 +59,25 @@ from pathlib import PurePosixPath
 
 from dam.collections.convert import (
     FOLDER_NOT_REMOVED,
+    ConvertBuilt,
+    Converter,
     ConvertPlan,
     ConvertResult,
     Entry,
-    _Built,
-    _Converter,
-    _unique,
+    unique_members,
 )
 from dam.collections.service import Collection, Group, Member, check_name
-from dam.core.paths import nfc
+from dam.core.text import fold_name
+from dam.errors import InvalidRequest
 from dam.ops.guards import fold_parts, join, parent
 from dam.ops.model import BatchResult
-from dam.services.errors import InvalidRequest
 
 NOT_REMOVED = FOLDER_NOT_REMOVED
 UNTOUCHED = " is left untouched: same file as "
 ALREADY = " (already in Important)"
 
 
-def _fold(name: str) -> str:
-    return nfc(name).casefold()
-
-
-class ImportantConverter(_Converter):
+class ImportantConverter(Converter):
     @property
     def root(self) -> str:
         return self.paths.important
@@ -122,13 +118,13 @@ class ImportantConverter(_Converter):
         parts = PurePosixPath(folder).parts
         return tuple(parts[len(PurePosixPath(self.root).parts) :])
 
-    def _build(self, rel: str, destination: str | None) -> _Built:
+    def _build(self, rel: str, destination: str | None) -> ConvertBuilt:
         return self._guarded_build(rel, lambda: self._plan_build(rel, destination))
 
-    def _plan_build(self, rel: str, destination: str | None) -> _Built:
+    def _plan_build(self, rel: str, destination: str | None) -> ConvertBuilt:
         entry = self._top_entry(rel)
         c = self.collections.builtin("important")
-        built = _Built(entry, c.name, c, [], [])
+        built = ConvertBuilt(entry, c.name, c, [], [])
         vacated: list[str] = []
         if entry.kind == "link":
             if not self._plan_link(built, entry.rel, ()):
@@ -145,7 +141,7 @@ class ImportantConverter(_Converter):
         self._resolve(built, vacated)
         return built
 
-    def _plan_link(self, built: _Built, link: str, group: tuple[str, ...]) -> bool:
+    def _plan_link(self, built: ConvertBuilt, link: str, group: tuple[str, ...]) -> bool:
         """UNLINK the user's link and make its target a member of ``group``, unless
         the file is Important already (a member, or an earlier link of this entry
         points at it): then the link is left untouched, with the reason noted.
@@ -167,7 +163,7 @@ class ImportantConverter(_Converter):
         self._link_member(built, link, group)
         return True
 
-    def _plan_folder(self, built: _Built, entry: Entry, dest: str) -> bool:
+    def _plan_folder(self, built: ConvertBuilt, entry: Entry, dest: str) -> bool:
         """Every link inside becomes a member of its folder's group and is UNLINKed
         (no link ever moves), every real file is MOVEd to its mirrored place under
         ``dest``, then every folder that is left empty (deepest first) is
@@ -185,10 +181,10 @@ class ImportantConverter(_Converter):
         removed = self._remove_emptied(built, entry.rel, dirs)
         return fold_parts(entry.rel) in removed
 
-    def _layout(self, built: _Built, vacated: list[str]):
+    def _layout(self, built: ConvertBuilt, vacated: list[str]):
         return self.ongoing.important_layout_after(self._after(built), vacated)
 
-    def _after(self, built: _Built) -> Collection:
+    def _after(self, built: ConvertBuilt) -> Collection:
         """The built-in as it will be once the conversion has run: the new members
         in their groups, and the groups that do not exist yet with placeholder ids
         (negative; the publisher only tells groups apart by id)."""
@@ -200,7 +196,11 @@ class ImportantConverter(_Converter):
             at: int | None = None
             for name in path:
                 found = next(
-                    (g for g in groups if g.parent_id == at and _fold(g.name) == _fold(name)),
+                    (
+                        g
+                        for g in groups
+                        if g.parent_id == at and fold_name(g.name) == fold_name(name)
+                    ),
                     None,
                 )
                 if found is None:
@@ -221,7 +221,7 @@ class ImportantConverter(_Converter):
                 group_id=group_id(m.group),
                 link_name=m.link_name,
             )
-            for m in _unique(built.members)
+            for m in unique_members(built.members)
             if m.drive_id not in have
         ]
         for path in built.groups:  # a subfolder without members becomes a group too
@@ -238,12 +238,12 @@ class ImportantConverter(_Converter):
 
     def apply(self, rel: str, destination: str | None, fingerprint: str) -> ConvertResult:
         """Convert ``rel`` in one journaled batch: exactly the previewed plan
-        (``fingerprint``), re-planned from the disk now (see ``_Converter._apply``)."""
+        (``fingerprint``), re-planned from the disk now (see ``Converter._apply``)."""
         return self._apply(
             rel, lambda: self._build(rel, destination), fingerprint, f"Converted {rel}"
         )
 
-    def _save(self, built: _Built, batch: BatchResult) -> tuple[Collection | None, list[str]]:
+    def _save(self, built: ConvertBuilt, batch: BatchResult) -> tuple[Collection | None, list[str]]:
         """The members whose op completed and are not members yet (read now, under
         the lock; one that is already is left as it was and noted), each in its
         group, and every planned group (one ``set_group_path`` per group), all
@@ -253,7 +253,7 @@ class ImportantConverter(_Converter):
         with self.collections.add_lock(cid):  # the members as they are now, then the adds
             c = self.collections.get(cid)
             new, notes = self._split_new(built, self._done_ids(built, batch), c.members)
-            by_id = {m.drive_id: m for m in _unique(built.members)}
+            by_id = {m.drive_id: m for m in unique_members(built.members)}
             by_group: dict[tuple[str, ...], list[str]] = {}
             for d in new:
                 by_group.setdefault(by_id[d].group, []).append(d)

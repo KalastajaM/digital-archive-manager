@@ -1,19 +1,36 @@
 """File index repository."""
 
 import json
+import threading
 import time
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, fields
 from datetime import date
 from pathlib import PurePosixPath
+from typing import TypeVar
 
-from sqlalchemy import Connection, Engine, and_, case, false, func, not_, or_, select, text, update
+from sqlalchemy import (
+    Connection,
+    Engine,
+    Text,
+    and_,
+    case,
+    false,
+    func,
+    not_,
+    or_,
+    select,
+    text,
+    update,
+)
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.codes.qr_model import QrRead
 from dam.core.paths import nfc
+from dam.core.text import fold, fold_name
 from dam.db.engine import write_tx
+from dam.db.generation import WriteGeneration
 from dam.db.tables import (
     checklist_items,
     collection_members,
@@ -37,7 +54,6 @@ from dam.db.tables import (
 )
 from dam.extract.base import ExtractedText
 from dam.extract.layout import Page1Layout
-from dam.rules.model import fold
 
 
 def ext_of(name: str, is_dir: bool | None) -> str | None:
@@ -54,9 +70,26 @@ PARKED = "/parked/"  # no archive-relative path starts with "/"
 _COUNTED = (files.c.is_dir.is_not(True), files.c.is_link.is_not(True), files.c.parked_at.is_(None))
 
 
-def _folded(path: str) -> str:
-    """``path`` compared the way the disk does: NFC and case-insensitive."""
-    return nfc(path).casefold()
+# What the owner (or a filing) gave a file, by its id, as ``FileRepo.given`` counts it:
+# the rows ``FileRepo.reconnect`` moves to another row (``member_link_names``, a name
+# remembered for a published link, moves too but is not counted).
+_GIVEN = (
+    ("tags", file_tags.c.drive_id),
+    ("collections", collection_members.c.drive_id),
+    ("tray_items", item_files.c.drive_id),
+    ("lock", file_locks.c.drive_id),
+    ("from_for", file_assignments.c.drive_id),
+    ("filing_code", file_assigned_codes.c.drive_id),
+    ("summaries", file_summaries.c.drive_id),
+    ("fields", file_fields.c.drive_id),
+    ("rule_outcomes", rule_outcomes.c.drive_id),
+)
+_GIVEN_NOTES = (("note", notes), ("checklist", checklist_items))
+
+# the tables the kept status answers read (``FileRepo._kept_answer``)
+_STATUS_TABLES = ("files", "file_layouts", "file_text")
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -93,6 +126,16 @@ _COLUMNS = [f.name for f in fields(FileRecord)]
 
 FLAT_SORTS = ("name", "date", "size", "folder")
 
+# ``last_error`` of a pending file while the content indexer reads it: set before the
+# read, replaced when its outcome is recorded. Still there on the next start means the
+# read stopped dam (a crafted file that ran it out of memory), so the file is skipped.
+READING_MARK = "dam: reading"
+
+
+def _unmarked():
+    """``last_error`` with a reading mark dropped (any other reason is kept)."""
+    return case((files.c.last_error == READING_MARK, None), else_=files.c.last_error)
+
 
 def _below(folder_nfc: str):
     """``path_nfc`` lies strictly below ``folder_nfc``: a range on the path index.
@@ -101,6 +144,43 @@ def _below(folder_nfc: str):
     (``"0"`` follows ``"/"``; SQLite compares text bytewise, in code point order), and
     nothing else does, so ``"Sauna 2"`` is never under ``"Sauna"``."""
     return and_(files.c.path_nfc >= folder_nfc + "/", files.c.path_nfc < folder_nfc + "0")
+
+
+def _at_or_below(folder_nfc: str):
+    """``path_nfc`` is ``folder_nfc`` or lies below it (see ``_below``)."""
+    return or_(files.c.path_nfc == folder_nfc, _below(folder_nfc))
+
+
+# One ``path_nfc`` per direct child of the folder with the ``path_nfc`` prefix ``:pre``
+# (``""`` = the archive root): the child's own path, or for a child folder without a
+# row of its own the first path below it. Each step is one seek on ix_files_path_nfc:
+# past a child with no "/" after the prefix to the next path (``|| char(1)``: no path
+# holds NUL), past a child folder to the first path after its subtree (``"<child>0"``,
+# as ``_below``). So a listing reads its children, not everything below them.
+_CHILDREN_WALK = """
+WITH RECURSIVE walk(p) AS (
+    SELECT (SELECT min(path_nfc) FROM files WHERE path_nfc >= :pre {upper})
+    UNION ALL
+    SELECT (
+        SELECT min(path_nfc) FROM files
+        WHERE path_nfc >= CASE
+            WHEN instr(substr(p, :n + 1), '/') = 0 THEN p || char(1)
+            ELSE substr(p, 1, :n + instr(substr(p, :n + 1), '/') - 1) || '0'
+        END {upper}
+    )
+    FROM walk WHERE p IS NOT NULL
+)
+SELECT p FROM walk WHERE p IS NOT NULL
+"""
+
+
+def _children_walk(prefix: str):
+    """``_CHILDREN_WALK`` for the folder prefix ``prefix`` (``"<folder>/"``, or ``""``)."""
+    upper = "AND path_nfc < :hi" if prefix else ""
+    params = {"pre": prefix, "n": len(prefix)}
+    if prefix:
+        params["hi"] = prefix[:-1] + "0"
+    return text(_CHILDREN_WALK.format(upper=upper)).bindparams(**params).columns(p=Text)
 
 
 @dataclass
@@ -148,6 +228,13 @@ def _fts_clear_path(conn: Connection, drive_id: str) -> None:
     )
 
 
+def _chunks(drive_ids: Collection[str], size: int = 500) -> Iterator[list[str]]:
+    """``drive_ids`` in lists of at most ``size``, for ``IN (...)`` queries."""
+    ids = list(drive_ids)
+    for start in range(0, len(ids), size):
+        yield ids[start : start + size]
+
+
 def _record(row) -> FileRecord:
     data = {c: row._mapping[c] for c in _COLUMNS}
     data["is_dir"] = bool(data["is_dir"])
@@ -161,11 +248,17 @@ class FileRepo:
     def __init__(self, engine: Engine, inbox: str) -> None:
         self.engine = engine
         self.inbox = nfc(inbox)
-        self._inbox_fold = _folded(self.inbox.strip("/"))
+        self._inbox_fold = fold_name(self.inbox.strip("/"))
         # a filing code's inbox folder (folded name) -> its code; set by ``App`` after
         # every load of the code table
         self.code_folders: dict[str, str] = {}
         self._bound: Connection | None = None
+        # the status answers (``counts``, ``layout_progress``, ``layout_unread``) kept
+        # until a write to the tables they read: the status bar asks every few seconds
+        self._kept_gen: WriteGeneration | None = None
+        self._kept: dict[tuple, object] = {}
+        self._kept_at = -1
+        self._kept_lock = threading.Lock()
 
     def in_inbox(self, rec: FileRecord) -> bool:
         """The file sits directly in the inbox folder or in a filing code's inbox folder
@@ -176,12 +269,12 @@ class FileRepo:
         """``path`` (archive-relative) is directly in the inbox folder or directly in a
         filing code's inbox folder (``<inbox>/To pay``), not deeper. Compared folded
         (NFC, case-insensitive), as the disk does."""
-        folder = _folded(path).rpartition("/")[0]
+        folder = fold_name(path).rpartition("/")[0]
         return folder == self._inbox_fold or self._code_of_folder(folder) is not None
 
     def inbox_code_of(self, path: str) -> str | None:
         """The code whose inbox folder directly holds ``path``, else None."""
-        return self._code_of_folder(_folded(path).rpartition("/")[0])
+        return self._code_of_folder(fold_name(path).rpartition("/")[0])
 
     def _code_of_folder(self, folded: str) -> str | None:
         above, _, name = folded.rpartition("/")
@@ -226,6 +319,29 @@ class FileRepo:
         esc = self.inbox.strip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         return files.c.path_nfc.like(esc + "/%", escape="\\")
 
+    def _kept_answer(self, key: tuple, compute: Callable[[], T]) -> T:
+        """``compute()``, or its answer from an earlier call while nothing in this process
+        has written to the tables it reads since (see ``WriteGeneration``). Not kept
+        inside a ``transaction``: its own writes are not committed yet."""
+        if self._bound is not None:
+            return compute()
+        with self._kept_lock:
+            if self._kept_gen is None:
+                self._kept_gen = WriteGeneration(self.engine, _STATUS_TABLES)
+            gen = self._kept_gen
+            at = gen.value
+            if self._kept_at == at and key in self._kept:
+                return self._kept[key]  # type: ignore[return-value]
+        answer = compute()
+        with self._kept_lock:
+            # a write while computing: the answer may be from the old rows
+            if gen.value == at:
+                if self._kept_at != at:
+                    self._kept.clear()
+                    self._kept_at = at
+                self._kept[key] = answer
+        return answer
+
     @staticmethod
     def record_from_row(row) -> FileRecord:
         """A ``FileRecord`` from a row selected from ``files`` (all columns)."""
@@ -268,22 +384,37 @@ class FileRepo:
         candidates for a path spelled in another case on a case-insensitive disk."""
         want = nfc(rel)
         folded = want.casefold()
-        cond = [
-            func.length(files.c.path_nfc) == len(want),
-            files.c.missing.is_not(True),
-            files.c.parked_at.is_(None),
-        ]
+        parts = folded.split("/")  # folding never makes or removes a "/"
+        # the spellings of each folder level in turn, from each level's children
+        prefixes = [""]
         with self._conn() as conn:
-            rows = conn.execute(select(files).where(*cond)).all()
-        return [_record(r) for r in rows if r.path_nfc.casefold() == folded]
+            for i, part in enumerate(parts):
+                last = i == len(parts) - 1
+                found: set[str] = set()
+                for prefix in prefixes:
+                    for p in conn.execute(_children_walk(prefix)).scalars():
+                        name = p[len(prefix) :].partition("/")[0]
+                        if name.casefold() == part:
+                            found.add(prefix + name if last else prefix + name + "/")
+                prefixes = sorted(found)
+            rows = []
+            for chunk in _chunks(prefixes):
+                cond = [
+                    files.c.path_nfc.in_(chunk),
+                    files.c.missing.is_not(True),
+                    files.c.parked_at.is_(None),
+                ]
+                rows += conn.execute(select(files).where(*cond)).all()
+        return [_record(r) for r in rows if len(r.path_nfc) == len(want)]
 
     def list_dir(self, rel: str) -> list[FileRecord]:
         """Direct children of ``rel`` (``""`` = archive root) that are not missing."""
         prefix = nfc(rel) + "/" if rel else ""
-        cond = [files.c.missing.is_not(True)]
-        if prefix:
-            cond.append(func.substr(files.c.path_nfc, 1, len(prefix)) == prefix)
-        cond.append(func.instr(func.substr(files.c.path_nfc, len(prefix) + 1), "/") == 0)
+        cond = [
+            files.c.path_nfc.in_(_children_walk(prefix)),
+            files.c.missing.is_not(True),
+            func.instr(func.substr(files.c.path_nfc, len(prefix) + 1), "/") == 0,
+        ]
         with self._conn() as conn:
             rows = conn.execute(select(files).where(and_(*cond)).order_by(files.c.path)).all()
         return [_record(r) for r in rows]
@@ -429,8 +560,13 @@ class FileRepo:
 
         One key per ``index_state`` of the present (not missing) files, plus ``total``
         (present files), ``inbox`` (present files directly in the inbox or in a filing
-        code's inbox folder, as ``inbox_files``) and ``missing``.
+        code's inbox folder, as ``inbox_files``) and ``missing``. Kept until the next
+        write (``_kept_answer``): counting reads every row.
         """
+        key = ("counts", tuple(sorted(self.code_folders.items())))
+        return dict(self._kept_answer(key, self._count))
+
+    def _count(self) -> dict[str, int]:
         present = files.c.missing.is_not(True)
         stmt = (
             select(
@@ -438,7 +574,13 @@ class FileRepo:
                 func.sum(case((present, 1), else_=0)),
                 func.sum(case((present, 0), else_=1)),
             )
-            .where(*_COUNTED)
+            # "+ 0": keeps the planner off ix_files_parked_at (nearly every row is
+            # unparked): a walk of ix_files_index_state_retry_at is about twice as fast
+            .where(
+                files.c.is_dir.is_not(True),
+                files.c.is_link.is_not(True),
+                (files.c.parked_at + 0).is_(None),
+            )
             .group_by(files.c.index_state)
         )
         under = select(files.c.path_nfc).where(*_COUNTED, present, self._under_inbox())
@@ -454,11 +596,20 @@ class FileRepo:
 
     def text_for(self, drive_id: str) -> str:
         """Extracted text of ``drive_id``; ``""`` when there is none."""
+        return self.texts_for([drive_id]).get(drive_id, "")
+
+    def texts_for(self, drive_ids: Collection[str]) -> dict[str, str]:
+        """``text_for`` for many files in one query (files without text are left out)."""
+        out: dict[str, str] = {}
         with self._conn() as conn:
-            body = conn.execute(
-                select(file_text.c.text).where(file_text.c.drive_id == drive_id)
-            ).scalar()
-        return body or ""
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_text.c.drive_id, file_text.c.text).where(
+                        file_text.c.drive_id.in_(chunk)
+                    )
+                ).all()
+                out.update((r.drive_id, r.text) for r in rows if r.text)
+        return out
 
     def content_keys(self) -> list[tuple[str, str]]:
         """(drive id, sha256) of every indexed file whose content is known."""
@@ -471,15 +622,23 @@ class FileRepo:
     def barcode_for(self, drive_id: str) -> str | None:
         """The bank barcode read from the file's current content; None if none was read
         (or it was read from content the file no longer has)."""
+        return self.barcodes_for([drive_id]).get(drive_id)
+
+    def barcodes_for(self, drive_ids: Collection[str]) -> dict[str, str]:
+        """``barcode_for`` for many files in one query (files without one are left out)."""
+        out: dict[str, str] = {}
         with self._conn() as conn:
-            return conn.execute(
-                select(file_barcodes.c.code)
-                .join(files, files.c.drive_id == file_barcodes.c.drive_id)
-                .where(
-                    file_barcodes.c.drive_id == drive_id,
-                    files.c.sha256 == file_barcodes.c.sha256,
-                )
-            ).scalar()
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_barcodes.c.drive_id, file_barcodes.c.code)
+                    .join(files, files.c.drive_id == file_barcodes.c.drive_id)
+                    .where(
+                        file_barcodes.c.drive_id.in_(chunk),
+                        files.c.sha256 == file_barcodes.c.sha256,
+                    )
+                ).all()
+                out.update((r.drive_id, r.code) for r in rows if r.code is not None)
+        return out
 
     def save_barcode(self, drive_id: str, sha256: str, code: str | None) -> bool:
         """Record what the barcode pass read from content ``sha256`` (``code`` None: none
@@ -504,16 +663,25 @@ class FileRepo:
     def qr_for(self, drive_id: str) -> list[QrRead]:
         """The QR stickers read from the file's current content; ``[]`` if none were
         found or none were read (or they were read from content the file no longer has)."""
+        return self.qrs_for([drive_id]).get(drive_id, [])
+
+    def qrs_for(self, drive_ids: Collection[str]) -> dict[str, list[QrRead]]:
+        """``qr_for`` for many files in one query (files without stickers are left out)."""
+        out: dict[str, list[QrRead]] = {}
         with self._conn() as conn:
-            reads = conn.execute(
-                select(file_qr_codes.c.reads)
-                .join(files, files.c.drive_id == file_qr_codes.c.drive_id)
-                .where(
-                    file_qr_codes.c.drive_id == drive_id,
-                    files.c.sha256 == file_qr_codes.c.sha256,
-                )
-            ).scalar()
-        return [QrRead(**r) for r in json.loads(reads)] if reads else []
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_qr_codes.c.drive_id, file_qr_codes.c.reads)
+                    .join(files, files.c.drive_id == file_qr_codes.c.drive_id)
+                    .where(
+                        file_qr_codes.c.drive_id.in_(chunk),
+                        files.c.sha256 == file_qr_codes.c.sha256,
+                    )
+                ).all()
+                for r in rows:
+                    if r.reads:
+                        out[r.drive_id] = [QrRead(**x) for x in json.loads(r.reads)]
+        return out
 
     def save_qr(self, drive_id: str, sha256: str, reads: Sequence[QrRead]) -> bool:
         """Record the QR stickers read from content ``sha256`` (``[]``: none found). Not
@@ -541,10 +709,20 @@ class FileRepo:
     def assigned_code(self, drive_id: str) -> str | None:
         """The filing code the owner gave the file in the app, else None (also for a
         file outside the inbox: the caller decides when it counts)."""
+        return self.assigned_codes([drive_id]).get(drive_id)
+
+    def assigned_codes(self, drive_ids: Collection[str]) -> dict[str, str]:
+        """``assigned_code`` for many files in one query (files without one are left out)."""
+        out: dict[str, str] = {}
         with self._conn() as conn:
-            return conn.execute(
-                select(file_assigned_codes.c.code).where(file_assigned_codes.c.drive_id == drive_id)
-            ).scalar()
+            for chunk in _chunks(drive_ids):
+                rows = conn.execute(
+                    select(file_assigned_codes.c.drive_id, file_assigned_codes.c.code).where(
+                        file_assigned_codes.c.drive_id.in_(chunk)
+                    )
+                ).all()
+                out.update((r.drive_id, r.code) for r in rows if r.code is not None)
+        return out
 
     def set_assigned_code(self, drive_ids: Sequence[str], code: str | None) -> None:
         """Give each file ``code`` (upper case), replacing the one it had; None removes
@@ -628,11 +806,9 @@ class FileRepo:
     def layouts_for(self, drive_ids: Collection[str]) -> dict[str, Page1Layout]:
         """``layout_for`` for many files in one query (files without a current layout are
         left out)."""
-        ids = list(drive_ids)
         out: dict[str, Page1Layout] = {}
         with self._conn() as conn:
-            for start in range(0, len(ids), 500):
-                chunk = ids[start : start + 500]
+            for chunk in _chunks(drive_ids):
                 rows = conn.execute(
                     select(file_layouts.c.drive_id, file_layouts.c.lines, file_layouts.c.source)
                     .join(files, files.c.drive_id == file_layouts.c.drive_id)
@@ -767,7 +943,10 @@ class FileRepo:
 
     def layout_progress(self) -> tuple[int, int]:
         """``(read, total)`` over the files the layout pass reads: how many have a layout
-        for their current content, and how many there are."""
+        for their current content, and how many there are. Kept until the next write."""
+        return self._kept_answer(("layout_progress",), self._layout_progress)
+
+    def _layout_progress(self) -> tuple[int, int]:
         read = case((self._has_layout(), 1), else_=0)
         with self._conn() as conn:
             row = conn.execute(
@@ -780,7 +959,10 @@ class FileRepo:
     def layout_unread(self) -> tuple[int, int]:
         """``(text, scans)``: of the files the layout pass has not read yet, how many are PDFs
         whose text came from their text layer (read quickly, no OCR) and how many need OCR
-        (scans, photos): the two are read at different speeds."""
+        (scans, photos): the two are read at different speeds. Kept until the next write."""
+        return self._kept_answer(("layout_unread",), self._layout_unread)
+
+    def _layout_unread(self) -> tuple[int, int]:
         quick = and_(files.c.ext == "pdf", file_text.c.ocr_used.is_not(True))
         with self._conn() as conn:
             row = conn.execute(
@@ -791,10 +973,7 @@ class FileRepo:
         return int(row[1]), int(row[0]) - int(row[1])
 
     def _in_inbox(self):
-        return or_(
-            files.c.path_nfc == self.inbox,
-            func.substr(files.c.path_nfc, 1, len(self.inbox) + 1) == self.inbox + "/",
-        )
+        return _at_or_below(self.inbox)
 
     def upsert(self, rec: FileRecord) -> None:
         """Insert or update by ``drive_id``; a different row holding the path is dropped."""
@@ -856,12 +1035,11 @@ class FileRepo:
         target = nfc(rel)
         cond = files.c.path_nfc == target
         if descendants:
-            cond = or_(cond, func.substr(files.c.path_nfc, 1, len(target) + 1) == target + "/")
+            cond = or_(cond, _below(target))
         conds = [cond, files.c.drive_id != keep_id]
         if except_under is not None:
             old = nfc(except_under)
-            conds.append(files.c.path_nfc != old)
-            conds.append(func.substr(files.c.path_nfc, 1, len(old) + 1) != old + "/")
+            conds.append(not_(_at_or_below(old)))
         with self._conn(write=True) as conn:
             ids = list(conn.execute(select(files.c.drive_id).where(and_(*conds))).scalars())
             for drive_id in ids:
@@ -948,6 +1126,76 @@ class FileRepo:
                 {"new": new_id, "old": old_id},
             )
 
+    @staticmethod
+    def _given_in(conn: Connection, drive_ids: Sequence[str]) -> dict[str, dict[str, int]]:
+        out: dict[str, dict[str, int]] = {}
+        for i in range(0, len(drive_ids), 500):
+            chunk = drive_ids[i : i + 500]
+            for what, column in _GIVEN:
+                for drive_id, n in conn.execute(
+                    select(column, func.count()).where(column.in_(chunk)).group_by(column)
+                ):
+                    out.setdefault(drive_id, {})[what] = n
+            for what, table in _GIVEN_NOTES:
+                for drive_id, n in conn.execute(
+                    select(table.c.target_id, func.count())
+                    .where(table.c.target_kind == "file", table.c.target_id.in_(chunk))
+                    .group_by(table.c.target_id)
+                ):
+                    out.setdefault(drive_id, {})[what] = n
+        return out
+
+    def given(self, drive_ids: Collection[str]) -> dict[str, dict[str, int]]:
+        """What the owner (or a filing) gave each of ``drive_ids``, counted by kind (the
+        keys of ``_GIVEN`` and ``_GIVEN_NOTES``); a file with nothing is left out."""
+        with self._conn() as conn:
+            return self._given_in(conn, list(dict.fromkeys(drive_ids)))
+
+    def reconnect(self, old_id: str, new_id: str) -> dict[str, int]:
+        """The file indexed as ``old_id`` (flagged missing) is the one now indexed as
+        ``new_id`` (moved or renamed outside the app, so the scanner gave it a new row):
+        everything given to it (what ``rekey`` carries: tags, notes and checklists,
+        collection and tray item places, the name its published link keeps, summaries,
+        fields, sender and person, locks, rule outcomes, the filing code) moves to
+        ``new_id``, and the old row goes with what was read from its content (text, fts,
+        barcode, QR and layout reads; the new row has its own). One transaction; returns
+        what moved, counted as ``given``. ``ValueError`` (nothing changes) when the old
+        row is not missing, the new one is not a present file, or the new one has
+        something given already. Database only: nothing on disk is touched."""
+        with self._conn(write=True) as conn:
+            old = conn.execute(
+                select(files.c.missing, files.c.parked_at).where(files.c.drive_id == old_id)
+            ).first()
+            new = conn.execute(
+                select(files.c.missing, files.c.parked_at, files.c.is_dir, files.c.is_link).where(
+                    files.c.drive_id == new_id
+                )
+            ).first()
+            if old is None or not old.missing or old.parked_at is not None:
+                raise ValueError("the old row is not missing")
+            if new is None or new.missing or new.parked_at is not None:
+                raise ValueError("the new row is not a present file")
+            if new.is_dir or new.is_link:
+                raise ValueError("the new row is not a regular file")
+            names_kept = conn.execute(
+                select(member_link_names.c.drive_id)
+                .where(member_link_names.c.drive_id == new_id)
+                .limit(1)
+            ).first()
+            if self._given_in(conn, [new_id]) or names_kept:
+                raise ValueError("the new row has something of its own")
+            moved = self._given_in(conn, [old_id]).get(old_id, {})
+            for _, column in (*_GIVEN, ("", member_link_names.c.drive_id)):
+                conn.execute(update(column.table).where(column == old_id).values(drive_id=new_id))
+            for _, table in _GIVEN_NOTES:
+                conn.execute(
+                    update(table)
+                    .where(table.c.target_kind == "file", table.c.target_id == old_id)
+                    .values(target_id=new_id)
+                )
+            self._delete_rows(conn, [old_id])
+        return moved
+
     def mark_missing(
         self, seen_before: float, subtree: str = "", skipped: Sequence[str] = ()
     ) -> int:
@@ -961,36 +1209,14 @@ class FileRepo:
             files.c.missing.is_not(True),
         ]
         if subtree:
-            sub = nfc(subtree)
-            prefix = sub + "/"
-            cond.append(
-                or_(
-                    files.c.path_nfc == sub,
-                    func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-                )
-            )
-        for rel in skipped:
-            sk = nfc(rel)
-            skip_prefix = sk + "/"
-            cond.append(
-                not_(
-                    or_(
-                        files.c.path_nfc == sk,
-                        func.substr(files.c.path_nfc, 1, len(skip_prefix)) == skip_prefix,
-                    )
-                )
-            )
+            cond.append(_at_or_below(nfc(subtree)))
+        cond.extend(not_(_at_or_below(nfc(rel))) for rel in skipped)
         with self._conn(write=True) as conn:
             return conn.execute(update(files).where(and_(*cond)).values(missing=True)).rowcount
 
     @staticmethod
     def _subtree_cond(rel: str):
-        sub = nfc(rel)
-        prefix = sub + "/"
-        return or_(
-            files.c.path_nfc == sub,
-            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-        )
+        return _at_or_below(nfc(rel))
 
     def count_subtree(self, rel: str, *, live_only: bool = False) -> int:
         """Rows at or under ``rel`` (``live_only``: not flagged missing)."""
@@ -1004,11 +1230,7 @@ class FileRepo:
 
     def has_live_under(self, rel: str) -> bool:
         """Some row strictly under ``rel`` is not flagged missing."""
-        prefix = nfc(rel) + "/"
-        cond = and_(
-            func.substr(files.c.path_nfc, 1, len(prefix)) == prefix,
-            files.c.missing.is_not(True),
-        )
+        cond = and_(_below(nfc(rel)), files.c.missing.is_not(True))
         with self._conn() as conn:
             return conn.execute(select(files.c.drive_id).where(cond).limit(1)).first() is not None
 
@@ -1189,6 +1411,37 @@ class FileRepo:
                 .values(retry_at=None, attempts=0)
             ).rowcount
 
+    def mark_reading(self, drive_id: str) -> None:
+        """Note that ``drive_id``'s content is being read (``READING_MARK``)."""
+        with self._conn(write=True) as conn:
+            conn.execute(
+                update(files).where(files.c.drive_id == drive_id).values(last_error=READING_MARK)
+            )
+
+    def clear_reading(self, drive_ids: Collection[str]) -> None:
+        """Drop the reading mark of those of ``drive_ids`` that still have it."""
+        ids = list(drive_ids)
+        with self._conn(write=True) as conn:
+            for i in range(0, len(ids), 500):
+                conn.execute(
+                    update(files)
+                    .where(
+                        files.c.drive_id.in_(ids[i : i + 500]),
+                        files.c.last_error == READING_MARK,
+                    )
+                    .values(last_error=None)
+                )
+
+    def fail_interrupted(self, reason: str) -> int:
+        """Put every file still marked as being read in ``error`` with ``reason`` (only
+        the explicit retry queues it again); returns how many."""
+        with self._conn(write=True) as conn:
+            return conn.execute(
+                update(files)
+                .where(files.c.last_error == READING_MARK)
+                .values(index_state="error", retry_at=None, attempts=0, last_error=reason)
+            ).rowcount
+
     def set_index_state(
         self,
         drive_id: str,
@@ -1197,8 +1450,9 @@ class FileRepo:
         attempts: int | None = None,
         expect: tuple[int | None, float | None] | None = None,
     ) -> None:
-        """Set the state; with ``expect`` (size, mtime), a changed row goes to pending."""
-        values: dict = {"index_state": state, "retry_at": retry_at}
+        """Set the state; with ``expect`` (size, mtime), a changed row goes to pending.
+        A reading mark (``READING_MARK``) is dropped either way."""
+        values: dict = {"index_state": state, "retry_at": retry_at, "last_error": _unmarked()}
         if attempts is not None:
             values["attempts"] = attempts
         with self._conn(write=True) as conn:
@@ -1207,7 +1461,7 @@ class FileRepo:
                     select(files.c.size, files.c.mtime).where(files.c.drive_id == drive_id)
                 ).first()
                 if row is not None and (row.size, row.mtime) != expect:
-                    values = {"index_state": "pending", "retry_at": None}
+                    values = {"index_state": "pending", "retry_at": None, "last_error": _unmarked()}
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
 
     def save_content(
@@ -1242,7 +1496,7 @@ class FileRepo:
                 conn.execute(
                     update(files)
                     .where(files.c.drive_id == drive_id)
-                    .values(index_state="pending", retry_at=None)
+                    .values(index_state="pending", retry_at=None, last_error=_unmarked())
                 )
                 return False
             values: dict = {
@@ -1334,12 +1588,11 @@ class FileRepo:
         its FTS name/path updated (or added, with empty text, if it had none).
         """
         old_nfc = nfc(old_rel)
-        prefix = old_nfc + "/"
         depth = len(PurePosixPath(old_rel).parts)
         now = time.time()  # a re-pathed row is on disk right now: a concurrent scan must keep it
         where = files.c.path_nfc == old_nfc
         if recursive:
-            where = or_(where, func.substr(files.c.path_nfc, 1, len(prefix)) == prefix)
+            where = or_(where, _below(old_nfc))
         with self._conn(write=True) as conn:
             rows = conn.execute(
                 select(files.c.drive_id, files.c.path, files.c.is_dir).where(where)

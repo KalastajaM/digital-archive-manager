@@ -14,7 +14,7 @@ from dam.db.tables import (
     notes,
     reminders_sent,
 )
-from dam.services.errors import InvalidRequest, NotFound
+from dam.errors import InvalidRequest, NotFound
 from dam.trays.model import TrayDef, load_trays
 from dam.trays.service import REMOVED_TRAY_NAME, TrayService
 
@@ -143,11 +143,12 @@ def test_name_without_date_prefix_or_extension(engine, svc):
     assert svc.create("to-read", ["d1"], {}, None).title == "Lease contract.v2"
 
 
-def test_done_sets_paid_on_today_and_reopen_undoes(engine, svc):
+def test_done_sets_paid_on_today_and_reopen_undoes(engine, svc, freeze_today):
+    today = freeze_today(date(2026, 10, 26))
     item = svc.create("to-pay", ["d1"], {"due_date": "2026-11-03"}, None)
     done = svc.done(item.id, {})
     assert done.state == "done"
-    assert done.done_fields == {"paid_on": date.today()}
+    assert done.done_fields == {"paid_on": today}
     assert done.done_at is not None
     with pytest.raises(InvalidRequest):
         svc.done(item.id, {})

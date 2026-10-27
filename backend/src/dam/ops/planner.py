@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.naming import unique_name
-from dam.core.paths import ArchivePaths, not_connected_message
+from dam.core.paths import ArchivePaths, nfc, not_connected_message
 from dam.index.driveid import read_drive_id
 from dam.ops import primitives
 from dam.ops.guards import (
@@ -80,7 +80,7 @@ def _below(folder: str, parts: tuple[str, ...]) -> str:
     return "/".join((folder, *parts)) if folder else "/".join(parts)
 
 
-def _add_note(note: str | None, extra: str) -> str:
+def add_note(note: str | None, extra: str) -> str:
     return f"{note}; {extra}" if note else extra
 
 
@@ -252,10 +252,20 @@ class _Sim:
         disk = self.disk_path(folder)
         if disk is None or not disk.is_dir():
             return None
+        # On a case-sensitive volume ``report.pdf`` and ``Report.pdf`` can both exist:
+        # prefer the exact spelling, then the same name in another normal form, and only
+        # then a name that differs in case.
+        best: tuple[int, str] | None = None
         for entry in disk.iterdir():
-            if fold_parts(entry.name) == want and self.kind(join(folder, entry.name)):
-                return entry.name
-        return None
+            n = entry.name
+            if fold_parts(n) != want or not self.kind(join(folder, n)):
+                continue
+            rank = 0 if n == name else 1 if nfc(n) == nfc(name) else 2
+            if rank == 0:
+                return n
+            if best is None or rank < best[0]:
+                best = (rank, n)
+        return best[1] if best else None
 
     def free_name(self, folder: str, name: str, exclude: str | None = None) -> str:
         """``unique_name`` against the disk folder plus entries simulated into it.
@@ -327,7 +337,7 @@ class Planner:
                 validate(op, self.paths, restore=restore)
             self._resolve_one(op)
             if redirect is not None:  # the op's own entry is always appended last
-                self.out[-1].note = _add_note(self.out[-1].note, redirect)
+                self.out[-1].note = add_note(self.out[-1].note, redirect)
         if self.locked_names:
             raise GuardError(self._locked_message(len(plan.ops)))
         self._check_space()
@@ -574,10 +584,10 @@ class Planner:
             self._ensure_folder(aside, False, quarantine_root=True)
         copy = self._plan_copy(src, folder, op.name or name)
         if original_stays:
-            copy.note = _add_note(copy.note, ORIGINAL_STAYS_NOTE)
+            copy.note = add_note(copy.note, ORIGINAL_STAYS_NOTE)
             return
         self._relocate(Op(OpKind.QUARANTINE, src, None), self._quarantine_folder(src))
-        self.out[-1].note = _add_note(self.out[-1].note, f"copied to {copy.dst}")
+        self.out[-1].note = add_note(self.out[-1].note, f"copied to {copy.dst}")
 
     def _plan_copy(self, src: str, dst_folder: str, wanted: str) -> ResolvedOp:
         """A COPY_ACROSS of the file ``src`` into ``dst_folder`` (spelled, existing in the
@@ -664,7 +674,7 @@ class Planner:
         first = len(self.out)
         self._ensure_folder(root, op.allow_top_level, made=True)
         if root_note is not None and len(self.out) > first:
-            self.out[first].note = _add_note(self.out[first].note, root_note)
+            self.out[first].note = add_note(self.out[first].note, root_note)
         for parts, kind, _ in listed:
             if kind == "dir":
                 self._ensure_folder(self.sim.spell(_below(root, parts)), False, made=True)
@@ -699,9 +709,9 @@ class Planner:
         quarantine = self.out[-1]
         quarantine.copied_to = root
         quarantine.tree = tree
-        quarantine.note = _add_note(quarantine.note, f"copied to {root}")
+        quarantine.note = add_note(quarantine.note, f"copied to {root}")
         if links:
-            quarantine.note = _add_note(
+            quarantine.note = add_note(
                 quarantine.note,
                 "1 link is not copied; it goes to To Delete with the folder"
                 if links == 1

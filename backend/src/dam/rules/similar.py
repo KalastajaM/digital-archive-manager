@@ -7,13 +7,15 @@ is only suggested when at least ``MIN_VOTES`` of the top matches are in it and i
 at least ``MIN_SHARE`` of them."""
 
 import re
-from collections import Counter
+import threading
+from collections import Counter, OrderedDict
 from pathlib import PurePosixPath
 
 from sqlalchemy import Engine, text
 
 from dam.core.naming import fix_mojibake
 from dam.core.paths import nfc
+from dam.db.generation import WriteGeneration
 
 SOURCE = "similar files"
 TOP = 10  # best matches that vote
@@ -30,7 +32,7 @@ _STOP = frozenset(
 )
 
 
-def _tokens(stem: str, body: str) -> list[str]:
+def word_tokens(stem: str, body: str) -> list[str]:
     out: list[str] = []
     for source in (stem, body[:TEXT_CHARS]):
         for w in _WORD.findall(nfc(source)):
@@ -44,17 +46,61 @@ def _special(path: str) -> bool:
     return any(part.startswith("##.") for part in PurePosixPath(nfc(path)).parts)
 
 
+def _words(name: str, body: str, ext: str | None) -> list[str]:
+    """The words searched for: from the name (without its extension) and the text."""
+    stem = fix_mojibake(name)
+    if ext and stem.lower().endswith("." + ext.lower()):
+        stem = stem[: -len(ext) - 1]
+    return word_tokens(stem, body)
+
+
 def similar_folder(
     engine: Engine, drive_id: str, name: str, body: str, ext: str | None = None
 ) -> str | None:
     """The folder most of the best-matching filed files are in, or None when nothing
     matches well enough. One indexed FTS query."""
-    stem = fix_mojibake(name)
-    if ext and stem.lower().endswith("." + ext.lower()):
-        stem = stem[: -len(ext) - 1]
-    words = _tokens(stem, body)
-    if not words:
-        return None
+    words = _words(name, body, ext)
+    return _search(engine, drive_id, words) if words else None
+
+
+class SimilarFolders:
+    """``similar_folder`` with the answers kept (the last ``size`` asked) until the index
+    changes: any write to the files or the search rows (a file indexed, filed, moved,
+    renamed or gone) starts afresh, since any of them can change the vote. The answer
+    for one file depends only on its words, so new text gives a new search too."""
+
+    def __init__(self, engine: Engine, size: int = 2048) -> None:
+        self._engine = engine
+        self._size = size
+        self._generation = WriteGeneration(engine, ("files", "file_fts"))
+        self._kept: OrderedDict[tuple[str, tuple[str, ...]], str | None] = OrderedDict()
+        self._kept_at = self._generation.value
+        self._lock = threading.Lock()
+
+    def folder(self, drive_id: str, name: str, body: str, ext: str | None = None) -> str | None:
+        words = _words(name, body, ext)
+        if not words:
+            return None
+        key = (drive_id, tuple(words))
+        at = self._generation.value
+        with self._lock:
+            if self._kept_at != at:
+                self._kept.clear()
+                self._kept_at = at
+            if key in self._kept:
+                self._kept.move_to_end(key)
+                return self._kept[key]
+        found = _search(self._engine, drive_id, words)
+        with self._lock:
+            # an index write while searching: the answer may be from the old rows
+            if self._generation.value == at == self._kept_at:
+                self._kept[key] = found
+                if len(self._kept) > self._size:
+                    self._kept.popitem(last=False)
+        return found
+
+
+def _search(engine: Engine, drive_id: str, words: list[str]) -> str | None:
     match = " OR ".join('"' + w.replace('"', '""') + '"' for w in words)
     sql = (
         "SELECT f.path FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "

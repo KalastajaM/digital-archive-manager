@@ -16,7 +16,7 @@ from typing import Protocol, runtime_checkable
 
 from dam import snapshots
 from dam.config import AppPaths
-from dam.services.errors import Conflict, NotFound
+from dam.errors import Conflict, NotFound
 from dam.services.launch import LaunchService, Runner, run_open
 
 _LOCK = threading.Lock()  # one snapshot, import or restore at a time in this process
@@ -78,7 +78,7 @@ class SnapshotService:
             raise Conflict("This window cannot restore a snapshot. Start dam with `dam serve`.")
         if self.pending():
             raise Conflict(
-                "An operation was interrupted and is not finished. Run `dam recover` "
+                "An operation was interrupted and is not finished. Use Run recovery "
                 "before restoring, so its record is not lost."
             )
         with _LOCK:

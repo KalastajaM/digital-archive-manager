@@ -1,7 +1,8 @@
 """Maintenance: checks the owner starts, polls and can stop, and the batches they lead to.
 
 Nothing here runs by itself. Duplicates are replaced or moved to To Delete through one
-previewed batch (``dry_run``), like every other change."""
+previewed batch (``dry_run``), like every other change. Reconnecting files moved outside
+dam is previewed too, but changes the database only (no batch, no Undo)."""
 
 from dataclasses import asdict
 
@@ -20,10 +21,12 @@ from dam.api.schemas import (
     MaintenanceJobOut,
     MaintenanceKindIn,
     MaintenanceStartIn,
+    ReconnectIn,
+    ReconnectOut,
 )
 from dam.app import App
-from dam.maintenance.jobs import Job
-from dam.services.errors import NotFound
+from dam.core.jobs import Job
+from dam.errors import NotFound
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
@@ -144,3 +147,15 @@ def remove_links(app: AppDep, body: LinkRemoveIn):
     """Remove broken links inside ``##. Ongoing`` / ``##. Important`` (the one removal
     allowed there); Undo makes them again. ``dry_run`` shows the plan."""
     return app.maintenance.remove_links(body.drive_ids, origin=UI_ORIGIN, dry_run=body.dry_run)
+
+
+@router.post("/moved/reconnect", response_model=ReconnectOut)
+def reconnect_moved(app: AppDep, body: ReconnectIn) -> dict:
+    """Reconnect files moved or renamed outside dam: what each old, missing index row had
+    (tags, notes, collections, tray items ...) moves to the file's new row, and the old
+    row goes. Database only: the archive is not touched, nothing is journaled, no Undo.
+    ``dry_run`` lists the pairs with what would move. 400: a pair that does not hold (see
+    ``MaintenanceService.reconnect``); 404: an unknown row."""
+    return asdict(
+        app.maintenance.reconnect([(p.old, p.new) for p in body.pairs], dry_run=body.dry_run)
+    )

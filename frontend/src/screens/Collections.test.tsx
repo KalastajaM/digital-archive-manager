@@ -103,7 +103,7 @@ const where = () => screen.getByTestId("where").textContent;
 const panel = () => screen.getByRole("region", { name: "Collection" });
 /** The header's file actions (the one FileActionBar, over the side panel). */
 const bar = () => within(panel()).getByRole("toolbar", { name: /file actions$/ });
-const tree = () => within(panel()).getByRole("region", { name: "Members" });
+const tree = () => within(panel()).getByRole("tree", { name: "Members" });
 
 /** Open the ⋯ menu of the toolbar and pick ``item``. */
 async function fromMenu(user: ReturnType<typeof userEvent.setup>, item: string | RegExp) {
@@ -187,7 +187,7 @@ describe("Collection detail", () => {
       "GET /api/files/v1/summary": { body: { ai: null, user: null } },
       "GET /api/notes/file/v1": { body: { text: "" } },
     });
-    const members = await within(panel()).findByRole("region", { name: "Members" });
+    const members = await within(panel()).findByRole("tree", { name: "Members" });
     const deed = within(members).getByText("deed.pdf").closest("li")!;
     expect(within(deed).getByText("Not connected")).toHaveClass("entry-offline");
     const quote = within(members).getByText("quote.pdf").closest("li")!;
@@ -200,10 +200,10 @@ describe("Collection detail", () => {
         body: changeOf({ ...SAUNA, members: SAUNA.members.slice(1) }, { problems: ["plan refused: x"] }),
       },
     });
-    const members = await within(panel()).findByRole("region", { name: "Members" });
-    expect(within(members).queryByRole("region", { name: "Ungrouped" })).toBeNull();
+    const members = await within(panel()).findByRole("tree", { name: "Members" });
+    expect(within(members).queryByRole("treeitem", { name: "Ungrouped" })).toBeNull();
     expect(within(members).queryByText("Ungrouped")).toBeNull();
-    expect(within(members).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(members).getAllByRole("treeitem")).toHaveLength(4);
     const quote = within(members).getByText("quote.pdf").closest("li")!;
     expect(quote).toHaveTextContent("40. House/Sauna");
     const plans = within(members).getByText("Plans").closest("li")!;
@@ -228,7 +228,7 @@ describe("Collection detail", () => {
 
   it("the inspector is Browse's file panel (rename, preview, tags, Add to collection, summary, note) with Quick Look; the file actions are in the header", async () => {
     renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).getByRole("heading", { level: 2, name: "quote.pdf" })).toBeInTheDocument();
     for (const name of [/^Rename/, "Move file to…", "Quick Look"]) {
@@ -245,7 +245,7 @@ describe("Collection detail", () => {
 
   it("the header has the collection's list actions at the left and the shown file's actions in one group at the right, in the app's order", async () => {
     renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     const toolbar = panel().querySelector("header.toolbar") as HTMLElement;
     const lead = toolbar.querySelector(".toolbar-lead") as HTMLElement;
     expect(within(lead).getByRole("heading", { level: 2 })).toBeInTheDocument();
@@ -266,7 +266,7 @@ describe("Collection detail", () => {
 
   it("a disabled file action in the header says why", async () => {
     renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     // the second member is missing: its bin is off, with the reason as the tooltip
     await userEvent.setup().click(within(tree()).getByText("old⟨U+202E⟩.pdf"));
     const bin = within(bar()).getByRole("button", { name: "Move to To Delete" });
@@ -279,7 +279,7 @@ describe("Collection detail", () => {
 
   it("the inspector has the file view's one block order; the collection's own parts are in the own block", async () => {
     renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     await within(inspector).findByRole("region", { name: "Tags" });
     const blocks = Array.from(inspector.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
@@ -292,7 +292,7 @@ describe("Collection detail", () => {
 
   it("Quick Look is an icon button with a tooltip; the members scroll in their own box; Ask AI is in the header", async () => {
     renderCollections("/collections/7");
-    const members = await within(panel()).findByRole("region", { name: "Members" });
+    const members = await within(panel()).findByRole("tree", { name: "Members" });
     expect(members.closest(".collection-members")).not.toBeNull();
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look Space");
@@ -324,20 +324,20 @@ describe("Collection detail", () => {
 
   it("the toolbar's New group icon says what groups are for", async () => {
     renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     const icon = within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" });
     expect(icon).toHaveAttribute("data-tip", "New group: sort files into groups");
   });
 
   it("the inspector has a resizable splitter", async () => {
     renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     expect(screen.getByRole("separator", { name: "Resize the inspector" })).toHaveAttribute("aria-valuenow", "380");
   });
 
   it("the selected file has Rename and Move to… inline; a folder member has them disabled", async () => {
     const { user } = renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(within(inspector).queryByRole("button", { name: "Edit details…" })).not.toBeInTheDocument();
     expect(within(inspector).getByRole("heading", { name: "quote.pdf" })).toBeInTheDocument();
@@ -353,7 +353,7 @@ describe("Collection detail", () => {
 
   it("the subtitle counts files and folders apart", async () => {
     renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     const subtitle = panel().querySelector(".toolbar-subtitle")!;
     // one counting rule on every screen: the folders, then every usable file (the list's count)
     expect(subtitle).toHaveTextContent(/^Open · 1 folder · 3 files$/);
@@ -370,7 +370,7 @@ describe("Collection detail", () => {
       "GET /api/collections/7": { body: one },
       "GET /api/collections": { body: [row(one, 23, 0)] },
     });
-    const members = await within(panel()).findByRole("region", { name: "Members" });
+    const members = await within(panel()).findByRole("tree", { name: "Members" });
     await waitFor(() => expect(panel().querySelector(".toolbar-subtitle")).toHaveTextContent(/^Open · 1 folder · 23 files$/));
     expect(within(members).queryByText("Ungrouped")).toBeNull();
     expect(within(members).getByText("Plans")).toBeInTheDocument();
@@ -378,7 +378,7 @@ describe("Collection detail", () => {
 
   it("selecting a member shows it in the side panel; j/k move the selection", async () => {
     const { user } = renderCollections("/collections/7");
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     await user.click(within(tree()).getByText("Plans"));
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     expect(inspector.querySelector(".current-path")).toHaveTextContent("40. House/Sauna/Plans"); // the path row
@@ -678,32 +678,46 @@ describe("Collection groups, summary and attention", () => {
   it("hides an empty Ungrouped, and shows it as a drop target only while files are dragged", async () => {
     const allGrouped: Collection = { ...GROUPED, members: GROUPED.members.map((m) => ({ ...m, group_id: m.group_id ?? 1 })) };
     renderCollections("/collections/7", { "GET /api/collections/7": { body: allGrouped } });
-    await within(panel()).findByRole("region", { name: "Quotes" });
-    expect(within(tree()).queryByRole("region", { name: "Ungrouped" })).toBeNull();
+    await within(panel()).findByRole("treeitem", { name: "Quotes" });
+    expect(within(tree()).queryByRole("treeitem", { name: "Ungrouped" })).toBeNull();
     const drag = new Event("dragstart", { bubbles: true }) as DragEvent;
     Object.defineProperty(drag, "dataTransfer", { value: { types: ["application/x-dam-files"] } });
     act(() => void document.dispatchEvent(drag));
-    const target = await within(tree()).findByRole("region", { name: "Ungrouped" });
+    const target = await within(tree()).findByRole("treeitem", { name: "Ungrouped" });
     expect(target).toHaveTextContent("Drop here to take files out of their group.");
     act(() => void document.dispatchEvent(new Event("dragend")));
-    await waitFor(() => expect(within(tree()).queryByRole("region", { name: "Ungrouped" })).toBeNull());
+    await waitFor(() => expect(within(tree()).queryByRole("treeitem", { name: "Ungrouped" })).toBeNull());
   });
 
   it("shows the groups as a tree with their file counts and summaries, and Ungrouped last", async () => {
     const { user } = grouped();
-    const quotes = await within(panel()).findByRole("region", { name: "Quotes" });
+    const quotes = await within(panel()).findByRole("treeitem", { name: "Quotes" });
     expect(within(quotes).getByText("Two offers⟨U+202E⟩")).toBeInTheDocument();
     // its own file and its subgroup's folder
     expect(quotes.querySelector(".group-count")).toHaveTextContent(/^1 file, 1 folder$/);
-    const old = within(quotes).getByRole("region", { name: "Old" });
+    const old = within(quotes).getByRole("treeitem", { name: "Old" });
     expect(old.querySelector(".group-count")).toHaveTextContent(/^1 folder$/);
     expect(within(old).getByText("Plans")).toBeInTheDocument();
-    const regions = within(tree()).getAllByRole("region").map((r) => r.getAttribute("aria-label"));
+    const regions = within(tree()).getAllByRole("treeitem").filter((r) => r.classList.contains("group")).map((r) => r.getAttribute("aria-label"));
     expect(regions).toEqual(["Quotes", "Old", "Plans", "Ungrouped"]);
-    expect(within(tree()).getByRole("region", { name: "Ungrouped" }).querySelector(".group-count")).toHaveTextContent(/^2 files$/);
+    expect(within(tree()).getByRole("treeitem", { name: "Ungrouped" }).querySelector(".group-count")).toHaveTextContent(/^2 files$/);
     // folding hides the files
     await user.click(within(quotes).getByRole("button", { name: "Quotes", expanded: true }));
     expect(within(quotes).queryByText("quote.pdf")).not.toBeInTheDocument();
+  });
+
+  it("announces the groups as a tree: levels, expanded state and nested groups", async () => {
+    const { user } = grouped();
+    const quotes = await within(panel()).findByRole("treeitem", { name: "Quotes" });
+    expect(quotes).toHaveAttribute("aria-level", "1");
+    expect(quotes).toHaveAttribute("aria-expanded", "true");
+    const old = within(quotes).getByRole("treeitem", { name: "Old" });
+    expect(old).toHaveAttribute("aria-level", "2");
+    // a file in a group is one level below it
+    expect(within(quotes).getByText("quote.pdf").closest("[role=treeitem]")).toHaveAttribute("aria-level", "2");
+    expect(within(quotes).getAllByRole("group").length).toBeGreaterThan(0);
+    await user.click(within(quotes).getByRole("button", { name: "Quotes", expanded: true }));
+    expect(quotes).toHaveAttribute("aria-expanded", "false");
   });
 
   it("+ Group creates a group and puts its name in rename at once", async () => {
@@ -739,7 +753,7 @@ describe("Collection groups, summary and attention", () => {
         return { body: changeOf(now) };
       },
     });
-    await within(panel()).findByRole("region", { name: "Quotes" });
+    await within(panel()).findByRole("treeitem", { name: "Quotes" });
     const add = () => user.click(within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" }));
     await add();
     await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(1));
@@ -772,7 +786,7 @@ describe("Collection groups, summary and attention", () => {
         return { body: changeOf(now) };
       },
     });
-    await within(panel()).findByRole("region", { name: "Quotes" });
+    await within(panel()).findByRole("treeitem", { name: "Quotes" });
     const add = () => user.click(within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" }));
     await add();
     const input = await within(panel()).findByRole("textbox", { name: "Group name" });
@@ -790,7 +804,7 @@ describe("Collection groups, summary and attention", () => {
     const { calls, user } = grouped({
       "PATCH /api/collection-groups/3": { body: changeOf(GROUPED) },
     });
-    const plans = await within(panel()).findByRole("region", { name: "Plans" });
+    const plans = await within(panel()).findByRole("treeitem", { name: "Plans" });
     within(plans).getByRole("button", { name: "Plans" }).focus();
     await user.keyboard("{Enter}");
     const input = within(plans).getByRole("textbox", { name: "Group name" });
@@ -810,7 +824,7 @@ describe("Collection groups, summary and attention", () => {
     const { calls, user } = grouped({
       "POST /api/collection-groups/1/remove": { body: changeOf({ ...GROUPED, groups: [PLANS, { ...OLD, parent_id: null }] }) },
     });
-    const quotes = await within(panel()).findByRole("region", { name: "Quotes" });
+    const quotes = await within(panel()).findByRole("treeitem", { name: "Quotes" });
     await user.click(within(quotes).getAllByRole("button", { name: "Actions for Quotes" })[0]);
     await user.click(within(screen.getByRole("menu", { name: "Actions for Quotes" })).getByRole("menuitem", { name: "Remove group…" }));
     const dialog = await screen.findByRole("dialog", { name: "Remove the group Quotes?" });
@@ -824,8 +838,8 @@ describe("Collection groups, summary and attention", () => {
 
   it("only live file members are draggable: not folders, missing or quarantined ones", async () => {
     grouped();
-    const ungrouped = await within(panel()).findByRole("region", { name: "Ungrouped" });
-    const quotes = within(tree()).getByRole("region", { name: "Quotes" });
+    const ungrouped = await within(panel()).findByRole("treeitem", { name: "Ungrouped" });
+    const quotes = within(tree()).getByRole("treeitem", { name: "Quotes" });
     const rowOf = (scope: HTMLElement, name: string) => within(scope).getByText(name).closest("li")!;
     expect(rowOf(quotes, "quote.pdf")).toHaveAttribute("draggable", "true");
     expect(rowOf(quotes, "Plans")).not.toHaveAttribute("draggable", "true"); // a folder, in Old
@@ -840,7 +854,7 @@ describe("Collection groups, summary and attention", () => {
     const { calls } = grouped({
       "POST /api/collections/7/members/group": { body: changeOf(GROUPED, { batch: batch([]) }) },
     });
-    const quotes = await within(panel()).findByRole("region", { name: "Quotes" });
+    const quotes = await within(panel()).findByRole("treeitem", { name: "Quotes" });
     const row = within(quotes).getByText("quote.pdf").closest("li")!;
     expect(row).toHaveAttribute("draggable", "true");
     const dt = dataTransfer();
@@ -855,7 +869,7 @@ describe("Collection groups, summary and attention", () => {
     expect(fireEvent.drop(ownHeader, { dataTransfer: dt })).toBe(false);
     expect(posts(calls, "/api/collections/7/members/group")).toHaveLength(0);
 
-    const plans = within(tree()).getByRole("region", { name: "Plans" });
+    const plans = within(tree()).getByRole("treeitem", { name: "Plans" });
     const header = within(plans).getByRole("button", { name: "Plans" }).closest(".group-header")!;
     fireEvent.dragEnter(header, { dataTransfer: dt });
     expect(header).toHaveAttribute("data-drop", "over");
@@ -928,7 +942,7 @@ describe("Collection groups, summary and attention", () => {
 
   it("no attention strip when nothing needs it", async () => {
     grouped({ "GET /api/collections/7/attention": { body: [] } });
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     await waitFor(() => expect(within(panel()).queryByRole("region", { name: "Needs attention" })).not.toBeInTheDocument());
   });
 
@@ -952,7 +966,7 @@ describe("Collection groups, summary and attention", () => {
     expect(patches(calls, "/api/collections/7/summary")[0].body).toEqual({ summary: "The sauna build, done by May" });
     expect(await within(panel()).findByText("Saved")).toBeInTheDocument();
 
-    const quotes = within(tree()).getByRole("region", { name: "Quotes" });
+    const quotes = within(tree()).getByRole("treeitem", { name: "Quotes" });
     await user.click(within(quotes).getByText("Two offers⟨U+202E⟩"));
     const line = within(quotes).getAllByRole("textbox", { name: "Summary of Quotes" })[0];
     expect(line).toHaveValue("Two offers‮"); // the raw text, to edit
@@ -975,7 +989,7 @@ describe("Collection groups, summary and attention", () => {
     const { calls, user } = grouped({
       "POST /api/collection-groups/1/remove": { status: 400, body: { error: "a group named ‮Old exists there" } },
     });
-    const quotes = await within(panel()).findByRole("region", { name: "Quotes" });
+    const quotes = await within(panel()).findByRole("treeitem", { name: "Quotes" });
     await user.click(within(quotes).getAllByRole("button", { name: "Actions for Quotes" })[0]);
     await user.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Remove group…" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Remove group" }));
@@ -988,7 +1002,7 @@ describe("Collection groups, summary and attention", () => {
     const { calls, user } = grouped({
       "PATCH /api/collection-groups/3": { status: 400, body: { error: "a group named Quotes exists there" } },
     });
-    const plans = await within(panel()).findByRole("region", { name: "Plans" });
+    const plans = await within(panel()).findByRole("treeitem", { name: "Plans" });
     await user.dblClick(within(plans).getByRole("button", { name: "Plans" }));
     const input = within(plans).getByRole("textbox", { name: "Group name" });
     await user.clear(input);
@@ -1007,15 +1021,15 @@ describe("Collection groups, summary and attention", () => {
     await user.selectOptions(within(inspector).getByRole("combobox", { name: "Group" }), "Plans");
     await waitFor(() => expect(posts(calls, "/api/collections/7/members/group")).toHaveLength(1));
     // a drop is refused while it runs
-    const quotes = within(tree()).getByRole("region", { name: "Quotes" });
+    const quotes = within(tree()).getByRole("treeitem", { name: "Quotes" });
     const dt = dataTransfer();
     fireEvent.dragStart(within(quotes).getByText("quote.pdf").closest("li")!, { dataTransfer: dt });
-    const header = within(within(tree()).getByRole("region", { name: "Plans" })).getByRole("button", { name: "Plans" }).closest(".group-header")!;
+    const header = within(within(tree()).getByRole("treeitem", { name: "Plans" })).getByRole("button", { name: "Plans" }).closest(".group-header")!;
     fireEvent.dragEnter(header, { dataTransfer: dt });
     expect(header).toHaveAttribute("data-tip", "Another change is still running");
     fireEvent.drop(header, { dataTransfer: dt });
     // a rename is refused with the reason, and its input stays
-    const plans = within(tree()).getByRole("region", { name: "Plans" });
+    const plans = within(tree()).getByRole("treeitem", { name: "Plans" });
     await user.dblClick(within(plans).getByRole("button", { name: "Plans" }));
     const input = within(plans).getByRole("textbox", { name: "Group name" });
     await user.type(input, " 2{Enter}");
@@ -1099,7 +1113,7 @@ describe("Collection AI summaries", () => {
     const { calls, user } = ai({ ...GROUPED, summary: "" });
     const line = await summarize(user);
     expect(line).toHaveTextContent(ANSWER.summary);
-    const plans = within(tree()).getByRole("region", { name: "Plans" });
+    const plans = within(tree()).getByRole("treeitem", { name: "Plans" });
     expect(within(plans).getByRole("region", { name: "AI summary of Plans" })).toHaveTextContent("The floor plans⟨U+202E⟩.");
     expect(patches(calls, "/api/collections/7/summary")).toHaveLength(0);
 
@@ -1118,7 +1132,7 @@ describe("Collection AI summaries", () => {
     expect(patches(calls, "/api/collection-groups/3")[0].body).toEqual({ summary: "The floor plans‮." });
 
     // Discard: nothing saved
-    const quotes = within(tree()).getByRole("region", { name: "Quotes" });
+    const quotes = within(tree()).getByRole("treeitem", { name: "Quotes" });
     await user.click(within(within(quotes).getByRole("region", { name: "AI summary of Quotes" })).getByRole("button", { name: "Discard" }));
     expect(within(quotes).queryByRole("region", { name: "AI summary of Quotes" })).not.toBeInTheDocument();
     expect(patches(calls, "/api/collection-groups/1")).toHaveLength(0);
@@ -1135,7 +1149,7 @@ describe("Collection AI summaries", () => {
     expect(patches(calls, "/api/collections/7/summary")).toHaveLength(0);
 
     // the group "Quotes" has a summary: asked too
-    const quotes = within(tree()).getByRole("region", { name: "Quotes" });
+    const quotes = within(tree()).getByRole("treeitem", { name: "Quotes" });
     await user.click(within(within(quotes).getByRole("region", { name: "AI summary of Quotes" })).getByRole("button", { name: "Use" }));
     const ask = await screen.findByRole("dialog", { name: "Replace the summary of Quotes?" });
     await user.click(within(ask).getByRole("button", { name: "Replace" }));
@@ -1262,7 +1276,7 @@ describe("Parent collections", () => {
   it("no Collections section without children", async () => {
     renderCollections("/collections/9", { "GET /api/collections": lists, "GET /api/collections/9": { body: DECK } });
     await within(panel()).findByRole("heading", { name: "Deck" });
-    await screen.findByRole("region", { name: "Members" });
+    await screen.findByRole("tree", { name: "Members" });
     expect(within(panel()).queryByRole("region", { name: "Collections" })).not.toBeInTheDocument();
   });
 
@@ -1377,7 +1391,7 @@ describe("Trash on collection members", () => {
       "POST /api/activity/q1/undo/preview": { body: [] },
       "POST /api/activity/q1/undo": { body: { batch_id: "u1", dry_run: false, done: [], failed: null, error: null, index_error: null } },
     });
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(dialog).toHaveTextContent("40. House/Sauna/quote.pdf → ##. To Delete/40. House/Sauna/quote.pdf");
@@ -1395,7 +1409,7 @@ describe("Trash on collection members", () => {
     const { calls, user } = renderCollections("/collections/7", {
       "POST /api/quarantine": quarantineRoute({ f1: "40. House/Sauna/quote.pdf" }),
     });
-    const members = await within(panel()).findByRole("region", { name: "Members" });
+    const members = await within(panel()).findByRole("tree", { name: "Members" });
     await user.click(within(within(members).getByText("x.pdf").closest("li")!).getByRole("button"));
     const bin = within(bar()).getByRole("button", { name: "Move to To Delete" });
     expect(bin).toBeDisabled();
@@ -1417,7 +1431,7 @@ describe("Trash on collection members", () => {
       "GET /api/collections/7": { body: { ...SAUNA, members: [{ ...SAUNA.members[0], is_link: true }, ...SAUNA.members.slice(1)] } },
       "POST /api/quarantine": quarantineRoute({ f1: "40. House/Sauna/quote.pdf" }),
     });
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(dialog).toHaveTextContent("A link moves the link; its target stays.");
@@ -1428,7 +1442,7 @@ describe("Trash on collection members", () => {
     const { user } = renderCollections("/collections/7", {
       "POST /api/quarantine": quarantineRoute({ f1: "40. House/Sauna/quote.pdf" }),
     });
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(dialog).not.toHaveTextContent(/link/);
@@ -1440,7 +1454,7 @@ describe("Trash on collection members", () => {
       "GET /api/collections/7": { body: important },
       "POST /api/quarantine": quarantineRoute({ f1: "40. House/Sauna/quote.pdf" }),
     });
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     const bin = within(bar()).getByRole("button", { name: "Move to To Delete" });
     expect(bin).toBeDisabled();
     expect(bin.parentElement).toHaveAttribute("data-tip", "This file is marked Important; unmark it first");
@@ -1455,7 +1469,7 @@ describe("Trash on collection members", () => {
     const { user } = renderCollections("/collections/7", {
       "POST /api/quarantine": IMPORTANT_REFUSED("40. House/Sauna/quote.pdf"),
     });
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     await user.click(within(bar()).getByRole("button", { name: "Move to To Delete" }));
     expect(await screen.findByText(/This file is marked Important; unmark it first/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -1468,12 +1482,12 @@ describe("The header's Browse file actions on a collection member", () => {
   const applied = (op: ReturnType<typeof moved>, folder: string) => ({
     batch_id: "m1", dry_run: false, done: [op], failed: null, error: null, index_error: null, unchanged: [], folder,
   });
-  const ready = () => screen.findByRole("region", { name: "Members" });
+  const ready = () => screen.findByRole("tree", { name: "Members" });
   const names = () => Array.from(bar().querySelectorAll("button")).map((b) => b.getAttribute("aria-label"));
 
   it("a file has them all, in Browse's order", async () => {
     renderCollections("/collections/7", { "GET /api/status": { body: STATUS } });
-    await within(panel()).findByRole("region", { name: "Members" });
+    await within(panel()).findByRole("tree", { name: "Members" });
     await waitFor(() => expect(names()).toContain("Back to inbox"));
     expect(names()).toEqual([
       "Put in tray",

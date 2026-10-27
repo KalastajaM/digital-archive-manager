@@ -16,7 +16,7 @@ from dam.demo import (  # noqa: F401 - re-exported for the tests
 )
 from dam.demo import build as _build
 from dam.demo import main as _main
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 
 def build(root: Path) -> tuple[Path, Path]:

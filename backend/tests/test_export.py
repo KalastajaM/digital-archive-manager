@@ -19,8 +19,8 @@ from dam.collections.export import (
 )
 from dam.config import load_settings
 from dam.core.paths import ArchivePaths
+from dam.errors import InvalidRequest
 from dam.index.repo import FileRecord
-from dam.services.errors import InvalidRequest
 from pdfs import make_text_pdf
 
 

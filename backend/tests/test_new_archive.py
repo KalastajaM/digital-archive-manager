@@ -20,10 +20,10 @@ from dam.cli.main import app as cli
 from dam.config import AppPaths, SpecialFolders, load_settings
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.db.tables import made_folders, operations
+from dam.errors import InvalidRequest, TooLarge
 from dam.ops.model import GuardError, Op, OpKind, Plan
 from dam.ops.primitives import MAX_COPY_BYTES
 from dam.rules.model import load_rules
-from dam.services.errors import InvalidRequest, TooLarge
 from dam.services.inbox import FileRequest
 from fsswap import recreate_dir
 

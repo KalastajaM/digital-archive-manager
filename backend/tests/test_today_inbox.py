@@ -118,8 +118,9 @@ def test_today_does_not_walk_the_tree(app, fake_archive, monkeypatch):
     app.today.found_in_inbox(TODAY)
 
 
-def test_today_api_has_inbox_stats_and_found(app, fake_archive):
-    add_scan(app, fake_archive, "northpower", NORTHPOWER_BILL, days_ago=3, base=date.today())
+def test_today_api_has_inbox_stats_and_found(app, fake_archive, freeze_today):
+    freeze_today(TODAY)
+    add_scan(app, fake_archive, "northpower", NORTHPOWER_BILL, days_ago=3)
     with TestClient(create_api(app), base_url="http://127.0.0.1:8765") as client:
         body = client.get("/api/today").json()
     stats = body["inbox_stats"]
@@ -133,14 +134,15 @@ def test_today_api_has_inbox_stats_and_found(app, fake_archive):
         "tray_name": "To pay",
         "due_date": "2026-11-15",
         "total": "84.20",
-        "overdue": date.today() > date(2026, 11, 15),
+        "overdue": False,  # due 15 Nov, today is frozen at 20 Oct
         "marks": [],
     }
 
 
-def test_today_found_rows_carry_their_marks(app, fake_archive):
-    add_scan(app, fake_archive, "northpower", NORTHPOWER_BILL, days_ago=3, base=date.today())
-    add_scan(app, fake_archive, "late", LATE_BILL, days_ago=2, base=date.today())
+def test_today_found_rows_carry_their_marks(app, fake_archive, freeze_today):
+    freeze_today(TODAY)
+    add_scan(app, fake_archive, "northpower", NORTHPOWER_BILL, days_ago=3)
+    add_scan(app, fake_archive, "late", LATE_BILL, days_ago=2)
     app.marks.star(["northpower"])
     app.marks.mark_important(["northpower", "late"], "Bills")
     with TestClient(create_api(app), base_url="http://127.0.0.1:8765") as client:

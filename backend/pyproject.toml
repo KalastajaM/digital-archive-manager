@@ -2,7 +2,7 @@
 name = "dam"
 version = "0.1.0"
 description = "Digital Archive Manager"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "SQLAlchemy>=2.0",
     "alembic",
@@ -28,6 +28,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "xlrd>=2.0.2",
     "python-pptx>=1.0.2",
+    "httpx2>=2.14.0",  # ai/anthropic.py imports it directly
 ]
 
 [project.optional-dependencies]
@@ -39,8 +40,8 @@ dev = [
     "extract-msg",
     "pytest",
     "ruff",
-    "httpx2>=2.14.0",
     "xlwt>=1.3.0",
+    "pytest-cov",
 ]
 
 [project.scripts]
@@ -55,6 +56,9 @@ packages = ["src/dam"]
 
 [tool.ruff]
 line-length = 100
+# keeps the quoted-annotation style the code has; ruff would otherwise infer py314 from
+# requires-python and ask to rewrite 45 spots in a separate cleanup
+target-version = "py313"
 src = ["src", "tests"]
 
 [tool.ruff.lint]

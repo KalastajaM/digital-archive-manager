@@ -14,7 +14,8 @@ never mix with another's.
   nothing in this package deletes).
 * Two profiles never share an archive folder, never nest one inside another and never
   keep an archive folder inside a data folder (``root_conflict``).
-* ``ServeLock``: one process serves a profile at a time.
+* ``ServeLock``: one process serves a profile, or changes it from the command line, at a
+  time.
 """
 
 import contextlib
@@ -34,7 +35,8 @@ import yaml
 from dam import setup
 from dam.config import AppPaths
 from dam.core.fs import open_nofollow, resolve
-from dam.services.errors import Conflict, InvalidRequest, NotFound
+from dam.core.text import fold_name
+from dam.errors import Conflict, InvalidRequest, NotFound
 
 try:  # POSIX
     import fcntl
@@ -110,10 +112,6 @@ def slugify(name: str) -> str:
     ascii_ = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     slug = re.sub(r"[^a-z0-9]+", "-", ascii_.lower()).strip("-")
     return slug[:40].strip("-") or "archive"
-
-
-def _folded(name: str) -> str:
-    return unicodedata.normalize("NFC", name).casefold()
 
 
 class ProfileStore:
@@ -205,9 +203,9 @@ class ProfileStore:
         for p in profiles:
             if p.id == text:
                 return p
-        wanted = _folded(text)
+        wanted = fold_name(text)
         for p in profiles:
-            if _folded(p.name) == wanted:
+            if fold_name(p.name) == wanted:
                 return p
         raise NotFound(f"There is no archive called '{key}'.")
 
@@ -255,7 +253,7 @@ class ProfileStore:
         self._save(profiles)
 
     def _unique_name(self, name: str, profiles: list[Profile], skip: str | None = None) -> None:
-        if any(_folded(p.name) == _folded(name) for p in profiles if p.id != skip):
+        if any(fold_name(p.name) == fold_name(name) for p in profiles if p.id != skip):
             raise Conflict(f"There is already an archive called '{name}'.")
 
     def check_new_name(self, name: str) -> str:
@@ -469,16 +467,25 @@ def root_conflict(
 
 
 class Locked(Exception):
-    """Another process serves this profile; ``port`` is its port when known."""
+    """Another process holds this profile: a server (``port`` is its port when known) or
+    a command that changes it (``command``, e.g. ``"dam scan"``)."""
 
-    def __init__(self, data_dir: Path, port: int | None) -> None:
+    def __init__(self, data_dir: Path, port: int | None, command: str | None = None) -> None:
         self.data_dir = data_dir
         self.port = port
-        super().__init__(
-            "This archive is already open in another dam window"
-            + (f" (on port {port})" if port else "")
-            + ". Close that one first, or use it."
-        )
+        self.command = command
+        if command:
+            message = (
+                f"A dam command ({command}) is changing this archive right now. "
+                "Wait for it to finish, then try again."
+            )
+        else:
+            message = (
+                "This archive is already open in another dam window"
+                + (f" (on port {port})" if port else "")
+                + ". Close that one first, or use it."
+            )
+        super().__init__(message)
 
 
 def _try_lock(fh) -> bool:
@@ -512,17 +519,26 @@ def _read_info(data_dir: Path) -> dict:
         return {}
 
 
+def _command(info: dict) -> str | None:
+    """The command named in ``serve.json``, when a command (not a server) holds the lock."""
+    command = info.get("command")
+    return command if info.get("kind") == "cli" and isinstance(command, str) else None
+
+
 class ServeLock:
     """``<data dir>/serve.lock``: held (an OS lock, gone when the process ends, even a
-    crash) by the process that serves the profile. ``serve.json`` beside it says on which
-    port; it only means something while the lock is held."""
+    crash) by the process that serves the profile, or by a command that changes it
+    (``dam scan``, ``dam file``, ...), so the two never write at once. ``serve.json``
+    beside it says who: ``kind`` "serve" with the port, or "cli" with the command; it
+    only means something while the lock is held."""
 
     def __init__(self, data_dir: Path) -> None:
         self.data_dir = Path(data_dir)
         self._fh = None
 
-    def acquire(self, port: int | None = None) -> None:
-        """Take the lock or raise ``Locked``."""
+    def acquire(self, port: int | None = None, command: str | None = None) -> None:
+        """Take the lock or raise ``Locked``. ``command``: a command takes it (``"dam
+        file"``), not a server."""
         if self._fh is not None:
             return
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -535,17 +551,22 @@ class ServeLock:
         fh = os.fdopen(fd, "r+", encoding="utf-8")
         if not _try_lock(fh):
             fh.close()
-            raise Locked(self.data_dir, _read_info(self.data_dir).get("port"))
+            info = _read_info(self.data_dir)
+            raise Locked(self.data_dir, info.get("port"), _command(info))
         self._fh = fh
-        info = {"pid": os.getpid(), "port": port, "since": datetime.now().isoformat()}
-        with contextlib.suppress(OSError):
-            (self.data_dir / INFO_NAME).write_text(json.dumps(info), encoding="utf-8")
+        self._write_info(port, command)
 
     def publish(self, port: int) -> None:
         """Say on which port this process serves the profile (after ``acquire``)."""
         if self._fh is None:
             return
-        info = {"pid": os.getpid(), "port": port, "since": datetime.now().isoformat()}
+        self._write_info(port, None)
+
+    def _write_info(self, port: int | None, command: str | None) -> None:
+        info: dict = {"pid": os.getpid(), "port": port, "since": datetime.now().isoformat()}
+        info["kind"] = "cli" if command else "serve"
+        if command:
+            info["command"] = command
         with contextlib.suppress(OSError):
             (self.data_dir / INFO_NAME).write_text(json.dumps(info), encoding="utf-8")
 
@@ -562,8 +583,9 @@ class ServeLock:
 
     @staticmethod
     def holder(data_dir: Path) -> dict | None:
-        """Who serves ``data_dir`` right now (``{"port": ...}``), or None when nobody
-        does. Writes nothing. Do not call it for a folder this process holds itself."""
+        """Who holds ``data_dir`` right now (``{"port": ..., "command": ...}``: a
+        server's port, or the command that changes it), or None when nobody does.
+        Writes nothing. Do not call it for a folder this process holds itself."""
         path = Path(data_dir) / LOCK_NAME
         if not path.exists():
             return None
@@ -575,4 +597,5 @@ class ServeLock:
             if _try_lock(fh):
                 _unlock(fh)
                 return None
-        return {"port": _read_info(Path(data_dir)).get("port")}
+        info = _read_info(Path(data_dir))
+        return {"port": info.get("port"), "command": _command(info)}

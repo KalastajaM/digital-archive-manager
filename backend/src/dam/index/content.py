@@ -41,6 +41,8 @@ BURST_S = 1800.0  # "read now" gives up after this long
 BURST_PAUSE_S = 0.05  # the pause between reads while documents are read now
 CLOUD_SLOW_S = 3.0  # a page-1 read that took this long counts as slow (a download, a big scan)
 MAX_REASON = 500  # characters of an error reason kept in the index
+# the reason of a file whose read was under way when dam last stopped without closing
+READING_STOPPED = "reading this file stopped dam unexpectedly; it is skipped until you retry it"
 
 
 def describe_error(exc: BaseException) -> str:
@@ -153,10 +155,28 @@ class ContentIndexer:
         self._closed = False
 
     def close(self) -> None:
-        """Stop accepting work. Abandoned daemon threads never block interpreter exit."""
+        """Stop accepting work. Abandoned daemon threads never block interpreter exit.
+        The files being read lose their reading mark: quitting is not a crash."""
         self._closed = True
+        with self._lock:
+            reading = list(self._inflight)
+        if reading:
+            try:
+                self.repo.clear_reading(reading)
+            except Exception:
+                log.warning("could not clear the reading marks", exc_info=True)
         if self.thumbs is not None:
             self.thumbs.flush(force=True)
+
+    def recover_interrupted(self) -> int:
+        """Put the files whose read was under way when dam last stopped without closing
+        (killed, out of memory) in ``error`` with ``READING_STOPPED``, so a file that
+        takes dam down is not read again on every start; returns how many. Call once
+        at start, before the first pass."""
+        stopped = self.repo.fail_interrupted(READING_STOPPED)
+        if stopped:
+            log.warning("%d file(s) were being read when dam stopped; skipping them", stopped)
+        return stopped
 
     def run_once(self, limit: int = 20, now: float | None = None) -> int:
         now = time.time() if now is None else now
@@ -229,6 +249,15 @@ class ContentIndexer:
         read_done, finished = threading.Event(), threading.Event()
         with self._lock:
             self._inflight.add(rec.drive_id)
+        try:
+            # recording the outcome replaces the mark; still there on the next start,
+            # it means this read stopped dam (``recover_interrupted``)
+            self.repo.mark_reading(rec.drive_id)
+        except BaseException:
+            with self._lock:
+                self._inflight.discard(rec.drive_id)
+            self._slots.release()
+            raise
         try:
             threading.Thread(
                 target=self._job,
@@ -714,6 +743,10 @@ class ContentIndexer:
         ends the idle wait early. ``wake`` never shortens the rate-limit pause. Whoever
         sets ``stop`` should also set ``wake`` so an idle loop notices at once.
         """
+        try:
+            self.recover_interrupted()
+        except Exception:
+            log.exception("could not check for reads that stopped dam")
         while not stop.is_set():
             if wake is not None:
                 wake.clear()  # before the pass: a wake set during it ends the next wait

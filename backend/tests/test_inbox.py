@@ -3,10 +3,10 @@
 import pytest
 import yaml
 
+from dam.errors import InvalidRequest
 from dam.extract.base import ExtractedText
 from dam.index.scanner import scan
 from dam.rules.fields import DetectedFields
-from dam.services.errors import InvalidRequest
 from dam.services.inbox import FileRequest, prefill_of
 
 INBOX = "##. Organize"

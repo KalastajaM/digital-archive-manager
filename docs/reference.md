@@ -32,7 +32,7 @@ the app's sidebar).
 
 ## Requirements
 
-dam runs on **macOS, Windows and Linux** (Python 3.13+, see "Platform support" below for
+dam runs on **macOS, Windows and Linux** (Python 3.14+, see "Platform support" below for
 what works where).
 
 - [uv](https://docs.astral.sh/uv/) for `backend/` (it installs the right Python itself).
@@ -72,7 +72,7 @@ from `backend/`.
 |---|---|---|---|
 | Install, index, search, file, undo, collections, export, reminders by e-mail | yes | yes | yes |
 | OCR of scans and photos | Apple Vision (no Finnish) | Tesseract, optional | Tesseract, optional |
-| Google Drive item ids (`xattr`) | yes | no: files keep a local identity | no (no Drive client) |
+| Google Drive item ids (`xattr`) | yes | no: files keep a local identity (moved or renamed outside dam, Maintenance reconnects them) | no (no Drive client) |
 | Open / Show in folder | `open`, `open -R` | default app, Explorer | `xdg-open` (reveal opens the folder) |
 | Quick Look thumbnails of any file | yes | no: PDF pages and images still render | no: same |
 | Desktop notifications | yes | not yet | not yet |
@@ -164,6 +164,15 @@ cd backend && uv run dam serve          # scans, watches and indexes in the back
 
 Options: `--port N` (default `server_port`, 8765), `--no-open`. Ctrl+C stops it cleanly.
 
+`dam serve` opens the browser on a sign-in link, `http://127.0.0.1:<port>/auth?t=<token>`,
+which signs that browser in and redirects to the start page (so the token is not left in
+the address bar or the history). With `--no-open` it prints that link once instead. Only
+a signed-in browser can use the app: see **Local-only API** under
+[Safety model in detail](#safety-model-in-detail). `dam open` opens the link for the
+`dam serve` that is running (it reads the port from `serve.json`); `dam open --print`
+prints it. A bookmark to `http://127.0.0.1:<port>/` keeps working in a browser that is
+signed in; in another browser the page says **Not signed in** and how to sign in.
+
 If the archive folder is not there (the cloud drive not running or signed out, or a wrong
 `archive_root`), every command except `dam openapi`, `dam remind`, `dam trays` and
 `dam collections` (which read only the database) stops with exit `1` and says so;
@@ -197,8 +206,9 @@ API and does not open the browser.
 | `dam quarantine PATH-OR-DRIVE-ID... [--dry-run] [--yes]` | Move to To Delete (into `##. To Delete`) |
 | `dam activity [--limit N]` | Recent batches of operations |
 | `dam undo BATCH-ID [--yes]` | Revert a batch |
-| `dam recover` | Settle operations interrupted by a crash (reads the disk, changes no files) |
+| `dam recover` | Settle operations interrupted by a crash (reads the disk, changes no archive files) |
 | `dam openapi` | Print the API's OpenAPI schema |
+| `dam open [--print]` | Open the running app in the browser and sign the browser in; `--print` prints the sign-in link instead. Changes nothing; exit `1` when no `dam serve` is running |
 | `dam trays [--tray ID] [--done]` | List the items in each tray |
 | `dam collections [--closed]` | List collections with member count and `##. Ongoing` status |
 | `dam ongoing sync [--dry-run]` | Bring `##. Ongoing` in line with the open collections |
@@ -245,7 +255,26 @@ dam --archive Test serve --port 8766   # the Test archive, side by side
 
 Each served archive holds a lock file in its data folder (`serve.lock`); a second
 `dam serve` (or a switch in the app) for an archive that is already open somewhere else
-is refused and tells you the port.
+is refused and tells you the port. The sign-in cookie carries the port in its name
+(`dam_auth_<port>`), so signing in to one server never signs the browser out of another.
+
+Commands that change an archive hold the same lock while they run, so the app and a
+command (or two commands) never write one archive at the same time. `serve.json` beside
+the lock says who holds it: `kind` `serve` with the `port`, or `kind` `cli` with the
+`command` (`dam file`). A command is refused while the app has the archive open ("This
+archive is open in the app on port 8766. Do this there, or close the app first.";
+`dam recover` points to Run recovery in the app instead), and the app or another command
+is refused while a command runs ("A dam command (dam scan) is changing this archive
+right now. Wait for it to finish, then try again."). `dam archives list` shows either.
+Commands that hold the lock: `scan`, `index`, `errors --retry` and
+`--retry-unsupported`, `file`, `quarantine`, `move` and `add` (each not with
+`--dry-run`), `undo`, `recover`, `init` (also through `archives add`), `star`, `unstar`, `important`
+(marking), `unimportant`, `ongoing sync` (not with `--dry-run`) and `ai --on`/`--off`.
+The others only read, or change only the archive list (`archives switch`, `rename`,
+`color`, `forget`) or the system keychain, and run alongside the app. `dam remind` also
+runs alongside it, so the daily job sends while the app is open: it only marks
+reminders as sent in the database. While another process has the archive, commands do
+not warn about interrupted operations: they may be changes under way there.
 
 **Keeping them apart**: two archives cannot have the same archive folder, nested folders
 (one inside the other), or an archive folder inside any archive's data folder. `dam init`,
@@ -315,7 +344,7 @@ are not found.
 
 **Changing a label** (`relabel`, `dam.relabel`). The new label passes the rules for a new
 one, except that the folder's own old label does not count as taken (a change of case is
-allowed). Refused while a journal row is still `planned` (run `dam recover`). Nothing on
+allowed). Refused while a journal row is still `planned` (Run recovery in the app). Nothing on
 disk changes. Every value equal to the old label, or starting with `<old label>/`, becomes
 the new label: `files.path`, `path_nfc` and the folder's own top row's `name`, the
 `file_fts` rows, `operations.src` and `dst` (except `abs:` paths and the plain file names a
@@ -371,21 +400,32 @@ files, and the Keychain entries. The zip is built in a temporary folder inside
 **Import** is `POST /api/snapshots/import` with the zip as the body
 (`application/octet-stream`, up to 2 GB; besides the inbox upload it is the only route
 that takes a non-JSON body). The file is unpacked into a temporary folder and checked as
-for a restore (below, apart from the archive folder and the migration); then it is copied
-in as `…-imported.zip`. A taken name gets `-2`; nothing is overwritten.
+for a restore (below, apart from the archive folder and the settings it keeps, the
+unpacked copy is migrated and compared too); then it is copied in as `…-imported.zip`. A taken name gets `-2`; nothing is overwritten.
 
 **Restore** (`POST /api/snapshots/{name}/restore {snapshot_current, other_folder_ok}`;
 `snapshot_current` is required) only takes a snapshot by name from this archive's
 `snapshots/` folder. Before anything changes it unpacks the zip into a temporary folder
-and checks it: only the expected entries (no absolute paths, `..` or links), the
-manifest format, `PRAGMA integrity_check`, a readable `settings.yaml` and a migration
-revision this version of dam knows (a newer or unknown one, such as one from another
-branch of dam, is refused). A snapshot whose `archive_root` differs from the open
-archive's is a 409 unless `other_folder_ok` is true; then `archive_root` and
-`extra_folders` in the unpacked `settings.yaml` are set to the open archive's (the index
-stores paths relative to the archive folders, so the rest still fits). The unpacked
-database is then migrated to the current revision. It is refused while an interrupted
-operation waits for `dam recover`, and while a maintenance check or rule replay runs.
+and checks it: only the expected entries (no absolute paths, `..`, `:` (drives and
+streams on Windows), Windows device names or links, on every platform), at most 10,000
+entries, deflated or stored only, no large entry packed more than 250 times smaller, at
+most 16 GB unpacked in all (counted again while unpacking, so a zip that declares less
+than it holds stops there) and no more than the free disk space, the manifest format,
+`PRAGMA integrity_check`, a migration revision this version of dam knows (a newer or
+unknown one, such as one from another branch of dam, is refused), no trigger, view or
+table that a fresh database migrated to that revision does not have, and a readable
+`settings.yaml`. The snapshot's database is opened with `PRAGMA trusted_schema=OFF`
+throughout. It is then migrated to the current revision and compared with dam's table
+definitions (`alembic` `compare_metadata`, the full-text index's own tables aside): any
+difference is a 409, since bare revision ids are shared with an older app that had
+another layout. A snapshot whose `archive_root` differs from the open archive's is a 409
+unless `other_folder_ok` is true. Every restore sets `archive_root` and `extra_folders` in
+the unpacked `settings.yaml` to the open archive's (the index stores paths relative to the
+archive folders, so the rest still fits; `kept_folders` says whether they differed), and
+keeps every current entry of `protected_paths` and `ai.exclude_folders`: the snapshot's
+entries are added after them, but none of the current ones is dropped, so a snapshot file
+cannot add a folder to the archive or lift a protection. It is refused while an interrupted
+operation waits for recovery (Run recovery), and while a maintenance check or rule replay runs.
 With `snapshot_current` a `before-restore` snapshot is taken next. Then the server closes
 the archive (`Host.close_and_reopen`: background work stopped, App closed), writes the
 unpacked database into the live `dam.sqlite` with the backup API (one transaction, no file
@@ -894,11 +934,17 @@ folder roots) is planned as two operations, always next to each other:
 
 1. `copy_across` (`src` the file, `dst` its path in the other folder; a taken name gets
    `_N`). The preview's op carries `size` and `cloud_only` (macOS `SF_DATALESS`: reading it
-   downloads it first). The journal row gets the source's sha256 (`content_hash`) before
-   anything is copied. The copy is written under `.dam-copy-<8 hex>-<name>` next to the
-   destination (exclusive create, fsync, no size cap, only the free-space check), checked
-   against the journaled size and hash, given the source's access and modification time,
-   and only then renamed to its name without overwriting. The file's index row then
+   downloads it first). The journal row is written (`planned`) before anything is copied.
+   The copy is written under `.dam-copy-<8 hex>-<name>` next to the destination
+   (exclusive create, fsync, no size cap, only the free-space check) in one read of the
+   source that also hashes it, then read back and checked to have that size and hash.
+   This part runs without `INDEX_LOCK`, so scans and other changes go on meanwhile (a
+   scan leaves the copy in progress out of the index). Then, under the lock again, the
+   source must still be the file the journal row saw (same file, size and modification
+   time) and the name still free, else the op fails naming the `.dam-copy-` file, which
+   stays. The sha256 goes into the row (`content_hash`), the copy gets the source's
+   access and modification time and only then is renamed to its name without
+   overwriting. The file's index row then
    describes the copy, so tags, notes, checklists, collection and tray item places, locks,
    summaries, fields and rule outcomes follow; it takes the copy's own Drive id if it has
    one, else a fresh `local:` id when the original's was a Drive id (the original keeps
@@ -1196,8 +1242,9 @@ The user guide's "What dam never does" gives the short version. The details:
   `GET /api/locks` answers `{files: [{drive_id, reason}], folders: [path]}`. The
   command line has no way to unlock, so `dam file`, `dam quarantine` and the like refuse a
   locked file; unlock it in the app first. Locking is not journaled (it changes nothing in
-  the archive). It is a catch against mistakes, not a security boundary: anything that can
-  call the local API can unlock.
+  the archive). It is a catch against mistakes, not a security boundary: whatever is
+  signed in to the local API (your browser, or a program that has read the token file)
+  can unlock.
 - **`##. Ongoing` ownership.** The app owns an entry only if it still is the exact thing
   it created (the identity above). An entry you made yourself, or one that was replaced,
   is never touched, never adopted and never deleted. If a name is taken by something
@@ -1211,6 +1258,22 @@ The user guide's "What dam never does" gives the short version. The details:
   (`POST /api/snapshots/import`), which take `application/octet-stream` and pass the same
   host and origin checks. The UI is served with a strict CSP. Other
   web pages cannot read or change your archive.
+- **Signed-in API.** The checks above stop web pages, not other programs on the same
+  computer, which can all reach `127.0.0.1`. So every request under `/api` (file
+  contents, page images, exports, sticker sheets, snapshots, and every change) also
+  needs a secret token: the cookie `dam_auth_<port>` or the header `X-Dam-Token`;
+  without it the answer is `401` with a plain message (`code: "not_signed_in"`), and the
+  UI shows a full-page **Not signed in** with what to do. The start page and its assets
+  need no token. The token (`secrets.token_urlsafe(32)`) is made on first use in
+  `api-token` beside `archives.yaml`, so one token serves every archive the server can
+  switch to; on macOS and Linux the file is mode `0600` (a looser mode is tightened
+  again); on Windows it relies on the permissions of the user profile folder, which only
+  you and administrators can read. `GET /auth?t=<token>` compares it in constant time,
+  sets the cookie (`HttpOnly`, `SameSite=Strict`, `Path=/`, one year) and redirects (303)
+  to `/`. The token is never logged (the access log shows `t=<hidden>`). Anything that
+  can read your user files (the token file, or the browser's cookies) can still use the
+  API: this keeps out other user accounts, sandboxed apps and web pages, not a program
+  that runs as you with access to your files.
 - **The database only.** Trays, items, notes, checklists, reminders, collections, stars,
   locks and tags live in `dam.sqlite` in the data folder. Nothing about them is written into the
   archive; the only archive writes for them are links and folders in `##. Ongoing` /
@@ -1229,8 +1292,8 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   out), `known` those with a stored sha256, `to_read_*` what the check would open. Reading a
   file kept online-only in Google Drive for desktop downloads it.
 - `POST /api/maintenance/jobs {kind, days?}` starts a check (`duplicates`, `empty_folders`,
-  `broken_links`, `references`, `names`, `waiting`, `label_clashes` or
-  `unfinished_copies`; `days` only for `waiting`, default
+  `broken_links`, `references`, `names`, `waiting`, `label_clashes`,
+  `unfinished_copies` or `moved`; `days` only for `waiting`, default
   30) and ends an earlier job of that kind. `GET /api/maintenance/jobs/{job_id}` answers
   the progress (`state` running, done, stopped or error; `done`/`total`, `bytes_done`/
   `bytes_total`, `current`) and, once it is not running, `result` as the field named after
@@ -1248,7 +1311,7 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   are left out of every result read, with the totals lowered. Keys per `kind`:
   `duplicates` the sha256, `versions` the name (folded), `empty_folders`, `broken_links`
   and `names` the drive id, `references` `"<collection|tray>-<owner id>-<item id>-<drive
-  id>"`. For `duplicates` and `versions`, `members` (required) are the group's drive ids;
+  id>"`, `moved` `"<old drive id>><new drive id>"`. For `duplicates` and `versions`, `members` (required) are the group's drive ids;
   the group stays out only while all its files are among them.
 - The `references` check gives a missing file's `path` as last seen: its index row's
   path, else the latest done journal operation for its drive id (null when neither
@@ -1289,6 +1352,31 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
   `##. Ongoing` or `##. Important` with the existing `unlink_symlink` operation (400 for a
   link anywhere else, or one that leads somewhere). Its undo needs the link's target to
   exist, so it is refused for these.
+- The `moved` check ("Moved outside dam") finds files with a `local:` id (no Drive id,
+  so the scanner matches them by path only) that were renamed or moved outside the app:
+  the scan made a new row and flagged the old one missing, and what the owner gave the
+  file stayed on the old row. It pairs a missing row that has something given (tags,
+  collection places, tray item files, a lock, From and For, the filing code, summaries,
+  edited fields, rule outcomes, a note or checklist entries) with a present row that has
+  none, outside the app's own folders, of the same size (above zero) and sha256. The
+  missing row needs a stored sha256 (`unhashed` counts those without); a present row
+  without one is hashed as the duplicate check hashes (stored back, cancellable, with
+  progress; `unreadable` counts failures). A content shared by more than one missing or
+  more than one present row makes its pairs `ambiguous`. Each pair (`old_id`, `old_path`,
+  `new_id`, `new_path`, `size`, `same_ext`, `ambiguous`, `moves`: what would move, counted
+  by kind) drops out of a result on a read once it no longer holds.
+- `POST /api/maintenance/moved/reconnect {pairs: [{old, new}], dry_run?}` reconnects
+  pairs (`FileRepo.reconnect`, one transaction per pair): every row naming the file by
+  the old id (the tables above, plus `member_link_names`; notes and checklists by
+  `target_id`) moves to the new id, then the old row goes with its text, FTS row and
+  content reads (the new row has its own). It changes the database only: nothing in the
+  archive is touched, so it goes through no batch, is not journaled and has no Undo; the
+  preview says so. Afterwards the collections sync runs, so a published link follows the
+  file. 400 when a file is named twice, the old row is not missing or has nothing given,
+  the new row is not a present regular file, is in the app's own folders, has something
+  given or changed on disk since the scan, the stored hashes or sizes differ, or the pair
+  is ambiguous; 404 for an unknown id. The answer is `{dry_run, pairs, errors}` (`pairs`
+  with what moved). The AI call log keeps the old id: it is history.
 - Empty folders and broken links elsewhere are marked for deletion with `POST
   /api/quarantine`, a name is fixed with `POST /api/browse/rename`: the existing previewed
   endpoints.
@@ -1322,8 +1410,14 @@ were fewer than three). `GET /api/status` has the same `page1`.
 A file whose text could not be extracted is `error` (something a retry might fix: a
 crash in the extractor, an extraction over 5 minutes) or `unsupported` (retrying will
 not help: a `.docx` that is not a valid Word file or not a Word document, a
-password-protected Word file or PDF, a type with no extractor, a file over 256 MB). The
-reason is stored with the file (`files.last_error`). `GET /api/index/errors` lists the
+password-protected Word file or PDF, a type with no extractor, a file over 256 MB, a
+Word, Excel, PowerPoint or iWork zip that would unpack to more than 512 MB, holds more
+than 10,000 parts or has a part over 1 MB packed more than 200 to 1). The
+reason is stored with the file (`files.last_error`). While a file is read its
+`last_error` is `dam: reading`; recording the outcome replaces it, and closing dam clears
+it. A file still marked on the next start (dam was killed mid-read, say out of memory)
+becomes `error` with "reading this file stopped dam unexpectedly; it is skipped until you
+retry it", so it is not read again until it is retried. `GET /api/index/errors` lists the
 `error` files (`?all=1` adds the unsupported ones) with `reason` and `retry_at`, newest
 file (mtime) first; `POST /api/index/retry {drive_ids}` puts those of them in `error` or
 `unsupported` back to `pending` (attempts and reason cleared) and wakes the indexer. On
@@ -1341,6 +1435,11 @@ the command line: `dam errors [--all] [--retry]`.
   .scpt .action`, and any file with an executable bit, plus Windows and Linux program,
   script and shortcut types such as `.exe .bat .ps1 .lnk .desktop`) with 409 "Won't open
   apps or scripts from the archive — use Show in Finder"; Reveal still works for them.
+  It also refuses web pages, SVG and XML files (`.html .htm .xhtml .svg .svgz .xml
+  .webarchive .mht .mhtml`, by the file's, the resolved or the link's name), whose
+  default app is a browser that would run their scripts as a local page, with 409 "Won't
+  open web pages, SVG or XML files from the archive, as their scripts would run in the
+  browser. Use Show in Finder".
 - `GET /api/tags?prefix=&limit=` lists the tags in use with the number of files that have
   each (`[{"name", "files"}]`), those starting with `prefix` (case and accents ignored),
   most used first then by name, at most `limit` (default 8, up to 50): the tag field's
@@ -1422,7 +1521,8 @@ Every command logs to `<data dir>/logs/dam.log`: INFO and up, rotated at 5 MB wi
 files kept (`dam.log.1` ... `dam.log.3`). Warnings and errors also go to stderr.
 Internal-error tracebacks go to the log file only.
 
-If a previous run was interrupted, commands warn you to run `dam recover`.
+If a previous run was interrupted, commands warn you to run `dam recover` (not while the
+app or another command has the archive; `dam serve` points to Run recovery in the app).
 
 ## Cloud drives
 
@@ -1483,5 +1583,8 @@ cd backend && DAM_DEV_ORIGIN=http://localhost:5173 uv run dam serve --no-open
 cd frontend && npm run dev         # http://localhost:5173
 ```
 
-`DAM_DEV_ORIGIN` lets the API accept the dev server's `Origin`. Details in
+`DAM_DEV_ORIGIN` lets the API accept the dev server's `Origin`. With it set, the printed
+sign-in link names `localhost` (`http://localhost:8765/auth?t=...`) and `/auth` redirects
+to the dev server: the cookie is then on `localhost`, which the browser also sends to
+port 5173, and the Vite proxy passes it to the API. Details in
 `frontend/README.md` and [CONTRIBUTING.md](../CONTRIBUTING.md).

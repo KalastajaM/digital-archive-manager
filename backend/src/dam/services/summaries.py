@@ -15,8 +15,8 @@ from sqlalchemy.dialects.sqlite import insert
 
 from dam.db.engine import write_tx
 from dam.db.tables import file_summaries
+from dam.errors import Conflict, InvalidRequest
 from dam.index.repo import FileRepo
-from dam.services.errors import Conflict, InvalidRequest
 
 SOURCES = ("ai", "user")
 SUMMARY_CHARS = 2000

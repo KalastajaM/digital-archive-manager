@@ -14,7 +14,7 @@ from dam.api.schemas import (
 )
 from dam.codes.model import format_validation
 from dam.config import DEFAULT_ADDRESS_ZONE, Person, Settings
-from dam.services.errors import InvalidRequest
+from dam.errors import InvalidRequest
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 

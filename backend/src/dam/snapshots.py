@@ -11,10 +11,16 @@ download of the zip) puts a copy wherever the user wants it, and importing one (
 picked anywhere) checks it in full and adds it to the list under a new name.
 
 Restoring never deletes anything. The snapshot is unpacked and checked first (safe
-member names, ``PRAGMA integrity_check``, readable settings, a migration revision this
-app knows), and its database is migrated to this app's revision in the unpacked copy. A
-snapshot of another archive folder (another computer, a moved folder) is restored only
-when the caller says so, and then keeps this archive's own folders in its settings.
+member names, limits on what it unpacks to, ``PRAGMA integrity_check``, no database
+objects dam never makes, readable settings, a migration revision this app knows), and
+its database is migrated to this app's revision in the unpacked copy and must then match
+dam's own layout exactly (bare revision ids are shared with an older app that had
+another layout). A snapshot of another archive folder (another computer, a moved
+folder) is restored only when the caller says so. Every restore keeps this archive's own
+folders (``archive_root``, ``extra_folders``) in its settings, and keeps every entry of
+the current ``protected_paths`` and ``ai.exclude_folders`` (the snapshot may add to
+them, never remove from them): a snapshot file can come from anywhere, and these are the
+settings that keep documents safe.
 Only then, with the archive closed (``apply_restore`` runs inside
 ``Host.close_and_reopen``), the copy is written into the live ``dam.sqlite`` with the
 backup API and the current ``config/`` and state files are moved aside to
@@ -37,15 +43,20 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePosixPath
 
 import yaml
+from alembic import command
+from alembic.autogenerate import compare_metadata
 from alembic.config import Config
+from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
+from sqlalchemy import Engine, event
 
 from dam import settings_write
-from dam.config import AppPaths, ExtraFolder, Settings
-from dam.db.engine import MIGRATIONS_DIR, make_engine, migrate
+from dam.config import AppPaths, ExtraFolder, Settings, load_settings
+from dam.db.engine import MIGRATIONS_DIR, make_engine, migrate, write_tx
+from dam.db.tables import metadata
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.ops.primitives import rename_excl
-from dam.services.errors import Conflict, InvalidRequest, NotFound
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +76,15 @@ MANUAL, BEFORE_RESTORE = "manual", "before-restore"
 BEFORE_RELABEL = "before-relabel"  # taken before an archive folder's label changes
 IMPORTED_SUFFIX = "-imported"
 MAX_IMPORT_BYTES = 2 * 1024**3
+# what one snapshot may unpack to (a zip bomb stops here): members, bytes in all, and how
+# much smaller than its content a large member may be packed (deflate tops out near 1000)
+MAX_MEMBERS = 10_000
+MAX_UNPACKED_BYTES = 16 * 1024**3
+MAX_RATIO = 250
+_RATIO_FROM = 1024**2  # small members are not held to the ratio
+_COPY_CHUNK = 1024**2
+# Windows device names: a member called one of these (with any extension) is a device there
+_RESERVED = {"con", "prn", "aux", "nul", *(f"{p}{n}" for p in ("com", "lpt") for n in range(10))}
 _NAME = re.compile(
     r"dam-snapshot-\d{8}-\d{6}(?:-\d+)?(?:-before-restore|-before-relabel)?(?:-imported)?\.zip"
 )
@@ -136,6 +156,7 @@ def _revision_problem(revision: str | None) -> str | None:
 def db_revision(db: Path) -> str | None:
     con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
     try:
+        con.execute("PRAGMA trusted_schema=OFF")
         row = con.execute("SELECT version_num FROM alembic_version").fetchone()
         return row[0] if row else None
     except sqlite3.DatabaseError:
@@ -293,35 +314,167 @@ def list_snapshots(paths: AppPaths, archive_root: Path | None = None) -> list[Sn
 # -- checking a snapshot ------------------------------------------------------------------
 
 
+def _unsafe_part(part: str) -> bool:
+    """A name component that is not one plain name on every platform: empty, ``.`` or
+    ``..``, a ``:`` (a drive or an alternate data stream on Windows), a Windows device
+    name, or a trailing dot or space (Windows drops it)."""
+    return (
+        part in ("", ".", "..")
+        or ":" in part
+        or part.split(".", 1)[0].strip().casefold() in _RESERVED
+        or part[-1] in ". "
+    )
+
+
 def _member_target(name: str) -> PurePosixPath | None:
     """The relative path a zip member may be unpacked to; None for a folder entry.
-    Anything else (an absolute path, ``..``, a name we never write) is refused."""
+    Anything else (an absolute path, ``..``, a drive or stream, a name we never write)
+    is refused, on every platform: a snapshot made on one may be restored on another."""
     if name.endswith("/"):
         return None
     rel = PurePosixPath(name)
-    if "\\" in name or rel.is_absolute() or any(p in ("", ".", "..") for p in name.split("/")):
+    if "\\" in name or rel.is_absolute() or any(_unsafe_part(p) for p in name.split("/")):
         raise InvalidRequest(f"The snapshot holds an unsafe entry: {name}")
     if name in (MANIFEST, DB_NAME, *STATE_FILES) or rel.parts[0] == CONFIG and len(rel.parts) > 1:
         return rel
     raise InvalidRequest(f"The snapshot holds an unexpected entry: {name}")
 
 
+_TOO_BIG = "The snapshot unpacks to more than a dam snapshot can hold; it was not unpacked."
+
+
+def _check_sizes(infos: list[zipfile.ZipInfo], target: Path) -> None:
+    """Refuse a zip that would unpack to too much, from what it declares (the copy
+    counts again, since a zip can declare less than it holds)."""
+    if len(infos) > MAX_MEMBERS:
+        raise InvalidRequest(f"The snapshot holds more than {MAX_MEMBERS} entries.")
+    for info in infos:
+        if info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+            raise InvalidRequest(f"The snapshot holds an entry dam does not write: {info.filename}")
+        if info.file_size > _RATIO_FROM and info.file_size > MAX_RATIO * max(info.compress_size, 1):
+            raise InvalidRequest(
+                f"The snapshot holds an entry packed unusually small: {info.filename}"
+            )
+    total = sum(info.file_size for info in infos)
+    if total > MAX_UNPACKED_BYTES:
+        raise InvalidRequest(_TOO_BIG)
+    if total > shutil.disk_usage(target).free:
+        raise InvalidRequest("There is not enough free disk space to check this snapshot.")
+
+
+def _copy_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, dest: Path, room: int) -> int:
+    """Copy one member to ``dest``, at most its declared size and ``room``; the bytes
+    written."""
+    written = 0
+    with zf.open(info) as src, dest.open("xb") as out:
+        while chunk := src.read(_COPY_CHUNK):
+            written += len(chunk)
+            if written > info.file_size or written > room:
+                raise InvalidRequest(_TOO_BIG)
+            out.write(chunk)
+    return written
+
+
 def _unpack(zf: zipfile.ZipFile, target: Path) -> None:
-    for info in zf.infolist():
+    target.mkdir(parents=True, exist_ok=True)
+    root = target.resolve()
+    infos = zf.infolist()
+    _check_sizes(infos, target)
+    room = MAX_UNPACKED_BYTES
+    for info in infos:
         rel = _member_target(info.filename)
         if rel is None:
             continue
         if stat.S_ISLNK(info.external_attr >> 16):
             raise InvalidRequest(f"The snapshot holds a link: {info.filename}")
         dest = target.joinpath(*rel.parts)
+        if not dest.resolve().is_relative_to(root):
+            raise InvalidRequest(f"The snapshot holds an unsafe entry: {info.filename}")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        with zf.open(info) as src, dest.open("xb") as out:
-            shutil.copyfileobj(src, out)
+        room -= _copy_member(zf, info, dest, room)
+
+
+def _untrusted(engine: Engine) -> Engine:
+    """``engine`` with the snapshot's schema distrusted: SQL functions in it (views,
+    triggers, indexes, defaults) cannot run app functions."""
+
+    @event.listens_for(engine, "connect")
+    def _distrust(dbapi_conn, _record) -> None:
+        dbapi_conn.execute("PRAGMA trusted_schema=OFF")
+
+    return engine
+
+
+def _objects(db: Path) -> list[tuple[str, str, str | None]]:
+    con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        con.execute("PRAGMA trusted_schema=OFF")
+        return con.execute("SELECT type, name, sql FROM sqlite_master").fetchall()
+    finally:
+        con.close()
+
+
+def _foreign_objects(db: Path, revision: str, work: Path) -> str | None:
+    """Why the snapshot's database holds something dam's migrations never make at
+    ``revision`` (a trigger, a view, an unknown or changed table), or None. Compared
+    with a fresh database migrated to that revision."""
+    reference = work / ".reference.sqlite"
+    config = Config()
+    config.set_main_option("script_location", str(MIGRATIONS_DIR))
+    engine = make_engine(reference)
+    try:
+        with write_tx(engine) as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, revision)
+    finally:
+        engine.dispose()
+    known = {name: sql for kind, name, sql in _objects(reference) if kind == "table"}
+    for kind, name, sql in _objects(db):
+        if kind in ("trigger", "view"):
+            return f"The snapshot's database holds a {kind} ({name}), which dam never makes."
+        if kind != "table" or name.startswith("sqlite_"):
+            continue
+        if name not in known:
+            return f"The snapshot's database holds a table dam does not know ({name})."
+        virtual = (sql or "").lstrip().upper().startswith("CREATE VIRTUAL")
+        if virtual and sql != known[name]:
+            return f"The snapshot's database has a table dam made differently ({name})."
+    return None
+
+
+_NOT_DAMS = "This snapshot was not made by this version of dam's database layout."
+
+
+def _include_name(name: str | None, type_: str, _parents: dict) -> bool:
+    """compare_metadata leaves out the full-text index's own tables (not in metadata)."""
+    return not (
+        type_ == "table" and name and name.startswith("file_fts") and name not in metadata.tables
+    )
+
+
+def _migrate_and_compare(db: Path) -> None:
+    """Bring the copy to this app's revision, then refuse it unless its layout is dam's."""
+    engine = _untrusted(make_engine(db))
+    try:
+        try:
+            migrate(engine, backup=False)  # a copy being checked
+        except Exception as e:
+            raise InvalidRequest(f"The snapshot's database could not be updated: {e}") from e
+        with engine.connect() as connection:
+            context = MigrationContext.configure(connection, opts={"include_name": _include_name})
+            differences = compare_metadata(context, metadata)
+    finally:
+        engine.dispose()
+    if differences:
+        log.warning("snapshot database differs from dam's layout: %s", differences[:5])
+        raise Conflict(_NOT_DAMS)
 
 
 def _unpack_and_check(zip_path: Path, work: Path) -> tuple[dict, Settings]:
-    """Unpack ``zip_path`` into ``work`` and check it: the manifest, every entry, the
-    database's integrity and revision, the settings. Returns the manifest and settings."""
+    """Unpack ``zip_path`` into ``work`` and check it: the manifest, every entry and
+    what they unpack to, the database's integrity, revision and layout (migrating the
+    copy in ``work`` to this app's revision), the settings. Returns the manifest and
+    settings."""
     try:
         with zipfile.ZipFile(zip_path) as zf:
             manifest = _read_manifest(zf)
@@ -333,6 +486,7 @@ def _unpack_and_check(zip_path: Path, work: Path) -> tuple[dict, Settings]:
         raise InvalidRequest("The snapshot has no database.")
     con = sqlite3.connect(db)
     try:
+        con.execute("PRAGMA trusted_schema=OFF")
         check = con.execute("PRAGMA integrity_check").fetchone()
     except sqlite3.DatabaseError as e:
         raise InvalidRequest(f"The snapshot's database cannot be read: {e}") from e
@@ -340,9 +494,15 @@ def _unpack_and_check(zip_path: Path, work: Path) -> tuple[dict, Settings]:
         con.close()
     if not check or check[0] != "ok":
         raise InvalidRequest("The snapshot's database is damaged (integrity check failed).")
-    problem = _revision_problem(db_revision(db))
+    revision = db_revision(db)
+    problem = _revision_problem(revision)
     if problem:
         raise Conflict(problem)
+    problem = _foreign_objects(db, revision or "", work)
+    if problem:
+        raise Conflict(problem)
+    # bring the copy to this app's revision now, so reopening after a restore only opens it
+    _migrate_and_compare(db)
     settings_file = work / CONFIG / "settings.yaml"
     if not settings_file.is_file():
         raise InvalidRequest("The snapshot has no settings.yaml.")
@@ -387,21 +547,56 @@ class StagedRestore:
     name: str
     folder: Path  # the unpacked snapshot (inside a temporary folder in snapshots/)
     revision: str
-    kept_folders: bool  # its folder settings were replaced by this archive's
+    kept_folders: bool  # its folder settings differed and were replaced by this archive's
 
 
-def _keep_folders(settings_file: Path, folders: Folders) -> None:
-    """Point the unpacked settings at this archive's own folders."""
+def _with_current(current: list[str], incoming: list[str]) -> list[str]:
+    """Every entry of ``current``, then those ``incoming`` adds."""
+    return [*current, *(e for e in incoming if e not in current)]
+
+
+def _keep_safety_settings(settings_file: Path, folders: Folders, current: Settings) -> bool:
+    """Point the unpacked settings at this archive's own folders and keep every entry
+    of the current ``protected_paths`` and ``ai.exclude_folders``. True when the
+    snapshot's folder settings differed."""
     text = settings_file.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    raw = yaml.safe_load(text) or {}
+    snap = Settings.model_validate(raw)
+    updates: dict[str, object] = {}
     extra = [
         {"label": e.label, "path": str(e.path), "attached": e.attached}
         for e in folders.extra_folders
     ]
-    updates = {"archive_root": str(folders.archive_root), "extra_folders": extra}
+    snap_extra = [
+        {"label": e.label, "path": str(e.path.expanduser()), "attached": e.attached}
+        for e in snap.extra_folders
+    ]
+    other = not _same_folder(snap.archive_root, folders.archive_root) or snap_extra != extra
+    if folders.archive_root is not None:
+        updates["archive_root"] = str(folders.archive_root)
+        updates["extra_folders"] = extra
+    protected = _with_current(current.protected_paths, snap.protected_paths)
+    if protected != snap.protected_paths:
+        updates["protected_paths"] = protected
+    excluded = _with_current(current.ai.exclude_folders, snap.ai.exclude_folders)
+    if excluded != snap.ai.exclude_folders:
+        ai = raw.get("ai") if isinstance(raw.get("ai"), dict) else {}
+        updates["ai"] = {**ai, "exclude_folders": excluded}
+        log.info("restore keeps this archive's AI-excluded folders: %s", excluded)
+    if "protected_paths" in updates:
+        log.info("restore keeps this archive's protected paths: %s", protected)
     settings_file.write_text(settings_write.with_keys(text, updates), encoding="utf-8")
-    raw = yaml.safe_load(settings_file.read_text(encoding="utf-8")) or {}
-    if not _same_folder(Settings.model_validate(raw).archive_root, folders.archive_root):
-        raise InvalidRequest("Could not set this archive's folder in the snapshot's settings.")
+    written = Settings.model_validate(
+        yaml.safe_load(settings_file.read_text(encoding="utf-8")) or {}
+    )
+    if (
+        folders.archive_root is not None
+        and not _same_folder(written.archive_root, folders.archive_root)
+        or not set(current.protected_paths) <= set(written.protected_paths)
+        or not set(current.ai.exclude_folders) <= set(written.ai.exclude_folders)
+    ):
+        raise InvalidRequest("Could not keep this archive's settings in the snapshot's settings.")
+    return other and folders.archive_root is not None
 
 
 def stage(
@@ -409,8 +604,9 @@ def stage(
 ) -> StagedRestore:
     """Unpack snapshot ``name`` into ``work`` and check everything that can be checked
     while the archive stays open. A snapshot of another archive folder needs
-    ``other_folder_ok`` and then keeps ``folders``. Raises with a plain message; nothing
-    in the data folder is changed."""
+    ``other_folder_ok``. Every restore keeps ``folders`` and the current protected paths
+    and AI-excluded folders. Raises with a plain message; nothing in the data folder is
+    changed."""
     info = read_info(paths, name, folders.archive_root)
     if info.problem:
         raise Conflict(info.problem)
@@ -423,18 +619,8 @@ def stage(
             f"The snapshot is of another archive folder ({settings.archive_root}). Confirm "
             "to restore it with this archive's own folders."
         )
-    if other:
-        _keep_folders(work / CONFIG / "settings.yaml", folders)
-    # bring the copy to this app's revision now, so reopening after the swap only opens it
-    db = work / DB_NAME
-    engine = make_engine(db)
-    try:
-        migrate(engine)
-    except Exception as e:
-        raise InvalidRequest(f"The snapshot's database could not be updated: {e}") from e
-    finally:
-        engine.dispose()
-    return StagedRestore(name, work, db_revision(db) or "", other)
+    kept = _keep_safety_settings(work / CONFIG / "settings.yaml", folders, load_settings(paths))
+    return StagedRestore(name, work, db_revision(work / DB_NAME) or "", kept)
 
 
 def _write_db(source: Path, live: Path) -> None:
@@ -442,6 +628,7 @@ def _write_db(source: Path, live: Path) -> None:
     src = sqlite3.connect(source)
     dst = sqlite3.connect(live)
     try:
+        src.execute("PRAGMA trusted_schema=OFF")
         dst.execute("PRAGMA busy_timeout=30000")
         # the backup API cannot write into a WAL database with another page size
         dst.execute("PRAGMA journal_mode=DELETE")

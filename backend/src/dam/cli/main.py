@@ -8,8 +8,9 @@ Exit codes: 0 success; 1 user error (unknown file, invalid request, guard refusa
 import json
 import sys
 import time
+import webbrowser
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Annotated
@@ -20,17 +21,18 @@ from dam import layouts as dam_layouts
 from dam import serve as dam_serve
 from dam import setup as dam_setup
 from dam.api import create_api
+from dam.api.auth import auth_url, load_token, read_token
 from dam.app import App
 from dam.cli import newarchive
 from dam.config import AppPaths, load_settings
 from dam.core.paths import OutsideArchiveError
+from dam.errors import InvalidRequest, NotConfigured, NotFound
 from dam.logging_setup import configure_logging, log_internal_error
 from dam.ops.model import BatchResult, GuardError, OpFailed, OpKind, ResolvedOp
 from dam.profiles import Locked, Profile, ProfileStore, ServeLock
 from dam.reminders import launchd, notify
 from dam.reminders.engine import Due
 from dam.services.archives import ArchiveService
-from dam.services.errors import InvalidRequest, NotConfigured, NotFound
 from dam.services.inbox import FileItResult, FileRequest
 from dam.services.layout import layout_label
 
@@ -92,38 +94,97 @@ def _store(ctx: typer.Context) -> ProfileStore:
     return ctx.meta["dam.store"]
 
 
+def _command_name(ctx: typer.Context) -> str:
+    """``dam file``, ``dam ongoing sync``: the command as typed, without its options."""
+    names: list[str] = []
+    c: typer.Context | None = ctx
+    while c is not None and c.parent is not None:
+        names.append(c.info_name or "")
+        c = c.parent
+    return " ".join(["dam", *reversed(names)])
+
+
+@contextmanager
+def changing(ctx: typer.Context, in_app: str = "Do this there") -> Iterator[None]:
+    """Hold the archive's lock (``serve.lock``, the one ``dam serve`` holds) while a
+    command changes it, so the app and other commands never write at the same time.
+    Re-entrant in one process (``init`` opens a session inside its own hold). Refused:
+    exit 1 saying who has it; ``in_app`` says what to do when that is the app."""
+    data_dir = Path(ctx.obj)
+    held: dict[Path, ServeLock] = ctx.meta.setdefault("dam.held", {})
+    if data_dir in held:
+        yield
+        return
+    lock = ServeLock(data_dir)
+    try:
+        lock.acquire(command=_command_name(ctx))
+    except Locked as e:
+        if e.command:
+            _err(f"error: {e}")
+        else:
+            where = f" on port {e.port}" if e.port else ""
+            _err(
+                f"error: This archive is open in the app{where}. {in_app}, or close the app first."
+            )
+        raise typer.Exit(EXIT_USER) from None
+    except InvalidRequest as e:
+        _err(f"error: {e}")
+        raise typer.Exit(EXIT_USER) from None
+    held[data_dir] = lock
+    try:
+        yield
+    finally:
+        del held[data_dir]
+        lock.release()
+
+
 @contextmanager
 def session(
-    ctx: typer.Context, warn_pending: bool = True, require_archive: bool = True
+    ctx: typer.Context,
+    warn_pending: bool = True,
+    require_archive: bool = True,
+    write: bool = False,
+    in_app: str = "Do this there",
 ) -> Iterator[App]:
-    """Open the App for one command and always close it.
+    """Open the App for one command and always close it. ``write``: the command changes
+    the archive, its database or its settings, so it holds the archive's lock first
+    (``changing``; ``in_app`` is its hint when the app has the archive).
 
     Known user errors exit 1 with ``error: <message>``; anything else exits 3 with one
     line on stderr and the traceback in the log file. Every command logs to
     ``<data dir>/logs/dam.log`` (INFO) and stderr (WARNING).
     """
-    application: App | None = None
-    try:
-        configure_logging(AppPaths(ctx.obj))
-        application = App.create(ctx.obj, require_archive=require_archive)
-        if warn_pending and application.activity.pending():
-            _err("warning: interrupted operations found; run `dam recover` first.")
-        yield application
-    except (typer.Exit, typer.Abort):
-        raise
-    except NotConfigured as e:
-        _err(str(e))
-        raise typer.Exit(EXIT_USER) from None
-    except USER_ERRORS as e:
-        _err(f"error: {e}")
-        raise typer.Exit(EXIT_USER) from None
-    except Exception as e:
-        log_path = log_internal_error(AppPaths(ctx.obj).logs_dir)
-        _err(f"internal error: {type(e).__name__}: {e} (details in {log_path})")
-        raise typer.Exit(EXIT_INTERNAL) from None
-    finally:
-        if application is not None:
-            application.close()
+    with changing(ctx, in_app) if write else nullcontext():
+        application: App | None = None
+        try:
+            configure_logging(AppPaths(ctx.obj))
+            application = App.create(ctx.obj, require_archive=require_archive)
+            if warn_pending and application.activity.pending() and _alone(ctx):
+                _err("warning: interrupted operations found; run `dam recover` first.")
+            yield application
+        except (typer.Exit, typer.Abort):
+            raise
+        except NotConfigured as e:
+            _err(str(e))
+            raise typer.Exit(EXIT_USER) from None
+        except USER_ERRORS as e:
+            _err(f"error: {e}")
+            raise typer.Exit(EXIT_USER) from None
+        except Exception as e:
+            log_path = log_internal_error(AppPaths(ctx.obj).logs_dir)
+            _err(f"internal error: {type(e).__name__}: {e} (details in {log_path})")
+            raise typer.Exit(EXIT_INTERNAL) from None
+        finally:
+            if application is not None:
+                application.close()
+
+
+def _alone(ctx: typer.Context) -> bool:
+    """Whether no other process (the app, another command) has this archive: only then
+    are pending journal rows surely interrupted ones, not rows of a change under way.
+    The app offers its own Run recovery."""
+    data_dir = Path(ctx.obj)
+    return data_dir in ctx.meta.get("dam.held", {}) or ServeLock.holder(data_dir) is None
 
 
 def table(headers: list[str], rows: list[list[str]]) -> None:
@@ -182,7 +243,7 @@ def finish(
 @app.command()
 def scan(ctx: typer.Context) -> None:
     """Sync the file index with the archive."""
-    with session(ctx) as a:
+    with session(ctx, write=True) as a:
         r = a.scan()
         typer.echo(
             f"added {r.added}, moved {r.moved}, updated {r.updated}, "
@@ -196,7 +257,7 @@ def index(
     limit: Annotated[int | None, typer.Option(help="Index at most this many files.")] = None,
 ) -> None:
     """Index file contents (text extraction, OCR) until nothing is left."""
-    with session(ctx) as a:
+    with session(ctx, write=True) as a:
         typer.echo(f"indexed {a.index(limit)} file(s)")
 
 
@@ -220,7 +281,7 @@ def errors(
 ) -> None:
     """List the files whose content could not be indexed, and why."""
     all_ = all_ or retry_unsupported
-    with session(ctx) as a:
+    with session(ctx, write=retry or retry_unsupported) as a:
         problems = a.repo.index_problems(include_unsupported=all_)
         if not problems:
             typer.echo("no index errors" if not all_ else "no index errors or unsupported files")
@@ -277,7 +338,7 @@ def file_cmd(
     yes: Annotated[bool, typer.Option("--yes", help="Do not ask for confirmation.")] = False,
 ) -> None:
     """Rename, move and tag one file (shows the plan and asks first)."""
-    with session(ctx) as a:
+    with session(ctx, write=not dry_run) as a:
         drive_id = a.browse.resolve(target).drive_id
         final_name = name if name is not None else a.inbox.suggestion(drive_id).name
         reqs = [FileRequest(drive_id, final_name, folder, tags=list(tag or []))]
@@ -318,7 +379,7 @@ def quarantine(
     yes: Annotated[bool, typer.Option("--yes", help="Do not ask for confirmation.")] = False,
 ) -> None:
     """Move files into the quarantine folder (never deletes)."""
-    with session(ctx) as a:
+    with session(ctx, write=not dry_run) as a:
         ids = [a.browse.resolve(t).drive_id for t in targets]
         preview = a.browse.quarantine(ids, origin="cli", dry_run=True)
         show_ops(preview.done)
@@ -348,7 +409,7 @@ def move(
     Files only; not from or into ##. Ongoing, nor into ##. To Delete (use `dam quarantine`).
     Undo with `dam undo BATCH`.
     """
-    with session(ctx) as a:
+    with session(ctx, write=not dry_run) as a:
         records = [a.browse.resolve(t) for t in targets]
         ids = [r.drive_id for r in records]
         preview = a.browse.move(ids, folder, origin="cli", dry_run=True)
@@ -398,7 +459,7 @@ def undo(
     yes: Annotated[bool, typer.Option("--yes", help="Do not ask for confirmation.")] = False,
 ) -> None:
     """Revert a batch."""
-    with session(ctx) as a:
+    with session(ctx, write=True) as a:
         summary = a.activity.get(batch_id)  # unknown batch: NotFound, before asking
         if not yes:
             for op in summary.ops:
@@ -412,8 +473,9 @@ def undo(
 
 @app.command()
 def recover(ctx: typer.Context) -> None:
-    """Settle operations that were interrupted (reads the disk, never changes files)."""
-    with session(ctx, warn_pending=False) as a:
+    """Settle operations that were interrupted (reads the disk; archive files are never
+    changed, but an interrupted rule picture move may be finished)."""
+    with session(ctx, warn_pending=False, write=True, in_app="Use Run recovery there") as a:
         r = a.activity.recover()
         if not r.entries and not r.index_errors:
             typer.echo("nothing to recover")
@@ -439,6 +501,8 @@ def serve(
     Without a built frontend it says so on stderr and serves only the API.
     Without a configured archive folder it starts in setup mode: the browser shows a
     first-run screen where you choose the folder (or run `dam init` instead).
+    The browser is opened on a sign-in link (only a signed-in browser can use the app);
+    with --no-open the link is printed instead.
     """
     app_paths = AppPaths(ctx.obj)
     app_paths.ensure()
@@ -457,6 +521,7 @@ def serve(
         raise typer.Exit(EXIT_USER) from None
     host = dam_serve.Host(store, dam_serve.STATIC_DIR)
     host.profile_id, host.first_lock = profile.id, lock
+    token = load_token(store.base)
     archives = ArchiveService(store, profile.id, host, app_paths)
     try:
         if not dam_setup.is_configured(app_paths):
@@ -474,6 +539,8 @@ def serve(
             lock.publish(chosen)
             typer.echo(f"No archive folder configured yet: setup is on http://127.0.0.1:{chosen}/")
             typer.echo("(or press Ctrl+C and run `dam init` instead)")
+            if no_open:
+                typer.echo(f"Sign a browser in with: {auth_url(chosen, token)}")
             try:
                 dam_serve.serve_setup(
                     app_paths,
@@ -488,18 +555,60 @@ def serve(
                 raise typer.Exit(EXIT_USER) from None
             _err("stopped")
             return
-        with session(ctx) as a:
+        with session(ctx, warn_pending=False) as a:
+            if a.activity.pending():  # `dam recover` is refused while this serves
+                _err("warning: interrupted operations found; use Run recovery in the app.")
             port = port if port is not None else a.settings.server_port
             if not built:  # the API still works; a browser would only show a 404
                 _err("frontend not built — run `cd frontend && npm ci && npm run build`")
             lock.publish(port)
             name = f" ({profile.name})" if len(store.load()) > 1 else ""
             typer.echo(f"serving on http://127.0.0.1:{port}/{name} (Ctrl+C to stop)")
+            if no_open:
+                typer.echo(f"Sign a browser in with: {auth_url(port, token)}")
             api = create_api(a, dam_serve.STATIC_DIR, archives)
+            # serve() reads the same token (beside the archive list) for the browser link
             dam_serve.serve(a, api, port, open_browser=built and not no_open, host=host)
             _err("stopped")
     finally:
         lock.release()
+
+
+def _serving_port(store: ProfileStore, chosen: Profile) -> int | None:
+    """The port of the server that has ``chosen`` open, else of any server that has one
+    of the archives open (a switch in the app moves a server to another archive)."""
+    profiles = [chosen, *(p for p in store.load() if p.id != chosen.id)]
+    for p in profiles:
+        holder = ServeLock.holder(p.data_dir)
+        if holder and not holder.get("command") and isinstance(holder.get("port"), int):
+            return holder["port"]
+    return None
+
+
+@app.command("open")
+def open_(
+    ctx: typer.Context,
+    print_only: Annotated[
+        bool, typer.Option("--print", help="Print the sign-in link instead of opening it.")
+    ] = False,
+) -> None:
+    """Open the running app in the browser and sign the browser in.
+
+    Use it for a browser that says it is not signed in, or after `dam serve --no-open`.
+    Changes nothing; exit 1 when no `dam serve` is running.
+    """
+    store = _store(ctx)
+    port = _serving_port(store, ctx.meta["dam.profile"])
+    token = read_token(store.base)
+    if port is None or token is None:
+        _err("error: dam is not running. Start it with `dam serve`.")
+        raise typer.Exit(EXIT_USER)
+    url = auth_url(port, token)
+    if print_only:
+        typer.echo(url)
+        return
+    if not webbrowser.open(url):
+        typer.echo(url)
 
 
 def _show_special_folders(root: Path) -> None:
@@ -616,6 +725,17 @@ def init(
     the special folders, previewed first and made as one undoable batch (`dam undo`).
     Nothing else is changed, and no folder is made that you did not confirm.
     """
+    with changing(ctx):
+        _init(ctx, archive, yes, layout, numbered)
+
+
+def _init(
+    ctx: typer.Context,
+    archive: Path | None,
+    yes: bool,
+    layout: str | None,
+    numbered: bool,
+) -> None:
     app_paths = AppPaths(ctx.obj)
     spec: dam_layouts.Spec | None = None
     # another archive's folder (or one inside / around it) cannot be this one's
@@ -683,7 +803,7 @@ def init(
         raise typer.Exit(EXIT_USER) from None
     typer.echo(f"Saved. The archive folder is {chosen}")
     if spec is not None:
-        with session(ctx, warn_pending=False) as a:
+        with session(ctx, warn_pending=False, write=True) as a:
             outcome = a.layout.apply(spec, origin="cli")
             finish(outcome.batch)
             typer.echo(
@@ -709,7 +829,7 @@ def add(
     A name that is taken gets _2; nothing is overwritten. Each file may be up to 200 MB.
     One journaled batch: `dam undo <batch>` moves the copies to the quarantine folder.
     """
-    with session(ctx) as a:
+    with session(ctx, write=not dry_run) as a:
         ops = a.intake.preview(list(files))
         show_ops(ops)
         if dry_run:
@@ -926,6 +1046,8 @@ def remind(
     if len(chosen) > 1:
         raise typer.BadParameter(f"use only one of {', '.join(chosen)}")
     when = _parse_now(now)
+    # no archive lock: the daily job must still send while the app is open, and it only
+    # marks reminders as sent in the database, which SQLite handles across processes
     with session(ctx, warn_pending=False, require_archive=False) as a:
         if install:
             _install_agent(ctx, a, yes, force)
@@ -995,7 +1117,9 @@ def archives_list(ctx: typer.Context) -> None:
         for p in profiles:
             elsewhere = ServeLock.holder(p.data_dir)
             where = ""
-            if elsewhere:
+            if elsewhere and elsewhere.get("command"):
+                where = f"in use by a dam command ({elsewhere['command']})"
+            elif elsewhere:
                 port = elsewhere.get("port")
                 where = f"open in another window{f' (port {port})' if port else ''}"
             rows.append(
@@ -1255,7 +1379,7 @@ def ai_cmd(
             raise typer.Exit(EXIT_USER) from None
         typer.echo("API key removed from the Keychain")
         return
-    with session(ctx, warn_pending=False, require_archive=False) as a:
+    with session(ctx, warn_pending=False, require_archive=False, write=on or off) as a:
         if log:
             _ai_log(a, limit)
             return
@@ -1367,7 +1491,7 @@ TARGETS = Annotated[list[str], typer.Argument(metavar="PATH-OR-DRIVE-ID...")]
 @app.command()
 def star(ctx: typer.Context, targets: TARGETS) -> None:
     """Star files or folders (★ Ongoing). Never moves or renames them."""
-    with session(ctx) as a:
+    with session(ctx, write=True) as a:
         ids = [a.browse.resolve(t).drive_id for t in targets]
         a.marks.star(ids)
         typer.echo(f"starred {len(ids)} item(s)")
@@ -1376,7 +1500,7 @@ def star(ctx: typer.Context, targets: TARGETS) -> None:
 @app.command()
 def unstar(ctx: typer.Context, targets: TARGETS) -> None:
     """Take the ★ off files or folders."""
-    with session(ctx) as a:
+    with session(ctx, write=True) as a:
         ids = [a.browse.resolve(t).drive_id for t in targets]
         a.marks.unstar(ids)
         typer.echo(f"unstarred {len(ids)} item(s)")
@@ -1422,7 +1546,7 @@ def important(
     if not targets:
         _err("error: name the files to mark, or use --list")
         raise typer.Exit(EXIT_USER)
-    with session(ctx) as a:
+    with session(ctx, write=True) as a:
         ids = [a.browse.resolve(t).drive_id for t in targets]
         a.marks.mark_important(ids, group)
         where = f" in {group.strip()}" if group and group.strip() else ""
@@ -1432,7 +1556,7 @@ def important(
 @app.command()
 def unimportant(ctx: typer.Context, targets: TARGETS) -> None:
     """Take the ! Important mark off files or folders."""
-    with session(ctx) as a:
+    with session(ctx, write=True) as a:
         ids = [a.browse.resolve(t).drive_id for t in targets]
         a.marks.unmark_important(ids)
         typer.echo(f"unmarked {len(ids)} item(s)")
@@ -1448,9 +1572,9 @@ def ongoing_sync(
     """Bring ##. Ongoing (the collections and the ★ files) and ##. Important (the !
     files) in line with the database (as dam serve does after a scan).
 
-    Do not run while `dam serve` is running.
+    Refused while the app has the archive open (it keeps these folders in line itself).
     """
-    with session(ctx) as a:
+    with session(ctx, write=not dry_run) as a:
         result = a.ongoing.sync(dry_run=dry_run)
         show_ops(result.plan)
         if dry_run:

@@ -13,10 +13,11 @@ from typing import Literal
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
 from dam.core.paths import nfc
+from dam.core.text import fold
 from dam.extract.layout import ZONE_MARGIN, Box, Line, Page1Layout, lines_in_zone
 from dam.index.repo import BARCODE_EXTS, FileRecord
 from dam.rules.fields import DetectedFields, detect_fields
-from dam.rules.model import Rule, fold
+from dam.rules.model import Rule
 from dam.rules.people import PeopleContext, detect_people, person_line, pick_person
 from dam.rules.picture import Match, Pictures
 from dam.rules.timings import Timings
@@ -196,6 +197,8 @@ def _no_controls(s: str) -> str:
 
 def clean_stem(stem: str) -> str:
     s = _COPY_MARKER.sub("", _no_controls(nfc(stem)))
+    # characters Windows and cloud drives refuse (guards refuse them in new names)
+    s = re.sub(r'[<>:"|?*\\/]', "_", s)
     s = re.sub(r"\s+", "_", s)
     s = re.sub(r"^(?:~\$)+", "", s)
     s = re.sub(r"_+", "_", s)
@@ -211,7 +214,7 @@ def _fit(stem: str, prefix: str, suffix: str) -> str:
     return raw[:budget].decode(errors="ignore").rstrip("._ ") or "x"
 
 
-def _parent(rel: str) -> str:
+def parent_folder(rel: str) -> str:
     parent = PurePosixPath(rel).parent.as_posix()
     return "" if parent == "." else parent
 
@@ -390,7 +393,7 @@ def check(
     score: float | None = None
     if when.folder_is is not None:
         want = nfc(when.folder_is).strip("/").casefold()
-        here = {nfc(_parent(rec.path)).casefold()}
+        here = {nfc(parent_folder(rec.path)).casefold()}
         if inbox_alias is not None:
             here.add(nfc(inbox_alias).strip("/").casefold())
         if want not in here:
@@ -439,7 +442,7 @@ def check(
     return Check(matched=True, picture_score=score)
 
 
-def _matches(
+def rule_matches(
     rule: Rule,
     rec: FileRecord,
     folded_text: str,
@@ -488,7 +491,7 @@ def render(template: str, doc_date: date | None, stem: str, person: str | None =
         raise TemplateError(str(e)) from e
 
 
-def _render_folder(
+def render_folder(
     template: str,
     doc_date: date | None,
     stem: str,
@@ -510,7 +513,7 @@ def _render_folder(
     return folder
 
 
-def _render_name(
+def render_name(
     template: str, doc_date: date | None, stem: str, ext: str, person: str | None = None
 ) -> str:
     name = render(template, doc_date, stem, person).strip()
@@ -555,7 +558,7 @@ def suggest(
     for rules with ``zones``. ``people``: the people list, the address zone and the
     document's assigned person, for ``{person}`` and ``when.person``. ``pictures``: the
     page-1 pictures, for rules with picture areas. ``quarantines``: the To Delete folders
-    no rule may file into (``_render_folder``)."""
+    no rule may file into (``render_folder``)."""
     special = special or SpecialFolders()
     name = rec.name or PurePosixPath(rec.path).name
     ext = (rec.ext or "").lower()
@@ -610,7 +613,7 @@ def suggest(
                 waiting = True  # who the letter is for is on page 1, not read yet
         if folder is None and rule.then.folder is not None:
             try:
-                folder = _render_folder(
+                folder = render_folder(
                     rule.then.folder, doc_date, stem, special, mine.name, quarantines
                 )
                 folder_rule = rule
@@ -622,7 +625,7 @@ def suggest(
                 errored = True
         if new_name is None and not conventional and rule.then.name is not None:
             try:
-                new_name = _render_name(rule.then.name, doc_date, stem, ext, mine.name)
+                new_name = render_name(rule.then.name, doc_date, stem, ext, mine.name)
                 name_rule = rule
                 if template_uses_person(rule.then.name) and rule.person_zone:
                     person_rule = person_rule or rule

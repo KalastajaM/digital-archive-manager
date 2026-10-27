@@ -12,10 +12,11 @@ import pytest
 from PIL import Image
 
 import bigfake
+from dam.core.text import fold
 from dam.index.repo import FileRecord
 from dam.rules import replay as replay_module
 from dam.rules.engine import check
-from dam.rules.model import Rule, fold
+from dam.rules.model import Rule
 from dam.rules.picture import Template, load_gray, load_page, match, match_gray
 from dam.rules.replay import ReplayRun, replay
 

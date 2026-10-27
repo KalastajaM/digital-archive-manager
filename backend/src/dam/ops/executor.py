@@ -19,8 +19,10 @@ from dam.core.fs import readlink
 from dam.core.paths import ArchivePaths, OutsideArchiveError, nfc
 from dam.db.engine import write_tx
 from dam.db.tables import made_folders, operations
-from dam.index.driveid import read_drive_id
-from dam.index.locks import INDEX_LOCK
+from dam.errors import Conflict
+from dam.index.driveid import LOCAL_ID_PREFIX, read_drive_id
+from dam.index.locks import COPYING, INDEX_LOCK
+from dam.index.own_changes import OwnChanges
 from dam.index.repo import FileRepo
 from dam.ops import identity, primitives
 from dam.ops import undo as _undo
@@ -39,8 +41,6 @@ from dam.ops.model import (
 )
 from dam.ops.planner import Planner, list_tree, tree_key, tree_of
 from dam.ops.undo import JournalEntry, RecoveryResult
-from dam.services import LOCAL_ID_PREFIX
-from dam.services.errors import Conflict
 
 if TYPE_CHECKING:
     from dam.locks import LockService
@@ -107,6 +107,17 @@ def _backwards(followed) -> list[list[str]]:
     return [[new_id, old_id, new_path, old_path] for old_id, new_id, old_path, new_path in followed]
 
 
+def not_recorded_message(rop: ResolvedOp, error: Exception) -> str:
+    """The change ``rop`` was made on disk, but the journal could not record it."""
+    what = f"{rop.src} -> {rop.dst}" if rop.src else rop.dst
+    why = getattr(error, "orig", None) or error  # the database's own words, not the SQL
+    return (
+        f"The change was made ({rop.kind.value} {what}) but could not be recorded in "
+        f"the activity log ({why}). Run recovery (in the app: Run recovery; on the "
+        "command line: dam recover) so dam records it and Undo works."
+    )
+
+
 def _outside_copy(rop: ResolvedOp) -> bool:
     """A COPY of a file elsewhere on this computer (``abs:``), not one already in the
     archive."""
@@ -168,8 +179,12 @@ class Executor:
         repo: FileRepo,
         throttle_ms: int = 0,
         areas_dir: Path | None = None,
+        own_changes: OwnChanges | None = None,
     ) -> None:
         self.paths = paths
+        # the paths of each relocation this executor indexed itself, so the watcher does
+        # not scan them again (``dam.index.own_changes``)
+        self.own_changes = own_changes if own_changes is not None else OwnChanges()
         # the rules' picture folder (config/rules/areas): the one place outside the archive
         # that PICTURE_TO_QUARANTINE takes a file from and PICTURE_BACK returns it to
         self.areas_dir = areas_dir
@@ -257,7 +272,8 @@ class Executor:
         return _undo.pending(self)
 
     def recover(self) -> RecoveryResult:
-        """Settle ``planned`` rows from the disk, read only (see ``dam.ops.undo``)."""
+        """Settle ``planned`` rows from the disk (see ``dam.ops.undo.recover``: no archive
+        file is touched; it may finish a rule picture's move across disks)."""
         return _undo.recover(self)
 
     # --- run -----------------------------------------------------------------
@@ -283,7 +299,10 @@ class Executor:
 
         A folder moved across disks (a final QUARANTINE with a ``tree``): Stop is not
         asked once its last file is copied, and that QUARANTINE first checks that the
-        source still holds what was copied (``_check_tree``)."""
+        source still holds what was copied (``_check_tree``).
+
+        Each op runs under ``INDEX_LOCK``, except the reading and writing of a file copied
+        across disks (``_run_copy``)."""
         self.batches.begin(result.batch_id)
         try:
             folder = _FolderRun.of(resolved)
@@ -302,9 +321,13 @@ class Executor:
                     return result
                 if seq and self.throttle_ms and not pair and not self._in_publish_root(rop):
                     time.sleep(self.throttle_ms / 1000)  # outside the lock
-                with INDEX_LOCK:
-                    if self._run_op(seq, rop, origin, result, undo_of, label, copied, folder):
+                if rop.kind is OpKind.COPY_ACROSS and rop.method != primitives.PRESENT:
+                    if self._run_copy(seq, rop, origin, result, undo_of, label, copied, folder):
                         return result
+                else:
+                    with INDEX_LOCK:
+                        if self._run_op(seq, rop, origin, result, undo_of, label, copied, folder):
+                            return result
                 if progress is not None:
                     progress(rop, seq, len(resolved))
             return result
@@ -339,15 +362,10 @@ class Executor:
     ) -> bool:
         """Journal, act, verify and index one op; True when the batch must stop.
         ``folder``: the folder moved across disks this op belongs to, if any."""
-        try:
-            snap, snap_error = self._snapshot(rop), None
-        except _FAILURES as e:
-            snap, snap_error = self._empty_snapshot(), f"cannot read source: {e}"
-        rop.content_hash = snap["content_hash"]  # a rule picture's hash, for the act
-        op_id = self._journal_planned(result.batch_id, seq, rop, snap, origin, undo_of, label)
-        if snap_error is not None:
-            self._stop(result, op_id, rop, "failed", snap_error)
+        started = self._journal_op(seq, rop, origin, result, undo_of, label)
+        if started is None:
             return True
+        op_id, snap = started
         try:
             if folder is not None and rop is folder.final:
                 self._precheck(rop, folder.names)
@@ -357,6 +375,116 @@ class Executor:
         except _FAILURES as e:
             self._stop(result, op_id, rop, "failed", str(e))
             return True
+        return self._settle(rop, op_id, snap, result, undo_of, folder)
+
+    def _journal_op(
+        self,
+        seq: int,
+        rop: ResolvedOp,
+        origin: str,
+        result: BatchResult,
+        undo_of: str | None,
+        label: str | None,
+    ) -> tuple[int, dict] | None:
+        """Snapshot ``rop``'s source and journal it ``planned``: its row id and the
+        snapshot. None when the source cannot be read (the row is failed then, and the
+        batch must stop)."""
+        try:
+            snap, snap_error = self._snapshot(rop), None
+        except _FAILURES as e:
+            snap, snap_error = self._empty_snapshot(), f"cannot read source: {e}"
+        rop.content_hash = snap["content_hash"]  # a rule picture's hash, for the act
+        op_id = self._journal_planned(result.batch_id, seq, rop, snap, origin, undo_of, label)
+        if snap_error is not None:
+            self._stop(result, op_id, rop, "failed", snap_error)
+            return None
+        return op_id, snap
+
+    def _run_copy(
+        self,
+        seq: int,
+        rop: ResolvedOp,
+        origin: str,
+        result: BatchResult,
+        undo_of: str | None,
+        label: str | None,
+        copied: Callable[[ResolvedOp, int], None] | None,
+        folder: _FolderRun | None,
+    ) -> bool:
+        """A file copied across disks, as ``_run_op`` but in three steps, so a large
+        file does not hold up scans and other changes for as long as it is read:
+
+        1. under ``INDEX_LOCK``: snapshot, the journal row (``planned``, before any file
+           is written) and the pre-check;
+        2. without it: the source read once, hashed as it is copied to a temporary
+           name, and the copy read back (``primitives.copy_to_temp``). The batch is
+           running all along (undo and recovery leave it alone) and the temporary
+           file is in ``COPYING`` (scans leave it out);
+        3. under ``INDEX_LOCK`` again: the source must still be the very file the
+           snapshot saw (same object, size and modification time) and the name still
+           free; the hash is journaled, the copy renamed into place, verified and
+           indexed.
+
+        On failure the row is failed and the temporary file stays, named in the error
+        (Maintenance lists it; dam never deletes). A crash leaves the row ``planned``:
+        recovery finds the temporary file and asks for a manual check, as before."""
+        with INDEX_LOCK:
+            started = self._journal_op(seq, rop, origin, result, undo_of, label)
+            if started is None:
+                return True
+            op_id, snap = started
+            try:
+                self._precheck(rop)
+            except _FAILURES as e:
+                self._stop(result, op_id, rop, "failed", str(e))
+                return True
+        src, dst = self.paths.abs(rop.src), self.paths.abs(rop.dst)  # the pre-check took both
+        temp = primitives.temp_copy_path(dst)
+        with COPYING.writing(temp.name):
+            try:
+                sha256 = primitives.copy_to_temp(
+                    src,
+                    temp,
+                    stop=self.cancel_copies.is_set,
+                    on_bytes=None if copied is None else lambda n: copied(rop, n),
+                )
+            except _FAILURES as e:
+                with INDEX_LOCK:
+                    self._stop(result, op_id, rop, "failed", str(e))
+                return True
+            with INDEX_LOCK:
+                try:
+                    self._precheck(rop)
+                    self._same_source(rop, snap)
+                except _FAILURES as e:
+                    error = primitives.not_copied(src, dst, temp, e)
+                    self._stop(result, op_id, rop, "failed", error)
+                    return True
+                rop.content_hash = snap["content_hash"] = sha256
+                self._journal_hash(op_id, sha256)  # before the rename: recovery compares it
+                try:
+                    primitives.place_copy(src, temp, dst)
+                except _FAILURES as e:
+                    self._stop(result, op_id, rop, "failed", str(e))
+                    return True
+                return self._settle(rop, op_id, snap, result, undo_of, folder)
+
+    def _same_source(self, rop: ResolvedOp, snap: dict) -> None:
+        """The source of a copy across disks is still the file its snapshot saw."""
+        st = os.lstat(self.paths.abs(rop.src))
+        if (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns) != snap["ident"]:
+            raise OpFailed(f"{rop.src} changed while it was copied, so it is not moved")
+
+    def _settle(
+        self,
+        rop: ResolvedOp,
+        op_id: int,
+        snap: dict,
+        result: BatchResult,
+        undo_of: str | None,
+        folder: _FolderRun | None,
+    ) -> bool:
+        """Verify, journal and index an op that acted; True when the batch must stop."""
         try:
             self._verify(rop, snap)
         except _FAILURES as e:
@@ -364,7 +492,14 @@ class Executor:
             # For an undo op the revert was carried out: the original is undone too.
             self._stop(result, op_id, rop, "unverified", str(e), undo_of)
             return True
-        self._journal_finish(op_id, "done", reverts=undo_of, rop=rop)
+        try:
+            self._journal_finish(op_id, "done", reverts=undo_of, rop=rop)
+        except SQLAlchemyError as e:
+            # The change is on disk but its row stays ``planned``: stop and say so;
+            # recovery settles the row from the disk.
+            log.warning("could not record operation %s as done", op_id, exc_info=True)
+            result.failed, result.error = rop, not_recorded_message(rop, e)
+            return True
         result.done.append(rop)
         if rop.kind is OpKind.MKDIR and rop.made:
             self._record_made(result.batch_id, rop)
@@ -390,10 +525,12 @@ class Executor:
             if folder is not None:
                 folder.copied(rop, snap)
             try:
-                self._repoint_copy(rop)
+                repointed = self._repoint_copy(rop)
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
+            if repointed:  # the copy's final rename; a copy never indexed is left to a scan
+                self.own_changes.add([rop.dst])
         if rop.kind in _RELOCATE:
             try:
                 followed = None
@@ -411,9 +548,12 @@ class Executor:
             except SQLAlchemyError as e:
                 result.index_error = f"index update failed for {rop.dst}: {e}"
                 return True
+            moved = self.paths.join(rop.dst)
+            tree = moved.is_dir() and not moved.is_symlink()  # its rows moved along with it
+            self.own_changes.add([rop.src, rop.dst], tree=tree)
         return False
 
-    def _repoint_copy(self, rop: ResolvedOp) -> None:
+    def _repoint_copy(self, rop: ResolvedOp) -> bool:
         """The file was copied across disks: its index row now describes the copy, so
         everything given to it (tags, notes, collections, items, locks) follows. The row
         takes the copy's own Drive id if it has one; a row with a Drive id gets a fresh
@@ -421,11 +561,11 @@ class Executor:
         on disk and must not take the row back on the next scan."""
         rec = self.repo.by_path(rop.src)
         if rec is None:  # never indexed: the next scan finds the copy
-            return
+            return False
         if rop.method == primitives.PRESENT and self.repo.by_path(rop.dst) is not None:
             # the copy has its row (the earlier move's, which the owner's things follow);
             # the original's row goes to To Delete with the folder
-            return
+            return False
         new_id = read_drive_id(self.paths.abs(rop.dst))
         if new_id is None:
             local = rec.drive_id.startswith(LOCAL_ID_PREFIX)
@@ -433,6 +573,7 @@ class Executor:
         if new_id != rec.drive_id:
             self.repo.rekey(rec.drive_id, new_id)
         self.repo.update_path(rop.src, rop.dst)
+        return True
 
     def _follow_folder_rows(self, src: str, dst_root: str) -> list[list[str]]:
         """A folder was copied across disks to ``dst_root`` and goes to To Delete next:
@@ -619,6 +760,7 @@ class Executor:
             "is_file": False,
             "link": None,
             "content_hash": None,
+            "ident": None,  # a copy across disks: (dev, ino, size, mtime_ns) of its source
         }
 
     def _snapshot(self, rop: ResolvedOp) -> dict:
@@ -654,8 +796,12 @@ class Executor:
             is_file=stat.S_ISREG(st.st_mode),
             link=self._link_record(p) if stat.S_ISLNK(st.st_mode) else None,
         )
-        if rop.kind in (OpKind.PICTURE_BACK, OpKind.COPY_ACROSS):
+        if rop.kind is OpKind.PICTURE_BACK or (
+            rop.kind is OpKind.COPY_ACROSS and rop.method == primitives.PRESENT
+        ):
             snap["content_hash"] = primitives.file_sha256(p)
+        elif rop.kind is OpKind.COPY_ACROSS:  # hashed while it is copied (``_run_copy``)
+            snap["ident"] = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
         if rop.kind is OpKind.COPY:  # the row describes the new file, not the original's id
             snap["drive_id"] = None
         return snap
@@ -714,6 +860,14 @@ class Executor:
                 )
             )
             return res.inserted_primary_key[0]
+
+    def _journal_hash(self, op_id: int, sha256: str) -> None:
+        """A copy across disks: the content hash read while copying, journaled before
+        the copy is renamed into place."""
+        with write_tx(self.engine) as conn:
+            conn.execute(
+                update(operations).where(operations.c.id == op_id).values(content_hash=sha256)
+            )
 
     @staticmethod
     def _journal_dst(rop: ResolvedOp, snap: dict) -> str:
@@ -875,6 +1029,8 @@ class Executor:
     def _act(
         self, rop: ResolvedOp, copied: Callable[[ResolvedOp, int], None] | None = None
     ) -> None:
+        """Carry out ``rop``. A copy across disks that writes a file runs in
+        ``_run_copy`` instead, so ``copied`` is not used here."""
         if rop.kind is OpKind.PICTURE_TO_QUARANTINE:
             source, dst = Path(rop.src[len(ABS_TARGET) :]), self.paths.abs(rop.dst)
             if rop.method == primitives.PICTURE_COPY:
@@ -910,14 +1066,8 @@ class Executor:
                 )
             case OpKind.COPY_ACROSS if rop.method == primitives.PRESENT:
                 primitives.present_matches(self.paths.abs(rop.src), dst, self.cancel_copies.is_set)
-            case OpKind.COPY_ACROSS:
-                primitives.copy_across(
-                    self.paths.abs(rop.src),
-                    dst,
-                    rop.content_hash,
-                    stop=self.cancel_copies.is_set,
-                    on_bytes=None if copied is None else lambda n: copied(rop, n),
-                )
+            case OpKind.COPY_ACROSS:  # carried out by ``_run_copy``
+                raise OpFailed("A copy across disks is run in its own steps.")
             case OpKind.COPY:
                 if _outside_copy(rop):
                     primitives.copy_file(Path(rop.src[len(ABS_TARGET) :]), dst)
@@ -979,7 +1129,7 @@ class Executor:
                 ok = stat.S_ISREG(os.lstat(dst).st_mode) and os.path.lexists(
                     self.paths.abs(rop.src)
                 )
-            case OpKind.COPY_ACROSS:  # its content was checked by ``copy_across`` itself
+            case OpKind.COPY_ACROSS:  # its content was checked by ``copy_to_temp``
                 st = os.lstat(dst)
                 ok = (
                     stat.S_ISREG(st.st_mode)

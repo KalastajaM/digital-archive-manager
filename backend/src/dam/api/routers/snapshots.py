@@ -14,7 +14,7 @@ from starlette.concurrency import run_in_threadpool
 
 from dam.api.deps import SnapshotsDep
 from dam.api.schemas import SnapshotOut, SnapshotRestoreIn, SnapshotRestoreOut, SnapshotsOut
-from dam.services.errors import InvalidRequest, TooLarge
+from dam.errors import InvalidRequest, TooLarge
 from dam.snapshots import MAX_IMPORT_BYTES
 
 router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])

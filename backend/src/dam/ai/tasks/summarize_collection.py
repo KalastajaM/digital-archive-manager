@@ -19,9 +19,9 @@ from dam.ai import guard
 from dam.ai.tasks import Built, register
 from dam.ai.tasks._common import digest, language, rules_point_excluded, shorten
 from dam.collections.service import Collection
+from dam.errors import InvalidRequest
 from dam.index.repo import FileRecord
 from dam.ops.guards import fold_parts, is_under, parent
-from dam.services.errors import InvalidRequest
 
 if TYPE_CHECKING:
     from dam.app import App
