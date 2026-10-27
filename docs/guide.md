@@ -9,6 +9,7 @@
   - [Getting documents in](#getting-documents-in)
   - [New folders](#new-folders)
   - [Run it as its own app window](#run-it-as-its-own-app-window)
+  - [Signing the browser in](#signing-the-browser-in)
 - [The window](#the-window)
 - [Today](#today)
 - [Filing from the Inbox](#filing-from-the-inbox)
@@ -169,6 +170,14 @@ taskbar:
 - **Safari:** open the app and choose **File → Add to Dock…**.
 
 dam must be running for the window to work.
+
+### Signing the browser in
+
+Only the browser dam opened can use dam: `dam serve` opens it through a sign-in link,
+and the browser stays signed in for a year. If a page says **Not signed in** (another
+browser, or a bookmark opened before dam signed that browser in), run `dam open` while
+dam is running; it opens the app and signs that browser in. `dam open --print` prints
+the link instead, to paste into a browser yourself.
 
 ## The window
 

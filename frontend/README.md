@@ -48,6 +48,12 @@ anything that does not look local (see `backend/src/dam/api/security.py`):
 - **Sec-Fetch-Site** from the browser is `same-origin` (page and `/api` are both on
   port 5173), which passes. `cross-site` is always refused.
 - POSTs must send `Content-Type: application/json` (the client always does).
+- **Sign-in**: every `/api` request needs the cookie that the sign-in link sets
+  (`backend/src/dam/api/auth.py`). With `DAM_DEV_ORIGIN` set, `dam serve --no-open` prints
+  the link as `http://localhost:8765/auth?t=...`: open it once, it sets the cookie on
+  `localhost` (cookies do not depend on the port, so the page on port 5173 sends it too,
+  and the proxy passes it on) and redirects to `http://localhost:5173/`. `dam open --print`
+  prints the link again. Without the cookie the page shows "Not signed in".
 
 The dev server port is fixed at 5173 (`strictPort`) so it always matches `DAM_DEV_ORIGIN`.
 If the backend uses another port (`dam serve --port`), change the proxy target in
