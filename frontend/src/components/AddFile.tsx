@@ -9,6 +9,7 @@ import { errorText, useBrowse } from "../api/client";
 import { MarkIcons } from "./MarkIcons";
 import { visible } from "../text";
 import { useSearch } from "../screens/useSearch";
+import { parentOf } from "../paths";
 
 type Chosen = { drive_id: string; name: string };
 
@@ -23,7 +24,6 @@ type Props = {
   onDone: () => void;
 };
 
-const parentOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
 
 export function AddFile({ taken, takenMode = "hide", takenLabel = "already there", choose, onDone }: Props) {
   const id = useId();

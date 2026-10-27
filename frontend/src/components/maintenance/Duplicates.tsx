@@ -36,19 +36,15 @@ import { foldedLine, ResetButton } from "./ListChecks";
 import { QuickLookButton, ShowInBrowse } from "./ShowInBrowse";
 import { useMaintenanceJob } from "./useMaintenanceJob";
 import { useFold } from "./view";
+import { baseName, extOf } from "../../paths";
 
 
 const PLACE_LABEL: Record<DupFile["place"], string | null> = { numbered: null, inbox: "Inbox", other: null };
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const browseTo = (file: DupFile) =>
   `/browse?${new URLSearchParams({ path: folderOf(file.path), select: file.drive_id })}`;
 
 const qlFile = (f: DupFile): QLFile => ({ drive_id: f.drive_id, name: null, path: f.path, ext: extOf(f.path) });
-const extOf = (path: string) => {
-  const name = baseName(path);
-  return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null;
-};
 
 const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
 

@@ -29,11 +29,11 @@ import { ConfirmPlan, snapshotKey } from "./PlanPreview";
 import { useToast } from "./Toasts";
 import { Sheet } from "./ui/Sheet";
 import { useUndoConfirm } from "./UndoConfirm";
+import { baseName, parentOf } from "../paths";
 
 /** The folder as the UI names it: the archive's top level is "Archive". */
 export const folderLabel = (folder: string) => (folder ? visible(folder) : "Archive");
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** Why files may not be dropped into ``folder`` (null: they may). The server checks the
  * same rules; this only says so before the drop. */
@@ -146,7 +146,6 @@ function movedFolderName(ops: ResolvedOp[]): string | null {
   return src ? baseName(src) : null;
 }
 const VERB: Record<DropMode, string> = { move: "move", link: "link", copy: "copy" };
-const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
 /** A window event every move flow sends after an apply that changed something (and,
  * with no ids, after its Undo): a screen showing files it did not move itself (Browse,

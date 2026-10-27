@@ -65,8 +65,8 @@ import { isTrashKey, useTrash } from "../components/Trash";
 import { MarkIcons } from "../components/MarkIcons";
 import { useKeydown } from "../keyboard";
 import { readDragFiles, readDragItem, useDropTarget } from "../dnd";
+import { baseName } from "../paths";
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** One field, saved on blur or Enter (a checkbox as soon as it changes). */
 function EditableField({

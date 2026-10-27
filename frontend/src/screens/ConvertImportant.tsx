@@ -22,6 +22,7 @@ import {
 import { changeLines } from "../components/collectionText";
 import { type RefusedRoot } from "../components/FolderBrowser";
 import { FolderPicker } from "../components/FolderPicker";
+import { baseName } from "../paths";
 
 /** The converter refuses these destinations too (``_forbidden_destinations``): the
  * folder browser dims them like ``##. Ongoing`` and the quarantine. */
@@ -46,7 +47,6 @@ type View = Pick<CollectionChange, "problems" | "batch" | "ongoing_status">;
 type Done = { batchId: string; title: string; view: View };
 type Pending = { body: ImportantConvertBody; plan: ConvertPlan };
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** The preview's members: where each goes (its group) and the name its link keeps. */
 function PlanMembers({ plan }: { plan: ConvertPlan }) {
