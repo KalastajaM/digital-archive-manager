@@ -9,6 +9,7 @@ export const MAX_ROWS = 400;
 
 export type FolderTree = { roots: string[]; children: Map<string, string[]>; all: Set<string> };
 
+// Differs from paths.ts: returns null instead of "" when the path has no "/".
 const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : null);
 const nameOf = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const fold = (s: string) => s.normalize("NFC").toLocaleLowerCase();

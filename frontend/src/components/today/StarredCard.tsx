@@ -18,9 +18,10 @@ import { type QLFile, useQuickLook } from "../useQuickLook";
 import { Card } from "../ui/Card";
 import { IconButton } from "../ui/IconButton";
 import type { CardFrame } from "./frame";
+import { baseName } from "../../paths";
 
 const ICON = { size: 16, strokeWidth: 1.75 } as const;
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+// Differs from paths.ts: takes a bare name, so a "/" in the input is not stripped first.
 const extOf = (name: string) => (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null);
 const nameOf = (m: Member) => (m.path ? baseName(m.path) : m.drive_id);
 /** A member Quick Look and Open can act on: an indexed file that is there. */

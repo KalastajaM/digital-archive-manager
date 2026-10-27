@@ -33,6 +33,7 @@ import { pageSrcs, printImages } from "./print";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
+import { parentOf } from "../paths";
 
 // Shown with <img> from /raw (never an iframe: /raw is CSP-sandboxed).
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
@@ -613,7 +614,6 @@ function Preview({ file, windowButton, zoomControl, extraTools, boxTool }: Previ
   );
 }
 
-const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const extOfPath = (path: string) => {
   const name = path.slice(path.lastIndexOf("/") + 1);
   return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null;

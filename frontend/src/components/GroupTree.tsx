@@ -27,12 +27,12 @@ import { SaveState } from "./SavedNote";
 import { useAutoSave } from "./useAutoSave";
 import { MarkIcons, OmitMark } from "./MarkIcons";
 import { FitText } from "./FitText";
+import { baseName } from "../paths";
 
 /** The fold key of "Ungrouped". */
 export const UNGROUPED = "ungrouped";
 export type FoldKey = number | typeof UNGROUPED;
 
-export const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 export const memberName = (m: Member) => visible(m.path ? baseName(m.path) : m.drive_id);
 

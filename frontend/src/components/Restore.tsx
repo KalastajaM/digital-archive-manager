@@ -15,6 +15,7 @@ import { ConfirmPlan } from "./PlanPreview";
 import { undoAction, useBlockToastActions, useToast } from "./Toasts";
 import type { MenuEntry } from "./ui/Menu";
 import { useUndoConfirm } from "./UndoConfirm";
+import { baseName } from "../paths";
 
 export type RestoreTo = "original" | "inbox";
 /** Where a restore goes: also a chosen folder (a drag out of To Delete onto it). */
@@ -167,7 +168,6 @@ function whereSaid(where: RestoreWhere): string {
   return where.to === "folder" ? ` to ${folderLabel(where.folder)}` : "";
 }
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** "a.pdf" for one, "3 files" for several (the toast and Activity say the same). */
 function restoredWhat(moved: ResolvedOp[]): string {

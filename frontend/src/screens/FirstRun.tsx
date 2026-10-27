@@ -15,6 +15,7 @@ import { ArchiveSwitcher } from "../components/ArchiveSwitcher";
 import { initialLayout, LayoutEditor, LayoutPreviewList, layoutBody, type LayoutState, useDebouncedPreview } from "../components/LayoutEditor";
 import { plural } from "../format";
 
+// Differs from paths.ts: also splits on "\", strips trailing separators, returns null at the top and for a drive root.
 /** The parent folder of a path (works for / and \ paths); null at the top. */
 function parentOf(path: string): string | null {
   const trimmed = path.replace(/[\\/]+$/, "");
@@ -23,6 +24,7 @@ function parentOf(path: string): string | null {
   return trimmed.slice(0, cut);
 }
 
+// Differs from paths.ts: no shared joinPath; keeps the separator style of the base path.
 const joinPath = (base: string, name: string) => `${base.replace(/[\\/]+$/, "")}${base.includes("\\") ? "\\" : "/"}${name}`;
 
 /** What to do with the chosen folder: start a new archive in it (an empty folder, or one

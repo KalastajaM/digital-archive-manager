@@ -16,13 +16,13 @@ import { ConfirmPlan } from "./PlanPreview";
 import { undoAction, useBlockToastActions, useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { useUndoConfirm } from "./UndoConfirm";
+import { baseName } from "../paths";
 
 export const TRASH_LABEL = "Move to To Delete";
 export const TRASH_KEY = "⌘⌫";
 /** A second ⌘⌫ (or click) while a Trash call is in flight: said, never silent. */
 export const TRASH_BUSY = "Already moving…";
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** The Trash key: ⌘⌫ (or ⌘⌦), never held down, never while typing. Outside a dialog
  * only when none is open; with ``within`` (a dialog's own element, e.g. Quick Look)

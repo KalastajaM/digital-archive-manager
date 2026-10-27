@@ -10,11 +10,8 @@ import { visible } from "../../text";
 import { DialogStatus, InlineResults, useDialogStatus } from "../FileLaunch";
 import { FIT_LEVEL, FilePreview, type ZoomControl } from "../FilePreview";
 import { IconButton } from "../ui/IconButton";
+import { extOf } from "../../paths";
 
-const extOf = (path: string) => {
-  const name = path.slice(path.lastIndexOf("/") + 1);
-  return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null;
-};
 const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "Top level");
 
 function Side({
