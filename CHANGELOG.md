@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Open a file from Activity.** Each operation in Activity that names a file has a
+  **Show in Browse** icon that opens Browse at the file's folder with the file selected
+  and shown on the right. When the file has been moved, renamed or marked for deletion
+  since, the operation says where it is now and the icon leads there; a file deleted by
+  hand (or moved outside dam and not reconnected) reads "no longer in the archive" and
+  has no link.
 - **Keep ##. Ongoing and ##. Important up to date after a Google Drive restart.** When
   Google Drive for desktop restarts, the links and folders dam made there can come back
   with a new device number, and dam then left them alone for good ("looks different from

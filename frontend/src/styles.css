@@ -1065,6 +1065,9 @@ main:has(> .help) { padding: 0; min-height: 0; display: flex; }
 .journal-paths code { font-size: var(--fs-sm); }
 .journal-arrow, .journal-target { color: var(--muted); }
 .journal-undone .journal-paths { color: var(--muted); }
+.journal-now { flex-basis: 100%; padding-left: 100px; color: var(--muted); }
+.journal-now code { font-size: var(--fs-sm); }
+.journal-show { flex: none; margin-left: auto; }
 .journal-error { flex-basis: 100%; padding-left: 100px; color: var(--red-text); }
 
 /* Recovery: a banner while something is interrupted, a quiet card once it ran */

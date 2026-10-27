@@ -759,3 +759,76 @@ describe("Activity search and filters", () => {
     expect(whenSince("", now)).toBeUndefined();
   });
 });
+
+describe("Activity: where each file is now", () => {
+  const now = (state: "here" | "moved" | "to_delete" | "missing", path: string | null, extra = {}) => ({
+    state,
+    path,
+    drive_id: path === null ? null : "d1",
+    is_dir: false,
+    ...extra,
+  });
+  const WHERE = batch("bw", [
+    row("bw", { id: 11, dst: "10. Financial/a.pdf", file_now: now("here", "10. Financial/a.pdf") }),
+    row("bw", { id: 12, seq: 1, dst: "10. Financial/b.pdf", file_now: now("moved", "13. Taxes/2026/b renamed.pdf") }),
+    row("bw", { id: 13, seq: 2, dst: "10. Financial/c.pdf", file_now: now("to_delete", "##. To Delete/10. Financial/c.pdf") }),
+    row("bw", { id: 14, seq: 3, dst: "10. Financial/d.pdf", file_now: now("missing", null) }),
+    row("bw", { id: 15, seq: 4, kind: "move", src: "Old", dst: "10. Financial/Old", is_file: false, file_now: now("here", "10. Financial/Old", { is_dir: true, drive_id: "f1" }) }),
+  ]);
+  const opRow = (path: string) => screen.getByText(path).closest("li") as HTMLElement;
+
+  async function open() {
+    api({ "GET /api/activity": { body: [WHERE] } });
+    renderWithProviders(<Activity />);
+    await screen.findByRole("article", { name: "Batch bw" });
+    await expandAll();
+    await userEvent.setup().click(screen.getByText("5 moves"));
+  }
+
+  it("a file still where the op left it has a Show in Browse link to its folder, selected", async () => {
+    await open();
+    const user = userEvent.setup();
+    const li = opRow("10. Financial/a.pdf");
+    expect(li).not.toHaveTextContent(/now|no longer/);
+    await user.click(within(li).getByRole("button", { name: "Show in Browse" }));
+    expect(screen.getByLabelText("location").textContent).toBe("/browse?path=10.+Financial&select=d1");
+  });
+
+  it("a file moved since says where it is now and links there", async () => {
+    await open();
+    const user = userEvent.setup();
+    const li = opRow("10. Financial/b.pdf");
+    expect(li).toHaveTextContent("now at 13. Taxes/2026/b renamed.pdf");
+    await user.click(within(li).getByRole("button", { name: "Show in Browse" }));
+    expect(screen.getByLabelText("location").textContent).toBe("/browse?path=13.+Taxes%2F2026&select=d1");
+  });
+
+  it("a file marked for deletion since says so and still links to it", async () => {
+    await open();
+    const li = opRow("10. Financial/c.pdf");
+    expect(li).toHaveTextContent("marked for deletion since, now in ##. To Delete/10. Financial");
+    expect(within(li).getByRole("button", { name: "Show in Browse" })).toBeInTheDocument();
+  });
+
+  it("a file deleted by hand says it is no longer in the archive, with no link", async () => {
+    await open();
+    const li = opRow("10. Financial/d.pdf");
+    expect(li).toHaveTextContent("no longer in the archive");
+    expect(within(li).queryByRole("button", { name: "Show in Browse" })).not.toBeInTheDocument();
+  });
+
+  it("a folder opens in Browse itself", async () => {
+    await open();
+    const user = userEvent.setup();
+    await user.click(within(opRow("10. Financial/Old")).getByRole("button", { name: "Show in Browse" }));
+    expect(screen.getByLabelText("location").textContent).toBe("/browse?path=10.+Financial%2FOld");
+  });
+
+  it("ops that name no file have no link", async () => {
+    api();
+    renderWithProviders(<Activity />);
+    await screen.findByRole("article", { name: "Batch b1" });
+    await expandAll();
+    expect(within(batchArticle("b1")).queryByRole("button", { name: "Show in Browse" })).not.toBeInTheDocument();
+  });
+});

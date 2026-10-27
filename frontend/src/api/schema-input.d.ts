@@ -5188,6 +5188,23 @@ export interface components {
             /** Note */
             note: string;
         };
+        /**
+         * FileNowOut
+         * @description Where the file an Activity op names is now, from the index.
+         */
+        FileNowOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "here" | "moved" | "to_delete" | "missing";
+            /** Path */
+            path: string | null;
+            /** Drive Id */
+            drive_id: string | null;
+            /** Is Dir */
+            is_dir: boolean;
+        };
         /** FileRecordOut */
         FileRecordOut: {
             /** Drive Id */
@@ -5822,6 +5839,7 @@ export interface components {
              * @default []
              */
             marks?: ("starred" | "important")[];
+            file_now?: components["schemas"]["FileNowOut"] | null;
         };
         /**
          * LabelClashesOut
