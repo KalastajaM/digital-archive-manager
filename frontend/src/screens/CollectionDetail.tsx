@@ -18,6 +18,7 @@
 import { Ellipsis, Eye, FolderOpen, FolderPlus, Layers, Share, Sparkles } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useStyle } from "../appearance";
 import {
   archiveKey,
   type CollectionAction,
@@ -761,6 +762,11 @@ export default function CollectionDetail({
   const local = useLocalToday();
   const today = fixed ?? local;
   const split = useSplitWidth(archiveKey("dam.collection.inspectorwidth"), { min: 230, max: Infinity, initial: 380, unit: "px", edge: "end" });
+  // The New look: under ~900px of page the side panel leaves the row and opens over the list
+  // from the "File details" button; under ~760px Show folder and Export fold into the ⋯ menu.
+  const [look] = useStyle();
+  const isNew = look === "new";
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const query = useCollection(id);
   // where a change of this collection shows: ! Important publishes to its own folder
   const rootName = query.data?.kind === "important" ? "##. Important" : "##. Ongoing";
@@ -1365,6 +1371,12 @@ export default function CollectionDetail({
       }
     : undefined;
 
+  // New, under ~760px: what the header lets go of is in the ⋯ menu (a built-in collection has no menu and keeps its buttons)
+  const moreEntries: MenuEntry[] = isNew
+    ? [{ label: "Show folder", onSelect: () => setFinder(true) }, { label: "Export…", onSelect: () => setExporting(true) }, "separator", ...more]
+    : more;
+  const foldable = isNew && !builtin ? "hdr-wide" : undefined;
+
   const parentName = (g: Group) => (g.parent_id === null ? null : c.groups.find((x) => x.id === g.parent_id)?.name ?? null);
 
   return (
@@ -1379,11 +1391,22 @@ export default function CollectionDetail({
           onEditTitle={builtin ? undefined : () => !busy && setRenaming(true)}
           actions={
             <>
+              {isNew && (
+                <button
+                  type="button"
+                  className="details-button"
+                  aria-expanded={detailsOpen}
+                  title="Show the selected file"
+                  onClick={() => setDetailsOpen((o) => !o)}
+                >
+                  File details
+                </button>
+              )}
               {builtin !== "starred" && (
                 <IconButton icon={<FolderPlus {...ICON} />} label="New group" tip="New group: sort files into groups" disabled={addBusy} onClick={() => void newGroup()} />
               )}
               <span className="menu-wrap" ref={finderRef}>
-                <IconButton icon={<FolderOpen {...ICON} />} label={showInLabel()} pressed={finder} onClick={() => setFinder((f) => !f)} />
+                <IconButton icon={<FolderOpen {...ICON} />} label={showInLabel()} pressed={finder} className={foldable} onClick={() => setFinder((f) => !f)} />
                 {finder && (
                   <div className="popover finder-popover" role="group" aria-label={showInLabel()}>
                     {builtin ? (
@@ -1422,12 +1445,12 @@ export default function CollectionDetail({
                   </div>
                 )}
               </span>
-              <IconButton icon={<Share {...ICON} />} label="Export…" onClick={() => setExporting(true)} />
-              {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={more} align="end" />}
+              <IconButton icon={<Share {...ICON} />} label="Export…" className={foldable} onClick={() => setExporting(true)} />
+              {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={moreEntries} align="end" />}
             </>
           }
         />
-      <div className="collection-cols" ref={split.hostRef} style={split.hostStyle}>
+      <div className="collection-cols" ref={split.hostRef} style={split.hostStyle} data-details={isNew && detailsOpen ? "open" : undefined}>
       <div className="collection-main">
         <div className="collection-body">
           {banner}
@@ -1498,6 +1521,15 @@ export default function CollectionDetail({
         </div>
       </div>
       <Splitter split={split} label="Resize the inspector" />
+      {isNew && detailsOpen && (
+        // narrow page: the panel opens over the list, with the file's actions on top of it
+        <>
+          <div className="details-scrim" aria-hidden="true" onClick={() => setDetailsOpen(false)} />
+          <div className="inspector-bar" role="toolbar" aria-label="File actions">
+            {fileBar}
+          </div>
+        </>
+      )}
       {browsed ? (
         <EntryInspector entry={browsed} busy={busy} onQuickLook={quickLook.open} ai={filingAI} />
       ) : (

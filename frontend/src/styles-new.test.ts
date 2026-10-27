@@ -100,3 +100,38 @@ describe("styles-new.css: Browse", () => {
     expect(plain).toMatch(/\.drop-mode-note \{ display: block;/);
   });
 });
+
+describe("styles-new.css: Collections and Trays", () => {
+  it("makes the collection page a container and folds in the agreed order", () => {
+    expect(plain).toMatch(/main:has\(> \.collection-page\) \{ container: coll \/ inline-size; \}/);
+    const order = ["900px", "760px"].map((w) => plain.indexOf(`@container coll (max-width: ${w})`));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect(order[0]).toBeLessThan(order[1]);
+    expect(plain).toMatch(/@container coll \(max-width: 760px\) \{\s*\[data-style="new"\] \.collection-toolbar \.hdr-wide \{ display: none; \}/);
+  });
+
+  it("keeps the collection's list and side panel side by side where Classic stacks them at 900px", () => {
+    const block = plain.slice(plain.indexOf('@media (max-width: 900px) {\n  [data-style="new"] .app:has(.collection-page)')).split(/\n\}\n/)[0];
+    expect(block).toContain('[data-style="new"] .app:has(.collection-page) .content');
+    expect(block).not.toMatch(/grid-template-columns: 1fr;/);
+    expect(plain).toMatch(/\.collection-cols > \.splitter \{ display: block; \}/);
+  });
+
+  it("keeps the header on one line: the subtitle shrinks before the title", () => {
+    expect(plain).toMatch(/\.collection-toolbar \{ flex-wrap: nowrap;/);
+    expect(plain).toMatch(/\.collection-toolbar \.toolbar-subtitle \{ flex: 0 100 auto;/);
+  });
+
+  it("makes the trays a container, lists the items with the calm selection and keeps the panes side by side", () => {
+    expect(plain).toMatch(/main:has\(> \.trays\) \{ container: trays \/ inline-size; \}/);
+    expect(plain).toMatch(/\.tray-items > li\[aria-current="true"\] \{\s*background: var\(--selected\);/);
+    expect(plain).toMatch(/\.trays-main \{ grid-template-columns: var\(--split\) minmax\(0, 1fr\); \}/);
+    expect(plain).toMatch(/\.trays-main > \.splitter \{ display: block; \}/);
+  });
+
+  it("puts the document beside the item's details when the item's pane is wide", () => {
+    expect(plain).toMatch(/\.trays-detail \{ container: tdetail \/ inline-size;/);
+    expect(plain).toMatch(/@container tdetail \(min-width: \d+px\)/);
+    expect(plain).toMatch(/\[data-block="preview"\] \{ grid-column: 2;/);
+  });
+});

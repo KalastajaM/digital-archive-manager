@@ -61,6 +61,21 @@ All notable changes are listed here. The format follows
   choice of a drop has each way's description under its name and the line "Holding ⌥ while
   dropping picks Copy." on its own. Everything Browse did before is still there. Classic is
   unchanged.
+- **The New look: Collections and Trays.** In New a collection's header is one line: the
+  title shortens with an ellipsis (the count after it goes first), and the buttons keep
+  their place. The groups and files are one bordered card with file names in the
+  fixed-width font and the status pills at the row end, and the note and checklist sit side
+  by side. The selected file's panel keeps its draggable divider, and the two columns never
+  stack. When the page is under about 900 px wide the panel moves behind a **File details**
+  button that opens it over the list, with the file's actions on top; under about 760 px
+  **Show folder** and **Export...** move into the **...** menu. Starred and Important are
+  the same page. The trays show the tray's name, count, **Add file** and **Open / Done** as
+  the list's header, with a calm fill on the chosen item, names that end in an ellipsis and
+  amounts and dates in the fixed-width font. The item has its fields (Check by, Waiting for,
+  Mark done or Mark paid) in one panel, a title of up to two lines, and, when the window is
+  wide enough, the document beside the details. The divider between the list and the item
+  is kept as before and the panes never stack. Everything the collections and trays did
+  before is still there. Classic is unchanged.
 - **Open a file from Activity.** Each operation in Activity that names a file has a
   **Show in Browse** icon that opens Browse at the file's folder with the file selected
   and shown on the right. When the file has been moved, renamed or marked for deletion
