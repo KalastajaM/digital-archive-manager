@@ -2462,4 +2462,6 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .look-card[data-look="new"] .look-preview-title { background: #17191e; }
 .look-card[data-look="new"] .look-preview-card { border-color: #e3e1da; border-radius: 6px; }
 .look-card[data-look="new"] .look-preview-bar { background: #234a7a; }
+.layout-reset { margin-top: var(--sp-5); }
+.layout-reset h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); font-weight: 600; }
 .look-choice + h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); font-weight: 600; }

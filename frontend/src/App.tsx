@@ -2,6 +2,7 @@ import { CircleAlert, FileQuestion, KeyRound } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { errorText, NOT_SIGNED_IN, type Status, useConfigured, useSignedOut, useStatus } from "./api/client";
+import { useStyle } from "./appearance";
 import { useIndexErrorsSheet } from "./components/IndexErrors";
 import { RecoveryPanel } from "./components/Recovery";
 import { hasBand } from "./components/archivePalette";
@@ -35,6 +36,7 @@ const Trays = lazy(() => import("./screens/Trays"));
  * line is a button: it opens the Index sheet (totals, files that could not be read). */
 function StatusBadge({ status }: { status: Status }) {
   const sheet = useIndexErrorsSheet();
+  const [look] = useStyle();
   const waiting = status.pending + status.cloud_pending;
   const parts: string[] = [`${groupDigits(status.inbox_count)} in inbox`, `${groupDigits(status.indexed)} searchable`];
   const page1 = status.page1;
@@ -47,7 +49,8 @@ function StatusBadge({ status }: { status: Status }) {
   if (status.rule_errors.length > 0) parts.push(`${status.rule_errors.length} rule file errors`);
   if (status.tray_errors.length > 0) parts.push(`${status.tray_errors.length} tray file errors`);
   const problems = [...status.rule_errors, ...status.tray_errors];
-  const title = problems.map((r) => visible(`${r.file}: ${r.message}`)).join("\n") || undefined;
+  // New: the icon rail shrinks the line to a dot, so the whole line is its tooltip
+  const title = problems.map((r) => visible(`${r.file}: ${r.message}`)).join("\n") || (look === "new" ? parts.join(" · ") : undefined);
   const attention = status.errors > 0 || problems.length > 0;
   return (
     <>

@@ -1,7 +1,7 @@
 /** Browse in the New look: the extra controls the stylesheet shows when the room is short
  * (the "View" menu per pane, the "More" menu, the Details button, the L / R tabs) and the
  * remembered divider between two panes. Classic renders none of them. */
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -22,9 +22,9 @@ const entry = (name: string, id: string, is_dir = false): DirEntry => ({
   marks: [],
 });
 
-function setup(url: string) {
+function setup(url: string, listing: DirEntry[] = [entry("Money", "d1", true), entry("a.pdf", "f1")]) {
   mockFetch({
-    "GET /api/browse": { body: [entry("Money", "d1", true), entry("a.pdf", "f1")] },
+    "GET /api/browse": { body: listing },
     "GET /api/collections": { body: [] },
     "GET /api/activity": { body: [] },
     "GET /api/status": { body: { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } } },
@@ -134,5 +134,68 @@ describe("Browse in New, two panes", () => {
     await screen.findAllByText("a.pdf");
     expect(screen.queryByRole("separator", { name: "Resize the two panes" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Panes" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Browse in New, a long path", () => {
+  const widthOf = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+  const clientOf = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  afterEach(() => {
+    if (widthOf) Object.defineProperty(HTMLElement.prototype, "offsetWidth", widthOf);
+    if (clientOf) Object.defineProperty(HTMLElement.prototype, "clientWidth", clientOf);
+  });
+  /** Every step measures 100px; the path has room for ``room`` px. */
+  const squeeze = (room: number) => {
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 100 });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains("breadcrumb") ? room : 0;
+      },
+    });
+  };
+
+  it("folds the parents that do not fit into one menu that names them and goes there", async () => {
+    document.documentElement.dataset.style = "new";
+    squeeze(330); // Archive, A, B, C is 400px: "..., B, C" fits
+    const { user } = setup("/browse?path=A%2FB%2FC", [entry("a.pdf", "f1")]);
+    await screen.findByText("a.pdf");
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(crumbs).getByRole("link", { name: "B" })).toBeInTheDocument();
+    expect(crumbs.querySelector("[aria-current=page]")).toHaveTextContent("C");
+    expect(within(crumbs).queryByRole("link", { name: "A" })).not.toBeInTheDocument();
+    await user.click(within(crumbs).getByRole("button", { name: "Parent folders" }));
+    const menu = await screen.findByRole("menu", { name: "Parent folders" });
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Archive", "A"]);
+    await user.click(within(menu).getByRole("menuitem", { name: "A" }));
+    await waitFor(() =>
+      expect(screen.getByRole("navigation", { name: "Breadcrumb" }).querySelector("[aria-current=page]")).toHaveTextContent("A"),
+    );
+  });
+
+  it("keeps only the folder you are in when nothing else fits, and everything when it all fits", async () => {
+    document.documentElement.dataset.style = "new";
+    squeeze(120);
+    setup("/browse?path=A%2FB%2FC", [entry("a.pdf", "f1")]);
+    await screen.findByText("a.pdf");
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(crumbs).queryAllByRole("link")).toHaveLength(0);
+    expect(within(crumbs).getByRole("button", { name: "Parent folders" })).toBeInTheDocument();
+    cleanup();
+    squeeze(900);
+    setup("/browse?path=A%2FB%2FC", [entry("a.pdf", "f1")]);
+    await screen.findByText("a.pdf");
+    const all = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(all).getAllByRole("link")).toHaveLength(3);
+    expect(within(all).queryByRole("button", { name: "Parent folders" })).not.toBeInTheDocument();
+  });
+
+  it("Classic never folds the path", async () => {
+    squeeze(120);
+    setup("/browse?path=A%2FB%2FC", [entry("a.pdf", "f1")]);
+    await screen.findByText("a.pdf");
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(crumbs).getAllByRole("link")).toHaveLength(3);
+    expect(within(crumbs).queryByRole("button")).not.toBeInTheDocument();
   });
 });

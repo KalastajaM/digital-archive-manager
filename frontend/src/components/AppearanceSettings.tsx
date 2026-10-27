@@ -1,6 +1,8 @@
 /** Settings → Appearance: Light, Dark, or Auto to follow the system. It applies at once,
  * to every archive, in this browser (see ``appearance.ts``). */
 import { type Appearance, type Look, useAppearance, useStyle } from "../appearance";
+import { forgetLayout, restoreLayout } from "../layoutMemory";
+import { undoAction, useToast } from "./Toasts";
 import { Segmented } from "./ui/Segmented";
 
 const OPTIONS: { value: Appearance; label: string }[] = [
@@ -42,6 +44,27 @@ function LookChoice() {
   );
 }
 
+function LayoutReset() {
+  const toast = useToast();
+  const reset = () => {
+    const removed = forgetLayout();
+    toast({
+      kind: "info",
+      text: Object.keys(removed).length > 0 ? "Layout reset: the panes and Today are back to their default arrangement." : "Nothing to reset: the layout is already the default.",
+      action: Object.keys(removed).length > 0 ? undoAction(() => restoreLayout(removed)) : undefined,
+    });
+  };
+  return (
+    <div className="layout-reset">
+      <h4>Layout</h4>
+      <p className="hint">Pane widths you drag and the order of the cards on Today are remembered in this browser, per screen.</p>
+      <button type="button" onClick={reset}>
+        Reset layout
+      </button>
+    </div>
+  );
+}
+
 export function AppearanceSettings() {
   const [choice, setChoice] = useAppearance();
   return (
@@ -51,6 +74,7 @@ export function AppearanceSettings() {
       <h4>Theme</h4>
       <p className="hint">Auto follows your system setting. This applies to every archive, in this browser.</p>
       <Segmented options={OPTIONS} value={choice} onChange={setChoice} ariaLabel="Appearance" />
+      <LayoutReset />
     </section>
   );
 }

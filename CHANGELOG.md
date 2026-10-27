@@ -8,6 +8,9 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Reset layout.** **Settings, Appearance, Layout, Reset layout** forgets every pane width
+  you dragged (Browse, Inbox, Trays, collections, for every archive) and the order and
+  folds of the cards on Today, in this browser. A message says it is done and has Undo.
 - **Open a folder from Activity.** Operations in Activity that name a folder (a folder moved
   on one disk or to another disk, renamed, made, or sent to To Delete) now have the same
   **Show in Browse** icon as files: Browse opens at that folder with its contents shown.
@@ -260,6 +263,13 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **New look, Browse.** A path too long for its pane now folds its parent folders into one
+  **...** menu ("... > Parent > Current"); each folder in the menu opens that folder, and
+  accepts a drop like the path does. The details panel now stays beside the list in a
+  window down to about 1000 px wide (it used to leave at 1350 px or so): it gives way only
+  when the list would get less than 420 px or the panel less than 340 px.
+- **New look, narrow window.** In the icon rail the status line is a dot; hovering it now
+  shows the whole line ("7 in inbox, 15 searchable") as a tooltip.
 - **Large folders scroll smoothly in Browse.** A folder, Files view or search with
   hundreds or thousands of entries now builds only the rows near what you see, so
   opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
