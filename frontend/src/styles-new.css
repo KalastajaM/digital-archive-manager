@@ -552,3 +552,189 @@
 }
 /* the proof's paths are whole paths: they wrap (at slashes and spaces) instead of running off */
 [data-style="new"] .replay-path { white-space: normal; text-align: left; overflow-wrap: anywhere; }
+
+/* ==== Today ===============================================================================
+ * The same cards, calmer: hairline cards, figures in the fixed-width face, status pills for
+ * Due / Overdue. The two card columns are cards, not panes, so they may reflow: Classic's
+ * stacking at 900px is undone here and the columns fold into one only when Today itself
+ * (the container below) is narrower than 560px. Buttons, tags and amounts never wrap. */
+[data-style="new"] main:has(> .today) { container: today / inline-size; padding: var(--sp-6) 40px 48px; }
+[data-style="new"] .today { max-width: 1120px; margin: 0 auto; }
+[data-style="new"] .today-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sp-3);
+  align-items: end;
+  margin-bottom: var(--sp-5);
+}
+[data-style="new"] .today-date { grid-column: 1; grid-row: 1; margin: 0 0 4px; font-size: var(--fs-sm); font-weight: 500; color: var(--muted); }
+[data-style="new"] .today-header h1 { grid-column: 1; grid-row: 2; font-size: 26px; font-weight: 600; letter-spacing: -0.015em; }
+[data-style="new"] .today-hero { grid-column: 1; grid-row: 3; margin: 4px 0 0; font-size: var(--fs-md); font-weight: 400; color: var(--text-2); }
+[data-style="new"] .today-reset { grid-column: 2; grid-row: 2 / 4; align-self: end; margin: 0; min-height: 28px; padding: 3px 12px; border: 1px solid var(--border); background: var(--panel); font-size: var(--fs-md); color: var(--text-2); }
+[data-style="new"] .today-reset:hover:not(:disabled) { background: var(--panel-2); }
+[data-style="new"] .today > .banner { margin-bottom: var(--sp-3); }
+
+[data-style="new"] .today-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--sp-5); }
+[data-style="new"] .today-col { gap: var(--sp-5); }
+@container today (max-width: 560px) {
+  [data-style="new"] .today-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+[data-style="new"] .today-card { padding: 14px 16px 10px; border-radius: var(--r-xl); }
+[data-style="new"] .today-card-compact { padding-bottom: 14px; }
+[data-style="new"] .today-card .card-header { margin-bottom: var(--sp-2); }
+[data-style="new"] .today-card .card-header h3 { font-size: var(--fs-lg); font-weight: 600; }
+[data-style="new"] .today-card .card-icon { color: var(--muted); }
+[data-style="new"] .today-card .card-actions { flex: none; }
+[data-style="new"] .today-slot[data-drop]::before,
+[data-style="new"] .today-col[data-drop="end"]::after { background: var(--accent); }
+[data-style="new"] .today-grid[data-dragging] .today-col:empty { border-radius: var(--r-xl); }
+
+/* The big figure and the line beside it */
+[data-style="new"] .today-big { font-family: var(--font-mono); font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+[data-style="new"] .today-sub { font-size: var(--fs-md); }
+
+/* Rows: hairline between, name first, status pill and amount at the side */
+[data-style="new"] .today-row,
+[data-style="new"] .found-row,
+[data-style="new"] .today-list li { border-top-width: 1px; border-top-color: var(--hairline); }
+[data-style="new"] .today-more { border-top-width: 1px; }
+[data-style="new"] .today-row { padding: 10px 0; }
+[data-style="new"] .today-row-title { font-weight: 500; }
+[data-style="new"] .today-row-sub { font-size: var(--fs-sm); }
+[data-style="new"] .today-row-side { min-width: 0; }
+[data-style="new"] .today-amount,
+[data-style="new"] .today-age { white-space: nowrap; }
+[data-style="new"] .today-amount { font-size: var(--fs-md); }
+[data-style="new"] .attention-fields { font-family: var(--font-mono); font-size: var(--fs-sm); }
+/* a field moves to the next line as a whole, so an IBAN or a reference breaks at its spaces
+   first and never runs under the amount */
+[data-style="new"] .attention-fields > span { display: inline-block; max-width: 100%; }
+[data-style="new"] .attention-note { font-style: normal; color: var(--muted-2); }
+[data-style="new"] .today-row .attention-actions { gap: 6px; }
+[data-style="new"] .today-row .attention-actions button { min-height: 24px; padding: 1px 8px; font-size: var(--fs-sm); }
+[data-style="new"] .round-check { border-color: var(--border-strong); }
+[data-style="new"] .round-check-red { border-color: var(--red); }
+[data-style="new"] .round-check-orange { border-color: var(--orange); }
+[data-style="new"] .round-check:checked::after { border-color: var(--on-accent); }
+[data-style="new"] .found-row { gap: var(--sp-3); }
+[data-style="new"] .found-row .today-row-title { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; }
+[data-style="new"] .found-row .today-row-sub { font-family: var(--font-mono); font-size: 11.5px; }
+[data-style="new"] .found-row button { flex: none; }
+[data-style="new"] .today-list a { font-weight: 500; }
+[data-style="new"] .starred-list a, [data-style="new"] .starred-name { font-family: var(--font-mono); font-size: 12.5px; }
+
+/* The inbox's age bar: a thin rounded track with its legend in mono */
+[data-style="new"] .age-bar-track { height: 8px; border-radius: 4px; }
+[data-style="new"] .age-bar-legend { font-family: var(--font-mono); font-size: var(--fs-xs); }
+[data-style="new"] .today-subhead { font-size: var(--fs-sm); font-weight: 600; color: var(--muted-2); letter-spacing: 0.02em; }
+
+/* ==== Pay mode: the large barcode, full window =============================================
+ * The sheet fills the window: a header band, the bill's title and amount, one card per
+ * value with its Copy (values on one line, in the fixed-width face except the payee; the
+ * cards wrap as whole cards), the barcode on white paper, three steps and a footer band.
+ * The barcode itself is drawn exactly as in Classic. */
+[data-style="new"] dialog.sheet.barcode-sheet {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+}
+[data-style="new"] dialog.sheet.barcode-sheet[open] { animation: none; }
+[data-style="new"] .barcode-sheet .sheet-title {
+  margin: 0;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--panel-2);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+[data-style="new"] .barcode-sheet .sheet-body { padding: 32px 36px 40px; }
+[data-style="new"] .barcode-sheet .sheet-body > * { max-width: 1180px; margin-left: auto; margin-right: auto; }
+[data-style="new"] .barcode-sheet .sheet-body > * + * { margin-top: 28px; }
+[data-style="new"] .barcode-sheet .sheet-body > .hint { margin-top: 12px; }
+[data-style="new"] .barcode-sheet .sheet-footer {
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 14px 28px;
+  border-top: 1px solid var(--hairline);
+  background: var(--panel-2);
+}
+[data-style="new"] .barcode-sheet .sheet-footer button { min-height: 36px; padding: 0 16px; }
+
+[data-style="new"] .pay-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+[data-style="new"] .pay-title { margin: 0; color: var(--text); min-width: 0; font-size: 30px; font-weight: 600; letter-spacing: -0.015em; overflow-wrap: anywhere; }
+[data-style="new"] .pay-total { font-family: var(--font-mono); font-size: 40px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; }
+
+[data-style="new"] .pay-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+[data-style="new"] .pay-fact {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 -1px -1px 0;
+  padding: 16px 18px;
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+[data-style="new"] .pay-fact dt { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
+[data-style="new"] .pay-fact dd { font-size: 22px; font-weight: 500; line-height: 1.25; white-space: nowrap; overflow-wrap: normal; }
+[data-style="new"] .pay-fact[data-kind="iban"] dd,
+[data-style="new"] .pay-fact[data-kind="reference"] dd,
+[data-style="new"] .pay-fact[data-kind="money"] dd,
+[data-style="new"] .pay-fact[data-kind="date"] dd { font-family: var(--font-mono); }
+[data-style="new"] .pay-fact .copy-compact {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+[data-style="new"] .pay-fact .copy-compact:hover:not(:disabled) { background: var(--panel-2); border-color: var(--border-strong); text-decoration: none; }
+[data-style="new"] .pay-fact .copied { white-space: nowrap; }
+
+[data-style="new"] .barcode-full { padding: 0; border: 1px solid var(--hairline); border-radius: 12px; }
+[data-style="new"] .barcode-full-paper { min-width: 100%; box-sizing: border-box; padding: var(--sp-5) 0 var(--sp-4); }
+[data-style="new"] .barcode-full-paper .barcode-code { font-size: 17px; letter-spacing: 0.06em; }
+
+[data-style="new"] .pay-steps {
+  counter-reset: pay-step;
+  list-style: none;
+  margin-bottom: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+[data-style="new"] .pay-steps li { counter-increment: pay-step; display: flex; gap: 12px; align-items: flex-start; line-height: 1.5; color: var(--text-2); }
+[data-style="new"] .pay-steps li::before {
+  content: counter(pay-step);
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--selected);
+  color: var(--accent-hover);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

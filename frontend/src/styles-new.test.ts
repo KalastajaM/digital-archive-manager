@@ -60,3 +60,16 @@ describe("styles-new.css: the Inbox, Draw a box and the rule sheet", () => {
     expect(plain).toMatch(/\.proof-mini \{\s*display: flex;/);
   });
 });
+
+describe("styles-new.css: Today and Pay mode", () => {
+  it("keeps Today's two card columns side by side where Classic stacks them, folding by Today's own width", () => {
+    expect(plain).toMatch(/main:has\(> \.today\) \{ container: today \/ inline-size;/);
+    expect(plain).toMatch(/\[data-style="new"\] \.today-grid \{ grid-template-columns: minmax\(0, 1\.15fr\) minmax\(0, 1fr\);/);
+    expect(plain).toMatch(/@container today \(max-width: 560px\)/);
+  });
+
+  it("never wraps a value in Pay mode: the cards wrap, not their values", () => {
+    expect(plain).toMatch(/\.pay-fact dd \{[^}]*white-space: nowrap/);
+    expect(plain).toMatch(/\.pay-facts \{[^}]*flex-wrap: wrap/);
+  });
+});
