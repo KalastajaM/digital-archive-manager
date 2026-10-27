@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Open a file from Activity.** Each operation in Activity that names a file has a
+  **Show in Browse** icon that opens Browse at the file's folder with the file selected
+  and shown on the right. When the file has been moved, renamed or marked for deletion
+  since, the operation says where it is now and the icon leads there; a file deleted by
+  hand (or moved outside dam and not reconnected) reads "no longer in the archive" and
+  has no link.
 - **Reconnect files moved outside dam.** A file without a Google Drive id (on Windows and
   Linux, every file) that you renamed or moved in Finder or File Explorer used to lose its
   tags, notes, collections, tray items and the rest: dam saw a new file and marked the

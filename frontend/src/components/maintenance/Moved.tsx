@@ -13,8 +13,8 @@ import { undoAction, useBlockToastActions, useToast } from "../Toasts";
 import { Sheet } from "../ui/Sheet";
 import { Tag } from "../ui/Tag";
 import { IgnoreButton, useIgnore } from "./Ignore";
-import { browseTo, Capped, CheckCard, ListHead, refusal, useTicks } from "./ListChecks";
-import { ShowInBrowse } from "./ShowInBrowse";
+import { Capped, CheckCard, ListHead, refusal, useTicks } from "./ListChecks";
+import { browseTo, ShowInBrowse } from "./ShowInBrowse";
 import { useMaintenanceJob } from "./useMaintenanceJob";
 
 const keyOf = (p: { old_id: string; new_id: string }) => `${p.old_id}>${p.new_id}`;

@@ -10,6 +10,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from dam.app import App
+from dam.services.file_now import files_now
 
 
 def _dict(obj: Any) -> dict:
@@ -96,11 +97,13 @@ def journal_out(app: App, rows: Iterable[Any]) -> list[dict]:
 
 
 def batches_out(app: App, batches: Iterable[Any]) -> list[dict]:
-    """Activity batches as dicts, every op with its file's marks (one query in all)."""
+    """Activity batches as dicts, every op with its file's marks (one query in all) and
+    where its file is now (``file_now``, a few queries in all)."""
     out = [_dict(b) for b in batches]
     ids = [op["drive_id"] for b in out for op in b["ops"] if op["drive_id"]]
     found = app.marks.marks_for(ids) if ids else {}
-    for b in out:
-        for op in b["ops"]:
-            op["marks"] = found.get(op["drive_id"], []) if op["drive_id"] else []
+    ops = [op for b in out for op in b["ops"]]
+    for op, now in zip(ops, files_now(app.repo, app.paths.is_quarantined, ops), strict=True):
+        op["marks"] = found.get(op["drive_id"], []) if op["drive_id"] else []
+        op["file_now"] = now
     return out

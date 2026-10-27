@@ -547,6 +547,17 @@ class SearchHitOut(BaseModel):
     connected: bool = True
 
 
+class FileNowOut(BaseModel):
+    """Where the file an Activity op names is now, from the index."""
+
+    # here: where the op left it; moved: elsewhere since; to_delete: marked for deletion
+    # since; missing: deleted, or moved outside dam and not reconnected
+    state: Literal["here", "moved", "to_delete", "missing"]
+    path: str | None  # None when missing
+    drive_id: str | None
+    is_dir: bool
+
+
 class JournalEntryOut(BaseModel):
     id: int
     batch_id: str
@@ -566,6 +577,9 @@ class JournalEntryOut(BaseModel):
     finished: float | None
     # the file's marks (★ / !), when the row names one (``drive_id``); [] otherwise
     marks: list[Mark] = []
+    # Activity only: where the op's file is now (None: the op names no file, or a
+    # recovery row)
+    file_now: FileNowOut | None = None
 
 
 class BatchSummaryOut(BaseModel):

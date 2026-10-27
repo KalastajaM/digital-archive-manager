@@ -1,7 +1,7 @@
 """Finding rows: by id or path, a folder's children, the inbox, files below a folder and the
 counts. Part of ``FileRepo`` (``dam.index.repo``)."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from sqlalchemy import (
     and_,
@@ -18,6 +18,7 @@ from dam.core.text import fold_name
 from dam.db.tables import (
     file_qr_codes,
     files,
+    reconnects,
 )
 from dam.index.repo.model import (
     BARCODE_EXTS,
@@ -103,6 +104,44 @@ class LookupMixin:
         with self._conn() as conn:
             row = conn.execute(select(files).where(files.c.path_nfc == nfc(rel))).first()
         return record(row) if row else None
+
+    def get_many(self, drive_ids: Collection[str]) -> dict[str, FileRecord]:
+        """``get`` for many ids in one query per chunk; unknown ids are left out."""
+        out: dict[str, FileRecord] = {}
+        with self._conn() as conn:
+            for chunk in chunks(drive_ids):
+                rows = conn.execute(select(files).where(files.c.drive_id.in_(chunk))).all()
+                out.update((r.drive_id, record(r)) for r in rows)
+        return out
+
+    def live_by_paths(self, rels: Collection[str]) -> dict[str, FileRecord]:
+        """The live (neither missing nor parked) record at each path, by NFC path."""
+        out: dict[str, FileRecord] = {}
+        with self._conn() as conn:
+            for chunk in chunks({nfc(r) for r in rels}):
+                cond = [
+                    files.c.path_nfc.in_(chunk),
+                    files.c.missing.is_not(True),
+                    files.c.parked_at.is_(None),
+                ]
+                out.update(
+                    (r.path_nfc, record(r)) for r in conn.execute(select(files).where(*cond))
+                )
+        return out
+
+    def reconnected_to(self, old_ids: Collection[str]) -> dict[str, str]:
+        """The id each of ``old_ids`` was reconnected to (the latest reconnect that is
+        not undone); ids never reconnected are left out."""
+        out: dict[str, str] = {}
+        with self._conn() as conn:
+            for chunk in chunks(old_ids):
+                rows = conn.execute(
+                    select(reconnects.c.old_id, reconnects.c.new_id)
+                    .where(reconnects.c.old_id.in_(chunk), reconnects.c.undone.is_(None))
+                    .order_by(reconnects.c.id)
+                )
+                out.update((r.old_id, r.new_id) for r in rows)
+        return out
 
     def by_folded_path(self, rel: str) -> list[FileRecord]:
         """Every live record whose path equals ``rel`` up to case (NFC, full casefold):

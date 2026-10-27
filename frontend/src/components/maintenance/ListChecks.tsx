@@ -29,14 +29,11 @@ import { IconButton } from "../ui/IconButton";
 import { Tag } from "../ui/Tag";
 import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
-import { ShowInBrowse } from "./ShowInBrowse";
+import { browseTo, ShowInBrowse } from "./ShowInBrowse";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
 import { useFold } from "./view";
 
 export const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
-const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
-export const browseTo = (path: string, driveId: string) =>
-  `/browse?${new URLSearchParams({ path: folderOf(path), select: driveId })}`;
 
 /** What a folded check card shows in place of its body. */
 export function foldedLine(check: Check, found: string | null) {
