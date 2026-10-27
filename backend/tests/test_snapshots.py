@@ -664,3 +664,15 @@ def test_a_database_with_a_known_revision_but_another_layout_is_refused(served, 
     assert not any("before-restore" in p.name for p in (paths.data_dir / "snapshots").iterdir())
     r = upload(c, (paths.data_dir / "snapshots" / foreign).read_bytes())
     assert r.status_code == 409
+
+
+def test_reveal_snapshots_folder_uses_the_injected_runner(served):
+    host, c, paths = served
+    seen: list[list[str]] = []
+    service = host.current.api.state.snapshots
+    service.runner = lambda args: seen.append(args) or 0
+    service.platform = "darwin"
+    assert post(c, "/api/snapshots/reveal").status_code == 204
+    assert seen == [["/usr/bin/open", str((paths.data_dir / "snapshots").resolve())]]
+    service.runner = lambda args: 1  # the system opener fails
+    assert post(c, "/api/snapshots/reveal").status_code == 409

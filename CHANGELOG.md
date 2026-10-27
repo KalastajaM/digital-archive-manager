@@ -154,6 +154,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **dam needs Python 3.14 or newer.** It never ran on 3.13 (the code relies on how 3.14
+  reads type hints), so the stated minimum now says so. `uv` installs the right Python
+  by itself.
 - **Browse and the status bar stay fast on large archives.** Opening a folder in
   Browse reads only that folder's entries instead of going through every file in the
   archive (about 30 ms down to under 1 ms for a folder in an archive of 200,000 files).

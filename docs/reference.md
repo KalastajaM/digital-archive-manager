@@ -32,7 +32,7 @@ the app's sidebar).
 
 ## Requirements
 
-dam runs on **macOS, Windows and Linux** (Python 3.13+, see "Platform support" below for
+dam runs on **macOS, Windows and Linux** (Python 3.14+, see "Platform support" below for
 what works where).
 
 - [uv](https://docs.astral.sh/uv/) for `backend/` (it installs the right Python itself).
