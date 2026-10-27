@@ -24,6 +24,7 @@ import { changeLines } from "../components/collectionText";
 import { LaunchButtons, useFileLaunch } from "../components/FileLaunch";
 import { type RefusedRoot } from "../components/FolderBrowser";
 import { FolderPicker } from "../components/FolderPicker";
+import { baseName } from "../paths";
 
 /** Destinations the conversion refuses besides ``##. Ongoing`` and the quarantine
  * (the inbox: ``_forbidden_destinations``; ``##. Important``: a protected path). */
@@ -69,11 +70,11 @@ export type Look = (key: string) => (() => void) | undefined;
 const lookRow = (key: string, look: Look) =>
   look(key) ? { tabIndex: 0, "data-quicklook": true, "data-look": key } : {};
 
+// Differs from paths.ts: takes a name (not a path) and gives null for a dotfile such as ".bashrc".
 const extOf = (name: string) => {
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : null;
 };
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const entryKey = (entry: OngoingEntry) => entry.rel;
 const itemKey = (entry: OngoingEntry, item: EntryItem) => `${entry.rel}/${item.name}`;
 

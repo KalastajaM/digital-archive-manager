@@ -46,10 +46,10 @@ import ReviewCard from "./ReviewCard";
 import { followUpLines, speaker, useFiling } from "./useFiling";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { MarkIcons } from "../components/MarkIcons";
+import { baseName } from "../paths";
 
 const MAX_NAMES = 5;
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** "a.pdf, b.pdf, … +N more" for the files a batch filed. */
 export function fileList(ops: ResolvedOp[]): string {

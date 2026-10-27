@@ -22,6 +22,7 @@ import { TagInput } from "./TagInput";
 import { useBlockToastActions } from "./Toasts";
 import { ClickToEdit } from "./ui/ClickToEdit";
 import { IconButton } from "./ui/IconButton";
+import { baseName } from "../paths";
 
 export type MetaFile = {
   drive_id: string;
@@ -34,7 +35,6 @@ export type MetaFile = {
   marks?: readonly Mark[];
 };
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const folderOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const fold = (s: string) => s.normalize("NFC").toLocaleLowerCase();
 const sameTags = (a: string[], b: string[]) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());

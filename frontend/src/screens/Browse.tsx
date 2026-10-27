@@ -82,6 +82,7 @@ import { filterToken, positiveTags, readQuery, sameFilter, type SearchFilter, se
 import { FilterBar, SearchSuggestions, type TagMode } from "../components/TagSearch";
 import { type Completion, useSearchCompletions } from "../components/useSearchCompletions";
 import { SearchHelp } from "../components/SearchHelp";
+import { parentOf } from "../paths";
 
 /** One row of the folder listing or of the search results. */
 const KEYS: KeyHint[] = [
@@ -165,7 +166,6 @@ export const LIST_WIDTH_KEY = "dam.browse.listwidth";
 const LIST_SPLIT = { min: 25, max: 75, initial: 45 };
 
 const NONE: Set<string> = new Set();
-const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
 const byText = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
 /** Search hits in a column's order (ties by name, then path); files with no date or size last. */
@@ -207,6 +207,7 @@ function groupHits(hits: Item[]): HitGroup[] {
   }
   return [...by].sort(([a], [b]) => byFolder(a, b)).map(([folder, files]) => ({ folder, files }));
 }
+// Differs from paths.ts: takes a bare name, so a "/" in the input is not stripped first.
 const extOf = (name: string) => (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null);
 const previewOf = (item: Item): PreviewFile => ({
   drive_id: item.drive_id,

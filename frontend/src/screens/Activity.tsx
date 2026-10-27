@@ -71,6 +71,7 @@ export function opsSummary(kinds: string[]): string {
     .join(", ");
 }
 
+// Differs from paths.ts: accepts null (treated as "").
 const baseName = (path: string | null) => (path ?? "").slice((path ?? "").lastIndexOf("/") + 1);
 const folderOf = (path: string | null) => (path ?? "").split("/").slice(0, -1).join("/");
 

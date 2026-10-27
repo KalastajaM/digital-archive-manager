@@ -6,6 +6,7 @@ import type { ResolvedOp } from "../api/client";
 import { noKeysHeld } from "../keyboard";
 import { formatSize, plural } from "../format";
 import { visible } from "../text";
+import { parentOf } from "../paths";
 
 export const KIND_LABEL: Record<ResolvedOp["kind"], string> = {
   rename: "Rename",
@@ -125,7 +126,6 @@ function collapseFolderChains(shown: Shown[]): Line[] {
   return out;
 }
 
-const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
 /** Notes that only say what happens anyway (a folder is made on the way). */
 const ROUTINE_NOTES = new Set(["create missing folder"]);

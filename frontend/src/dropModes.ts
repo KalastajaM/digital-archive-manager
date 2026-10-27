@@ -15,6 +15,7 @@
  * nothing, and the refusal says why before the drop. */
 import { LOCKED_REASON } from "./api/client";
 import { TO_DELETE_REASON } from "./toDelete";
+import { parentOf } from "./paths";
 import { visible } from "./text";
 
 export type DropMode = "move" | "link" | "copy";
@@ -43,7 +44,6 @@ export const ADD_FROM_OWN_FOLDER = "Open the file's own folder to add it to a co
 const fold = (s: string) => s.normalize("NFC").toLowerCase();
 const isUnder = (path: string, area: string) => fold(path) === fold(area) || fold(path).startsWith(`${fold(area)}/`);
 const isInside = (path: string, area: string) => fold(path).startsWith(`${fold(area)}/`);
-export const parentOf = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
 export type Areas = { quarantine: string; ongoing: string; important: string };
 

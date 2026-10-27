@@ -78,7 +78,6 @@ import {
   type GroupProposals,
   GroupTree,
   groupPaths,
-  baseName,
   browseHref,
   memberName,
   treeOf,
@@ -126,16 +125,13 @@ import { isShortcut, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
 import { inFileManager, showInLabel } from "../fileManager";
 import { visible } from "../text";
+import { baseName, extOf } from "../paths";
 
 type Pending = { action: CollectionAction; ops: ResolvedOp[]; title: string; label: string; done: string };
 
 const ICON = { size: 18, strokeWidth: 1.75 } as const;
 const STILL_RUNNING = "Another change is still running. Try again when it is done.";
 
-const extOf = (path: string) => {
-  const name = path.slice(path.lastIndexOf("/") + 1);
-  return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null;
-};
 
 type ExportState =
   | { kind: "idle" }
