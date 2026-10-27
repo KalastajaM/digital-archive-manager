@@ -393,7 +393,6 @@ def test_inherited_real_id_blocks_later_owner(fake_archive, engine):
 
 def test_scans_are_serialised(fake_archive, engine, monkeypatch):
     import threading
-    import time
 
     from dam.index import scanner
 
@@ -402,14 +401,35 @@ def test_scans_are_serialised(fake_archive, engine, monkeypatch):
     guard = threading.Lock()
     state = {"active": 0, "max": 0}
     entered = threading.Event()
+    contended = threading.Event()  # the second scan is asking for SCAN_LOCK
+    overlapped = threading.Event()  # two scans were inside at once (the bug)
     real = scanner._scan
+    real_lock = scanner.SCAN_LOCK
+    asked = [0]
+
+    class WatchedLock:
+        def __enter__(self):
+            asked[0] += 1
+            if asked[0] >= 2:
+                contended.set()
+            return real_lock.__enter__()
+
+        def __exit__(self, *exc):
+            return real_lock.__exit__(*exc)
+
+    monkeypatch.setattr(scanner, "SCAN_LOCK", WatchedLock())
 
     def spy(*args):
         with guard:
             state["active"] += 1
             state["max"] = max(state["max"], state["active"])
+            if state["active"] > 1:
+                overlapped.set()
         entered.set()
-        time.sleep(0.2)  # hold the scan open so an unserialised second scan would overlap
+        # hold the scan open until the second one is waiting, then give an unserialised
+        # one a moment to overlap
+        contended.wait(5)
+        overlapped.wait(0.2)
         try:
             return real(*args)
         finally:

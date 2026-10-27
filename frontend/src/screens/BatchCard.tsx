@@ -123,7 +123,7 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
     tags,
     entries.flatMap((e) => e.suggestion.tags.map((t): Offer => ({ value: t, source: e.suggestion.tag_sources[t] ?? "scan" }))),
   );
-  const useFolder = (value: string) => {
+  const chooseFolder = (value: string) => {
     setFolder(value);
     setFolderEdited(true);
   };
@@ -131,7 +131,7 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
   const foldersConflict = folderOffers.length > 1;
   const useAll = () => {
     if (filing.busy || adding.busy) return;
-    if (folderOffers.length === 1) useFolder(folderOffers[0].value);
+    if (folderOffers.length === 1) chooseFolder(folderOffers[0].value);
     if (tagChips.length > 0) setTags(addTags(tags, tagChips.map((o) => o.value)));
   };
 
@@ -268,14 +268,14 @@ export default function BatchCard({ entries, filing, onAdded, trash }: Props) {
               ref={folderRef}
               label="Folder"
               value={folder}
-              onChange={useFolder}
+              onChange={chooseFolder}
               error={tried ? folderProblem : null}
             />
             <FieldChips
               field="Folder"
               offers={folderOffers}
               disabled={filing.busy || adding.busy}
-              onUse={(o) => useFolder(o.value)}
+              onUse={(o) => chooseFolder(o.value)}
             />
             {foldersConflict && (
               <p className="hint">The files suggest different folders: pick one. Use all leaves the folder as it is.</p>

@@ -7,7 +7,7 @@ from alembic.migration import MigrationContext
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from dam.db.engine import migrate
+from dam.db.engine import migrate, schema_differences
 
 TABLES = {"files", "file_text", "tags", "file_tags", "operations", "file_fts"}
 
@@ -242,6 +242,15 @@ def test_phase2_tables_have_no_metadata_drift(engine):
         diffs = compare_metadata(MigrationContext.configure(conn), metadata)
     flat = [d for diff in diffs for d in (diff if isinstance(diff, list) else [diff])]
     assert [d for d in flat if _diff_table(d) in PHASE2_COLUMNS] == []
+
+
+def test_migrations_to_head_match_the_whole_metadata(engine):
+    """Every table, column, index and constraint in db/tables.py is made by a migration
+    and vice versa (the file_fts* shadow tables are not in the metadata and are left out)."""
+    assert schema_differences(engine) == []
+    with engine.begin() as conn:  # the comparison sees a difference when there is one
+        conn.execute(text("CREATE TABLE stray (id INTEGER)"))
+    assert schema_differences(engine) != []
 
 
 def test_ongoing_entries_cascade_with_their_collection(engine):

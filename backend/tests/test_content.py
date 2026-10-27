@@ -310,11 +310,21 @@ def test_run_forever_wake_ends_idle_wait(fake_archive, engine, monkeypatch):
     monkeypatch.setattr(content_mod, "IDLE_WAIT_S", 60.0)
     paths, repo, _ = setup(fake_archive, engine)
     indexer = ContentIndexer(paths, repo, engine, default_registry(["en-US"]), 6000)
+    idle_pass = threading.Event()
+    real_step = indexer.step
+
+    def step():
+        count = real_step()
+        if not count:
+            idle_pass.set()
+        return count
+
+    monkeypatch.setattr(indexer, "step", step)
     stop, wake = threading.Event(), threading.Event()
     t = threading.Thread(target=indexer.run_forever, args=(stop, wake))
     t.start()
     try:
-        time.sleep(0.2)  # nothing to do: idle for up to 60 s
+        assert idle_pass.wait(5)  # nothing to do: idle for up to 60 s
         add_pdf(fake_archive, repo)
         wake.set()
         deadline = time.time() + 5

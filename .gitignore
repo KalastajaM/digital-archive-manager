@@ -20,6 +20,7 @@ openapi.json
 .mypy_cache/
 .coverage
 htmlcov/
+coverage/
 # local data directories (a data dir holds the index, logs and your settings)
 DigitalArchiveManager/
 /data/

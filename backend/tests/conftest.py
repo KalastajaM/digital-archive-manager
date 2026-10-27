@@ -265,3 +265,32 @@ def _no_real_anthropic_client(monkeypatch: pytest.MonkeyPatch) -> None:
         raise AssertionError("tests must never construct anthropic.Anthropic")
 
     monkeypatch.setattr(anthropic.Anthropic, "__init__", refuse)
+
+
+@pytest.fixture
+def freeze_today(monkeypatch: pytest.MonkeyPatch):
+    """``freeze_today(day)``: ``date.today()`` returns ``day`` in the modules that ask for
+    today's date, so a test cannot flip with the calendar or across midnight. Returns
+    ``day``."""
+    import datetime
+
+    from dam.api.routers import collections, today, trays
+    from dam.rules import fields
+    from dam.services import today as today_service
+    from dam.trays import service
+
+    def freeze(day: datetime.date) -> datetime.date:
+        class _Meta(type):
+            def __instancecheck__(cls, obj):  # real dates still count as dates
+                return isinstance(obj, datetime.date)
+
+        class FrozenDate(datetime.date, metaclass=_Meta):
+            @classmethod
+            def today(cls):
+                return day
+
+        for module in (collections, today, trays, fields, service, today_service):
+            monkeypatch.setattr(module, "date", FrozenDate)
+        return day
+
+    return freeze

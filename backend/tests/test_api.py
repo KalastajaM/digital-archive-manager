@@ -517,7 +517,11 @@ def test_at_most_two_renders_hold_file_bytes(client, app, fake_archive, monkeypa
     deadline = time.monotonic() + 5
     while active[0] < 2 and time.monotonic() < deadline:
         time.sleep(0.01)
-    time.sleep(0.3)  # give a third render every chance to start
+    # Give a third render every chance to start: stop at once if the peak passes 2 (the
+    # bug), else when the window is over.
+    window = time.monotonic() + 0.3
+    while peak[0] <= 2 and time.monotonic() < window:
+        time.sleep(0.01)
     assert peak[0] == 2
     release.set()
     for t in threads:
@@ -980,11 +984,23 @@ def test_start_background_and_stop(app, fake_archive):
     bg.stop()  # idempotent
 
 
-def test_watcher_change_wakes_indexer(app, fake_archive):
+def test_watcher_change_wakes_indexer(app, fake_archive, monkeypatch):
+    # The indexer clears `wake` before each pass, so once a pass finds nothing to do any
+    # later wake ends its idle wait: wait for such a pass instead of sleeping.
+    idle_pass = threading.Event()
+    real_step = app.content.step
+
+    def step():
+        count = real_step()
+        if not count:
+            idle_pass.set()
+        return count
+
+    monkeypatch.setattr(app.content, "step", step)
     bg = start_background(app)
     try:
         bg.scan_thread.join(10)
-        time.sleep(0.2)  # the indexer is now idle (nothing pending)
+        assert idle_pass.wait(10)  # the indexer is now idle (nothing pending)
         fake_archive.add(f"{INBOX}/late.txt", content=b"late", drive_id="late-1")
         bg.watcher._note(str(fake_archive.root / INBOX / "late.txt"))
         deadline = time.monotonic() + 15

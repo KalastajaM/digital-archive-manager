@@ -22,7 +22,7 @@ safety matter more than speed.
 
 ## Dev setup
 
-You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.13+ itself) and Node as
+You need [uv](https://docs.astral.sh/uv/) (it installs Python 3.14+ itself) and Node as
 in `frontend/.nvmrc`.
 
 **macOS:** `brew install uv` and `brew install nvm` (or any Node manager), then
@@ -75,7 +75,11 @@ before opening a pull request.
 cd backend && uv run ruff check . && uv run pytest -q -W error
 cd frontend && npm test -- --run && npm run build
 cd frontend && npm run gen:api     # after API changes, commit the regenerated schema
+cd frontend && npm run lint        # react-hooks rules; CI fails on errors, not warnings
 ```
+
+Coverage (not run in CI, no thresholds): `cd backend && uv run pytest --cov=dam --cov-report=term-missing`
+and `cd frontend && npm run coverage`.
 
 ## Commits
 

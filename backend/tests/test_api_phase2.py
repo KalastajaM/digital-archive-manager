@@ -60,8 +60,8 @@ def new_item(client, drive_ids=("f1",), fields=None, tray="to-pay"):
 # -- today --------------------------------------------------------------------------
 
 
-def test_today(client, app, files):
-    due = (date.today() - timedelta(days=1)).isoformat()
+def test_today(client, app, files, freeze_today):
+    due = (freeze_today(date(2026, 10, 26)) - timedelta(days=1)).isoformat()
     item = new_item(client, fields={"due_date": due, "amount": "84,20"})
     app.last_reminders = RemindResult(errors={"email": "login failed"})
     r = client.get("/api/today")
@@ -158,8 +158,10 @@ def test_item_lifecycle(client, app, files):
     ]
 
 
-def test_tray_items_carry_level_file_state_and_note_flag(client, app, files, fake_archive):
-    due = (date.today() - timedelta(days=1)).isoformat()
+def test_tray_items_carry_level_file_state_and_note_flag(
+    client, app, files, fake_archive, freeze_today
+):
+    due = (freeze_today(date(2026, 10, 26)) - timedelta(days=1)).isoformat()
     late = new_item(client, ["f1"], fields={"due_date": due})
     undated = new_item(client, ["f2"])
     send(client, "PUT", f"/api/notes/item/{undated['id']}", {"text": "call first"})
