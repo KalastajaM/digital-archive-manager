@@ -225,7 +225,7 @@ def test_mac_notification_is_not_available_elsewhere(monkeypatch):
 
 @pytest.mark.parametrize("platform", ["linux", "win32"])
 def test_remind_install_explains_and_changes_nothing(tmp_path, monkeypatch, platform):
-    from dam.cli import main as cli
+    from dam.cli.main import remind_cmds as cli
 
     monkeypatch.setattr(cli, "_platform", lambda: platform)
     monkeypatch.setattr(cli.launchd, "install", lambda *a, **k: pytest.fail("installed"))
