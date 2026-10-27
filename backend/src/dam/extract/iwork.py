@@ -8,6 +8,7 @@ import io
 import zipfile
 from pathlib import Path
 
+from dam.extract import zip_guard
 from dam.extract.base import ExtractedText, UnsupportedContent
 from dam.extract.ocr import ImageOcrExtractor
 from dam.extract.pdf import PdfExtractor
@@ -29,17 +30,20 @@ class IworkExtractor:
         return path.suffix.lower() in self.suffixes
 
     def extract(self, path: Path, data: bytes | None = None) -> ExtractedText:
+        zip_guard.check(path, data)
         try:
             with zipfile.ZipFile(io.BytesIO(data) if data is not None else str(path)) as zf:
                 names = set(zf.namelist())
                 pdf = next((n for n in _PDFS if n in names), None)
                 if pdf:
-                    preview, extractor = zf.read(pdf), PdfExtractor(self.languages)
+                    preview = zip_guard.read_member(zf, pdf)
+                    extractor = PdfExtractor(self.languages)
                 else:
                     image = next((n for n in _IMAGES if n in names), None)
                     if image is None:
                         raise UnsupportedContent(NO_PREVIEW)
-                    preview, extractor = zf.read(image), ImageOcrExtractor(self.languages)
+                    preview = zip_guard.read_member(zf, image)
+                    extractor = ImageOcrExtractor(self.languages)
         except zipfile.BadZipFile as exc:
             raise UnsupportedContent(NOT_IWORK) from exc
         got = extractor.extract(path, preview)

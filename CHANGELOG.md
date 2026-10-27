@@ -841,6 +841,15 @@ All notable changes are listed here. The format follows
   same version numbers). A restore now always keeps this archive's own folders, its
   protected paths and the folders never sent to AI; a snapshot can add protected paths
   or excluded folders but no longer remove them, or add a folder to the archive.
+- **A crafted document can no longer take dam down.** A Word, Excel, PowerPoint, Pages,
+  Numbers or Keynote file that would unpack to more than 512 MB, holds more than 10,000
+  parts, or has a part packed unusually small is marked as unreadable instead of
+  being read into memory. If reading a file still stops dam (for example it runs out of
+  memory), that file is listed as an error on the next start and skipped, rather than
+  stopping dam again on every start, until you retry it.
+- **Open no longer hands web pages to the browser.** Open refuses `.html`, `.htm`,
+  `.xhtml`, `.svg`, `.svgz`, `.xml`, `.webarchive`, `.mht` and `.mhtml` files from the
+  archive, as their scripts would run in the browser; Show in Finder still works.
 
 ## [0.1.0] - Unreleased
 
