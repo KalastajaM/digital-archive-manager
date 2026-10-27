@@ -342,11 +342,13 @@ type EntryProps = {
   /** The file of a folder's contents that is selected (its drive id), if any. */
   entry: string | null;
   onSelectEntry: (entry: DirEntry) => void;
+  /** The tree level (aria-level) of the member the contents belong to. */
+  base: number;
 };
 
 /** What is inside the folder ``path`` (fetched once it is shown): files and subfolders,
  * the latter opening in turn. */
-function FolderContents({ path, level, entry, onSelectEntry }: EntryProps & { path: string; level: number }) {
+function FolderContents({ path, level, entry, onSelectEntry, base }: EntryProps & { path: string; level: number }) {
   const listing = useBrowse(path);
   const pad = { "--lvl": level } as CSSProperties;
   if (listing.isPending) {
@@ -373,14 +375,14 @@ function FolderContents({ path, level, entry, onSelectEntry }: EntryProps & { pa
   return (
     <>
       {listing.data.map((e) => (
-        <EntryRow key={e.path} e={e} level={level} entry={entry} onSelectEntry={onSelectEntry} />
+        <EntryRow key={e.path} e={e} level={level} entry={entry} onSelectEntry={onSelectEntry} base={base} />
       ))}
     </>
   );
 }
 
 /** One file or subfolder inside a folder member. */
-function EntryRow({ e, level, entry, onSelectEntry }: EntryProps & { e: DirEntry; level: number }) {
+function EntryRow({ e, level, entry, onSelectEntry, base }: EntryProps & { e: DirEntry; level: number }) {
   const [open, setOpen] = useState(false);
   const name = visible(e.name);
   const Icon = e.is_dir ? Folder : File;
@@ -390,6 +392,10 @@ function EntryRow({ e, level, entry, onSelectEntry }: EntryProps & { e: DirEntry
       <li
         className="member member-entry"
         data-quicklook={e.is_dir ? undefined : ""}
+        role="treeitem"
+        aria-level={base + level}
+        aria-expanded={e.is_dir ? open : undefined}
+        aria-selected={selected}
         aria-current={selected ? "true" : undefined}
         style={{ "--lvl": level } as CSSProperties}
       >
@@ -410,7 +416,7 @@ function EntryRow({ e, level, entry, onSelectEntry }: EntryProps & { e: DirEntry
           </span>
         </button>
       </li>
-      {e.is_dir && open && <FolderContents path={e.path} level={level + 1} entry={entry} onSelectEntry={onSelectEntry} />}
+      {e.is_dir && open && <FolderContents path={e.path} level={level + 1} entry={entry} onSelectEntry={onSelectEntry} base={base} />}
     </>
   );
 }
@@ -422,6 +428,7 @@ function MemberRow({
   onSelect,
   entry,
   onSelectEntry,
+  base,
 }: EntryProps & {
   m: Member;
   attention: MemberAttention | undefined;
@@ -442,6 +449,10 @@ function MemberRow({
       <li
         className={`member${gone ? " member-gone" : ""}${folder ? " member-folder-row" : ""}`}
         data-quicklook
+        role="treeitem"
+        aria-level={base}
+        aria-expanded={folder ? open : undefined}
+        aria-selected={selected}
         aria-current={selected ? "true" : undefined}
         style={folder ? ({ "--lvl": 0 } as CSSProperties) : undefined}
         draggable={draggable || undefined}
@@ -484,7 +495,7 @@ function MemberRow({
         </button>
         {folder && <FolderMenu driveId={m.drive_id} path={m.path!} name={name} />}
       </li>
-      {folder && open && <FolderContents path={m.path!} level={1} entry={entry} onSelectEntry={onSelectEntry} />}
+      {folder && open && <FolderContents path={m.path!} level={1} entry={entry} onSelectEntry={onSelectEntry} base={base} />}
     </>
   );
 }
@@ -586,7 +597,8 @@ export function GroupTree({
     );
   };
 
-  const rows = (list: Member[] | undefined) =>
+  /** Member rows at tree level ``level`` (1 is the top). */
+  const rows = (list: Member[] | undefined, level: number) =>
     (list ?? []).map((m) => (
       <MemberRow
         key={m.drive_id}
@@ -596,10 +608,11 @@ export function GroupTree({
         onSelect={() => onSelect(m.drive_id)}
         entry={entry}
         onSelectEntry={onSelectEntry}
+        base={level}
       />
     ));
 
-  const renderGroup = (g: Group, siblings: Group[], index: number): ReactNode => {
+  const renderGroup = (g: Group, siblings: Group[], index: number, level: number): ReactNode => {
     const name = visible(g.name);
     const expanded = !folded.has(g.id);
     const files = tree.members.get(g.id) ?? [];
@@ -630,7 +643,15 @@ export function GroupTree({
       { label: "Remove group…", onSelect: () => actions.remove(g) },
     ];
     return (
-      <section key={g.id} className="group" aria-label={name}>
+      <section
+        key={g.id}
+        className="group"
+        role="treeitem"
+        aria-level={level}
+        aria-expanded={expanded}
+        aria-selected={false}
+        aria-label={name}
+      >
         <Header
           label={name}
           count={memberCount(membersIn(tree, g.id))}
@@ -660,9 +681,13 @@ export function GroupTree({
           </div>
         )}
         {expanded && (
-          <div className="group-body">
-            {subgroups.map((s, i) => renderGroup(s, subgroups, i))}
-            {files.length > 0 && <ul className="group-files">{rows(files)}</ul>}
+          <div className="group-body" role="group">
+            {subgroups.map((s, i) => renderGroup(s, subgroups, i, level + 1))}
+            {files.length > 0 && (
+              <ul className="group-files" role="none">
+                {rows(files, level + 1)}
+              </ul>
+            )}
             {files.length === 0 && subgroups.length === 0 && <p className="group-empty">Drag files here.</p>}
           </div>
         )}
@@ -677,15 +702,22 @@ export function GroupTree({
   const dragging = useFilesDragging();
   return (
     <OmitMark.Provider value={c.kind === "starred" ? "starred" : c.kind === "important" ? "important" : null}>
-    <section className="group-tree" aria-label="Members">
+    <section className="group-tree" role="tree" aria-label="Members">
       {c.members.length === 0 && c.groups.length === 0 && (
         <p className="hint">No files yet. Add files from Browse or when filing.</p>
       )}
-      {top.map((g, i) => renderGroup(g, top, i))}
+      {top.map((g, i) => renderGroup(g, top, i, 1))}
       {/* without groups the members are a plain list: "Ungrouped" would say nothing */}
-      {c.groups.length === 0 && ungrouped.length > 0 && <ul className="group-files group-plain">{rows(ungrouped)}</ul>}
+      {c.groups.length === 0 && ungrouped.length > 0 && <ul className="group-files group-plain" role="none">{rows(ungrouped, 1)}</ul>}
       {c.groups.length > 0 && (ungrouped.length > 0 || dragging) && (
-        <section className="group group-ungrouped" aria-label="Ungrouped">
+        <section
+          className="group group-ungrouped"
+          role="treeitem"
+          aria-level={1}
+          aria-expanded={ungroupedOpen}
+          aria-selected={false}
+          aria-label="Ungrouped"
+        >
           <Header
             label="Ungrouped"
             count={memberCount(ungrouped)}
@@ -695,8 +727,8 @@ export function GroupTree({
             onDrop={dropInto(null)}
           />
           {ungroupedOpen && (
-            <div className="group-body">
-              {ungrouped.length > 0 ? <ul className="group-files">{rows(ungrouped)}</ul> : <p className="group-empty">Drop here to take files out of their group.</p>}
+            <div className="group-body" role="group">
+              {ungrouped.length > 0 ? <ul className="group-files" role="none">{rows(ungrouped, 2)}</ul> : <p className="group-empty">Drop here to take files out of their group.</p>}
             </div>
           )}
         </section>

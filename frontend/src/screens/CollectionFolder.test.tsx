@@ -73,7 +73,7 @@ function setup() {
   return { calls, user };
 }
 
-const members = async () => within(await screen.findByRole("region", { name: "Members" }));
+const members = async () => within(await screen.findByRole("tree", { name: "Members" }));
 
 describe("a folder member of a collection", () => {
   it("opens in place: files and subfolders, listed when opened, subfolders opening in turn", async () => {
@@ -87,6 +87,17 @@ describe("a folder member of a collection", () => {
     expect(await list.findByRole("button", { name: /^sketch\.png/ })).toBeInTheDocument();
     await user.click(list.getByRole("button", { name: "Collapse Plans" }));
     expect(list.queryByRole("button", { name: /^plan\.pdf/ })).not.toBeInTheDocument();
+  });
+
+  it("gives the folder's contents tree levels below the folder", async () => {
+    const { user } = setup();
+    const list = await members();
+    const plans = list.getByRole("button", { name: "Expand Plans" }).closest("[role=treeitem]")!;
+    expect(plans).toHaveAttribute("aria-expanded", "false");
+    await user.click(list.getByRole("button", { name: "Expand Plans" }));
+    const file = (await list.findByRole("button", { name: /^plan\.pdf/ })).closest("[role=treeitem]")!;
+    expect(plans).toHaveAttribute("aria-expanded", "true");
+    expect(file).toHaveAttribute("aria-level", String(Number(plans.getAttribute("aria-level")) + 1));
   });
 
   it("a file inside shows in the side panel with its details", async () => {

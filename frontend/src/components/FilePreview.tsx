@@ -320,12 +320,14 @@ function TextPreview({ driveId, tools, onFail }: { driveId: string; tools: React
   failed.current = onFail;
   useEffect(() => {
     let live = true;
-    fetchTextPreview(driveId).then(
+    const controller = new AbortController();
+    fetchTextPreview(driveId, controller.signal).then(
       (t) => live && setText(t),
       () => live && failed.current(),
     );
     return () => {
       live = false;
+      controller.abort();
     };
   }, [driveId]);
   return (
