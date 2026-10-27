@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import insert, select, text
 
-from conftest import needs_dir_fd
+from conftest import needs_dir_fd, put_fts_row
 from dam.config import Settings
 from dam.core.fs import readlink
 from dam.core.paths import ArchivePaths
@@ -814,13 +814,8 @@ def test_update_path_prefix_boundary_and_fts(engine):
                 },
             ],
         )
-        conn.execute(
-            text("INSERT INTO file_fts(drive_id, name, path, text) VALUES (:d, :n, :p, 't')"),
-            [
-                {"d": "d2", "n": nfd, "p": f"a/b/{nfd}"},
-                {"d": "d3", "n": "x.pdf", "p": "a/bc/x.pdf"},
-            ],
-        )
+        put_fts_row(conn, "d2", nfd, f"a/b/{nfd}", "t")
+        put_fts_row(conn, "d3", "x.pdf", "a/bc/x.pdf", "t")
     repo = FileRepo(engine, inbox="##. Organize")
     repo.update_path("a/b", "z/B")
     repo.update_path("not/in/db", "z/q")  # unknown rows: no-op

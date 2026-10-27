@@ -3,6 +3,7 @@ from datetime import date
 
 from sqlalchemy import insert, select, text
 
+from conftest import put_fts_row
 from dam.db.tables import file_tags, file_text, files
 from dam.index.repo import FileRecord, FileRepo, TagRepo
 
@@ -102,9 +103,7 @@ def test_rekey_carries_children(engine):
     repo.upsert(rec("local:1", "a.pdf"))
     with engine.begin() as conn:
         conn.execute(insert(file_text), {"drive_id": "local:1", "text": "hello"})
-        conn.execute(
-            text("INSERT INTO file_fts(drive_id, name, path, text) VALUES ('local:1','a','a','t')")
-        )
+        put_fts_row(conn, "local:1", "a", "a", "t")
     TagRepo(engine).add("local:1", ["x"])
     repo.rekey("local:1", "real")
     assert repo.get("local:1") is None and repo.get("real").path == "a.pdf"
@@ -119,9 +118,7 @@ def test_upsert_drops_stale_row_with_children(engine):
     repo.upsert(rec("old", "a.pdf"))
     with engine.begin() as conn:
         conn.execute(insert(file_text), {"drive_id": "old", "text": "hello"})
-        conn.execute(
-            text("INSERT INTO file_fts(drive_id, name, path, text) VALUES ('old','a','a','t')")
-        )
+        put_fts_row(conn, "old", "a", "a", "t")
     TagRepo(engine).add("old", ["x"])
     repo.upsert(rec("new", "a.pdf"))
     assert repo.get("old") is None and repo.by_path("a.pdf").drive_id == "new"
@@ -146,9 +143,7 @@ def test_park_removes_row_from_lookups_and_fts_path(engine):
     repo = FileRepo(engine, inbox="##. Organize")
     repo.upsert(rec("old", "a.pdf"))
     with engine.begin() as conn:
-        conn.execute(
-            text("INSERT INTO file_fts(drive_id, name, path, text) VALUES ('old','a','a.pdf','t')")
-        )
+        put_fts_row(conn, "old", "a", "a.pdf", "t")
     repo.park("a.pdf", keep_id="new")
     assert repo.by_path("a.pdf") is None and repo.list_dir("") == []
     assert repo.get("old").missing

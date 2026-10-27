@@ -57,6 +57,15 @@ file_text = Table(
     Column("ocr_used", Boolean),
 )
 
+# The FTS rowid of each file's ``file_fts`` row (migration 0037). ``file_fts`` cannot
+# index ``drive_id``, so every FTS write finds its row through this map, by rowid.
+file_fts_map = Table(
+    "file_fts_map",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("fts_rowid", Integer, nullable=False),
+)
+
 # The bank barcode read from the file's scan (migration 0009); ``code`` None: read, none
 # found (0010). ``sha256`` is the content it was read from: a row for other content is
 # ignored, and the barcode pass reads the file again.
@@ -163,6 +172,8 @@ operations = Table(
     Column("copied_to", Text, nullable=True),
     Column("followed", Text, nullable=True),
     Index("ix_operations_batch_id", "batch_id"),  # migration 0004
+    # the status poll looks for planned rows (migration 0037)
+    Index("ix_operations_planned", "state", sqlite_where=text("state = 'planned'")),
 )
 
 # --- Phase 2 (migration 0005): trays, collections, notes, reminders ---

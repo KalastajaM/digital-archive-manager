@@ -386,7 +386,7 @@ def test_migrations_upgrade_an_existing_db(tmp_path: Path, new_engine):
         cols = {r[1]: r[3] for r in conn.execute(text("PRAGMA table_info(file_barcodes)"))}
         assert conn.execute(text("SELECT count(*) FROM files")).scalar() == 1
         assert conn.execute(text("SELECT code FROM file_barcodes")).scalar() == CODE
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0036"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0037"
     assert list(cols) == ["drive_id", "code", "sha256", "read_at"]
     assert cols["code"] == 0 and cols["read_at"] == 1  # code nullable: "none found"
     engine.dispose()
