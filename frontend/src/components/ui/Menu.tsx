@@ -21,6 +21,8 @@ export type MenuEntry =
       disabled?: boolean;
       /** Why the entry is disabled: shown under its label (and its accessible description). */
       reason?: string;
+      /** A tooltip for the entry (shown on hover and keyboard focus). */
+      tip?: string;
       /** A toggle: shown with a check mark (``menuitemcheckbox``). */
       checked?: boolean;
       /** A colour dot before the label (an archive's colour). */
@@ -167,6 +169,7 @@ export function Menu({ label, icon, entries, align = "start", className, text, t
                     role={entry.checked === undefined ? "menuitem" : "menuitemcheckbox"}
                     aria-checked={entry.checked}
                     className="menu-item"
+                    data-tip={entry.tip}
                     disabled={entry.disabled}
                     aria-describedby={entry.disabled && entry.reason ? `${menuId}-why-${i}` : undefined}
                     tabIndex={-1}

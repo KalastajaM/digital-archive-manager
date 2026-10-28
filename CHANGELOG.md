@@ -8,6 +8,14 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **A Relatives button on Browse file rows (New look).** Beside the Quick Look eye, a
+  Relatives button appears when you hover or focus a file row (folders, links and files in
+  To Delete have none). It opens that file's Relatives window without changing your
+  selection.
+- **Clearer Browse view switch (New look).** "Folders" is now "This folder" (its subfolders
+  and its own files) and "Files" is "All files below" (every file in this folder and its
+  subfolders, in one list), each with a tooltip, also in the narrow View menu. They work
+  as before.
 - **A Choose... button for archive folders (New look).** Next to every typed folder path
   (first-run setup, Add archive with a demo archive, and Settings, Archive folders, Add
   folder) a **Choose...** button opens your operating system's own folder window on this
@@ -883,6 +891,12 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **Tooltips are never cut off (New look).** A tooltip next to a pane edge, such as the Quick
+  Look eye at the right end of a Browse row, used to be hidden behind the neighbouring
+  panel. Tooltips now show above everything, stay inside the window and wrap when long.
+- **From and For line up (New look).** On the Inbox filing panel the labels and their
+  values ("Who sent it?", "Who is it for?") sit on one baseline, both buttons are the same
+  height, and a long name ends in an ellipsis inside its button.
 - **Dark theme: text and numbers you could barely read.** In the New look, grey text on
   the open sidebar row, on grey tags and on the remove cross of a chip is a little lighter
   (it was just under the readable limit), the key hints and counts on a blue button or the

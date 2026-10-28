@@ -69,15 +69,54 @@ describe("Browse in New, one pane", () => {
     expect(screen.queryByRole("tablist", { name: "Panes" })).not.toBeInTheDocument();
   });
 
-  it("the View menu holds Folders, Files and the collection filter", async () => {
+  it("the View menu holds This folder, All files below and the collection filter", async () => {
     document.documentElement.dataset.style = "new";
     const { user } = setup("/browse");
     await screen.findByText("a.pdf");
     await user.click(within(screen.getByRole("region", { name: "Browse" })).getByRole("button", { name: "View" }));
     const menu = await screen.findByRole("menu", { name: "View" });
-    expect(within(menu).getByRole("menuitemcheckbox", { name: "Folders" })).toBeChecked();
-    expect(within(menu).getByRole("menuitemcheckbox", { name: "Files" })).not.toBeChecked();
+    expect(within(menu).getByRole("menuitemcheckbox", { name: "This folder" })).toBeChecked();
+    expect(within(menu).getByRole("menuitemcheckbox", { name: "All files below" })).not.toBeChecked();
+    expect(within(menu).getByRole("menuitemcheckbox", { name: "This folder" })).toHaveAttribute("data-tip", expect.stringContaining("subfolders and its own files"));
+    expect(within(menu).getByRole("menuitemcheckbox", { name: "All files below" })).toHaveAttribute("data-tip", expect.stringContaining("in one list"));
     expect(within(menu).getByRole("menuitemcheckbox", { name: "All files" })).toBeChecked();
+  });
+
+  it("the view switch says This folder and All files below, with tooltips, and still switches", async () => {
+    document.documentElement.dataset.style = "new";
+    const { user } = setup("/browse");
+    await screen.findByText("a.pdf");
+    const view = within(screen.getByRole("group", { name: "View" }));
+    const here = view.getByRole("button", { name: "This folder" });
+    const below = view.getByRole("button", { name: "All files below" });
+    expect(view.queryByRole("button", { name: "Folders" })).not.toBeInTheDocument();
+    expect(here).toHaveAttribute("data-tip", "This folder: its subfolders and its own files");
+    expect(below).toHaveAttribute("data-tip", "All files below: every file in this folder and its subfolders, in one list");
+    expect(here).toHaveAttribute("aria-pressed", "true");
+    await user.click(below);
+    expect(below).toHaveAttribute("aria-pressed", "true");
+    expect(here).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("a file row has a Relatives button beside Quick Look that opens that file's Relatives; folders have none", async () => {
+    document.documentElement.dataset.style = "new";
+    const { user } = setup("/browse");
+    await screen.findByText("a.pdf");
+    expect(screen.queryByRole("button", { name: "Relatives of Money" })).not.toBeInTheDocument();
+    const rel = screen.getByRole("button", { name: "Relatives of a.pdf" });
+    expect(rel).toHaveAttribute("data-tip", "Relatives");
+    expect(screen.getByRole("button", { name: "Quick Look a.pdf" })).toBeInTheDocument();
+    await user.click(rel);
+    expect(await screen.findByRole("dialog", { name: /Relatives/ })).toBeInTheDocument();
+  });
+
+  it("Classic has no Relatives button on rows and keeps Folders and Files", async () => {
+    setup("/browse");
+    await screen.findByText("a.pdf");
+    expect(screen.queryByRole("button", { name: "Relatives of a.pdf" })).not.toBeInTheDocument();
+    const view = within(screen.getByRole("group", { name: "View" }));
+    expect(view.getByRole("button", { name: "Folders" })).toBeInTheDocument();
+    expect(view.getByRole("button", { name: "Files" })).toBeInTheDocument();
   });
 
   it("Classic has none of these", async () => {

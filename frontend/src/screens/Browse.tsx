@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, PanelRight } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, Network, PanelRight } from "lucide-react";
 import {
   cloneElement,
   type CSSProperties,
@@ -127,6 +127,10 @@ type Item = {
 type PaneId = "left" | "right";
 const PANES: PaneId[] = ["left", "right"];
 const PANE_NAME: Record<PaneId, string> = { left: "Left pane", right: "Right pane" };
+
+/** The New look's view switch tooltips (the switch and the folded View menu). */
+const THIS_FOLDER_TIP = "This folder: its subfolders and its own files";
+const ALL_FILES_TIP = "All files below: every file in this folder and its subfolders, in one list";
 
 /** Folders: the folder tree as it is; Files: every file below the folder, flat. */
 export type PaneView = "folders" | "files";
@@ -449,6 +453,8 @@ type RowProps = {
   onContextMenu?: (e: MouseEvent) => void;
   /** A file row: the Quick Look button at its right end, shown on hover. */
   onQuickLook?: () => void;
+  /** A file row (New): the Relatives button beside Quick Look, shown on hover too. */
+  onRelatives?: () => void;
   /** The row's place in the pane's items: focus finds the row by it. */
   row: number;
   /** An even line of the list: shaded (the list renders only the rows near the view, so
@@ -473,6 +479,7 @@ function EntryRow({
   dropProps,
   onContextMenu,
   onQuickLook,
+  onRelatives,
   row,
   stripe,
 }: RowProps) {
@@ -542,6 +549,9 @@ function EntryRow({
       </button>
       {onQuickLook && !item.is_dir && (
         <IconButton icon={<Eye />} label={`Quick Look ${visible(item.name)}`} tip="Quick Look" shortcut="Space" className="entry-ql" onClick={onQuickLook} />
+      )}
+      {onRelatives && !item.is_dir && (
+        <IconButton icon={<Network />} label={`Relatives of ${visible(item.name)}`} tip="Relatives" className="entry-ql entry-rel" onClick={onRelatives} />
       )}
       {refusal && (
         <span className="drop-refusal" role="status">
@@ -1512,6 +1522,8 @@ export default function Browse() {
   // A row's Quick Look button: that row becomes the pane's current one, and Quick Look
   // opens once the render has its pane's files.
   const [lookAt, setLookAt] = useState<string | null>(null);
+  // the Relatives window of a file: from "Relatives…" in the details' actions or a row's button
+  const [relativesOf, setRelativesOf] = useState<BlockFile | null>(null);
   const quickLookRow = (pane: PaneId, i: number) => {
     const id = items[pane][i].drive_id;
     setActive(pane);
@@ -1735,8 +1747,12 @@ export default function Browse() {
               value={state.view}
               onChange={(view) => setPane(pane, { view })}
               options={[
-                { value: "folders", label: "Folders", title: "The folders as they are" },
-                { value: "files", label: "Files", title: "Every file below this folder, without the folders" },
+                isNew
+                  ? { value: "folders", label: "This folder", title: THIS_FOLDER_TIP }
+                  : { value: "folders", label: "Folders", title: "The folders as they are" },
+                isNew
+                  ? { value: "files", label: "All files below", title: ALL_FILES_TIP }
+                  : { value: "files", label: "Files", title: "Every file below this folder, without the folders" },
               ]}
             />
             {isNew && (
@@ -1748,8 +1764,8 @@ export default function Browse() {
                 align="end"
                 className={state.collection === null ? "pane-narrow" : "pane-narrow menu-active"}
                 entries={[
-                  { label: "Folders", checked: state.view === "folders", onSelect: () => setPane(pane, { view: "folders" }) },
-                  { label: "Files", checked: state.view === "files", onSelect: () => setPane(pane, { view: "files" }) },
+                  { label: "This folder", tip: THIS_FOLDER_TIP, checked: state.view === "folders", onSelect: () => setPane(pane, { view: "folders" }) },
+                  { label: "All files below", tip: ALL_FILES_TIP, checked: state.view === "files", onSelect: () => setPane(pane, { view: "files" }) },
                   "separator",
                   ...filterEntries(pane),
                 ]}
@@ -1909,6 +1925,11 @@ export default function Browse() {
                     dragPaths={dragPaths}
                     dragSpecial={dragSpecial}
                     onQuickLook={split || isNew ? () => quickLookRow(pane, i) : undefined}
+                    onRelatives={
+                      isNew && !item.is_dir && !item.is_link && !inToDelete(item.path)
+                        ? () => setRelativesOf({ drive_id: item.drive_id, path: item.path, name: item.name })
+                        : undefined
+                    }
                   />
                 );
               }}
@@ -2098,8 +2119,6 @@ export default function Browse() {
   };
   const several = acted.length > 1;
   const noFiles = moveTargets.length === 0;
-  // the Relatives window of the file in the details (from "Relatives…" in its actions)
-  const [relativesOf, setRelativesOf] = useState<BlockFile | null>(null);
   const inDetails = (selector: string) => document.querySelector<HTMLElement>(`.browse-preview ${selector}`);
   const inspectorActions: InspectorAction[] = [];
   if (isNew) {
