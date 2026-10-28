@@ -715,6 +715,9 @@
 [data-style="new"] .box-kept { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; padding: 16px 18px 4px; gap: 12px; font-size: var(--fs-md); }
 [data-style="new"] .box-kept li { padding: 12px; border: 1px solid var(--hairline); border-radius: var(--r-xl); align-items: flex-start; flex-wrap: nowrap; }
 [data-style="new"] .box-kept-text { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* the "nothing in that area" message is a row of the card (a column), not a 100% wide flex item:
+ * its basis made the card too short and clipped the message */
+[data-style="new"] .box-kept-problem { flex: none; }
 [data-style="new"] .box-kept-text > strong { flex: 1 1 auto; font-weight: 600; }
 [data-style="new"] .box-kept-text > :not(strong):not(.box-mode):not(.box-chip):not(.box-found):not(.box-kept-pic) { flex: 1 0 100%; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-2); }
 [data-style="new"] .box-kept-picture { max-height: 56px; border-radius: var(--r-md); }
@@ -725,12 +728,14 @@
 /* -- layout pass 2: the boxes as drawn: a number and a colour each, words as chips, the foot -- */
 [data-style="new"] {
   --tone-0: #234a7a;
-  --tone-1: #c0661a;
+  --tone-1: #b25d14; /* white on it: 4.7:1 */
+  --on-tone: #ffffff;
   --tone-2: #2e7d4a;
   --tone-3: #7a3d8c;
   --tone-4: #a12f55;
 }
 [data-style="new"][data-theme="dark"] {
+  --on-tone: #1a1917; /* dark ink on the light tones: 6.2:1 or better */
   --tone-0: #8db0e3;
   --tone-1: #e8964a;
   --tone-2: #6cc088;
@@ -742,7 +747,7 @@
 [data-style="new"] .page-box-kept[data-tone="2"] { --tone: var(--tone-2); }
 [data-style="new"] .page-box-kept[data-tone="3"] { --tone: var(--tone-3); }
 [data-style="new"] .page-box-kept[data-tone="4"] { --tone: var(--tone-4); }
-[data-style="new"] .page-box-kept .page-box-number { background: var(--tone); color: var(--paper); }
+[data-style="new"] .page-box-kept .page-box-number { background: var(--tone); color: var(--on-tone); }
 [data-style="new"] .box-panel-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 [data-style="new"] .box-panel-sub { font-size: var(--fs-sm); color: var(--muted); }
 [data-style="new"] .box-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -755,7 +760,7 @@
 [data-style="new"] .box-kept li { position: relative; }
 [data-style="new"] .box-kept-text { flex-wrap: wrap; padding-right: 30px; }
 [data-style="new"] .box-kept li > .icon-button { top: 10px; right: 10px; width: 26px; height: 26px; }
-[data-style="new"] .box-chip { flex: none; padding: 0 6px; border-radius: var(--r-sm); background: var(--tone); color: var(--paper); font-family: var(--font-mono); font-size: 11px; font-weight: 500; line-height: 18px; }
+[data-style="new"] .box-chip { flex: none; padding: 0 6px; border-radius: var(--r-sm); background: var(--tone); color: var(--on-tone); font-family: var(--font-mono); font-size: 11px; font-weight: 500; line-height: 18px; }
 [data-style="new"] .box-kept-text > .box-found,
 [data-style="new"] .box-kept-text > .box-kept-pic { flex: 1 0 100%; display: flex; flex-direction: column; gap: 6px; font-family: var(--font); font-size: var(--fs-md); color: var(--text-2); }
 [data-style="new"] .box-kept-text > .box-found { min-width: 0; max-width: 100%; }
@@ -2621,3 +2626,11 @@
 /* Plex Mono has no bold: a bold code would be drawn wider than its box */
 [data-style="new"] .code-line-code { font-weight: 500; }
 [data-style="new"] .search-help { width: 28px; height: 28px; }
+
+/* ==== Dark theme contrast ================================================================
+ * Text on the accent fill keeps 4.5:1 or better: the dimmed key hints and counts are less
+ * transparent, and the key cap in a primary button is a darker chip (a lighter one gave 4.0). */
+:root[data-style="new"][data-theme="dark"] .tn-start-count,
+:root[data-style="new"][data-theme="dark"] .tray-segmented .segmented-option[aria-pressed="true"] .segmented-key { opacity: 0.9; }
+:root[data-style="new"][data-theme="dark"] .panel-actions .primary kbd,
+:root[data-style="new"][data-theme="dark"] .item-new .item-done-buttons .primary kbd { background: rgb(0 0 0 / 0.2); }

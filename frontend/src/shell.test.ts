@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import css from "./styles.css?raw";
 import theme from "./theme.css?raw";
+import newCss from "./styles-new.css?raw";
 import { balanceColumns } from "./components/today/balance";
 import { holdsText } from "./components/collectionTree";
 
@@ -53,6 +54,45 @@ describe("theme contrast (4.5:1 for small text)", () => {
 
   it("filled buttons use the fill token, not the text accent", () => {
     expect(declarations("button.primary")).toMatch(/background:\s*var\(--accent-fill\)/);
+  });
+});
+
+/** The hex tokens of one rule of theme.css, found by its selector. */
+function block(selector: string): Record<string, string> {
+  const text = strip(theme);
+  const from = text.indexOf(selector + " {");
+  const body = text.slice(from, text.indexOf("}", from));
+  return Object.fromEntries([...body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
+}
+/** A translucent colour laid over an opaque one. */
+function over(fg: string, alpha: number, bg: string) {
+  const mix = (i: number) => Math.round(parseInt(fg.slice(i, i + 2), 16) * alpha + parseInt(bg.slice(i, i + 2), 16) * (1 - alpha));
+  return "#" + [1, 3, 5].map((i) => mix(i).toString(16).padStart(2, "0")).join("");
+}
+
+describe("dark theme contrast on tinted surfaces", () => {
+  it("New dark: muted and grey text read on the open sidebar row, a selected row and a grey tag", () => {
+    const t = { ...block(':root[data-style="new"]'), ...block(':root[data-style="new"][data-theme="dark"]') };
+    for (const surface of [t["--sidebar-sel"], t["--selected"], over("#ffffff", 0.08, t["--panel"]), over("#ffffff", 0.08, t["--panel-2"])]) {
+      expect(contrast(t["--muted"], surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(t["--grey-text"], surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it("New: the number on a drawn box reads on every box colour, in both themes", () => {
+    const text = strip(newCss);
+    const hexes = (from: string) => {
+      const body = text.slice(text.indexOf(from), text.indexOf("}", text.indexOf(from)));
+      return Object.fromEntries([...body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
+    };
+    for (const from of ['[data-style="new"] {\n  --tone-0', '[data-style="new"][data-theme="dark"] {\n  --on-tone']) {
+      const t = hexes(from);
+      expect(t["--on-tone"]).toBeDefined();
+      for (const n of [0, 1, 2, 3, 4]) expect(contrast(t["--on-tone"], t[`--tone-${n}`])).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it("Classic dark: the red text reads on the red tag background over a panel", () => {
+    const t = block(':root[data-theme="dark"]');
+    expect(contrast(t["--red-text"], over("#ff453a", 0.2, t["--panel"]))).toBeGreaterThanOrEqual(4.5);
   });
 });
 
