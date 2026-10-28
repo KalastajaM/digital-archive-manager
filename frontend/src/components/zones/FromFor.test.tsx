@@ -64,6 +64,20 @@ describe("From and For chips", () => {
     expect(screen.getByRole("button", { name: "For: not set" })).toBeInTheDocument();
   });
 
+  it("in New, label and value are separate parts of one button, the value alone ellipsised", () => {
+    document.documentElement.dataset.style = "new";
+    try {
+      setup(<FromFor entry={entry({}, assigned("owner", { sender: "A very long sender name without any break at all" , person: null }))} />);
+      const [from, forWhom] = Array.from(document.querySelectorAll<HTMLElement>(".from-for-chip"));
+      expect(from.querySelector(".from-for-word")?.textContent).toBe("From");
+      expect(from.querySelector(".from-for-value")?.textContent).toBe("A very long sender name without any break at all");
+      expect(forWhom.querySelector(".from-for-word")?.textContent).toBe("For");
+      expect(forWhom.querySelector(".from-for-value")?.textContent).toBe("Who is it for?");
+    } finally {
+      delete document.documentElement.dataset.style;
+    }
+  });
+
   it.each([
     ["assigned", entry({ person: "Tiina", person_source: "assigned" }, assigned("owner")), "For: Tiina · you set this"],
     ["address area", entry({ person: "Tiina", person_source: "address area" }), "For: Tiina · address area"],

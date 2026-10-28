@@ -9,6 +9,7 @@ import { RecoveryProvider } from "./components/Recovery";
 import { ToastProvider } from "./components/Toasts";
 import { UndoProvider } from "./components/UndoConfirm";
 import { installOverflowTitles } from "./overflowTitles";
+import { installTooltips } from "./tooltips";
 import "./fonts.css";
 import "./theme.css";
 import "./styles.css";
@@ -19,6 +20,7 @@ const client = new QueryClient({
 });
 
 installOverflowTitles();
+installTooltips();
 installAppearance();
 
 createRoot(document.getElementById("root")!).render(

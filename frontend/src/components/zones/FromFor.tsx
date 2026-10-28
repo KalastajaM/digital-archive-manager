@@ -140,7 +140,13 @@ export function FromFor({ entry }: { entry: InboxEntry }) {
   const chip = (kind: AssignKind, value: string | null, source: string | null) => (
     <button type="button" className={value ? "from-for-chip" : "from-for-chip from-for-empty"} onClick={() => setPicking(kind)}>
       <span className="from-for-word">{isNew ? WORD[kind] : `${WORD[kind]}:`}</span>{" "}
-      {value ? visible(value) : <span className="hint">{isNew ? EMPTY[kind] : "not set"}</span>}
+      {isNew ? (
+        <span className="from-for-value">{value ? visible(value) : EMPTY[kind]}</span>
+      ) : value ? (
+        visible(value)
+      ) : (
+        <span className="hint">not set</span>
+      )}
       {value && source && (
         <>
           {" "}

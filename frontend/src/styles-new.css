@@ -114,7 +114,17 @@
 [data-style="new"] .toast { border-radius: var(--r-lg); }
 
 /* Tooltips: ink on paper, inverted */
-[data-style="new"] [data-tip]::after { background: var(--text); color: var(--bg); box-shadow: none; }
+/* The CSS box is replaced by one tip in the top layer (src/tooltips.ts): never cut off by a pane. */
+[data-style="new"] [data-tip]::after { display: none !important; }
+[data-style="new"] .dam-tip {
+  display: none; position: fixed; inset: auto; margin: 0; border: 0; overflow: visible;
+  max-width: min(320px, calc(100vw - 8px)); padding: 4px 8px; border-radius: var(--r-sm);
+  background: var(--text); color: var(--bg); font-size: var(--fs-xs); font-weight: 400; line-height: 1.35;
+  white-space: normal; overflow-wrap: anywhere; pointer-events: none; z-index: 2147483647;
+  animation: tip-in var(--motion) var(--ease) both; --tip-from: -2px;
+}
+[data-style="new"] .dam-tip[data-open] { display: block; }
+@media (prefers-reduced-motion: reduce) { [data-style="new"] .dam-tip { animation-duration: 1ms; } }
 
 /* Keys */
 [data-style="new"] kbd {
@@ -672,8 +682,10 @@
 /* From and For: two buttons side by side, the empty one dashed */
 [data-style="new"] .from-for { margin: 0 0 18px; }
 [data-style="new"] .from-for-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-[data-style="new"] .from-for-chip { display: flex; align-items: center; gap: 6px; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); font-size: 13px; font-weight: 500; text-align: left; overflow: hidden; text-overflow: ellipsis; }
-[data-style="new"] .from-for-chip .from-for-word { flex: none; font-weight: 400; color: var(--muted); }
+[data-style="new"] .from-for-chip { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; align-content: center; column-gap: 6px; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); font-size: 13px; line-height: 18px; font-weight: 500; text-align: left; overflow: hidden; }
+/* the label and the value share one baseline: the label in the label style, the value in the field text size */
+[data-style="new"] .from-for-chip .from-for-word { font-size: var(--fs-sm); font-weight: 400; color: var(--muted-2); white-space: nowrap; }
+[data-style="new"] .from-for-chip .from-for-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 [data-style="new"] .from-for-chip .from-for-source { display: none; }
 [data-style="new"] .from-for-chip.from-for-empty { border-style: dashed; border-color: var(--border-strong); font-weight: 400; color: var(--text-2); }
 
@@ -1655,7 +1667,7 @@
 [data-style="new"] .list-head-count { margin-left: auto; color: var(--accent-hover); font-weight: 500; }
 /* the Quick Look eye at the row end, on hover or focus, in both layouts */
 [data-style="new"] .entries.entries-flat li,
-[data-style="new"] .flat-head { grid-template-columns: var(--flat-check) minmax(0, 1fr) 22px; }
+[data-style="new"] .flat-head { grid-template-columns: var(--flat-check) minmax(0, 1fr) 22px 22px; }
 [data-style="new"] .entries.entries-flat .entry-ql { margin-right: 0; }
 [data-style="new"] .entries .icon-button.entry-ql { color: var(--muted-2); }
 [data-style="new"] .entries li:hover .entry-ql,
