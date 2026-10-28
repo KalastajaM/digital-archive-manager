@@ -1293,12 +1293,14 @@ An arc runs from this file's row to each relative's row. A thicker arc means mor
 and an orange dashed one means the file is not filed yet. An arc to a folded folder ends at
 the folder's row. The list scrolls up and down; there is no zoom or panning.
 
+- **Folders.** Only folders with a relative (and this file's own) are shown. A folder that
+  only leads to one other folder shares its row with it, as in **11. Bills & Receipts / 2026**.
 - **In common.** The strip above the list shows each value shared with some relatives once,
   with how many share it. Press one to light up those files and fade the rest; press it again
   (or another one) to change or clear it.
 - **What a row shares.** Point at a row, or move to it with the keyboard, and the card at
   the top of the panel on the right lists the exact values (Folder, Sender, Tag and so on)
-  with **Quick look** and **Not related**. The row and its arc are outlined. The card sits
+  with **Quick look**, **Its relatives** and **Not related**. The row and its arc are outlined. The card sits
   beside the outline, never over it, and stays on the last row you pointed at, so you can
   move over to its buttons.
 - **Act on several at once.** The panel on the right has the same buttons as the block
@@ -1306,8 +1308,13 @@ the folder's row. The list scrolls up and down; there is no zoom or panning.
   file there**), with the same previews, Undo and reasons when a button is off. **2+
   links**, **Same sender** and **Outside this folder** tick a group in one click. **N marked
   not related** is there too, with **Show again**.
-- **Keys.** `↑`/`↓` move between rows, **Space** opens Quick Look, `X` ticks the row, `N`
-  marks it not related, **Esc** closes the window.
+- **Walk the family tree.** Click a relative's name to see its own relatives in the same
+  window, and go on from there to theirs. The trail at the top shows the files you came
+  through; click one, or **Back**, to return. The file you came from is marked **came from**
+  in the outline. Ticks and the lit strip start fresh on each file.
+- **Keys.** `↑`/`↓` move between rows, **Space** opens Quick Look, **Enter** shows the row's
+  own relatives, **Backspace** goes back, `X` ticks the row, `N` marks it not related,
+  **Esc** closes the window.
 
 Quick Look from the block or the window opens in **compare mode**: this file on the left, the
 relative on the right, and below them what the two share. **N** (Not related) marks the

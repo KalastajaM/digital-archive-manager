@@ -2508,7 +2508,13 @@
 [data-style="new"] .relatives-dialog .sheet-title { font-size: var(--fs-lg); margin-bottom: var(--sp-1); }
 [data-style="new"] .relatives-dialog .sheet-body { display: flex; flex-direction: column; gap: var(--sp-2); overflow: hidden; }
 [data-style="new"] .rel-head { display: flex; align-items: center; gap: var(--sp-2); }
-[data-style="new"] .rel-file { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--muted); }
+[data-style="new"] .rel-trail { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: var(--fs-sm); }
+[data-style="new"] .rel-crumb { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 220px; color: var(--muted); }
+[data-style="new"] .rel-crumb .link-button { min-width: 0; font: inherit; }
+[data-style="new"] .rel-file { flex: 1; min-width: 0; color: var(--muted); }
+[data-style="new"] .rel-trail .rel-file { color: var(--text); }
+[data-style="new"] .rel-open { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+[data-style="new"] .rel-open:hover { text-decoration: underline; }
 [data-style="new"] .rel-strip { flex: none; display: flex; align-items: center; gap: 6px; overflow-x: auto; white-space: nowrap; padding: var(--sp-1) 0; border-bottom: 1px solid var(--hairline); }
 [data-style="new"] .rel-strip-label { font-size: var(--fs-sm); color: var(--muted); margin-right: var(--sp-1); }
 [data-style="new"] .rel-chip { flex: none; min-height: 0; padding: 2px 10px; border-radius: var(--r-pill); font-size: var(--fs-sm); }
@@ -2570,8 +2576,9 @@
 [data-style="new"] .rel-card-list dt { color: var(--muted); }
 [data-style="new"] .rel-card-list dd { margin: 0; overflow-wrap: anywhere; }
 [data-style="new"] .rel-card-note { color: var(--muted); font-size: var(--fs-xs); }
-[data-style="new"] .rel-card-actions { display: flex; gap: 6px; align-items: center; padding-top: 6px; border-top: 1px solid var(--hairline); }
+[data-style="new"] .rel-card-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 6px; border-top: 1px solid var(--hairline); }
 [data-style="new"] .rel-side { flex: none; width: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); background: var(--panel-2); border-radius: var(--r-lg); }
+[data-style="new"] .rel-side > * { flex: none; }
 [data-style="new"] .rel-side-block { display: flex; flex-direction: column; gap: var(--sp-2); }
 [data-style="new"] .rel-side-label { font-size: var(--fs-xs); font-weight: 500; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
 [data-style="new"] .rel-side .relatives-actions { padding: 0; background: none; box-shadow: none; }
