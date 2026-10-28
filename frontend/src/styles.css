@@ -1338,6 +1338,9 @@ li[aria-current="true"] .tag { background: var(--highlight); color: inherit; }
 .barcode-paper[title] { cursor: zoom-in; }
 /* Full size: 3 px a module, never scaled; a narrow window scrolls it sideways. */
 dialog.sheet.barcode-sheet { width: fit-content; max-width: 96vw; }
+.pay-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.pay-position { flex: 1 1 200px; color: var(--muted); font-size: var(--fs-sm); }
+.pay-step { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
 .barcode-full { max-width: 100%; overflow-x: auto; border-radius: var(--r-md); }
 .barcode-full-paper { width: max-content; padding: var(--sp-3) 0; background: var(--paper); color: var(--barcode-ink); }
 .barcode-full-paper .barcode-code { font-size: var(--fs-md); }

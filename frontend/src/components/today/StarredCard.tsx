@@ -100,7 +100,7 @@ function StarredRow({ m, onLook }: { m: Member; onLook?: () => void }) {
   );
 }
 
-export function StarredCard({ frame }: { frame: CardFrame }) {
+export function StarredCard({ frame, Shell = Card }: { frame: CardFrame; Shell?: typeof Card }) {
   const starred = useBuiltin("starred");
   const members = useMemo(
     () =>
@@ -164,7 +164,7 @@ export function StarredCard({ frame }: { frame: CardFrame }) {
   };
   const n = members.length;
   return (
-    <Card
+    <Shell
       title="Starred"
       icon={<Star />}
       className="today-card today-card-compact"
@@ -189,6 +189,6 @@ export function StarredCard({ frame }: { frame: CardFrame }) {
       )}
       {quickLook.view}
       {trash.view}
-    </Card>
+    </Shell>
   );
 }

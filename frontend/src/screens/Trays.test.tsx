@@ -7,6 +7,7 @@ import { STATUS_ON } from "../components/ai/testData";
 import { publishSelection } from "../selection";
 import { type Call, dataTransfer, deferred, IMPORTANT_REFUSED, mockFetch, quarantineRoute, renderWithProviders, undoButton } from "../test-utils";
 import Trays from "./Trays";
+import { localToday } from "../format";
 
 vi.mock("../selection", async (actual) => ({
   ...(await actual<typeof import("../selection")>()),
@@ -1042,7 +1043,7 @@ describe("Bill view", () => {
     expect(within(panel).getByText(BARCODE_CODE)).toBeInTheDocument();
   });
 
-  it("Pay mode offers the tray's done action: it closes Pay mode and opens the item's done form", async () => {
+  it("Pay mode offers the tray's done action: it marks the bill paid and moves on to the next bill", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
     });
@@ -1051,14 +1052,13 @@ describe("Bill view", () => {
     await user.keyboard("b");
     const sheet = await screen.findByRole("dialog", { name: "Bank barcode" });
     expect(within(sheet).getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(await within(sheet).findByText(/^Bill 1 of 3/)).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Mark paid" }));
-    expect(screen.queryByRole("dialog", { name: "Bank barcode" })).not.toBeInTheDocument();
-    const form = await screen.findByRole("form", { name: "Mark paid" });
-    expect(within(form).getByLabelText("Paid on")).toHaveValue(DAY);
-    // nothing is posted until the form is confirmed
-    expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(0);
-    await user.keyboard("{Enter}");
+    // the tray's own default (paid on today) is sent at once, and Pay mode shows the next bill
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: localToday() } });
+    expect(await within(sheet).findByText(/^Bill 2 of 3/)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Bank barcode" })).toBe(sheet);
   });
 
   it("has no Note button (the note is on the page), and every action button has a tooltip", async () => {

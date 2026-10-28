@@ -3,17 +3,16 @@
  * item's current fields (``GET /api/items/{id}/barcode``); when a barcode printed on the
  * scan disagrees, a warning names the fields and offers its values. It is drawn as large as
  * the pane allows (down to a size a phone still reads); "Show large barcode" (or ``b``, or
- * a double click) opens Pay mode: the barcode full size with the payee, amount, reference,
- * IBAN and due date in large type to check against the bill, and Copy barcode number. */
+ * a double click) opens Pay mode (``PayMode.tsx``): the barcode full size with the payee,
+ * amount, reference, IBAN and due date in large type to check against the bill. */
 import { Maximize2 } from "lucide-react";
 import { type CSSProperties, type RefObject, useEffect, useId, useRef, useState } from "react";
-import { useStyle } from "../appearance";
 import { isShortcut, useKeydown } from "../keyboard";
 import { errorText, type ItemBarcode, useItemBarcode, useItemUpdate } from "../api/client";
 import { fieldWord, formatDate, formatMoney } from "../format";
 import { visible } from "../text";
 import { CopyButton } from "./CopyButton";
-import { Sheet } from "./ui/Sheet";
+import { usePayMode } from "./payModeContext";
 
 /** One module (the narrowest bar) in CSS pixels: at least 2 so a phone camera resolves it. */
 export const MODULE_PX = 2;
@@ -30,7 +29,7 @@ export const FULL_BAR_HEIGHT = 120;
 
 /** ``--quiet-zone`` for the paper around a symbol drawn at ``px`` a module: its digits
  * are inset by it, so they start under the first bar (the CSS never repeats the sum). */
-const quietZone = (px: number) => ({ "--quiet-zone": `${QUIET_MODULES * px}px` }) as CSSProperties;
+export const quietZone = (px: number) => ({ "--quiet-zone": `${QUIET_MODULES * px}px` }) as CSSProperties;
 
 /** The bars' x and width in modules: ``modules`` alternates bar, space, bar, … */
 export function bars(modules: number[]): { x: number; w: number }[] {
@@ -110,7 +109,7 @@ function Drawn({ code, modules, onFullSize }: { code: string; modules: number[];
 }
 
 /** The symbol at ``px`` CSS pixels a module, with its quiet zones. */
-function BarcodeSvg({
+export function BarcodeSvg({
   code,
   modules,
   px = MODULE_PX,
@@ -136,104 +135,6 @@ function BarcodeSvg({
         <rect key={b.x} x={(QUIET_MODULES + b.x) * px} y={0} width={b.w * px} height={height} />
       ))}
     </svg>
-  );
-}
-
-/** One value of the bill, shown large in Pay mode (``copy``: what its Copy button puts
- * on the clipboard, as in the copy rows). */
-export type PayFact = { label: string; value: string; copy?: { raw: string; type: string; label: string } };
-
-/** The barcode full size on white paper, with its digits; Esc or Close returns. While
- * the code is fetched again it stays open with the last code and says "Updating…". */
-function FullSize({
-  code,
-  modules,
-  updating,
-  pay,
-  title,
-  done,
-  onClose,
-}: {
-  code: string;
-  modules: number[];
-  updating: boolean;
-  pay?: PayFact[];
-  /** The bill's title, for the New look's heading. */
-  title?: string;
-  done?: PayDone;
-  onClose: () => void;
-}) {
-  const [look] = useStyle();
-  const isNew = look === "new";
-  const amount = pay?.find((f) => f.copy?.type === "money");
-  return (
-    <Sheet
-      open
-      title="Bank barcode"
-      className="barcode-sheet"
-      onClose={onClose}
-      footer={
-        <>
-          <CopyButton value={code} label="barcode number" />
-          {done ? (
-            <>
-              <button type="button" onClick={onClose}>
-                Close
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => {
-                  onClose();
-                  done.onDone();
-                }}
-              >
-                {visible(done.label)}
-              </button>
-            </>
-          ) : (
-            <button type="button" className="primary" onClick={onClose}>
-              Done
-            </button>
-          )}
-        </>
-      }
-    >
-      {isNew && title && (
-        <div className="pay-head">
-          <h3 className="pay-title">{visible(title)}</h3>
-          {amount && <span className="pay-total">{visible(amount.value)}</span>}
-        </div>
-      )}
-      {pay && pay.length > 0 && (
-        <dl className="pay-facts" aria-label="Payment details">
-          {pay.map((f) => (
-            <div key={f.label} className="pay-fact" data-kind={f.copy?.type}>
-              <dt>{visible(f.label)}</dt>
-              <dd>{visible(f.value)}</dd>
-              {isNew && f.copy && <CopyButton value={f.copy.raw} type={f.copy.type} label={f.copy.label} compact />}
-            </div>
-          ))}
-        </dl>
-      )}
-      <div className="barcode-full">
-        <div className="barcode-full-paper" style={quietZone(FULL_MODULE_PX)}>
-          <BarcodeSvg code={code} modules={modules} px={FULL_MODULE_PX} height={FULL_BAR_HEIGHT} />
-          <code className="barcode-code">{visible(code)}</code>
-        </div>
-      </div>
-      {isNew && (
-        <ol className="pay-steps" aria-label="How to pay with the barcode">
-          <li>In your banking app choose to pay with a barcode (in most Finnish banks: Pay, then Scan barcode).</li>
-          <li>Hold the phone about 15 to 25 cm from the screen.</li>
-          <li>Check the payee, amount and reference before you confirm.</li>
-        </ol>
-      )}
-      <p className="hint">Scan it from the screen with your banking app.</p>
-      <p className="hint barcode-full-status" role="status">
-        {updating ? "Updating…" : ""}
-      </p>
-    </Sheet>
   );
 }
 
@@ -290,29 +191,16 @@ function Mismatch({ itemId, barcode }: { itemId: number; barcode: ItemBarcode })
   );
 }
 
-/** The item's own done action ("Mark paid"), offered in Pay mode once the bill is paid:
- * it closes Pay mode and opens the item's done form, the same as its button. */
-export type PayDone = { label: string; onDone: () => void };
-
-export function Barcode({
-  itemId,
-  pay,
-  title,
-  done,
-}: {
-  itemId: number;
-  pay?: PayFact[];
-  title?: string;
-  done?: PayDone;
-}) {
+export function Barcode({ itemId }: { itemId: number }) {
   const query = useItemBarcode(itemId);
-  const [fullSize, setFullSize] = useState(false);
+  const payMode = usePayMode();
+  const showFull = () => payMode.open(itemId);
   const canShow = !!query.data?.code && !!query.data?.modules;
   // ``b``: Pay mode, from the bill (not while typing or behind a dialog)
   useKeydown((e) => {
     if (e.key !== "b" || !isShortcut(e) || !canShow) return;
     e.preventDefault();
-    setFullSize(true);
+    showFull();
   });
   if (query.isPending) return null;
   if (query.isError) {
@@ -332,12 +220,12 @@ export function Barcode({
         </p>
       ) : drawn ? (
         <div className="barcode-box">
-          <Drawn code={drawn.code} modules={drawn.modules} onFullSize={() => setFullSize(true)} />
+          <Drawn code={drawn.code} modules={drawn.modules} onFullSize={showFull} />
           <div className="barcode-help">
             <p>Scan it with your banking app, or copy the barcode number into the web bank.</p>
             <div className="barcode-buttons">
               <CopyButton value={drawn.code} label="barcode number" />
-              <button type="button" className="barcode-large" onClick={() => setFullSize(true)}>
+              <button type="button" className="barcode-large" onClick={showFull}>
                 <Maximize2 size={14} strokeWidth={1.75} aria-hidden="true" /> Show large barcode <kbd>B</kbd>
               </button>
             </div>
@@ -347,17 +235,6 @@ export function Barcode({
         <p className="hint barcode-reason">No barcode: {visible(barcode.reason ?? "it cannot be built")}</p>
       )}
       {!updating && barcode.mismatch.length > 0 && <Mismatch itemId={itemId} barcode={barcode} />}
-      {fullSize && drawn && (
-        <FullSize
-          code={drawn.code}
-          modules={drawn.modules}
-          updating={updating}
-          pay={pay}
-          title={title}
-          done={done}
-          onClose={() => setFullSize(false)}
-        />
-      )}
     </div>
   );
 }

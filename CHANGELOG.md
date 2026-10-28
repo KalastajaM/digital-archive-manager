@@ -8,6 +8,23 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Pay mode steps through your bills.** Pay mode now says "Bill 2 of 5 · 412,90 € open in
+  total" and has **Previous bill** and **Next bill** buttons (the ← and → keys too) that go
+  through every open bill, across all your bill trays by due date, without closing. The
+  barcode, the values, the title and **Mark paid** follow the bill on screen, and **Mark paid**
+  now marks it paid at once (today's date, with a toast to undo it; a form only when your tray
+  asks for a value) and moves on to the next bill. Works in both looks.
+- **The New look: Today laid out as drawn.** A headline built from your counts ("One bill is
+  overdue, seven documents to file") with **Start filing** and **Customize**, the Convert notice
+  as one line, four tiles (**To file**, **Overdue**, **Due in 14 days**, **Waiting on others**,
+  each linking to what it counts), and two columns. On the left a **To pay** table with each
+  bill's due tag and amount, **Pay** (opens Pay mode on that bill) and **Paid**, the overdue
+  bill opened up with its copy buttons and note, and every other tray as a short list with
+  **Show all**. On the right the **Inbox** summary with a bar for the files the rules
+  recognised and Ask AI, **Collections to do**, **Starred**, **Reminders** and **Search**.
+  **Customize** turns the sections into an arrange mode (fold, Move up and Move down, drag by
+  the heading, **Reset layout**), kept apart from Classic's arrangement. In a narrow window the
+  right column moves under the left. Classic is unchanged.
 - **Skip a file in the Inbox.** **Skip** (or the **s** key, in both looks) leaves the file you
   are looking at where it is and goes on to the next one in the list, round to the first from
   the last. Nothing in the archive changes. In the New look Skip is a button at the foot of the

@@ -9,10 +9,10 @@ import type { CardFrame } from "./frame";
 export type ClearTray = { id: string; name: string };
 
 /** "To pay is clear", "To pay and To read are clear", "To pay, To action and To read are clear". */
-export function ClearCard({ trays, frame }: { trays: ClearTray[]; frame: CardFrame }) {
+export function ClearCard({ trays, frame, Shell = Card }: { trays: ClearTray[]; frame: CardFrame; Shell?: typeof Card }) {
   const enc = encodeURIComponent;
   return (
-    <Card
+    <Shell
       title="Clear"
       icon={<CircleCheck />}
       className="today-card today-card-compact"
@@ -30,6 +30,6 @@ export function ClearCard({ trays, frame }: { trays: ClearTray[]; frame: CardFra
           {trays.length === 1 ? "is" : "are"} clear.
         </p>
       )}
-    </Card>
+    </Shell>
   );
 }
