@@ -2582,6 +2582,9 @@
 [data-style="new"] .rel-row.carded.lit { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--accent); }
 [data-style="new"] .rel-arc.on .rel-arc-line { stroke: var(--accent-hover); }
 [data-style="new"] .rel-arc.on .rel-dot { r: 4.5; }
+/* pointing at a file: its arc (and its folder's arc) stand out, the rest step back */
+[data-style="new"] .rel-arcs.pointing .rel-arc:not(.on) { opacity: 0.25; }
+[data-style="new"] .rel-arcs .rel-arc { transition: opacity var(--motion) var(--ease); }
 [data-style="new"] .rel-card-name { font-weight: 600; overflow-wrap: anywhere; }
 [data-style="new"] .rel-card-list { margin: 0; display: flex; flex-direction: column; gap: 3px; }
 [data-style="new"] .rel-card-list > div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }

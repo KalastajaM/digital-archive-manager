@@ -149,7 +149,7 @@ today:
 **Quick Look compare mode**: extend `QuickLook.tsx` (already a modal with ←/→ and
 Space) with an optional second pane for "this file", a footer with what they share, and
 verdict keys: N Not related, → Skip, Y Related and next. Each pane zooms on its own
-(+ / - / 0 go to the pane clicked last); "Zoom together" links them for same-size documents. "Related" only moves on; it
+(+ / - / 0 go to the pane clicked last); "Move together" links their zoom, scroll (as a share of the way down) and page. "Related" only moves on; it
 stores nothing, since being related is computed, not stored.
 
 ## Phase 3: AI find relatives

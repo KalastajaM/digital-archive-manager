@@ -3,13 +3,14 @@
  * shortcuts are off while it is open (``dialogOpen()``); its keys (Space/Esc to close,
  * ←/→ and j/k to move) are handled by ``useQuickLook``. */
 import { ChevronLeft, ChevronRight, Link2, Network, X } from "lucide-react";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isTyping } from "../keyboard";
 import { visible } from "../text";
 import { FileDetails } from "./FileDetails";
 import { DialogStatus, InlineResults, useDialogStatus } from "./FileLaunch";
 import { FIT_LEVEL, FilePreview, type ZoomControl, ZoomKeys, ZOOM_LEVELS } from "./FilePreview";
 import { IconButton } from "./ui/IconButton";
+import { alignPages, alignScroll, MoveLink, newHub } from "./moveTogether";
 import { MarkToggles } from "./MarkToggles";
 import type { BoxTool } from "./zones/PageBoxes";
 import { TrashButton } from "./Trash";
@@ -71,10 +72,29 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
   // The zoom the user chose stays while paging through documents (a new Quick Look starts at Fit).
   const zoomControl = useState(FIT_LEVEL);
   const subjectZoom = useState(FIT_LEVEL);
-  // Compare mode: each pane zooms on its own (documents of different sizes need different
-  // zooms), unless "Zoom together" is on; the keys go to the pane last clicked or focused.
+  // Compare mode: each pane zooms, scrolls and turns pages on its own (documents of
+  // different sizes need different zooms), unless "Move together" is on; the keys go to
+  // the pane last clicked or focused.
   const [together, setTogether] = useState(false);
   const [active, setActive] = useState<"subject" | "file">("file");
+  const [hub] = useState(newHub);
+  const subjectLink = useMemo(() => ({ hub, pane: "subject" }), [hub]);
+  const fileLink = useMemo(() => ({ hub, pane: "file" }), [hub]);
+  useEffect(() => {
+    hub.on = together;
+    // the other pane comes to where the one in use is: its page now, its scroll once the
+    // shared zoom has drawn
+    if (!together) return;
+    alignPages(hub, active);
+    const frameId = requestAnimationFrame(() => alignScroll(hub, active));
+    return () => cancelAnimationFrame(frameId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when switched on
+  }, [hub, together]);
+  // the next relative opens on the page this file is on
+  const fileId = file.drive_id;
+  useEffect(() => {
+    if (hub.on) alignPages(hub, "subject");
+  }, [hub, fileId]);
   const name = visible(qlName(file));
   // Open / Show in Finder outcomes: on this line, not as toasts under the modal
   const own = useDialogStatus();
@@ -107,8 +127,10 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
   const shared = compare?.shared(file) ?? [];
   const reason = compare?.reason?.(file) ?? null;
   const toggleTogether = () => {
-    // apart again: this file keeps the shared zoom, so nothing jumps
+    // apart again: this file keeps the shared zoom, so nothing jumps; together: both take
+    // the zoom of the pane in use
     if (together) subjectZoom[1](zoomControl[0]);
+    else if (active === "subject") zoomControl[1](subjectZoom[0]);
     setTogether(!together);
   };
   const paneClass = (pane: "subject" | "file") =>
@@ -172,7 +194,9 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
                 This file: <span className="quicklook-pane-name">{visible(qlName(compare.subject))}</span>
               </p>
               <div className="quicklook-preview preview-fill">
-                <FilePreview file={compare.subject} zoomControl={together ? zoomControl : subjectZoom} />
+                <MoveLink.Provider value={subjectLink}>
+                  <FilePreview file={compare.subject} zoomControl={together ? zoomControl : subjectZoom} />
+                </MoveLink.Provider>
               </div>
             </div>
             <div className={paneClass("file")} onPointerDown={() => setActive("file")} onFocus={() => setActive("file")}>
@@ -181,7 +205,9 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
               </p>
               <div className="quicklook-preview preview-fill">
                 <InlineResults.Provider value={status.report}>
-                  <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} boxTool={boxTool} />
+                  <MoveLink.Provider value={fileLink}>
+                    <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} boxTool={boxTool} />
+                  </MoveLink.Provider>
                 </InlineResults.Provider>
               </div>
             </div>
@@ -199,12 +225,12 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
               aria-pressed={together}
               title={
                 together
-                  ? "Both previews zoom as one. Click to zoom each on its own"
-                  : "Each preview zooms on its own (+ / - zoom the one last clicked). Click to zoom both as one"
+                  ? "Both previews zoom, scroll and turn pages as one. Click to move each on its own"
+                  : "Each preview moves on its own (+ / - zoom the one last clicked). Click to zoom, scroll and turn pages in both as one"
               }
               onClick={toggleTogether}
             >
-              <Link2 size={14} aria-hidden="true" /> Zoom together
+              <Link2 size={14} aria-hidden="true" /> Move together
             </button>
             {shared.length > 0 && <span className="quicklook-shared-label">In common</span>}
             <ul className="quicklook-shared" aria-label="In common">

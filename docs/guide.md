@@ -1293,8 +1293,11 @@ highlighted in its folder; files still in the inbox sit under **Inbox** on an or
 folder with more than eight relatives is folded to its name and a count; click it to open it.
 
 An arc runs from this file's row to each relative's row. A thicker arc means more in common,
-and an orange dashed one means the file is not filed yet. An arc to a folded folder ends at
-the folder's row. The list scrolls up and down; there is no zoom or panning.
+and an orange dashed one means the file is not filed yet. When another folder holds two or
+more relatives, one arc runs to the folder's name, as thick as its closest relative, and a
+short branch runs from there to each file; an arc to a folded folder ends at the folder's
+row. Point at a file and its arc stands out while the others fade. The list scrolls up and
+down; there is no zoom or panning.
 
 - **Folders.** Only folders with a relative (and this file's own) are shown. A folder that
   only leads to one other folder shares its row with it, as in **11. Bills & Receipts / 2026**.
@@ -1324,10 +1327,13 @@ relative on the right, and below them what the two share. **N** (Not related) ma
 relative and moves to the next, **→** (Skip) moves on, and **Y** (Related, next) also moves
 on and stores nothing, since being related is worked out from what the files share, never
 saved. `←`/`→` still step through the relatives, and **Space** or **Esc** closes it.
-Each side zooms on its own, since the two documents are often of different sizes: `+`, `-`
-and `0` zoom the side you clicked last (a line along its top shows which). **Zoom together**
-below them makes both sides zoom as one, for documents of the same size; press it again to
-zoom them apart.
+Each side zooms, scrolls and turns pages on its own, since the two documents are often of
+different sizes: `+`, `-` and `0` zoom the side you clicked last (a line along its top shows
+which). **Move together** below them makes both sides zoom, scroll and turn pages as one, so
+you can read two versions of a document side by side. Scrolling keeps both at the same share
+of the way down, and a shorter document stays on its last page. When you switch it on, the
+other side comes to the zoom and page of the side you clicked last; the next relative opens
+on the page this file is on. Press it again to move them apart.
 
 Nothing here is guessed from names or text: a file lacks the **sender** link until a sender
 has been set on it (see [From and For on a document](#from-and-for-on-a-document)).
