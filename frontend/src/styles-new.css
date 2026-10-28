@@ -1481,43 +1481,6 @@
 [data-style="new"] .browse-preview .file-meta-title h2 { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 500; }
 
 /* the actions with their keys, and the selection summary */
-[data-style="new"] .inspector-actions {
-  list-style: none;
-  margin: 0;
-  padding: 4px;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-}
-[data-style="new"] .inspector-actions > li.has-rule { margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--hairline); }
-[data-style="new"] .inspector-action-menu,
-[data-style="new"] .inspector-action-tip { display: flex; width: 100%; }
-[data-style="new"] .inspector-action {
-  width: 100%;
-  min-height: 30px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  box-shadow: none;
-  font: inherit;
-  color: var(--text-2);
-  text-align: left;
-  cursor: pointer;
-}
-[data-style="new"] .inspector-action:hover:not(:disabled) { background: var(--hover); }
-[data-style="new"] .inspector-action:disabled { color: var(--muted); opacity: 0.6; cursor: default; }
-[data-style="new"] .inspector-action[aria-pressed="true"] { color: var(--accent-hover); font-weight: 600; }
-[data-style="new"] .inspector-action.is-danger { color: var(--red-text); }
-[data-style="new"] .inspector-action-label,
-[data-style="new"] .inspector-action .menu-button-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[data-style="new"] .inspector-action svg { color: var(--muted); }
-[data-style="new"] .inspector-action-keys { flex: none; font-family: var(--font-mono); font-size: 11px; color: var(--muted); background: none; border: 0; padding: 0; box-shadow: none; }
 [data-style="new"] .inspector-hint { margin: auto 0 0; font-size: var(--fs-sm); color: var(--muted); line-height: 1.5; }
 [data-style="new"] .inspector-selection { display: flex; flex-direction: column; gap: 16px; }
 [data-style="new"] .inspector-stack { position: relative; height: 132px; overflow: hidden; border-radius: var(--r-lg); background: var(--desk); }
@@ -1794,25 +1757,8 @@
 [data-style="new"] .collection-inspector { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; background: var(--panel-2); border-left: 1px solid var(--hairline); padding: 18px; }
 [data-style="new"] .collection-inspector .file-meta-title h2 { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
 /* the panel's blocks in the drawn order: name and folder, tags, group, summary, preview, buttons, note */
-[data-style="new"] .collection-inspector .file-panel { display: contents; }
-[data-style="new"] .collection-inspector .file-view-block { display: block; min-width: 0; }
-[data-style="new"] .collection-inspector [data-block="header"] { order: 1; }
-[data-style="new"] .collection-inspector [data-block="tags"] { order: 2; }
-[data-style="new"] .collection-inspector [data-block="own"] { order: 3; }
-[data-style="new"] .collection-inspector [data-block="collections"] { order: 4; }
-[data-style="new"] .collection-inspector [data-block="summary"] { order: 5; }
-[data-style="new"] .collection-inspector [data-block="relatives"] { order: 6; }
-[data-style="new"] .collection-inspector [data-block="preview"] { order: 7; }
-[data-style="new"] .collection-inspector .inspector-foot { order: 8; display: flex; flex-direction: column; gap: 10px; }
-[data-style="new"] .collection-inspector [data-block="notes"] { order: 9; }
 [data-style="new"] .collection-inspector .relatives { margin: 0; }
-[data-style="new"] .collection-inspector > :not(.file-panel):not(.inspector-foot) { order: 3; }
 [data-style="new"] .inspector-collection { margin-top: 0; }
-[data-style="new"] .inspector-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-[data-style="new"] .inspector-buttons > button { min-height: 32px; padding: 0 12px; }
-[data-style="new"] .inspector-buttons > button.is-quiet-danger { border-color: transparent; background: transparent; box-shadow: none; color: var(--red-text); }
-[data-style="new"] .inspector-buttons > button.is-quiet-danger:hover:not(:disabled) { background: var(--red-bg); }
-[data-style="new"] .inspector-foot .file-action-bar { display: flex; flex-wrap: wrap; gap: 2px; }
 
 /* -- groups and files: one bordered card, file names in the fixed-width face -- */
 [data-style="new"] .collection-members { max-height: none; overflow: visible; margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-xl); background: var(--panel); }
@@ -2028,7 +1974,6 @@
 [data-style="new"] .item-new .item-sub { margin: 0; color: var(--muted); }
 [data-style="new"] .item-new .item-sub a { color: var(--accent); }
 [data-style="new"] .item-new .item-actions > .menu-wrap > button { min-height: 32px; padding: 0 12px; }
-[data-style="new"] .item-bar-slot { flex: none; display: flex; align-items: center; gap: 2px; min-height: 32px; }
 [data-style="new"] .item-new .item-fields { flex-wrap: wrap; }
 [data-style="new"] .item-new .item-done-buttons { align-self: flex-end; }
 [data-style="new"] .item-new .item-done-buttons .primary kbd { margin-left: 8px; padding: 0 5px; border: 0; background: rgb(255 255 255 / 0.16); color: inherit; font-size: 11px; line-height: 18px; }
@@ -2656,3 +2601,56 @@
 :root[data-style="new"][data-theme="dark"] .tray-segmented .segmented-option[aria-pressed="true"] .segmented-key { opacity: 0.9; }
 :root[data-style="new"][data-theme="dark"] .panel-actions .primary kbd,
 :root[data-style="new"][data-theme="dark"] .item-new .item-done-buttons .primary kbd { background: rgb(0 0 0 / 0.2); }
+
+/* ==== The one file panel skeleton ===========================================================
+ * Browse, the Inbox, a tray and a collection show the file on the right in this order: header,
+ * the two icon rows, the screen's own section, tags, collections, group, summary, relatives,
+ * preview, notes (FilePanelSkeleton). Text never leaves its box: names wrap at 2 lines then an
+ * ellipsis (the whole name is the tooltip and the path under it), paths and chips wrap. */
+[data-style="new"] .file-skeleton { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+[data-style="new"] .file-skeleton > .file-view-block { display: block; min-width: 0; }
+[data-style="new"] .file-skeleton > .file-view-block > * { margin-top: 0; margin-bottom: 0; }
+[data-style="new"] .file-skeleton .file-meta-head { margin-bottom: 0; display: flex; flex-direction: column; gap: 4px; }
+[data-style="new"] .file-skeleton .file-meta-head > * { margin-top: 0; margin-bottom: 0; }
+[data-style="new"] .file-skeleton .file-meta-title { align-items: flex-start; gap: 6px; }
+[data-style="new"] .file-skeleton .file-meta-title h2 { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+[data-style="new"] .file-skeleton .file-meta-title h2:not(:has(.click-edit)) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+[data-style="new"] .file-skeleton .file-meta-title .lock-control { flex: none; }
+[data-style="new"] .file-skeleton .file-collections,
+[data-style="new"] .file-skeleton .file-tags,
+[data-style="new"] .file-skeleton .relatives { margin: 0; }
+[data-style="new"] .file-skeleton .actions,
+[data-style="new"] .file-skeleton .summary-actions { flex-wrap: wrap; }
+[data-style="new"] .file-skeleton [data-block="top"] { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+[data-style="new"] .file-skeleton [data-block="top"] > * { margin-top: 0; margin-bottom: 0; }
+[data-style="new"] .file-skeleton [data-block="group"] .inspector-collection { margin-top: 0; }
+[data-style="new"] .inspector-links { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+[data-style="new"] .inspector-links .link-button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+
+/* the two icon rows: look at it, file it. Every control 30px, one line, groups apart by a rule. */
+[data-style="new"] .file-actions-icons { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+[data-style="new"] .file-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
+[data-style="new"] .file-actions-row .icon-button,
+[data-style="new"] .file-actions-row .menu-wrap .icon-button { flex: none; width: 30px; height: 30px; }
+[data-style="new"] .file-actions-row .icon-button-wrap,
+[data-style="new"] .file-actions-row .menu-wrap { flex: none; display: inline-flex; align-items: center; }
+[data-style="new"] .file-actions-icons .icon-button-glyph svg { width: 16px; height: 16px; }
+[data-style="new"] .file-actions-sep { flex: none; align-self: center; width: 1px; height: 18px; margin: 0 4px; background: var(--border-strong, var(--border)); }
+/* Move to To Delete: red, at the right end of its row */
+[data-style="new"] .file-actions-row .trash-button,
+[data-style="new"] .file-actions-row .icon-button-wrap:has(> .trash-button) { margin-left: auto; }
+[data-style="new"] .file-actions-row .trash-button { color: var(--red-text); }
+[data-style="new"] .file-actions-row .trash-button:hover:not(:disabled) { background: var(--red-bg); color: var(--red-text); }
+[data-style="new"] .file-actions-row .trash-button:disabled { color: var(--muted); }
+/* the Inbox's panel body: the skeleton, then the plan under it */
+[data-style="new"] .panel-body > .file-skeleton { gap: 14px; }
+/* an item or collection badge with a long name wraps inside the panel instead of running out of it */
+[data-style="new"] .file-skeleton .link-badges { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+[data-style="new"] .file-skeleton .link-badges li { min-width: 0; max-width: 100%; }
+[data-style="new"] .file-skeleton .link-badges .tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }

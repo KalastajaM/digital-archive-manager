@@ -232,10 +232,57 @@ describe("The filing panel in the New look", () => {
     expect(panel).toHaveTextContent("Suggested by rule “vesilaitos”");
     expect(within(panel).getByRole("heading", { name: "Vesilaitos water bill" })).toBeInTheDocument();
     // where its relatives were filed: a hint for this one, folded until opened
-    expect(within(panel).getByRole("button", { name: /^Relatives/ })).toHaveAttribute("aria-expanded", "false");
+    expect(within(panel).getByRole("button", { name: /^Relatives/, expanded: false })).toBeInTheDocument();
     await user.click(within(panel).getByRole("button", { name: "Edit rule" }));
     const sheet = await screen.findByRole("dialog", { name: "Edit rule vesilaitos" });
     expect(within(sheet).getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it("is the one file panel: the file's header, the icon rows, then the form, with Relatives after it", async () => {
+    setup("new");
+    const panel = await screen.findByRole("complementary", { name: "File this document" });
+    await within(panel).findByLabelText("Name");
+    const blocks = [...panel.querySelectorAll(".file-skeleton > [data-block]")].map((b) => (b as HTMLElement).dataset.block);
+    expect(blocks).toEqual(["header", "actions", "top", "relatives"]);
+    // header: the file's name and where it is now
+    expect(within(panel.querySelector(".file-meta-head") as HTMLElement).getByRole("heading", { name: "scan001.pdf" })).toBeInTheDocument();
+    // row 1: look at it; row 2 only has what applies here: no Back to inbox (it is in the inbox),
+    // no From, For or Put in tray (the form has them), no bin (the foot has To Delete)
+    const look = within(panel).getByRole("group", { name: "Look at it" });
+    expect(within(look).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Open",
+      "Quick Look",
+      expect.stringMatching(/^Show in /),
+      "Relatives",
+    ]);
+    const filing = within(panel).getByRole("group", { name: "File it" });
+    expect(within(filing).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Star", "Mark Important"]);
+    expect(within(panel).queryByRole("button", { name: "Back to inbox" })).toBeNull();
+    // the suggestion header stays above, with Ask AI there (not repeated in the icon row)
+    expect(within(look).queryByRole("button", { name: "Ask AI" })).toBeNull();
+  });
+
+  it("several selected: the same skeleton with From, For, the marks and the bin in the icon rows, no Who field", async () => {
+    const user = setup("new");
+    await screen.findByLabelText("Name");
+    await user.click(screen.getByRole("checkbox", { name: "Select scan001.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select scan002.pdf" }));
+    const card = await screen.findByRole("article", { name: "Batch of 2 files" });
+    const blocks = [...card.querySelectorAll(".file-skeleton > [data-block]")].map((b) => (b as HTMLElement).dataset.block);
+    expect(blocks).toEqual(["header", "actions", "top"]);
+    const filing = within(card).getByRole("group", { name: "File it" });
+    expect(within(filing).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "From…",
+      "For…",
+      "Star",
+      "Mark Important",
+      "Move 2 to To Delete",
+    ]);
+    // the toolbar keeps Preview and File 2 files, and no longer repeats the marks and the bin
+    expect(within(card).getAllByRole("button", { name: "Star" })).toHaveLength(1);
+    expect(within(card).queryByRole("group", { name: "Who" })).toBeNull();
+    await user.click(within(filing).getByRole("button", { name: "From…" }));
+    expect(await screen.findByRole("dialog", { name: "From (2 documents)" })).toBeInTheDocument();
   });
 
   it("has no Edit rule when no rule suggested anything", async () => {
@@ -297,8 +344,9 @@ describe("The document bar in the New look", () => {
   it("has the file's name, zoom, Open and one menu for Open, Print, Open in window and Show in Finder", async () => {
     const user = setup("new");
     await screen.findByLabelText("Name");
-    expect(screen.getByRole("toolbar", { name: "Document" })).toHaveTextContent("scan001.pdf");
-    expect(screen.getByRole("button", { name: "Open" })).toBeInTheDocument();
+    const bar = screen.getByRole("toolbar", { name: "Document" });
+    expect(bar).toHaveTextContent("scan001.pdf");
+    expect(within(bar).getByRole("button", { name: "Open" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Print" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "More: Print, Open in window, Show in Finder" }));
     const menu = screen.getByRole("menu");

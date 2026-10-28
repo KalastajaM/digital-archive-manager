@@ -121,17 +121,30 @@ describe("a collection in New", () => {
     expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
   });
 
-  it("puts the selected file's buttons under its preview: Open, Show in folder, Note on this file, Remove", async () => {
+  it("shows the selected file in the one file panel: two icon rows, then Group with its two links", async () => {
     document.documentElement.dataset.style = "new";
     setup();
-    const group = await screen.findByRole("group", { name: "This file" });
-    for (const name of ["Open", "Show in folder", "Note on this file", "Remove from collection"]) {
-      expect(within(group).getByRole("button", { name })).toBeInTheDocument();
+    const panel = await screen.findByRole("complementary", { name: "Selected file" });
+    const look = await within(panel).findByRole("group", { name: "Look at it" });
+    for (const name of ["Open", "Relatives", "Ask AI"]) {
+      expect(within(look).getByRole("button", { name })).toBeInTheDocument();
     }
-    // the rest of the file's actions follow as the icon row, no longer in the page header
+    const filing = within(panel).getByRole("group", { name: "File it" });
+    for (const name of ["From…", "For…", "Put in tray", "Star", "Mark Important", "Back to inbox", "Move to To Delete"]) {
+      expect(within(filing).getByRole("button", { name })).toBeInTheDocument();
+    }
+    // Remove from collection is an icon of the second row (a membership action, undone from its toast)
+    expect(within(filing).getByRole("button", { name: /Remove quote.pdf from the collection/ })).toBeInTheDocument();
+    // Show in folder and Note on this file stay, as links under the collections
+    expect(within(panel).getByRole("button", { name: "Show in folder" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Note on this file" })).toBeInTheDocument();
+    // the blocks come in the skeleton's order
+    const blocks = [...panel.querySelectorAll("[data-block]")].map((b) => (b as HTMLElement).dataset.block);
+    const order = ["header", "actions", "tags", "collections", "group", "summary", "relatives", "preview", "notes"];
+    expect(blocks.filter((b) => order.includes(b!))).toEqual(order.filter((b) => blocks.includes(b)));
+    // no longer in the page's header or a foot under the preview
     expect(document.querySelector(".collection-head .file-action-bar")).toBeNull();
-    expect(document.querySelector(".collection-inspector .file-action-bar")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: /Remove quote.pdf from the collection/ })).not.toBeInTheDocument();
+    expect(document.querySelector(".inspector-foot")).toBeNull();
   });
 
   it("Add files opens a finder that puts the chosen file in the collection", async () => {

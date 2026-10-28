@@ -17,18 +17,40 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 export const FILE_VIEW_BLOCKS = ["header", "tags", "collections", "summary", "own", "relatives", "preview", "notes"] as const;
-export type FileViewBlock = (typeof FILE_VIEW_BLOCKS)[number];
+/** The New look's one file panel skeleton (``FilePanelSkeleton``): the two icon rows right under
+ * the header, the screen's own section (the Inbox's filing form) under them, a collection's
+ * group under its collections. */
+export const SKELETON_BLOCKS = [
+  "header",
+  "actions",
+  "top",
+  "tags",
+  "collections",
+  "group",
+  "summary",
+  "own",
+  "relatives",
+  "preview",
+  "notes",
+] as const;
+export type FileViewBlock = (typeof SKELETON_BLOCKS)[number];
 
 export type FileViewBlocks = Partial<Record<FileViewBlock, ReactNode>>;
 
 export function FileView({
   className,
   rootProps,
+  order = FILE_VIEW_BLOCKS,
   ...blocks
-}: FileViewBlocks & { className?: string; rootProps?: HTMLAttributes<HTMLDivElement> }) {
+}: FileViewBlocks & {
+  className?: string;
+  rootProps?: HTMLAttributes<HTMLDivElement>;
+  /** The blocks in their order (the New look's skeleton passes ``SKELETON_BLOCKS``). */
+  order?: readonly FileViewBlock[];
+}) {
   return (
     <div className={className} {...rootProps}>
-      {FILE_VIEW_BLOCKS.map((name) => {
+      {order.map((name) => {
         const content = blocks[name];
         return content === undefined || content === null || content === false ? null : (
           <div key={name} className="file-view-block" data-block={name}>

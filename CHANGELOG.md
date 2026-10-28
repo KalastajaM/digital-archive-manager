@@ -8,6 +8,23 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **One file panel for Browse, the Inbox, the trays and a collection (New look).** The panel
+  on the right shows a file the same way everywhere: its name (click to rename) and folder
+  (click to move) with the lock, then two rows of icon buttons, then tags, collections (a box
+  like the tags: chips and a field with suggestions), the summary, Relatives, the preview and
+  the note. Each tooltip names its key, for example "Quick Look (Space)". Row one is for
+  looking: Open, Quick Look, Show in Finder, Relatives, Ask AI. Row two is for filing: Who sent
+  it, Who it is for, Put in tray, then Star and Important, then Back to inbox, and Move to To
+  Delete at the right end in red. Only what applies is shown: no Back to inbox for a file in
+  the inbox, Restore for a file in To Delete, and a button that cannot run now stays with its
+  reason in the tooltip. The long list of actions in Browse's panel is gone (Rename, Move to,
+  Tag and Add to collection are done in place, and their keys still work). In the Inbox the
+  filing form sits right under the icons, with File it, Skip and To Delete below; in a tray
+  the item's card (dates, Mark paid, files, checklist, note, history) sits beside the panel,
+  with Remove from tray in the item's header; in a collection the Group and a Remove from
+  collection button come under the collections. With several files selected, the summary comes
+  with the icons that apply to many (Move to, Add to collection, From, For, Star, Important and
+  the bin).
 - **A Relatives button on Browse file rows (New look).** Beside the Quick Look eye, a
   Relatives button appears when you hover or focus a file row (folders, links and files in
   To Delete have none). It opens that file's Relatives window without changing your

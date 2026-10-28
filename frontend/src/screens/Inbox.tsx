@@ -810,6 +810,7 @@ export default function Inbox() {
             trash={{ run: trashTargets, busy: trash.busy }}
             lead={queueLead}
             onSkip={skip}
+            onQuickLook={isNew ? quickLook.open : undefined}
           />
         ) : null}
         {isNew && !markedOpen && (batch.length > 0 || current) && (
