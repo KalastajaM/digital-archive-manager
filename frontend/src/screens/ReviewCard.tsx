@@ -52,6 +52,9 @@ import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFil
 import { LockControl } from "../components/LockControl";
 import { useInboxFolder } from "../components/MoveTo";
 import { MarkToggles } from "../components/MarkToggles";
+import { FileActionIcons } from "../components/FileActionIcons";
+import { FilePanelSkeleton, StaticFileHead } from "../components/FilePanelSkeleton";
+import { allMarked, type Markable, useBatchMark } from "../components/useBatchMark";
 import { TRASH_KEY, TRASH_LABEL, TrashButton } from "../components/Trash";
 import { suggestingRule, titleOf } from "./inboxQueue";
 import {
@@ -283,11 +286,13 @@ type Props = {
   lead?: ReactNode;
   /** Skip: on to the next file in the queue without filing this one (s). */
   onSkip?: () => void;
+  /** The New look: Quick Look on this file (the icon row's). */
+  onQuickLook?: () => void;
 };
 
 /** One inbox file: a toolbar with its name and the actions, the preview, and the
  * editable proposal as a narrow inspector beside it. */
-export default function ReviewCard({ entry, filing, trash, lead, onSkip }: Props) {
+export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuickLook }: Props) {
   const ids = useId();
   const [look] = useStyle();
   const isNew = look === "new";
@@ -493,7 +498,7 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip }: Props
       <NoteEditor value={note} onChange={setNote} />
     </>
   );
-  const form = (
+  const formMain = (
     <>
       <FilingMessage filing={filing} ids={[entry.record.drive_id]} problem={tried && !fieldProblem ? otherProblem : null} />
       {entry.suggestion.conflict && (
@@ -595,32 +600,53 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip }: Props
           {collectionAndNote}
         </details>
       )}
-      {/* where the files it shares a sender, tag or IBAN with were filed: a hint for this one */}
-      {isNew && (
-        <RelativesBlock
-          key={entry.record.drive_id}
-          compact
-          file={{ drive_id: entry.record.drive_id, path: entry.record.path, name: entry.record.name ?? null, ext: entry.record.ext }}
-        />
-      )}
-      {/* After the form, so showing it never pushes the fields down; it sticks to the
-          bottom of the inspector while the form scrolls. */}
-      {plan && (
-        <div className="inbox-plan">
-          <PlanPreview
-            ops={plan.ops}
-            tags={parseTags(tags)}
-            followUps={followUpLines(plan.requests, trays.list, entry.prefill)}
-            onClose={filing.clearPlan}
-            action={
-              <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || lock.blocked}>
-                File it
-              </button>
-            }
-          />
-        </div>
-      )}
     </>
+  );
+  // where the files it shares a sender, tag or IBAN with were filed: a hint for this one
+  const relativesNode = (
+    <RelativesBlock
+      key={entry.record.drive_id}
+      compact
+      file={{ drive_id: entry.record.drive_id, path: entry.record.path, name: entry.record.name ?? null, ext: entry.record.ext }}
+    />
+  );
+  // After the form, so showing it never pushes the fields down; it sticks to the
+  // bottom of the inspector while the form scrolls.
+  const planNode = plan && (
+    <div className="inbox-plan">
+      <PlanPreview
+        ops={plan.ops}
+        tags={parseTags(tags)}
+        followUps={followUpLines(plan.requests, trays.list, entry.prefill)}
+        onClose={filing.clearPlan}
+        action={
+          <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || lock.blocked}>
+            File it
+          </button>
+        }
+      />
+    </div>
+  );
+  const form = (
+    <>
+      {formMain}
+      {isNew && relativesNode}
+      {planNode}
+    </>
+  );
+
+  // The New look's icon rows: the look row (Ask AI is the suggestion header's link, From and For
+  // the form's chips, Put in tray the form's tray picker, the bin the footer's To Delete)
+  // and ★ / ! (the same toggles as Browse's, applied at once).
+  const batchMarks = useBatchMark();
+  const markable: Markable[] = [{ drive_id: entry.record.drive_id, name: fileName, marks: entry.record.marks }];
+  const fileIcons = (
+    <FileActionIcons
+      file={{ drive_id: entry.record.drive_id, path: entry.record.path, name: entry.record.name ?? null, ext: entry.record.ext, is_link: entry.record.is_link }}
+      onQuickLook={onQuickLook}
+      star={{ on: allMarked(markable, "star"), run: () => void batchMarks.run("star", markable), disabled: batchMarks.busy }}
+      important={{ on: allMarked(markable, "important"), run: () => void batchMarks.run("important", markable), disabled: batchMarks.busy }}
+    />
   );
 
   if (isNew) {
@@ -694,10 +720,16 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip }: Props
                   </span>
                 )}
               </div>
-              <MarkToggles driveId={entry.record.drive_id} name={fileName} marks={entry.record.marks} />
-              <LockControl driveId={entry.record.drive_id} marks={entry.record.marks} path={entry.record.path} />
             </header>
-            <div className="panel-body">{form}</div>
+            <div className="panel-body">
+              <FilePanelSkeleton
+                header={<StaticFileHead driveId={entry.record.drive_id} name={fileName} folder={inFolder} path={entry.record.path} marks={entry.record.marks} />}
+                actions={fileIcons}
+                top={formMain}
+                relatives={relativesNode}
+              />
+              {planNode}
+            </div>
             <footer className="panel-foot">
               <p className="panel-summary">
                 {!fieldProblem && <ShieldCheck size={14} aria-hidden="true" />}

@@ -125,12 +125,27 @@ describe("a tray in New", () => {
     expect(within(files).getByRole("button", { name: /Builder quote\.pdf/, pressed: true })).toBeInTheDocument();
     expect(within(main).getByText("Checklist")).toBeInTheDocument();
     expect(within(main).getByText("History")).toBeInTheDocument();
-    expect(within(side).getByText("Summary of")).toBeInTheDocument();
+    // the column beside it is the one file panel, for the file shown
+    const blocks = (await waitFor(() => {
+      const found = [...side.querySelectorAll(".file-skeleton > [data-block]")].map((b) => (b as HTMLElement).dataset.block);
+      if (found.length === 0) throw new Error("no file panel yet");
+      return found;
+    })) as string[];
+    const order = ["header", "actions", "tags", "collections", "summary", "relatives", "preview", "notes"];
+    expect(blocks.filter((b) => order.includes(b))).toEqual(order.filter((b) => blocks.includes(b)));
+    expect(blocks.slice(0, 2)).toEqual(["header", "actions"]);
     // the shown file's relatives, folded until opened
-    expect(await within(side).findByRole("button", { name: /^Relatives/ })).toHaveAttribute("aria-expanded", "false");
+    expect(await within(side).findByRole("button", { name: /^Relatives/, expanded: false })).toBeInTheDocument();
+    // the file's two icon rows: the item's own actions (Remove from tray, Move to tray) stay in the item's header
+    const filing = within(side).getByRole("group", { name: "File it" });
+    expect(within(filing).queryByRole("button", { name: "Put in tray" })).toBeNull();
+    expect(within(filing).queryByRole("button", { name: "Remove from tray" })).toBeNull();
+    expect(within(filing).getByRole("button", { name: "Back to inbox" })).toBeInTheDocument();
+    expect(within(filing).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
+    expect(within(item.querySelector(".item-header") as HTMLElement).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument();
     // the fields card comes before the two columns
-    const order = [...(item.querySelector(".item-new") as HTMLElement).children].map((c) => c.className);
-    expect(order.findIndex((c) => c.includes("item-fields"))).toBeLessThan(order.findIndex((c) => c.includes("item-cols")));
+    const kids = [...(item.querySelector(".item-new") as HTMLElement).children].map((c) => c.className);
+    expect(kids.findIndex((c) => c.includes("item-fields"))).toBeLessThan(kids.findIndex((c) => c.includes("item-cols")));
   });
 
   it("renders none of it in Classic", async () => {

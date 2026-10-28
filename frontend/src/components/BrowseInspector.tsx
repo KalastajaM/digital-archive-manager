@@ -1,75 +1,11 @@
-/** What Browse's details panel (the New look) holds besides a file's own panel: the list of
- * actions with their keys, and, for several selected files, the summary on top of it. The
- * screen decides what each action does (it hands over the same functions the old header's
- * buttons run); this only draws them. */
-import type { ReactElement } from "react";
+/** What Browse's details panel (the New look) holds besides a file's own panel: the hint under
+ * it and, for several selected files, the summary (the icon rows under it are
+ * ``FileActionIcons``). */
 import { Link } from "react-router-dom";
 import { useCollectionsWithMarked } from "../api/client";
 import { formatSize } from "../format";
 import { parentOf } from "../paths";
 import { visible } from "../text";
-import { Menu, type MenuEntry } from "./ui/Menu";
-
-type Common = {
-  label: string;
-  /** Off now; ``reason`` is the tooltip then. */
-  disabled?: boolean;
-  reason?: string | null;
-  /** A thin rule above the action: a new group. */
-  rule?: boolean;
-};
-
-/** A button (``keys``: the shortcut it also has), or a pull-down (``menu``). */
-export type InspectorAction =
-  | (Common & { run: () => void; keys?: string; danger?: boolean; pressed?: boolean })
-  | (Common & { menu: MenuEntry[] });
-
-function Action({ action }: { action: InspectorAction }) {
-  const off = action.disabled === true || !!action.reason;
-  const wrap = (node: ReactElement) =>
-    off && action.reason ? (
-      <span className="inspector-action-tip" data-tip={action.reason}>
-        {node}
-      </span>
-    ) : (
-      node
-    );
-  if ("menu" in action) {
-    return off ? (
-      wrap(
-        <button type="button" className="inspector-action" disabled>
-          <span className="inspector-action-label">{action.label}</span>
-        </button>,
-      )
-    ) : (
-      <Menu label={action.label} text={action.label} icon={null} entries={action.menu} triggerClassName="inspector-action" className="inspector-action-menu" />
-    );
-  }
-  return wrap(
-    <button
-      type="button"
-      className={action.danger ? "inspector-action is-danger" : "inspector-action"}
-      aria-pressed={action.pressed}
-      disabled={off}
-      onClick={action.run}
-    >
-      <span className="inspector-action-label">{action.label}</span>
-      {action.keys && <kbd className="inspector-action-keys">{action.keys}</kbd>}
-    </button>,
-  );
-}
-
-export function InspectorActions({ actions }: { actions: InspectorAction[] }) {
-  return (
-    <ul className="inspector-actions" aria-label="Actions">
-      {actions.map((a) => (
-        <li key={a.label} className={a.rule ? "has-rule" : undefined}>
-          <Action action={a} />
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /** The one-line hint under the panel: what a drop does. */
 export function InspectorHint() {

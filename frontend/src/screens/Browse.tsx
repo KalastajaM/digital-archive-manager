@@ -54,7 +54,7 @@ import {
   useInboxFolder,
   useMoveFlow,
 } from "../components/MoveTo";
-import { isTrashKey, TRASH_BUSY, TRASH_KEY, TRASH_LABEL, useTrash } from "../components/Trash";
+import { isTrashKey, TRASH_BUSY, useTrash } from "../components/Trash";
 import { undoAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { useNewFolder } from "../components/NewFolder";
@@ -82,10 +82,9 @@ import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { FolderTree } from "../components/FolderTree";
-import { InspectorActions, type InspectorAction, InspectorHint, SelectionSummary } from "../components/BrowseInspector";
-import { showInLabel } from "../fileManager";
-import { useFileLaunch } from "../components/FileLaunch";
-import { FileActionBar, useAskAction } from "../components/FileActionBar";
+import { InspectorHint, SelectionSummary } from "../components/BrowseInspector";
+import { FileActionBar, type FileActionBarProps, useAskAction } from "../components/FileActionBar";
+import { FileActionIcons } from "../components/FileActionIcons";
 import { useFilingAI } from "../components/ai/useFilingAI";
 import { usePutInTrayEntries } from "./FileActions";
 import { SEARCH_DEBOUNCE_MS, useSearch } from "./useSearch";
@@ -206,7 +205,7 @@ const PANES_SPLIT = { min: 25, max: 75, initial: 50 };
 export const TREE_WIDTH_KEY = "dam.browse.treewidth";
 const TREE_SPLIT = { min: 150, max: 360, initial: 176, unit: "px" } as const;
 export const INSPECTOR_WIDTH_KEY = "dam.browse.inspectorwidth";
-const INSPECTOR_SPLIT = { min: 260, max: 520, initial: 280, unit: "px", edge: "end" } as const;
+const INSPECTOR_SPLIT = { min: 280, max: 520, initial: 320, unit: "px", edge: "end" } as const;
 
 const NONE: Set<string> = new Set();
 
@@ -2104,7 +2103,6 @@ export default function Browse() {
 
   // The New look's details panel: what the old header's file actions did, as a list with its
   // keys. Each entry runs the handler the header's button ran.
-  const launch = useFileLaunch(previewed?.drive_id ?? "");
   const addEntries = (ids: string[]): MenuEntry[] => {
     const kids = childrenOf(collectionRows ?? []);
     const out: MenuEntry[] = [];
@@ -2117,134 +2115,91 @@ export default function Browse() {
     walk(null, 0);
     return out.length > 0 ? out : [{ label: "No open collections", disabled: true, onSelect: () => {} }];
   };
-  const several = acted.length > 1;
-  const noFiles = moveTargets.length === 0;
-  const inDetails = (selector: string) => document.querySelector<HTMLElement>(`.browse-preview ${selector}`);
-  const inspectorActions: InspectorAction[] = [];
-  if (isNew) {
-    const here = previewed;
-    if (here) {
-      const away = here.connected === false;
-      inspectorActions.push(
-        { label: "Open", run: () => void launch.run("open"), disabled: launch.busy || away, reason: away ? "Not connected" : null },
-        {
-          label: "Quick Look",
-          keys: "Space",
-          run: () => quickLookRow(act, items[act].indexOf(here)),
-          disabled: locked,
-        },
-        { label: showInLabel(), run: () => void launch.run("reveal"), disabled: launch.busy || away, reason: away ? "Not connected" : null },
-      );
-      if (!here.is_dir && !here.is_link && !inToDelete(here.path)) {
-        const file = { drive_id: here.drive_id, path: here.path, name: here.name };
-        inspectorActions.push({ label: "Relatives…", run: () => setRelativesOf(file) });
-      }
-    }
-    inspectorActions.push(
-      {
-        label: "Move to…",
-        keys: "⇧⌘M",
-        run: openMoveTo,
-        disabled: (noFiles && !folderToMove) || locked,
-        reason: moveBlocked ?? folderMoveBlocked,
-        rule: here !== null,
+  const barProps: FileActionBarProps = {
+    tray: {
+      label: "Put in tray",
+      entries: trayEntries,
+      disabled: moveTargets.length === 0 || locked,
+      reason: readOnlyWhy,
+    },
+    backToInbox: {
+      run: () => {
+        if (inbox && !inboxRefusal(moveTargets.map((it) => it.path), inbox)) {
+          startRequest(
+            backToInbox(
+              moveTargets.map((it) => it.drive_id),
+              inbox,
+              moveTargets.map((it) => it.path),
+            ),
+          );
+        }
       },
-      ...(here
-        ? [
-            {
-              label: "Rename",
-              run: () => inDetails(".click-edit")?.click(),
-              disabled: locked,
-              reason: readOnlyWhy,
-            },
-          ]
-        : []),
-      {
-        label: "Add to collection…",
-        menu: addEntries(moveTargets.map((it) => it.drive_id)),
-        disabled: noFiles || locked,
-        reason: readOnlyWhy,
-      },
-      {
-        label: "Put in tray…",
-        menu: trayEntries,
-        disabled: noFiles || locked,
-        reason: readOnlyWhy,
-      },
-      ...(here
-        ? [
-            {
-              label: "Tag…",
-              run: () => inDetails(".file-tags input")?.focus(),
-              disabled: locked,
-              reason: readOnlyWhy,
-            },
-          ]
-        : []),
-      {
-        label: several ? "Say who sent these…" : "Say who sent this…",
-        run: () => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) }),
-        disabled: noFiles || locked,
-        reason: readOnlyWhy,
-      },
-      {
-        label: several ? "Say who these are for…" : "Say who this is for…",
-        run: () => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) }),
-        disabled: noFiles || locked,
-        reason: readOnlyWhy,
-      },
-      {
-        label: "Back to inbox",
-        run: () => {
-          if (inbox && !inboxRefusal(moveTargets.map((it) => it.path), inbox)) {
-            startRequest(
-              backToInbox(
-                moveTargets.map((it) => it.drive_id),
-                inbox,
-                moveTargets.map((it) => it.path),
-              ),
-            );
-          }
-        },
-        disabled: noFiles || locked,
-        reason: inboxWhy,
-        rule: true,
-      },
-      { label: "Ask AI…", run: askBar.run, disabled: askBar.disabled, reason: askBar.reason },
-      {
-        label: starAll ? "Remove the star" : "Star",
-        pressed: starAll,
-        run: () => void batchMark("star"),
-        disabled: noFiles || marks.busy,
-        reason: readOnlyWhy,
-        rule: true,
-      },
-      {
-        label: importantAll ? "Unmark Important" : "Mark Important",
-        pressed: importantAll,
-        run: () => void batchMark("important"),
-        disabled: noFiles || marks.busy,
-        reason: readOnlyWhy,
-      },
-    );
-    if (markTargets.some((it) => inToDelete(it.path))) {
-      inspectorActions.push({
-        label: "Restore from To Delete…",
-        menu: restoreEntries((to) => startRestore(markIds, to), restoreWhy),
-        rule: true,
-      });
-    }
-    inspectorActions.push({
-      label: markIds.length > 1 ? `Move ${markIds.length} to To Delete` : TRASH_LABEL,
-      keys: TRASH_KEY,
-      danger: true,
+      disabled: moveTargets.length === 0 || locked,
+      reason: inboxWhy,
+    },
+    moveTo: {
+      run: openMoveTo,
+      shortcut: "⇧⌘M",
+      disabled: (moveTargets.length === 0 && !folderToMove) || locked,
+      reason: moveBlocked ?? folderMoveBlocked,
+    },
+    sender: {
+      run: () => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) }),
+      disabled: moveTargets.length === 0 || locked,
+      reason: readOnlyWhy,
+    },
+    person: {
+      run: () => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) }),
+      disabled: moveTargets.length === 0 || locked,
+      reason: readOnlyWhy,
+    },
+    ask: askBar,
+    star: {
+      on: starAll,
+      run: () => void batchMark("star"),
+      disabled: moveTargets.length === 0 || marks.busy,
+      reason: readOnlyWhy,
+    },
+    important: {
+      on: importantAll,
+      run: () => void batchMark("important"),
+      disabled: moveTargets.length === 0 || marks.busy,
+      reason: readOnlyWhy,
+    },
+    restore:
+      markTargets.some((it) => inToDelete(it.path))
+        ? { entries: restoreEntries((to) => startRestore(markIds, to), restoreWhy) }
+        : undefined,
+    trash: {
+      count: markIds.length,
       run: trashSelection,
       disabled: markIds.length === 0 || marking.busy,
       reason: markBlocked,
-      rule: true,
-    });
-  }
-  const actionList = <InspectorActions actions={inspectorActions} />;
+    },
+  };
+  const several = acted.length > 1;
+  const noFiles = moveTargets.length === 0;
+  // The New look's file panel: the two icon rows of the one skeleton (``FileActionIcons``), with
+  // the handlers the Classic header's buttons run. A selection has no look row; what is done
+  // in place for one file (Move to…, Add to collection) is an icon for several.
+  const previewedFile = previewed
+    ? { drive_id: previewed.drive_id, path: previewed.path, name: previewed.name, is_dir: previewed.is_dir, is_link: previewed.is_link, connected: previewed.connected }
+    : null;
+  const actionIcons = (
+    <FileActionIcons
+      {...barProps}
+      moveTo={several ? barProps.moveTo : undefined}
+      ask={several ? undefined : barProps.ask}
+      file={several ? null : previewedFile}
+      onQuickLook={!several && previewed ? () => quickLookRow(act, items[act].indexOf(previewed)) : undefined}
+      quickLookReason={locked ? "Another change is under way" : null}
+      addTo={
+        several
+          ? { entries: addEntries(moveTargets.map((it) => it.drive_id)), disabled: noFiles || locked, reason: readOnlyWhy }
+          : undefined
+      }
+    />
+  );
   const detail = previewed ? (
     <FilePanel
       file={{
@@ -2255,13 +2210,13 @@ export default function Browse() {
       disabled={locked}
       restore={(to) => startRestore([previewed.drive_id], to)}
       boxTool
-      extras={isNew ? actionList : undefined}
+      actions={isNew ? actionIcons : undefined}
       headerActions={{ ai: filingAI }}
     />
   ) : isNew && several ? (
     <>
       <SelectionSummary files={acted} />
-      {actionList}
+      {actionIcons}
     </>
   ) : folderShown ? (
     <FolderPanel
@@ -2404,69 +2359,7 @@ export default function Browse() {
         search={searchBox}
         trailing={
           isNew ? undefined : (
-          <FileActionBar
-            tray={{
-              label: "Put in tray",
-              entries: trayEntries,
-              disabled: moveTargets.length === 0 || locked,
-              reason: readOnlyWhy,
-            }}
-            backToInbox={{
-              run: () => {
-                if (inbox && !inboxRefusal(moveTargets.map((it) => it.path), inbox)) {
-                  startRequest(
-                    backToInbox(
-                      moveTargets.map((it) => it.drive_id),
-                      inbox,
-                      moveTargets.map((it) => it.path),
-                    ),
-                  );
-                }
-              },
-              disabled: moveTargets.length === 0 || locked,
-              reason: inboxWhy,
-            }}
-            moveTo={{
-              run: openMoveTo,
-              shortcut: "⇧⌘M",
-              disabled: (moveTargets.length === 0 && !folderToMove) || locked,
-              reason: moveBlocked ?? folderMoveBlocked,
-            }}
-            sender={{
-              run: () => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) }),
-              disabled: moveTargets.length === 0 || locked,
-              reason: readOnlyWhy,
-            }}
-            person={{
-              run: () => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) }),
-              disabled: moveTargets.length === 0 || locked,
-              reason: readOnlyWhy,
-            }}
-            ask={askBar}
-            star={{
-              on: starAll,
-              run: () => void batchMark("star"),
-              disabled: moveTargets.length === 0 || marks.busy,
-              reason: readOnlyWhy,
-            }}
-            important={{
-              on: importantAll,
-              run: () => void batchMark("important"),
-              disabled: moveTargets.length === 0 || marks.busy,
-              reason: readOnlyWhy,
-            }}
-            restore={
-              markTargets.some((it) => inToDelete(it.path))
-                ? { entries: restoreEntries((to) => startRestore(markIds, to), restoreWhy) }
-                : undefined
-            }
-            trash={{
-              count: markIds.length,
-              run: trashSelection,
-              disabled: markIds.length === 0 || marking.busy,
-              reason: markBlocked,
-            }}
-          />
+          <FileActionBar {...barProps} />
           )
         }
       />

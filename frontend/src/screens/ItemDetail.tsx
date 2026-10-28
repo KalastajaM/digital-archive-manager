@@ -4,7 +4,7 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { Eye, X } from "lucide-react";
+import { CircleMinus, Eye, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
@@ -47,7 +47,7 @@ import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
 import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
-import { FileActionBar, useAskAction } from "../components/FileActionBar";
+import { FileActionBar, type FileActionBarProps, useAskAction } from "../components/FileActionBar";
 import { useFilingAI } from "../components/ai/useFilingAI";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { toDeleteReason } from "../toDelete";
@@ -63,8 +63,10 @@ import { visible } from "../text";
 import { AddFile } from "../components/AddFile";
 import { FileMeta } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
-import { RelativesBlock } from "../components/RelativesBlock";
 import { FileCollections } from "./FileActions";
+import { FilePanel } from "./FilePanel";
+import { FileActionIcons } from "../components/FileActionIcons";
+import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { backToInbox, deletionRefusal, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../components/MoveTo";
 import { isTrashKey, useTrash } from "../components/Trash";
 import { MarkIcons } from "../components/MarkIcons";
@@ -467,9 +469,10 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const actionsRef = useRef<HTMLDivElement>(null);
   const [look] = useStyle();
   const isNew = look === "new";
-  // The New look draws the file actions in the item's own header, not in the list's
-  const [ownSlot, setOwnSlot] = useState<HTMLElement | null>(null);
-  const slot = isNew ? ownSlot : barSlot;
+  // The New look draws the file's actions in the side panel's icon rows (``FileActionIcons``),
+  // not in the list's header
+  const slot = isNew ? null : barSlot;
+  const [assigning, setAssigning] = useState<AssignKind | null>(null);
   const update = useItemUpdate();
   const saveTitle = async (title: string) => (await update.mutateAsync({ id: item.id, title })).title;
   // Where the file's tags are shown: under the title. They belong to the shown file
@@ -678,54 +681,60 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       : null;
   const markReason = hasFile && shown ? toDeleteReason(shown.path) : null;
   const markable = hasFile && shown ? [{ drive_id: shown.drive_id, name: baseName(shown.path ?? ""), marks: shown.marks }] : [];
+  const barProps: FileActionBarProps = {
+    barRef: actionsRef,
+    tray: open && !isNew ? { label: "Move to tray", entries: moveEntries } : undefined,
+    removeFromTray: { run: () => setRemoving(true), disabled: moveItem.isPending },
+    backToInbox:
+      hasFile && shown
+        ? {
+            run: () => {
+              if (inbox && !inboxWhy) fileMove.start(backToInbox([shown.drive_id], inbox, [shown.path!]));
+            },
+            reason: inboxWhy,
+          }
+        : undefined,
+    // Who sent it / who it is for: the New look's icon rows have them for every context
+    sender: isNew && hasFile && shown ? { run: () => setAssigning("sender"), disabled: trash.busy, reason: markReason } : undefined,
+    person: isNew && hasFile && shown ? { run: () => setAssigning("person"), disabled: trash.busy, reason: markReason } : undefined,
+    ask: hasFile ? askBar : undefined,
+    star: hasFile
+      ? {
+          on: allMarked(markable, "star"),
+          run: () => void batchMarks.run("star", markable),
+          disabled: batchMarks.busy,
+          reason: markReason,
+        }
+      : undefined,
+    important: hasFile
+      ? {
+          on: allMarked(markable, "important"),
+          run: () => void batchMarks.run("important", markable),
+          disabled: batchMarks.busy,
+          reason: markReason,
+        }
+      : undefined,
+    trash:
+      shown && canTrash(shown)
+        ? { run: () => trashFile(shown), disabled: trash.busy, reason: deletionRefusal(shown.path!, shown.marks) }
+        : undefined,
+  };
   // (Move to tray is also done by dragging the item onto a tray in the sidebar; this is the
   // way without a mouse. Remove from tray is not a bin: it deletes nothing, the bin is To Delete.)
-  const actionRow =
-    slot &&
-    createPortal(
-      <FileActionBar
-        barRef={actionsRef}
-        tray={open && !isNew ? { label: "Move to tray", entries: moveEntries } : undefined}
-        removeFromTray={{ run: () => setRemoving(true), disabled: moveItem.isPending }}
-        backToInbox={
-          hasFile && shown
-            ? {
-                run: () => {
-                  if (inbox && !inboxWhy) fileMove.start(backToInbox([shown.drive_id], inbox, [shown.path!]));
-                },
-                reason: inboxWhy,
-              }
-            : undefined
-        }
-        ask={hasFile ? askBar : undefined}
-        star={
-          hasFile
-            ? {
-                on: allMarked(markable, "star"),
-                run: () => void batchMarks.run("star", markable),
-                disabled: batchMarks.busy,
-                reason: markReason,
-              }
-            : undefined
-        }
-        important={
-          hasFile
-            ? {
-                on: allMarked(markable, "important"),
-                run: () => void batchMarks.run("important", markable),
-                disabled: batchMarks.busy,
-                reason: markReason,
-              }
-            : undefined
-        }
-        trash={
-          shown && canTrash(shown)
-            ? { run: () => trashFile(shown), disabled: trash.busy, reason: deletionRefusal(shown.path!, shown.marks) }
-            : undefined
-        }
-      />,
-      slot,
-    );
+  const actionRow = slot && createPortal(<FileActionBar {...barProps} />, slot);
+  const { removeFromTray: _item, ...fileIconProps } = barProps;
+  void _item;
+  const fileIcons = (
+    <FileActionIcons
+      {...fileIconProps}
+      file={
+        hasFile && shown
+          ? { drive_id: shown.drive_id, path: shown.path ?? null, name: shown.path ? baseName(shown.path) : null, ext: shown.ext }
+          : null
+      }
+      onQuickLook={onQuickLook && hasFile ? onQuickLook : undefined}
+    />
+  );
 
   const quickLookButton = onQuickLook && firstPath && (
     <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
@@ -818,20 +827,12 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       {trash.view}
       {filingAI.sheet}
       {fileMove.view}
+      {assigning && shown && <AssignSheet kind={assigning} driveIds={[shown.drive_id]} onClose={() => setAssigning(null)} />}
       {!files.isPending && actionRow}
     </>
   );
   const collectionsBlock =
     shown?.path && shown.state !== "missing" ? <FileCollections key={shown.drive_id} driveId={shown.drive_id} hideItem={item.id} /> : null;
-  // Relatives of the file shown (one in To Delete or missing has none to act on)
-  const relativesBlock =
-    shown?.path && shown.state === "ok" ? (
-      <RelativesBlock
-        key={shown.drive_id}
-        compact
-        file={{ drive_id: shown.drive_id, path: shown.path, name: baseName(shown.path), ext: shown.ext }}
-      />
-    ) : null;
   const previewBlock = (
     <>
       <div className="item-files" ref={setPreviewSlot} />
@@ -881,7 +882,13 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
               </div>
             )}
             {open && <Menu label="Move to tray" text="Move to tray…" icon={null} entries={moveEntries} align="end" />}
-            <div className="item-bar-slot" ref={setOwnSlot} />
+            <IconButton
+              icon={<CircleMinus />}
+              label="Remove from tray"
+              tip="Remove from this tray (the files stay where they are)"
+              disabled={moveItem.isPending}
+              onClick={() => setRemoving(true)}
+            />
           </div>
           <IconButton icon={<X />} label="Close" onClick={onClose} />
         </header>
@@ -939,12 +946,22 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             <History item={item} tray={tray} today={today} />
           </div>
           <div className="item-col-side">
-            <ItemSummary item={item} />
-            {previewBlock}
-            <div className="item-file-head" ref={setHeadSlot} />
-            <div className="item-tags-slot" ref={setTagSlot} />
-            {collectionsBlock}
-            {relativesBlock}
+            {!files.isPending && shown?.path && shown.state !== "missing" ? (
+              // the one file panel, for the file shown (the item's card is the column beside it)
+              <FilePanel
+                key={shown.drive_id}
+                file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }}
+                preview={{ drive_id: shown.drive_id, path: shown.path, ext: shown.ext }}
+                disabled={trash.busy}
+                headerActions={{ ai: filingAI }}
+                actions={fileIcons}
+                hideItem={item.id}
+                compactRelatives
+                boxTool
+              />
+            ) : (
+              <ItemSummary item={item} />
+            )}
           </div>
         </div>
         {sheets}

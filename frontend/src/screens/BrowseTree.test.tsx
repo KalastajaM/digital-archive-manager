@@ -296,7 +296,7 @@ describe("The dividers and the folded tree", () => {
     await screen.findByRole("tree", { name: "Folder tree" });
     const body = document.querySelector(".browse-body") as HTMLElement;
     expect(body.style.getPropertyValue("--tree-w")).toBe("176px");
-    expect(body.style.getPropertyValue("--details-w")).toBe("280px");
+    expect(body.style.getPropertyValue("--details-w")).toBe("320px");
     const treeDivider = screen.getByRole("separator", { name: "Resize the folder tree" });
     treeDivider.focus();
     await user.keyboard("{ArrowRight}");
@@ -307,7 +307,7 @@ describe("The dividers and the folded tree", () => {
     const detailsDivider = screen.getByRole("separator", { name: "Resize the details panel" });
     detailsDivider.focus();
     await user.keyboard("{ArrowLeft}"); // the panel is measured from the right: left makes it wider
-    expect(body.style.getPropertyValue("--details-w")).toBe("296px");
+    expect(body.style.getPropertyValue("--details-w")).toBe("336px");
     expect(Object.keys(localStorage).some((k) => k.includes(INSPECTOR_WIDTH_KEY))).toBe(true);
   });
 
@@ -352,7 +352,7 @@ describe("The details beside two panes", () => {
     return out;
   }
 
-  it("shows the file of the active pane, with the actions and their keys", async () => {
+  it("shows the file of the active pane, with the two icon rows and their keys", async () => {
     mockFetch({
       "GET /api/browse": (call) => ({ body: LISTINGS[queryOf(call).get("path") ?? ""] ?? [] }),
       "GET /api/collections": { body: [] },
@@ -373,31 +373,36 @@ describe("The details beside two panes", () => {
     expect(within(details).getByText("No file selected")).toBeInTheDocument();
     await user.click(await within(pane("Left pane")).findByText("a.pdf"));
     expect(await within(details).findByRole("heading", { name: "a.pdf" })).toBeInTheDocument();
-    const actions = within(details).getByRole("list", { name: "Actions" });
-    const labels = within(actions).getAllByRole("listitem").map((li) => li.querySelector(".inspector-action-label, .menu-button-text")?.textContent);
-    expect(labels).toEqual([
+    // two rows of icon buttons, each with its key in the tooltip
+    const look = within(details).getByRole("group", { name: "Look at it" });
+    expect(within(look).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
       "Open",
       "Quick Look",
       expect.stringMatching(/^Show in /),
-      "Relatives…",
-      "Move to…",
-      "Rename",
-      "Add to collection…",
-      "Put in tray…",
-      "Tag…",
-      "Say who sent this…",
-      "Say who this is for…",
-      "Back to inbox",
-      "Ask AI…",
+      "Relatives",
+      "Ask AI",
+    ]);
+    expect(within(look).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look (Space)");
+    const filing = within(details).getByRole("group", { name: "File it" });
+    expect(within(filing).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "From…",
+      "For…",
+      "Put in tray",
       "Star",
       "Mark Important",
+      "Back to inbox",
       "Move to To Delete",
     ]);
-    expect(within(actions).getByRole("button", { name: /^Quick Look/ })).toHaveTextContent("Space");
-    expect(within(actions).getByRole("button", { name: /^Move to…/ })).toHaveTextContent("⇧⌘M");
-    expect(within(actions).getByRole("button", { name: /^Move to To Delete/ })).toHaveTextContent("⌘⌫");
-    // Relatives… opens the Relatives window of this file
-    await user.click(within(actions).getByRole("button", { name: /^Relatives…/ }));
+    expect(within(filing).getByRole("button", { name: "Move to To Delete" })).toHaveAttribute("data-tip", "Move to To Delete (⌘⌫)");
+    // what is done in place is not in the rows: Rename, Move to…, Tag…, Add to collection…
+    for (const row of [look, filing]) {
+      expect(within(row).queryByRole("button", { name: /^(Rename|Move to…|Tag…|Add to collection…)/ })).toBeNull();
+    }
+    // the name and the folder do them in place
+    expect(within(details).getByRole("button", { name: "Rename a.pdf" })).toBeInTheDocument();
+    expect(within(details).getByRole("button", { name: "Move file to…" })).toBeInTheDocument();
+    // Relatives opens the Relatives window of this file
+    await user.click(within(look).getByRole("button", { name: "Relatives" }));
     const window = await screen.findByRole("dialog", { name: "Relatives" });
     expect(within(window).getByText("a.pdf")).toBeInTheDocument();
     await user.click(within(window).getByRole("button", { name: "Close" }));
@@ -418,7 +423,7 @@ describe("The details beside two panes", () => {
     await user.click(within(left).getByRole("checkbox", { name: "Select b.pdf" }));
     expect(await within(details).findByRole("heading", { name: "2 files selected" })).toBeInTheDocument();
     expect(details).toHaveTextContent(/2[.,]9 KB, all in 10\. Financial\/Banks/);
-    await user.click(within(details).getByRole("button", { name: /^Move to…/ }));
+    await user.click(within(details).getByRole("button", { name: "Move to…" }));
     const sheet = await screen.findByRole("dialog");
     expect(sheet).toHaveTextContent("a.pdf");
     expect(sheet).toHaveTextContent("b.pdf");
@@ -431,7 +436,7 @@ describe("The details beside two panes", () => {
     await within(left).findByText("a.pdf");
     await user.click(within(left).getByRole("checkbox", { name: "Select a.pdf" }));
     await user.click(within(left).getByRole("checkbox", { name: "Select b.pdf" }));
-    await user.click(await within(details).findByRole("button", { name: /^Move 2 to To Delete/ }));
+    await user.click(await within(details).findByRole("button", { name: "Move 2 to To Delete" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.includes("/api/quarantine"))).toBe(true));
   });
 });

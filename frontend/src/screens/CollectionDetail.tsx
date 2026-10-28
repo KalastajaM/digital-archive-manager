@@ -71,7 +71,6 @@ import {
   subtreeOf,
 } from "../components/collectionTree";
 import { CopyButton } from "../components/CopyButton";
-import { useFileLaunch } from "../components/FileLaunch";
 import { FileDetails } from "../components/FileDetails";
 import { useCollectionOrder } from "../components/useCollectionOrder";
 import {
@@ -88,7 +87,8 @@ import {
 } from "../components/GroupTree";
 import { LastChange } from "../components/LastChange";
 import { BUILTIN_LABEL } from "../components/MarkIcons";
-import { FileActionBar, useAskAction } from "../components/FileActionBar";
+import { FileActionBar, type FileActionBarProps, useAskAction } from "../components/FileActionBar";
+import { FileActionIcons } from "../components/FileActionIcons";
 import { type FilingAI, useFilingAI } from "../components/ai/useFilingAI";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { toDeleteReason } from "../toDelete";
@@ -649,53 +649,39 @@ function NewChildSheet({
   );
 }
 
-/** The New look's foot of the side panel: Open, Show in folder, Note on this file and Remove
- * from collection as drawn, then the file's other actions (the icon bar) as a second row. */
-type Foot = { remove?: { run: () => void; disabled: boolean }; bar: ReactNode };
-
-function InspectorFoot({
-  driveId,
-  connected,
-  canOpen,
+/** The New look's block under the collections box: the member's Group (the keyboard way to move
+ * it), and two links for what only a collection's panel has: the file's own folder in Browse and
+ * a jump to its note. */
+function CollectionSection({
+  group,
   showButton,
-  foot,
+  noteLink,
 }: {
-  driveId: string;
-  connected: boolean | undefined;
-  canOpen: boolean;
+  group: ReactNode;
   showButton: ReactNode;
-  foot: Foot;
+  noteLink: boolean;
 }) {
-  const launch = useFileLaunch(driveId);
-  const away = connected === false;
   const toNote = () => {
     const box = document.querySelector<HTMLElement>(".collection-inspector .item-note");
     const toggle = box?.querySelector<HTMLButtonElement>(".collapsible-toggle[aria-expanded='false']");
     toggle?.click(); // a folded note opens first
     requestAnimationFrame(() => box?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
   };
+  if (!group && !showButton && !noteLink) return null;
   return (
-    <div className="inspector-foot">
-      <div className="inspector-buttons" role="group" aria-label="This file">
-        {canOpen && (
-          <button type="button" className="primary" disabled={launch.busy || away} title={away ? "Not connected" : undefined} onClick={() => void launch.run("open")}>
-            Open
-          </button>
-        )}
-        {showButton}
-        {canOpen && (
-          <button type="button" onClick={toNote}>
-            Note on this file
-          </button>
-        )}
-        {foot.remove && (
-          <button type="button" className="is-quiet-danger" disabled={foot.remove.disabled} onClick={foot.remove.run}>
-            Remove from collection
-          </button>
-        )}
-      </div>
-      {foot.bar}
-    </div>
+    <section className="inspector-collection" aria-label="In this collection">
+      {group}
+      {(showButton || noteLink) && (
+        <div className="inspector-links">
+          {showButton}
+          {noteLink && (
+            <button type="button" className="link-button" onClick={toNote}>
+              Note on this file
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -712,12 +698,12 @@ function Inspector({
   onGroup,
   onQuickLook,
   ai,
-  foot,
+  icons,
 }: {
   /** The page's Ask AI, whose answer shows in the file's details. */
   ai: FilingAI;
-  /** The New look: the buttons under the preview (they are in the page's header in Classic). */
-  foot?: Foot;
+  /** The New look: the file's two icon rows (``FileActionIcons``; in Classic they are in the page's header). */
+  icons?: ReactNode;
   member: Member | null;
   groups: { group: Group; path: string }[];
   busy: boolean;
@@ -738,7 +724,7 @@ function Inspector({
   // the file's own folder in Browse, with the file selected (a click on a member keeps the
   // collection's page; Today's Starred card opens Browse on a click)
   const showButton = !member.is_dir && member.path && (
-    <button type="button" onClick={() => navigate(browseHref(member.path!, member.drive_id))}>
+    <button type="button" className={icons !== undefined ? "link-button" : undefined} onClick={() => navigate(browseHref(member.path!, member.drive_id))}>
       Show in folder
     </button>
   );
@@ -772,16 +758,20 @@ function Inspector({
           view={quickLookButton}
           headerActions={{ ai }}
           compactRelatives
+          actions={icons}
           extras={
-            (group || (showButton && !foot)) && (
-              <section className="inspector-collection" aria-label="In this collection">
-                {group}
-                {showButton && !foot && <div className="inspector-actions">{showButton}</div>}
-              </section>
+            icons !== undefined ? (
+              <CollectionSection group={group} showButton={showButton} noteLink />
+            ) : (
+              (group || showButton) && (
+                <section className="inspector-collection" aria-label="In this collection">
+                  {group}
+                  {showButton && <div className="inspector-actions">{showButton}</div>}
+                </section>
+              )
             )
           }
         />
-        {foot && <InspectorFoot driveId={member.drive_id} connected={member.connected} canOpen showButton={showButton} foot={foot} />}
       </aside>
     );
   }
@@ -803,6 +793,7 @@ function Inspector({
   );
   return (
     <aside className="collection-inspector" aria-label="Selected file">
+      {icons}
       {member.path && (member.missing || member.quarantined) ? (
         <>
           <FileDetails file={{ drive_id: member.drive_id, name: null, path: member.path }} />
@@ -829,7 +820,6 @@ function Inspector({
           {actions()}
         </>
       )}
-      {foot && <InspectorFoot driveId={member.drive_id} connected={member.connected} canOpen={false} showButton={null} foot={foot} />}
     </aside>
   );
 }
@@ -841,14 +831,14 @@ function EntryInspector({
   busy,
   onQuickLook,
   ai,
-  bar,
+  icons,
 }: {
   entry: DirEntry;
   busy: boolean;
   onQuickLook: () => void;
   ai: FilingAI;
-  /** The New look: the file's actions under the preview. */
-  bar?: ReactNode;
+  /** The New look: the file's two icon rows. */
+  icons?: ReactNode;
 }) {
   const folder = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
   return (
@@ -860,12 +850,8 @@ function EntryInspector({
         intro={<p className="hint">In the folder {visible(folder)}, which is in this collection. The file itself is not a member.</p>}
         view={<IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
         headerActions={{ ai }}
+        actions={icons}
       />
-      {bar && (
-        <div className="inspector-foot">
-          {bar}
-        </div>
-      )}
     </aside>
   );
 }
@@ -1434,52 +1420,55 @@ export default function CollectionDetail({
   const markReason = toDeleteReason(shownPath);
   const markable = shownFile && shownPath ? [{ drive_id: shownFile.drive_id, name: baseName(shownPath), marks: shownFile.marks }] : [];
   const trashWhy = browsed ? deletionRefusal(browsed.path, browsed.marks) : selected ? trashRefusal(selected) : null;
-  const fileBar = shownFile ? (
-    <FileActionBar
-      tray={
-        shownIsFile
-          ? { label: "Put in tray", entries: trayEntries, disabled: busy, reason: markReason }
-          : undefined
-      }
-      removeFromCollection={
-        !isNew && !browsed && selected && !builtin
-          ? { name: memberName(selected), run: () => void removeMember(selected), disabled: busy }
-          : undefined
-      }
-      backToInbox={{
-        run: () => {
-          if (inbox && shownPath && !inboxWhy) startMove(backToInbox([shownFile.drive_id], inbox, [shownPath]));
+  const barProps: FileActionBarProps | null = shownFile
+    ? {
+        tray: shownIsFile ? { label: "Put in tray", entries: trayEntries, disabled: busy, reason: markReason } : undefined,
+        removeFromCollection:
+          !browsed && selected && !builtin ? { name: memberName(selected), run: () => void removeMember(selected), disabled: busy } : undefined,
+        backToInbox: {
+          run: () => {
+            if (inbox && shownPath && !inboxWhy) startMove(backToInbox([shownFile.drive_id], inbox, [shownPath]));
+          },
+          disabled: busy,
+          reason: inboxWhy,
         },
-        disabled: busy,
-        reason: inboxWhy,
-      }}
-      moveTo={{
-        run: () => {
-          if (!moveWhy) setMoveSheet({ id: shownFile.drive_id, name: baseName(shownPath!) });
+        moveTo: {
+          run: () => {
+            if (!moveWhy) setMoveSheet({ id: shownFile.drive_id, name: baseName(shownPath!) });
+          },
+          shortcut: "⇧⌘M",
+          disabled: busy,
+          reason: moveWhy,
         },
-        shortcut: "⇧⌘M",
-        disabled: busy,
-        reason: moveWhy,
-      }}
-      sender={{ run: () => setAssigning({ kind: "sender", ids: [shownFile.drive_id] }), disabled: busy, reason: fileWhy }}
-      person={{ run: () => setAssigning({ kind: "person", ids: [shownFile.drive_id] }), disabled: busy, reason: fileWhy }}
-      ask={shownPath && !("missing" in shownFile && (shownFile.missing || shownFile.quarantined)) ? askBar : undefined}
-      star={
-        shownPath
+        sender: { run: () => setAssigning({ kind: "sender", ids: [shownFile.drive_id] }), disabled: busy, reason: fileWhy },
+        person: { run: () => setAssigning({ kind: "person", ids: [shownFile.drive_id] }), disabled: busy, reason: fileWhy },
+        ask: shownPath && !("missing" in shownFile && (shownFile.missing || shownFile.quarantined)) ? askBar : undefined,
+        star: shownPath
           ? { on: allMarked(markable, "star"), run: () => void batchMarks.run("star", markable), disabled: busy || batchMarks.busy, reason: markReason }
-          : undefined
-      }
-      important={
-        shownPath
+          : undefined,
+        important: shownPath
           ? { on: allMarked(markable, "important"), run: () => void batchMarks.run("important", markable), disabled: busy || batchMarks.busy, reason: markReason }
-          : undefined
+          : undefined,
+        restore: inTrash ? { entries: restoreEntries(startRestore, null) } : undefined,
+        trash: { run: trashSelected, disabled: busy || trashWhy !== null, reason: trashWhy },
       }
-      restore={inTrash ? { entries: restoreEntries(startRestore, null) } : undefined}
-      trash={{ run: trashSelected, disabled: busy || trashWhy !== null, reason: trashWhy }}
-    />
-  ) : (
-    <FileActionBar />
-  );
+    : null;
+  // Classic: one bar in the page's header. New: the file's two icon rows in its side panel,
+  // without Move to… (the folder in the panel's header does it).
+  const fileBar = barProps ? <FileActionBar {...barProps} /> : <FileActionBar />;
+  const fileIcons =
+    barProps && shownFile ? (
+      <FileActionIcons
+        {...barProps}
+        moveTo={undefined}
+        file={
+          shownIsFile
+            ? { drive_id: shownFile.drive_id, path: shownPath, name: browsed ? browsed.name : selected ? memberName(selected) : null, is_link: shownFile.is_link, connected: "connected" in shownFile ? shownFile.connected : undefined }
+            : null
+        }
+        onQuickLook={shownIsFile && (browsed || (selected && looks.includes(selected))) ? quickLook.open : undefined}
+      />
+    ) : undefined;
 
   const subtitle = (
     <>
@@ -1754,7 +1743,7 @@ export default function CollectionDetail({
         </>
       )}
       {browsed ? (
-        <EntryInspector entry={browsed} busy={busy} onQuickLook={quickLook.open} ai={filingAI} bar={isNew ? fileBar : undefined} />
+        <EntryInspector entry={browsed} busy={busy} onQuickLook={quickLook.open} ai={filingAI} icons={isNew ? fileIcons : undefined} />
       ) : (
       <Inspector
         member={selected}
@@ -1767,14 +1756,7 @@ export default function CollectionDetail({
         }}
         onQuickLook={selected && looks.includes(selected) ? quickLook.open : undefined}
         ai={filingAI}
-        foot={
-          isNew
-            ? {
-                remove: selected && !builtin ? { run: () => void removeMember(selected), disabled: busy } : undefined,
-                bar: fileBar,
-              }
-            : undefined
-        }
+        icons={isNew ? fileIcons : undefined}
       />
       )}
       </div>

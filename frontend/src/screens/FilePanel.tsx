@@ -11,6 +11,7 @@ import type { FilingAI } from "../components/ai/useFilingAI";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
+import { FilePanelSkeleton } from "../components/FilePanelSkeleton";
 import { RelativesBlock } from "../components/RelativesBlock";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
 import { Breakable } from "../components/PlanPreview";
@@ -34,6 +35,9 @@ export function FilePanel({
   restore,
   headerActions,
   compactRelatives = false,
+  actions,
+  summary,
+  hideItem,
 }: {
   file: MetaFile;
   /** What the preview shows (Browse: a link's target). */
@@ -55,27 +59,41 @@ export function FilePanel({
   headerActions?: { ai: FilingAI };
   /** A narrow panel (a collection): Relatives starts folded. */
   compactRelatives?: boolean;
+  /** The New look: the two icon rows (``FileActionIcons``), under the header. Its blocks in
+   * the skeleton's order: ``extras`` (a collection's Group) sits under the collections, and
+   * Restore, Put in tray and Back to inbox are in the icon rows. */
+  actions?: ReactNode;
+  /** The New look: the summary block, where the screen has its own (a tray's file picker). */
+  summary?: ReactNode;
+  /** A tray item that is not listed among the file's items (the one being viewed). */
+  hideItem?: number;
 }) {
   // A file in ##. To Delete is read-only until it is restored
   const readOnly = toDeleteReason(file.path);
   // Relatives is New look only; a link stands for its target, which has its own panel
   const [look] = useStyle();
+  const isNew = look === "new";
   const relatives = look === "new" && !readOnly && !file.is_link && !file.is_dir && file.path !== null;
   return (
     <FileMeta key={`meta-${file.drive_id}`} file={file} disabled={disabled} ai={headerActions?.ai}>
-      {(meta) => (
-        <FileView
-          className="file-panel"
+      {(meta) => {
+        const Panel = isNew ? FilePanelSkeleton : FileView;
+        return (
+        <Panel
+          className={isNew ? undefined : "file-panel"}
           header={
             <>
               {meta.header}
               {intro}
             </>
           }
+          actions={isNew ? actions : undefined}
           tags={meta.tags}
-          collections={<FileCollections driveId={file.drive_id} readOnly={readOnly} />}
-          summary={<SummaryBox driveId={file.drive_id} readOnly={readOnly} />}
+          collections={<FileCollections driveId={file.drive_id} hideItem={hideItem} readOnly={readOnly} />}
+          group={isNew ? extras : undefined}
+          summary={summary ?? <SummaryBox driveId={file.drive_id} readOnly={readOnly} />}
           own={
+            isNew ? undefined :
             // the header carries Put in tray and Back to inbox: nothing of its own left, unless To Delete's Restore
             headerActions && !extras && !(readOnly && restore) ? undefined : (
             <>
@@ -97,9 +115,9 @@ export function FilePanel({
               boxTool={boxTool ? {} : undefined}
               extraTools={
                 <>
-                  {view}
-                  {!headerActions && meta.marks}
-                  {!headerActions && meta.ask}
+                  {!isNew && view}
+                  {!headerActions && !isNew && meta.marks}
+                  {!headerActions && !isNew && meta.ask}
                   {tools}
                 </>
               }
@@ -107,7 +125,8 @@ export function FilePanel({
           }
           notes={<SavedNote kind="file" target={file.drive_id} label="Note on this file" readOnly={readOnly} />}
         />
-      )}
+        );
+      }}
     </FileMeta>
   );
 }

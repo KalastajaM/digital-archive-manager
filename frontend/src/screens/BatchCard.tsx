@@ -21,6 +21,9 @@ import { Toolbar } from "../components/ui/Toolbar";
 import { ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
 import { IconButton } from "../components/ui/IconButton";
 import { TipButton } from "../components/ui/TipButton";
+import { FileActionIcons } from "../components/FileActionIcons";
+import { FilePanelSkeleton } from "../components/FilePanelSkeleton";
+import { useStyle } from "../appearance";
 import { allMarked, type Markable, useBatchMark } from "../components/useBatchMark";
 import { addTags, FieldChips, type Offer, offersFor, parseTags, tagOffers, UseAll } from "../components/SuggestionChip";
 import { visible } from "../text";
@@ -88,6 +91,8 @@ function commonFolder(entries: InboxEntry[]): string {
  * the server (``tray_fields: {}``). No note. */
 export default function BatchCard({ entries, filing, onAdded, trash, lead }: Props) {
   const ids = useId();
+  const [look] = useStyle();
+  const isNew = look === "new";
   const [folder, setFolder] = useState(() => commonFolder(entries));
   const [folderEdited, setFolderEdited] = useState(false);
   const [tags, setTags] = useState("");
@@ -198,6 +203,126 @@ export default function BatchCard({ entries, filing, onAdded, trash, lead }: Pro
   }));
   const starAll = allMarked(markable, "star");
   const importantAll = allMarked(markable, "important");
+  // ★ / ! and the bin: toolbar icons in Classic, the file panel's icon rows in New
+  const marksAndTrash = (
+    <>
+      <IconButton
+        icon={<StarGlyph size={16} filled={starAll} />}
+        label={starAll ? "Remove the star" : "Star"}
+        pressed={starAll}
+        disabled={marks.busy}
+        onClick={() => void marks.run("star", markable)}
+      />
+      <IconButton
+        icon={<ImportantGlyph large />}
+        label={importantAll ? "Unmark Important" : "Mark Important"}
+        pressed={importantAll}
+        disabled={marks.busy}
+        onClick={() => void marks.run("important", markable)}
+      />
+      {trash && <TrashButton count={entries.length} disabled={filing.busy || adding.busy || trash.busy} onClick={trash.run} />}
+    </>
+  );
+  const fields = (
+    <>
+      <FilingMessage filing={filing} ids={cardIds} problem={tried && !folderProblem ? otherProblem : null} />
+      <UseAll
+        count={(folderOffers.length === 1 ? 1 : 0) + tagChips.length}
+        disabled={filing.busy || adding.busy}
+        onUse={useAll}
+      />
+      <div className="field">
+        <FolderPicker
+          ref={folderRef}
+          label="Folder"
+          value={folder}
+          onChange={chooseFolder}
+          error={tried ? folderProblem : null}
+        />
+        <FieldChips
+          field="Folder"
+          offers={folderOffers}
+          disabled={filing.busy || adding.busy}
+          onUse={(o) => chooseFolder(o.value)}
+        />
+        {foldersConflict && (
+          <p className="hint">The files suggest different folders: pick one. Use all leaves the folder as it is.</p>
+        )}
+      </div>
+      <div className="field">
+        <label htmlFor={`${ids}-tags`}>Tags</label>
+        <TagInput
+          id={`${ids}-tags`}
+          value={parseTags(tags)}
+          onChange={(next) => setTags(next.join(", "))}
+          placeholder="Add a tag (added to every file)"
+          disabled={filing.busy || adding.busy}
+          passCmdEnter
+        />
+        <FieldChips field="tag" offers={tagChips} disabled={filing.busy || adding.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
+      </div>
+      {!isNew && (
+      <div className="field from-for-batch" role="group" aria-label="Who">
+        <span className="field-label">Who</span>
+        <div className="actions">
+          <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("sender")}>
+            From…
+          </button>
+          <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("person")}>
+            For…
+          </button>
+        </div>
+      </div>
+      )}
+      <hr />
+      <TrayPicker
+        trays={trays.list}
+        value={tray?.id ?? null}
+        onChange={trays.setTrayId}
+        problem={trays.problem}
+      />
+      {tray && <p className="hint">Each file’s item is filled in from its own scan.</p>}
+      {tray && alreadyIn > 0 && (
+        <p className="notice">
+          {alreadyIn === 1
+            ? `1 file is already in ${visible(tray.name)}: no new item for it.`
+            : `${alreadyIn} files are already in ${visible(tray.name)}: no new item for them.`}
+        </p>
+      )}
+      <CollectionNamesInput
+        value={collections}
+        onChange={setCollections}
+        text={collectionText}
+        onTextChange={setCollectionText}
+      />
+      <div className="actions">
+        <button
+          type="button"
+          onClick={() => void addOnly()}
+          disabled={collections.length === 0 || !!collectionProblem || filing.busy || adding.busy}
+          title="Add the files to the collections above and leave them in the inbox, to file them one by one later"
+        >
+          Add to collection only
+        </button>
+      </div>
+      {collections.length === 0 && (
+        <p className="hint">
+          Collection only? Choose it, then “Add to collection only”. No folder needed.
+        </p>
+      )}
+      {adding.busy && (
+        <p className="hint" role="status">
+          Adding…
+        </p>
+      )}
+      {adding.error && (
+        <p className="error" role="alert">
+          {visible(adding.error)}
+        </p>
+      )}
+      {assigning && <AssignSheet kind={assigning} driveIds={cardIds} onClose={() => setAssigning(null)} />}
+    </>
+  );
   return (
     <article className="batch-card" aria-label={`Batch of ${count}`}>
       <Toolbar
@@ -206,23 +331,7 @@ export default function BatchCard({ entries, filing, onAdded, trash, lead }: Pro
         subtitle="each keeps its suggested name"
         actions={
           <>
-            <IconButton
-              icon={<StarGlyph size={16} filled={starAll} />}
-              label={starAll ? "Remove the star" : "Star"}
-              pressed={starAll}
-              disabled={marks.busy}
-              onClick={() => void marks.run("star", markable)}
-            />
-            <IconButton
-              icon={<ImportantGlyph large />}
-              label={importantAll ? "Unmark Important" : "Mark Important"}
-              pressed={importantAll}
-              disabled={marks.busy}
-              onClick={() => void marks.run("important", markable)}
-            />
-            {trash && (
-              <TrashButton count={entries.length} disabled={filing.busy || adding.busy || trash.busy} onClick={trash.run} />
-            )}
+            {!isNew && marksAndTrash}
             <TipButton
               className="tip-end"
               tip="Show exactly what will move, before anything changes ↩"
@@ -260,100 +369,30 @@ export default function BatchCard({ entries, filing, onAdded, trash, lead }: Pro
           ))}
         </ul>
         <div className="inspector batch-form">
-          <FilingMessage filing={filing} ids={cardIds} problem={tried && !folderProblem ? otherProblem : null} />
-          <UseAll
-            count={(folderOffers.length === 1 ? 1 : 0) + tagChips.length}
-            disabled={filing.busy || adding.busy}
-            onUse={useAll}
-          />
-          <div className="field">
-            <FolderPicker
-              ref={folderRef}
-              label="Folder"
-              value={folder}
-              onChange={chooseFolder}
-              error={tried ? folderProblem : null}
+          {isNew ? (
+            <FilePanelSkeleton
+              header={
+                <header className="file-meta-head">
+                  <div className="file-meta-title">
+                    <h2>{count} selected</h2>
+                  </div>
+                  <p className="current-path">each keeps its suggested name</p>
+                </header>
+              }
+              actions={
+                <FileActionIcons
+                  sender={{ run: () => setAssigning("sender"), disabled: filing.busy || adding.busy }}
+                  person={{ run: () => setAssigning("person"), disabled: filing.busy || adding.busy }}
+                  star={{ on: starAll, run: () => void marks.run("star", markable), disabled: marks.busy }}
+                  important={{ on: importantAll, run: () => void marks.run("important", markable), disabled: marks.busy }}
+                  trash={trash ? { count: entries.length, run: trash.run, disabled: filing.busy || adding.busy || trash.busy } : undefined}
+                />
+              }
+              top={fields}
             />
-            <FieldChips
-              field="Folder"
-              offers={folderOffers}
-              disabled={filing.busy || adding.busy}
-              onUse={(o) => chooseFolder(o.value)}
-            />
-            {foldersConflict && (
-              <p className="hint">The files suggest different folders: pick one. Use all leaves the folder as it is.</p>
-            )}
-          </div>
-          <div className="field">
-            <label htmlFor={`${ids}-tags`}>Tags</label>
-            <TagInput
-              id={`${ids}-tags`}
-              value={parseTags(tags)}
-              onChange={(next) => setTags(next.join(", "))}
-              placeholder="Add a tag (added to every file)"
-              disabled={filing.busy || adding.busy}
-              passCmdEnter
-            />
-            <FieldChips field="tag" offers={tagChips} disabled={filing.busy || adding.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
-          </div>
-          <div className="field from-for-batch" role="group" aria-label="Who">
-            <span className="field-label">Who</span>
-            <div className="actions">
-              <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("sender")}>
-                From…
-              </button>
-              <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("person")}>
-                For…
-              </button>
-            </div>
-          </div>
-          <hr />
-          <TrayPicker
-            trays={trays.list}
-            value={tray?.id ?? null}
-            onChange={trays.setTrayId}
-            problem={trays.problem}
-          />
-          {tray && <p className="hint">Each file’s item is filled in from its own scan.</p>}
-          {tray && alreadyIn > 0 && (
-            <p className="notice">
-              {alreadyIn === 1
-                ? `1 file is already in ${visible(tray.name)}: no new item for it.`
-                : `${alreadyIn} files are already in ${visible(tray.name)}: no new item for them.`}
-            </p>
+          ) : (
+            fields
           )}
-          <CollectionNamesInput
-            value={collections}
-            onChange={setCollections}
-            text={collectionText}
-            onTextChange={setCollectionText}
-          />
-          <div className="actions">
-            <button
-              type="button"
-              onClick={() => void addOnly()}
-              disabled={collections.length === 0 || !!collectionProblem || filing.busy || adding.busy}
-              title="Add the files to the collections above and leave them in the inbox, to file them one by one later"
-            >
-              Add to collection only
-            </button>
-          </div>
-          {collections.length === 0 && (
-            <p className="hint">
-              Collection only? Choose it, then “Add to collection only”. No folder needed.
-            </p>
-          )}
-          {adding.busy && (
-            <p className="hint" role="status">
-              Adding…
-            </p>
-          )}
-          {adding.error && (
-            <p className="error" role="alert">
-              {visible(adding.error)}
-            </p>
-          )}
-          {assigning && <AssignSheet kind={assigning} driveIds={cardIds} onClose={() => setAssigning(null)} />}
           {plan && (
             <div className="inbox-plan">
               <PlanPreview
