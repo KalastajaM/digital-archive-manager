@@ -45,6 +45,12 @@ without ever deleting a file.
   folder and everything in it belongs, including what you put in it later.
 - **Tags and search.** Search by tag from the Search card on Today or in Browse. A Tags
   screen lets you rename, merge and group tags, each change with Undo.
+- **Relatives: a family tree for each document.** Every document shows the files it
+  belongs with, and why: the same sender, reference number, IBAN, collection, tag, folder or
+  person. Last year's bill, the contract behind it and the scan still in the inbox show up
+  together; open the connections view to see them by folder, compare one side by side in
+  Quick Look, and tag, collect, move or link them together in one undoable step. Built only
+  from what you stored; an optional AI pass finds more, on a click.
 
 <table>
   <tr>

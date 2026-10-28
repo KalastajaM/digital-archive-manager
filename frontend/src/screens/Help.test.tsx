@@ -75,6 +75,13 @@ describe("Help", () => {
     for (const path of diagrams.querySelectorAll("[marker-end]")) expect(heads).toContain(path.getAttribute("marker-end"));
   });
 
+  it("shows the Relatives diagram right under the Relatives heading", () => {
+    renderHelp();
+    const heading = screen.getByRole("heading", { level: 2, name: "Relatives" });
+    const diagram = heading.nextElementSibling as HTMLElement;
+    expect(within(diagram).getByRole("figure")).toHaveTextContent("How Relatives works");
+  });
+
   it("slugs headings the way GitHub does", () => {
     expect(slug("AI (optional)")).toBe("ai-optional");
     expect(slug("Starred and Important")).toBe("starred-and-important");
