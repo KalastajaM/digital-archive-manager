@@ -69,6 +69,29 @@ describe("compare mode", () => {
     expect(last.onClose).toHaveBeenCalled();
   });
 
+  it("zooms each pane on its own: + / - go to the pane last clicked, and Zoom together links them", async () => {
+    const { user } = setup(true);
+    // [this file, the relative], each pane's level ("Fit" or a percentage)
+    const levels = async () => (await screen.findAllByTestId("zoom-level")).map((el) => el.textContent);
+    expect(await levels()).toEqual(["Fit", "Fit"]);
+    fireEvent.keyDown(dialog(), { key: "+" });
+    expect(await levels()).toEqual(["Fit", "150%"]);
+    const [subjectIn] = screen.getAllByRole("button", { name: "Zoom in" });
+    await user.click(subjectIn);
+    expect(await levels()).toEqual(["150%", "150%"]);
+    fireEvent.keyDown(dialog(), { key: "+" }); // the subject pane was clicked last
+    expect(await levels()).toEqual(["200%", "150%"]);
+    const together = within(dialog()).getByRole("button", { name: /Zoom together/ });
+    await user.click(together);
+    expect(together).toHaveAttribute("aria-pressed", "true");
+    expect(await levels()).toEqual(["150%", "150%"]);
+    fireEvent.keyDown(dialog(), { key: "-" });
+    expect(await levels()).toEqual(["Fit", "Fit"]);
+    await user.click(together);
+    fireEvent.keyDown(dialog(), { key: "+" });
+    expect(await levels()).toEqual(["150%", "Fit"]); // apart again: the keys still go to the pane last clicked
+  });
+
   it("Space closes, but Space on a button presses that button", () => {
     const { onClose, onNotRelated } = setup(true);
     const button = within(dialog()).getByRole("button", { name: /Not related/ });

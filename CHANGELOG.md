@@ -21,11 +21,13 @@ All notable changes are listed here. The format follows
 - **Show connections for Relatives (New look).** The Relatives block has a **Show connections**
   link that opens the folder outline cut down to the folders with a relative, with an arc from
   this file to each one (thicker for more in common, orange and dashed for a file not filed
-  yet). The **In common** strip lights up the files that share one value, a card on each row
-  lists exactly what it shares, and the panel on the right has the block's actions plus
-  **2+ links**, **Same sender** and **Outside this folder**. Quick Look from Relatives now
-  shows this file beside the relative with what they share, and **N** (Not related), **→**
-  (Skip) and **Y** (Related, next) to go through them.
+  yet). The **In common** strip lights up the files that share one value. Pointing at a row
+  shows exactly what it shares in a card in the panel on the right, beside the outline rather
+  than over it; the panel also has the block's actions plus **2+ links**, **Same sender** and
+  **Outside this folder**. Quick Look from Relatives now shows this file beside the relative
+  with what they share, and **N** (Not related), **→** (Skip) and **Y** (Related, next) to go
+  through them. Each side zooms on its own (`+` and `-` zoom the side clicked last), and
+  **Zoom together** links them for documents of the same size.
 - **Find more relatives with AI (New look, optional).** When AI is on, the Relatives block
   and window have **Find more with AI…**. It first shows what will be sent: this document's
   name, folder and first 2,000 characters, and up to 28 candidate files (chosen by a free

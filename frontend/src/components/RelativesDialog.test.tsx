@@ -156,10 +156,11 @@ describe("the In common strip", () => {
 });
 
 describe("the card", () => {
-  it("shows the exact shared values on hover, with Quick look and Not related", async () => {
+  it("shows the exact shared values on hover in the side panel, with Quick look and Not related", async () => {
     const { user } = setup();
     await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
     expect(screen.queryByRole("group", { name: /What .* shares/ })).toBeNull();
+    expect(screen.getByText(/Point at a file/)).toBeInTheDocument();
     await user.hover(rowOf("20240928_Verohallinto.pdf"));
     const card = await screen.findByRole("group", { name: "What 20240928_Verohallinto.pdf shares" });
     for (const [k, v] of [["Folder", "13. Taxes"], ["Sender", "Verohallinto"], ["Tag", "Taxes"], ["Collection", "Tax return"]]) {
@@ -168,8 +169,17 @@ describe("the card", () => {
     }
     expect(within(card).getByRole("button", { name: /Quick look/ })).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "Not related" })).toBeInTheDocument();
+    // beside the outline, never over it
+    expect(card.closest(".rel-side")).not.toBeNull();
+    expect(card.closest(".rel-rows")).toBeNull();
+    expect(rowOf("20240928_Verohallinto.pdf")).toHaveClass("carded");
+    // it stays when the pointer leaves, so its buttons can be reached
     await user.unhover(rowOf("20240928_Verohallinto.pdf"));
-    expect(screen.queryByRole("group", { name: /What .* shares/ })).toBeNull();
+    expect(screen.getByRole("group", { name: "What 20240928_Verohallinto.pdf shares" })).toBeInTheDocument();
+    await user.hover(rowOf("receipt.pdf"));
+    expect(await screen.findByRole("group", { name: "What receipt.pdf shares" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "What 20240928_Verohallinto.pdf shares" })).toBeNull();
+    expect(rowOf("20240928_Verohallinto.pdf")).not.toHaveClass("carded");
   });
 
   it("shows on keyboard focus too, and Not related there marks the pair", async () => {

@@ -50,16 +50,21 @@ const renderWidth = (zoom: number): PageWidth => (zoom <= 1 ? 900 : zoom <= 1.5 
  * (Quick Look keeps the user's zoom while paging through documents). */
 export type ZoomControl = [number, Dispatch<SetStateAction<number>>];
 
+/** Whether a preview takes the + / - / 0 keys itself. Quick Look's compare mode turns it
+ * off: with two previews in one dialog, it sends the keys to one of them (or both). */
+export const ZoomKeys = createContext(true);
+
 /** Zoom state plus the + / - / 0 keys (ignored while typing, and behind an open dialog:
  * a preview inside the dialog, as in Quick Look, keeps them). */
 function useZoom(root: RefObject<HTMLElement | null>, control?: ZoomControl) {
   const own = useState(FIT);
+  const keys = useContext(ZoomKeys);
   const [level, setLevel] = control ?? own;
   const zoomIn = () => setLevel((l) => Math.min(ZOOM_LEVELS.length - 1, l + 1));
   const zoomOut = () => setLevel((l) => Math.max(0, l - 1));
   const fit = () => setLevel(FIT);
   useKeydown((e) => {
-    if (!isShortcutIn(e, root.current)) return;
+    if (!keys || !isShortcutIn(e, root.current)) return;
     if (e.key === "+" || e.key === "=") zoomIn();
     else if (e.key === "-") zoomOut();
     else if (e.key === "0") fit();

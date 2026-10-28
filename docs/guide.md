@@ -1250,8 +1250,11 @@ the folder's row. The list scrolls up and down; there is no zoom or panning.
 - **In common.** The strip above the list shows each value shared with some relatives once,
   with how many share it. Press one to light up those files and fade the rest; press it again
   (or another one) to change or clear it.
-- **What a row shares.** Point at a row, or move to it with the keyboard, and a card lists
-  the exact values (Folder, Sender, Tag and so on) with **Quick look** and **Not related**.
+- **What a row shares.** Point at a row, or move to it with the keyboard, and the card at
+  the top of the panel on the right lists the exact values (Folder, Sender, Tag and so on)
+  with **Quick look** and **Not related**. The row and its arc are outlined. The card sits
+  beside the outline, never over it, and stays on the last row you pointed at, so you can
+  move over to its buttons.
 - **Act on several at once.** The panel on the right has the same buttons as the block
   (**Tag…**, **Add to collection…**, **Move to folder…**, **Link them here**, **Link this
   file there**), with the same previews, Undo and reasons when a button is off. **2+
@@ -1265,6 +1268,10 @@ relative on the right, and below them what the two share. **N** (Not related) ma
 relative and moves to the next, **→** (Skip) moves on, and **Y** (Related, next) also moves
 on and stores nothing, since being related is worked out from what the files share, never
 saved. `←`/`→` still step through the relatives, and **Space** or **Esc** closes it.
+Each side zooms on its own, since the two documents are often of different sizes: `+`, `-`
+and `0` zoom the side you clicked last (a line along its top shows which). **Zoom together**
+below them makes both sides zoom as one, for documents of the same size; press it again to
+zoom them apart.
 
 Nothing here is guessed from names or text: a file lacks the **sender** link until a sender
 has been set on it (see [From and For on a document](#from-and-for-on-a-document)).

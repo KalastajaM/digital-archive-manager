@@ -1,8 +1,10 @@
 /** The Relatives dialog: the folder outline cut down to the folders that hold a relative,
  * with an arc from this file's row to each relative's row (thicker = more in common,
  * orange dashed = not filed yet). The "In common" strip lights up the files that share one
- * value. Hover or focus on a row shows exactly what it shares. The actions on the ticked
- * files are the block's own (``ActionBar``). Opened from the block's "Show connections". */
+ * value. Hover or focus on a row shows exactly what it shares, in the side panel so the
+ * card never covers the outline or the arcs; it stays on the last row pointed at, so the
+ * mouse can travel to its buttons. The actions on the ticked files are the block's own
+ * (``ActionBar``). Opened from the block's "Show connections". */
 import { X } from "lucide-react";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { type Relative, useRelatives } from "../api/client";
@@ -123,8 +125,9 @@ export function RelativesDialog({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [lit, setLit] = useState<Common | null>(null);
-  const [hover, setHover] = useState<string | null>(null);
-  const [focused, setFocused] = useState<string | null>(null);
+  // the row whose card shows: the last one hovered or focused (it stays when the pointer
+  // leaves, so the card's buttons can be reached)
+  const [carded, setCarded] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const mapRef = useRef<HTMLUListElement>(null);
 
@@ -196,7 +199,7 @@ export function RelativesDialog({
     { label: "Outside this folder", ids: regular.filter((r) => fold(r.folder) !== fold(here)).map((r) => r.drive_id) },
   ];
 
-  const shownCard = hover ?? focused;
+  const card = relatives.find((r) => r.drive_id === carded) ?? null;
   const rowEls = () => [...(mapRef.current?.querySelectorAll<HTMLElement>("[data-rel]") ?? [])];
   const onKeys = (e: KeyboardEvent<HTMLDialogElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -318,21 +321,17 @@ export function RelativesDialog({
                       const rname = visible(r.name);
                       const pick = isAIPick(r) ? r : null;
                       const faded = lit !== null && !sharesValue(r, lit);
-                      const showCard = shownCard === r.drive_id;
+                      const isCarded = carded === r.drive_id;
                       return (
                         <li
                           key={r.drive_id}
                           data-rel={r.drive_id}
                           tabIndex={r.drive_id === outline[0]?.drive_id ? 0 : -1}
                           aria-label={`${rname}, ${pick ? `found by AI: ${visible(pick.reason)}` : kindsOf(r).map((k) => KIND_LABEL[k]).join(", ")}`}
-                          className={`rel-row${selected.has(r.drive_id) ? " checked" : ""}${pick ? " ai" : ""}${r.in_inbox ? " unfiled" : ""}${faded ? " faded" : ""}${lit && !faded ? " lit" : ""}`}
+                          className={`rel-row${selected.has(r.drive_id) ? " checked" : ""}${pick ? " ai" : ""}${r.in_inbox ? " unfiled" : ""}${faded ? " faded" : ""}${lit && !faded ? " lit" : ""}${isCarded ? " carded" : ""}`}
                           style={{ paddingLeft: 8 + row.depth * INDENT }}
-                          onMouseEnter={() => setHover(r.drive_id)}
-                          onMouseLeave={() => setHover((h) => (h === r.drive_id ? null : h))}
-                          onFocus={() => setFocused(r.drive_id)}
-                          onBlur={(e) => {
-                            if (!e.currentTarget.contains(e.relatedTarget)) setFocused((f) => (f === r.drive_id ? null : f));
-                          }}
+                          onMouseEnter={() => setCarded(r.drive_id)}
+                          onFocus={() => setCarded(r.drive_id)}
                         >
                           <input
                             type="checkbox"
@@ -359,33 +358,6 @@ export function RelativesDialog({
                               {r.same_month && <span className="tag tag-grey">+ same month</span>}
                             </span>
                           )}
-                          {showCard && (
-                            <div className="rel-card" role="group" aria-label={`What ${rname} shares`}>
-                              <span className="rel-card-name trunc">{rname}</span>
-                              {pick && (
-                                <p className="rel-card-reason">
-                                  <AIMark pick={pick} /> {visible(pick.reason)}
-                                </p>
-                              )}
-                              <dl className="rel-card-list">
-                                {r.links.map((l) => (
-                                  <div key={`${l.kind}:${l.value}`}>
-                                    <dt>{KIND_NAME[l.kind]}</dt>
-                                    <dd>{visible(l.value)}</dd>
-                                  </div>
-                                ))}
-                              </dl>
-                              {r.same_month && <span className="rel-card-note">+ same month</span>}
-                              <span className="rel-card-actions">
-                                <button type="button" onClick={() => look.open(r.drive_id)}>
-                                  Quick look <kbd>Space</kbd>
-                                </button>
-                                <button type="button" className="link-button" onClick={() => notRelated(r)}>
-                                  Not related
-                                </button>
-                              </span>
-                            </div>
-                          )}
                         </li>
                       );
                     })}
@@ -395,7 +367,8 @@ export function RelativesDialog({
                       arcs.map((a) => {
                         const faded = lit !== null && !a.rels.some((r) => sharesValue(r, lit));
                         const ai = a.rels.every(isAIPick);
-                        const cls = `rel-arc${a.inbox ? " inbox" : ""}${ai ? " ai" : ""}${faded ? " faded" : ""}`;
+                        const on = carded !== null && a.ids.includes(carded);
+                        const cls = `rel-arc${a.inbox ? " inbox" : ""}${ai ? " ai" : ""}${faded ? " faded" : ""}${on ? " on" : ""}`;
                         return (
                           <g key={a.key} className={cls} data-target={a.key}>
                             <path
@@ -412,6 +385,14 @@ export function RelativesDialog({
                 </div>
               </div>
               <aside className="rel-side" aria-label="Actions">
+                <div className="rel-side-block rel-card-slot">
+                  <span className="rel-side-label">In common with this file</span>
+                  {card ? (
+                    <RelativeCard relative={card} onLook={() => look.open(card.drive_id)} onNotRelated={() => notRelated(card)} />
+                  ) : (
+                    <p className="hint">Point at a file, or move to it with the arrow keys, to see exactly what it shares.</p>
+                  )}
+                </div>
                 <div className="rel-side-block">
                   <span className="rel-side-label">Selected</span>
                   {ticked.length > 0 ? (
@@ -480,5 +461,41 @@ export function RelativesDialog({
       {look.view}
       {given ? null : own.sheet}
     </>
+  );
+}
+
+/** What one relative shares with this file: each value exactly, the AI's reason for a
+ * pick, and Quick Look and Not related. */
+function RelativeCard({ relative: r, onLook, onNotRelated }: { relative: Relative; onLook: () => void; onNotRelated: () => void }) {
+  const rname = visible(r.name);
+  const pick = isAIPick(r) ? r : null;
+  return (
+    <div className="rel-card" role="group" aria-label={`What ${rname} shares`}>
+      <span className="rel-card-name" title={rname}>
+        {rname}
+      </span>
+      {pick && (
+        <p className="rel-card-reason">
+          <AIMark pick={pick} /> {visible(pick.reason)}
+        </p>
+      )}
+      <dl className="rel-card-list">
+        {r.links.map((l) => (
+          <div key={`${l.kind}:${l.value}`}>
+            <dt>{KIND_NAME[l.kind]}</dt>
+            <dd>{visible(l.value)}</dd>
+          </div>
+        ))}
+      </dl>
+      {r.same_month && <span className="rel-card-note">+ same month</span>}
+      <span className="rel-card-actions">
+        <button type="button" onClick={onLook}>
+          Quick look <kbd>Space</kbd>
+        </button>
+        <button type="button" className="link-button" onClick={onNotRelated}>
+          Not related
+        </button>
+      </span>
+    </div>
   );
 }

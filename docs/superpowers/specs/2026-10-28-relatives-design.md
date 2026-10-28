@@ -139,14 +139,17 @@ today:
   marker ("↑ 3 above"). No zoom or pan.
 - "In common" strip: each shared value once with its count; clicking one highlights its
   files and fades the rest.
-- Hover or focus card: the exact shared values, Quick Look, Not related.
+- Hover or focus card: the exact shared values, Quick Look, Not related. Shown at the top
+  of the right panel (never over the outline or the arcs) and kept on the last row pointed
+  at, so its buttons can be reached; that row and its arc are outlined.
 - Right: the same action panel as the block, plus quick selections (2+ links, same
   sender, outside this folder).
 - Keyboard: arrows move between rows, Space Quick Look, X ticks, N Not related.
 
 **Quick Look compare mode**: extend `QuickLook.tsx` (already a modal with ←/→ and
 Space) with an optional second pane for "this file", a footer with what they share, and
-verdict keys: N Not related, → Skip, Y Related and next. "Related" only moves on; it
+verdict keys: N Not related, → Skip, Y Related and next. Each pane zooms on its own
+(+ / - / 0 go to the pane clicked last); "Zoom together" links them for same-size documents. "Related" only moves on; it
 stores nothing, since being related is computed, not stored.
 
 ## Phase 3: AI find relatives

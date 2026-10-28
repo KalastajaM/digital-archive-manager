@@ -2,13 +2,13 @@
  * preview and the document's details beside it. A modal <dialog>, so the page's own
  * shortcuts are off while it is open (``dialogOpen()``); its keys (Space/Esc to close,
  * ←/→ and j/k to move) are handled by ``useQuickLook``. */
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Link2, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { isTyping } from "../keyboard";
 import { visible } from "../text";
 import { FileDetails } from "./FileDetails";
 import { DialogStatus, InlineResults, useDialogStatus } from "./FileLaunch";
-import { FIT_LEVEL, FilePreview } from "./FilePreview";
+import { FIT_LEVEL, FilePreview, type ZoomControl, ZoomKeys, ZOOM_LEVELS } from "./FilePreview";
 import { IconButton } from "./ui/IconButton";
 import { MarkToggles } from "./MarkToggles";
 import type { BoxTool } from "./zones/PageBoxes";
@@ -43,7 +43,8 @@ type Props = {
   /** Compare mode (Relatives): ``subject`` is shown in a second pane beside the shown file,
    * with what they share below and the verdict keys: N Not related, → Skip, Y Related and
    * next (which only moves on: being related is computed, never stored). This mode handles
-   * its own keys (Space, ←/→, j/k, N, Y), so the host adds none. */
+   * its own keys (Space, ←/→, j/k, N, Y, and + / - / 0 for the pane last clicked, or for
+   * both while "Zoom together" is on), so the host adds none. */
   compare?: {
     subject: QLFile;
     shared: (file: QLFile) => string[];
@@ -66,6 +67,10 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
   // The zoom the user chose stays while paging through documents (a new Quick Look starts at Fit).
   const zoomControl = useState(FIT_LEVEL);
   const subjectZoom = useState(FIT_LEVEL);
+  // Compare mode: each pane zooms on its own (documents of different sizes need different
+  // zooms), unless "Zoom together" is on; the keys go to the pane last clicked or focused.
+  const [together, setTogether] = useState(false);
+  const [active, setActive] = useState<"subject" | "file">("file");
   const name = visible(qlName(file));
   // Open / Show in Finder outcomes: on this line, not as toasts under the modal
   const own = useDialogStatus();
@@ -79,6 +84,12 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
     // Space on one of Quick Look's own buttons (Close, Skip, zoom…) presses that button
     if (e.key === " " && e.target instanceof Element && e.target.closest("button")) return;
     const key = e.key.toLowerCase();
+    const step = e.key === "+" || e.key === "=" ? 1 : e.key === "-" ? -1 : e.key === "0" ? 0 : null;
+    if (step !== null) {
+      if (!e.repeat) zoomBy(together || active === "file" ? zoomControl : subjectZoom, step);
+      e.preventDefault();
+      return;
+    }
     if (e.key === " ") onClose();
     else if (e.key === "ArrowRight" || key === "j") {
       if (!last) onIndex(index + 1);
@@ -90,6 +101,13 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
     e.preventDefault();
   };
   const shared = compare?.shared(file) ?? [];
+  const toggleTogether = () => {
+    // apart again: this file keeps the shared zoom, so nothing jumps
+    if (together) subjectZoom[1](zoomControl[0]);
+    setTogether(!together);
+  };
+  const paneClass = (pane: "subject" | "file") =>
+    `quicklook-pane${!together && active === pane ? " active" : ""}`;
   return (
     <dialog
       ref={ref}
@@ -135,16 +153,21 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
       <DialogStatus status={status} />
       {compare ? (
         <>
+          <ZoomKeys.Provider value={false}>
           <div className="quicklook-body">
-            <div className="quicklook-pane">
+            <div
+              className={paneClass("subject")}
+              onPointerDown={() => setActive("subject")}
+              onFocus={() => setActive("subject")}
+            >
               <p className="quicklook-pane-label">
                 This file: <span className="quicklook-pane-name">{visible(qlName(compare.subject))}</span>
               </p>
               <div className="quicklook-preview preview-fill">
-                <FilePreview file={compare.subject} zoomControl={subjectZoom} />
+                <FilePreview file={compare.subject} zoomControl={together ? zoomControl : subjectZoom} />
               </div>
             </div>
-            <div className="quicklook-pane">
+            <div className={paneClass("file")} onPointerDown={() => setActive("file")} onFocus={() => setActive("file")}>
               <p className="quicklook-pane-label">
                 <span className="quicklook-pane-name">{name}</span>
               </p>
@@ -155,7 +178,21 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
               </div>
             </div>
           </div>
+          </ZoomKeys.Provider>
           <div className="quicklook-verdict">
+            <button
+              type="button"
+              className="quicklook-zoom-together"
+              aria-pressed={together}
+              title={
+                together
+                  ? "Both previews zoom as one. Click to zoom each on its own"
+                  : "Each preview zooms on its own (+ / - zoom the one last clicked). Click to zoom both as one"
+              }
+              onClick={toggleTogether}
+            >
+              <Link2 size={14} aria-hidden="true" /> Zoom together
+            </button>
             <span className="quicklook-shared-label">In common</span>
             <ul className="quicklook-shared" aria-label="In common">
               {shared.map((s) => (
@@ -189,4 +226,9 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
       )}
     </dialog>
   );
+}
+
+/** One zoom step in (1) or out (-1), or back to Fit (0). */
+function zoomBy([, setLevel]: ZoomControl, step: number) {
+  setLevel((l) => (step === 0 ? FIT_LEVEL : Math.min(ZOOM_LEVELS.length - 1, Math.max(0, l + step))));
 }

@@ -1641,7 +1641,7 @@
 [data-style="new"] .rel-chip-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 [data-style="new"] .rel-layout { flex: 1; min-height: 0; display: flex; gap: var(--sp-3); }
 [data-style="new"] .rel-scroll { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; }
-[data-style="new"] .rel-map { position: relative; display: flex; box-sizing: content-box; padding-bottom: 150px; }
+[data-style="new"] .rel-map { position: relative; display: flex; box-sizing: content-box; padding-bottom: var(--sp-4); }
 [data-style="new"] .rel-rows { flex: 1; min-width: 0; list-style: none; margin: 0; padding: 0; }
 [data-style="new"] .rel-rows > li { position: relative; height: 28px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding-right: var(--sp-2); min-width: 0; }
 [data-style="new"] .rel-folder { color: var(--text-2); font-weight: 500; }
@@ -1682,8 +1682,14 @@
 [data-style="new"] .rel-empty { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
 [data-style="new"] .ai-payload-sections { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 [data-style="new"] .ai-candidates { margin: var(--sp-2) 0 0; padding-left: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
-[data-style="new"] .rel-card { position: absolute; z-index: 3; top: 100%; left: 36px; width: 260px; box-sizing: border-box; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--r-lg); background: var(--panel); color: var(--text); font-size: var(--fs-sm); font-weight: 400; box-shadow: var(--shadow-pop); }
-[data-style="new"] .rel-card-name { font-weight: 600; }
+/* The card lives in the side panel, never over the outline or the arcs */
+[data-style="new"] .rel-card { box-sizing: border-box; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--r-lg); background: var(--panel); color: var(--text); font-size: var(--fs-sm); font-weight: 400; box-shadow: var(--shadow-card); }
+[data-style="new"] .rel-card-slot { min-height: 132px; }
+[data-style="new"] .rel-row.carded { box-shadow: inset 0 0 0 1px var(--accent); }
+[data-style="new"] .rel-row.carded.lit { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--accent); }
+[data-style="new"] .rel-arc.on .rel-arc-line { stroke: var(--accent-hover); }
+[data-style="new"] .rel-arc.on .rel-dot { r: 4.5; }
+[data-style="new"] .rel-card-name { font-weight: 600; overflow-wrap: anywhere; }
 [data-style="new"] .rel-card-list { margin: 0; display: flex; flex-direction: column; gap: 3px; }
 [data-style="new"] .rel-card-list > div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
 [data-style="new"] .rel-card-list dt { color: var(--muted); }
@@ -1706,6 +1712,11 @@
 [data-style="new"] .quicklook-pane > .quicklook-preview { flex: 1; }
 [data-style="new"] .quicklook-pane-label { flex: none; margin: 0; padding: var(--sp-2) var(--sp-4) 0; font-size: var(--fs-sm); color: var(--muted); }
 [data-style="new"] .quicklook-pane-name { font-family: var(--font-mono); color: var(--text); }
+/* Compare mode: the pane the zoom keys go to (while the panes zoom apart) */
+[data-style="new"] .quicklook-pane { box-shadow: inset 0 2px 0 transparent; }
+[data-style="new"] .quicklook-pane.active { box-shadow: inset 0 2px 0 var(--accent); }
+[data-style="new"] .quicklook-zoom-together { display: inline-flex; align-items: center; gap: 6px; }
+[data-style="new"] .quicklook-zoom-together[aria-pressed="true"] { border-color: var(--accent); background: var(--selected); color: var(--accent-hover); }
 [data-style="new"] .quicklook-verdict { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); border-top: 1px solid var(--hairline); }
 [data-style="new"] .quicklook-shared-label { font-size: var(--fs-sm); color: var(--muted); }
 [data-style="new"] .quicklook-shared { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1); list-style: none; margin: 0; padding: 0; }
