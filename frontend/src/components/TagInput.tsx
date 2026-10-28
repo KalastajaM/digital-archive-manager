@@ -117,7 +117,7 @@ export function TagInput({
       <div className={disabled ? "tag-field disabled" : "tag-field"} title={disabled ? (disabledReason ?? undefined) : undefined}>
         {value.map((t) => (
           <span key={t} className="tag-token">
-            {visible(t)}
+            <span className="tag-token-text">{visible(t)}</span>
             <button
               type="button"
               aria-label={`Remove tag ${visible(t)}`}

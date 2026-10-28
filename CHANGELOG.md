@@ -850,6 +850,17 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **Text no longer runs out of its box.** In the New look a checklist entry (on an item, a
+  collection or a file) now wraps inside its column with the tick box beside its first
+  line, instead of being cut at the edge; the figure in a Today tile scales down with its
+  tile (a bill of a million euros no longer pokes out), the payee in Pay mode wraps, a
+  long word in the rule sheet ends in "..." and a long tag or collection chip ends in
+  "..." inside its field. In both looks a very long word in a collection's name or a file's
+  key facts breaks instead of leaving its row, a long rule id and a long tag on a file row
+  end in "...", and the code of a rule no longer spills into the next column. Also in the
+  New look, the buttons beside a field (Mark done, Browse tags, the "?" next to a search
+  box) now line up with the inputs and are as tall as they are.
+
 - **A folder opened while typing a search stays open.** Opening a folder in Browse within
   a quarter second of typing in the search box could put you back in the folder you came
   from once the words reached the address.
