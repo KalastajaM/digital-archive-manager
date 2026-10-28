@@ -8,6 +8,31 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Skip a file in the Inbox.** **Skip** (or the **s** key, in both looks) leaves the file you
+  are looking at where it is and goes on to the next one in the list, round to the first from
+  the last. Nothing in the archive changes. In the New look Skip is a button at the foot of the
+  filing panel and **s** is in the shortcut list.
+- **Edit the rule behind a suggestion.** When a rule gave the filing suggestion, the New look's
+  filing panel says "Suggested by rule ..." and **Edit rule** opens that rule in the rule sheet,
+  with the document on screen as the one it is tested against.
+- **A picture area shows how this document scores.** Under **Match needed** the rule sheet says
+  "This document scores 0.97. Lower is looser, higher is stricter." for the document the rule
+  is made from or edited with, whether or not it matches, so the slider can be set with a
+  real number in front of you.
+- **The New look: the Inbox, Draw a box and the rule sheet laid out as drawn.** The list has a
+  header with the number to file and an **All / Bills / New** filter with counts (Bills: the
+  scan found a due date or an amount; New: no rule suggests anything yet). A row shows a title,
+  the file's own name and date, and one pill: how many days overdue, the due date, the amount,
+  the rule, or "Not recognised"; the foot says what is checked and has a **Shortcuts** list
+  (**?** opens it). The document has one bar with its name, the zoom, **Draw a box**, **Open** and
+  a **...** menu for Print, Open in window and Show in Finder. The filing panel has its own
+  header (rule, title, star, Important, lock, Ask AI), the form, and a foot that says what
+  filing will do ("Renames and moves 1 file, adds it to To pay. Undo any time.") with Skip,
+  To Delete and File it. From and For are two buttons side by side. In Draw a box, each box has
+  a number and a colour on the page and in the panel, its words as chips, and the panel ends with
+  **Back to filing** and **Make a rule...**. The rule sheet has a header with what it is made from
+  and a close button, labels in a column beside what they set, "The proof", and **Save rule**.
+
 - **Search and jump (Cmd+K, Ctrl+K elsewhere).** One box that finds files, folders, collections,
   trays, tags and the screens themselves as you type. The arrow keys move, Enter opens the
   choice where it lives (a file opens in Browse with it selected, a folder in Browse, a tray,

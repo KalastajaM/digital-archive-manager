@@ -253,6 +253,14 @@ with a form beside it for name, folder, tags, tray, tray fields, collections and
 4. **Preview** (Enter) shows the planned changes below the form. **File it** (⌘Enter)
    applies exactly what was previewed; the toast has **Undo**.
 
+**Skip** (or `s`) leaves the file where it is and goes on to the next one; nothing in the
+archive changes. In the New look the Inbox is arranged as: the list (with an **All / Bills /
+New** filter: Bills are files where the scan found a due date or an amount, New are files no
+rule suggests anything for), one bar over the document (name, zoom, **Draw a box**, **Open**
+and a **...** menu), and the filing panel, whose header names the rule behind the suggestion
+(**Edit rule** opens it in the rule sheet, with this document as the one it is tested against)
+and whose foot has **Skip**, **To Delete** and **File it**.
+
 More on the form:
 
 - **Folder**: the first suggestion is active as you type; Enter takes it, ↑/↓ move, Esc
@@ -1627,6 +1635,8 @@ Windows and Linux, read Ctrl for ⌘ and Alt for ⌥.
 | Inbox | `Enter` | Preview the filing |
 | Inbox | ⌘`Enter` | File it (after the preview) |
 | Inbox | `n` / `f` | Edit the name / the folder |
+| Inbox | `s` | Skip: go on to the next file without filing this one (round to the first from the last) |
+| Inbox (New look) | `?` | Open the shortcut list |
 | Inbox | `1`–`9` / `0` | Choose a tray / no tray |
 | Inbox | `u` | Undo the last filing |
 | Trays | `Enter` | Open the item |

@@ -2,6 +2,7 @@
  * both as chips with where they came from; the Inbox batch and a Browse selection open the
  * same sheet for many documents at once. */
 import { useId, useState } from "react";
+import { useStyle } from "../../appearance";
 import { errorText, type InboxEntry, usePeople, usePutAssignments, useSenders, useWaitForPage1 } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
@@ -10,6 +11,8 @@ import { Sheet } from "../ui/Sheet";
 export type AssignKind = "sender" | "person";
 
 const WORD: Record<AssignKind, string> = { sender: "From", person: "For" };
+/** What an empty chip says in the New look (a dashed button, as drawn). */
+const EMPTY: Record<AssignKind, string> = { sender: "Who sent it?", person: "Who is it for?" };
 
 /** The sheet that sets From or For on these documents. ``current``: what one document has
  * would be preselected (a person found in the address area counts); ``assigned``: this
@@ -128,13 +131,16 @@ export function FromFor({ entry }: { entry: InboxEntry }) {
   const { person, people_found: found, waiting_for_page1: reading, page1_unavailable: unavailable } = entry.suggestion;
   const sender = entry.assignment?.sender ?? null;
   const [picking, setPicking] = useState<AssignKind | null>(null);
+  const [look] = useStyle();
+  const isNew = look === "new";
   const put = usePutAssignments();
   const [error, setError] = useState<string | null>(null);
   useWaitForPage1(id, reading);
 
   const chip = (kind: AssignKind, value: string | null, source: string | null) => (
-    <button type="button" className="from-for-chip" onClick={() => setPicking(kind)}>
-      <span className="from-for-word">{WORD[kind]}:</span> {value ? visible(value) : <span className="hint">not set</span>}
+    <button type="button" className={value ? "from-for-chip" : "from-for-chip from-for-empty"} onClick={() => setPicking(kind)}>
+      <span className="from-for-word">{isNew ? WORD[kind] : `${WORD[kind]}:`}</span>{" "}
+      {value ? visible(value) : <span className="hint">{isNew ? EMPTY[kind] : "not set"}</span>}
       {value && source && (
         <>
           {" "}

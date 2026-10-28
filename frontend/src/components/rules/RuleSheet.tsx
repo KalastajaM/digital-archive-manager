@@ -16,6 +16,7 @@ import {
   type RuleIn,
   type RuleOffer,
   useAreaPicture,
+  useFileDetail,
   useInbox,
   usePeople,
   useRules,
@@ -377,6 +378,15 @@ export function RuleSheet({
       : "Make a rule"
     : `${filed ? "Update" : "Edit"} rule ${initial.id}`;
 
+  // New: what the rule is made from, under the title
+  const sourceName = useFileDetail(sourceDriveId ?? "", isNew && !!sourceDriveId).data?.record.name ?? null;
+  const subtitle = sourceName ? (
+    <>
+      {zoneDraft ? `From ${plural(zoneDraft.zones.length + (zoneDraft.pictures ?? []).length, "box", "boxes")} on` : "Tested with"}{" "}
+      <span className="mono">{visible(sourceName)}</span>
+    </>
+  ) : undefined;
+
   /** A token chip puts its pattern into the field where the caret is (New look). */
   const insertToken = (fieldId: string, value: string, set: (v: string) => void, token: string) => {
     const el = document.getElementById(fieldId) as HTMLInputElement | null;
@@ -424,6 +434,8 @@ export function RuleSheet({
       <Sheet
         open
         title={title}
+        subtitle={isNew ? subtitle : undefined}
+        closeButton={isNew}
         onClose={onClose}
         className={proofOpen ? "rule-sheet proof-open" : "rule-sheet"}
         footer={
@@ -446,6 +458,9 @@ export function RuleSheet({
               </span>
             )}
             {hasCondition && pendingColl && <span className="hint footer-start">{pendingColl}</span>}
+            {isNew && !draft && !initial.learned && initial.file && (
+              <span className="hint footer-start rule-rewrite">{visible(rewriteNote("Saving", initial.file))}</span>
+            )}
             <button type="button" onClick={onClose}>Cancel</button>
             <button
               type="button"
@@ -453,7 +468,7 @@ export function RuleSheet({
               disabled={!canSave}
               onClick={() => (different > 0 ? setAsking(true) : void doSave())}
             >
-              {hasCondition && tested === null && !failed ? "Testing…" : "Save"}
+              {hasCondition && tested === null && !failed ? "Testing…" : isNew ? "Save rule" : "Save"}
             </button>
           </>
         }
@@ -461,6 +476,7 @@ export function RuleSheet({
         <section className="rule-section" aria-labelledby={`${ids}-when-h`}>
           <div className="rule-section-head">
             <h3 id={`${ids}-when-h`} className="rule-section-title">When a document matches</h3>
+            {isNew && <span className="rule-section-sub">a word or the picture in every area</span>}
             {areas.length > 1 && <InfoTip id={`${ids}-areas-tip`} tip={AREAS_TIP} />}
           </div>
           {(areas.length === 0 || words.length > 0) && (
@@ -505,6 +521,7 @@ export function RuleSheet({
                 image={area.image}
                 minScore={area.minScore ?? null}
                 defaultScore={defaultMin}
+                hereScore={test.replay?.source?.area_scores?.[at] ?? null}
                 onScore={(minScore) => setAreas((all) => all.map((a, i) => (i === at ? { ...a, minScore } : a)))}
                 onRemove={() => {
                   recutTag.current.removed++;
@@ -715,7 +732,7 @@ export function RuleSheet({
             readingNow={test.readingNow}
           />
         )}
-        {!draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}
+        {!isNew && !draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}
         {error && <p className="error" role="alert">{visible(error)}</p>}
       </Sheet>
       {asking && (
@@ -866,6 +883,7 @@ function AreaPictureView({
   image,
   minScore,
   defaultScore,
+  hereScore,
   onScore,
   onRemove,
 }: {
@@ -874,6 +892,8 @@ function AreaPictureView({
   image: string;
   minScore: number | null;
   defaultScore: number;
+  /** The score of the document the rule is made from for this area, when it is known. */
+  hereScore: number | null;
   onScore: (score: number | null) => void;
   onRemove: () => void;
 }) {
@@ -911,6 +931,14 @@ function AreaPictureView({
           onClick={() => onScore(null)}
         />
       </div>
+      <p className="hint rule-score-hint">
+        {hereScore !== null && (
+          <>
+            This document scores <span className="mono">{hereScore.toFixed(2)}</span>.{" "}
+          </>
+        )}
+        Lower is looser, higher is stricter.
+      </p>
     </div>
   );
 }

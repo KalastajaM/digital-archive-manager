@@ -51,9 +51,17 @@ export function ruleIdOf(s: Pick<FileSuggestions, "name_source" | "folder_source
 
 /** What the tool gives a preview: its toolbar button, the layer around the page image and
  * the panel with what was found. */
-export type Boxes = { button: ReactNode; around: (image: ReactNode) => ReactNode; panel: ReactNode };
+export type Boxes = {
+  button: ReactNode;
+  /** The hint on how to draw (or why not), apart from ``panel`` when it was asked for
+   * (``splitNote``: the New document bar shows it beside the button). Else it is null and
+   * ``panel`` starts with it. */
+  note: ReactNode;
+  around: (image: ReactNode) => ReactNode;
+  panel: ReactNode;
+};
 
-const NONE: Boxes = { button: null, around: (image) => image, panel: null };
+const NONE: Boxes = { button: null, note: null, around: (image) => image, panel: null };
 
 /** Gives ``children`` the tool of a preview. ``pageOne``: the preview shows page 1 (images
  * always do); the tool is hidden on other pages. Without ``tool`` it does nothing and asks
@@ -62,32 +70,36 @@ export function WithBoxes({
   driveId,
   tool,
   pageOne,
+  splitNote = false,
   children,
 }: {
   driveId: string;
   tool: BoxTool | undefined;
   pageOne: boolean;
+  splitNote?: boolean;
   children: (boxes: Boxes) => ReactNode;
 }) {
   if (tool === undefined) return children(NONE);
-  return <ActiveBoxes driveId={driveId} tool={tool} pageOne={pageOne}>{children}</ActiveBoxes>;
+  return <ActiveBoxes driveId={driveId} tool={tool} pageOne={pageOne} splitNote={splitNote}>{children}</ActiveBoxes>;
 }
 
 function ActiveBoxes({
   driveId,
   tool,
   pageOne,
+  splitNote,
   children,
 }: {
   driveId: string;
   tool: BoxTool;
   pageOne: boolean;
+  splitNote: boolean;
   children: (boxes: Boxes) => ReactNode;
 }) {
-  return children(useBoxTool(driveId, tool, pageOne));
+  return children(useBoxTool(driveId, tool, pageOne, splitNote));
 }
 
-function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
+function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote: boolean): Boxes {
   const active = pageOne;
   const [on, setOn] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -217,6 +229,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
       <IconButton
         icon={<SquareDashed />}
         label="Draw a box"
+        text={splitNote ? "Draw a box" : undefined}
         tip="Draw a box on page 1 to make a rule or set the address area"
         pressed={on}
         disabled={unavailable !== null}
@@ -248,7 +261,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
         />
       )}
       {boxes.map((k, i) => (
-        <span key={k.id} className="page-box page-box-kept" data-testid="kept-box" style={percent(k.box)}>
+        <span key={k.id} className="page-box page-box-kept" data-testid="kept-box" data-tone={i % 5} style={percent(k.box)}>
           <span className="page-box-number">{i + 1}</span>
         </span>
       ))}
@@ -260,6 +273,19 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
         />
       )}
     </span>
+  );
+  const note = !on ? null : unavailable !== null ? (
+    <p className="hint box-note">{visible(unavailable)}</p>
+  ) : page.data?.read !== true ? (
+    <p className="busy box-note" role="status">
+      {page.isError ? "Could not read page 1." : "Reading page 1…"}
+    </p>
+  ) : (
+    <p className="hint box-note">
+      {boxes.length > 0
+        ? "Drag over page 1 to add the next box. Esc drops the last box."
+        : "Drag over page 1 to draw a box. Esc cancels."}
+    </p>
   );
   const panel = (
     <>
@@ -274,19 +300,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
       )}
       {on && (
     <>
-      {unavailable !== null ? (
-        <p className="hint box-note">{visible(unavailable)}</p>
-      ) : page.data?.read !== true ? (
-        <p className="busy box-note" role="status">
-          {page.isError ? "Could not read page 1." : "Reading page 1…"}
-        </p>
-      ) : (
-        <p className="hint box-note">
-          {boxes.length > 0
-            ? "Drag over page 1 to add the next box. Esc drops the last box."
-            : "Drag over page 1 to draw a box. Esc cancels."}
-        </p>
-      )}
+      {!splitNote && note}
       {boxes.length > 0 && (
         <BoxPanel
           driveId={driveId}
@@ -301,7 +315,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean): Boxes {
       )}
     </>
   );
-  return { button, around, panel };
+  return { button, note: splitNote ? note : null, around, panel };
 }
 
 /** A pointer's place on the layer under it, as fractions of it (null: it has no size). */
