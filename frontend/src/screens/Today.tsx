@@ -2,143 +2,29 @@
  * with urgency tags), the inbox's age and what its scans found, and the extras. Each
  * card folds to its headline and can be dragged by its header to another place (or
  * moved with ⌥↑ / ⌥↓ on its header); see ``useCardLayout``. */
-import { Bell, Layers } from "lucide-react";
-import { type DragEvent, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
 import { errorText, type Today as TodayData, useToday, useTrays } from "../api/client";
+import { useStyle } from "../appearance";
 import { useLocalClock } from "../components/RelativeDate";
-import type { CardFrame } from "../components/today/frame";
 import { balanceColumns } from "../components/today/balance";
 import { ClearCard } from "../components/today/ClearCard";
 import { FOUND_SHOWN, InboxCard } from "../components/today/InboxCard";
+import { CollectionsCard, isClear, needingAttention, Notices, RemindersCard } from "../components/today/pieces";
 import { SearchCard } from "../components/today/SearchCard";
 import { StarredCard } from "../components/today/StarredCard";
-import { Banner } from "../components/Banner";
-import { ImportantBanner } from "../components/ImportantBanner";
 import { type TrayCardInfo, TrayCard, trayCards } from "../components/today/TrayCard";
-import { Card } from "../components/ui/Card";
-import { Tag } from "../components/ui/Tag";
-import { CARD_DRAG_TYPE, type CardLayout, type Place, useCardLayout } from "../components/useCardLayout";
-import { DRAG_TYPE } from "../dnd";
-import { clockTime, dayWord, localToday, longDate, plural, shortDate } from "../format";
+import { useCardDrag } from "../components/today/useCardDrag";
+import { useCardFrames } from "../components/today/useCardFrames";
+import { useCardLayout } from "../components/useCardLayout";
+import { longDate, plural } from "../format";
 import { visible } from "../text";
+import TodayNew from "./TodayNew";
 
 /** "Good morning" (5–11), "Good afternoon" (12–17), "Good evening" otherwise. */
 export function greeting(hour: number): string {
   if (hour >= 5 && hour < 12) return "Good morning";
   if (hour >= 12 && hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-/** The open collections with something to do: open checklist entries, or files still
- * in the inbox. The rest are in the sidebar; Today leaves them out. */
-function needingAttention(data: TodayData) {
-  return data.overview.collections.filter((c) => c.open_checks > 0 || c.in_inbox > 0);
-}
-
-/** Shown only while ``needingAttention`` has any (the page leaves the card out). */
-function CollectionsCard({ data, frame }: { data: TodayData; frame: CardFrame }) {
-  const collections = needingAttention(data);
-  return (
-    <Card
-      title="Collections to do"
-      icon={<Layers />}
-      className="today-card today-card-compact"
-      fold={frame.fold}
-      headerProps={frame.headerProps}
-      actions={
-        <Link className="card-link" to="/collections" aria-label="Show all collections">
-          Show all
-        </Link>
-      }
-    >
-      {frame.fold.folded ? (
-        <p className="today-sub">{plural(collections.length, "collection")}</p>
-      ) : (
-        <ul className="today-list">
-          {collections.map((c) => (
-            <li key={c.id}>
-              <Link to={`/collections/${c.id}`}>{visible(c.name)}</Link>
-              <span className="today-row-sub">
-                {plural(c.files, "file")}
-                {c.in_inbox > 0 && ` · ${plural(c.in_inbox, "file")} in the inbox`}
-                {c.open_checks > 0 && ` · ${plural(c.open_checks, "checklist item")} open`}
-                {c.note_excerpt && (
-                  <>
-                    {" · "}
-                    <i>{visible(c.note_excerpt)}</i>
-                  </>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-function lastChecked(at: string, today: string): string {
-  const when = new Date(at);
-  if (Number.isNaN(when.getTime())) return visible(at);
-  const time = clockTime(when);
-  return `${dayWord(localToday(when), today) ?? shortDate(when.getTime() / 1000)} at ${time}`;
-}
-
-function RemindersCard({ data, today, frame }: { data: TodayData; today: string; frame: CardFrame }) {
-  const { reminders } = data;
-  const problems = Object.keys(reminders.errors).length + (reminders.skipped ? 1 : 0);
-  return (
-    <Card
-      title="Reminders"
-      icon={<Bell />}
-      className="today-card today-card-compact"
-      fold={frame.fold}
-      headerProps={frame.headerProps}
-    >
-      <p className="today-sub">
-        {reminders.last_run ? `Last checked ${lastChecked(reminders.last_run, today)}` : "Not checked yet."}
-        {frame.fold.folded && problems > 0 && (
-          <>
-            {" "}
-            <Tag tone="orange">{plural(problems, "problem")}</Tag>
-          </>
-        )}
-      </p>
-      {!frame.fold.folded &&
-        Object.entries(reminders.errors).map(([channel, message]) => (
-          <p key={channel} className="notice">
-            {visible(channel)}: {visible(message)}
-          </p>
-        ))}
-      {!frame.fold.folded && reminders.skipped && <p className="notice">Check skipped: {visible(reminders.skipped)}</p>}
-    </Card>
-  );
-}
-
-function Notices({ data, traysError }: { data: TodayData; traysError: string | null }) {
-  const { tray_errors, ongoing_sync_failure, unmanaged_ongoing, unmanaged_important } = data;
-  return (
-    <>
-      {unmanaged_ongoing > 0 && (
-        <Banner
-          label="Ongoing"
-          message={`${plural(unmanaged_ongoing, "entry", "entries")} in ##. Ongoing ${unmanaged_ongoing === 1 ? "is" : "are"} not in the app yet.`}
-          action={{ label: "Convert", to: "/ongoing" }}
-        />
-      )}
-      <ImportantBanner count={unmanaged_important} />
-      {ongoing_sync_failure && (
-        <p className="notice">Ongoing sync is failing: {visible(ongoing_sync_failure)}</p>
-      )}
-      {traysError && <p className="notice">Tray settings could not be loaded: {visible(traysError)}</p>}
-      {tray_errors.map((e) => (
-        <p key={e.file} className="hint">
-          Tray file skipped — {visible(e.file)}: {visible(e.message)}
-        </p>
-      ))}
-    </>
-  );
 }
 
 /** What is waiting, for the header's hero line. ``dueNoun``: "bill" when every item
@@ -169,15 +55,6 @@ export function waitingOf(data: TodayData, moneyTrays: Set<string>): Waiting {
   };
 }
 
-/** A tray with nothing open and nothing to show: it joins the one "Clear" card. */
-function isClear(info: TrayCardInfo, data: TodayData): boolean {
-  return (
-    (info.count?.open ?? 0) === 0 &&
-    !data.attention.some((a) => a.tray === info.id) &&
-    (data.open_items.find((t) => t.tray_id === info.id)?.items.length ?? 0) === 0
-  );
-}
-
 /** A card's rough height, to deal the cards out between the columns. */
 function weigh(info: TrayCardInfo, data: TodayData): number {
   const attention = data.attention.filter((a) => a.tray === info.id).length;
@@ -185,91 +62,13 @@ function weigh(info: TrayCardInfo, data: TodayData): number {
   return 2 + attention * 2.5 + Math.max(0, items - attention) * 1.2;
 }
 
-/** Whether a drag is a Today card: it carries ``CARD_DRAG_TYPE`` and no files (a file
- * drag is never taken as a card, even with a card type beside its files). */
-function isCardDrag(e: DragEvent): boolean {
-  const types = Array.from(e.dataTransfer?.types ?? []);
-  return types.includes(CARD_DRAG_TYPE) && !types.includes(DRAG_TYPE);
-}
-
-type DropAt = { id: string; side: "before" | "after" } | { column: number };
-
-/** Drag and drop of the cards by their headers, with where a drop would land. */
-function useCardDrag(layout: CardLayout) {
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [dropAt, setDropAt] = useState<DropAt | null>(null);
-  const end = () => {
-    setDragging(null);
-    setDropAt(null);
-  };
-  const over = (e: DragEvent, at: DropAt) => {
-    if (!isCardDrag(e)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-    setDropAt((now) => (JSON.stringify(now) === JSON.stringify(at) ? now : at));
-  };
-  const drop = (e: DragEvent, where: Place) => {
-    if (!isCardDrag(e)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const id = e.dataTransfer.getData(CARD_DRAG_TYPE);
-    if (id) layout.place(id, where);
-    end();
-  };
-  /** Above or below the middle of the card under the pointer. */
-  const side = (e: DragEvent): "before" | "after" => {
-    const box = e.currentTarget.getBoundingClientRect();
-    return box.height > 0 && e.clientY > box.top + box.height / 2 ? "after" : "before";
-  };
-  return {
-    dragging,
-    dropAt,
-    header: (id: string) => ({
-      draggable: true,
-      onDragStart: (e: DragEvent) => {
-        // A link or button inside the header keeps its own drag (or none).
-        if (e.target !== e.currentTarget) return;
-        e.dataTransfer.setData(CARD_DRAG_TYPE, id);
-        e.dataTransfer.effectAllowed = "move";
-        setDragging(id);
-      },
-      onDragEnd: end,
-    }),
-    slot: (id: string) => ({
-      onDragOver: (e: DragEvent) => over(e, { id, side: side(e) }),
-      onDrop: (e: DragEvent) => {
-        const at = side(e);
-        drop(e, at === "before" ? { before: id } : { after: id });
-      },
-    }),
-    // Over the column itself (a gap between cards, or under the last one): before the
-    // first card whose middle is below the pointer, else at the end of the column.
-    column: (column: number) => {
-      const gap = (e: DragEvent): string | null => {
-        const slots = e.currentTarget.querySelectorAll<HTMLElement>(":scope > .today-slot");
-        for (const slot of slots) {
-          const box = slot.getBoundingClientRect();
-          if (box.height > 0 && e.clientY < box.top + box.height / 2) return slot.dataset.cardId ?? null;
-        }
-        return null;
-      };
-      return {
-        onDragOver: (e: DragEvent) => {
-          const id = gap(e);
-          over(e, id === null ? { column } : { id, side: "before" });
-        },
-        onDrop: (e: DragEvent) => {
-          const id = gap(e);
-          drop(e, id === null ? { column } : { before: id });
-        },
-      };
-    },
-  };
-}
-
 /** ``today`` is the local date (kept current) unless given (tests pass a fixed one). */
-export default function Today({ today: fixed }: { today?: string }) {
+export default function Today({ today }: { today?: string }) {
+  const [look] = useStyle();
+  return look === "new" ? <TodayNew today={today} /> : <TodayClassic today={today} />;
+}
+
+function TodayClassic({ today: fixed }: { today?: string }) {
   const clock = useLocalClock();
   const today = fixed ?? clock.today;
   const data = useToday();
@@ -307,17 +106,7 @@ export default function Today({ today: fixed }: { today?: string }) {
     hiddenCards,
   );
   const drag = useCardDrag(layout);
-  // After a keyboard move the card may land in another column (a new element): the
-  // focus goes back to its header button so the keys can move it on.
-  const refocus = useRef<string | null>(null);
-  const [announcement, setAnnouncement] = useState("");
-  useEffect(() => {
-    const id = refocus.current;
-    if (id === null) return;
-    refocus.current = null;
-    const slot = [...document.querySelectorAll<HTMLElement>(".today-slot")].find((el) => el.dataset.cardId === id);
-    slot?.querySelector<HTMLButtonElement>(".card-header button")?.focus();
-  }, [layout.columns]);
+  const { frame, announcement } = useCardFrames(layout, drag);
 
   if (data.isPending) return <p className="busy today-loading">Loading…</p>;
   if (data.isError) {
@@ -329,22 +118,6 @@ export default function Today({ today: fixed }: { today?: string }) {
   }
   const { attention } = data.data;
 
-  const frame = (id: string, title: string): CardFrame => ({
-    fold: { folded: layout.collapsed(id), onToggle: () => layout.toggle(id) },
-    headerProps: {
-      ...drag.header(id),
-      // Option-Up / Option-Down with the focus in a card's header moves the card on.
-      onKeyDown: (e) => {
-        if (!e.altKey || e.metaKey || e.ctrlKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
-        const by = e.key === "ArrowUp" ? -1 : 1;
-        e.preventDefault();
-        if (!layout.canMove(id, by)) return;
-        refocus.current = id;
-        layout.move(id, by);
-        setAnnouncement(`${title} moved ${by < 0 ? "up" : "down"}`);
-      },
-    },
-  });
   const render = (id: string) => {
     if (id === "inbox") return <InboxCard data={data.data} frame={frame(id, "Inbox")} />;
     if (id === "search") return <SearchCard frame={frame(id, "Search")} />;

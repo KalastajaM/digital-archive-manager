@@ -232,6 +232,18 @@ marked paid today), with a toast to undo it; only a done field that needs a valu
 give opens a small form. Drag a card by its header to reorder, or press ⌥↑ / ⌥↓ with the
 focus on it; **Reset layout** under the date restores the default order.
 
+**The New look** (Settings, Appearance) lays Today out differently, with the same content:
+the date and a headline built from your counts ("One bill is overdue, seven documents to
+file") with **Start filing** and **Customize**; four tiles (**To file**, **Overdue**, **Due
+in 14 days**, **Waiting on others**), each a link to what it counts; on the left a **To pay**
+table (each bill with its due tag and amount, **Pay** to open Pay mode on it and **Paid** to
+mark it paid; the overdue bill opens up with its copy buttons and note) and your other
+trays as short lists with **Show all**; on the right the **Inbox** summary (how many files
+the rules recognised), **Collections to do**, **Starred**, **Reminders** and **Search**.
+**Customize** is where the sections are arranged: each shows a fold chevron and **Move up** /
+**Move down** and can be dragged by its heading, and **Reset layout** puts them back. In a
+narrow window the right column moves under the left one.
+
 Today also shows a banner while `##. Ongoing` or `##. Important` holds things dam does not
 manage yet, with a **Convert** button (see [Converting existing folders](#converting-existing-folders)).
 
@@ -935,6 +947,10 @@ and **Copy**.
   barcode (in most Finnish banks: *Pay* → *Scan barcode*), hold the phone about 15–25 cm
   from the screen, and check the payee, amount and reference before you confirm. Without
   a camera, **Copy** the 54 digits into the bank's "virtual barcode" field.
+- **Several bills in a row.** Pay mode says "Bill 2 of 5" with what is open in total, and
+  **Previous bill** / **Next bill** (or the ← and → keys) step through every open bill,
+  across all bill trays by due date, without closing it. **Mark paid** marks the bill on
+  screen paid (today, with a toast to undo it) and moves on to the next one.
 
 ## Collections
 

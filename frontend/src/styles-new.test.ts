@@ -62,10 +62,16 @@ describe("styles-new.css: the Inbox, Draw a box and the rule sheet", () => {
 });
 
 describe("styles-new.css: Today and Pay mode", () => {
-  it("keeps Today's two card columns side by side where Classic stacks them, folding by Today's own width", () => {
+  it("keeps Today's two columns side by side where Classic stacks them, folding by Today's own width", () => {
     expect(plain).toMatch(/main:has\(> \.today\) \{ container: today \/ inline-size;/);
-    expect(plain).toMatch(/\[data-style="new"\] \.today-grid \{ grid-template-columns: minmax\(0, 1\.15fr\) minmax\(0, 1fr\);/);
-    expect(plain).toMatch(/@container today \(max-width: 560px\)/);
+    expect(plain).toMatch(/\.tn-body-grid \{ display: grid; grid-template-columns: minmax\(420px, 1\.9fr\) minmax\(220px, 1fr\);/);
+    expect(plain).toMatch(/@container today \(max-width: 663px\)/);
+  });
+
+  it("never cuts a figure on Today: tile values and bill amounts stay on one line, names truncate", () => {
+    expect(plain).toMatch(/\.tn-tile-value \{[^}]*white-space: nowrap/);
+    expect(plain).toMatch(/\.tn-bill-actions \{[^}]*white-space: nowrap/);
+    expect(plain).toMatch(/\.tn-bill-name > a \{[^}]*text-overflow: ellipsis/);
   });
 
   it("never wraps a value in Pay mode: the cards wrap, not their values", () => {

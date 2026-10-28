@@ -28,7 +28,9 @@ import {
   useUndoMoveItem,
 } from "../api/client";
 import { SummaryBox } from "../components/ai/SummaryBox";
-import { Barcode, type PayFact } from "../components/Barcode";
+import { Barcode } from "../components/Barcode";
+import { paymentNames } from "../components/payFacts";
+import { markLabel } from "../components/useMarkDone";
 import { Checklist } from "../components/Checklist";
 import { Collapsible } from "../components/Collapsible";
 import { CopyButton } from "../components/CopyButton";
@@ -354,40 +356,6 @@ export type DoneMode = "done" | "file";
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && v !== "";
 
-/** The bill's copy rows: payee, IBAN, reference, amount and due date (the tray's fields
- * of those kinds, in that order); each copies its raw value. */
-function paymentNames(tray: TrayDef): string[] {
-  const defs = tray.fields ?? {};
-  const byType = (type: string) => Object.keys(defs).find((n) => defs[n].type === type);
-  const amount = amountField(tray);
-  return [
-    "payee" in defs ? "payee" : undefined,
-    byType("iban"),
-    byType("reference"),
-    amount ?? undefined,
-    tray.date_field ?? undefined,
-  ].filter((n, i, all): n is string => n !== undefined && all.indexOf(n) === i);
-}
-
-/** What Pay mode shows next to the large barcode, to check it against the bill: payee,
- * IBAN, reference, amount and due date as text (those with a valid value), in the
- * order of the copy rows. */
-function payFacts(item: Item, tray: TrayDef): PayFact[] {
-  const defs = tray.fields ?? {};
-  const facts: PayFact[] = [];
-  for (const name of paymentNames(tray)) {
-    const def = defs[name];
-    const value = item.fields[name];
-    if (typeof value !== "string" || value === "" || item.invalid_fields.includes(name)) continue;
-    let text = value;
-    if (def.type === "iban" || (def.type === "reference" && /^RF/i.test(value))) text = groupIban(value);
-    else if (def.type === "money") text = formatMoney(value);
-    else if (def.type === "date") text = formatDate(value);
-    facts.push({ label: fieldLabel(name), value: text, copy: { raw: value, type: def.type, label: fieldWord(name) } });
-  }
-  return facts;
-}
-
 function PaymentDetails({ item, tray, today }: { item: Item; tray: TrayDef; today: string }) {
   const defs = tray.fields ?? {};
   const names = paymentNames(tray);
@@ -457,9 +425,6 @@ export default function ItemDetail({ id, ...rest }: ItemProps & { id: number }) 
   }
   return <ItemBody item={query.data} {...rest} />;
 }
-
-/** "Mark done" unless the tray names its own done label ("Mark paid"). */
-const markLabel = (doneLabel: string) => (doneLabel === "Done" ? "Mark done" : doneLabel);
 
 function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuickLook, barSlot }: ItemProps & { item: Item }) {
   const files = useItemFiles(item.id);
@@ -858,12 +823,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         )}
         {kind === "bill" && tray && <PaymentDetails item={item} tray={tray} today={today} />}
         {kind === "bill" && open && (
-          <Barcode
-            itemId={item.id}
-            pay={tray ? payFacts(item, tray) : undefined}
-            title={item.title}
-            done={tray ? { label: doneText, onDone: () => setDone("done") } : undefined}
-          />
+          <Barcode itemId={item.id} />
         )}
         {item.state === "done" ? (
           <p className="item-done">

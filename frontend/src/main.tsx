@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { installAppearance } from "./appearance";
+import { PayModeProvider } from "./components/PayMode";
 import { RecoveryProvider } from "./components/Recovery";
 import { ToastProvider } from "./components/Toasts";
 import { UndoProvider } from "./components/UndoConfirm";
@@ -26,9 +27,11 @@ createRoot(document.getElementById("root")!).render(
       <ToastProvider>
         <UndoProvider>
           <RecoveryProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
+            <PayModeProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </PayModeProvider>
           </RecoveryProvider>
         </UndoProvider>
       </ToastProvider>
