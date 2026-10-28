@@ -13,7 +13,7 @@ function setup(path: string) {
     "GET /api/filing-codes": { body: { codes: [], problems: [], warnings: [] } },
     "GET /api/filing-codes/folders": { body: { missing: [], stray: [] } },
     "GET /api/trays": { body: { trays: [], skipped: [] } },
-    "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true } },
+    "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true, extra_folders: [] }], can_switch: true } },
   });
   renderWithProviders(
     <MemoryRouter initialEntries={[path]}>
@@ -300,3 +300,48 @@ function renderSnapshots() {
   );
   return userEvent.setup();
 }
+
+describe("Settings Appearance in New", () => {
+  beforeEach(() => {
+    document.documentElement.dataset.style = "new";
+  });
+
+  it("arranges Look, Theme, Layout and Archive colour as separate groups under a title that says where it is kept", async () => {
+    setup("/settings/appearance");
+    const section = await screen.findByRole("region", { name: "Appearance" });
+    expect(within(section).getByText("Kept in this browser, the same for every archive.")).toBeInTheDocument();
+    const groups = [...section.querySelectorAll("fieldset > legend")].map((l) => l.textContent);
+    expect(groups).toEqual(["Look", "Theme", "Layout", "Archive colour"]);
+    expect(within(section).getByText("Auto follows your computer's setting.")).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Reset layout" })).toBeInTheDocument();
+  });
+
+  it("takes the theme from radios, applied at once", async () => {
+    const user = setup("/settings/appearance");
+    const section = await screen.findByRole("region", { name: "Appearance" });
+    const theme = within(section).getByRole("radiogroup", { name: "Appearance" });
+    expect(within(theme).getByRole("radio", { name: "Auto" })).toBeChecked();
+    await user.click(within(theme).getByRole("radio", { name: "Dark" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(localStorage.getItem(APPEARANCE_KEY)).toBe("dark");
+    expect(within(theme).getByRole("radio", { name: "Dark" })).toBeChecked();
+  });
+
+  it("opens Manage archives from the note on the archive colour", async () => {
+    const user = setup("/settings/appearance");
+    const section = await screen.findByRole("region", { name: "Appearance" });
+    expect(within(section).getByText(/Every archive except Main gets a coloured band/)).toBeInTheDocument();
+    await user.click(within(section).getByRole("button", { name: "Manage archives" }));
+    expect(await screen.findByRole("dialog", { name: "Manage archives" })).toBeInTheDocument();
+  });
+
+  it("keeps the Look cards in place when the look is switched there", async () => {
+    const user = setup("/settings/appearance");
+    const section = await screen.findByRole("region", { name: "Appearance" });
+    const classic = within(section).getByRole("radio", { name: /Classic/ });
+    await user.click(classic);
+    expect(document.documentElement.dataset.style).toBe("classic");
+    expect(within(section).queryByRole("radiogroup")).toBeNull();
+    expect(within(section).getByRole("radio", { name: /Classic/ })).toBe(classic);
+  });
+});

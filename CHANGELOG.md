@@ -8,6 +8,21 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **The New look: Activity, Maintenance and Settings laid out as drawn.** **Activity** has a
+  header with the count ("8 changes, undone one at a time") and the **Changes / AI calls**
+  switch; the search now sits first in the filter row, with the four filters and **Expand
+  all** after it (under about 820 pixels they fold behind **Filters N**, search stays).
+  Rows are a little taller and an opened change is tinted; a change that cannot be undone
+  (already undone, an undo, or interrupted) shows **Details** or **Review** where Undo
+  would be, and an undo is marked "You". **Maintenance** is a list of checks, each a row
+  with its name, a status line ("3 empty folders · today 14:10", "None found", "Not checked
+  yet") and one **Check** (then **Check again**) button, then what it does and its result;
+  this browser remembers when each check last ended, and Reset all forgets that too. The
+  header holds **Collapse all** and **Reset all**. **Settings > Appearance** has a title
+  that says it is kept in this browser, then Look cards the full width of the section,
+  **Theme** as Light / Dark / Auto radios, **Layout** with Reset layout beside its text,
+  and an **Archive colour** note whose **Manage archives** link opens that sheet. The
+  Settings list is a little wider. Classic is unchanged.
 - **The New look: Browse with two panes starts without the folder tree.** The second pane
   mostly shows what the tree shows, so the **Folder tree** button in the header now also
   appears with two panes and shows or hides the tree beside them; the choice is remembered

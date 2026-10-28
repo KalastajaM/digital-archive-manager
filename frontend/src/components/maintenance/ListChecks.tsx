@@ -14,6 +14,7 @@ import {
   useRemoveBrokenLinks,
   useStatus,
 } from "../../api/client";
+import { useStyle } from "../../appearance";
 import { changeToast } from "../collectionText";
 import { inFileManager } from "../../fileManager";
 import { dialogOpen } from "../../keyboard";
@@ -31,6 +32,7 @@ import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
 import { browseTo, ShowInBrowse } from "./ShowInBrowse";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
+import { ranText } from "./lastRun";
 import { useFold } from "./view";
 
 export const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
@@ -59,8 +61,63 @@ export function ResetButton({ check, title, busy = false }: { check: Check; titl
   );
 }
 
+/** The New look's status line of a check ("3 groups found · today 14:10"): what its
+ * result says, when it ended in this browser if known, and a tone for the colour. */
+export function checkStatus(check: Check, found: boolean, summary: string): { text: string; tone: "found" | "clean" | "never" | "running" | "error" } {
+  if (check.running) return { text: "Checking…", tone: "running" };
+  if (check.error || check.job?.state === "error") return { text: "The check failed", tone: "error" };
+  if (check.job === null) return { text: "Not checked yet", tone: "never" };
+  const what = found ? summary : "None found";
+  const stopped = check.job.state === "stopped" ? ", stopped early" : "";
+  const when = check.ranAt === null ? "" : ` · ${ranText(check.ranAt)}`;
+  return { text: `${what}${stopped}${when}`, tone: found ? "found" : "clean" };
+}
+
+/** In a New check row's header: the status line and the one button (Check, Check again or
+ * Stop), after the check's own reset. */
+export function CheckHead({
+  check,
+  found,
+  summary,
+  label,
+  onStart,
+  busy = false,
+  reset,
+}: {
+  check: Check;
+  found: boolean;
+  summary: string;
+  /** The button before a result exists ("Check"); "…again" follows it. */
+  label: string;
+  onStart: () => void;
+  busy?: boolean;
+  reset: ReactNode;
+}) {
+  const status = checkStatus(check, found, summary);
+  const ended = check.job !== null && !check.running;
+  return (
+    <>
+      <span className="check-status" data-tone={status.tone}>
+        {status.text}
+      </span>
+      {reset}
+      {check.running ? (
+        <button type="button" className="check-button" onClick={check.stop}>
+          Stop
+        </button>
+      ) : (
+        <button type="button" className={ended ? "check-button" : "check-button primary"} onClick={onStart} disabled={check.starting || busy}>
+          {ended ? `${label} again` : label}
+        </button>
+      )}
+    </>
+  );
+}
+
 /** A check's card: what it looks for, its button, progress with Stop, and the result.
- * Folded, it shows one line: what the check found, or that it has not run. */
+ * Folded, it shows one line: what the check found, or that it has not run. In the New look
+ * the card is a row: title, status line and the button in its header, then what it looks
+ * for and the result. */
 export function CheckCard({
   title,
   icon,
@@ -95,28 +152,35 @@ export function CheckCard({
 }) {
   const ended = check.job !== null && !check.running;
   const fold = useFold(kind);
+  const [look] = useStyle();
+  const isNew = look === "new";
   const reset = <ResetButton check={check} title={title} />;
+  const head = isNew ? <CheckHead check={check} found={found} summary={summary} label={buttonLabel} onStart={() => check.start()} reset={reset} /> : reset;
   if (fold?.folded)
     return (
-      <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={reset}>
-        <p className="hint">{foldedLine(check, found ? summary : empty || null)}</p>
+      <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={head}>
+        {isNew ? null : <p className="hint">{foldedLine(check, found ? summary : empty || null)}</p>}
       </Card>
     );
   return (
-    <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={reset}>
+    <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={head}>
       <p>{intro}</p>
-      <div className="check-actions">
-        {check.running ? (
-          <button type="button" onClick={check.stop}>
-            Stop
-          </button>
-        ) : (
-          <button type="button" className="primary" onClick={() => check.start()} disabled={check.starting}>
-            {ended ? `${buttonLabel} again` : buttonLabel}
-          </button>
-        )}
-        {extra}
-      </div>
+      {isNew ? (
+        extra && <div className="check-actions">{extra}</div>
+      ) : (
+        <div className="check-actions">
+          {check.running ? (
+            <button type="button" onClick={check.stop}>
+              Stop
+            </button>
+          ) : (
+            <button type="button" className="primary" onClick={() => check.start()} disabled={check.starting}>
+              {ended ? `${buttonLabel} again` : buttonLabel}
+            </button>
+          )}
+          {extra}
+        </div>
+      )}
       {check.running && check.job && <JobProgress job={check.job} noun="items" />}
       {check.error && (
         <p className="error" role="alert">

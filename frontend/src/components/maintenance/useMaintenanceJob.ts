@@ -12,6 +12,7 @@ import {
   startMaintenanceJob,
   stopMaintenanceJob,
 } from "../../api/client";
+import { forgetRun, lastRun, noteRun } from "./lastRun";
 
 /** How often a running check is asked how far it has come (a test may change it). */
 export const maintenancePolling = { ms: 700 };
@@ -28,12 +29,15 @@ export type Check = {
   reload: () => void;
   /** Forget the check and its result (a running one is ended): as before it ran. */
   reset: () => void;
+  /** When it last ended in this browser (epoch milliseconds), if known. */
+  ranAt: number | null;
 };
 
 export function useMaintenanceJob(kind: MaintenanceKind): Check {
   const [job, setJob] = useState<MaintenanceJob | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ranAt, setRanAt] = useState<number | null>(() => lastRun(kind));
   const epoch = useRef(0);
   const live = useRef<string | null>(null); // the running job's id, to stop it on leaving
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -45,7 +49,11 @@ export function useMaintenanceJob(kind: MaintenanceKind): Check {
         if (mine !== epoch.current) return;
         setJob(next);
         if (next.state === "running") timer.current = setTimeout(() => void poll(), maintenancePolling.ms);
-        else live.current = null;
+        else {
+          live.current = null;
+          noteRun(kind);
+          setRanAt(Date.now());
+        }
       } catch (e) {
         if (mine === epoch.current) {
           live.current = null;
@@ -54,7 +62,7 @@ export function useMaintenanceJob(kind: MaintenanceKind): Check {
       }
     };
     timer.current = setTimeout(() => void poll(), 20);
-  }, []);
+  }, [kind]);
 
   useEffect(() => {
     const mine = ++epoch.current;
@@ -111,9 +119,11 @@ export function useMaintenanceJob(kind: MaintenanceKind): Check {
         epoch.current += 1;
         live.current = null;
         setJob(stopped);
+        noteRun(kind);
+        setRanAt(Date.now());
       })
       .catch((e) => setError(errorText(e)));
-  }, [job]);
+  }, [job, kind]);
 
   const reload = useCallback(() => {
     if (!job) return;
@@ -128,8 +138,10 @@ export function useMaintenanceJob(kind: MaintenanceKind): Check {
     live.current = null;
     setJob(null);
     setError(null);
+    forgetRun(kind);
+    setRanAt(null);
     void forgetMaintenanceJobs(kind).catch((e) => setError(errorText(e)));
   }, [kind]);
 
-  return { job, running: job?.state === "running", starting, error, start, stop, reload, reset };
+  return { job, running: job?.state === "running", starting, error, start, stop, reload, reset, ranAt };
 }
