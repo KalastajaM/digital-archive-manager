@@ -134,7 +134,37 @@ describe("the outline", () => {
     expect(fold).toHaveTextContent("9 files");
     await user.click(fold);
     expect(screen.getByRole("checkbox", { name: "Select doc0.pdf" })).toBeInTheDocument();
-    expect(document.querySelectorAll("svg.rel-arcs .rel-arc")).toHaveLength(14);
+    // opened, the nine are a bundle: one arc to the folder and a branch to each file
+    expect(document.querySelectorAll("svg.rel-arcs .rel-arc:not(.branch)")).toHaveLength(6);
+    expect(document.querySelectorAll("svg.rel-arcs .rel-arc.branch")).toHaveLength(9);
+  });
+
+  it("bundles a folder's relatives into one arc to its heading, but not this file's own folder", async () => {
+    const two = [rel("p1", "a.pdf", "30. Home/Property", [["tag", "Taxes"]]), rel("p2", "b.pdf", "30. Home/Property", [["sender", "x"], ["tag", "Taxes"], ["reference", "1"]])];
+    setup({}, [...RELATIVES.filter((r) => r.drive_id !== "r5"), ...two]);
+    await screen.findByRole("checkbox", { name: "Select a.pdf" });
+    const trunk = document.querySelector('.rel-arc[data-target="folder:30. home/property"]');
+    expect(trunk).not.toBeNull();
+    expect(trunk).not.toHaveClass("branch");
+    expect(document.querySelector('.rel-arc[data-target="p1"]')).toHaveClass("branch");
+    expect(document.querySelector('.rel-arc[data-target="p2"]')).toHaveClass("branch");
+    // thick as its best relative
+    const width = (el: Element | null) => Number(el?.querySelector("path")?.getAttribute("stroke-width"));
+    expect(width(trunk)).toBeGreaterThan(width(document.querySelector('.rel-arc[data-target="r6"]')));
+    // the two in this file's own folder keep an arc each
+    expect(document.querySelector('.rel-arc[data-target="r2"]')).not.toHaveClass("branch");
+    expect(document.querySelector('.rel-arc[data-target="r3"]')).not.toHaveClass("branch");
+  });
+
+  it("pointing at a file outlines its branch and its folder's arc and steps the rest back", async () => {
+    const two = [rel("p1", "a.pdf", "30. Home/Property", [["tag", "Taxes"]]), rel("p2", "b.pdf", "30. Home/Property", [["tag", "Taxes"]])];
+    setup({}, [...RELATIVES, ...two]);
+    await screen.findByRole("checkbox", { name: "Select a.pdf" });
+    fireEvent.mouseEnter(rowOf("a.pdf"));
+    expect(document.querySelector("svg.rel-arcs")).toHaveClass("pointing");
+    expect(document.querySelector('.rel-arc[data-target="p1"]')).toHaveClass("on");
+    expect(document.querySelector('.rel-arc[data-target="folder:30. home/property"]')).toHaveClass("on");
+    expect(document.querySelector('.rel-arc[data-target="p2"]')).not.toHaveClass("on");
   });
 
   it("says what to do when there are none", async () => {

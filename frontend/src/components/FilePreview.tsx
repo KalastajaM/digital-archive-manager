@@ -33,6 +33,7 @@ import { pageSrcs, printImages } from "./print";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { Menu } from "./ui/Menu";
+import { usePageLink, useScrollLink } from "./moveTogether";
 import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
 import { parentOf } from "../paths";
 
@@ -283,6 +284,7 @@ const WHEEL_STEP = 50;
 function ZoomFrame({ zoom, children }: { zoom: Zoom; children: ReactNode }) {
   const frame = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
+  const onScroll = useScrollLink(frame);
   const wheel = useRef(0);
   // Where to keep still while the zoom changes: a point in the frame and the zoom before.
   const anchor = useRef<{ x: number; y: number; from: number } | null>(null);
@@ -385,7 +387,7 @@ function ZoomFrame({ zoom, children }: { zoom: Zoom; children: ReactNode }) {
 
   const cls = ["zoom-frame", zoom.zoom > 1 && "pannable", dragging && "dragging"].filter(Boolean);
   return (
-    <div ref={frame} className={cls.join(" ")} data-testid="zoom-frame" onMouseDown={onMouseDown}>
+    <div ref={frame} className={cls.join(" ")} data-testid="zoom-frame" onMouseDown={onMouseDown} onScroll={onScroll}>
       <span ref={probe} className="zoom-probe" aria-hidden="true" />
       <FitContext.Provider value={fitContext}>{children}</FitContext.Provider>
     </div>
@@ -546,6 +548,11 @@ function PdfPages({
 }) {
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState<number | null>(null);
+  const lastRef = useRef(lastPage);
+  lastRef.current = lastPage;
+  // with Move together on, a page turn here turns the other preview too; a shorter
+  // document stays on its last page
+  const go = usePageLink(page, (p) => setPage(lastRef.current === null ? p : Math.min(p, lastRef.current)));
   const inBar = useContext(BarContext) !== null;
   const root = useRef<HTMLElement>(null);
   const zoom = useZoom(root, control);
@@ -591,7 +598,7 @@ function PdfPages({
               type="button"
               aria-label="Previous page"
               disabled={page <= 1}
-              onClick={() => setPage(page - 1)}
+              onClick={() => go(page - 1)}
             >
               ‹
             </button>
@@ -603,7 +610,7 @@ function PdfPages({
               type="button"
               aria-label="Next page"
               disabled={lastPage !== null && page >= lastPage}
-              onClick={() => setPage(page + 1)}
+              onClick={() => go(page + 1)}
             >
               ›
             </button>

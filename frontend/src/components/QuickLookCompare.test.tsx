@@ -82,7 +82,7 @@ describe("compare mode", () => {
     expect(last.onClose).toHaveBeenCalled();
   });
 
-  it("zooms each pane on its own: + / - go to the pane last clicked, and Zoom together links them", async () => {
+  it("zooms each pane on its own: + / - go to the pane last clicked, and Move together links them", async () => {
     const { user } = setup(true);
     // [this file, the relative], each pane's level ("Fit" or a percentage)
     const levels = async () => (await screen.findAllByTestId("zoom-level")).map((el) => el.textContent);
@@ -94,15 +94,32 @@ describe("compare mode", () => {
     expect(await levels()).toEqual(["150%", "150%"]);
     fireEvent.keyDown(dialog(), { key: "+" }); // the subject pane was clicked last
     expect(await levels()).toEqual(["200%", "150%"]);
-    const together = within(dialog()).getByRole("button", { name: /Zoom together/ });
+    const together = within(dialog()).getByRole("button", { name: /Move together/ });
     await user.click(together);
     expect(together).toHaveAttribute("aria-pressed", "true");
-    expect(await levels()).toEqual(["150%", "150%"]);
+    expect(await levels()).toEqual(["200%", "200%"]); // both take the zoom of the pane in use
     fireEvent.keyDown(dialog(), { key: "-" });
-    expect(await levels()).toEqual(["Fit", "Fit"]);
+    expect(await levels()).toEqual(["150%", "150%"]);
     await user.click(together);
     fireEvent.keyDown(dialog(), { key: "+" });
-    expect(await levels()).toEqual(["150%", "Fit"]); // apart again: the keys still go to the pane last clicked
+    expect(await levels()).toEqual(["200%", "150%"]); // apart again: the keys still go to the pane last clicked
+  });
+
+  it("Move together turns the pages of both, and apart each turns its own", async () => {
+    const { user } = setup(true);
+    const pages = async () => (await screen.findAllByText(/^Page \d/)).map((el) => el.textContent);
+    expect(await pages()).toEqual(["Page 1", "Page 1"]);
+    const [subjectNext, fileNext] = screen.getAllByRole("button", { name: "Next page" });
+    await user.click(subjectNext);
+    expect(await pages()).toEqual(["Page 2", "Page 1"]);
+    await user.click(within(dialog()).getByRole("button", { name: /Move together/ }));
+    // switched on: the relative comes to the page of the pane in use
+    expect(await pages()).toEqual(["Page 2", "Page 2"]);
+    await user.click(fileNext);
+    expect(await pages()).toEqual(["Page 3", "Page 3"]);
+    await user.click(within(dialog()).getByRole("button", { name: /Move together/ }));
+    await user.click(fileNext);
+    expect(await pages()).toEqual(["Page 3", "Page 4"]);
   });
 
   it("Space closes, but Space on a button presses that button", () => {
