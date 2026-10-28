@@ -12,6 +12,7 @@ import yaml
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
+from typer.testing import CliRunner
 
 import archive_guard
 import dam.serve as serve_mod
@@ -1121,3 +1122,97 @@ def test_a_settings_file_with_a_windows_path_is_edited_safely(app_paths):
     assert data["special_folders"]["inbox"] == "00. Inbox"
     assert data["special_folders"]["ongoing"] == "##. Ongoing"
     assert data["server_port"] == 8765
+
+
+# -- the second review ----------------------------------------------------------------------------
+
+
+def test_dam_serve_finishes_an_interrupted_rename_before_it_opens_the_archive(
+    closed, fake_archive, monkeypatch
+):
+    """R1: through the real ``dam serve`` command (the server itself stubbed): the rename that
+    stopped after the folder moved is finished, so the app opens with the new name."""
+    from dam import serve as dam_serve
+    from dam.cli.main import app as cli
+
+    monkeypatch.setattr(special_folders, "roll_forward", lambda *a, **k: 1 / 0)
+    with pytest.raises(ZeroDivisionError):
+        special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    monkeypatch.undo()
+    assert load_settings(closed).special_folders.inbox == "##. Organize"
+    seen = []
+    monkeypatch.setattr(
+        dam_serve, "serve", lambda a, *args, **kw: seen.append(a.paths.inbox)
+    )
+    r = CliRunner().invoke(cli, ["--data-dir", str(closed.data_dir), "serve", "--no-open"])
+    assert r.exit_code == 0, r.output
+    assert seen == ["00. Inbox"]
+    assert load_settings(closed).special_folders.inbox == "00. Inbox"
+    assert _state(closed) == ["done"]
+
+
+def test_a_reconcile_that_fails_never_stops_the_archive_opening(closed, fake_archive, monkeypatch):
+    """Errors are contained: per rename (it becomes attention with the reason), and anywhere
+    else (logged, nothing raised)."""
+    monkeypatch.setattr(special_folders, "roll_forward", lambda *a, **k: 1 / 0)
+    with pytest.raises(ZeroDivisionError):
+        special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    # per rename: finishing it fails again
+    assert special_folders.reconcile(closed) == 0
+    assert _state(closed) == ["attention"]
+    # anywhere else: even looking for renames fails
+    monkeypatch.setattr(special_folders, "_unfinished", lambda e: 1 / 0)
+    assert special_folders.reconcile(closed) == 0
+
+
+def test_undo_clears_settings_when_the_take_back_crashed_after_the_folder_moved(
+    closed, fake_archive, monkeypatch
+):
+    """R2: the folder is back and the journal shows nothing acted, but the rule and the
+    stored paths still say the new name: the next start puts them back, not 'failed'."""
+    rules = closed.config_dir / "rules" / "zz-mine.yaml"
+    rules.write_text(
+        "- id: a\n  when: {text_contains: [x]}\n  then: {folder: '##. Important/P'}\n",
+        encoding="utf-8",
+    )
+    before = rules.read_bytes()
+    renamed = special_folders.rename_folder(closed, "important", "##. Keep")
+    assert b"##. Keep/P" in rules.read_bytes()
+    monkeypatch.setattr(special_folders, "roll_back", lambda *a, **k: 1 / 0)
+    with pytest.raises(ZeroDivisionError):
+        special_folders.undo(closed, renamed.batch_id)
+    monkeypatch.undo()
+    assert (fake_archive.root / "##. Important").is_dir()
+    engine = make_engine(closed.db_path)
+    try:
+        with engine.begin() as conn:  # the app was stopped before it could note anything
+            conn.execute(special_folder_renames.update().values(state="attention"))
+    finally:
+        engine.dispose()
+    assert special_folders.reconcile(closed) == 1
+    assert rules.read_bytes() == before
+    assert load_settings(closed).special_folders.important == "##. Important"
+    assert _state(closed) == ["undone"]
+
+
+def test_undo_finds_a_rule_by_its_id_when_rules_were_added_since(
+    closed, fake_archive
+):
+    """M1: an edit is recorded against the rule's id, not its place in the file."""
+    rules = closed.config_dir / "rules" / "zz-mine.yaml"
+    rules.write_text(
+        "- id: a\n  when: {text_contains: [x]}\n  then: {folder: '##. Organize/A'}\n",
+        encoding="utf-8",
+    )
+    renamed = special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    assert "'00. Inbox/A'" in rules.read_text(encoding="utf-8")
+    # a rule is added above it, and it already used the new name
+    rules.write_text(
+        "- id: z\n  when: {text_contains: [y]}\n  then: {folder: '00. Inbox/A'}\n"
+        + rules.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    special_folders.undo(closed, renamed.batch_id)
+    text = rules.read_text(encoding="utf-8")
+    assert "- id: z\n  when: {text_contains: [y]}\n  then: {folder: '00. Inbox/A'}" in text
+    assert "folder: '##. Organize/A'" in text
