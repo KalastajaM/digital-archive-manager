@@ -18,9 +18,8 @@ import { DoneForm } from "../components/DoneForm";
 import { CopyButton } from "../components/CopyButton";
 import { ItemBadges } from "../components/ItemBadges";
 import { useLocalClock } from "../components/RelativeDate";
-import { ClearCard } from "../components/today/ClearCard";
 import { FoundList, NotRecognised } from "../components/today/InboxCard";
-import { CollectionsCard, isClear, needingAttention, Notices, RemindersCard } from "../components/today/pieces";
+import { CollectionsCard, needingAttention, Notices, RemindersCard } from "../components/today/pieces";
 import { SearchCard } from "../components/today/SearchCard";
 import { StarredCard } from "../components/today/StarredCard";
 import { countsOf, headlineOf, openLine, tilesOf } from "../components/today/summary";
@@ -425,22 +424,19 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
   const trayId = (info: TrayCardInfo) => `tray:${info.id}`;
   const isBill = (info: TrayCardInfo) => isBillTray(info.def);
   const billTrayIds = new Set(cards.filter(isBill).map((c) => c.id));
-  // A tray with nothing open joins the one "Clear" section; bills are one table.
-  const clearTrays = data.data ? cards.filter((c) => isClear(c, data.data)) : [];
-  const busy = cards.filter((c) => !clearTrays.includes(c));
-  const busyBills = busy.filter(isBill);
-  const busyOthers = busy.filter((c) => !isBill(c));
+  // Every tray keeps its place, empty or not (an empty one says so), so the left column is
+  // there with no data too; this is why the New look has no Clear section.
+  const billTrays = cards.filter(isBill);
+  const otherTrays = cards.filter((c) => !isBill(c));
   const hiddenCards = [
-    ...(busyBills.length === 0 ? ["pay"] : []),
+    ...(billTrays.length === 0 ? ["pay"] : []),
     ...(data.data && needingAttention(data.data).length === 0 ? ["collections"] : []),
-    ...(clearTrays.length === 0 ? ["clear"] : []),
-    ...clearTrays.map(trayId),
   ];
   const hidden = new Set(hiddenCards);
   const layout = useCardLayout(
     [
-      ["pay", ...busyOthers.map(trayId)],
-      ["inbox", "collections", "starred", "reminders", "clear", "search", ...clearTrays.map(trayId)],
+      ["pay", ...otherTrays.map(trayId)],
+      ["inbox", "collections", "starred", "reminders", "search"],
     ],
     {},
     hiddenCards,
@@ -460,12 +456,11 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
   const d = data.data;
   const traysUnknown = !trays.isSuccess;
   const titles: Record<string, string> = {
-    pay: billTrays(busyBills),
+    pay: billsTitle(billTrays),
     inbox: "Inbox",
     collections: "Collections to do",
     starred: "Starred",
     reminders: "Reminders",
-    clear: "Clear",
     search: "Search",
     ...Object.fromEntries(cards.map((c) => [trayId(c), visible(c.name)])),
   };
@@ -475,8 +470,8 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
       return (
         <PaySection
           data={d}
-          billTrays={busyBills}
-          bills={open.bills.filter((b) => busyBills.some((t) => t.id === b.tray.id))}
+          billTrays={billTrays}
+          bills={open.bills}
           loaded={open.loaded}
           today={today}
           traysUnknown={traysUnknown}
@@ -491,9 +486,6 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
     if (id === "starred") return <StarredCard frame={frame} Shell={TnSection} />;
     if (id === "collections") return <CollectionsCard data={d} frame={frame} Shell={TnSection} />;
     if (id === "reminders") return <RemindersCard data={d} today={today} frame={frame} Shell={TnSection} />;
-    if (id === "clear") {
-      return <ClearCard trays={clearTrays.map((c) => ({ id: c.id, name: c.name }))} frame={frame} Shell={TnSection} />;
-    }
     const info = cards.find((c) => trayId(c) === id);
     if (!info) return null;
     return (
@@ -606,6 +598,6 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
 }
 
 /** The bill table's name: its tray's name, or "To pay" when several trays share it. */
-function billTrays(trays: TrayCardInfo[]): string {
+function billsTitle(trays: TrayCardInfo[]): string {
   return trays.length === 1 ? visible(trays[0].name) : "To pay";
 }

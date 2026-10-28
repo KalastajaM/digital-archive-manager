@@ -288,18 +288,31 @@ describe("Today in the New look: To pay", () => {
     expect(form).toBeInTheDocument();
   });
 
-  it("leaves the table out when every bill tray is clear, and the Clear section names it", async () => {
+  it("keeps the To pay section with a calm empty line when nothing is open, and no Clear card", async () => {
     renderToday(
       {
         attention: [],
-        overview: { ...TODAY.overview, trays: TODAY.overview.trays.map((t) => (t.tray_id === "to-pay" ? { ...t, open: 0, overdue: 0, sum: "0.00" } : t)) },
-        open_items: [{ tray_id: "to-pay", items: [] }, ...TODAY.open_items.slice(1)],
+        overview: { ...TODAY.overview, trays: TODAY.overview.trays.map((t) => ({ ...t, open: 0, overdue: 0, sum: t.sum ? "0.00" : null })) },
+        open_items: TODAY.open_items.map((t) => ({ ...t, items: [] })),
       },
       { "GET /api/trays/to-pay/items": { body: [] } },
     );
-    const clear = await screen.findByRole("region", { name: "Clear" });
-    expect(clear).toHaveTextContent("To pay is clear.");
+    const pay = await screen.findByRole("region", { name: "To pay" });
+    expect(await within(pay).findByText("Nothing open.")).toBeInTheDocument();
+    expect(within(pay).getByText("0 open")).toBeInTheDocument();
+    expect(within(section("To action")).getByText("Nothing open.")).toBeInTheDocument();
+    expect(within(section("Follow up")).getByText("Nothing open.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Clear" })).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("with many bills shows eight rows and links to the rest; long names stay in their row", async () => {
+    const many = Array.from({ length: 12 }, (_, i) => bill(30 + i, `A very long bill name number ${i} ${"x".repeat(60)}`, `2026-11-${10 + i}`, "10.00"));
+    renderToday({}, { "GET /api/trays/to-pay/items": { body: many } });
+    const table = await screen.findByRole("table");
+    await within(table).findByRole("link", { name: /number 0 / });
+    expect(within(table).getAllByRole("button", { name: /^Open Pay mode for/ })).toHaveLength(8);
+    expect(within(table).getByRole("link", { name: "4 more bills" })).toHaveAttribute("href", "/trays/to-pay");
   });
 });
 
