@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, onTestFinished } from "vitest";
 import App from "../App";
 import { type Archive, getActiveArchive, navigation, setActiveArchive } from "../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
@@ -214,6 +214,20 @@ describe("Add archive", () => {
     await user.click(create);
     await waitFor(() => expect(leave).toHaveBeenCalled());
     expect(posts(calls, "/api/archives")[0].body).toMatchObject({ name: "Demo", demo_folder: "/tmp/demo-folder" });
+  });
+
+  it("fills the demo folder from the system folder dialog", async () => {
+    document.documentElement.dataset.style = "new";
+    onTestFinished(() => {
+      delete document.documentElement.dataset.style;
+    });
+    const { user } = renderSwitcher({
+      "POST /api/system/choose-folder": { body: { path: "/Users/me/Demo", cancelled: false, unavailable: null } },
+    });
+    const dialog = await open(user);
+    await user.click(within(dialog).getByRole("radio", { name: /Create a demo archive/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Choose…" }));
+    await waitFor(() => expect(within(dialog).getByLabelText("Folder for the demo archive")).toHaveValue("/Users/me/Demo"));
   });
 
   it("shows the server's refusal (a folder that is not empty) and stays", async () => {

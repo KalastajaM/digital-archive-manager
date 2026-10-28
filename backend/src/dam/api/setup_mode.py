@@ -18,6 +18,7 @@ from dam.api.main import (
     mount_frontend,
 )
 from dam.api.routers import archives as archives_router
+from dam.api.routers import dialogs as dialogs_router
 from dam.api.routers import setup as setup_router
 from dam.api.security import ArchiveGuardMiddleware, InternalErrorMiddleware, LocalOnlyMiddleware
 from dam.api.setup_ctl import SetupMode
@@ -60,6 +61,7 @@ def create_setup_api(
 
     api.include_router(setup_router.router)
     api.include_router(archives_router.router)
+    api.include_router(dialogs_router.router)
 
     @api.api_route(
         "/api/{rest:path}",

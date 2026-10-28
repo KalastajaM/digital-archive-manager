@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **A Choose... button for archive folders (New look).** Next to every typed folder path
+  (first-run setup, Add archive with a demo archive, and Settings, Archive folders, Add
+  folder) a **Choose...** button opens your operating system's own folder window on this
+  computer and fills the field with the folder you pick. Cancelling changes nothing; where
+  no folder window can be shown (for example Linux without zenity or kdialog) a short
+  message says to type the path, which always still works. The window only asks for a
+  folder: dam creates and changes nothing.
 - **Search suggestions in the search palette and Browse.** Typing a filter such as `tag:in`
   or `collection:ho` in the palette (Cmd+K or Ctrl+K, or the search field in the sidebar)
   lists the matching tags, collections, senders, people, trays, folders, types and `is:`

@@ -14,6 +14,7 @@ from dam.api.routers import (
     browse,
     codes,
     collections,
+    dialogs,
     export,
     files,
     folders,
@@ -184,6 +185,7 @@ def create_api(
 # every router's module, in the order they are included
 ROUTERS = (
     system,
+    dialogs,
     inbox,
     layout,
     files,

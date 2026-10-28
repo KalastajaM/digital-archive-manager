@@ -608,6 +608,12 @@ export const useSetupCandidates = () =>
     staleTime: Infinity,
   });
 
+/** Open the operating system's folder dialog on this computer (the server shows it) and
+ * get the chosen absolute path, or ``cancelled``, or why none could be shown. Nothing
+ * changes on disk. ``start``: where the dialog opens. */
+export const chooseFolder = (start?: string) =>
+  apiPost("/api/system/choose-folder", { body: start ? { start } : {} });
+
 /** Check a folder path (nothing changes on disk). */
 export const checkSetupPath = (path: string) => apiPost("/api/setup/validate", { body: { path } });
 

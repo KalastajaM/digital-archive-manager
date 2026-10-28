@@ -84,6 +84,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/choose-folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose Folder
+         * @description Open the operating system's folder dialog on this computer and return the chosen
+         *     absolute ``path``, or ``cancelled``, or why it is ``unavailable``. Never changes
+         *     anything. A plain ``def``: it runs in the thread pool, so it does not block the server.
+         */
+        post: operations["choose_folder_api_system_choose_folder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/inbox": {
         parameters: {
             query?: never;
@@ -4639,6 +4661,23 @@ export interface components {
             /** Position */
             position: number;
         };
+        /** ChooseFolderIn */
+        ChooseFolderIn: {
+            /** Start */
+            start?: string | null;
+        };
+        /** ChooseFolderOut */
+        ChooseFolderOut: {
+            /** Path */
+            path?: string | null;
+            /**
+             * Cancelled
+             * @default false
+             */
+            cancelled: boolean;
+            /** Unavailable */
+            unavailable?: string | null;
+        };
         /**
          * CodeHitOut
          * @description A filing code found for a file: by its inbox folder, a pen mark, a QR sticker, or
@@ -8833,6 +8872,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetryIndexOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    choose_folder_api_system_choose_folder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChooseFolderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChooseFolderOut"];
                 };
             };
             /** @description Bad Request */

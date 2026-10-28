@@ -4,6 +4,7 @@ import { useState } from "react";
 import { addArchive, errorText, navigation, switchArchive, useArchives } from "../api/client";
 import { ArchiveSwatches } from "./ArchiveSwatches";
 import { freeColor } from "./archivePalette";
+import { FolderPathInput } from "./FolderPathInput";
 import { Sheet } from "./ui/Sheet";
 
 type Kind = "own" | "demo";
@@ -100,14 +101,14 @@ export function AddArchive({ open, onClose }: { open: boolean; onClose: () => vo
       {kind === "demo" && (
         <div className="field">
           <label htmlFor="add-archive-folder">Folder for the demo archive</label>
-          <input
+          <FolderPathInput
             id="add-archive-folder"
-            type="text"
             value={folder}
             spellCheck={false}
             autoComplete="off"
             placeholder="A new or empty folder, e.g. /Users/you/Documents/Demo archive"
-            onChange={(e) => setFolder(e.target.value)}
+            onChange={setFolder}
+            disabled={busy}
           />
           <p className="first-run-hint">The folder must be new or empty. dam creates the demo files inside it.</p>
         </div>
