@@ -2050,19 +2050,39 @@
  * title (cut with an ellipsis, whole in the tooltip), state, time, Undo. Under ~820px the four
  * filters fold behind a "Filters N" button that opens them under the header. */
 [data-style="new"] main:has(> .activity) { container: act / inline-size; }
-[data-style="new"] .activity > .toolbar,
-[data-style="new"] .activity .activity-filters { padding-right: var(--sp-5); }
-[data-style="new"] .activity-toolbar { flex-wrap: nowrap; gap: var(--sp-3); }
+[data-style="new"] .activity-toolbar { flex-wrap: nowrap; gap: var(--sp-3); padding: 16px 24px 12px; border-bottom-width: 0; }
 [data-style="new"] .activity-toolbar .toolbar-title { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; }
 [data-style="new"] .activity-toolbar .toolbar-title h2 { flex: none; }
-[data-style="new"] .activity-toolbar .toolbar-subtitle { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-style="new"] .activity-toolbar .toolbar-subtitle { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); }
 [data-style="new"] .activity-toolbar .toolbar-actions { flex: none; flex-wrap: nowrap; margin-left: 0; }
-[data-style="new"] .activity .toolbar-search { width: auto; flex: 0 1 240px; min-width: 140px; }
-[data-style="new"] .activity-filters { gap: var(--sp-2); padding-top: 10px; padding-bottom: 10px; border-bottom-width: 1px; }
-[data-style="new"] .activity-filters select { min-width: 0; }
+[data-style="new"] .activity-toolbar .segmented { flex: none; padding: 3px; gap: 2px; border-radius: 7px; background: var(--panel-2); }
+[data-style="new"] .activity-toolbar .segmented-option { height: 26px; padding: 0 10px; border-radius: 5px; font-size: var(--fs-md); color: var(--muted-2); }
+[data-style="new"] .activity-toolbar .segmented-option[aria-pressed="true"] { background: var(--panel); box-shadow: var(--shadow-segment); color: var(--text); font-weight: 500; }
+/* the filter row: the search first (it takes what the filters leave), the four filters,
+ * Expand all, and "Filters N" once the filters fold */
+[data-style="new"] .activity-filters { align-items: center; gap: var(--sp-2); padding: 0 24px 14px; border-bottom-width: 1px; }
+[data-style="new"] .activity-filters select { min-width: 0; height: 32px; field-sizing: content; }
+[data-style="new"] .activity-filters button { height: 32px; }
+[data-style="new"] .activity-search {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 32px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--muted);
+}
+[data-style="new"] .activity-search:focus-within { border-color: var(--accent); }
+[data-style="new"] .activity-search svg { flex: none; }
+[data-style="new"] .activity-search input { flex: 1; min-width: 0; height: auto; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; font: inherit; color: var(--text); }
 [data-style="new"] .activity .filters-toggle { display: none; }
-[data-style="new"] .activity-body { padding: var(--sp-2) var(--sp-5) var(--sp-8); }
-[data-style="new"] .activity-body > * { max-width: 1040px; }
+[data-style="new"] .activity-body { padding: var(--sp-2) 24px var(--sp-8); }
+[data-style="new"] .activity-body > * { max-width: 992px; }
 [data-style="new"] .activity-more { padding-left: 0; }
 
 [data-style="new"] .timeline-day { margin-bottom: 0; }
@@ -2083,7 +2103,7 @@
 [data-style="new"] .batch { display: block; padding: 0; }
 [data-style="new"] .batch-dot { display: none; }
 [data-style="new"] .batch-main { padding: 0; background: transparent; box-shadow: none; border-radius: 0; }
-[data-style="new"] .batch-header { flex-wrap: wrap; gap: 6px 10px; min-height: 44px; padding: 6px 12px; box-sizing: border-box; }
+[data-style="new"] .batch-header { flex-wrap: wrap; gap: 6px 10px; min-height: 56px; padding: 6px 12px; box-sizing: border-box; }
 [data-style="new"] .batch-toggle { order: 0; flex: none; }
 [data-style="new"] .batch-origin {
   order: 1;
@@ -2103,6 +2123,11 @@
 /* an automatic change has no Undo: its note is a line under the title */
 [data-style="new"] .batch-actions:has(.batch-note) { order: 6; flex: 1 1 100%; padding-left: 28px; }
 [data-style="new"] .batch-note { font-size: var(--fs-sm); }
+/* an opened change is tinted, like the board's expanded row */
+[data-style="new"] .timeline > li:has(.batch-toggle[aria-expanded="true"]) { background: color-mix(in srgb, var(--panel-2) 40%, var(--panel)); }
+[data-style="new"] .timeline > li:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
+[data-style="new"] .timeline > li:last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+[data-style="new"] .batch-details { flex: none; height: 28px; padding: 0 10px; font-size: var(--fs-sm); }
 
 /* the operations, indented under the title: kind | from, then → to | state | Show in Browse */
 [data-style="new"] .batch-main .plan.journal,
@@ -2131,15 +2156,16 @@
 [data-style="new"] .journal-error { grid-column: 2 / -1; padding-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-style="new"] .journal-now code { font-family: var(--font-mono); font-size: 12px; }
 
-/* the folding order: the filters leave the header, behind "Filters N" */
+/* the folding order: the filters and Expand all leave the row, behind "Filters N" */
 @container act (max-width: 820px) {
   [data-style="new"] .activity .filters-toggle { display: inline-flex; align-items: center; gap: 6px; }
-  [data-style="new"] .activity .activity-filters { display: none; }
-  [data-style="new"] .activity[data-filters="open"] .activity-filters { display: flex; }
+  [data-style="new"] .activity .activity-filters .flt { display: none; }
+  [data-style="new"] .activity[data-filters="open"] .activity-filters .flt { display: inline-flex; }
+  [data-style="new"] .activity[data-filters="open"] .activity-filters select.flt { display: block; }
 }
 @container act (max-width: 640px) {
   [data-style="new"] .activity-toolbar .toolbar-subtitle { display: none; }
-  [data-style="new"] .activity .toolbar-search { flex-basis: 160px; }
+  [data-style="new"] .activity-search { flex-basis: 160px; }
 }
 
 /* ==== Maintenance: the checks as one list of hairline rows ====================================
@@ -2148,30 +2174,58 @@
  * then what it does, its button and its result. Paths and names are set in the fixed-width
  * face and cut with an ellipsis (the whole in the tooltip). */
 [data-style="new"] main:has(> .maintenance-screen) { container: maint / inline-size; }
-[data-style="new"] .maintenance-screen { --maintenance-w: 980px; gap: 0; }
-[data-style="new"] .maintenance-toolbar { flex-wrap: nowrap; padding-right: var(--sp-5); }
-[data-style="new"] .maintenance-toolbar .toolbar-title { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; }
-[data-style="new"] .maintenance-toolbar .toolbar-title h2 { flex: none; }
-[data-style="new"] .maintenance-toolbar .toolbar-subtitle { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[data-style="new"] .maintenance-toolbar .toolbar-actions { flex: none; flex-wrap: nowrap; margin-left: 0; }
+[data-style="new"] .maintenance-screen {
+  box-sizing: border-box;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+  gap: 18px;
+}
+/* the header: the title with what the screen is, Collapse all and Reset all along its foot */
+[data-style="new"] .maintenance-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+[data-style="new"] .maintenance-head-text { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+[data-style="new"] .maintenance-head h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+[data-style="new"] .maintenance-sub { color: var(--muted); }
+[data-style="new"] .maintenance-head > button { height: 32px; flex: none; }
+/* the checks: one bordered list, a row each (title, status line, button; then what it does) */
 [data-style="new"] .maintenance-body {
   gap: 0;
   padding: 0;
-  margin: var(--sp-5) var(--sp-5) var(--sp-8);
-  max-width: var(--maintenance-w);
+  margin: 0;
+  max-width: none;
   border: 1px solid var(--hairline);
   border-radius: var(--r-xl);
 }
-[data-style="new"] .maintenance-body > .card { padding: 14px 16px; border-radius: 0; box-shadow: none; background: transparent; min-width: 0; }
+[data-style="new"] .maintenance-body > .card { padding: 14px 16px; border-radius: 0; box-shadow: none; background: transparent; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 [data-style="new"] .maintenance-body > .card:first-child { border-radius: var(--r-xl) var(--r-xl) 0 0; }
 [data-style="new"] .maintenance-body > .card:last-child { border-radius: 0 0 var(--r-xl) var(--r-xl); }
 [data-style="new"] .maintenance-body > .card + .card { border-top: 1px solid var(--hairline); }
-[data-style="new"] .maintenance-body .card-header { margin-bottom: 8px; }
-[data-style="new"] .maintenance-body .card-header h3 { min-width: 0; font-size: 14px; font-weight: 600; color: var(--text); }
-[data-style="new"] .maintenance-body .card-icon { color: var(--muted); }
-[data-style="new"] .maintenance-body .card-actions { flex: none; }
-[data-style="new"] .maintenance-body .card-folded .card-header { margin-bottom: 0; }
+[data-style="new"] .maintenance-body .card-header { flex-wrap: wrap; gap: 10px; margin-bottom: 0; }
+[data-style="new"] .maintenance-body .card-header h3 { flex: 1 1 180px; min-width: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+[data-style="new"] .maintenance-body .card-icon { display: none; }
+[data-style="new"] .maintenance-body .card-actions { flex: 0 1 auto; margin-left: 0; flex-wrap: wrap; gap: 10px; }
+[data-style="new"] .maintenance-body .card-actions .icon-button { width: 28px; height: 28px; }
+[data-style="new"] .maintenance-body .card-body > :first-child { margin-top: 0; }
+[data-style="new"] .maintenance-body .card-folded .card-body { display: none; }
 [data-style="new"] .maintenance-body .card p { max-width: 760px; color: var(--muted-2); line-height: 1.5; }
+[data-style="new"] .check-status {
+  flex: none;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  background: var(--grey-bg);
+  color: var(--grey-text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-style="new"] .check-status[data-tone="found"] { background: var(--orange-bg); color: var(--orange-text); }
+[data-style="new"] .check-status[data-tone="clean"] { background: var(--green-bg); color: var(--green-text); }
+[data-style="new"] .check-status[data-tone="error"] { background: var(--red-bg); color: var(--red-text); }
+[data-style="new"] .check-button { height: 30px; flex: none; padding: 0 12px; font-weight: 500; }
+[data-style="new"] .check-button.primary { font-weight: 500; }
 [data-style="new"] .maintenance-body .card h4 { font-size: var(--fs-md); font-weight: 600; }
 [data-style="new"] .check-actions { gap: var(--sp-2); }
 [data-style="new"] .inline-field input[type="number"] { font-family: var(--font-mono); }
@@ -2205,17 +2259,16 @@
 [data-style="new"] .compare-side + .compare-side { border-left-width: 1px; }
 [data-style="new"] .compare-head { border-bottom-width: 1px; }
 @container maint (max-width: 640px) {
-  [data-style="new"] .maintenance-toolbar .toolbar-subtitle { display: none; }
-  [data-style="new"] .maintenance-body { margin-left: var(--sp-3); margin-right: var(--sp-3); }
+  [data-style="new"] .maintenance-screen { padding-left: var(--sp-4); padding-right: var(--sp-4); }
 }
 
-/* ==== Settings: a 200px list on the left, the section beside it =============================
+/* ==== Settings: a 225px column on the left (a 200px list in it), the section beside it =============================
  * The title heads the list (one grid: the toolbar over the list in the first column, the
  * section in the second). The list's two groups carry small-caps captions; the current
  * section has the selected fill. The section is as wide as its content needs, up to ~820px
  * (Filing codes is wider: its table folds by its own container). */
 [data-style="new"] main:has(> .settings) { container: settings / inline-size; }
-[data-style="new"] .settings { display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+[data-style="new"] .settings { display: grid; grid-template-columns: 225px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
 [data-style="new"] .settings-layout { display: contents; }
 [data-style="new"] .settings > .toolbar {
   grid-area: 1 / 1;
@@ -2242,6 +2295,7 @@
 [data-style="new"] .settings-nav h4 {
   padding: 6px 10px;
   font-size: var(--fs-xs);
+  line-height: 14px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   overflow: hidden;
@@ -2278,6 +2332,32 @@
   [data-style="new"] .settings { grid-template-columns: 168px minmax(0, 1fr); }
   [data-style="new"] .settings-body { padding: 20px 20px 40px; }
 }
+
+/* -- Settings > Appearance: the title with what it is kept in, then Look, Theme, Layout and
+ * Archive colour as separate groups -- */
+[data-style="new"] .appearance-new { display: flex; flex-direction: column; gap: 28px; }
+[data-style="new"] .appearance-new > header { display: flex; flex-direction: column; gap: 4px; }
+[data-style="new"] .appearance-new > header h3 { margin: 0; font-size: 20px; font-weight: 600; }
+[data-style="new"] .appearance-sub { color: var(--muted); }
+[data-style="new"] .appearance-new fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
+[data-style="new"] .appearance-new legend { padding: 0; margin-bottom: 10px; font-weight: 600; }
+[data-style="new"] .appearance-new .look-choice { margin: 0; }
+[data-style="new"] .appearance-new .look-cards { max-width: none; gap: 14px; }
+[data-style="new"] .appearance-new .look-card { gap: 10px; padding: 12px; border-radius: var(--r-xl); }
+[data-style="new"] .appearance-new .look-preview { height: 120px; border-radius: 6px; }
+[data-style="new"] .appearance-new .look-card-name { font-weight: 500; }
+[data-style="new"] .appearance-new .look-card-hint { font-size: var(--fs-sm); color: var(--muted); }
+[data-style="new"] .theme-radios { display: inline-flex; gap: 2px; padding: 3px; border-radius: 7px; background: var(--panel-2); }
+[data-style="new"] .theme-radios label { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 14px; border-radius: 5px; color: var(--muted-2); cursor: pointer; }
+[data-style="new"] .theme-radios label[data-checked] { background: var(--panel); box-shadow: var(--shadow-segment); color: var(--text); font-weight: 500; }
+[data-style="new"] .theme-radios input { margin: 0; accent-color: var(--accent); }
+[data-style="new"] .appearance-group > .hint { margin: 8px 0 0; font-size: var(--fs-sm); }
+[data-style="new"] .appearance-group > p { margin: 0; color: var(--muted-2); }
+[data-style="new"] .appearance-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+[data-style="new"] .appearance-row p { flex: 1 1 320px; min-width: 0; margin: 0; color: var(--muted-2); }
+[data-style="new"] .appearance-row button { height: 32px; flex: none; }
+[data-style="new"] .appearance-group button.link-button { display: inline; height: auto; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; text-decoration: none; }
+[data-style="new"] .appearance-group button.link-button:hover:not(:disabled) { background: transparent; color: var(--accent-hover); text-decoration: underline; }
 
 /* ==== Help, Tags, Ask, the viewer, first run and the archive sheets ============================
  * No board for these: the same type scale, hairlines and fixed-width paths as the screens

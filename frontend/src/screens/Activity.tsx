@@ -2,7 +2,7 @@
  * ("Today", "Yesterday", then the date), each with its own Undo. Search and filters
  * (kept in the URL) narrow it on the server, a page at a time. Recovery sits on top
  * when something was interrupted. */
-import { ChevronRight, History, MousePointerClick, RefreshCw, Terminal, Undo2 } from "lucide-react";
+import { ChevronRight, History, MousePointerClick, RefreshCw, Search, Terminal, Undo2 } from "lucide-react";
 import { Link, useInRouterContext, useSearchParams } from "react-router-dom";
 import { Fragment, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
@@ -226,7 +226,7 @@ function CollectionLink({ id, children }: { id: number; children: ReactNode }) {
 
 /** Where a batch came from, in words; the app is the default and says nothing. */
 const ORIGIN_WORD: Record<string, string> = { cli: "command line" };
-const NEW_ORIGIN_WORD: Record<string, string> = { ui: "You", cli: "CLI", workflow: "Auto" };
+const NEW_ORIGIN_WORD: Record<string, string> = { ui: "You", undo: "You", cli: "CLI", workflow: "Auto" };
 
 /** Batches with more ops than this show them behind a "Show details" fold. */
 export const OPS_OPEN_MAX = 3;
@@ -314,6 +314,17 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded
                   "change the collection to undo it"
                 )}
               </span>
+            ) : look === "new" && (b.undone || b.is_undo || interrupted) ? (
+              // New: a change that cannot be undone offers its details instead of a dead Undo
+              <button
+                type="button"
+                className="batch-details"
+                aria-expanded={expanded}
+                aria-label={`${interrupted ? "Review" : "Details of"} ${title}`}
+                onClick={onToggle}
+              >
+                {interrupted ? "Review" : "Details"}
+              </button>
             ) : (
               <TipButton
                 disabled={blocked || undoBusy}
@@ -591,11 +602,11 @@ export function whenSince(when: string, now = new Date()): number | undefined {
 
 export const ACTIVITY_SEARCH_DEBOUNCE_MS = 250;
 
-type FilterMenuProps = { label: string; value: string; options: [string, string][]; onChange: (v: string) => void };
+type FilterMenuProps = { label: string; value: string; options: [string, string][]; onChange: (v: string) => void; className?: string };
 
-function FilterMenu({ label, value, options, onChange }: FilterMenuProps) {
+function FilterMenu({ label, value, options, onChange, className }: FilterMenuProps) {
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+    <select aria-label={label} className={className} value={value} onChange={(e) => onChange(e.target.value)}>
       {options.map(([v, text]) => (
         <option key={v} value={v}>
           {text}
@@ -747,21 +758,37 @@ export default function Activity() {
     );
   }
   const count = activity.data?.length ?? 0;
+  const searchInput = (
+    <input
+      id="activity-q"
+      type="search"
+      placeholder="Search changes and files"
+      aria-label={isNew ? "Search the changes" : undefined}
+      value={text}
+      spellCheck={false}
+      onChange={(e) => setText(e.target.value)}
+    />
+  );
   const searchBox = (
     <div className="search">
       <label htmlFor="activity-q" className="visually-hidden">
         Search the changes
       </label>
-      <input
-        id="activity-q"
-        type="search"
-        placeholder="Search changes and files"
-        value={text}
-        spellCheck={false}
-        onChange={(e) => setText(e.target.value)}
-      />
+      {searchInput}
     </div>
   );
+  const toggleAllButton = (
+    <button
+      type="button"
+      className={isNew ? "quiet flt" : undefined}
+      disabled={searching}
+      data-tip={searching ? "Search results are shown open" : undefined}
+      onClick={toggleAll}
+    >
+      {expandAll || searching ? "Collapse all" : "Expand all"}
+    </button>
+  );
+  const menuClass = isNew ? "flt" : undefined;
   return (
     <div className="activity" data-filters={filtersOpen ? "open" : undefined}>
       <Toolbar
@@ -769,22 +796,46 @@ export default function Activity() {
         title="Activity"
         subtitle={
           view === "changes" && count > 0
-            ? `${plural(count, "change", "changes")}${activity.hasNextPage ? " so far" : ""}`
+            ? isNew
+              ? `${plural(count, "change", "changes")}${activity.hasNextPage ? " so far" : ""}, undone one at a time`
+              : `${plural(count, "change", "changes")}${activity.hasNextPage ? " so far" : ""}`
             : undefined
         }
         actions={
           <>
-          {view === "changes" && count > 0 && (
-            <button
-              type="button"
-              disabled={searching}
-              data-tip={searching ? "Search results are shown open" : undefined}
-              onClick={toggleAll}
-            >
-              {expandAll || searching ? "Collapse all" : "Expand all"}
+            {!isNew && view === "changes" && count > 0 && toggleAllButton}
+            <Segmented<View>
+              ariaLabel="Show"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "changes", label: "Changes" },
+                { value: "ai", label: isNew ? "AI calls" : "AI", ariaLabel: isNew ? "AI calls" : undefined },
+              ]}
+            />
+          </>
+        }
+        search={!isNew && view === "changes" ? searchBox : undefined}
+      />
+      {view === "changes" && (
+        <div className="activity-filters" role="group" aria-label="Filters">
+          {isNew && (
+            <label className="activity-search">
+              <Search size={14} aria-hidden="true" />
+              {searchInput}
+            </label>
+          )}
+          <FilterMenu className={menuClass} label="Kind of change" value={filters.kind} options={KIND_OPTIONS} onChange={(v) => setParam({ kind: v })} />
+          <FilterMenu className={menuClass} label="Status" value={filters.status} options={STATUS_OPTIONS} onChange={(v) => setParam({ status: v })} />
+          <FilterMenu className={menuClass} label="Made by" value={filters.origin} options={ORIGIN_OPTIONS} onChange={(v) => setParam({ origin: v })} />
+          <FilterMenu className={menuClass} label="When" value={filters.when} options={WHEN_OPTIONS} onChange={(v) => setParam({ when: v })} />
+          {filtered && (
+            <button type="button" className={isNew ? "activity-clear flt" : "activity-clear"} onClick={clearFilters}>
+              Clear filters
             </button>
           )}
-          {isNew && view === "changes" && (
+          {isNew && toggleAllButton}
+          {isNew && (
             <button
               type="button"
               className="filters-toggle"
@@ -792,30 +843,6 @@ export default function Activity() {
               onClick={() => setFiltersOpen((o) => !o)}
             >
               Filters <span className="mono">{filterCount}</span>
-            </button>
-          )}
-          <Segmented<View>
-            ariaLabel="Show"
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "changes", label: "Changes" },
-              { value: "ai", label: "AI" },
-            ]}
-          />
-          </>
-        }
-        search={view === "changes" ? searchBox : undefined}
-      />
-      {view === "changes" && (
-        <div className="activity-filters" role="group" aria-label="Filters">
-          <FilterMenu label="Kind of change" value={filters.kind} options={KIND_OPTIONS} onChange={(v) => setParam({ kind: v })} />
-          <FilterMenu label="Status" value={filters.status} options={STATUS_OPTIONS} onChange={(v) => setParam({ status: v })} />
-          <FilterMenu label="Made by" value={filters.origin} options={ORIGIN_OPTIONS} onChange={(v) => setParam({ origin: v })} />
-          <FilterMenu label="When" value={filters.when} options={WHEN_OPTIONS} onChange={(v) => setParam({ when: v })} />
-          {filtered && (
-            <button type="button" className="activity-clear" onClick={clearFilters}>
-              Clear filters
             </button>
           )}
         </div>

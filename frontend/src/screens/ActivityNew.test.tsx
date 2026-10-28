@@ -1,11 +1,16 @@
-/** Activity and Maintenance in the New look: the "Filters N" button that folds the filters
- * in a narrow screen, who made each change as a chip, and Maintenance's text buttons.
- * Classic renders none of it. */
-import { cleanup, screen, within } from "@testing-library/react";
+/** Activity and Maintenance in the New look, as the boards draw them. Activity: the header
+ * (title, count, Changes / AI calls), the filter row (search, four filters, Expand all and
+ * the "Filters N" button that folds them in a narrow screen), who made each change as a chip
+ * and Details or Review where there is no Undo. Maintenance: a row per check with its status
+ * line and one button. Classic renders none of it. */
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BatchSummary, JournalEntry } from "../api/client";
+import { RAN_KEY } from "../components/maintenance/lastRun";
+import { maintenancePolling } from "../components/maintenance/useMaintenanceJob";
+import { archiveKey } from "../api/client";
 import { mockFetch, renderWithProviders } from "../test-utils";
 import Activity from "./Activity";
 import Maintenance from "./Maintenance";
@@ -79,6 +84,53 @@ describe("Activity in New", () => {
     expect(within(screen.getByRole("article", { name: "Batch b2" })).getByText("CLI")).toHaveClass("batch-origin");
   });
 
+  it("puts the search and Expand all in the filter row, not in the header", async () => {
+    document.documentElement.dataset.style = "new";
+    api();
+    const user = userEvent.setup();
+    activity();
+    await screen.findByRole("article", { name: "Batch b1" });
+    const filters = screen.getByRole("group", { name: "Filters" });
+    expect(within(filters).getByRole("searchbox", { name: "Search the changes" })).toBeInTheDocument();
+    const header = document.querySelector(".activity-toolbar") as HTMLElement;
+    expect(within(header).queryByRole("searchbox")).toBeNull();
+    expect(within(header).queryByRole("button", { name: /all$/ })).toBeNull();
+    expect(header).toHaveTextContent("2 changes, undone one at a time");
+    const expand = within(filters).getByRole("button", { name: "Expand all" });
+    await user.click(expand);
+    expect(within(filters).getByRole("button", { name: "Collapse all" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Hide the operations/ })).toHaveLength(2);
+  });
+
+  it("names the AI view AI calls", async () => {
+    document.documentElement.dataset.style = "new";
+    api();
+    activity();
+    await screen.findByRole("article", { name: "Batch b1" });
+    expect(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "AI calls" })).toBeInTheDocument();
+  });
+
+  it("offers Undo on a done change, Details on an undone one and Review on an interrupted one", async () => {
+    document.documentElement.dataset.style = "new";
+    const undone: BatchSummary = { ...B2, batch_id: "b3", undone: true, undoable: false, ops: [op("b3", { state: "undone" })] };
+    const interrupted: BatchSummary = { ...B2, batch_id: "b4", undoable: false, ops: [op("b4", { state: "planned" })] };
+    mockFetch({ "GET /api/activity": { body: [B1, undone, interrupted] }, "GET /api/recovery": { body: [] } });
+    const user = userEvent.setup();
+    activity();
+    const done = await screen.findByRole("article", { name: "Batch b1" });
+    expect(within(done).getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    const gone = screen.getByRole("article", { name: "Batch b3" });
+    expect(within(gone).queryByRole("button", { name: "Undo" })).toBeNull();
+    const details = within(gone).getByRole("button", { name: /^Details of/ });
+    expect(details).toHaveTextContent("Details");
+    expect(details).toHaveAttribute("aria-expanded", "false");
+    await user.click(details);
+    expect(details).toHaveAttribute("aria-expanded", "true");
+    const stopped = screen.getByRole("article", { name: "Batch b4" });
+    expect(within(stopped).getByRole("button", { name: /^Review/ })).toHaveTextContent("Review");
+    expect(within(stopped).getByText("Run recovery first")).toBeInTheDocument();
+  });
+
   it("has neither in Classic", async () => {
     api();
     activity();
@@ -86,6 +138,12 @@ describe("Activity in New", () => {
     expect(screen.queryByRole("button", { name: /^Filters/ })).not.toBeInTheDocument();
     expect(screen.queryByText("You")).not.toBeInTheDocument();
     expect(screen.getByText("command line")).toBeInTheDocument();
+    // the search stays in the header, the filter row holds the filters alone
+    const header = document.querySelector(".activity-toolbar") as HTMLElement;
+    expect(within(header).getByRole("searchbox")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Filters" })).queryByRole("searchbox")).toBeNull();
+    expect(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "AI" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Details of/ })).toBeNull();
   });
 });
 
@@ -114,5 +172,76 @@ describe("Maintenance in New", () => {
     const collapse = await screen.findByRole("button", { name: "Collapse all" });
     expect(collapse).not.toHaveTextContent("Collapse all");
     expect(screen.queryByText(/every fix is previewed/)).not.toBeInTheDocument();
+  });
+
+  it("has no icon buttons in the header, and one status line and one button per check", async () => {
+    document.documentElement.dataset.style = "new";
+    maintenance();
+    await screen.findByRole("button", { name: "Collapse all" });
+    const rows = document.querySelectorAll(".maintenance-body > .card");
+    expect(rows).toHaveLength(10);
+    for (const row of rows) {
+      const head = row.querySelector(".card-header") as HTMLElement;
+      expect(within(head).getByText("Not checked yet")).toHaveClass("check-status");
+      expect(within(head).getAllByRole("button", { name: /^Check( again)?$/ })).toHaveLength(1);
+      expect(row.querySelectorAll(".check-button")).toHaveLength(1);
+    }
+    // Moved outside dam and Left alone after a Drive restart are rows like the others
+    expect(screen.getByRole("region", { name: "Moved outside dam" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Left alone after a Drive restart" })).toBeInTheDocument();
+  });
+
+  it("says what a check found and when, and Reset all forgets both", async () => {
+    document.documentElement.dataset.style = "new";
+    maintenancePolling.ms = 5;
+    const done = {
+      job_id: "job-1",
+      kind: "empty_folders",
+      state: "done",
+      version: 1,
+      done: 1,
+      total: 1,
+      bytes_done: 0,
+      bytes_total: 0,
+      current: null,
+      elapsed_s: 0.1,
+      error: null,
+      empty_folders: { items: [{ drive_id: "f1", path: "20. Home/Old" }], total: 1 },
+    };
+    const routes: Parameters<typeof mockFetch>[0] = {
+      "POST /api/maintenance/jobs": { body: { ...done, state: "running" } },
+      "GET /api/maintenance/jobs/job-1": { body: done },
+      "GET /api/maintenance/ignored": { body: [] },
+      "DELETE /api/maintenance/jobs": { status: 204 },
+    };
+    for (const kind of ["duplicates", "broken_links", "references", "names", "waiting", "label_clashes", "unfinished_copies", "moved", "remounted"]) {
+      routes[`GET /api/maintenance/jobs/latest/${kind}`] = { body: null };
+    }
+    routes["GET /api/maintenance/jobs/latest/empty_folders"] = { body: null };
+    mockFetch(routes);
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter>
+        <Maintenance />
+      </MemoryRouter>,
+    );
+    const row = await screen.findByRole("region", { name: "Empty folders" });
+    await user.click(within(row).getByRole("button", { name: "Check" }));
+    const status = await within(row).findByText(/^1 empty folder · today \d\d:\d\d$/);
+    expect(status).toHaveAttribute("data-tone", "found");
+    expect(within(row).getByRole("button", { name: "Check again" })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(archiveKey(RAN_KEY)) ?? "{}")).toHaveProperty("empty_folders");
+    maintenancePolling.ms = 700;
+    await user.click(screen.getByRole("button", { name: "Reset all" }));
+    await waitFor(() => expect(localStorage.getItem(archiveKey(RAN_KEY))).toBeNull());
+    expect(within(await screen.findByRole("region", { name: "Empty folders" })).getByText("Not checked yet")).toBeInTheDocument();
+  });
+
+  it("keeps the old card in Classic: the button under the text, no status line", async () => {
+    maintenance();
+    const row = await screen.findByRole("region", { name: "Empty folders" });
+    expect(row.querySelector(".check-status")).toBeNull();
+    expect(row.querySelector(".card-body .check-actions button")).not.toBeNull();
+    expect(row.querySelector(".card-header")?.querySelector("button.primary")).toBeNull();
   });
 });
