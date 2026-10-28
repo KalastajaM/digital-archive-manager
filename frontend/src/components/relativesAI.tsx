@@ -5,7 +5,7 @@
  * related, and go away with Hide. Asking again for the same files is answered from the
  * AI cache ("from earlier", free). */
 import { Sparkles } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import type { Relative } from "../api/client";
 import { euro, plural } from "../format";
 import { visible } from "../text";
@@ -51,11 +51,15 @@ export type Finder = ReturnType<typeof useFindRelatives>;
  * has become one is not listed twice). Render ``sheet`` once. */
 export function useFindRelatives(file: BlockFile, relatives: Relative[]) {
   const ai = useAIState();
-  const [found, setFound] = useState<{ data: Found; info: AIResultInfo } | null>(null);
+  // an answer belongs to the file it was asked for: the Relatives dialog can move on to
+  // another file, and that one starts without picks
+  const [answer, setFound] = useState<{ for: string; data: Found; info: AIResultInfo } | null>(null);
+  const found = answer?.for === file.drive_id ? answer : null;
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
+  const forId = useRef(file.drive_id);
   const send = useAISend<Found>("find-relatives", (data, info) => {
     setGone(new Set());
-    setFound({ data, info });
+    setFound({ for: forId.current, data, info });
   });
 
   const picks = useMemo(() => {
@@ -70,7 +74,10 @@ export function useFindRelatives(file: BlockFile, relatives: Relative[]) {
     /** AI is on and has a key: the button is shown. */
     available: ai.on,
     busy: send.busy,
-    ask: () => send.ask({ drive_id: file.drive_id }),
+    ask: () => {
+      forId.current = file.drive_id;
+      send.ask({ drive_id: file.drive_id });
+    },
     sheet: send.sheet,
     picks,
     /** There is an answer on show (the line with Hide). */

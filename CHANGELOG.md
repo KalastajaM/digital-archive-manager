@@ -80,6 +80,11 @@ All notable changes are listed here. The format follows
   with what they share, and **N** (Not related), **→** (Skip) and **Y** (Related, next) to go
   through them. Each side zooms on its own (`+` and `-` zoom the side clicked last), and
   **Zoom together** links them for documents of the same size.
+  Click a relative's name (or press **Enter**, or **Its relatives** on its card) to see that
+  file's own relatives in the same window, and keep going from file to file; the trail at
+  the top and **Back** (or **Backspace**) lead back, and the file you came from is marked.
+  Folders that only lead to one other folder share a row (**11. Bills & Receipts / 2026**),
+  so the outline is shorter.
 - **Find more relatives with AI (New look, optional).** When AI is on, the Relatives block
   and window have **Find more with AI…**. It first shows what will be sent: this document's
   name, folder and first 2,000 characters, and up to 28 candidate files (chosen by a free
