@@ -1235,6 +1235,37 @@ Delete. A link in the archive stands for the file it points to, which is listed 
   The two link buttons are hidden where links cannot be made (Windows without Developer
   Mode), as in Browse.
 
+### Show connections
+
+**Show connections** in the block's heading opens the Relatives window: the folder outline
+cut down to the folders that hold a relative (and this file's own), nested by path, one row
+per relative with its checkbox, its link labels and **+ same month**. This file's row is
+highlighted in its folder; files still in the inbox sit under **Inbox** on an orange tint. A
+folder with more than eight relatives is folded to its name and a count; click it to open it.
+
+An arc runs from this file's row to each relative's row. A thicker arc means more in common,
+and an orange dashed one means the file is not filed yet. An arc to a folded folder ends at
+the folder's row. The list scrolls up and down; there is no zoom or panning.
+
+- **In common.** The strip above the list shows each value shared with some relatives once,
+  with how many share it. Press one to light up those files and fade the rest; press it again
+  (or another one) to change or clear it.
+- **What a row shares.** Point at a row, or move to it with the keyboard, and a card lists
+  the exact values (Folder, Sender, Tag and so on) with **Quick look** and **Not related**.
+- **Act on several at once.** The panel on the right has the same buttons as the block
+  (**Tag…**, **Add to collection…**, **Move to folder…**, **Link them here**, **Link this
+  file there**), with the same previews, Undo and reasons when a button is off. **2+
+  links**, **Same sender** and **Outside this folder** tick a group in one click. **N marked
+  not related** is there too, with **Show again**.
+- **Keys.** `↑`/`↓` move between rows, **Space** opens Quick Look, `X` ticks the row, `N`
+  marks it not related, **Esc** closes the window.
+
+Quick Look from the block or the window opens in **compare mode**: this file on the left, the
+relative on the right, and below them what the two share. **N** (Not related) marks the
+relative and moves to the next, **→** (Skip) moves on, and **Y** (Related, next) also moves
+on and stores nothing, since being related is worked out from what the files share, never
+saved. `←`/`→` still step through the relatives, and **Space** or **Esc** closes it.
+
 Nothing here is guessed from names or text: a file lacks the **sender** link until a sender
 has been set on it (see [From and For on a document](#from-and-for-on-a-document)).
 

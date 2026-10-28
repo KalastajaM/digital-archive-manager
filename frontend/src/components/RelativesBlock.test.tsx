@@ -141,6 +141,17 @@ describe("the list", () => {
   });
 });
 
+describe("Show connections", () => {
+  it("opens the Relatives dialog for this file", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Show connections" }));
+    const dialog = await screen.findByRole("dialog", { name: "Relatives" });
+    expect(within(dialog).getAllByText("20250930_Verohallinto.pdf").length).toBeGreaterThan(0);
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Relatives" })).toBeNull());
+  });
+});
+
 describe("the action bar", () => {
   it("appears when something is ticked, counting this file and the ticked", async () => {
     const { user } = setup();

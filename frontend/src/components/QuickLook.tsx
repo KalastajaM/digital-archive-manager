@@ -3,7 +3,8 @@
  * shortcuts are off while it is open (``dialogOpen()``); its keys (Space/Esc to close,
  * ←/→ and j/k to move) are handled by ``useQuickLook``. */
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { isTyping } from "../keyboard";
 import { visible } from "../text";
 import { FileDetails } from "./FileDetails";
 import { DialogStatus, InlineResults, useDialogStatus } from "./FileLaunch";
@@ -39,9 +40,18 @@ type Props = {
   trash?: { run: () => void; refusal: string | null; busy: boolean };
   /** The box tool of the page-1 preview (``testRule``: draw the rule being tested). */
   boxTool?: BoxTool;
+  /** Compare mode (Relatives): ``subject`` is shown in a second pane beside the shown file,
+   * with what they share below and the verdict keys: N Not related, → Skip, Y Related and
+   * next (which only moves on: being related is computed, never stored). This mode handles
+   * its own keys (Space, ←/→, j/k, N, Y), so the host adds none. */
+  compare?: {
+    subject: QLFile;
+    shared: (file: QLFile) => string[];
+    onNotRelated: (file: QLFile) => void;
+  };
 };
 
-export function QuickLook({ files, index, onIndex, onClose, status: given, trash, boxTool = {} }: Props) {
+export function QuickLook({ files, index, onIndex, onClose, status: given, trash, boxTool = {}, compare }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -55,18 +65,38 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
   const file = files[index];
   // The zoom the user chose stays while paging through documents (a new Quick Look starts at Fit).
   const zoomControl = useState(FIT_LEVEL);
+  const subjectZoom = useState(FIT_LEVEL);
   const name = visible(qlName(file));
   // Open / Show in Finder outcomes: on this line, not as toasts under the modal
   const own = useDialogStatus();
   const status = given ?? own;
   const { clear } = status;
   useEffect(() => clear(), [file.drive_id, clear]); // another document: the old result goes
+  const last = index >= files.length - 1;
+  const related = () => (last ? onClose() : onIndex(index + 1));
+  const onCompareKey = (e: KeyboardEvent<HTMLDialogElement>) => {
+    if (!compare || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+    // Space on one of Quick Look's own buttons (Close, Skip, zoom…) presses that button
+    if (e.key === " " && e.target instanceof Element && e.target.closest("button")) return;
+    const key = e.key.toLowerCase();
+    if (e.key === " ") onClose();
+    else if (e.key === "ArrowRight" || key === "j") {
+      if (!last) onIndex(index + 1);
+    } else if (e.key === "ArrowLeft" || key === "k") {
+      if (index > 0) onIndex(index - 1);
+    } else if (key === "n") compare.onNotRelated(file);
+    else if (key === "y") related();
+    else return;
+    e.preventDefault();
+  };
+  const shared = compare?.shared(file) ?? [];
   return (
     <dialog
       ref={ref}
-      className="quicklook"
+      className={compare ? "quicklook compare" : "quicklook"}
       aria-label={`Quick Look: ${name}`}
       tabIndex={-1}
+      onKeyDown={compare ? onCompareKey : undefined}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
@@ -74,7 +104,7 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
     >
       <div className="quicklook-bar">
         <div className="quicklook-title">
-          <h2>{name}</h2>
+          <h2>{compare ? "Is this related?" : name}</h2>
           <span className="quicklook-count">
             {index + 1} of {files.length}
           </span>
@@ -103,6 +133,49 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
         </div>
       </div>
       <DialogStatus status={status} />
+      {compare ? (
+        <>
+          <div className="quicklook-body">
+            <div className="quicklook-pane">
+              <p className="quicklook-pane-label">
+                This file: <span className="quicklook-pane-name">{visible(qlName(compare.subject))}</span>
+              </p>
+              <div className="quicklook-preview preview-fill">
+                <FilePreview file={compare.subject} zoomControl={subjectZoom} />
+              </div>
+            </div>
+            <div className="quicklook-pane">
+              <p className="quicklook-pane-label">
+                <span className="quicklook-pane-name">{name}</span>
+              </p>
+              <div className="quicklook-preview preview-fill">
+                <InlineResults.Provider value={status.report}>
+                  <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} boxTool={boxTool} />
+                </InlineResults.Provider>
+              </div>
+            </div>
+          </div>
+          <div className="quicklook-verdict">
+            <span className="quicklook-shared-label">In common</span>
+            <ul className="quicklook-shared" aria-label="In common">
+              {shared.map((s) => (
+                <li key={s} className="tag tag-grey">
+                  {s}
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => compare.onNotRelated(file)}>
+              Not related <kbd>N</kbd>
+            </button>
+            <button type="button" disabled={last} onClick={() => onIndex(index + 1)}>
+              Skip <kbd>→</kbd>
+            </button>
+            <button type="button" className="primary" onClick={related}>
+              Related, next <kbd>Y</kbd>
+            </button>
+          </div>
+        </>
+      ) : (
       <div className="quicklook-body">
         <div className="quicklook-preview preview-fill">
           <InlineResults.Provider value={status.report}>
@@ -113,6 +186,7 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
           <FileDetails file={file} scanned={file.scanned} />
         </aside>
       </div>
+      )}
     </dialog>
   );
 }

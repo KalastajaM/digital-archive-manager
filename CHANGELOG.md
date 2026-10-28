@@ -18,6 +18,14 @@ All notable changes are listed here. The format follows
   action shows what it will do first and has Undo. The crossed eye on a row says the two files
   are **not related**: they stay out of each other's list, and **N marked not related** brings
   them back. Classic does not have the block; nothing in your archive changes when you look.
+- **Show connections for Relatives (New look).** The Relatives block has a **Show connections**
+  link that opens the folder outline cut down to the folders with a relative, with an arc from
+  this file to each one (thicker for more in common, orange and dashed for a file not filed
+  yet). The **In common** strip lights up the files that share one value, a card on each row
+  lists exactly what it shares, and the panel on the right has the block's actions plus
+  **2+ links**, **Same sender** and **Outside this folder**. Quick Look from Relatives now
+  shows this file beside the relative with what they share, and **N** (Not related), **→**
+  (Skip) and **Y** (Related, next) to go through them.
 - **Mark a bill paid from Pay mode.** The large barcode (press **b** on a bill) now has
   the tray's own done button, such as **Mark paid**, next to **Close**. It closes Pay mode
   and opens the same form as the button on the bill, so you confirm the paid date there
