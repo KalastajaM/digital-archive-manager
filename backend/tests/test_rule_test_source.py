@@ -140,6 +140,7 @@ def test_the_sync_endpoint_leaves_the_source_out(app, api, fake_archive):
         "path": "11. Bills/20260110_Fortum.pdf",
         "matched": True,
         "reason": "",
+        "area_scores": [],
     }
     assert post(api, "/api/rules/replay", {"rule": WORD}).json()["source"] is None
 
@@ -173,6 +174,35 @@ def test_a_picture_source_has_its_score_in_the_reason_and_not_in_the_scores(app,
     ok = post(api, "/api/rules/replay", {"rule": rule, "source_drive_id": "m1"}).json()
     assert ok["source"]["matched"] is True
     assert all(s["drive_id"] != "m1" for s in ok["scores"]) and ok["matched"] == 2
+
+
+def test_a_picture_source_reports_its_score_for_each_area(app, api, fake_archive):
+    for i in range(3):
+        add(app, fake_archive, f"Insurance/Acme/20250{i + 1}10_A.pdf", f"m{i}", "x")
+        keep(app, f"m{i}", synth.letter(shift=(2 * i, 3 * i)))
+    add(app, fake_archive, "10. Bank/other.pdf", "o", "x")
+    keep(app, "o", synth.letter(kind=1))
+    saved = {"drive_id": "m0", "box": BOX, "save": True, "rule_id": "acme"}
+    image = post(api, "/api/rules/area-picture", saved).json()["image"]
+    rule = picture_rule(image)
+    del rule["when"]["folder_is"]
+    ok = post(api, "/api/rules/replay", {"rule": rule, "source_drive_id": "m1"}).json()
+    [score] = ok["source"]["area_scores"]
+    assert ok["source"]["matched"] is True
+    assert score is not None and score >= 0.85
+    # a document that does not match still says how close it came
+    miss = post(api, "/api/rules/replay", {"rule": rule, "source_drive_id": "o"}).json()
+    [low] = miss["source"]["area_scores"]
+    assert miss["source"]["matched"] is False
+    assert low is not None and low < score
+    assert f"scores {low:.2f}" in miss["source"]["reason"]
+
+
+def test_a_source_without_picture_areas_has_no_area_scores(app, fake_archive):
+    filed(app, fake_archive)
+    rule = Rule.model_validate(WORD)
+    r = replay(app.engine, rule, [rule], app.settings.special_folders, source_drive_id="c")
+    assert r.source.area_scores == []
 
 
 def test_the_marked_documents_leave_the_source_out(app, fake_archive):

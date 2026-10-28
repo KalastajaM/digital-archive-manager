@@ -143,6 +143,10 @@ class SourceDoc:
     path: str
     matched: bool | None
     reason: str = ""
+    # one entry per area of the rule: the document's picture score for a picture area
+    # (None for a text area, or while the picture of page 1 is not made yet). The sheet
+    # shows it under "Match needed", whether or not the area matched.
+    area_scores: list[float | None] = field(default_factory=list)
 
 
 @dataclass
@@ -649,13 +653,14 @@ class ReplayRun:
         else:
             alias, rule = None, self.free
         c = check(rule, rec, folded, alias, layout, ctx, self.pictures)
+        scores = _area_scores(rule, rec, self.pictures)
         if c.matched:
-            self.source = SourceDoc(row.drive_id, row.path, True)
+            self.source = SourceDoc(row.drive_id, row.path, True, "", scores)
             return
         why = _why(rule, rec, folded, alias, self.special, layout, ctx, self.pictures)
         if c.waiting:
             self._want([row.drive_id])
-        self.source = SourceDoc(row.drive_id, row.path, None if c.waiting else False, why)
+        self.source = SourceDoc(row.drive_id, row.path, None if c.waiting else False, why, scores)
 
     def refresh_marked(self) -> None:
         assert self.sender_ids is not None and self.rule.sender
@@ -981,6 +986,18 @@ def replay(
 def _area(index: int, total: int) -> str:
     """ "the area", or "area 2" when the rule has several."""
     return "the area" if total == 1 else f"area {index + 1}"
+
+
+def _area_scores(rule: Rule, rec: FileRecord, pictures: Pictures | None) -> list[float | None]:
+    """The picture score of ``rec`` for each area of ``rule`` (None for a text area, or
+    when the picture of page 1 is not made yet); empty for a rule without picture areas."""
+    if not any(z.is_picture for z in rule.when.zones):
+        return []
+    out: list[float | None] = []
+    for i, zone in enumerate(rule.when.zones):
+        found = picture_match(rule, i, rec, pictures) if zone.is_picture else None
+        out.append(found.score if found is not None else None)
+    return out
 
 
 def _why(

@@ -103,11 +103,24 @@ describe("RuleSheet in the New look", () => {
   });
 });
 
+describe("RuleSheet header and foot in the New look", () => {
+  it("has a close button, calls its proof The proof and saves with Save rule", async () => {
+    const { user } = setup("new");
+    const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
+    expect(await within(sheet).findByText("The proof")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Save rule" })).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Close" }));
+  });
+});
+
 describe("RuleSheet in Classic", () => {
   it("keeps the select, and has no chips or proof summary", async () => {
     setup("classic");
     expect(await screen.findByRole("combobox", { name: "How the words match in area" })).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Insert into name" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Show proof" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    expect(screen.queryByText("The proof")).toBeNull();
+    expect(screen.getByRole("button", { name: /^(Save|Testing…)$/ })).toBeInTheDocument();
   });
 });

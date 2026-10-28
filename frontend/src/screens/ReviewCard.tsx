@@ -1,4 +1,6 @@
-import { PanelRightClose, PanelRightOpen, Sparkles } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, ShieldCheck, Sparkles } from "lucide-react";
+import { useStyle } from "../appearance";
+import { EditRuleSheet } from "../components/rules/EditRule";
 import { IconButton } from "../components/ui/IconButton";
 import { TipButton } from "../components/ui/TipButton";
 import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
@@ -41,7 +43,7 @@ import {
 } from "../components/TrayPicker";
 import { useToast } from "../components/Toasts";
 import { Toolbar } from "../components/ui/Toolbar";
-import { fieldWord } from "../format";
+import { fieldWord, shortDate } from "../format";
 import { dialogOpen, isCmdEnter, isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
 import { visible } from "../text";
 import { LinkBadges } from "./FileActions";
@@ -49,7 +51,8 @@ import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFil
 import { LockControl } from "../components/LockControl";
 import { useInboxFolder } from "../components/MoveTo";
 import { MarkToggles } from "../components/MarkToggles";
-import { TrashButton } from "../components/Trash";
+import { TRASH_KEY, TRASH_LABEL, TrashButton } from "../components/Trash";
+import { suggestingRule, titleOf } from "./inboxQueue";
 import {
   addTags,
   AI_SOURCE,
@@ -277,12 +280,17 @@ type Props = {
   trash?: CardTrash;
   /** The New look's "Inbox N" button (the list is folded in a narrow window). */
   lead?: ReactNode;
+  /** Skip: on to the next file in the queue without filing this one (s). */
+  onSkip?: () => void;
 };
 
 /** One inbox file: a toolbar with its name and the actions, the preview, and the
  * editable proposal as a narrow inspector beside it. */
-export default function ReviewCard({ entry, filing, trash, lead }: Props) {
+export default function ReviewCard({ entry, filing, trash, lead, onSkip }: Props) {
   const ids = useId();
+  const [look] = useStyle();
+  const isNew = look === "new";
+  const [editingRule, setEditingRule] = useState(false);
   const [name, setName] = useState(entry.suggestion.name);
   const inbox = useInboxFolder();
   const [folder, setFolder] = useState(entry.suggestion.folder ?? "");
@@ -470,6 +478,268 @@ export default function ReviewCard({ entry, filing, trash, lead }: Props) {
   // every file here is in the inbox: name only a folder inside it (such as a code's folder)
   const inFolder = folderOf(entry.record.path);
   const inboxSubfolder = inbox && inFolder.startsWith(`${inbox}/`) ? inFolder.slice(inbox.length + 1) : inbox ? null : inFolder;
+
+  // "Collection and note": in the form after the tray in Classic, folded at the end in New
+  const collectionAndNote = (
+    <>
+      <CollectionNamesInput
+        value={collections}
+        onChange={setCollections}
+        text={collectionText}
+        onTextChange={setCollectionText}
+      />
+      {answer?.summary.trim() && <AISummary summary={answer.summary} onUse={useSummaryAsNote} />}
+      <NoteEditor value={note} onChange={setNote} />
+    </>
+  );
+  const form = (
+    <>
+      <FilingMessage filing={filing} ids={[entry.record.drive_id]} problem={tried && !fieldProblem ? otherProblem : null} />
+      {entry.suggestion.conflict && (
+        <p className="notice" role="status">
+          These filing codes disagree; pick the values here.
+        </p>
+      )}
+      <AssignedCode entry={entry} disabled={filing.busy} />
+      <AIHint what="for filing suggestions" />
+      {ai.sheet}
+      <LinkBadges driveId={entry.record.drive_id} />
+      <FromFor entry={entry} />
+      <UseAll count={chipCount} disabled={filing.busy} onUse={useAll} />
+      <div className="field">
+        <label htmlFor={`${ids}-name`}>Name</label>
+        <input
+          ref={nameRef}
+          id={`${ids}-name`}
+          className={nameInvalid ? "invalid" : undefined}
+          aria-invalid={nameInvalid ? true : undefined}
+          aria-describedby={nameInvalid ? `${ids}-name-error` : undefined}
+          value={name}
+          spellCheck={false}
+          onChange={(e) => setName(e.target.value)}
+        />
+        {nameInvalid && fieldProblem && (
+          <p id={`${ids}-name-error`} className="error field-error" role="alert">
+            {fieldProblem.message}
+          </p>
+        )}
+        <FieldChips field="Name" offers={nameOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setName(o.value)} />
+        {rejected("name", "name")}
+      </div>
+      <div className="field">
+        <FolderPicker
+          ref={folderRef}
+          label="Folder"
+          value={folder}
+          onChange={setFolder}
+          error={tried && fieldProblem?.field === "folder" ? fieldProblem.message : null}
+        />
+        <FieldChips field="Folder" offers={folderOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setFolder(o.value)} />
+        {rejected("folder", "folder")}
+      </div>
+      <div className="field">
+        <label htmlFor={`${ids}-tags`}>Tags</label>
+        <TagInput
+          id={`${ids}-tags`}
+          value={parseTags(tags)}
+          onChange={(next) => setTags(next.join(", "))}
+          disabled={filing.busy}
+          passCmdEnter
+        />
+        <FieldChips field="tag" offers={tagChips} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
+        {rejected("tags", "tags")}
+      </div>
+      <hr />
+      <TrayPicker trays={trays.list} value={tray?.id ?? null} onChange={trays.setTrayId} problem={trays.problem} />
+      {(trayOffer || answer?.rejected.tray) && (
+        <div className="suggestion-tray-line">
+          {trayOffer && (
+            <SuggestionChip
+              field="tray"
+              offer={{ value: trayOffer.id, source: AI_SOURCE, note: aiNote(answer?.confidence.tray, answer?.reason) }}
+              shown={trayOffer.name}
+              disabled={filing.busy}
+              onUse={() => trays.setTrayId(trayOffer.id)}
+            />
+          )}
+          {rejected("tray", "tray")}
+        </div>
+      )}
+      {rejectedTrayFields.map(([key, reason]) => (
+        <AIRejected key={key} field={fieldWord(key.slice("tray_fields.".length))} reason={reason} />
+      ))}
+      {tray &&
+        (alreadyIn ? (
+          <AlreadyIn tray={tray} driveId={entry.record.drive_id} />
+        ) : (
+          <TrayFields tray={tray} values={trayFields} found={found} onChange={editField} chips={trayChips} />
+        ))}
+      {!isNew && collectionAndNote}
+      {fromSticker && (
+        <StickerMarks
+          star={star}
+          important={important}
+          hasStar={hasStar}
+          hasImportant={hasImportant}
+          unclear={unclearBoxes(entry.suggestion)}
+          onStar={setStar}
+          onImportant={setImportant}
+        />
+      )}
+      <hr />
+      <DetectedFields entry={entry} />
+      {isNew && (
+        <details className="panel-more" open={collections.length > 0 || note.trim() !== "" || !!answer?.summary.trim()}>
+          <summary>Collection and note</summary>
+          {collectionAndNote}
+        </details>
+      )}
+      {/* After the form, so showing it never pushes the fields down; it sticks to the
+          bottom of the inspector while the form scrolls. */}
+      {plan && (
+        <div className="inbox-plan">
+          <PlanPreview
+            ops={plan.ops}
+            tags={parseTags(tags)}
+            followUps={followUpLines(plan.requests, trays.list, entry.prefill)}
+            onClose={filing.clearPlan}
+            action={
+              <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || lock.blocked}>
+                File it
+              </button>
+            }
+          />
+        </div>
+      )}
+    </>
+  );
+
+  if (isNew) {
+    const rule = suggestingRule(entry.suggestion);
+    const codeHit = entry.suggestion.codes.find((c) => !c.overridden);
+    const kicker = rule ? `Suggested by rule “${rule}”` : codeHit ? `Suggested by filing code ${codeHit.code}` : "No rule matched";
+    const date = entry.record.mtime ? shortDate(entry.record.mtime) : "";
+    const meta = [date, inboxSubfolder && `in ${inboxSubfolder}`].filter(Boolean).join(" · ");
+    const title = titleOf(entry);
+    // what filing will do, in a line: from the form as it is now
+    const renames = name.trim() !== "" && name.trim() !== fileName;
+    const moves = folder.trim() !== "";
+    const verb = renames && moves ? "Renames and moves 1 file" : renames ? "Renames 1 file" : moves ? "Moves 1 file" : "Keeps the file as it is";
+    const adds = [
+      ...(tray && !alreadyIn ? [`adds it to ${tray.name}`] : []),
+      ...(collections.length > 0 ? [`adds it to ${collections.join(", ")}`] : []),
+    ];
+    const summary = `${verb}${adds.length > 0 ? `, ${adds.join(", ")}` : ""}. Undo any time.`;
+    const blocked = filing.busy || lock.blocked;
+    const why = lock.blocked ? LOCKED_REASON : FILING_BUSY;
+    return (
+      <article className="review-card" aria-label={`Review ${fileName}`}>
+        <div className={showPreview ? "review-body show-preview" : "review-body"}>
+          <div className="preview-pane preview-fill">
+            <FilePreview
+              file={entry.record}
+              boxTool={{ suggestion: entry.suggestion }}
+              bar={
+                <>
+                  {lead}
+                  <span className="doc-name" title={visible(fileName)}>
+                    {visible(fileName)}
+                  </span>
+                  {meta && (
+                    <span className="doc-meta doc-wide" title={visible(meta)}>
+                      · {visible(meta)}
+                    </span>
+                  )}
+                </>
+              }
+            />
+          </div>
+          <aside className="proposal inspector" aria-label="File this document">
+            <header className="panel-head">
+              <div className="panel-head-text">
+                <span className="panel-kicker" title={visible(kicker)}>
+                  {visible(kicker)}
+                </span>
+                <h2 className="panel-title" title={visible(title)}>
+                  {visible(title)}
+                </h2>
+                {(rule || aiState.on) && (
+                  <span className="panel-links">
+                    {rule && (
+                      <button type="button" className="link-button" onClick={() => setEditingRule(true)}>
+                        Edit rule
+                      </button>
+                    )}
+                    {rule && aiState.on && " · "}
+                    {aiState.on && (
+                      <button
+                        type="button"
+                        className="link-button"
+                        title="Ask AI to suggest a name, folder and tags"
+                        disabled={filing.busy || ai.busy}
+                        onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
+                      >
+                        Ask AI
+                      </button>
+                    )}
+                  </span>
+                )}
+              </div>
+              <MarkToggles driveId={entry.record.drive_id} name={fileName} marks={entry.record.marks} />
+              <LockControl driveId={entry.record.drive_id} marks={entry.record.marks} path={entry.record.path} />
+            </header>
+            <div className="panel-body">{form}</div>
+            <footer className="panel-foot">
+              <p className="panel-summary">
+                {!fieldProblem && <ShieldCheck size={14} aria-hidden="true" />}
+                <span>{visible(fieldProblem ? fieldProblem.message : summary)}</span>
+                <TipButton
+                  className="link-button"
+                  tip="Show exactly what will move, before anything changes ↩"
+                  onClick={preview}
+                  disabled={blocked}
+                  disabledReason={why}
+                >
+                  Preview
+                </TipButton>
+              </p>
+              <div className="panel-actions">
+                <button type="button" onClick={onSkip} disabled={!onSkip || filing.busy} title="Leave this file here and go on to the next one (s)">
+                  Skip
+                </button>
+                {trash && (
+                  <TipButton
+                    tip={`${TRASH_LABEL} ${TRASH_KEY}`}
+                    aria-label={TRASH_LABEL}
+                    onClick={trash.run}
+                    disabled={filing.busy || trash.busy || lock.blocked}
+                    disabledReason={lock.blocked ? LOCKED_REASON : FILING_BUSY}
+                  >
+                    To Delete
+                  </TipButton>
+                )}
+                <span className="panel-actions-gap" />
+                <TipButton
+                  className="primary tip-end"
+                  aria-label="File it"
+                  aria-keyshortcuts="Meta+Enter"
+                  tip="Move it to the folder with the new name ⌘↩"
+                  onClick={fileIt}
+                  disabled={blocked}
+                  disabledReason={why}
+                >
+                  File it <kbd aria-hidden="true">⌘↵</kbd>
+                </TipButton>
+              </div>
+            </footer>
+          </aside>
+        </div>
+        {editingRule && rule && (
+          <EditRuleSheet ruleId={rule} driveId={entry.record.drive_id} onClose={() => setEditingRule(false)} />
+        )}
+      </article>
+    );
+  }
   return (
     <article className="review-card" aria-label={`Review ${fileName}`}>
       <Toolbar
@@ -530,124 +800,7 @@ export default function ReviewCard({ entry, filing, trash, lead }: Props) {
           <FilePreview file={entry.record} boxTool={{ suggestion: entry.suggestion }} />
         </div>
         <div className="proposal inspector">
-          <FilingMessage filing={filing} ids={[entry.record.drive_id]} problem={tried && !fieldProblem ? otherProblem : null} />
-          {entry.suggestion.conflict && (
-            <p className="notice" role="status">
-              These filing codes disagree; pick the values here.
-            </p>
-          )}
-          <AssignedCode entry={entry} disabled={filing.busy} />
-          <AIHint what="for filing suggestions" />
-          {ai.sheet}
-          <LinkBadges driveId={entry.record.drive_id} />
-          <FromFor entry={entry} />
-          <UseAll count={chipCount} disabled={filing.busy} onUse={useAll} />
-          <div className="field">
-            <label htmlFor={`${ids}-name`}>Name</label>
-            <input
-              ref={nameRef}
-              id={`${ids}-name`}
-              className={nameInvalid ? "invalid" : undefined}
-              aria-invalid={nameInvalid ? true : undefined}
-              aria-describedby={nameInvalid ? `${ids}-name-error` : undefined}
-              value={name}
-              spellCheck={false}
-              onChange={(e) => setName(e.target.value)}
-            />
-            {nameInvalid && fieldProblem && (
-              <p id={`${ids}-name-error`} className="error field-error" role="alert">
-                {fieldProblem.message}
-              </p>
-            )}
-            <FieldChips field="Name" offers={nameOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setName(o.value)} />
-            {rejected("name", "name")}
-          </div>
-          <div className="field">
-            <FolderPicker
-              ref={folderRef}
-              label="Folder"
-              value={folder}
-              onChange={setFolder}
-              error={tried && fieldProblem?.field === "folder" ? fieldProblem.message : null}
-            />
-            <FieldChips field="Folder" offers={folderOffers} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setFolder(o.value)} />
-            {rejected("folder", "folder")}
-          </div>
-          <div className="field">
-            <label htmlFor={`${ids}-tags`}>Tags</label>
-            <TagInput
-              id={`${ids}-tags`}
-              value={parseTags(tags)}
-              onChange={(next) => setTags(next.join(", "))}
-              disabled={filing.busy}
-              passCmdEnter
-            />
-            <FieldChips field="tag" offers={tagChips} codeLabel={codeLabel} disabled={filing.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
-            {rejected("tags", "tags")}
-          </div>
-          <hr />
-          <TrayPicker trays={trays.list} value={tray?.id ?? null} onChange={trays.setTrayId} problem={trays.problem} />
-          {(trayOffer || answer?.rejected.tray) && (
-            <div className="suggestion-tray-line">
-              {trayOffer && (
-                <SuggestionChip
-                  field="tray"
-                  offer={{ value: trayOffer.id, source: AI_SOURCE, note: aiNote(answer?.confidence.tray, answer?.reason) }}
-                  shown={trayOffer.name}
-                  disabled={filing.busy}
-                  onUse={() => trays.setTrayId(trayOffer.id)}
-                />
-              )}
-              {rejected("tray", "tray")}
-            </div>
-          )}
-          {rejectedTrayFields.map(([key, reason]) => (
-            <AIRejected key={key} field={fieldWord(key.slice("tray_fields.".length))} reason={reason} />
-          ))}
-          {tray &&
-            (alreadyIn ? (
-              <AlreadyIn tray={tray} driveId={entry.record.drive_id} />
-            ) : (
-              <TrayFields tray={tray} values={trayFields} found={found} onChange={editField} chips={trayChips} />
-            ))}
-          <CollectionNamesInput
-            value={collections}
-            onChange={setCollections}
-            text={collectionText}
-            onTextChange={setCollectionText}
-          />
-          {answer?.summary.trim() && <AISummary summary={answer.summary} onUse={useSummaryAsNote} />}
-          <NoteEditor value={note} onChange={setNote} />
-          {fromSticker && (
-            <StickerMarks
-              star={star}
-              important={important}
-              hasStar={hasStar}
-              hasImportant={hasImportant}
-              unclear={unclearBoxes(entry.suggestion)}
-              onStar={setStar}
-              onImportant={setImportant}
-            />
-          )}
-          <hr />
-          <DetectedFields entry={entry} />
-          {/* After the form, so showing it never pushes the fields down; it sticks to the
-              bottom of the inspector while the form scrolls. */}
-          {plan && (
-            <div className="inbox-plan">
-              <PlanPreview
-                ops={plan.ops}
-                tags={parseTags(tags)}
-                followUps={followUpLines(plan.requests, trays.list, entry.prefill)}
-                onClose={filing.clearPlan}
-                action={
-                  <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || lock.blocked}>
-                    File it
-                  </button>
-                }
-              />
-            </div>
-          )}
+          {form}
         </div>
       </div>
     </article>

@@ -1,5 +1,6 @@
 /** The proof under a rule: what it would have done to the documents filed so far. */
 import { createContext, useContext, useId, useState } from "react";
+import { useStyle } from "../../appearance";
 import type { Replay, RuleIn } from "../../api/client";
 import { groupDigits, plural } from "../../format";
 import { visible } from "../../text";
@@ -276,6 +277,7 @@ export function ReplayResult({
   readingNow?: boolean;
 }) {
   const id = useId();
+  const [look] = useStyle();
   const [opened, setOpened] = useState<QLFile | null>(null);
   if (error)
     return (
@@ -293,7 +295,16 @@ export function ReplayResult({
   return (
     <OpenDocument.Provider value={(d) => setOpened(qlFile(d))}>
     <section className="replay-result" aria-labelledby={`${id}-title`} aria-busy={pending}>
-      <h4 id={`${id}-title`}>Test against your filed documents</h4>
+      {look === "new" ? (
+        <div className="proof-head">
+          <h4 id={`${id}-title`} aria-label="Test against your filed documents">
+            The proof
+          </h4>
+          <span className="proof-live">{pending ? "testing…" : "updates as you edit"}</span>
+        </div>
+      ) : (
+        <h4 id={`${id}-title`}>Test against your filed documents</h4>
+      )}
       {pending && <p className="hint replay-stale">Testing the rule as it is now. The result below is of the rule before your last change.</p>}
       {replay.source && <SourceLine source={replay.source} />}
       {replay.matched > 0 && (

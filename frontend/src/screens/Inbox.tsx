@@ -31,6 +31,7 @@ import { OfferRuleSheet } from "../components/rules/RuleSheet";
 import { type ToastAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { isTrashKey, useTrash } from "../components/Trash";
 import { IconButton } from "../components/ui/IconButton";
+import { Popover } from "../components/ui/Popover";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
 import { Tag } from "../components/ui/Tag";
 import { Thumb } from "../components/Thumb";
@@ -44,6 +45,7 @@ import { publishSelection } from "../selection";
 import { visible } from "../text";
 import BatchCard from "./BatchCard";
 import ReviewCard from "./ReviewCard";
+import { counts, type Filter, matches, pillOf, titleOf } from "./inboxQueue";
 import { followUpLines, speaker, useFiling } from "./useFiling";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { MarkIcons } from "../components/MarkIcons";
@@ -97,6 +99,9 @@ const KEYS: KeyHint[] = [
   [["u"], "undo"],
   [["⌘⌫"], "move to To Delete"],
 ];
+
+/** The New look's shortcut list: the same keys, with Skip. */
+const NEW_KEYS: KeyHint[] = [...KEYS.slice(0, 7), [["s"], "skip to the next file"], ...KEYS.slice(7)];
 
 /** "due 15.10.2026 · 84,20 €" from the scan, red once the due date has passed. */
 function ScanChip({ prefill, today }: { prefill: Record<string, string>; today: string }) {
@@ -170,11 +175,22 @@ export default function Inbox() {
     setLastApplied((last) => (last?.batchId === batchId ? null : last)),
   );
 
-  const entries: InboxEntry[] = useMemo(() => inbox.data ?? [], [inbox.data]);
+  // The New look's queue can show All, Bills (the scan found a due date or an amount) or New
+  // (no rule suggests anything yet); Classic always shows all of them.
+  const allEntries: InboxEntry[] = useMemo(() => inbox.data ?? [], [inbox.data]);
+  const [filterChoice, setFilter] = useState<Filter>("all");
+  const filter: Filter = isNew ? filterChoice : "all";
+  const entries: InboxEntry[] = useMemo(
+    () => (filter === "all" ? allEntries : allEntries.filter((e) => matches(e, filter))),
+    [allEntries, filter],
+  );
+  const tally = useMemo(() => counts(allEntries), [allEntries]);
   const found = entries.findIndex((e) => e.record.drive_id === selectedId);
   const index = found >= 0 ? found : 0;
   const current = entries[index] as InboxEntry | undefined;
-  const batch = entries.filter((e) => checked.has(e.record.drive_id));
+  const batch = allEntries.filter((e) => checked.has(e.record.drive_id));
+  const [shortcuts, setShortcuts] = useState(false);
+  const [shortcutsAnchor, setShortcutsAnchor] = useState<HTMLButtonElement | null>(null);
 
   const declineRule = useDeclineRule();
   const [ruleOffer, setRuleOffer] = useState<{ offer: RuleOffer; filed?: { folder: string; name: string } } | null>(null);
@@ -237,7 +253,7 @@ export default function Inbox() {
       const next = entries[index + 1] ?? entries[index - 1];
       setSelectedId(next ? next.record.drive_id : null);
     }
-  }, (id) => entries.find((e) => e.record.drive_id === id)?.prefill);
+  }, (id) => allEntries.find((e) => e.record.drive_id === id)?.prefill);
   // Trash (⌫, the card's bin, Quick Look): the batch, else the entry on screen. Like
   // filing, a trashed entry is left behind for the next one; a batch is unticked.
   const trash = useTrash({
@@ -264,7 +280,7 @@ export default function Inbox() {
   const [codeAnchor, setCodeAnchor] = useState<HTMLButtonElement | null>(null);
   const [picking, setPicking] = useState(false);
   const canAssign = !markedOpen && targets.length > 0 && filingCodes.length > 0;
-  const targetEntries = entries.filter((e) => targets.includes(e.record.drive_id));
+  const targetEntries = allEntries.filter((e) => targets.includes(e.record.drive_id));
   const pickCode = (code: string | null) => {
     setPicking(false);
     // each file's code before, for Undo (files that had the same one go back together)
@@ -304,7 +320,7 @@ export default function Inbox() {
 
   // An error for files that have left the inbox has no card to show on: make it a toast.
   const names = useRef(new Map<string, string>());
-  for (const e of entries) names.current.set(e.record.drive_id, e.record.name ?? e.record.path);
+  for (const e of allEntries) names.current.set(e.record.drive_id, e.record.name ?? e.record.path);
   const message = filing.message;
   const { dismissMessage } = filing;
   useEffect(() => {
@@ -328,6 +344,18 @@ export default function Inbox() {
   const select = (id: string | null) => {
     if (locked) return; // never leave an entry while its file call is in flight
     setSelectedId(id);
+  };
+  /** Skip: on to the next file in the queue (round to the first from the last) without
+   * filing this one. Nothing in the archive changes; it is only the selection. */
+  const skip = () => {
+    if (locked || undo.undoing.current) return;
+    const next = entries[index + 1] ?? entries[0];
+    if (!next || next.record.drive_id === current?.record.drive_id) {
+      toast({ kind: "info", text: "There is no other file in the queue to skip to." });
+      return;
+    }
+    setAnchorId(next.record.drive_id);
+    setSelectedId(next.record.drive_id);
   };
   const step = (delta: number) => {
     const target = entries[Math.max(0, Math.min(entries.length - 1, index + delta))];
@@ -447,6 +475,18 @@ export default function Inbox() {
       trashTargets();
       return;
     }
+    if (isShortcut(e) && e.key === "?" && isNew) {
+      e.preventDefault();
+      setShortcuts((open) => !open);
+      return;
+    }
+    if (isShortcut(e) && e.key === "s" && !e.shiftKey) {
+      // only on the one file shown, never behind the batch form or the marked panel
+      if (markedOpen || batch.length > 0 || !current) return;
+      e.preventDefault();
+      skip();
+      return;
+    }
     if (isShortcut(e) && e.key === "c" && !e.shiftKey) {
       if (!canAssign || locked) return;
       e.preventDefault();
@@ -514,7 +554,7 @@ export default function Inbox() {
       title="Show the inbox list"
       onClick={() => openQueue(!queueOpen)}
     >
-      Inbox <span className="mono">{entries.length}</span>
+      Inbox <span className="mono">{allEntries.length}</span>
     </button>
   ) : undefined;
   return (
@@ -533,7 +573,7 @@ export default function Inbox() {
       >
         <Toolbar
           title="Inbox"
-          subtitle={plural(entries.length, "file")}
+          subtitle={isNew ? `${allEntries.length} to file` : plural(entries.length, "file")}
           actions={
             <>
               {marked > 0 && (
@@ -577,7 +617,37 @@ export default function Inbox() {
             </>
           }
         />
-        {entries.length === 0 ? (
+        {isNew && allEntries.length > 0 && (
+          <div className="queue-filter-wrap">
+          <div className="queue-filter" role="group" aria-label="Show">
+            {(
+              [
+                ["all", "All"],
+                ["bills", "Bills"],
+                ["new", "New"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className="queue-filter-option"
+                aria-pressed={filter === value}
+                title={
+                  value === "bills"
+                    ? "Files where the scan found a due date or an amount"
+                    : value === "new"
+                      ? "Files no rule suggests anything for yet"
+                      : undefined
+                }
+                onClick={() => setFilter(value)}
+              >
+                {label} <span className="mono">{tally[value]}</span>
+              </button>
+            ))}
+          </div>
+          </div>
+        )}
+        {allEntries.length === 0 ? (
           <InboxEmpty
             inbox={status.data?.special_folders?.inbox ?? "the inbox folder"}
             exists={status.data?.inbox_exists !== false}
@@ -585,6 +655,8 @@ export default function Inbox() {
             choosing={addFiles.busy}
             onSetup={setupFolders.open}
           />
+        ) : entries.length === 0 ? (
+          <p className="hint queue-none">Nothing in this view.</p>
         ) : (
           <ul ref={listRef} className="inbox-entries">
             {entries.map((e, i) => {
@@ -597,6 +669,8 @@ export default function Inbox() {
               const date = e.record.mtime ? shortDate(e.record.mtime) : "";
               // the file's own name first: a suggested name is only that until it is filed
               const suggested = e.suggestion.name !== name ? e.suggestion.name : null;
+              const pill = isNew ? pillOf(e, today) : null;
+              const title = isNew ? titleOf(e) : name;
               return (
                 <li
                   key={id}
@@ -604,7 +678,7 @@ export default function Inbox() {
                   draggable
                   onDragStart={(ev) => {
                     const ids = dragSelection([...checked], id);
-                    const pathOf = new Map(entries.map((x) => [x.record.drive_id, x.record.path]));
+                    const pathOf = new Map(allEntries.map((x) => [x.record.drive_id, x.record.path]));
                     const paths = ids.map((d) => pathOf.get(d)).filter((p): p is string => p !== undefined);
                     setDragFiles(ev, ids, visible(name), paths);
                   }}
@@ -625,16 +699,31 @@ export default function Inbox() {
                   >
                     <Thumb record={e.record} />
                     <span className="entry-text">
-                      <span className="entry-name">
-                        {visible(name)}
+                      <span className="entry-name" title={isNew ? visible(title) : undefined}>
+                        {visible(title)}
                         <MarkIcons marks={e.record.marks} driveId={id} path={e.record.path} />
                       </span>
-                      <span className="entry-meta">
-                        {date}
-                        {date && suggested && " · "}
-                        {suggested && <>Suggested: {visible(suggested)}</>}
-                      </span>
-                      <ScanChip prefill={e.prefill} today={today} />
+                      {isNew ? (
+                        // the board's row: the title, then the file's own name and date,
+                        // then one status pill (what the scan or a rule found)
+                        <>
+                          <span className="entry-meta" title={visible(name)}>
+                            {title !== name && <span className="entry-file">{visible(name)}</span>}
+                            {title !== name && date && " · "}
+                            {date}
+                          </span>
+                          {pill && <span className={`entry-pill pill-${pill.tone}`}>{visible(pill.text)}</span>}
+                        </>
+                      ) : (
+                        <>
+                          <span className="entry-meta">
+                            {date}
+                            {date && suggested && " · "}
+                            {suggested && <>Suggested: {visible(suggested)}</>}
+                          </span>
+                          <ScanChip prefill={e.prefill} today={today} />
+                        </>
+                      )}
                       <CodeBadge codes={e.suggestion.codes} />
                     </span>
                   </button>
@@ -643,8 +732,45 @@ export default function Inbox() {
             })}
           </ul>
         )}
-        <KeyHints hints={KEYS} />
+        {isNew ? (
+          <footer className="queue-foot">
+            <span className="queue-checked">
+              {batch.length > 0 ? (
+                <>
+                  {batch.length} checked ·{" "}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => document.querySelector<HTMLElement>(".inbox-card button.primary")?.focus()}
+                  >
+                    File {batch.length} checked
+                  </button>
+                </>
+              ) : (
+                "None checked"
+              )}
+            </span>
+            <button
+              ref={setShortcutsAnchor}
+              type="button"
+              className="link-button queue-shortcuts"
+              aria-expanded={shortcuts}
+              onClick={() => setShortcuts((open) => !open)}
+            >
+              <kbd>?</kbd> Shortcuts
+            </button>
+          </footer>
+        ) : (
+          <KeyHints hints={KEYS} />
+        )}
       </nav>
+      {isNew && shortcuts && (
+        <Popover anchor={shortcutsAnchor} label="Keyboard shortcuts" onClose={() => setShortcuts(false)}>
+          <div tabIndex={-1} ref={(el) => el?.focus({ preventScroll: true })} className="shortcut-body">
+            <KeyHints hints={NEW_KEYS} className="shortcut-list" />
+          </div>
+        </Popover>
+      )}
       <Splitter split={split} label="Resize the list" />
       {isNew && queueOpen && <div className="queue-scrim" aria-hidden="true" onClick={() => setQueueOpen(false)} />}
       <section
@@ -655,7 +781,7 @@ export default function Inbox() {
       >
         {markedOpen ? (
           <MarkedBatch
-            entries={entries}
+            entries={allEntries}
             trays={trayList}
             filing={filing}
             onOpen={(id) => {
@@ -683,6 +809,7 @@ export default function Inbox() {
             filing={filing}
             trash={{ run: trashTargets, busy: trash.busy }}
             lead={queueLead}
+            onSkip={skip}
           />
         ) : null}
         {isNew && !markedOpen && (batch.length > 0 || current) && (

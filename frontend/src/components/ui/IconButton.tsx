@@ -17,15 +17,17 @@ type Props = {
   className?: string;
   /** Why it is disabled: shown as the tooltip (a disabled button shows none of its own). */
   disabledReason?: string;
+  /** Words shown beside the icon (the button keeps ``label`` as its accessible name). */
+  text?: ReactNode;
 };
 
 /** A toolbar icon button: a Lucide icon, named by ``label``, with a tooltip on hover
  * and keyboard focus (CSS reads ``data-tip``). */
-export function IconButton({ icon, label, tip, shortcut, onClick, disabled, pressed, tipSide, className, disabledReason }: Props) {
+export function IconButton({ icon, label, tip, shortcut, onClick, disabled, pressed, tipSide, className, disabledReason, text }: Props) {
   const button = (
     <button
       type="button"
-      className={className ? `icon-button ${className}` : "icon-button"}
+      className={["icon-button", text != null && "has-text", className].filter(Boolean).join(" ")}
       aria-label={label}
       aria-pressed={pressed}
       data-tip={shortcut ? `${tip ?? label} ${shortcut}` : (tip ?? label)}
@@ -36,6 +38,7 @@ export function IconButton({ icon, label, tip, shortcut, onClick, disabled, pres
       <span className="icon-button-glyph" aria-hidden="true">
         {icon}
       </span>
+      {text != null && <span className="icon-button-text">{text}</span>}
     </button>
   );
   if (!disabled || !disabledReason) return button;

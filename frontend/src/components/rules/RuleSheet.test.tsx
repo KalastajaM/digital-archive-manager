@@ -738,6 +738,31 @@ describe("RuleSheet", () => {
       expect(within(sheet).queryByText(/Add a text box to make this faster/)).toBeNull();
     });
 
+    it("says what the document the rule is made from scores for a picture area, and what the number means", async () => {
+      sheetFor({ ...REPLAY, source: { drive_id: "d1", path: "##. Organize/a.pdf", matched: true, reason: "", area_scores: [0.97, null] } });
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      const picture = within(sheet).getByRole("group", { name: "Area 1" });
+      await within(picture).findByText(/This document scores/);
+      expect(picture).toHaveTextContent("This document scores 0.97. Lower is looser, higher is stricter.");
+      // the text area has no score
+      expect(within(sheet).getByRole("group", { name: "Area 2" })).not.toHaveTextContent("scores");
+    });
+
+    it("shows the score of a document that does not match too, and no score when none is known", async () => {
+      sheetFor({ ...REPLAY, source: { drive_id: "d1", path: "##. Organize/a.pdf", matched: false, reason: "the picture in area 1 scores 0.71, needs 0.90", area_scores: [0.71, null] } });
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      await within(sheet).findByText(/This document scores/);
+      expect(within(sheet).getByRole("group", { name: "Area 1" })).toHaveTextContent("This document scores 0.71.");
+    });
+
+    it("says only how loose or strict it is when no document is known", async () => {
+      sheetFor();
+      const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
+      const picture = within(sheet).getByRole("group", { name: "Area 1" });
+      expect(picture).toHaveTextContent("Lower is looser, higher is stricter.");
+      expect(picture).not.toHaveTextContent("This document scores");
+    });
+
     it("tests and saves both kinds of area as they are, and a score back at the usual one is left out", async () => {
       const { calls, user } = sheetFor({ ...REPLAY, different: [] });
       const sheet = await screen.findByRole("dialog", { name: "Edit rule acme" });
