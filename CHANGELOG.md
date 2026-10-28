@@ -855,6 +855,19 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **Dark theme: text and numbers you could barely read.** In the New look, grey text on
+  the open sidebar row, on grey tags and on the remove cross of a chip is a little lighter
+  (it was just under the readable limit), the key hints and counts on a blue button or the
+  chosen tray are no longer dimmed below it, and the numbers on the boxes you draw in
+  "Draw a box" use dark ink on the light box colours (white on them was hard to read; in
+  the light theme the orange box is a little darker for the same reason). In the Classic
+  look the grey secondary text is lighter, the red of an overdue tag is a little lighter,
+  and tags inside the orange "Needs attention" strip no longer draw their tint twice.
+
+- **The New look's "Draw a box" panel no longer cuts off a box's message.** A box with
+  nothing in it shows "There is nothing in that area" in full instead of being clipped at
+  the bottom of its card.
+
 - **Text no longer runs out of its box.** In the New look a checklist entry (on an item, a
   collection or a file) now wraps inside its column with the tick box beside its first
   line, instead of being cut at the edge; the figure in a Today tile scales down with its

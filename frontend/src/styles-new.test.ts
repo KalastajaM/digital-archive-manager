@@ -176,3 +176,9 @@ describe("styles-new.css: text never leaves its box", () => {
     expect(rule('[data-style="new"] .item-fields .field')).toContain("margin-bottom: 0");
   });
 });
+
+describe("styles-new.css: Draw a box panel", () => {
+  it("keeps a box's message from taking a 100% flex basis in the card's column", () => {
+    expect(plain).toMatch(/\.box-kept-problem \{ flex: none; \}/);
+  });
+});

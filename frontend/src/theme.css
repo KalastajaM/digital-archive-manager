@@ -132,8 +132,8 @@
 
   --text: #f5f5f7;
   --text-2: #d1d1d6;
-  --muted: #a1a1a6;
-  --muted-2: #aeaeb2;
+  --muted: #b4b4b8; /* 4.5:1 or better on the tinted surfaces too (open sidebar row, tags, chips) */
+  --muted-2: #c0c0c5;
 
   --border: rgb(255 255 255 / 0.16);
   --border-strong: rgb(255 255 255 / 0.26);
@@ -148,7 +148,7 @@
   --focus-ring: rgb(10 132 255 / 0.55);
 
   --red: #ff453a;
-  --red-text: #ff6961;
+  --red-text: #ff857d; /* 4.8:1 on its tag background (the old #ff6961 gave 4.0) */
   --red-bg: rgb(255 69 58 / 0.2);
   --orange: #ff9f0a;
   --orange-text: #ffb340;
@@ -158,7 +158,7 @@
   --green-bg: rgb(48 209 88 / 0.2);
   --blue-text: #6cb4ff;
   --blue-bg: rgb(10 132 255 / 0.22);
-  --grey-text: #aeaeb2;
+  --grey-text: #bcbcc1;
   --grey-bg: rgb(255 255 255 / 0.1);
 
   --shadow-card: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 1px 3px rgb(0 0 0 / 0.4);
@@ -270,7 +270,7 @@
 
   --text: #ecebe4;
   --text-2: #cfccc3;
-  --muted: #a39f95;
+  --muted: #aeaaa0; /* 4.9:1 or better on every dark surface, selected rows and tags included */
   --muted-2: #b8b4a9;
 
   --border: #3d3b37;
@@ -296,7 +296,7 @@
   --green-bg: rgb(74 163 101 / 0.18);
   --blue-text: #9dbceb;
   --blue-bg: rgb(141 176 227 / 0.16);
-  --grey-text: #a39f95;
+  --grey-text: #aeaaa0;
   --grey-bg: rgb(255 255 255 / 0.08);
 
   --shadow-card: 0 0 0 1px #34322f;
