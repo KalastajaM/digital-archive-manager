@@ -7,7 +7,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DirEntry } from "../api/client";
 import { type Call, dataTransfer, mockFetch, renderWithProviders } from "../test-utils";
-import Browse, { INSPECTOR_WIDTH_KEY, TREE_WIDTH_KEY } from "./Browse";
+import { forgetLayout } from "../layoutMemory";
+import Browse, { INSPECTOR_WIDTH_KEY, TREE_SHOWN_KEY, TREE_WIDTH_KEY } from "./Browse";
 
 const dir = (path: string, extra: Partial<DirEntry> = {}): DirEntry => ({
   name: path.slice(path.lastIndexOf("/") + 1),
@@ -110,6 +111,7 @@ describe("The folder tree", () => {
   });
 
   it("highlights the folder of each pane (marked L and R with two panes) and opens the parents", async () => {
+    localStorage.setItem(TREE_SHOWN_KEY, "1");
     setup(two("10. Financial/Banks", "13. Taxes"));
     await within(await screen.findByRole("tree", { name: "Folder tree" })).findByRole("treeitem", { name: "Banks" });
     expect(item("Banks")).toHaveAttribute("aria-selected", "true");
@@ -128,6 +130,7 @@ describe("The folder tree", () => {
   });
 
   it("a click opens the folder in the active pane (the other pane stays)", async () => {
+    localStorage.setItem(TREE_SHOWN_KEY, "1");
     const { user } = setup(two("13. Taxes", "30. Home"));
     await screen.findByRole("tree", { name: "Folder tree" });
     await user.click(await screen.findByText("t.pdf")); // the left pane is the active one
@@ -166,6 +169,7 @@ describe("The folder tree", () => {
   });
 
   it("is a drop target: files dropped on a folder go through the same Move preview", async () => {
+    localStorage.setItem(TREE_SHOWN_KEY, "1");
     const { calls } = setup(two("10. Financial", "13. Taxes"));
     const row = (await screen.findByText("x.pdf")).closest("li") as HTMLElement;
     await screen.findByRole("tree", { name: "Folder tree" });
@@ -183,6 +187,7 @@ describe("The folder tree", () => {
   });
 
   it("takes a dragged folder too, and refuses a folder dropped into itself with the reason", async () => {
+    localStorage.setItem(TREE_SHOWN_KEY, "1");
     const { calls } = setup(one("10. Financial"));
     const row = (await screen.findByText("Banks", { selector: ".entry-name" })).closest("li") as HTMLElement;
     await screen.findByRole("tree", { name: "Folder tree" });
@@ -224,8 +229,64 @@ describe("The folder tree", () => {
     await screen.findByText("x.pdf");
     expect(screen.queryByRole("tree")).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Folders" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Show folders" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Folder tree" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Preview" })).not.toBeInTheDocument();
+  });
+});
+
+describe("The tree beside two panes", () => {
+  const body = () => document.querySelector(".browse-body") as HTMLElement;
+
+  it("starts hidden, with the button off", async () => {
+    setup(two("10. Financial", "13. Taxes"));
+    await screen.findByText("x.pdf");
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+    expect(screen.queryByRole("separator", { name: "Resize the folder tree" })).not.toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Folder tree" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(button).toHaveAttribute("data-tip", "Show the folder tree");
+  });
+
+  it("the button shows and hides it beside the panes, and the choice is remembered", async () => {
+    const { user } = setup(two("10. Financial", "13. Taxes"));
+    await screen.findByText("x.pdf");
+    const button = screen.getByRole("button", { name: "Folder tree" });
+    await user.click(button);
+    await screen.findByRole("tree", { name: "Folder tree" });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(button).toHaveAttribute("data-tip", "Hide the folder tree");
+    expect(body().dataset.tree).toBeUndefined(); // docked, not the overlay
+    expect(localStorage.getItem(TREE_SHOWN_KEY)).toBe("1");
+    cleanup();
+    setup(two("10. Financial", "13. Taxes")); // another visit
+    await screen.findByRole("tree", { name: "Folder tree" });
+    await user.click(screen.getByRole("button", { name: "Folder tree" }));
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+    expect(localStorage.getItem(TREE_SHOWN_KEY)).toBe("0");
+  });
+
+  it("is remembered per archive", async () => {
+    localStorage.setItem(`${TREE_SHOWN_KEY}.work`, "1"); // another archive's choice
+    setup(two("10. Financial", "13. Taxes"));
+    await screen.findByText("x.pdf");
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+  });
+
+  it("one pane keeps its tree whatever was chosen for two", async () => {
+    localStorage.setItem(TREE_SHOWN_KEY, "0");
+    setup(one(""));
+    await screen.findByRole("tree", { name: "Folder tree" });
+    expect(screen.getByRole("button", { name: "Folder tree" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("Reset layout forgets the choice, in every archive", () => {
+    localStorage.setItem(TREE_SHOWN_KEY, "1");
+    localStorage.setItem(`${TREE_SHOWN_KEY}.work`, "1");
+    forgetLayout();
+    expect(localStorage.getItem(TREE_SHOWN_KEY)).toBeNull();
+    expect(localStorage.getItem(`${TREE_SHOWN_KEY}.work`)).toBeNull();
   });
 });
 
@@ -254,7 +315,7 @@ describe("The dividers and the folded tree", () => {
     const { user } = setup(one(""));
     await screen.findByRole("tree", { name: "Folder tree" });
     const body = document.querySelector(".browse-body") as HTMLElement;
-    const button = screen.getByRole("button", { name: "Show folders" });
+    const button = screen.getByRole("button", { name: "Folder tree" });
     expect(body.dataset.tree).toBeUndefined();
     await user.click(button);
     expect(body.dataset.tree).toBe("open");
@@ -270,7 +331,7 @@ describe("The dividers and the folded tree", () => {
     const { user } = setup(one(""));
     await screen.findByRole("tree", { name: "Folder tree" });
     const body = document.querySelector(".browse-body") as HTMLElement;
-    await user.click(screen.getByRole("button", { name: "Show folders" }));
+    await user.click(screen.getByRole("button", { name: "Folder tree" }));
     expect(body.dataset.tree).toBe("open");
     await user.keyboard("{Escape}");
     expect(body.dataset.tree).toBeUndefined();

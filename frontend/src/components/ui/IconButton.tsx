@@ -12,6 +12,8 @@ type Props = {
   disabled?: boolean;
   /** For toggles (e.g. a split view): marks the button pressed. */
   pressed?: boolean;
+  /** For buttons that show or hide a region: marks it expanded. */
+  expanded?: boolean;
   /** Where the tooltip goes; "above" for controls near the bottom of the window. */
   tipSide?: "below" | "above";
   className?: string;
@@ -23,13 +25,14 @@ type Props = {
 
 /** A toolbar icon button: a Lucide icon, named by ``label``, with a tooltip on hover
  * and keyboard focus (CSS reads ``data-tip``). */
-export function IconButton({ icon, label, tip, shortcut, onClick, disabled, pressed, tipSide, className, disabledReason, text }: Props) {
+export function IconButton({ icon, label, tip, shortcut, onClick, disabled, pressed, expanded, tipSide, className, disabledReason, text }: Props) {
   const button = (
     <button
       type="button"
       className={["icon-button", text != null && "has-text", className].filter(Boolean).join(" ")}
       aria-label={label}
       aria-pressed={pressed}
+      aria-expanded={expanded}
       data-tip={shortcut ? `${tip ?? label} ${shortcut}` : (tip ?? label)}
       data-tip-side={tipSide === "above" ? "above" : undefined}
       onClick={onClick}
