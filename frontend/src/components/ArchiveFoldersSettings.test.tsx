@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import { ArchiveFoldersSettings } from "./ArchiveFoldersSettings";
 
@@ -113,6 +113,20 @@ describe("Archive folders settings", () => {
     await waitFor(() => expect(posts(calls, "/api/archive-folders")).toHaveLength(2));
     expect(posts(calls, "/api/archive-folders")[1].body).toEqual({ label: "Taxes", path: "/Volumes/Taxes", dry_run: false });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("Add folder fills the path from the system folder dialog", async () => {
+    document.documentElement.dataset.style = "new";
+    onTestFinished(() => {
+      delete document.documentElement.dataset.style;
+    });
+    const { user } = setup({
+      "POST /api/system/choose-folder": { body: { path: "/Volumes/Chosen", cancelled: false, unavailable: null } },
+    });
+    await user.click(await screen.findByRole("button", { name: "Add folder" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Choose…" }));
+    await waitFor(() => expect(within(dialog).getByLabelText("Folder path")).toHaveValue("/Volumes/Chosen"));
   });
 
   it("shows the server's message when the folder is refused", async () => {

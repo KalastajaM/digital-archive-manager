@@ -111,7 +111,10 @@ confirm, and every change can be undone from Activity.
 ## Getting started
 
 The first time you open dam, a welcome screen asks for the archive folder. It lists the
-cloud-drive folders it finds on your computer, or you can type any path. The folder is
+cloud-drive folders it finds on your computer, or you can type any path. In the New look a
+**Choose...** button next to the path opens your system's folder window instead (the same
+button is in Add archive and in Settings, Archive folders, Add folder). Where no such
+window can be shown, dam says so and you type the path. The folder is
 checked as you type; when you press **Use this folder** the app starts in the same window.
 
 - **A folder that already has documents** is used as it is: dam creates nothing, and

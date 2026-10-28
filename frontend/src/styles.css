@@ -2513,3 +2513,9 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 :root[data-theme="dark"]:not([data-style="new"]) .attention-strip .tag-grey { --tag-tint: var(--grey-bg); }
 :root[data-theme="dark"]:not([data-style="new"]) .attention-strip .tag-blue { --tag-tint: var(--blue-bg); }
 :root[data-theme="dark"]:not([data-style="new"]) .attention-strip .tag-green { --tag-tint: var(--green-bg); }
+
+/* A typed folder path with its "Choose…" button: one row, one height */
+.path-row { display: flex; align-items: stretch; gap: var(--sp-2); min-width: 0; }
+.path-row input:not([type="checkbox"]):not([type="radio"]) { flex: 1 1 auto; min-width: 0; width: auto; }
+.path-row .path-choose { flex: none; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; }
+.path-message { margin: var(--sp-1) 0 0; overflow-wrap: anywhere; }

@@ -302,6 +302,8 @@ from dam.api.schemas.settings import (
     SenderOut,
 )
 from dam.api.schemas.setup import (
+    ChooseFolderIn,
+    ChooseFolderOut,
     FolderPathIn,
     LayoutFolderOut,
     LayoutIn,
@@ -461,6 +463,8 @@ __all__ = [
     "SetupCandidateOut",
     "SetupCandidatesOut",
     "SetupPathIn",
+    "ChooseFolderIn",
+    "ChooseFolderOut",
     "LayoutRowIn",
     "SpecialNamesIn",
     "LayoutIn",

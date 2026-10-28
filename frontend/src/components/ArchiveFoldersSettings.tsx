@@ -15,6 +15,7 @@ import {
   useArchiveFolders,
 } from "../api/client";
 import { visible } from "../text";
+import { FolderPathInput } from "./FolderPathInput";
 import { RelabelSheet } from "./RelabelSheet";
 import { Sheet } from "./ui/Sheet";
 
@@ -156,14 +157,13 @@ function AddSheet({ onClose, onDone }: { onClose: () => void; onDone: (c: Folder
       </div>
       <div className="field">
         <label htmlFor="add-folder-path">Folder path</label>
-        <input
+        <FolderPathInput
           id="add-folder-path"
-          type="text"
           value={path}
           spellCheck={false}
           autoComplete="off"
           placeholder="For example /Volumes/Scans"
-          onChange={edit(setPath)}
+          onChange={(v) => edit(setPath)({ target: { value: v } })}
         />
       </div>
       {checked && (

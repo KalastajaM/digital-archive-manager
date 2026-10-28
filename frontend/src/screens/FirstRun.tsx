@@ -12,6 +12,7 @@ import {
   useArchives,
 } from "../api/client";
 import { ArchiveSwitcher } from "../components/ArchiveSwitcher";
+import { FolderPathInput } from "../components/FolderPathInput";
 import { initialLayout, LayoutEditor, LayoutPreviewList, layoutBody, type LayoutState, useDebouncedPreview } from "../components/LayoutEditor";
 import { plural } from "../format";
 
@@ -159,14 +160,13 @@ export default function FirstRun() {
 
         <div className="field">
           <label htmlFor="first-run-path">Folder path</label>
-          <input
+          <FolderPathInput
             id="first-run-path"
-            type="text"
             value={path}
             spellCheck={false}
             autoComplete="off"
             placeholder="For example /Users/you/Documents/Archive"
-            onChange={(e) => choose(e.target.value)}
+            onChange={choose}
             onKeyDown={(e) => {
               if (e.key === "Enter" && usable && !saving) void submit();
             }}

@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 import App from "../App";
 import type { SetupCheck, SetupResult } from "../api/client";
 import { mockFetch, renderWithProviders } from "../test-utils";
@@ -105,6 +105,23 @@ describe("FirstRun", () => {
     expect(within(folders).getByText("found")).toBeInTheDocument();
     expect(within(folders).getByText("not there yet")).toBeInTheDocument();
     expect(screen.getByText(/did not create any of these/)).toBeInTheDocument();
+  });
+
+  it("fills the path from the system folder dialog and checks it", async () => {
+    document.documentElement.dataset.style = "new";
+    onTestFinished(() => {
+      delete document.documentElement.dataset.style;
+    });
+    const user = userEvent.setup();
+    mockFetch({
+      "GET /api/setup/candidates": { body: CANDIDATES },
+      "POST /api/system/choose-folder": { body: { path: "/Users/me/Drive/Papers", cancelled: false, unavailable: null } },
+      "POST /api/setup/validate": (call) => ({ body: ok((call.body as { path: string }).path) }),
+    });
+    renderScreen();
+    await user.click(await screen.findByRole("button", { name: "Choose…" }));
+    await waitFor(() => expect(screen.getByLabelText("Folder path")).toHaveValue("/Users/me/Drive/Papers"));
+    expect(await screen.findByText("This folder can be used.")).toBeInTheDocument();
   });
 
   it("shows why a typed folder cannot be used and keeps the button off", async () => {

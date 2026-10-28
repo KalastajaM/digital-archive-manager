@@ -31,6 +31,16 @@ class SetupPathIn(StrictIn):
     path: str = Field(max_length=4096)
 
 
+class ChooseFolderIn(StrictIn):
+    start: str | None = Field(default=None, max_length=4096)  # where the dialog opens
+
+
+class ChooseFolderOut(BaseModel):
+    path: str | None = None  # the chosen folder, absolute
+    cancelled: bool = False
+    unavailable: str | None = None  # why no dialog could be shown (a plain message)
+
+
 class LayoutRowIn(StrictIn):
     key: str | None = Field(default=None, max_length=64)
     name: str = Field(max_length=255)
