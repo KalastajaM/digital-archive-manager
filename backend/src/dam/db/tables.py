@@ -585,3 +585,24 @@ readopted = Table(
     Column("undone", Float, nullable=True),
     Index("ix_readopted_batch_id", "batch_id"),
 )
+
+# One row per rename of a special folder (``dam.special_folders``, migration 0042). The
+# folder itself is renamed by a journaled batch (``batch_id``); the row says which settings,
+# rules and stored paths followed it, and how far the rename got, so an interruption is
+# finished (or undone) at the next start. ``state``: planned (the rename started),
+# done, undone, failed (the folder never moved). ``key``: inbox | ongoing | important |
+# quarantine; ``old`` and ``new`` are the folder's names.
+special_folder_renames = Table(
+    "special_folder_renames",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("batch_id", Text, nullable=False, unique=True),
+    Column("key", Text, nullable=False),
+    Column("old", Text, nullable=False),
+    Column("new", Text, nullable=False),
+    Column("state", Text, nullable=False),
+    # how many folders the batch renames (one per disk for To Delete)
+    Column("folders", Integer, nullable=False, server_default="1"),
+    Column("created", Float, nullable=False),
+    Column("finished", Float, nullable=True),
+)

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from sqlalchemy import Engine, func, select
 
+from dam import special_folders
 from dam.ai.service import AIService
 from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
 from dam.codes.model import save_codes as write_codes
@@ -465,6 +466,9 @@ class App:
         """
         app_paths = AppPaths(data_dir)
         app_paths.ensure()
+        # a rename of a special folder that an interruption left half done is finished
+        # before the settings are read (its names are in them)
+        special_folders.reconcile(app_paths)
         settings = load_settings(app_paths)
         if settings.archive_root is None:
             if require_archive:

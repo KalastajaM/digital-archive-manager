@@ -3716,6 +3716,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/special-folders/{key}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename Special Folder
+         * @description Rename the folder ``key`` (inbox, ongoing, important or quarantine). The dry run
+         *     answers with every place that changes, and why the rest stays. Applying renames the
+         *     folder on its disk(s) and updates the settings, rules and stored paths; 400 for a
+         *     name that cannot be used or a setting that cannot be edited safely.
+         */
+        post: operations["rename_special_folder_api_special_folders__key__rename_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tags": {
         parameters: {
             query?: never;
@@ -7799,6 +7822,56 @@ export interface components {
              * @default []
              */
             area_scores?: (number | null)[];
+        };
+        /** SpecialFolderPlaceOut */
+        SpecialFolderPlaceOut: {
+            /** Place */
+            place: string;
+            /**
+             * How
+             * @enum {string}
+             */
+            how: "renamed" | "rebuilt" | "unchanged";
+            /** What */
+            what: string;
+        };
+        /** SpecialFolderRenameIn */
+        SpecialFolderRenameIn: {
+            /** Name */
+            name: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run?: boolean;
+        };
+        /**
+         * SpecialFolderRenameOut
+         * @description What renaming a special folder changes (in a dry run: would change). ``batch_id``:
+         *     the Activity batch to undo it with; None for a dry run.
+         */
+        SpecialFolderRenameOut: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "inbox" | "ongoing" | "important" | "quarantine";
+            /** Title */
+            title: string;
+            /** Old */
+            old: string;
+            /** New */
+            new: string;
+            /** Places */
+            places: components["schemas"]["SpecialFolderPlaceOut"][];
+            /** Warnings */
+            warnings: string[];
+            /** Google Drive */
+            google_drive: boolean;
+            /** Undo */
+            undo: string;
+            /** Batch Id */
+            batch_id?: string | null;
         };
         /** SpecialFoldersOut */
         SpecialFoldersOut: {
@@ -27777,6 +27850,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeopleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    rename_special_folder_api_special_folders__key__rename_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecialFolderRenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecialFolderRenameOut"];
                 };
             };
             /** @description Bad Request */

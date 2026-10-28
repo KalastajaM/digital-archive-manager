@@ -405,6 +405,61 @@ publisher leaves Ongoing and Important links into an unplugged or detached folde
 Maintenance shows them as "Folder not connected" or "Folder detached", and its **Archive
 folder names** check lists main-folder entries that share a folder's label.
 
+### Renaming a special folder
+
+Settings, **Archive folders**, **Special folders** (New look) renames the Inbox, Ongoing,
+Important or To Delete folder (`dam.special_folders`). The new name follows the folder-name
+rules, except that a `##.` start is fine, and it must not be the name of another special
+folder, of an archive folder (an extra folder's label) or of anything already in the folder
+it lives in (a change of letter case alone is allowed).
+
+| Call | Does |
+|---|---|
+| `POST /api/special-folders/{key}/rename` `{name, dry_run}` | `key` is `inbox`, `ongoing`, `important` or `quarantine`. Answers with `key`, `title`, `old`, `new`, `places` (each place that stores the name: `place`, `how` = `renamed`, `rebuilt` or `unchanged`, and `what` in words), `warnings`, `google_drive`, `undo` and `batch_id` (null for a dry run). `400` for a name or setting that cannot be used, `404` for an unknown key, `409` while a job or batch runs, when a disk is away or detached, after an interrupted operation, or without `dam serve`. |
+| `POST /api/activity/{batch_id}/undo` | For this batch it also puts the settings, rules and stored paths back. |
+
+What happens, in this order, with the archive closed (`Host.close_and_reopen`, so no scan
+writes old paths back):
+
+1. The rename is recorded in `special_folder_renames` (migration 0042, state `planned`).
+2. The folder is renamed through the executor: one journaled `RENAME` batch (origin `ui`),
+   on its own disk, with the executor re-pathing the folder's index rows and search rows.
+   To Delete is renamed in the main folder and in each extra folder that has one, in the
+   same batch; all extra folders must be attached and connected. Guards and locks apply as
+   for any folder rename (a locked file inside refuses it, in the dry run already). If a
+   later disk fails, the earlier ones are undone and nothing else changes.
+3. `config/settings.yaml`: `special_folders.<key>`, and the `protected_paths` and
+   `ai.exclude_folders` entries that start with the old name. `config/rules/*.yaml` and
+   `config/filing_codes.yaml`: every `folder` and `folder_is` value that starts with it (a
+   template whose first part is a placeholder is left alone). These are edited value by
+   value (`dam.core.yamledit`), each replaced file is kept as `<name>.bak-<time>` and read
+   back, settings last. A filing code's `inbox_folder` (such as `To pay`) is relative to the
+   inbox and does not change.
+4. One transaction: `ongoing_entries.rel` and `collections.ongoing_rel` (what the
+   publisher recorded in Ongoing and Important) and the keys of ignored Maintenance results
+   under the old name; then the rename is marked `done`.
+5. The archive is opened again with the new name. The sync that runs after the first scan
+   rebuilds the managed shortcuts whose file lies in the renamed folder (the publisher
+   compares each link with where the file is now). Shortcuts inside a renamed Ongoing or
+   Important keep their absolute targets and stay valid.
+
+Left as they are: the journal and `made_folders` (history: an older change under the old
+name can be undone again after this rename is undone), collections, trays, tags, notes and
+locks (keyed by file id), `ongoing_switched`, `readopted` and `reconnects` (tied to the
+journal), and shortcuts that dam did not make for Ongoing or Important (the preview counts
+them). The plain `dam undo` and `ActivityService.undo` refuse this batch (409): the folder
+alone would go back and leave the settings on the new name. Undo in Activity runs the
+executor's undo (an exact `RENAME` back) and then the same edits the other way round.
+
+An interruption is finished at the next start (`special_folders.reconcile`, called before
+the settings are read): a `planned` rename whose folder moved gets its settings and stored
+paths, one whose folder never moved is marked `failed`, one with only some disks renamed is
+put back, and a `done` rename whose journal shows the folder undone gets its old settings
+back. A journal row still `planned` waits for Run recovery. Editing `settings.yaml` by
+hand stays possible: rename the folder in the file manager, change the name under
+`special_folders` (and any `protected_paths`, rule or filing code value that holds it), then
+restart dam; nothing is journaled and the index follows with the next scan.
+
 ## Snapshots
 
 A snapshot is one zip per archive in `<data folder>/snapshots/`, named
@@ -483,7 +538,9 @@ All in the data folder under `config/`:
   default `true`), `page1_text_reads_per_minute` (how fast page 1 of PDFs with a text layer
   is read, 1 to 6000, default 300; scans, photos and slow reads keep
   `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings) and `address_zone`
-  (`[x0, y0, x1, y1]` as fractions of page 1, origin top left).
+  (`[x0, y0, x1, y1]` as fractions of page 1, origin top left). The four
+  `special_folders` names can be changed in Settings (see Renaming a special folder) or by
+  hand.
 - `trays/*.yaml`: one tray per file (see Tray files).
 - `filing_codes.yaml`: the filing code table (see Filing codes file below).
 - `sticker_sheets.yaml`: the saved custom sticker sheet, if any (see Sticker sheet

@@ -250,7 +250,15 @@ class InboxService:
         # cuts and keeps the crops of picture areas
         self._area_pictures = area_pictures
         # "similar files" folders, kept until the index changes
-        self._similar = SimilarFolders(repo.engine)
+        self._similar = SimilarFolders(
+            repo.engine,
+            special=(
+                special.inbox,
+                special.ongoing,
+                special.important,
+                special.quarantine,
+            ),
+        )
 
     def people_context(self, drive_id: str, rows: _Rows | None = None) -> PeopleContext:
         person = self._assigned_person(drive_id) if rows is None else rows.persons.get(drive_id)

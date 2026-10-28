@@ -5,7 +5,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from dam.api.deps import AppDep
+from dam import special_folders
+from dam.api.deps import AppDep, SnapshotsDep
 from dam.api.marks import batches_out, journal_out
 from dam.api.schemas import (
     BatchSummaryOut,
@@ -14,6 +15,7 @@ from dam.api.schemas import (
     ResolvedOpOut,
     UndoResultOut,
 )
+from dam.errors import Conflict
 
 router = APIRouter(prefix="/api", tags=["activity"])
 
@@ -61,8 +63,18 @@ def undo_preview(app: AppDep, batch_id: str) -> list:
 
 
 @router.post("/activity/{batch_id}/undo", response_model=UndoResultOut)
-def undo(app: AppDep, batch_id: str) -> dict:
+def undo(app: AppDep, snaps: SnapshotsDep, batch_id: str) -> dict:
     app.activity.get(batch_id)  # NotFound (404) for an unknown batch
+    if special_folders.is_rename(app.engine, batch_id):
+        # a special folder's rename: the folder, and the settings, rules and stored paths
+        # that followed it, with the archive closed and opened again (as the rename was)
+        if snaps.reopener is None:
+            raise Conflict("This window cannot undo that. Start dam with `dam serve`.")
+        with app.held():
+            done = snaps.reopener.close_and_reopen(
+                lambda: special_folders.undo(app.app_paths, batch_id)
+            )
+        return {**asdict(done), "follow_up_error": None}
     outcome = app.activity.undo(batch_id)
     return {**asdict(outcome.batch), "follow_up_error": outcome.follow_up_error}
 

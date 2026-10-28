@@ -14,7 +14,7 @@ from pathlib import PurePosixPath
 from sqlalchemy import Engine, text
 
 from dam.core.naming import fix_mojibake
-from dam.core.paths import nfc
+from dam.core.paths import fold_name, nfc
 from dam.db.generation import WriteGeneration
 
 SOURCE = "similar files"
@@ -42,8 +42,13 @@ def word_tokens(stem: str, body: str) -> list[str]:
     return out[:MAX_TOKENS]
 
 
-def _special(path: str) -> bool:
-    return any(part.startswith("##.") for part in PurePosixPath(nfc(path)).parts)
+def _special(path: str, names: tuple[str, ...] = ()) -> bool:
+    """The path is in one of the app's own folders: any ``##.`` folder, or one of
+    ``names`` (the configured names, which need not start with ``##.``)."""
+    parts = PurePosixPath(nfc(path)).parts
+    if any(part.startswith("##.") for part in parts):
+        return True
+    return any(fold_name(part) in {fold_name(n) for n in names} for part in parts[:2])
 
 
 def _words(name: str, body: str, ext: str | None) -> list[str]:
@@ -55,12 +60,17 @@ def _words(name: str, body: str, ext: str | None) -> list[str]:
 
 
 def similar_folder(
-    engine: Engine, drive_id: str, name: str, body: str, ext: str | None = None
+    engine: Engine,
+    drive_id: str,
+    name: str,
+    body: str,
+    ext: str | None = None,
+    special: tuple[str, ...] = (),
 ) -> str | None:
     """The folder most of the best-matching filed files are in, or None when nothing
     matches well enough. One indexed FTS query."""
     words = _words(name, body, ext)
-    return _search(engine, drive_id, words) if words else None
+    return _search(engine, drive_id, words, special) if words else None
 
 
 class SimilarFolders:
@@ -69,8 +79,9 @@ class SimilarFolders:
     renamed or gone) starts afresh, since any of them can change the vote. The answer
     for one file depends only on its words, so new text gives a new search too."""
 
-    def __init__(self, engine: Engine, size: int = 2048) -> None:
+    def __init__(self, engine: Engine, size: int = 2048, special: tuple[str, ...] = ()) -> None:
         self._engine = engine
+        self._special = special
         self._size = size
         self._generation = WriteGeneration(engine, ("files", "file_fts"))
         self._kept: OrderedDict[tuple[str, tuple[str, ...]], str | None] = OrderedDict()
@@ -90,7 +101,7 @@ class SimilarFolders:
             if key in self._kept:
                 self._kept.move_to_end(key)
                 return self._kept[key]
-        found = _search(self._engine, drive_id, words)
+        found = _search(self._engine, drive_id, words, self._special)
         with self._lock:
             # an index write while searching: the answer may be from the old rows
             if self._generation.value == at == self._kept_at:
@@ -100,7 +111,9 @@ class SimilarFolders:
         return found
 
 
-def _search(engine: Engine, drive_id: str, words: list[str]) -> str | None:
+def _search(
+    engine: Engine, drive_id: str, words: list[str], special: tuple[str, ...] = ()
+) -> str | None:
     match = " OR ".join('"' + w.replace('"', '""') + '"' for w in words)
     sql = (
         "SELECT f.path FROM file_fts JOIN files f ON f.drive_id = file_fts.drive_id "
@@ -112,7 +125,7 @@ def _search(engine: Engine, drive_id: str, words: list[str]) -> str | None:
         rows = conn.execute(text(sql), {"q": match, "id": drive_id}).all()
     folders: list[str] = []
     for r in rows:
-        if _special(r.path):
+        if _special(r.path, special):
             continue
         parent = PurePosixPath(r.path).parent.as_posix()
         if parent != ".":

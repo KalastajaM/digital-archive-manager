@@ -8,6 +8,18 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Rename the special folders (New look).** Settings, Archive folders, Special folders lists
+  the Inbox, Ongoing, Important and To Delete folders with a Rename for each. You type a new
+  name (it may start with `##.` or not), and a preview lists every place that holds the old
+  name and what happens there: the folder on your disk and its index paths, the settings, your
+  rules and filing codes, and the shortcuts dam keeps in Ongoing and Important (renamed,
+  rebuilt or still valid), plus a note when your archive is in Google Drive that the rename has
+  to sync. It is refused while a move or other job runs, when a disk is not connected, or after
+  an interrupted operation. The rename is one entry in Activity; a toast offers Undo, and Undo
+  gives back the folder name, the settings line, the rules and the paths. If dam is stopped
+  half way, it finishes (or takes back) the rename the next time it starts. Editing
+  `settings.yaml` by hand still works.
+
 - **One file panel for Browse, the Inbox, the trays and a collection (New look).** The panel
   on the right shows a file the same way everywhere: its name (click to rename) and folder
   (click to move) with the lock, then two rows of icon buttons, then tags, collections (a box
