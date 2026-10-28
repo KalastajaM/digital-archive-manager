@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **The New look: Browse with two panes starts without the folder tree.** The second pane
+  mostly shows what the tree shows, so the **Folder tree** button in the header now also
+  appears with two panes and shows or hides the tree beside them; the choice is remembered
+  per archive and cleared by Reset layout. One pane keeps the tree as before.
 - **The New look: collections and trays laid out as drawn.** A **collection** now has one
   header across the page: a line saying where it sits ("Collection, no parent, Put inside
   another collection…"), its name, a state pill (Open, Closed, Built in), "7 files, 4 groups",

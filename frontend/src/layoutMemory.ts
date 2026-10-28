@@ -1,8 +1,9 @@
 /** What this browser remembers about the layout, and the way to forget it all at once
  * (Settings → Appearance → Reset layout).
  *
- * Two kinds: the widths of the panes you dragged (every ``useSplitWidth`` key, one per
- * screen) and the order and folds of Today's cards. Each key is kept per archive (the
+ * Three kinds: the widths of the panes you dragged (every ``useSplitWidth`` key, one per
+ * screen), the order and folds of Today's cards and whether Browse shows its folder tree
+ * beside two panes. Each key is kept per archive (the
  * archive "main" under the plain key, the others under ``<key>.<archive id>``), so a reset
  * clears the plain key and every archive's copy. Every storage access is in try/catch:
  * private windows and blocked site data throw. A test keeps this list in step with the
@@ -19,11 +20,13 @@ export const PANE_WIDTH_KEYS = [
   "dam.collection.inspectorwidth",
 ];
 export const TODAY_LAYOUT_KEYS = ["dam.today.layout.v1"];
+/** Browse with two panes: whether the folder tree is shown beside them (hidden until asked for). */
+export const BROWSE_TREE_KEYS = ["dam.browse.treeshown"];
 
 export type Remembered = Record<string, string>;
 
 const isOurs = (name: string) =>
-  [...PANE_WIDTH_KEYS, ...TODAY_LAYOUT_KEYS].some((key) => name === key || name.startsWith(`${key}.`));
+  [...PANE_WIDTH_KEYS, ...TODAY_LAYOUT_KEYS, ...BROWSE_TREE_KEYS].some((key) => name === key || name.startsWith(`${key}.`));
 
 /** Forgets every remembered pane width and Today's card layout, for every archive.
  * Returns what was removed, so an Undo can put it back with ``restoreLayout``. */

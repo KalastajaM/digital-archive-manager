@@ -1310,6 +1310,8 @@
 [data-style="new"] .browse-toolbar .hdr-more,
 [data-style="new"] .browse-toolbar .tree-button,
 [data-style="new"] .browse-toolbar .details-button { display: none; }
+/* two panes: the folder tree is the reader's choice, so its button is always there */
+[data-style="new"] .browse-split .browse-toolbar .tree-button { display: inline-flex; }
 @container browse (max-width: 1120px) {
   [data-style="new"] .browse-toolbar .details-button { display: inline-flex; }
 }

@@ -153,6 +153,26 @@ const SORT_COLUMNS: { sort: FlatSort; label: string }[] = [
 /** A newly chosen column starts newest/largest first for dates and sizes, A–Z otherwise. */
 const firstDir = (sort: FlatSort): "asc" | "desc" => (sort === "date" || sort === "size" ? "desc" : "asc");
 
+/** Where the New look remembers whether two panes show the folder tree beside them (it starts
+ * hidden: the second pane mostly says what the tree says). Per archive, this browser only. */
+export const TREE_SHOWN_KEY = "dam.browse.treeshown";
+function readTreeShown(): boolean {
+  try {
+    return localStorage.getItem(archiveKey(TREE_SHOWN_KEY)) === "1";
+  } catch {
+    return false; // storage blocked: hidden
+  }
+}
+function writeTreeShown(shown: boolean) {
+  try {
+    localStorage.setItem(archiveKey(TREE_SHOWN_KEY), shown ? "1" : "0");
+  } catch {
+    // storage blocked: the choice lasts for this page only
+  }
+}
+/** Browse narrower than this (px): the folder tree gives way to an overlay (see styles-new.css). */
+const TREE_FOLDS_AT = 880;
+
 /** Where the two-pane choice is remembered (this browser only). */
 export const SPLIT_KEY = "dam.browse.split";
 function readSplit(): boolean {
@@ -716,6 +736,21 @@ export default function Browse() {
   // the folders and the details fold behind buttons (and open over the panes) when the room is short
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [treeOpen, setTreeOpen] = useState(false);
+  // two panes: the folder tree beside them is the owner's choice (hidden until asked for);
+  // one pane always has it. Under TREE_FOLDS_AT the button opens it over the panes instead.
+  const [treeShown, setTreeShown] = useState(readTreeShown);
+  const [narrow, setNarrow] = useState(false);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!isNew || !el) return;
+    const read = () => setNarrow(el.clientWidth > 0 && el.clientWidth <= TREE_FOLDS_AT);
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(read);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [isNew]);
   const act: PaneId = split ? active : "left";
   const shown: PaneId[] = split ? PANES : ["left"];
   const flatOf = (pane: PaneId) => panes[pane].view === "files";
@@ -2207,6 +2242,10 @@ export default function Browse() {
   const treeMarks = split
     ? PANES.map((pane) => ({ path: paths[pane], label: pane === "left" ? "L" : "R" }))
     : [{ path: paths.left, label: "" }];
+  // is the tree on screen: docked (one pane always, two panes when chosen) or open over the panes
+  const treeDocked = !split || treeShown;
+  const treeOverlay = treeOpen && (!split || narrow);
+  const treeVisible = split && !narrow ? treeShown : treeOpen;
   const closeOverlays = () => {
     setDetailsOpen(false);
     setTreeOpen(false);
@@ -2225,12 +2264,17 @@ export default function Browse() {
             // under ~880px of Browse the folder tree leaves the row and opens over the panes from here
             <IconButton
               icon={<Folder />}
-              label="Show folders"
-              tip={treeOpen ? "Hide folders" : "Folders"}
-              pressed={treeOpen}
+              label="Folder tree"
+              tip={treeVisible ? "Hide the folder tree" : "Show the folder tree"}
+              pressed={treeVisible}
+              expanded={treeVisible}
               className="tree-button"
               onClick={() => {
-                setTreeOpen((o) => !o);
+                if (split && !narrow) {
+                  const next = !treeShown;
+                  setTreeShown(next);
+                  writeTreeShown(next);
+                } else setTreeOpen((o) => !o);
                 setDetailsOpen(false);
               }}
             />
@@ -2425,22 +2469,27 @@ export default function Browse() {
           className="browse-body"
           ref={(el) => {
             // the tree's and the details panel's widths are measured from this row
+            bodyRef.current = el;
             treeSplit.hostRef.current = el;
             inspectorSplit.hostRef.current = el;
           }}
           style={{ "--tree-w": `${treeSplit.width}px`, "--details-w": `${inspectorSplit.width}px` } as CSSProperties}
           data-details={detailsOpen ? "open" : undefined}
-          data-tree={treeOpen ? "open" : undefined}
+          data-tree={treeOverlay ? "open" : undefined}
         >
-          <FolderTree
-            marks={treeMarks}
-            onOpen={(entry) => {
-              open(act, entry);
-              setTreeOpen(false);
-            }}
-            dropFor={dropTo}
-          />
-          <Splitter split={treeSplit} label="Resize the folder tree" className="tree-splitter" />
+          {(treeDocked || treeOverlay) && (
+            <>
+              <FolderTree
+                marks={treeMarks}
+                onOpen={(entry) => {
+                  open(act, entry);
+                  setTreeOpen(false);
+                }}
+                dropFor={dropTo}
+              />
+              <Splitter split={treeSplit} label="Resize the folder tree" className="tree-splitter" />
+            </>
+          )}
           <div className="browse-main" ref={panesSplit.hostRef} style={panesSplit.hostStyle}>
             {shown.map((pane, i) => (
               <Fragment key={pane}>
@@ -2454,7 +2503,7 @@ export default function Browse() {
             {detail}
             <InspectorHint />
           </section>
-          {(detailsOpen || treeOpen) && <div className="browse-scrim" aria-hidden="true" onClick={closeOverlays} />}
+          {(detailsOpen || treeOverlay) && <div className="browse-scrim" aria-hidden="true" onClick={closeOverlays} />}
         </div>
       ) : (
         <div
