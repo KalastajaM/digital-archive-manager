@@ -84,7 +84,7 @@ export function useSplitWidth(key: string, options: SplitOptions): Split {
   };
 }
 
-export function Splitter({ split, label }: { split: Split; label: string }) {
+export function Splitter({ split, label, className }: { split: Split; label: string; className?: string }) {
   const { opts, width } = split;
   const end = opts.edge === "end";
   const step = opts.unit === "%" ? 2 : 16;
@@ -117,7 +117,7 @@ export function Splitter({ split, label }: { split: Split; label: string }) {
   };
   return (
     <div
-      className={end ? "splitter splitter-end" : "splitter"}
+      className={[end ? "splitter splitter-end" : "splitter", className].filter(Boolean).join(" ")}
       role="separator"
       aria-orientation="vertical"
       aria-label={label}
