@@ -1,6 +1,7 @@
-/** Search and jump (Cmd+K / Ctrl+K): opens by key in both looks, filters the screens, trays,
- * collections, tags, folders and files, moves with the arrow keys, opens the chosen thing
- * where it lives and closes on Esc. */
+/** Search and jump (Cmd+K / Ctrl+K): opens by key in both looks, filters the trays,
+ * collections, tags, folders and files (no screens), moves with the arrow keys, opens the
+ * chosen thing where it lives and closes on Esc. A last row searches the archive; filters
+ * typed in the box (tag:, collection:, ...) list their values to take with Enter or Tab. */
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -20,12 +21,22 @@ const COLLECTIONS = [
   { id: 5, name: "Boat shed", path: ["Summer cottage", "Boat shed"], files: 0, members: [] },
 ];
 const TAGS = { tags: [{ name: "insurance", files: 14, pinned: true, group_id: null }], groups: [] };
+const TAG_LIST = [
+  { name: "insurance", files: 14 },
+  { name: "invoice", files: 3 },
+  { name: "Ilmoitus", files: 1 },
+  { name: "tax", files: 2 },
+];
 const HIT = { drive_id: "d9", path: "30. Home/Electricity/bill.pdf", name: "bill.pdf", snippet: "", rank: 1, size: 1, mtime: 1, marks: [], connected: true };
 
 const ROUTES = {
   "GET /api/trays": { body: TRAYS },
   "GET /api/collections": { body: COLLECTIONS },
   "GET /api/tags/all": { body: TAGS },
+  "GET /api/tags": (call: Call) => {
+    const prefix = (new URL(call.url, "http://x").searchParams.get("prefix") ?? "").toLowerCase();
+    return { body: TAG_LIST.filter((t) => t.name.toLowerCase().startsWith(prefix)) };
+  },
   "GET /api/folders": { body: ["30. Home", "30. Home/Electricity", "40. Travel"] },
   "GET /api/search": (call: Call) => ({ body: call.url.includes("q=bill") ? [HIT] : [] }),
 };
@@ -118,41 +129,58 @@ describe("Search and jump", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("offers the screens, trays and collections before anything is typed", async () => {
+  it("offers the trays and collections before anything is typed, and no screens", async () => {
     const { user } = setup();
     await user.click(screen.getByRole("button", { name: "Open" }));
-    expect(await screen.findByRole("option", { name: /^Today/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /^Browse/ })).toBeInTheDocument();
     expect(await screen.findByRole("option", { name: /^To pay/ })).toBeInTheDocument();
     expect(await screen.findByRole("option", { name: /^2026 House sale/ })).toBeInTheDocument();
+    for (const screenName of ["Today", "Inbox", "Browse", "Settings", "Help"]) {
+      expect(screen.queryByRole("option", { name: new RegExp(`^${screenName}$`) })).toBeNull();
+    }
+    expect(screen.queryByRole("group", { name: "Screens" })).toBeNull();
     expect(screen.queryByRole("option", { name: /^insurance/ })).toBeNull(); // tags and folders only when searched
+    expect(screen.queryByRole("option", { name: /Search the archive for/ })).toBeNull(); // no query, no search row
   });
 
-  it("filters as you type, best match first, and says when nothing matches", async () => {
+  it("filters as you type, best match first, and ends with a row that searches the archive", async () => {
     const { user } = setup();
     await user.click(screen.getByRole("button", { name: "Open" }));
     await user.type(box(), "ho");
     await screen.findByRole("option", { name: /^2026 House sale/ });
-    expect(screen.queryByRole("option", { name: /^Today/ })).toBeNull();
+    expect(screen.queryByRole("option", { name: /^To pay/ })).toBeNull();
     const folders = within(screen.getByRole("group", { name: "Folders" })).getAllByRole("option");
     expect(folders.map((o) => o.textContent)).toEqual(["30. Home", "Electricity30. Home"]);
+    const options = screen.getAllByRole("option");
+    expect(options.at(-1)).toHaveTextContent("Search the archive for \u201cho\u201d");
     await user.clear(box());
     await user.type(box(), "zzzz");
-    expect(await screen.findByText(/Nothing matches/)).toBeInTheDocument();
+    const only = await screen.findAllByRole("option");
+    expect(only).toHaveLength(1); // nothing matches, the search row stays
+    await user.click(only[0]);
+    expect(screen.getByTestId("where")).toHaveTextContent("/browse?q=zzzz");
+    expect(dialog()).toBeNull();
   });
 
-  it("moves with the arrow keys (wrapping) and opens a screen on Enter", async () => {
+  it("the search row opens Browse's search with the words and the filters, as Browse's own box does", async () => {
     const { user } = setup();
     await user.click(screen.getByRole("button", { name: "Open" }));
-    await screen.findByRole("option", { name: /^Today/ });
+    await user.type(box(), 'water tag:insurance collection:"House sale" ');
+    await user.click(await screen.findByRole("option", { name: /Search the archive for/ }));
+    expect(screen.getByTestId("where")).toHaveTextContent(`/browse?q=${encodeURIComponent('water tag:insurance collection:"House sale"').replace(/%20/g, "+")}`);
+  });
+
+  it("moves with the arrow keys (wrapping) and opens the chosen row on Enter", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Open" }));
+    await screen.findByRole("option", { name: /^To pay/ });
     await user.keyboard("{ArrowDown}");
-    expect(screen.getByRole("option", { name: /^Inbox/ })).toHaveAttribute("aria-selected", "true");
-    expect(box()).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: /^Inbox/ }).id);
+    expect(screen.getByRole("option", { name: /^Follow up/ })).toHaveAttribute("aria-selected", "true");
+    expect(box()).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: /^Follow up/ }).id);
     await user.keyboard("{ArrowUp}{ArrowUp}");
     const options = screen.getAllByRole("option");
     expect(options.at(-1)).toHaveAttribute("aria-selected", "true"); // wrapped to the last
-    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}"); // Today, Inbox, Browse
-    expect(screen.getByTestId("where")).toHaveTextContent("/browse");
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}"); // To pay, Follow up
+    expect(screen.getByTestId("where")).toHaveTextContent("/trays/follow-up");
     expect(dialog()).toBeNull();
   });
 
@@ -187,12 +215,88 @@ describe("Search and jump", () => {
   it("closes on Esc and on a click on the backdrop, and the page keys stay off meanwhile", async () => {
     const { user } = setup();
     await user.click(screen.getByRole("button", { name: "Open" }));
-    await screen.findByRole("option", { name: /^Today/ });
+    await screen.findByRole("option", { name: /^To pay/ });
     await user.keyboard("{Escape}");
     expect(dialog()).toBeNull();
     await user.click(screen.getByRole("button", { name: "Open" }));
     const d = await screen.findByRole("dialog", { name: "Search and jump" });
     fireEvent.click(d);
     await waitFor(() => expect(dialog()).toBeNull());
+  });
+
+  describe("filter suggestions", () => {
+    const values = () => within(screen.getByRole("group", { name: "Filters" })).getAllByRole("option").map((o) => o.textContent);
+
+    it("lists the tags that start with what follows tag:, ignoring case and accents, and Enter takes one", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "tag:i");
+      await waitFor(() => expect(values()).toEqual(["tag:insurance14", "tag:invoice3", "tag:Ilmoitus1"]));
+      await user.type(box(), "n");
+      await waitFor(() => expect(values()).toEqual(["tag:insurance14", "tag:invoice3"]));
+      await user.keyboard("{ArrowDown}{Enter}");
+      expect(box()).toHaveValue("tag:invoice ");
+      expect(dialog()).not.toBeNull(); // the palette stays open
+      expect(box()).toHaveFocus();
+    });
+
+    it("Tab takes the active value too, quotes it when it has spaces, and later filters still work", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "tag:insurance coll");
+      await waitFor(() => expect(values()).toEqual(["collection:"]));
+      await user.keyboard("{Tab}");
+      expect(box()).toHaveValue("tag:insurance collection:");
+      await user.type(box(), "hou");
+      await waitFor(() => expect(values()).toEqual(['collection:"2026 House sale"']));
+      await user.keyboard("{Tab}");
+      expect(box()).toHaveValue('tag:insurance collection:"2026 House sale" ');
+      await user.type(box(), "water");
+      expect(screen.getAllByRole("option").at(-1)).toHaveTextContent("Search the archive for \u201cwater tag:insurance collection:\"2026 House sale\"\u201d");
+    });
+
+    it("offers a filter name for a few letters (co becomes collection:)", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "co");
+      await waitFor(() => expect(values()).toContain("collection:"));
+      await user.keyboard("{Enter}");
+      expect(box()).toHaveValue("collection:");
+    });
+
+    it("takes the value at the caret and leaves the text after it", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "tag:ta water");
+      await user.keyboard("{Home}{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}"); // after "tag:t"
+      await waitFor(() => expect(values()).toEqual(["tag:tax2"]));
+      await user.keyboard("{Enter}");
+      expect(box()).toHaveValue("tag:tax water");
+    });
+
+    it("Esc closes the suggestions first and the palette on the second press; typing brings them back", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "tag:in");
+      await waitFor(() => expect(values()).toHaveLength(2));
+      await user.keyboard("{Escape}");
+      expect(dialog()).not.toBeNull();
+      expect(screen.queryByRole("group", { name: "Filters" })).toBeNull();
+      await user.type(box(), "s");
+      await waitFor(() => expect(screen.getByRole("group", { name: "Filters" })).toBeInTheDocument());
+      await user.keyboard("{Escape}{Escape}");
+      expect(dialog()).toBeNull();
+    });
+
+    it("is a combobox over a listbox: the active suggestion is the activedescendant", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "tag:in");
+      const first = (await screen.findAllByRole("option"))[0];
+      expect(first).toHaveAttribute("aria-selected", "true");
+      expect(box()).toHaveAttribute("aria-activedescendant", first.id);
+      expect(box()).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("listbox", { name: "Results" })).toContainElement(first);
+    });
   });
 });

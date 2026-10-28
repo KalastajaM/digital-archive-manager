@@ -34,21 +34,24 @@ export function FilterChips({ filters, onRemove }: { filters: SearchFilter[]; on
  * filter being typed. ``active`` is the one the arrow keys are on. Taken on mouse down so
  * the box keeps the focus. */
 export function SearchSuggestions({
+  id,
   offered,
   active,
   onPick,
 }: {
+  /** The listbox's id; option ``i`` is ``${id}-${i}`` (the box's aria-controls / activedescendant). */
+  id: string;
   offered: Completion[];
   active: number;
   onPick: (c: Completion) => void;
 }) {
-  const id = useId();
   if (offered.length === 0) return null;
   return (
     <ul id={id} className="tag-suggest" role="listbox" aria-label="Suggestions">
       {offered.map((c, i) => (
         <li
           key={c.key}
+          id={`${id}-${i}`}
           role="option"
           aria-selected={i === active}
           className={i === active ? "active" : undefined}

@@ -407,7 +407,7 @@ describe("Refused targets say why, visibly, and a drop there says it in a toast"
     const hit = { drive_id: "fx", path: "10. Financial/x.pdf", name: "x.pdf", snippet: "[x]", rank: -1, size: 1, mtime: 1, marks: [] };
     const { user } = setup(one("10. Financial"), { "GET /api/search": { body: [hit] }, "GET /api/folders": { body: [] } });
     await screen.findByText("x.pdf");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "x");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "x");
     const row = (await screen.findByRole("button", { name: /^x\.pdf/ })).closest("li")!;
     const zone = screen.getByTestId("pane-drop");
     const dt = dragFrom(row);

@@ -8,6 +8,16 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Search suggestions in the search palette and Browse.** Typing a filter such as `tag:in`
+  or `collection:ho` in the palette (Cmd+K or Ctrl+K, or the search field in the sidebar)
+  lists the matching tags, collections, senders, people, trays, folders, types and `is:`
+  words below, and a few letters of a filter name (`co`) offer `collection:`. Arrow keys
+  move, Enter or Tab puts the value in the box (in quotes when it has spaces, at the caret,
+  so `tag:insurance collection:"House sale" water` works), and Esc hides the list before it
+  closes the palette. Browse's search box takes Tab the same way and now announces its
+  suggestions to screen readers.
+- **A last row in the search palette: "Search the archive for ...".** It opens Browse's
+  search with exactly what you typed, filters included.
 - **The New look: Activity, Maintenance and Settings laid out as drawn.** **Activity** has a
   header with the count ("8 changes, undone one at a time") and the **Changes / AI calls**
   switch; the search now sits first in the filter row, with the four filters and **Expand
@@ -417,6 +427,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **The search palette no longer lists screens** (Today, Inbox, Settings and so on). It finds
+  files, folders, collections, trays and tags. This applies to both looks.
+- **The New look has no Search card on Today** (the palette and Browse's search box do that
+  job). Classic keeps it. A layout you saved with it loses its place quietly.
 - **New look, Browse.** A path too long for its pane now folds its parent folders into one
   **...** menu ("... > Parent > Current"); each folder in the menu opens that folder, and
   accepts a drop like the path does. The details panel now stays beside the list in a
