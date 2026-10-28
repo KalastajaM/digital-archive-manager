@@ -144,7 +144,7 @@ describe("Browse extra archive folders", () => {
     ];
     const { user } = setup("", { "GET /api/search": { body: hits } });
     await screen.findByText("readme.txt");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "pdf");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "pdf");
     const results = await screen.findByRole("list", { name: "Search results" });
     const row = (name: string) => within(results).getByText(name).closest("li")!;
     expect(within(row("old.pdf")).getByText("Not connected")).toBeInTheDocument();
@@ -192,7 +192,7 @@ describe("Browse", () => {
   it("shortcuts are ignored while typing in the search box", async () => {
     const { calls, user } = setup("10. Financial/Banks", { "GET /api/search": { body: [] } });
     await screen.findByText("a.pdf");
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
     await user.type(box, "jk{Backspace}");
     expect(box).toHaveValue("j");
     expect(browseCalls(calls)).toHaveLength(1); // Backspace did not go up
@@ -226,7 +226,7 @@ describe("Browse", () => {
       "GET /api/search": { status: 400, body: { error: "bad c\u202Ed" } },
     });
     expect(await screen.findByRole("alert")).toHaveTextContent("bad a⟨U+202E⟩b");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "q");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "q");
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("bad c⟨U+202E⟩d"));
   });
 
@@ -269,7 +269,7 @@ describe("Search", () => {
   it("is debounced: typing a word sends one request", async () => {
     const { calls, user } = setup("", { "GET /api/search": { body: [hit()] } });
     await screen.findByText("readme.txt");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "invoice");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "invoice");
     expect(searches(calls)).toHaveLength(0); // nothing before the pause
     await screen.findByText("invoice");
     expect(searches(calls)).toHaveLength(1);
@@ -282,12 +282,12 @@ describe("Search", () => {
     // the scope sits beside the box, so it can be chosen before typing
     const scope = screen.getByRole("group", { name: "Search scope" });
     expect(within(scope).getByRole("button", { name: "Archive" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveAttribute("placeholder", "Search the archive");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "invoice");
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveAttribute("placeholder", "Search the archive");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "invoice");
     const results = await screen.findByRole("list", { name: "Search results" });
     expect(queryOf(searches(calls).at(-1)!).get("folder")).toBeNull(); // the whole archive by default
     await user.click(within(scope).getByRole("button", { name: "Folder" }));
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveAttribute("placeholder", "Search 10. Financial");
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveAttribute("placeholder", "Search 10. Financial");
     const mark = await within(results).findByText("invoice");
     expect(mark.tagName).toBe("MARK");
     expect(mark.parentElement).toHaveTextContent("Total of the invoice is due");
@@ -303,7 +303,7 @@ describe("Search", () => {
           : { body: [hit({ drive_id: "new", name: "new.pdf", path: "X/new.pdf", snippet: "[invoice]" })] },
     });
     await screen.findByText("readme.txt");
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
     await user.type(box, "inv");
     await new Promise((r) => setTimeout(r, 300));
     await user.type(box, "oice");
@@ -324,7 +324,7 @@ describe("Search", () => {
           : { body: [hit({ drive_id: "f2", path: "10. Financial/Banks/b.pdf", name: "b.pdf" })] },
     });
     await screen.findByText("readme.txt");
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
     await user.type(box, "tiliote");
     await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     const preview = screen.getByRole("region", { name: "Preview" });
@@ -342,7 +342,7 @@ describe("Search", () => {
       "GET /api/search": { body: [hit({ name: evil, path: `X/${evil}`, snippet: "<b>[bold]</b> ‮x" })] },
     });
     await screen.findByText("readme.txt");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "bold");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "bold");
     expect(await screen.findByText(evil)).toBeInTheDocument();
     expect(document.querySelector("img[src=x]")).toBeNull();
     expect(document.querySelector("b")).toBeNull();
@@ -365,7 +365,7 @@ describe("Search results' columns", () => {
   it("show folder, date and size, sort by a column and go back to best match", async () => {
     const { user } = setup("", { "GET /api/search": { body: hits } });
     await screen.findByText("readme.txt");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "pdf");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "pdf");
     await screen.findByRole("list", { name: "Search results" });
     await user.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Files" }));
     expect(order()).toEqual(["b.pdf", "a.pdf", "c.pdf"]); // best match first
@@ -1494,7 +1494,7 @@ describe("Task 11 review fixes", () => {
       "POST /api/activity/m1/undo/preview": { body: [] }, "POST /api/activity/m1/undo": { body: UNDONE },
     });
     await screen.findByText("readme.txt");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "a");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "a");
     await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     await user.click(screen.getByRole("button", { name: "Move to…" }));
     const sheet = await screen.findByRole("dialog", { name: "Move 1 file to…" });
@@ -1790,7 +1790,7 @@ describe("marks in Browse (stars)", () => {
       },
       "GET /api/files/f1/page/1.png": { body: {} },
     });
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "invoice");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "invoice");
     const results = await screen.findByRole("list", { name: "Search results" });
     const hit = await within(results).findByRole("button", { name: /^a\.pdf/ });
     expect(within(results).queryByRole("img", { name: "Starred" })).toBeNull();
@@ -1825,7 +1825,7 @@ describe("Trash in Browse (stars spec §8)", () => {
     const { calls, user } = setup("10. Financial/Banks", trash);
     await user.click(await screen.findByRole("checkbox", { name: "Select a.pdf" }));
     await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
-    await user.click(screen.getByRole("searchbox"));
+    await user.click(screen.getByRole("combobox"));
     await user.keyboard("{Meta>}{Backspace}{/Meta}");
     expect(quarantines(calls)).toHaveLength(0);
     screen.getByRole("checkbox", { name: "Select b.pdf" }).focus();
@@ -2193,7 +2193,7 @@ describe("New folder", () => {
     await user.click(screen.getByRole("button", { name: "Collection: Sauna" }));
     await user.click(await screen.findByRole("menuitemcheckbox", { name: "All files" }));
     await waitFor(() => expect(newButton()).toBeEnabled());
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "zzz");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "zzz");
     await waitFor(() => expect(newButton()).toBeDisabled());
     expect(newButton().closest(".icon-button-wrap")?.getAttribute("data-tip")).toMatch(/^Search results/);
   });

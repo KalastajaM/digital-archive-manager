@@ -68,7 +68,7 @@ function setup(url: string) {
   return { calls, user };
 }
 
-const box = () => screen.getByRole("searchbox", { name: "Search" }) as HTMLInputElement;
+const box = () => screen.getByRole("combobox", { name: "Search" }) as HTMLInputElement;
 const options = async () => within(await screen.findByRole("listbox", { name: "Suggestions" })).getAllByRole("option");
 const chips = () => within(screen.getByRole("list", { name: "Search filters" })).getAllByRole("listitem").map((li) => li.textContent);
 
@@ -241,5 +241,36 @@ describe("The ? popup", () => {
     await user.click(screen.getByRole("button", { name: "Search help" }));
     await user.click(screen.getByRole("link", { name: "Searching in the guide" }));
     expect(await screen.findByText("Help page")).toBeInTheDocument();
+  });
+});
+
+describe("Filter completions: keyboard and roles", () => {
+  it("is a combobox whose active suggestion is the activedescendant", async () => {
+    const { user } = setup("/browse");
+    await user.type(box(), "tag:");
+    const list = await screen.findByRole("listbox", { name: "Suggestions" });
+    expect(box()).toHaveAttribute("aria-controls", list.id);
+    expect(box()).toHaveAttribute("aria-expanded", "true");
+    await user.keyboard("{ArrowDown}");
+    const [first] = await options();
+    expect(box()).toHaveAttribute("aria-activedescendant", first.id);
+  });
+
+  it("Tab takes the first value of the filter being typed, as Enter does", async () => {
+    const { user } = setup("/browse");
+    await user.type(box(), "collection:hol");
+    await options();
+    await user.keyboard("{Tab}");
+    expect(chips()).toEqual(["collection:Holiday×"]);
+    expect(box()).toHaveValue("");
+  });
+
+  it("Escape closes the suggestions and keeps the text", async () => {
+    const { user } = setup("/browse");
+    await user.type(box(), "tag:in");
+    await options();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox", { name: "Suggestions" })).toBeNull();
+    expect(box()).toHaveValue("tag:in");
   });
 });

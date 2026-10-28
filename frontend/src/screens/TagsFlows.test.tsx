@@ -138,7 +138,7 @@ describe("Browse with tags", () => {
     expect(await screen.findByText("one.pdf")).toBeInTheDocument();
     const chips = screen.getByRole("list", { name: "Search filters" });
     expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["tag:medical×", "tag:tax return×"]);
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("Kela");
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("Kela");
     // the whole query goes to the API as it is in the address
     expect(queryOf(searches(calls)[0]).get("q")).toBe('Kela tag:medical tag:"tax return"');
   });
@@ -162,15 +162,15 @@ describe("Browse with tags", () => {
 
   it("typing tag:name and a space makes a chip; the words stay in the box", async () => {
     const { calls, user } = setup("/browse");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "Kela tag:medical ");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "Kela tag:medical ");
     expect(where()).toBe("/browse?q=Kela+tag%3Amedical");
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("Kela ");
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("Kela ");
     await waitFor(() => expect(searches(calls).some((c) => queryOf(c).get("q") === "Kela tag:medical")).toBe(true));
   });
 
   it("suggests matching tags while typing; picking one makes a chip and removes the word", async () => {
     const { user } = setup("/browse");
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
     await user.type(box, "Kela med");
     const list = await screen.findByRole("listbox", { name: "Suggestions" });
     expect(within(list).getAllByRole("option").map((o) => o.textContent)).toEqual(["medical3", "Medicine1"]);
@@ -181,7 +181,7 @@ describe("Browse with tags", () => {
 
   it("Enter finishes a tag being typed with the matching suggestion", async () => {
     const { user } = setup("/browse");
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
     await user.type(box, "tag:medi");
     await screen.findByRole("listbox", { name: "Suggestions" });
     await user.type(box, "{Enter}");

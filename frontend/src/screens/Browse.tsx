@@ -2039,6 +2039,11 @@ export default function Browse() {
           title={inFolder ? `Searches ${visible(paths[sp])} and its subfolders` : undefined}
           value={query}
           spellCheck={false}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={offered.length > 0}
+          aria-controls={`${ids}-suggest`}
+          aria-activedescendant={onSuggestion >= 0 && offered[onSuggestion] ? `${ids}-suggest-${onSuggestion}` : undefined}
           onChange={(e) => {
             if (!searching && e.target.value.trim()) setSearchPane(act);
             typeInBox(e.target.value);
@@ -2046,8 +2051,14 @@ export default function Browse() {
             setOnSuggestion(-1);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Escape") setSuggestOpen(false);
-            else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && offered.length > 0) {
+            if (e.key === "Escape") {
+              if (offered.length > 0) e.stopPropagation(); // the suggestions close first
+              setSuggestOpen(false);
+            } else if (e.key === "Tab" && !e.shiftKey && offered.length > 0 && (onSuggestion >= 0 || typed.partial !== null)) {
+              // Tab takes the suggestion the arrows are on, else the first value of the filter being typed
+              e.preventDefault();
+              pick(offered[Math.max(onSuggestion, 0)]);
+            } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && offered.length > 0) {
               e.preventDefault();
               const by = e.key === "ArrowDown" ? 1 : -1;
               setOnSuggestion((n) => Math.max(-1, Math.min(offered.length - 1, n + by)));
@@ -2064,7 +2075,7 @@ export default function Browse() {
             }
           }}
         />
-        <SearchSuggestions offered={offered} active={onSuggestion} onPick={pick} />
+        <SearchSuggestions id={`${ids}-suggest`} offered={offered} active={onSuggestion} onPick={pick} />
       </div>
       <SearchHelp onUse={putExample} />
     </div>

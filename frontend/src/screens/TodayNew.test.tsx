@@ -371,9 +371,16 @@ describe("Today in the New look: the right column", () => {
     expect(within(section("Reminders")).getByText("Not checked yet.")).toBeInTheDocument();
   });
 
-  it("keeps the search that opens Browse with its filters", async () => {
-    renderToday();
-    expect(within(await screen.findByRole("region", { name: "Search" })).getByRole("searchbox", { name: "Search the archive" })).toBeInTheDocument();
+  it("has no Search card (the palette and Browse search), and a saved layout that still lists it is read without it", async () => {
+    localStorage.setItem(LAYOUT_KEY_NEW, JSON.stringify({ order: ["search", "pay", "|", "inbox", "search", "starred"], collapsed: { search: true } }));
+    const { user } = renderToday();
+    await screen.findByRole("table");
+    expect(screen.queryByRole("region", { name: "Search" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(order()).not.toContain("Search");
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+    await user.click(screen.getByRole("button", { name: "Collapse Starred" }));
+    expect(localStorage.getItem(LAYOUT_KEY_NEW)).not.toContain("search"); // pruned when the layout is next saved
   });
 });
 

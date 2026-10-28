@@ -126,7 +126,7 @@ describe("Search results by folder", () => {
     await user.click(screen.getByRole("button", { name: "Unfold 10. Financial/Banks" }));
     expect(outline()).toHaveLength(7);
     await user.click(screen.getByRole("button", { name: "Fold 30. Car" }));
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "x");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "x");
     await waitFor(() => expect(outline()).toHaveLength(7));
   });
 
@@ -135,7 +135,7 @@ describe("Search results by folder", () => {
     await screen.findByRole("list", { name: "Search results" });
     await user.click(screen.getByRole("button", { name: "Open folder 10. Financial/Banks" }));
     expect(where()).toBe("/browse?path=10.+Financial%2FBanks");
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("");
     expect(screen.queryByRole("list", { name: "Search results" })).not.toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Tag filters" })).not.toBeInTheDocument();
   });
@@ -197,8 +197,8 @@ describe("The tags row", () => {
     expect(chips.closest(".tag-bar")).not.toBeNull();
     expect(chips.closest(".search")).toBeNull();
     expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["tag:medical×", "tag:tax return×"]);
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("Kela");
-    expect(within(screen.getByRole("searchbox", { name: "Search" }).closest(".search") as HTMLElement).queryByText("medical")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("Kela");
+    expect(within(screen.getByRole("combobox", { name: "Search" }).closest(".search") as HTMLElement).queryByText("medical")).toBeNull();
   });
 
   it("there is no row without tags", async () => {
@@ -250,11 +250,11 @@ describe("The tags row", () => {
   it("tag:name typed in the box lands in the row and leaves the box", async () => {
     const { user } = setup("/browse?q=pdf");
     await screen.findByRole("list", { name: "Search results" });
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), " tag:medical ");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), " tag:medical ");
     expect(where()).toBe("/browse?q=pdf+tag%3Amedical");
     const chips = await screen.findByRole("list", { name: "Search filters" });
     expect(chips.closest(".tag-bar")).not.toBeNull();
-    expect((screen.getByRole("searchbox", { name: "Search" }) as HTMLInputElement).value.trim()).toBe("pdf"); // only the words
+    expect((screen.getByRole("combobox", { name: "Search" }) as HTMLInputElement).value.trim()).toBe("pdf"); // only the words
   });
 });
 

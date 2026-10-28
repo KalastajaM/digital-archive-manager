@@ -74,7 +74,7 @@ describe("Select all", () => {
   it("⌘A in the search box is the text field's own select all", async () => {
     const { user } = setup(FILES, { "GET /api/search": { body: [] } });
     await screen.findByText("a.pdf");
-    await user.type(screen.getByRole("searchbox", { name: "Search" }), "x");
+    await user.type(screen.getByRole("combobox", { name: "Search" }), "x");
     await user.keyboard("{Meta>}a{/Meta}");
     expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument();
   });

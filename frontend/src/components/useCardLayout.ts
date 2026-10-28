@@ -108,12 +108,14 @@ export function useCardLayout(
   // Keyed by the defaults' value: callers pass a new array on every render.
   const columns = useMemo(() => resolve(saved.order, JSON.parse(defaultsKey) as string[][]), [saved.order, defaultsKey]);
 
-  // Saved folds are pruned to the cards that exist (a removed tray's fold goes).
+  // Saved folds and places are pruned to the cards that exist (a removed tray, or a card
+  // the look no longer has, goes).
   const update = useCallback(
     (next: Saved) => {
       const known = new Set((JSON.parse(defaultsKey) as string[][]).flat());
       const folds = Object.fromEntries(Object.entries(next.collapsed).filter(([id]) => known.has(id)));
-      const pruned = { order: next.order, collapsed: folds };
+      const order = next.order && next.order.filter((t) => t === BREAK || known.has(t));
+      const pruned = { order, collapsed: folds };
       setSaved(pruned);
       write(key, pruned);
     },

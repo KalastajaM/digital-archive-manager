@@ -3,7 +3,7 @@
  * columns. Left: the "To pay" table (Pay opens Pay mode on that bill, Paid marks it paid;
  * a bill that is overdue or due today opens up with its copy buttons and note) and the
  * other trays as compact lists. Right: the Inbox summary, Collections to do, Starred,
- * Reminders, and the rest (Clear, Search).
+ * Reminders (search lives in the palette and Browse).
  *
  * It composes the same pieces as Classic's Today (rows, mutations, cards); only the
  * arrangement differs. Customize turns the page into an arrange mode: each section gets
@@ -20,7 +20,6 @@ import { ItemBadges } from "../components/ItemBadges";
 import { useLocalClock } from "../components/RelativeDate";
 import { FoundList, NotRecognised } from "../components/today/InboxCard";
 import { CollectionsCard, needingAttention, Notices, RemindersCard } from "../components/today/pieces";
-import { SearchCard } from "../components/today/SearchCard";
 import { StarredCard } from "../components/today/StarredCard";
 import { countsOf, headlineOf, openLine, tilesOf } from "../components/today/summary";
 import { waited } from "../components/today/time";
@@ -436,7 +435,7 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
   const layout = useCardLayout(
     [
       ["pay", ...otherTrays.map(trayId)],
-      ["inbox", "collections", "starred", "reminders", "search"],
+      ["inbox", "collections", "starred", "reminders"],
     ],
     {},
     hiddenCards,
@@ -461,7 +460,6 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
     collections: "Collections to do",
     starred: "Starred",
     reminders: "Reminders",
-    search: "Search",
     ...Object.fromEntries(cards.map((c) => [trayId(c), visible(c.name)])),
   };
   const render = (id: string) => {
@@ -482,7 +480,6 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
       );
     }
     if (id === "inbox") return <InboxSection data={d} frame={frame} />;
-    if (id === "search") return <SearchCard frame={frame} Shell={TnSection} />;
     if (id === "starred") return <StarredCard frame={frame} Shell={TnSection} />;
     if (id === "collections") return <CollectionsCard data={d} frame={frame} Shell={TnSection} />;
     if (id === "reminders") return <RemindersCard data={d} today={today} frame={frame} Shell={TnSection} />;
