@@ -11,6 +11,8 @@
 export const PANE_WIDTH_KEYS = [
   "dam.browse.listwidth",
   "dam.browse.panesplit",
+  "dam.browse.treewidth",
+  "dam.browse.inspectorwidth",
   "dam.inbox.listwidth",
   "dam.inbox.panelwidth",
   "dam.trays.listwidth",

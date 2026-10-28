@@ -44,6 +44,26 @@ PDFS = [
     (f"{SPECIAL.important}/passport.pdf", "Passport copy"),
 ]
 
+# Deeper folders and long names (the folder tree and the truncated names in Browse).
+_STATEMENTS = "10. Financial/Banks/Northbank/2026 statements"
+_SAUNA = "30. Home/Renovation/2026 Sauna conversion"
+DEEP_PDFS = [
+    (
+        f"{_STATEMENTS}/20260228_Northbank current account statement February 2026 "
+        "with the annual interest summary.pdf",
+        "Northbank tiliote helmikuu 2026",
+    ),
+    (f"{_STATEMENTS}/20260331_Northbank statement March.pdf", "Northbank tiliote maaliskuu 2026"),
+    (f"{_STATEMENTS}/20260430_Northbank statement April.pdf", "Northbank tiliote huhtikuu 2026"),
+    (
+        f"{_SAUNA}/Permits and drawings/20260310_Building permit application for the sauna "
+        "conversion and chimney change.pdf",
+        "Rakennuslupa hakemus 2026",
+    ),
+    (f"{_SAUNA}/Permits and drawings/20260322_Floor plan.pdf", "Pohjapiirros 2026"),
+    (f"{_SAUNA}/20260401_Contractor quote.pdf", "Urakkatarjous 2026"),
+]
+
 
 # A water bill as a scan (image only) with the bank barcode printed at its foot, drawn
 # from the same modules the app's own barcode uses: indexing reads it back.
@@ -199,6 +219,8 @@ def build_into(archive: Path, data_dir: Path) -> None:
         "11. Bills & Receipts/2026",
         "13. Taxes",
         "30. Home/Electricity",
+        "30. Home/Renovation/2026 Sauna conversion/Permits and drawings",
+        "10. Financial/Banks/Northbank/2026 statements",
         "40. Family",
     ):
         (archive / folder).mkdir(parents=True, exist_ok=True)
@@ -222,6 +244,11 @@ def build_into(archive: Path, data_dir: Path) -> None:
         n += 1
         (archive / rel).write_text(body, encoding="utf-8")
         _tag(archive / rel, n)
+
+    # deeper folders with long names, for trying the folder tree and truncated names
+    for rel, text in DEEP_PDFS:
+        n += 1
+        _tag(make_text_pdf(archive / rel, text), n)
 
     n += 1
     _tag(_make_barcode_bill(archive / BARCODE_BILL), n)

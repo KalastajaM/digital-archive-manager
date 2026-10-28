@@ -23,13 +23,15 @@ type Props = {
   stacked?: boolean;
   /** Something before the title (the New look's "Inbox N" button that opens a folded list). */
   lead?: ReactNode;
+  /** The search before the actions instead of after them (the New Browse header). */
+  searchFirst?: boolean;
   /** Extra class and inline style for the header (a screen that sizes it to a column). */
   className?: string;
   style?: CSSProperties;
 };
 
 /** The unified toolbar at the top of a screen: title, subtitle, actions, search. */
-export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, trailing, stacked, lead: before, className, style }: Props) {
+export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, search, trailing, stacked, lead: before, searchFirst, className, style }: Props) {
   const lead = (
     <>
       {before}
@@ -51,12 +53,13 @@ export function Toolbar({ title, titleEditor, subtitle, onEditTitle, actions, se
             {subtitle}
           </span>}
       </div>
+      {searchFirst && search && <div className="toolbar-search">{search}</div>}
       {actions && (
         <div className="toolbar-actions" role="toolbar" aria-label={`${title} actions`}>
           {actions}
         </div>
       )}
-      {search && <div className="toolbar-search">{search}</div>}
+      {!searchFirst && search && <div className="toolbar-search">{search}</div>}
     </>
   );
   return (

@@ -12,7 +12,7 @@ def test_build_demo_archive(tmp_path):
     for name in (special.inbox, special.ongoing, special.important, special.quarantine):
         assert (archive / name).is_dir()
     files = [p for p in archive.rglob("*") if p.is_file() and not p.is_symlink()]
-    assert 8 <= len(files) <= 16
+    assert 8 <= len(files) <= 24
     for path in files:
         assert xattr.getxattr(path, DRIVE_ID_XATTR).decode().startswith("demo-")
     inbox_pdfs = list((archive / special.inbox).glob("*.pdf"))

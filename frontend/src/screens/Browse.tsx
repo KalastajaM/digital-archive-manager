@@ -1,6 +1,7 @@
 import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, PanelRight } from "lucide-react";
 import {
   cloneElement,
+  type CSSProperties,
   type DragEvent,
   Fragment,
   type MouseEvent,
@@ -53,7 +54,7 @@ import {
   useInboxFolder,
   useMoveFlow,
 } from "../components/MoveTo";
-import { isTrashKey, TRASH_BUSY, useTrash } from "../components/Trash";
+import { isTrashKey, TRASH_BUSY, TRASH_KEY, TRASH_LABEL, useTrash } from "../components/Trash";
 import { undoAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { useNewFolder } from "../components/NewFolder";
@@ -78,6 +79,10 @@ import { inToDelete, toDeleteReasonFor } from "../toDelete";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
+import { FolderTree } from "../components/FolderTree";
+import { InspectorActions, type InspectorAction, InspectorHint, SelectionSummary } from "../components/BrowseInspector";
+import { showInLabel } from "../fileManager";
+import { useFileLaunch } from "../components/FileLaunch";
 import { FileActionBar, useAskAction } from "../components/FileActionBar";
 import { useFilingAI } from "../components/ai/useFilingAI";
 import { usePutInTrayEntries } from "./FileActions";
@@ -171,6 +176,11 @@ const LIST_SPLIT = { min: 25, max: 75, initial: 45 };
 /** Two panes (New look): the left pane's share, dragged on the divider between them. */
 export const PANES_WIDTH_KEY = "dam.browse.panesplit";
 const PANES_SPLIT = { min: 25, max: 75, initial: 50 };
+/** The New look's folder tree (px, from the left) and details panel (px, from the right). */
+export const TREE_WIDTH_KEY = "dam.browse.treewidth";
+const TREE_SPLIT = { min: 150, max: 360, initial: 176, unit: "px" } as const;
+export const INSPECTOR_WIDTH_KEY = "dam.browse.inspectorwidth";
+const INSPECTOR_SPLIT = { min: 260, max: 520, initial: 280, unit: "px", edge: "end" } as const;
 
 const NONE: Set<string> = new Set();
 
@@ -701,7 +711,11 @@ export default function Browse() {
   const [look] = useStyle();
   const isNew = look === "new";
   const panesSplit = useSplitWidth(archiveKey(PANES_WIDTH_KEY), PANES_SPLIT);
+  const treeSplit = useSplitWidth(archiveKey(TREE_WIDTH_KEY), TREE_SPLIT);
+  const inspectorSplit = useSplitWidth(archiveKey(INSPECTOR_WIDTH_KEY), INSPECTOR_SPLIT);
+  // the folders and the details fold behind buttons (and open over the panes) when the room is short
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [treeOpen, setTreeOpen] = useState(false);
   const act: PaneId = split ? active : "left";
   const shown: PaneId[] = split ? PANES : ["left"];
   const flatOf = (pane: PaneId) => panes[pane].view === "files";
@@ -1316,11 +1330,21 @@ export default function Browse() {
   // One pane: the row the cursor is on is the selected file, and the detail shows it
   // (a click, j/k and a move all end up here). Two panes have no detail.
   // (A row nobody has picked yet is not highlighted, and shows no detail.)
-  const previewed: Item | null =
-    !split && sel.touched && currentItem && !currentItem.is_dir && !gone.has(currentItem.drive_id) ? currentItem : null;
+  // The New look shows the details beside two panes too: the files the active pane acts on
+  // (the checked ones, else the row the cursor is on); several of them get a summary.
+  const acted = isNew ? moveTargets.filter((it) => !gone.has(it.drive_id)) : [];
+  const previewed: Item | null = isNew
+    ? acted.length === 1
+      ? acted[0]
+      : null
+    : !split && sel.touched && currentItem && !currentItem.is_dir && !gone.has(currentItem.drive_id)
+      ? currentItem
+      : null;
   // a folder on the cursor shows its own panel: its collections and Add to collection
   const folderShown: Item | null =
-    !split && sel.touched && currentItem?.is_dir && !gone.has(currentItem.drive_id) ? currentItem : null;
+    (isNew || !split) && sel.touched && currentItem?.is_dir && !gone.has(currentItem.drive_id) && acted.length === 0
+      ? currentItem
+      : null;
   // Move to… (the header's, ⇧⌘M and the panel's) takes the folder shown when no file is picked
   const folderToMove: Item | null = moveTargets.length === 0 ? folderShown : null;
   const folderMoveBlocked = folderToMove ? folderMoveWhy(folderToMove) : null;
@@ -1336,7 +1360,7 @@ export default function Browse() {
   const askBar = useAskAction(
     filingAI,
     previewed && moveTargets.length === 1 && moveTargets[0].drive_id === previewed.drive_id ? previewed : null,
-    split ? "Ask AI works on one file: use one pane" : "Select one file to ask AI",
+    split && !isNew ? "Ask AI works on one file: use one pane" : "Select one file to ask AI",
     locked,
   );
   // A root of a folder whose disk is away is not opened: the row says why.
@@ -1470,6 +1494,12 @@ export default function Browse() {
       (e.target as HTMLElement).blur();
       return;
     }
+    if (e.key === "Escape" && (treeOpen || detailsOpen) && !dialogOpen()) {
+      // the folders or the details opened over the panes close again
+      setTreeOpen(false);
+      setDetailsOpen(false);
+      return;
+    }
     if ((e.metaKey || e.ctrlKey) && !e.altKey && !isTyping(e.target) && !dialogOpen()) {
       if (isTrashKey(e)) {
         // the focused list (or nothing focused): the pane's selection, as the button
@@ -1489,6 +1519,8 @@ export default function Browse() {
       return;
     }
     if (!isShortcut(e)) return;
+    // the folder tree has its own keys (arrows, Enter)
+    if (e.target instanceof Element && e.target.closest('[role="tree"]')) return;
     if (e.key === "j" || e.key === "ArrowDown") step(1);
     else if (e.key === "k" || e.key === "ArrowUp") step(-1);
     else if (e.key === "Enter") {
@@ -1574,7 +1606,7 @@ export default function Browse() {
     const sortState = isSearch ? searchSort : sorts[pane];
     // Two panes have no preview panel: the active pane's toolbar has the ★ / ! toggles of
     // the file it is on (one file: a toggle marks one file)
-    const onFiles = split && act === pane ? filesOf(pane) : [];
+    const onFiles = split && !isNew && act === pane ? filesOf(pane) : [];
     const marked = onFiles.length === 1 ? onFiles[0] : null;
     const fileRows = rows.filter((it) => !it.is_dir);
     const checkedIds = new Set(s.ids); // a big folder: no list scan per row
@@ -1598,6 +1630,13 @@ export default function Browse() {
         onChange={() => selectAll(pane)}
       />
     );
+    const folderCount = rows.length - fileRows.length;
+    const filesWord = (n: number) => `${groupDigits(n)} ${n === 1 ? "file" : "files"}`;
+    const countText = flat
+      ? filesWord(total)
+      : folderCount > 0
+        ? `${groupDigits(folderCount)} ${folderCount === 1 ? "folder" : "folders"}, ${filesWord(fileRows.length)}`
+        : filesWord(fileRows.length);
     const selectedFiles = () =>
       filesOf(pane)
         .filter((it) => sourceRefusal(it.path) === null)
@@ -1639,6 +1678,10 @@ export default function Browse() {
             go={(to) => go(pane, to)}
             drop={dropTo}
           />
+          {isNew && split && act !== pane && (
+            // the pane you are not in shows what it holds; its tools come back when you click into it
+            <span className="pane-count">{countText}</span>
+          )}
           <div className="pane-tools">
             {marked && <MarkToggles key={marked.drive_id} driveId={marked.drive_id} name={marked.name} marks={marked.marks} path={marked.path} />}
             <Menu
@@ -1691,6 +1734,11 @@ export default function Browse() {
             <div className="list-head">
               {selectAllBox}
               <span>Select all</span>
+              {isNew && checkedFiles > 0 && (
+                <span className="list-head-count">
+                  {checkedFiles} of {fileRows.length} selected
+                </span>
+              )}
             </div>
           )}
           {columns && body === null && (
@@ -1985,6 +2033,185 @@ export default function Browse() {
     </div>
   );
 
+  // The New look's details panel: what the old header's file actions did, as a list with its
+  // keys. Each entry runs the handler the header's button ran.
+  const launch = useFileLaunch(previewed?.drive_id ?? "");
+  const addEntries = (ids: string[]): MenuEntry[] => {
+    const kids = childrenOf(collectionRows ?? []);
+    const out: MenuEntry[] = [];
+    const walk = (parent: number | null, level: number) => {
+      for (const c of kids.get(parent) ?? []) {
+        out.push({ label: visible(c.name), indent: level, onSelect: () => addToCollection(c, ids) });
+        walk(c.id, level + 1);
+      }
+    };
+    walk(null, 0);
+    return out.length > 0 ? out : [{ label: "No open collections", disabled: true, onSelect: () => {} }];
+  };
+  const several = acted.length > 1;
+  const noFiles = moveTargets.length === 0;
+  const inDetails = (selector: string) => document.querySelector<HTMLElement>(`.browse-preview ${selector}`);
+  const inspectorActions: InspectorAction[] = [];
+  if (isNew) {
+    const here = previewed;
+    if (here) {
+      const away = here.connected === false;
+      inspectorActions.push(
+        { label: "Open", run: () => void launch.run("open"), disabled: launch.busy || away, reason: away ? "Not connected" : null },
+        {
+          label: "Quick Look",
+          keys: "Space",
+          run: () => quickLookRow(act, items[act].indexOf(here)),
+          disabled: locked,
+        },
+        { label: showInLabel(), run: () => void launch.run("reveal"), disabled: launch.busy || away, reason: away ? "Not connected" : null },
+      );
+    }
+    inspectorActions.push(
+      {
+        label: "Move to…",
+        keys: "⇧⌘M",
+        run: openMoveTo,
+        disabled: (noFiles && !folderToMove) || locked,
+        reason: moveBlocked ?? folderMoveBlocked,
+        rule: here !== null,
+      },
+      ...(here
+        ? [
+            {
+              label: "Rename",
+              run: () => inDetails(".click-edit")?.click(),
+              disabled: locked,
+              reason: readOnlyWhy,
+            },
+          ]
+        : []),
+      {
+        label: "Add to collection…",
+        menu: addEntries(moveTargets.map((it) => it.drive_id)),
+        disabled: noFiles || locked,
+        reason: readOnlyWhy,
+      },
+      {
+        label: "Put in tray…",
+        menu: trayEntries,
+        disabled: noFiles || locked,
+        reason: readOnlyWhy,
+      },
+      ...(here
+        ? [
+            {
+              label: "Tag…",
+              run: () => inDetails(".file-tags input")?.focus(),
+              disabled: locked,
+              reason: readOnlyWhy,
+            },
+          ]
+        : []),
+      {
+        label: several ? "Say who sent these…" : "Say who sent this…",
+        run: () => setAssigning({ kind: "sender", ids: moveTargets.map((it) => it.drive_id) }),
+        disabled: noFiles || locked,
+        reason: readOnlyWhy,
+      },
+      {
+        label: several ? "Say who these are for…" : "Say who this is for…",
+        run: () => setAssigning({ kind: "person", ids: moveTargets.map((it) => it.drive_id) }),
+        disabled: noFiles || locked,
+        reason: readOnlyWhy,
+      },
+      {
+        label: "Back to inbox",
+        run: () => {
+          if (inbox && !inboxRefusal(moveTargets.map((it) => it.path), inbox)) {
+            startRequest(
+              backToInbox(
+                moveTargets.map((it) => it.drive_id),
+                inbox,
+                moveTargets.map((it) => it.path),
+              ),
+            );
+          }
+        },
+        disabled: noFiles || locked,
+        reason: inboxWhy,
+        rule: true,
+      },
+      { label: "Ask AI…", run: askBar.run, disabled: askBar.disabled, reason: askBar.reason },
+      {
+        label: starAll ? "Remove the star" : "Star",
+        pressed: starAll,
+        run: () => void batchMark("star"),
+        disabled: noFiles || marks.busy,
+        reason: readOnlyWhy,
+        rule: true,
+      },
+      {
+        label: importantAll ? "Unmark Important" : "Mark Important",
+        pressed: importantAll,
+        run: () => void batchMark("important"),
+        disabled: noFiles || marks.busy,
+        reason: readOnlyWhy,
+      },
+    );
+    if (markTargets.some((it) => inToDelete(it.path))) {
+      inspectorActions.push({
+        label: "Restore from To Delete…",
+        menu: restoreEntries((to) => startRestore(markIds, to), restoreWhy),
+        rule: true,
+      });
+    }
+    inspectorActions.push({
+      label: markIds.length > 1 ? `Move ${markIds.length} to To Delete` : TRASH_LABEL,
+      keys: TRASH_KEY,
+      danger: true,
+      run: trashSelection,
+      disabled: markIds.length === 0 || marking.busy,
+      reason: markBlocked,
+      rule: true,
+    });
+  }
+  const actionList = <InspectorActions actions={inspectorActions} />;
+  const detail = previewed ? (
+    <FilePanel
+      file={{
+        ...previewed,
+        marks: [...items.left, ...items.right].find((i) => i.drive_id === previewed.drive_id)?.marks ?? previewed.marks,
+      }}
+      preview={previewOf(previewed)}
+      disabled={locked}
+      restore={(to) => startRestore([previewed.drive_id], to)}
+      boxTool
+      extras={isNew ? actionList : undefined}
+      headerActions={{ ai: filingAI }}
+    />
+  ) : isNew && several ? (
+    <>
+      <SelectionSummary files={acted} />
+      {actionList}
+    </>
+  ) : folderShown ? (
+    <FolderPanel
+      folder={folderShown}
+      refusal={folderCollectRefusal(folderShown.path, specialFolders)}
+      restore={(to) => startRestore([folderShown.drive_id], to)}
+      moveTo={{ run: () => openFolderMoveTo(folderShown), refusal: folderMoveWhy(folderShown) ?? (locked ? MOVE_BUSY : null) }}
+    />
+  ) : (
+    <EmptyState
+      icon={<File size={40} strokeWidth={1.25} />}
+      title="No file selected"
+      hint="Select a file to see its preview and details."
+    />
+  );
+  const treeMarks = split
+    ? PANES.map((pane) => ({ path: paths[pane], label: pane === "left" ? "L" : "R" }))
+    : [{ path: paths.left, label: "" }];
+  const closeOverlays = () => {
+    setDetailsOpen(false);
+    setTreeOpen(false);
+  };
+
   return (
     <div className={split ? "browse browse-split" : "browse"}>
       <Toolbar
@@ -1992,33 +2219,64 @@ export default function Browse() {
         className="browse-toolbar"
         style={split ? undefined : listSplit.hostStyle}
         subtitle={checked.length > 0 ? `${checked.length} selected` : undefined}
+        searchFirst={isNew}
+        lead={
+          isNew ? (
+            // under ~880px of Browse the folder tree leaves the row and opens over the panes from here
+            <IconButton
+              icon={<Folder />}
+              label="Show folders"
+              tip={treeOpen ? "Hide folders" : "Folders"}
+              pressed={treeOpen}
+              className="tree-button"
+              onClick={() => {
+                setTreeOpen((o) => !o);
+                setDetailsOpen(false);
+              }}
+            />
+          ) : undefined
+        }
         actions={
-          <>
-            <IconButton
-              icon={<Columns2 />}
-              label="Two panes"
-              pressed={split}
-              className={isNew ? "hdr-wide" : undefined}
-              onClick={toggleSplit}
-            />
-            {split && (
-              <IconButton icon={<ArrowLeftRight />} label="Swap panes" className={isNew ? "hdr-wide" : undefined} onClick={swapPanes} />
-            )}
-            <IconButton
-              icon={<FolderPlus />}
-              label="New folder"
-              shortcut="⇧⌘N"
-              className={isNew ? "hdr-wide" : undefined}
-              disabled={newFolderWhy(act) !== null || naming !== null || locked}
-              disabledReason={newFolderWhy(act) ?? undefined}
-              onClick={startNewFolder}
-            />
-            {isNew && (
-              // under ~760px of Browse the three buttons above fold into this menu
+          isNew ? (
+            <>
+              <Segmented<"one" | "two">
+                ariaLabel="Layout"
+                className="hdr-wide"
+                value={split ? "two" : "one"}
+                onChange={(v) => {
+                  if ((v === "two") !== split) toggleSplit();
+                }}
+                options={[
+                  { value: "one", label: "One pane" },
+                  { value: "two", label: "Two panes" },
+                ]}
+              />
+              <IconButton
+                icon={<ArrowLeftRight />}
+                label="Swap panes"
+                text="Swap panes"
+                className="hdr-wide"
+                disabled={!split}
+                disabledReason="Needs two panes"
+                onClick={swapPanes}
+              />
+              <IconButton
+                icon={<FolderPlus />}
+                label="New folder"
+                text="New folder"
+                shortcut="⇧⌘N"
+                className="hdr-wide hdr-plain"
+                disabled={newFolderWhy(act) !== null || naming !== null || locked}
+                disabledReason={newFolderWhy(act) ?? undefined}
+                onClick={startNewFolder}
+              />
+              {
+                // under ~760px of Browse the three controls above fold into this menu
+              }
               <Menu
                 label="More: panes and folders"
                 icon={<Ellipsis />}
-                align="start"
+                align="end"
                 className="hdr-more"
                 entries={[
                   { label: split ? "One pane" : "Two panes", onSelect: toggleSplit },
@@ -2031,22 +2289,39 @@ export default function Browse() {
                   },
                 ]}
               />
-            )}
-            {isNew && !split && (
-              // under ~760px the details panel leaves the row and opens over the list from here
+              {
+                // under ~1120px of Browse the details leave the row and open over the panes from here
+              }
               <IconButton
                 icon={<PanelRight />}
                 label="Details"
                 tip={detailsOpen ? "Hide details" : "Show details"}
                 pressed={detailsOpen}
                 className="details-button"
-                onClick={() => setDetailsOpen((o) => !o)}
+                onClick={() => {
+                  setDetailsOpen((o) => !o);
+                  setTreeOpen(false);
+                }}
               />
-            )}
-          </>
+            </>
+          ) : (
+            <>
+              <IconButton icon={<Columns2 />} label="Two panes" pressed={split} onClick={toggleSplit} />
+              {split && <IconButton icon={<ArrowLeftRight />} label="Swap panes" onClick={swapPanes} />}
+              <IconButton
+                icon={<FolderPlus />}
+                label="New folder"
+                shortcut="⇧⌘N"
+                disabled={newFolderWhy(act) !== null || naming !== null || locked}
+                disabledReason={newFolderWhy(act) ?? undefined}
+                onClick={startNewFolder}
+              />
+            </>
+          )
         }
         search={searchBox}
         trailing={
+          isNew ? undefined : (
           <FileActionBar
             tray={{
               label: "Put in tray",
@@ -2110,6 +2385,7 @@ export default function Browse() {
               reason: markBlocked,
             }}
           />
+          )
         }
       />
       {marking.message && (
@@ -2144,55 +2420,59 @@ export default function Browse() {
           ))}
         </div>
       )}
-      <div
-        className="browse-main"
-        ref={isNew && split ? panesSplit.hostRef : listSplit.hostRef}
-        style={split ? (isNew ? panesSplit.hostStyle : undefined) : listSplit.hostStyle}
-        data-details={isNew && !split && detailsOpen ? "open" : undefined}
-      >
-        {isNew
-          ? shown.map((pane, i) => (
+      {isNew ? (
+        <div
+          className="browse-body"
+          ref={(el) => {
+            // the tree's and the details panel's widths are measured from this row
+            treeSplit.hostRef.current = el;
+            inspectorSplit.hostRef.current = el;
+          }}
+          style={{ "--tree-w": `${treeSplit.width}px`, "--details-w": `${inspectorSplit.width}px` } as CSSProperties}
+          data-details={detailsOpen ? "open" : undefined}
+          data-tree={treeOpen ? "open" : undefined}
+        >
+          <FolderTree
+            marks={treeMarks}
+            onOpen={(entry) => {
+              open(act, entry);
+              setTreeOpen(false);
+            }}
+            dropFor={dropTo}
+          />
+          <Splitter split={treeSplit} label="Resize the folder tree" className="tree-splitter" />
+          <div className="browse-main" ref={panesSplit.hostRef} style={panesSplit.hostStyle}>
+            {shown.map((pane, i) => (
               <Fragment key={pane}>
                 {i === 1 && <Splitter split={panesSplit} label="Resize the two panes" />}
                 {renderPane(pane)}
               </Fragment>
-            ))
-          : shown.map(renderPane)}
-        {!split && (
-          <>
-            <Splitter split={listSplit} label="Resize the list" />
-            {isNew && detailsOpen && <div className="details-scrim" aria-hidden="true" onClick={() => setDetailsOpen(false)} />}
-            <section className="browse-preview" aria-label="Preview">
-              {previewed ? (
-                <FilePanel
-                  file={{
-                    ...previewed,
-                    marks: [...items.left, ...items.right].find((i) => i.drive_id === previewed.drive_id)?.marks ?? previewed.marks,
-                  }}
-                  preview={previewOf(previewed)}
-                  disabled={locked}
-                  restore={(to) => startRestore([previewed.drive_id], to)}
-                  boxTool
-                  headerActions={{ ai: filingAI }}
-                />
-              ) : folderShown ? (
-                <FolderPanel
-                  folder={folderShown}
-                  refusal={folderCollectRefusal(folderShown.path, specialFolders)}
-                  restore={(to) => startRestore([folderShown.drive_id], to)}
-                  moveTo={{ run: () => openFolderMoveTo(folderShown), refusal: folderMoveWhy(folderShown) ?? (locked ? MOVE_BUSY : null) }}
-                />
-              ) : (
-                <EmptyState
-                  icon={<File size={40} strokeWidth={1.25} />}
-                  title="No file selected"
-                  hint="Select a file to see its preview and details."
-                />
-              )}
-            </section>
-          </>
-        )}
-      </div>
+            ))}
+          </div>
+          <Splitter split={inspectorSplit} label="Resize the details panel" className="details-splitter" />
+          <section className="browse-preview" aria-label="Preview">
+            {detail}
+            <InspectorHint />
+          </section>
+          {(detailsOpen || treeOpen) && <div className="browse-scrim" aria-hidden="true" onClick={closeOverlays} />}
+        </div>
+      ) : (
+        <div
+          className="browse-main"
+          ref={listSplit.hostRef}
+          style={split ? undefined : listSplit.hostStyle}
+        >
+          {shown.map(renderPane)}
+          {!split && (
+            <>
+              <Splitter split={listSplit} label="Resize the list" />
+              <section className="browse-preview" aria-label="Preview">
+                {detail}
+              </section>
+            </>
+          )}
+        </div>
+      )}
       <KeyHints hints={KEYS} className="browse-keys" />
       {quickLook.view}
       {move.view}
