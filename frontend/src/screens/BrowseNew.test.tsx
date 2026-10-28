@@ -1,6 +1,6 @@
 /** Browse in the New look: the extra controls the stylesheet shows when the room is short
- * (the "View" menu per pane, the "More" menu, the Details button, the L / R tabs) and the
- * remembered divider between two panes. Classic renders none of them. */
+ * (the "View" menu per pane, the "More" menu, the Details and folders buttons, the L / R
+ * tabs) and the remembered divider between two panes. Classic renders none of them. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -59,13 +59,13 @@ describe("Browse in New, one pane", () => {
     const pane = screen.getByRole("region", { name: "Browse" });
     expect(within(pane).getByRole("button", { name: "View" })).toBeInTheDocument();
     // the Details button opens the panel over the list, and the scrim closes it again
-    const main = document.querySelector(".browse-main") as HTMLElement;
-    expect(main.dataset.details).toBeUndefined();
+    const body = document.querySelector(".browse-body") as HTMLElement;
+    expect(body.dataset.details).toBeUndefined();
     await user.click(details);
-    expect(main.dataset.details).toBe("open");
+    expect(body.dataset.details).toBe("open");
     expect(details).toHaveAttribute("aria-pressed", "true");
-    await user.click(document.querySelector(".details-scrim") as HTMLElement);
-    expect(main.dataset.details).toBeUndefined();
+    await user.click(document.querySelector(".browse-scrim") as HTMLElement);
+    expect(body.dataset.details).toBeUndefined();
     expect(screen.queryByRole("tablist", { name: "Panes" })).not.toBeInTheDocument();
   });
 
@@ -107,8 +107,8 @@ describe("Browse in New, two panes", () => {
     expect(screen.getByRole("region", { name: "Right pane" })).toHaveClass("browse-pane-active");
     expect(screen.getByRole("region", { name: "Left pane" })).not.toHaveClass("browse-pane-active");
     expect([...document.querySelectorAll(".pane-id")].map((n) => n.textContent)).toEqual(["L", "R"]);
-    // the two panes have no Details button: there is no panel beside them
-    expect(screen.queryByRole("button", { name: "Details" })).not.toBeInTheDocument();
+    // the details panel sits beside two panes too (a Details button opens it when the room is short)
+    expect(screen.getByRole("button", { name: "Details" })).toBeInTheDocument();
   });
 
   it("remembers the divider's place and a double-click resets it", async () => {

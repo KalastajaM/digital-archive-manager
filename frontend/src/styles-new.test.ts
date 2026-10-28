@@ -84,15 +84,23 @@ describe("styles-new.css: Browse", () => {
   it("makes the screen and each pane a container, and folds in the agreed order", () => {
     expect(plain).toMatch(/main:has\(> \.browse\) \{ container: browse \/ inline-size; \}/);
     expect(plain).toMatch(/\.browse-pane \{ container: pane \/ inline-size;/);
-    const order = ["880px", "760px", "759px", "640px"].map((w) => plain.indexOf(`@container browse (max-width: ${w})`));
+    const order = ["1120px", "880px", "760px", "640px"].map((w) => plain.indexOf(`@container browse (max-width: ${w})`));
     expect(order.every((i) => i > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(plain).toMatch(/@container pane \(max-width: 480px\)/);
   });
 
+  it("has the folder tree and the details beside the panes, each behind its own button when the room is short", () => {
+    expect(plain).toMatch(/\.browse-body > \.tree \{ flex: 0 0 var\(--tree-w\);/);
+    expect(plain).toMatch(/\.browse-body > \.browse-preview \{ flex: 0 0 var\(--details-w\);/);
+    expect(plain).toMatch(/@container browse \(max-width: 1120px\) \{\s*\[data-style="new"\] \.browse-toolbar \.details-button \{ display: inline-flex; \}/);
+    expect(plain).toMatch(/@container browse \(max-width: 880px\) \{[\s\S]*?\.tree-button \{ display: inline-flex; \}/);
+    expect(plain).toMatch(/\.browse-body\[data-tree="open"\] > \.tree \{\s*display: flex;\s*position: absolute;/);
+  });
+
   it("keeps the panes side by side where Classic stacks them at 900px", () => {
     const block = plain.slice(plain.indexOf('@media (max-width: 900px) {\n  [data-style="new"] .app:has(.browse)')).split(/\n\}\n/)[0];
-    expect(block).toContain('[data-style="new"] .browse-main { grid-template-columns: minmax(300px, var(--split)) minmax(0, 1fr); }');
+    expect(block).toContain('[data-style="new"] .browse:not(.browse-split) .browse-main { grid-template-columns: minmax(0, 1fr); }');
     expect(block).toContain('[data-style="new"] .app:has(.browse) .content { height: 100%; }');
     expect(block).not.toMatch(/grid-template-columns: 1fr;/);
   });

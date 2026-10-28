@@ -8,6 +8,23 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **The New look: Browse laid out as drawn.** A **folder tree** on the left (the top folders of
+  every archive folder, each opening onto its subfolders when you expand it; the folder each
+  pane is in is highlighted and marked L or R, and its parents open by themselves). Click a
+  folder to open it in the active pane, use the arrow keys, Enter and Home / End to move
+  through it, or drop files or a folder on it to move, link or copy them as on a breadcrumb
+  step. Beside the panes, also with two, the **details panel** shows the selected file (or a
+  summary for several files: how many, how big, where, which collections) with a list of
+  **actions and their keys** (Open, Quick Look, Show in Finder, Move to…, Rename, Add to
+  collection…, Put in tray…, Tag…, Say who sent it, Back to inbox, Ask AI, Star, Mark
+  Important, Move to To Delete) that replaces the row of icon buttons in the header. The header
+  now reads Browse, search, **One pane / Two panes**, **Swap panes** and **New folder**. The
+  pane you are not in shows how many files it holds instead of its tools, and a list says
+  "2 of 9 selected". When the window gets narrow the details fold behind a **Details** button
+  first, then the folder tree behind a **Folders** button, then the header buttons into "...",
+  then the two panes into an L / R pair of tabs. Both dividers are remembered and
+  double-click resets them. The demo archive has deeper folders and long names to try it on.
+  Classic is unchanged.
 - **Pay mode steps through your bills.** Pay mode now says "Bill 2 of 5 · 412,90 € open in
   total" and has **Previous bill** and **Next bill** buttons (the ← and → keys too) that go
   through every open bill, across all your bill trays by due date, without closing. The
