@@ -35,7 +35,7 @@ export const SHOWN = 4;
 
 export { EMPTY_TEXT };
 
-export function RelativesBlock({ file }: { file: BlockFile }) {
+export function RelativesBlock({ file, compact = false }: { file: BlockFile; /** A narrow panel: folded until opened. */ compact?: boolean }) {
   const query = useRelatives(file.drive_id);
   const data = query.data;
   const [map, setMap] = useState(false);
@@ -47,6 +47,7 @@ export function RelativesBlock({ file }: { file: BlockFile }) {
       name="relatives"
       title="Relatives"
       className="relatives"
+      foldedByDefault={compact}
       aside={
         data && data.total > 0 ? (
           <>
@@ -211,7 +212,7 @@ function RelativeRow({
         </div>
         {unfiled && (
           <div className="relative-unfiled">
-            <span>{KIND_PHRASE[kinds[0]]}, not filed yet</span>
+            <span title={`${KIND_PHRASE[kinds[0]]}, not filed yet`}>{KIND_PHRASE[kinds[0]]}, not filed yet</span>
             <Link to="/inbox" className="link-button">
               Go to the inbox
             </Link>

@@ -11,17 +11,19 @@ const KEY = "dam.collapsed.";
 /** The sections that remember their state. */
 export type CollapsibleName = "summary" | "checklist" | "notes" | "history" | "relatives";
 
-function readCollapsed(name: CollapsibleName): boolean {
+function readCollapsed(name: CollapsibleName, folded: boolean): boolean {
   try {
-    return window.localStorage.getItem(KEY + name) === "1";
+    const v = window.localStorage.getItem(KEY + name);
+    return v === null ? folded : v === "1";
   } catch {
-    return false; // blocked or unavailable: expanded
+    return folded; // blocked or unavailable: the default
   }
 }
 
-function writeCollapsed(name: CollapsibleName, collapsed: boolean) {
+function writeCollapsed(name: CollapsibleName, collapsed: boolean, folded: boolean) {
   try {
     if (collapsed) window.localStorage.setItem(KEY + name, "1");
+    else if (folded) window.localStorage.setItem(KEY + name, "0");
     else window.localStorage.removeItem(KEY + name);
   } catch {
     // not remembered; the section still folds
@@ -35,6 +37,7 @@ export function Collapsible({
   aside,
   className,
   headingId,
+  foldedByDefault = false,
   children,
 }: {
   name: CollapsibleName;
@@ -46,14 +49,16 @@ export function Collapsible({
   className?: string;
   /** The heading's id when the caller needs it. */
   headingId?: string;
+  /** Folded until the person opens it (a stored choice wins). */
+  foldedByDefault?: boolean;
   children: ReactNode;
 }) {
   const ownId = useId();
   const hid = headingId ?? `${ownId}-h`;
   const bodyId = `${ownId}-body`;
-  const [collapsed, setCollapsed] = useState(() => readCollapsed(name));
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(name, foldedByDefault));
   const toggle = () => {
-    writeCollapsed(name, !collapsed);
+    writeCollapsed(name, !collapsed, foldedByDefault);
     setCollapsed(!collapsed);
   };
   return (

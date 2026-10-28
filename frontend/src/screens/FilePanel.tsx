@@ -33,6 +33,7 @@ export function FilePanel({
   boxTool = true,
   restore,
   headerActions,
+  compactRelatives = false,
 }: {
   file: MetaFile;
   /** What the preview shows (Browse: a link's target). */
@@ -52,6 +53,8 @@ export function FilePanel({
    * to inbox, ★ / ! and Ask AI are not repeated here. ``ai`` is the screen's Ask AI, whose
    * answer shows in the file's details. */
   headerActions?: { ai: FilingAI };
+  /** A narrow panel (a collection): Relatives starts folded. */
+  compactRelatives?: boolean;
 }) {
   // A file in ##. To Delete is read-only until it is restored
   const readOnly = toDeleteReason(file.path);
@@ -87,7 +90,7 @@ export function FilePanel({
             </>
             )
           }
-          relatives={relatives && file.path !== null ? <RelativesBlock file={{ ...file, path: file.path, name: file.name ?? null }} /> : undefined}
+          relatives={relatives && file.path !== null ? <RelativesBlock compact={compactRelatives} file={{ ...file, path: file.path, name: file.name ?? null }} /> : undefined}
           preview={
             <FilePreview
               file={preview}

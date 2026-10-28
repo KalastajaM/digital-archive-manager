@@ -1776,9 +1776,11 @@
 [data-style="new"] .collection-inspector [data-block="own"] { order: 3; }
 [data-style="new"] .collection-inspector [data-block="collections"] { order: 4; }
 [data-style="new"] .collection-inspector [data-block="summary"] { order: 5; }
-[data-style="new"] .collection-inspector [data-block="preview"] { order: 6; }
-[data-style="new"] .collection-inspector .inspector-foot { order: 7; display: flex; flex-direction: column; gap: 10px; }
-[data-style="new"] .collection-inspector [data-block="notes"] { order: 8; }
+[data-style="new"] .collection-inspector [data-block="relatives"] { order: 6; }
+[data-style="new"] .collection-inspector [data-block="preview"] { order: 7; }
+[data-style="new"] .collection-inspector .inspector-foot { order: 8; display: flex; flex-direction: column; gap: 10px; }
+[data-style="new"] .collection-inspector [data-block="notes"] { order: 9; }
+[data-style="new"] .collection-inspector .relatives { margin: 0; }
 [data-style="new"] .collection-inspector > :not(.file-panel):not(.inspector-foot) { order: 3; }
 [data-style="new"] .inspector-collection { margin-top: 0; }
 [data-style="new"] .inspector-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2379,15 +2381,18 @@
 [data-style="new"] .relative-kinds { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
 [data-style="new"] .relative-tools { flex: none; display: flex; align-items: flex-start; }
 [data-style="new"] .relative-tools .icon-button { width: var(--icon-button-sm); height: var(--icon-button-sm); min-height: 0; }
-/* A narrow details panel (Browse beside two panes): the name gets the whole width, the
-   folder goes under it and the row's buttons to a line of their own */
-@container (max-width: 320px) {
-  [data-style="new"] .relative-row { flex-wrap: wrap; row-gap: 2px; }
+/* A narrow details panel (a collection, Browse beside two panes): each relative is two lines, the
+   name and, under it, the folder or the reason, each cut with an ellipsis; the buttons stay on
+   the row as icons */
+@container (max-width: 380px) {
+  [data-style="new"] .relative-row { gap: 6px; }
   [data-style="new"] .relative-line { flex-direction: column; align-items: stretch; gap: 0; }
-  [data-style="new"] .relative-folder { text-align: left; }
-  [data-style="new"] .relative-unfiled { flex-wrap: wrap; column-gap: var(--sp-2); row-gap: 0; }
-  [data-style="new"] .relative-unfiled .link-button { margin-left: 0; }
-  [data-style="new"] .relative-tools { flex-basis: 100%; justify-content: flex-end; }
+  [data-style="new"] .relative-name,
+  [data-style="new"] .relative-folder { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+  [data-style="new"] .relative-unfiled { flex-wrap: nowrap; gap: var(--sp-2); min-width: 0; }
+  [data-style="new"] .relative-unfiled > :first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  [data-style="new"] .relative-unfiled .link-button { flex: none; margin-left: 0; white-space: nowrap; }
+  [data-style="new"] .relative-tools { flex: none; align-self: flex-start; }
 }
 [data-style="new"] .relatives-more { align-self: flex-start; font-size: var(--fs-sm); }
 [data-style="new"] .relatives-hidden { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }

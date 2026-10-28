@@ -771,6 +771,7 @@ function Inspector({
           disabled={busy}
           view={quickLookButton}
           headerActions={{ ai }}
+          compactRelatives
           extras={
             (group || (showButton && !foot)) && (
               <section className="inspector-collection" aria-label="In this collection">
