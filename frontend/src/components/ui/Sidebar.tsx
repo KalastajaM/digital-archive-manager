@@ -14,6 +14,8 @@ import {
   ListTodo,
   type LucideIcon,
   Pin,
+  Plus,
+  Search,
   Settings,
   Sun,
   Tag as TagIcon,
@@ -27,6 +29,7 @@ import {
   type TrayDef,
   useBuiltin,
   useCollectionMembers,
+  useAllTags,
   useCollections,
   useSidebarTags,
   useStatus,
@@ -65,6 +68,7 @@ import {
 } from "../useCollectionOrder";
 import { useUndoConfirm } from "../UndoConfirm";
 import { useQuickPut } from "../useQuickPut";
+import { searchKeyLabel } from "../../searchKey";
 import { positiveTags, readQuery, tagFilter } from "../../searchFilters";
 
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
@@ -74,6 +78,40 @@ const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 function useRowTitle(): (text: string) => string | undefined {
   const [look] = useStyle();
   return (text) => (look === "new" ? text : undefined);
+}
+
+/** New look: the grip on a row that can be dragged to a new place (shown on hover). The
+ * whole row drags, as in Classic; the grip only says so. Classic draws none. */
+function Grip() {
+  const [look] = useStyle();
+  if (look !== "new") return null;
+  return (
+    <span className="sidebar-grip" aria-hidden="true">
+      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+        <circle cx="2.5" cy="3" r="1.2" />
+        <circle cx="7.5" cy="3" r="1.2" />
+        <circle cx="2.5" cy="7" r="1.2" />
+        <circle cx="7.5" cy="7" r="1.2" />
+        <circle cx="2.5" cy="11" r="1.2" />
+        <circle cx="7.5" cy="11" r="1.2" />
+      </svg>
+    </span>
+  );
+}
+
+/** New look: the search field under the archive's name. It looks like a field but opens the
+ * search and jump palette (also on the shortcut); in the icon rail it is an icon. */
+function SidebarSearch({ onOpen }: { onOpen: () => void }) {
+  const key = searchKeyLabel();
+  return (
+    <button type="button" className="sidebar-search" aria-haspopup="dialog" aria-label={`Search (${key})`} title={`Search (${key})`} onClick={onOpen}>
+      <Search size={14} strokeWidth={2} aria-hidden="true" />
+      <span className="sidebar-search-text">Search</span>
+      <kbd className="sidebar-search-key" aria-hidden="true">
+        {key}
+      </kbd>
+    </button>
+  );
 }
 
 type RowProps = {
@@ -126,6 +164,7 @@ function Section({
   folded,
   onFold,
   foldedCount,
+  add,
   children,
 }: {
   title: string;
@@ -134,8 +173,11 @@ function Section({
   folded: boolean;
   onFold: () => void;
   foldedCount?: number;
+  /** New look: a "+" after the caption that goes to where something is made. */
+  add?: { to: string; label: string };
   children: ReactNode;
 }) {
+  const [look] = useStyle();
   return (
     <li className="sidebar-section">
       <div className="sidebar-section-head">
@@ -157,6 +199,11 @@ function Section({
         >
           <ChevronRight size={12} strokeWidth={2} aria-hidden="true" className="sidebar-chevron" data-open={!folded || undefined} />
         </button>
+        {look === "new" && add && (
+          <Link to={add.to} className="sidebar-section-add" aria-label={add.label} title={add.label}>
+            <Plus size={13} strokeWidth={2} aria-hidden="true" />
+          </Link>
+        )}
       </div>
       {!folded && <ul className="sidebar-list">{children}</ul>}
     </li>
@@ -320,13 +367,17 @@ function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeP
   const reorder = useReorderRow(order, c, target.props);
   const name = visible(c.name);
   const title = useRowTitle();
+  const [look] = useStyle();
+  // New: a count of the files in it, named with the row like the trays' counts
+  const files = look === "new" ? c.files : 0;
+  const label = files ? `${name} (${files})` : name;
   return (
     <li className="sidebar-tree-item">
       <NavLink
         to={`/collections/${c.id}`}
         className={children.length > 0 ? "sidebar-row sidebar-row-parent" : "sidebar-row"}
-        aria-label={name}
-        title={title(name)}
+        aria-label={label}
+        title={title(label)}
         data-collection-id={c.id}
         draggable
         onDragStart={(e) => setDragCollection(e, c.id, c.name)}
@@ -334,8 +385,10 @@ function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeP
         onContextMenu={onMenu(c)}
         {...reorder.props}
       >
+        <Grip />
         <Layers className="sidebar-icon" {...ICON} />
         <span className="sidebar-label">{name}</span>
+        {files > 0 && <span className="sidebar-count">{files}</span>}
       </NavLink>
       {children.length > 0 && (
         <button
@@ -365,6 +418,7 @@ type SectionFolds = ReturnType<typeof useFolds<string>>;
 /** The Collections section: the open collections as a tree; its caption takes a
  * dropped collection to the top level. */
 function CollectionsSection({ list, sections }: { list: CollectionRow[]; sections: SectionFolds }) {
+  const [look] = useStyle();
   const folds = useFolds(archiveKey(FOLD_KEY), isId);
   const collect = useAddToCollection();
   const mover = useMoveCollection(list, (target) => target && folds.unfold(target.id));
@@ -379,6 +433,8 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
       dropProps={top.props}
       folded={sections.folded.has("collections")}
       onFold={() => sections.toggle("collections")}
+      foldedCount={look === "new" ? (kids.get(null) ?? []).length + 2 : undefined}
+      add={{ to: "/collections?new=1", label: "New collection" }}
     >
       <ImportantRow />
       <StarredRow />
@@ -428,13 +484,57 @@ function StarredRow() {
 }
 
 /** The Tags section: its caption opens the Tags screen; below it the pinned tags, then the
- * most recently used ones (eight in all), each opening its files in Browse. */
+ * most recently used ones (eight in all), each opening its files in Browse. New look: the
+ * Tags screen is a row in the Archive section, and the tags are two sections, "Pinned
+ * tags" and "Recent tags" (none shown while there are none). */
 function TagsSection({ sections }: { sections: SectionFolds }) {
   const tags = useSidebarTags();
   const location = useLocation();
+  const [look] = useStyle();
   const shown = tags.data ?? [];
   // the tags Browse filters by now: `tag:` filters in the search, or an older `?tag=` link
   const current = location.pathname === "/browse" ? browseTags(location.search) : [];
+  const rows = (list: typeof shown) =>
+    list.map((t) => {
+      const name = visible(t.name);
+      const Icon = t.pinned ? Pin : TagIcon;
+      const isCurrent = current.length === 1 && current[0] === t.name;
+      return (
+        <li key={t.name}>
+          {/* a plain Link: a NavLink would mark every tag current on /browse, since they
+              all share that path and differ only in the query */}
+          <Link
+            to={`/browse?${new URLSearchParams({ q: tagFilter(t.name) })}`}
+            className={isCurrent ? "sidebar-row active" : "sidebar-row"}
+            aria-label={`${name} (${t.files})`}
+            aria-current={isCurrent ? "page" : undefined}
+            title={t.pinned ? `${name} (pinned)` : name}
+          >
+            <Icon className="sidebar-icon" {...ICON} />
+            <span className="sidebar-label">{name}</span>
+            {t.files > 0 && <span className="sidebar-count">{t.files}</span>}
+          </Link>
+        </li>
+      );
+    });
+  if (look === "new") {
+    const pinned = shown.filter((t) => t.pinned);
+    const recent = shown.filter((t) => !t.pinned);
+    return (
+      <>
+        {pinned.length > 0 && (
+          <Section title="Pinned tags" folded={sections.folded.has("pinned-tags")} onFold={() => sections.toggle("pinned-tags")} foldedCount={pinned.length}>
+            {rows(pinned)}
+          </Section>
+        )}
+        {recent.length > 0 && (
+          <Section title="Recent tags" folded={sections.folded.has("recent-tags")} onFold={() => sections.toggle("recent-tags")} foldedCount={recent.length}>
+            {rows(recent)}
+          </Section>
+        )}
+      </>
+    );
+  }
   return (
     <Section
       title="Tags"
@@ -442,30 +542,15 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
       folded={sections.folded.has("tags")}
       onFold={() => sections.toggle("tags")}
     >
-      {shown.map((t) => {
-        const name = visible(t.name);
-        const Icon = t.pinned ? Pin : TagIcon;
-        const isCurrent = current.length === 1 && current[0] === t.name;
-        return (
-          <li key={t.name}>
-            {/* a plain Link: a NavLink would mark every tag current on /browse, since they
-                all share that path and differ only in the query */}
-            <Link
-              to={`/browse?${new URLSearchParams({ q: tagFilter(t.name) })}`}
-              className={isCurrent ? "sidebar-row active" : "sidebar-row"}
-              aria-label={`${name} (${t.files})`}
-              aria-current={isCurrent ? "page" : undefined}
-              title={t.pinned ? `${name} (pinned)` : name}
-            >
-              <Icon className="sidebar-icon" {...ICON} />
-              <span className="sidebar-label">{name}</span>
-              {t.files > 0 && <span className="sidebar-count">{t.files}</span>}
-            </Link>
-          </li>
-        );
-      })}
+      {rows(shown)}
     </Section>
   );
+}
+
+/** New look: the Tags screen's row in the Archive section, counting every tag. */
+function TagsRow() {
+  const all = useAllTags();
+  return <Row to="/tags" icon={TagIcon} label="Tags" count={all.data?.tags.length} />;
 }
 
 /** The tags a Browse address filters by, when it filters by tags alone (no words or
@@ -490,12 +575,15 @@ export function trayIcon(tray: TrayDef): LucideIcon {
 type Props = {
   /** The sidebar's foot: the status line. */
   footer?: ReactNode;
+  /** Opens search and jump; New look: the search field under the archive's name. */
+  onSearch?: () => void;
 };
 
 /** The app's sidebar: Today, Inbox, Browse, the trays, the open collections (a tree)
  * and the rest of the archive (Trays, Collections and Archive fold). Documents dragged onto a tray are put in it; onto a collection, added to
  * it. A collection dragged onto another goes inside it; onto the caption, to the top. */
-export function Sidebar({ footer }: Props) {
+export function Sidebar({ footer, onSearch }: Props) {
+  const [look] = useStyle();
   const status = useStatus();
   const today = useToday();
   useTodayFollowsInbox(status.data);
@@ -510,6 +598,7 @@ export function Sidebar({ footer }: Props) {
   return (
     <aside className="sidebar">
       <ArchiveSwitcher />
+      {look === "new" && onSearch && <SidebarSearch onOpen={onSearch} />}
       <nav aria-label="Main" className="sidebar-nav">
         <ul className="sidebar-list">
           <Row to="/" end icon={Sun} label="Today" badge={due} />
@@ -547,9 +636,20 @@ export function Sidebar({ footer }: Props) {
           <CollectionsSection list={collections.data ?? []} sections={sections} />
           <TagsSection sections={sections} />
           <Section title="Archive" folded={sections.folded.has("archive")} onFold={() => sections.toggle("archive")}>
-            <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
-            <Row to="/activity" icon={History} label="Activity" />
-            <Row to="/maintenance" icon={Wrench} label="Maintenance" />
+            {look === "new" ? (
+              <>
+                <TagsRow />
+                <Row to="/activity" icon={History} label="Activity" />
+                <Row to="/maintenance" icon={Wrench} label="Maintenance" />
+                <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
+              </>
+            ) : (
+              <>
+                <Row to="/ask" icon={MessageCircleQuestion} label="Ask" />
+                <Row to="/activity" icon={History} label="Activity" />
+                <Row to="/maintenance" icon={Wrench} label="Maintenance" />
+              </>
+            )}
             <Row to="/settings" icon={Settings} label="Settings" />
             <Row to="/help" icon={CircleHelp} label="Help" />
           </Section>

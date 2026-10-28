@@ -159,17 +159,71 @@
 /* ==== The shell: sidebar and content ======================================================= */
 [data-style="new"] .sidebar {
   container: side / inline-size;
-  padding: var(--sp-3) 10px var(--sp-2);
+  padding: var(--sp-3) 10px 10px;
   gap: 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border-right: 1px solid var(--hairline);
+  overflow: hidden; /* the archive block, the search field and the foot stay; the list scrolls */
 }
-[data-style="new"] .sidebar-brand { padding: 0 0 var(--sp-3); }
-[data-style="new"] .archive-button { padding: 6px 8px; margin: 0; border-radius: var(--r-md); font-weight: 600; color: var(--text); }
-[data-style="new"] .archive-dot { width: 18px; height: 18px; border-radius: 5px; box-shadow: none; }
-[data-style="new"] .sidebar-section { margin-top: var(--sp-4); }
-[data-style="new"] .sidebar-section-head { padding-right: 0; flex-direction: row; }
+[data-style="new"] .sidebar > * { flex: none; }
+[data-style="new"] .sidebar > .sidebar-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+[data-style="new"] .sidebar-brand { padding: 0; margin-bottom: 14px; }
+/* The archive block: a coloured tile with its initial, the name, and under it where the
+ * folder lives and how many files it holds; the switch chevrons at the end. */
+[data-style="new"] .archive-button { gap: 10px; padding: 8px; margin: 0; border-radius: var(--r-md); font-weight: 600; color: var(--text); }
+[data-style="new"] .archive-tile {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+[data-style="new"] .archive-text { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.2; white-space: nowrap; }
+[data-style="new"] .archive-name { flex: none; font-size: 13px; }
+[data-style="new"] .archive-sub { overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; font-weight: 400; color: var(--muted); }
+/* The search field: a button that looks like a field and opens search and jump. */
+[data-style="new"] .sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  height: 34px;
+  min-height: 0;
+  margin-bottom: 14px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--field);
+  box-shadow: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+}
+[data-style="new"] .sidebar-search:hover:not(:disabled) { border-color: var(--border-strong); background: var(--field); }
+[data-style="new"] .sidebar-search svg { flex: none; }
+[data-style="new"] .sidebar-search-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-style="new"] .sidebar-search-key {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--hairline);
+  border-bottom-width: 1px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  white-space: nowrap;
+}
+[data-style="new"] .sidebar-section { margin-top: 9px; }
+[data-style="new"] .sidebar-section-head { padding-right: 0; padding-bottom: 3px; flex-direction: row; }
 /* Caption: small caps, with the fold chevron before it (always shown, as drawn). */
 [data-style="new"] .sidebar-section-title {
   padding: 0 4px;
@@ -191,14 +245,35 @@
   color: var(--muted);
 }
 [data-style="new"] .sidebar-section-count { font-size: var(--fs-xs); }
+/* Every row starts 12px in: that column is the drag grip's, on the rows that can be moved. */
+[data-style="new"] .sidebar-list { display: flex; flex-direction: column; gap: 1px; }
 [data-style="new"] .sidebar-row {
+  position: relative;
   gap: 10px;
   min-height: var(--sidebar-row-h);
-  padding: 0 8px;
+  margin-left: 12px;
+  padding: 0 8px 0 6px;
   border-radius: var(--r-md);
   color: var(--text-2);
   font-weight: 450;
 }
+[data-style="new"] .sidebar-grip {
+  position: absolute;
+  left: -12px;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  opacity: 0;
+  cursor: grab;
+  transition: opacity var(--motion) var(--ease);
+}
+[data-style="new"] .sidebar-row:hover > .sidebar-grip,
+[data-style="new"] .sidebar-row:focus-visible > .sidebar-grip { opacity: 0.7; }
+@media (hover: none) { [data-style="new"] .sidebar-grip { opacity: 0.5; } }
 [data-style="new"] .sidebar-row:hover { background: var(--hover); }
 [data-style="new"] .sidebar-row[aria-current="page"],
 [data-style="new"] .sidebar-row.active { background: var(--sidebar-sel); color: var(--accent-hover); font-weight: 600; }
@@ -207,33 +282,63 @@
 [data-style="new"] .sidebar-row.active .sidebar-icon { color: var(--accent); }
 [data-style="new"] .sidebar-important { color: var(--red-text); }
 [data-style="new"] .sidebar-starred { color: var(--orange); }
-[data-style="new"] .sidebar-count { font-size: var(--fs-sm); padding: 0 5px; line-height: 18px; }
-/* An urgent count is a status pill in the Overdue colours. */
+/* Counts are figures (mono, never cut); an urgent one is a solid red pill. */
+[data-style="new"] .sidebar-count { flex: none; font-family: var(--font-mono); font-size: 11.5px; padding: 0 5px; line-height: 18px; }
 [data-style="new"] .sidebar-badge {
+  flex: none;
   min-width: 0;
   padding: 0 5px;
   border-radius: var(--r-sm);
-  background: var(--red-bg);
-  color: var(--red-text);
-  font-size: var(--fs-sm);
-  font-weight: 500;
+  background: #b3261e;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
   line-height: 18px;
 }
+:root[data-style="new"][data-theme="dark"] .sidebar-badge { background: var(--red-bg); color: var(--red-text); }
 [data-style="new"] .sidebar-children { padding-left: 14px; }
 /* Built-in collections (Important, Starred) are set apart from the user's own. */
 [data-style="new"] .sidebar-list > li:has(> a > .sidebar-starred) {
   margin-bottom: 4px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 5px;
+  background: linear-gradient(var(--hairline), var(--hairline)) bottom 0 left 18px / calc(100% - 26px) 1px no-repeat;
 }
 [data-style="new"] .sidebar-disclosure { color: var(--muted); }
-[data-style="new"] .sidebar-foot { padding: var(--sp-3) 6px 0; border-top-width: 1px; }
+/* "+" after a caption: where a new collection is made. */
+[data-style="new"] .sidebar-section-add {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  color: var(--muted);
+}
+[data-style="new"] .sidebar-section-add:hover { background: var(--hover); color: var(--text); }
+[data-style="new"] .sidebar-foot { padding: 10px 10px 2px; border-top-width: 1px; }
 [data-style="new"] .status-badge { font-size: var(--fs-sm); }
-[data-style="new"] .status-badge .status-line-button { min-height: 0; padding: 0; border: 0; background: transparent; font-weight: 400; color: inherit; }
+[data-style="new"] .status-badge .status-line-button { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: transparent; font-weight: 400; text-align: left; color: inherit; }
+[data-style="new"] .status-line-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; line-height: 1.25; color: var(--muted); }
+[data-style="new"] .status-line-main { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+[data-style="new"] .status-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+[data-style="new"] .status-attention .status-dot { background: var(--orange); }
+[data-style="new"] .status-line-label,
+[data-style="new"] .status-line-rest { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-style="new"] .status-badge .status-line-button:hover:not(:disabled) { background: transparent; color: var(--text); }
 
 /* Drag-and-drop highlights keep their Classic meaning, in the accent. */
 [data-style="new"] .sidebar-row[data-drop="over"] { color: var(--text); }
+
+/* ==== Search and jump ======================================================================= */
+[data-style="new"] dialog.palette { border-radius: var(--r-xl); box-shadow: var(--shadow-sheet); }
+[data-style="new"] dialog.palette[open] { animation: none; }
+[data-style="new"] .palette-field { border-bottom-width: 1px; }
+[data-style="new"] .palette-foot { border-top-width: 1px; }
+[data-style="new"] .palette-field kbd,
+[data-style="new"] .palette-foot kbd { border-width: 1px; font-family: var(--font-mono); background: transparent; }
+[data-style="new"] .palette-option[aria-selected="true"] { color: var(--accent-hover); }
 
 /* ==== The icon rail: a narrow window, or a sidebar narrower than 120px ===================
  * The grid column shrinks to 60px at 960px and below; the sidebar measures itself (container
@@ -252,14 +357,21 @@
   [data-style="new"] .sidebar-children > li > .sidebar-disclosure,
   [data-style="new"] .sidebar-tree-item > .sidebar-disclosure,
   [data-style="new"] .look-toggle { display: none !important; }
-  [data-style="new"] .sidebar-row { position: relative; justify-content: center; padding: 0 !important; }
+  [data-style="new"] .sidebar-row { justify-content: center; margin-left: 0; padding: 0 !important; }
+  [data-style="new"] .sidebar-grip,
+  [data-style="new"] .sidebar-section-add,
+  [data-style="new"] .archive-text,
+  [data-style="new"] .status-line-text { display: none !important; }
+  [data-style="new"] .sidebar-search { justify-content: center; padding: 0; }
+  [data-style="new"] .sidebar-search-text,
+  [data-style="new"] .sidebar-search-key { display: none; }
   [data-style="new"] .sidebar-badge { position: absolute; top: 0; right: 2px; min-width: 0; padding: 0 3px; font-size: 10px; line-height: 14px; }
   [data-style="new"] .sidebar-children { padding-left: 0; }
   [data-style="new"] .sidebar-section { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--hairline); }
   [data-style="new"] .sidebar-section-head { justify-content: center; }
   [data-style="new"] .sidebar-section-fold { margin: 0; width: 100%; height: 18px; }
   [data-style="new"] .archive-button { justify-content: center; padding: 6px 0; }
-  [data-style="new"] .sidebar-list > li:has(> a > .sidebar-starred) { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+  [data-style="new"] .sidebar-list > li:has(> a > .sidebar-starred) { margin-bottom: 0; padding-bottom: 0; background: none; }
   [data-style="new"] .sidebar-foot { padding: var(--sp-2) 0 0; text-align: center; }
   /* the status line becomes one dot: green, or orange when something needs a look */
   [data-style="new"] .status-badge { display: flex; justify-content: center; }
