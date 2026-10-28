@@ -1134,7 +1134,7 @@ relative when it shares at least one link; the score is the sum of the weights o
 | --- | --- | --- |
 | `reference` | `items.fields.reference` of the tray items the files are on | 5 |
 | `sender` | `file_assignments.sender` (case and accents ignored) | 3 |
-| `collection` | `collection_members` (not the built-in Starred and Important) | 3 |
+| `collection` | `collection_members`, directly or through a member folder (every file inside it, at any depth); not the built-in Starred and Important | 3 |
 | `tag` (each) | `file_tags` | 2 |
 | `folder` | the folder the file is directly in (not the inbox, a code's inbox folder or the archive root) | 2 |
 | `iban` | `items.fields.iban` | 2 |

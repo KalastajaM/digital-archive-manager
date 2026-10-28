@@ -1218,7 +1218,8 @@ a count of the rest ("2 more with one link in common").
 
 A file is a relative when it shares at least one **link** with this one. Each row names its
 links in short labels: **folder** (the same folder; sharing the inbox does not count, since
-it holds what is not filed yet), **sender**, **collection**, **tag**,
+it holds what is not filed yet), **sender**, **collection** (also a file inside a folder
+that is in the collection), **tag**,
 **IBAN**, **reference** (the number of a tray item) and **person** (the "For" of the
 document). Hover the labels for the exact values. Every link adds to a score, and the list
 is ranked by it: a shared reference number counts most, then a sender or a collection, then

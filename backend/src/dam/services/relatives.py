@@ -19,7 +19,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from sqlalchemy import Connection, Engine, and_, delete, func, or_, select
+from sqlalchemy import Connection, Engine, and_, delete, func, literal, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.core.paths import ArchivePaths
@@ -133,6 +133,11 @@ def damping(count: int, limit: int = COMMON_LIMIT) -> float:
     return 0.5 if count > limit else 1.0
 
 
+def _like_escape(path: str) -> str:
+    """``path`` for a LIKE pattern with ``escape="\\"``."""
+    return path.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _folder_of(path_nfc: str) -> str:
     return path_nfc.rpartition("/")[0]
 
@@ -183,7 +188,7 @@ class RelativesService:
             hits: dict[str, dict[tuple[str, str], float]] = {}
             self._tags(conn, subject, hits)
             self._assignments(conn, subject, hits)
-            self._collections(conn, subject, hits)
+            self._collections(conn, rec, hits)
             self._folder(conn, rec, hits)
             self._items(conn, subject, hits)
             for other in [*marked, subject]:
@@ -304,22 +309,42 @@ class RelativesService:
             for other in others:
                 self._add(hits, other, kind, value, len(others) + 1)
 
-    def _collections(self, conn: Connection, subject: str, hits: dict) -> None:
-        # the two built-in collections (starred, important) are marks, not groups of files
-        mine = (
-            conn.execute(
-                select(collection_members.c.collection_id)
-                .join(collections, collections.c.id == collection_members.c.collection_id)
-                .where(collection_members.c.drive_id == subject, collections.c.kind.is_(None))
+    def _collections(self, conn: Connection, rec: FileRecord, hits: dict) -> None:
+        # A collection holds files directly or through a member folder (every file inside
+        # it, at any depth), as the file panel's collection chips count them. The two
+        # built-in collections (starred, important) are marks, not groups of files.
+        subject = rec.drive_id
+        folders = files.alias("folder")
+        live_folder = and_(
+            folders.c.is_dir.is_(True),
+            folders.c.missing.is_not(True),
+            folders.c.parked_at.is_(None),
+        )
+        regular = collections.c.kind.is_(None)
+        direct = select(collection_members.c.collection_id).where(
+            collection_members.c.drive_id == subject
+        )
+        prefix_len = func.length(folders.c.path_nfc) + 1
+        through_folder = (
+            select(collection_members.c.collection_id)
+            .join(folders, folders.c.drive_id == collection_members.c.drive_id)
+            .where(
+                live_folder,
+                func.substr(literal(rec.path_nfc), 1, prefix_len) == folders.c.path_nfc + "/",
             )
-            .scalars()
-            .all()
+        )
+        mine = dict(
+            conn.execute(
+                select(collections.c.id, collections.c.name).where(
+                    regular, collections.c.id.in_(direct.union(through_folder))
+                )
+            ).all()
         )
         if not mine:
             return
+        # the files added one by one
         rows = conn.execute(
-            select(collection_members.c.drive_id, collections.c.name)
-            .join(collections, collections.c.id == collection_members.c.collection_id)
+            select(collection_members.c.drive_id, collection_members.c.collection_id)
             .join(files, files.c.drive_id == collection_members.c.drive_id)
             .where(
                 collection_members.c.collection_id.in_(list(mine)),
@@ -327,8 +352,24 @@ class RelativesService:
                 _live,
             )
         ).all()
-        for other, name in rows:
-            self._add(hits, other, "collection", name)
+        for other, cid in rows:
+            self._add(hits, other, "collection", mine[cid])
+        # the files inside its member folders
+        held = conn.execute(
+            select(folders.c.path_nfc, collection_members.c.collection_id)
+            .join(folders, folders.c.drive_id == collection_members.c.drive_id)
+            .where(collection_members.c.collection_id.in_(list(mine)), live_folder)
+        ).all()
+        for path, cid in held:
+            others = conn.execute(
+                select(files.c.drive_id).where(
+                    files.c.path_nfc.like(_like_escape(path) + "/%", escape="\\"),
+                    files.c.drive_id != subject,
+                    _live,
+                )
+            ).scalars()
+            for other in others:
+                self._add(hits, other, "collection", mine[cid])
 
     def _folder(self, conn: Connection, rec: FileRecord, hits: dict) -> None:
         # Sharing the inbox (or a code's inbox folder) or the archive root says nothing:
@@ -336,7 +377,7 @@ class RelativesService:
         folder = _folder_of(rec.path_nfc)
         if not folder or self.repo.in_inbox_path(rec.path):
             return
-        escaped = folder.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        escaped = _like_escape(folder)
         direct = and_(
             files.c.path_nfc.like(escaped + "/%", escape="\\"),
             files.c.path_nfc.not_like(escaped + "/%/%", escape="\\"),
