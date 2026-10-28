@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Relative } from "../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
-import { RelativesDialog } from "./RelativesDialog";
+import { buildOutline, RelativesDialog } from "./RelativesDialog";
 
 const FILE = { drive_id: "d0", path: "13. Taxes/20250930_Verohallinto.pdf", name: "20250930_Verohallinto.pdf" };
 
@@ -76,14 +76,13 @@ describe("the outline", () => {
     await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
     const list = screen.getByRole("list", { name: "Folders with relatives" });
     const rows = [...list.children].map((li) => li.querySelector(".rel-name, .rel-folder-name")?.textContent);
-    // 13. Taxes holds this file; the Inbox comes last; 30. Home is only a way to Property
+    // 13. Taxes holds this file; the Inbox comes last; 30. Home is only a way to Property, so one row
     expect(rows).toEqual([
       "13. Taxes",
       "20250930_Verohallinto.pdf",
       "20240928_Verohallinto.pdf",
       "20250415_Veroilmoitus 2024.pdf",
-      "30. Home",
-      "Property",
+      "30. Home / Property",
       "20250926_Vuokratulot.pdf",
       "40. Misc",
       "receipt.pdf",
@@ -95,6 +94,19 @@ describe("the outline", () => {
     expect(rowOf("scan_20261001.pdf")).toHaveClass("unfiled");
     expect(within(rowOf("20240928_Verohallinto.pdf")).getByText("sender")).toBeInTheDocument();
     expect(within(rowOf("20250926_Vuokratulot.pdf")).getByText("+ same month")).toBeInTheDocument();
+  });
+
+  it("gives a folder its own row only where it holds files or the paths below it part", () => {
+    const labels = (rs: Relative[]) =>
+      buildOutline(FILE, rs, new Set()).flatMap((r) => (r.t === "folder" ? [`${r.depth}:${r.label}`] : []));
+    expect(
+      labels([
+        rel("a", "a.pdf", "12. Insurance/01. Pohjola/Claims", [["tag", "x"]]),
+        rel("b", "b.pdf", "12. Insurance/02. If/Claims", [["tag", "x"]]),
+        rel("c", "c.pdf", "11. Bills/2026", [["tag", "x"]]),
+        rel("d", "d.pdf", "11. Bills", [["tag", "x"]]),
+      ]),
+    ).toEqual(["0:11. Bills", "1:2026", "0:12. Insurance", "1:01. Pohjola / Claims", "1:02. If / Claims", "0:13. Taxes"]);
   });
 
   it("draws one arc per relative, dashed orange for the unfiled one", async () => {
@@ -295,5 +307,56 @@ describe("the keys", () => {
     await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
     fireEvent.keyDown(rowOf("receipt.pdf"), { key: "Escape" });
     expect(closed).toBe(1);
+  });
+});
+
+describe("walking the family tree", () => {
+  const BACK_TO_FILE = [
+    rel("d0", "20250930_Verohallinto.pdf", "13. Taxes", [["sender", "Verohallinto"]]),
+    rel("r7", "20230930_Verohallinto.pdf", "13. Taxes/Old", [["sender", "Verohallinto"]]),
+  ];
+  const walkRoutes = {
+    "GET /api/files/r2/relatives": { body: { ...body(BACK_TO_FILE), drive_id: "r2", common: [] } },
+  };
+
+  it("a relative's name shows its own relatives, marks the file it came from, and Back returns", async () => {
+    const { user } = setup(walkRoutes);
+    await user.click(await screen.findByRole("button", { name: "20240928_Verohallinto.pdf" }));
+    await screen.findByRole("checkbox", { name: "Select 20230930_Verohallinto.pdf" });
+    const trail = screen.getByRole("navigation", { name: "Files walked through" });
+    expect(within(trail).getByRole("button", { name: "20250930_Verohallinto.pdf" })).toBeInTheDocument();
+    expect(within(trail).getByText("20240928_Verohallinto.pdf")).toHaveAttribute("aria-current", "page");
+    expect(within(rowOf("20250930_Verohallinto.pdf")).getByText("came from")).toBeInTheDocument();
+    // the In common strip and the side panel belong to the new file
+    expect(screen.queryByRole("group", { name: "In common" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Back/ }));
+    await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
+    expect(screen.queryByRole("button", { name: /^Back/ })).not.toBeInTheDocument();
+  });
+
+  it("Enter on a row walks, the card offers Its relatives, and Backspace or a crumb goes back", async () => {
+    const { user } = setup(walkRoutes);
+    await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
+    rowOf("20240928_Verohallinto.pdf").focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("checkbox", { name: "Select 20230930_Verohallinto.pdf" });
+    // the keys stay with the dialog after the outline changed
+    await user.keyboard("{Backspace}");
+    await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
+    fireEvent.mouseEnter(rowOf("20240928_Verohallinto.pdf"));
+    await user.click(screen.getByRole("button", { name: /Its relatives/ }));
+    await screen.findByRole("checkbox", { name: "Select 20230930_Verohallinto.pdf" });
+    const trail = screen.getByRole("navigation", { name: "Files walked through" });
+    await user.click(within(trail).getByRole("button", { name: "20250930_Verohallinto.pdf" }));
+    await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
+  });
+
+  it("forgets ticks when it moves to another file", async () => {
+    const { user } = setup(walkRoutes);
+    await user.click(await screen.findByRole("checkbox", { name: "Select receipt.pdf" }));
+    await user.click(screen.getByRole("button", { name: "20240928_Verohallinto.pdf" }));
+    await screen.findByRole("checkbox", { name: "Select 20230930_Verohallinto.pdf" });
+    await user.click(screen.getByRole("button", { name: /^Back/ }));
+    expect(await screen.findByRole("checkbox", { name: "Select receipt.pdf" })).not.toBeChecked();
   });
 });
