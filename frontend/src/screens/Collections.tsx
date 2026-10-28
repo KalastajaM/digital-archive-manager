@@ -2,8 +2,8 @@
  * list, as a Mac list. ``/collections/<id>`` is one collection's page (the sidebar
  * lists the open ones and is the main way in). */
 import { ChevronRight, Layers } from "lucide-react";
-import { type ReactNode, useId, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { type CollectionRow, errorText, useCollections, useCreateCollection } from "../api/client";
 import { COLLECTION_NAME_MAX } from "../components/CollectionPicker";
 import { sentence } from "../components/collectionText";
@@ -28,6 +28,13 @@ import CollectionDetail from "./CollectionDetail";
 /** An inline name input: Enter (or Create) creates the collection and opens it. */
 function NewCollection({ onCreated }: { onCreated: (id: number) => void }) {
   const id = useId();
+  // The sidebar's "+" opens /collections?new=1: the name field takes the focus.
+  const location = useLocation();
+  const wanted = new URLSearchParams(location.search).get("new") === "1";
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (wanted) field.current?.focus();
+  }, [wanted, location.key]);
   const create = useCreateCollection();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +63,7 @@ function NewCollection({ onCreated }: { onCreated: (id: number) => void }) {
         <Layers className="new-collection-icon" size={16} strokeWidth={1.75} aria-hidden="true" />
         <input
           id={id}
+          ref={field}
           value={name}
           maxLength={COLLECTION_NAME_MAX}
           spellCheck={false}

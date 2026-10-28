@@ -7,6 +7,7 @@ import { useIndexErrorsSheet } from "./components/IndexErrors";
 import { RecoveryPanel } from "./components/Recovery";
 import { hasBand } from "./components/archivePalette";
 import { EmptyState } from "./components/ui/EmptyState";
+import { SearchPalette, useSearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/ui/Sidebar";
 import { LookToggle, useLookShortcut } from "./components/LookToggle";
 import { CopyJobProgress } from "./components/CopyJobProgress";
@@ -52,11 +53,29 @@ function StatusBadge({ status }: { status: Status }) {
   // New: the icon rail shrinks the line to a dot, so the whole line is its tooltip
   const title = problems.map((r) => visible(`${r.file}: ${r.message}`)).join("\n") || (look === "new" ? parts.join(" · ") : undefined);
   const attention = status.errors > 0 || problems.length > 0;
+  // New: two lines, as drawn. First how much is searchable (a dot says all is well), then
+  // the rest of what the one-line status says, or "nothing waiting".
+  const all = status.indexed >= status.files;
+  const rest = [parts[0], ...(waiting === 0 ? ["nothing waiting"] : []), ...parts.slice(2)];
   return (
     <>
       <p className={attention ? "status-badge status-attention" : "status-badge"} title={title} data-testid="status-line">
         <button type="button" className="link-button status-line-button" onClick={sheet.open}>
-          {parts.join(" · ")}
+          {look === "new" ? (
+            <>
+              <span className="status-line-text">
+                <span className="status-line-main">
+                  <span className="status-dot" aria-hidden="true" />
+                  <span className="status-line-label">
+                    {all ? `All ${groupDigits(status.files)} files searchable` : `${groupDigits(status.indexed)} of ${groupDigits(status.files)} files searchable`}
+                  </span>
+                </span>
+                <span className="status-line-rest">{rest.join(" · ")}</span>
+              </span>
+            </>
+          ) : (
+            parts.join(" · ")
+          )}
         </button>
       </p>
       {sheet.view}
@@ -147,6 +166,7 @@ function Shell() {
   const status = useStatus();
   useArchiveChrome(status.data);
   useLookShortcut();
+  const palette = useSearchPalette();
   const band = hasBand(status.data?.archive, status.data?.profiles_count);
   const onActivity = useLocation().pathname === "/activity"; // it has its own panel
   const foot = (
@@ -159,7 +179,8 @@ function Shell() {
   return (
     <div className="app" data-archive-band={band ? "" : undefined} style={band ? ({ "--archive-color": status.data?.archive?.color } as React.CSSProperties) : undefined}>
       {band && <div className="archive-band" aria-hidden="true" />}
-      <Sidebar footer={foot} />
+      <Sidebar footer={foot} onSearch={palette.show} />
+      <SearchPalette open={palette.open} onClose={palette.hide} />
       <div className="content">
         <CopyJobProgress />
         {status.data?.archive_available === false && <ArchiveUnavailableBanner />}

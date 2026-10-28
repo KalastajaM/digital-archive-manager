@@ -8,6 +8,20 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Search and jump (Cmd+K, Ctrl+K elsewhere).** One box that finds files, folders, collections,
+  trays, tags and the screens themselves as you type. The arrow keys move, Enter opens the
+  choice where it lives (a file opens in Browse with it selected, a folder in Browse, a tray,
+  collection or tag on its page), and Esc closes it. It works in both looks and also while you
+  are typing in a field. In the New look the sidebar has a search field under the archive's
+  name that opens it, shown as an icon when the sidebar is narrow.
+- **The New look: the sidebar as drawn.** The archive block shows an initial tile, the name and
+  under it where the archive folder lives and how many files it holds (for example "Google
+  Drive · 2 418 files"). Rows have a drag handle on hover where they can be moved (collections),
+  collections show how many files they hold, and Collections has a **+** that takes you to the
+  new-collection field. Pinned tags and recent tags are their own sections, the Tags screen is
+  a row under Archive with the number of tags, and the foot shows how many files are searchable
+  and what is waiting. The archive block, the search field and the foot stay in place while the
+  list scrolls.
 - **Mark a bill paid from Pay mode.** The large barcode (press **b** on a bill) now has
   the tray's own done button, such as **Mark paid**, next to **Close**. It closes Pay mode
   and opens the same form as the button on the bill, so you confirm the paid date there

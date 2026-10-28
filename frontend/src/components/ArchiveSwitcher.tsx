@@ -1,6 +1,9 @@
 import { ChevronsUpDown } from "lucide-react";
 import { useState } from "react";
-import { type Archive, errorText, navigation, switchArchive, useArchives } from "../api/client";
+import { type Archive, errorText, navigation, switchArchive, useArchives, useStatus } from "../api/client";
+import { useStyle } from "../appearance";
+import { archiveSource } from "../archiveSource";
+import { groupDigits } from "../format";
 import { visible } from "../text";
 import { AddArchive } from "./AddArchive";
 import { ManageArchives } from "./ManageArchives";
@@ -9,12 +12,23 @@ import { type MenuEntry, Menu } from "./ui/Menu";
 
 const FALLBACK_COLOR = "#3b6fd4";
 
+/** New look: the line under the archive's name, "Google Drive · 2 418 files": where the
+ * folder lives (from its path) and how many files the index knows. Without a file count
+ * (the status has not arrived) the place alone is shown. */
+function ArchiveLine({ root }: { root: string | null }) {
+  const files = useStatus().data?.files;
+  const place = archiveSource(root);
+  const text = [place && visible(place), files === undefined ? null : `${groupDigits(files)} files`].filter(Boolean).join(" · ");
+  return text ? <span className="archive-sub">{text}</span> : null;
+}
+
 /** The archive menu at the top of the sidebar: the archive shown (name and colour dot),
  * the list to switch to, "Add archive…" and "Manage archives…". Switching closes this
  * archive's background work and opens the other in the same window; an archive that
  * another dam window has open is listed but cannot be switched to. */
 export function ArchiveSwitcher() {
   const list = useArchives();
+  const [look] = useStyle();
   const toast = useToast();
   const [sheet, setSheet] = useState<"add" | "manage" | null>(null);
   const [switching, setSwitching] = useState(false);
@@ -62,12 +76,30 @@ export function ArchiveSwitcher() {
       <h1>
         <Menu
           label={`Archive: ${name}`}
-          icon={<span className="archive-dot" style={{ background: color }} />}
+          icon={
+            look === "new" ? (
+              <span className="archive-tile" style={{ background: color }} aria-hidden="true">
+                {Array.from(name)[0]?.toUpperCase()}
+              </span>
+            ) : (
+              <span className="archive-dot" style={{ background: color }} />
+            )
+          }
           text={
-            <>
-              <span className="archive-name">{name}</span>
-              <ChevronsUpDown className="archive-chevron" size={12} strokeWidth={2} aria-hidden="true" />
-            </>
+            look === "new" ? (
+              <>
+                <span className="archive-text">
+                  <span className="archive-name">{name}</span>
+                  {current?.archive_root && <ArchiveLine root={current.archive_root} />}
+                </span>
+                <ChevronsUpDown className="archive-chevron" size={14} strokeWidth={2} aria-hidden="true" />
+              </>
+            ) : (
+              <>
+                <span className="archive-name">{name}</span>
+                <ChevronsUpDown className="archive-chevron" size={12} strokeWidth={2} aria-hidden="true" />
+              </>
+            )
           }
           triggerClassName="archive-button"
           entries={entries}

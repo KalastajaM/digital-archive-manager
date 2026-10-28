@@ -384,6 +384,38 @@ dialog.sheet[open] { animation: sheet-in var(--motion) var(--ease); }
 /* A third action ("Don't offer these") stands apart at the left, as on a Mac. */
 .sheet-footer > .footer-start { margin-right: auto; }
 
+/* ---- Search and jump (Cmd/Ctrl+K): one box over the window ------------------------------ */
+dialog.palette {
+  margin: 12dvh auto auto;
+  width: min(640px, 92vw);
+  max-height: 70dvh;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-xl);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-sheet);
+  overflow: hidden;
+}
+dialog.palette[open] { display: flex; flex-direction: column; animation: sheet-in var(--motion) var(--ease); }
+dialog.palette::backdrop { background: var(--backdrop); }
+.palette-field { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-4); height: 48px; border-bottom: 0.5px solid var(--separator); color: var(--muted); }
+.palette-field svg { flex: none; }
+dialog.palette .palette-field input,
+dialog.palette .palette-field input:focus,
+dialog.palette .palette-field input:focus-visible { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: var(--fs-lg); color: var(--text); }
+.palette-results { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-2); }
+.palette-group-title { padding: var(--sp-2) var(--sp-2) var(--sp-1); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.palette-option { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0 var(--sp-2); border-radius: var(--r-md); cursor: default; }
+.palette-option[aria-selected="true"] { background: var(--selected); color: var(--text); }
+.palette-icon { flex: none; color: var(--muted); }
+.palette-option[aria-selected="true"] .palette-icon { color: var(--accent); }
+.palette-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-hint { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-sm); }
+.palette-empty { margin: 0; padding: var(--sp-3) var(--sp-2); color: var(--muted); }
+.palette-foot { flex: none; display: flex; gap: var(--sp-4); margin: 0; padding: var(--sp-2) var(--sp-4); border-top: 0.5px solid var(--separator); color: var(--muted); font-size: var(--fs-xs); }
+.palette-foot kbd + kbd { margin-left: 2px; }
+
 /* ---- Card, tag, empty state ------------------------------------------------------- */
 .card { background: var(--panel); border-radius: var(--r-xl); box-shadow: var(--shadow-card); padding: var(--sp-4); }
 .card-header { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
