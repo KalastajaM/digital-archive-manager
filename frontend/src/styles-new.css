@@ -2285,7 +2285,7 @@
 [data-style="new"] .breadcrumb-ruler .icon-button { display: block; width: 24px; height: 24px; padding: 0; }
 
 /* Relatives: the files a document belongs with, in the details panel (RelativesBlock.tsx) */
-[data-style="new"] .relatives { margin: var(--sp-3) 0; }
+[data-style="new"] .relatives { margin: var(--sp-3) 0; container-type: inline-size; }
 [data-style="new"] .relatives .collapsible-head h3 { text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-xs); }
 [data-style="new"] .relatives-count { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 [data-style="new"] .relatives-body { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
@@ -2306,6 +2306,16 @@
 [data-style="new"] .relative-kinds { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
 [data-style="new"] .relative-tools { flex: none; display: flex; align-items: flex-start; }
 [data-style="new"] .relative-tools .icon-button { width: var(--icon-button-sm); height: var(--icon-button-sm); min-height: 0; }
+/* A narrow details panel (Browse beside two panes): the name gets the whole width, the
+   folder goes under it and the row's buttons to a line of their own */
+@container (max-width: 320px) {
+  [data-style="new"] .relative-row { flex-wrap: wrap; row-gap: 2px; }
+  [data-style="new"] .relative-line { flex-direction: column; align-items: stretch; gap: 0; }
+  [data-style="new"] .relative-folder { text-align: left; }
+  [data-style="new"] .relative-unfiled { flex-wrap: wrap; column-gap: var(--sp-2); row-gap: 0; }
+  [data-style="new"] .relative-unfiled .link-button { margin-left: 0; }
+  [data-style="new"] .relative-tools { flex-basis: 100%; justify-content: flex-end; }
+}
 [data-style="new"] .relatives-more { align-self: flex-start; font-size: var(--fs-sm); }
 [data-style="new"] .relatives-hidden { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
 [data-style="new"] .relatives-hidden > .link-button { align-self: flex-start; color: var(--muted); }
