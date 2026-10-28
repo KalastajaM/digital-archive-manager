@@ -816,6 +816,9 @@
 [data-style="new"] .rule-sheet .folder-picker input { font-family: var(--font-mono); font-size: 12.5px; }
 /* the words: pills in the fixed-width face, the ticked ones tinted */
 [data-style="new"] .rule-word { padding: 2px 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-sm); }
+/* a long word ends in "…" inside the sheet (the full word is its title) */
+[data-style="new"] .rule-words > li { min-width: 0; max-width: 100%; }
+[data-style="new"] .rule-word { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 [data-style="new"] .rule-word[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--blue-bg); color: var(--accent-hover); }
 [data-style="new"] .rule-area { display: flex; flex-direction: column; gap: 8px; }
 [data-style="new"] .rule-area-head .link-button { color: var(--accent); }
@@ -1207,6 +1210,9 @@
 }
 [data-style="new"] .pay-fact dt { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
 [data-style="new"] .pay-fact dd { font-size: 22px; font-weight: 500; line-height: 1.25; white-space: nowrap; overflow-wrap: normal; }
+/* a name (the payee) is running text and wraps; the figures above never do */
+[data-style="new"] .pay-fact:not([data-kind="iban"]):not([data-kind="reference"]):not([data-kind="money"]):not([data-kind="date"]) dd { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+[data-style="new"] .pay-fact { min-width: 0; }
 [data-style="new"] .pay-fact[data-kind="iban"] dd,
 [data-style="new"] .pay-fact[data-kind="reference"] dd,
 [data-style="new"] .pay-fact[data-kind="money"] dd,
@@ -1885,7 +1891,7 @@
 [data-style="new"] .collection-list .collection-children-list { border: 0; }
 [data-style="new"] .collection-list > li + li::before { border-top-width: 1px; }
 [data-style="new"] .collection-children-list::before { border-top-width: 1px; }
-[data-style="new"] .collection-row-title { font-weight: 500; }
+[data-style="new"] .collection-row-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-style="new"] .collection-row-meta { font-family: var(--font-mono); font-size: var(--fs-xs); }
 [data-style="new"] .new-collection-row { border: 1px solid var(--hairline); border-radius: var(--r-lg); }
 
@@ -1984,6 +1990,8 @@
 [data-style="new"] .item-fields .field-date input[type="date"],
 [data-style="new"] .item-fields .field-money input { font-family: var(--font-mono); font-size: 12.5px; }
 [data-style="new"] .item-done-buttons { margin-top: 0; }
+/* the fields sit in one row: a field's bottom margin must not push the buttons below the inputs */
+[data-style="new"] .item-fields .field { margin-bottom: 0; }
 [data-style="new"] .item-fields .field-text { flex: 1 1 14rem; }
 [data-style="new"] .fact-value { font-family: var(--font-mono); font-size: 12.5px; }
 [data-style="new"] .fact > * { border-bottom-width: 1px; }
@@ -2586,3 +2594,30 @@
 [data-style="new"] .quicklook-shared > li { display: block; max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-style="new"] .quicklook-reason { flex: none; margin: 0; padding: var(--sp-2) var(--sp-4) 0; border-top: 1px solid var(--hairline); font-size: var(--fs-sm); color: var(--text-2); overflow-wrap: anywhere; }
 [data-style="new"] .quicklook-reason + .quicklook-verdict { border-top: none; }
+
+/* ==== Text never leaves its box ===========================================================
+ * Running text wraps (a word with no spaces breaks as a last resort); one-line names end in
+ * an ellipsis (overflowTitles.ts adds the full text as a tooltip); figures never truncate. */
+
+/* A checklist entry is running text: it wraps, and the grip, tick box and Delete line up
+ * with its first line (the global "a control's text never wraps" rule must not hold it). */
+[data-style="new"] .check { align-items: flex-start; }
+[data-style="new"] button.check-text { white-space: normal; overflow-wrap: anywhere; line-height: 19px; }
+[data-style="new"] input.check-text { height: 24px; margin-top: -2px; }
+[data-style="new"] .check > .check-grip,
+[data-style="new"] .check > input[type="checkbox"] { margin-top: 2px; margin-bottom: 0; }
+[data-style="new"] .check > .check-delete { margin-top: -1px; }
+
+/* Figures keep their size but follow their tile: the value scales down before it would
+ * leave the box (a million-euro bill still fits a narrow tile). */
+[data-style="new"] .tn-tile { container-type: inline-size; }
+[data-style="new"] .tn-tile-value { font-size: min(22px, calc(100cqi / (var(--chars, 8) * 0.62))); }
+
+/* One control height in a row: the tag and collection fields are as tall as the Browse
+ * button beside them (a field with chips wrapped inside still grows), and the "?" next to
+ * a search box is as tall as the box. */
+[data-style="new"] .tag-field { min-height: 28px; padding-block: 1px; }
+[data-style="new"] .tag-field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { min-height: 0; height: 24px; }
+/* Plex Mono has no bold: a bold code would be drawn wider than its box */
+[data-style="new"] .code-line-code { font-weight: 500; }
+[data-style="new"] .search-help { width: 28px; height: 28px; }

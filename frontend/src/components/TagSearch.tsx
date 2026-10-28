@@ -14,11 +14,13 @@ export function FilterChips({ filters, onRemove }: { filters: SearchFilter[]; on
     <ul className="search-tags" aria-label="Search filters">
       {filters.map((f) => (
         <li key={filterToken(f)} className={f.negated ? "tag-token filter-not" : "tag-token"}>
-          <span className="filter-name">
-            {f.negated ? "not " : ""}
-            {f.name}:
+          <span className="tag-token-text">
+            <span className="filter-name">
+              {f.negated ? "not " : ""}
+              {f.name}:
+            </span>
+            {visible(f.value)}
           </span>
-          {visible(f.value)}
           <button type="button" aria-label={`Remove filter ${filterToken(f)}`} onClick={() => onRemove(f)}>
             ×
           </button>

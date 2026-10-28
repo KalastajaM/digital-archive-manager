@@ -185,15 +185,15 @@ export function CollectionInput({
           {chips.map((c) => (
             <span key={c.key} className="tag-token">
               {c.to ? (
-                <Link to={c.to}>
+                <Link to={c.to} className="tag-token-text">
                   {visible(c.name)}
                   {c.suffix}
                 </Link>
               ) : (
-                <>
+                <span className="tag-token-text">
                   {visible(c.name)}
                   {c.suffix}
-                </>
+                </span>
               )}
               {c.removable !== false && (
                 <button

@@ -150,3 +150,29 @@ describe("styles-new.css: Collections and Trays", () => {
     expect(plain).toMatch(/\.item-col-side \{ flex: 1 1 260px;/);
   });
 });
+
+describe("styles-new.css: text never leaves its box", () => {
+  /** Every declaration block whose selector list is exactly this selector, joined. */
+  const rule = (selector: string) => {
+    const blocks = [...plain.matchAll(/([^{};]+)\{([^{}]*)\}/g)].filter(([, sel]) => sel.split(",").map((x) => x.trim()).includes(selector)).map(([, , body]) => body);
+    expect(blocks.length).toBeGreaterThan(0);
+    return blocks.join(" ");
+  };
+
+  it("lets a checklist entry wrap, though a control's text never does", () => {
+    expect(rule('[data-style="new"] button')).toContain("white-space: nowrap");
+    const entry = rule('[data-style="new"] button.check-text');
+    expect(entry).toContain("white-space: normal");
+    expect(entry).toContain("overflow-wrap: anywhere");
+    expect(rule('[data-style="new"] .check')).toContain("align-items: flex-start");
+  });
+
+  it("scales a tile's figure with its tile instead of cutting it", () => {
+    expect(rule('[data-style="new"] .tn-tile')).toContain("container-type: inline-size");
+    expect(rule('[data-style="new"] .tn-tile-value')).toContain("cqi");
+  });
+
+  it("keeps the fields' bottom margin from pushing Mark done below the inputs", () => {
+    expect(rule('[data-style="new"] .item-fields .field')).toContain("margin-bottom: 0");
+  });
+});

@@ -9,7 +9,7 @@
  * arrangement differs. Customize turns the page into an arrange mode: each section gets
  * its fold chevron and Move up / Move down and can be dragged by its heading, and Reset
  * layout puts them back (kept per archive in this browser, apart from Classic's). */
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { Link } from "react-router-dom";
 import { type AttentionItem, errorText, type Item, type Today as TodayData, useInbox, useToday, useTrays } from "../api/client";
 import { AgeBar } from "../components/AgeBar";
@@ -549,7 +549,9 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
           {tiles.map((t) => (
             <Link key={t.id} to={t.to} className="tn-tile" data-tone={t.tone}>
               <span className="tn-tile-label">{t.label}</span>
-              <span className="tn-tile-value">{t.value}</span>
+              <span className="tn-tile-value" style={{ "--chars": String(t.value.length) } as CSSProperties}>
+                {t.value}
+              </span>
               <span className="tn-tile-note" title={t.note}>
                 {t.note}
               </span>
