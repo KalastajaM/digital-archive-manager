@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Mark a bill paid from Pay mode.** The large barcode (press **b** on a bill) now has
+  the tray's own done button, such as **Mark paid**, next to **Close**. It closes Pay mode
+  and opens the same form as the button on the bill, so you confirm the paid date there
+  as before.
 - **Reset layout.** **Settings, Appearance, Layout, Reset layout** forgets every pane width
   you dragged (Browse, Inbox, Trays, collections, for every archive) and the order and
   folds of the cards on Today, in this browser. A message says it is done and has Undo.

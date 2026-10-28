@@ -1042,6 +1042,25 @@ describe("Bill view", () => {
     expect(within(panel).getByText(BARCODE_CODE)).toBeInTheDocument();
   });
 
+  it("Pay mode offers the tray's done action: it closes Pay mode and opens the item's done form", async () => {
+    const { calls, user } = renderTrays("/trays/to-pay?item=1", {
+      "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
+    });
+    const panel = await screen.findByRole("region", { name: "Item" });
+    await within(panel).findByRole("img", { name: /^Bank barcode/ });
+    await user.keyboard("b");
+    const sheet = await screen.findByRole("dialog", { name: "Bank barcode" });
+    expect(within(sheet).getByRole("button", { name: "Close" })).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Mark paid" }));
+    expect(screen.queryByRole("dialog", { name: "Bank barcode" })).not.toBeInTheDocument();
+    const form = await screen.findByRole("form", { name: "Mark paid" });
+    expect(within(form).getByLabelText("Paid on")).toHaveValue(DAY);
+    // nothing is posted until the form is confirmed
+    expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(0);
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(sent(calls, "POST", "/api/items/1/done")).toHaveLength(1));
+  });
+
   it("has no Note button (the note is on the page), and every action button has a tooltip", async () => {
     renderTrays("/trays/to-pay?item=1", {
       "GET /api/items/1/files": { body: [{ ...NORTHPOWER_FILE, drive_id: "i1", path: "##. Organize/x.pdf", in_inbox: true }] },
