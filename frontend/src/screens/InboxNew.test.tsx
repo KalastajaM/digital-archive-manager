@@ -231,6 +231,8 @@ describe("The filing panel in the New look", () => {
     const panel = await screen.findByRole("complementary", { name: "File this document" });
     expect(panel).toHaveTextContent("Suggested by rule “vesilaitos”");
     expect(within(panel).getByRole("heading", { name: "Vesilaitos water bill" })).toBeInTheDocument();
+    // where its relatives were filed: a hint for this one, folded until opened
+    expect(within(panel).getByRole("button", { name: /^Relatives/ })).toHaveAttribute("aria-expanded", "false");
     await user.click(within(panel).getByRole("button", { name: "Edit rule" }));
     const sheet = await screen.findByRole("dialog", { name: "Edit rule vesilaitos" });
     expect(within(sheet).getByRole("button", { name: "Close" })).toBeInTheDocument();

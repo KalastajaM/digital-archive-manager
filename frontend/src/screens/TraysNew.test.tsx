@@ -126,6 +126,8 @@ describe("a tray in New", () => {
     expect(within(main).getByText("Checklist")).toBeInTheDocument();
     expect(within(main).getByText("History")).toBeInTheDocument();
     expect(within(side).getByText("Summary of")).toBeInTheDocument();
+    // the shown file's relatives, folded until opened
+    expect(await within(side).findByRole("button", { name: /^Relatives/ })).toHaveAttribute("aria-expanded", "false");
     // the fields card comes before the two columns
     const order = [...(item.querySelector(".item-new") as HTMLElement).children].map((c) => c.className);
     expect(order.findIndex((c) => c.includes("item-fields"))).toBeLessThan(order.findIndex((c) => c.includes("item-cols")));
@@ -137,6 +139,7 @@ describe("a tray in New", () => {
     expect(document.querySelector(".tray-row-meta")).toBeNull();
     expect(document.querySelector(".seg-count")).toBeNull();
     expect(document.querySelector(".item-new")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Relatives/ })).toBeNull();
     expect(document.querySelector(".trays-list > .trays-toolbar")).toBeNull();
   });
 });

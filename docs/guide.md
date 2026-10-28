@@ -1226,10 +1226,16 @@ Tags are kept in dam's own database, not in the archive, so changing them moves 
 
 ## Relatives
 
-Relatives are the other files a document belongs with, and why. They show in the file's
-panel under **Relatives**, in the **New look** only (Classic does not have them). Select a
-file in Browse or in a collection and the block lists up to four of them, best first, with
-a count of the rest ("2 more with one link in common").
+Relatives are the other files a document belongs with, and why: a family tree for a
+document, built from what you stored about it. They are in the **New look** only (Classic
+does not have them). You find them:
+
+- in the file's panel in **Browse** and in a **collection**, under **Relatives**, which
+  lists up to four of them, best first, with a count of the rest ("2 more with one link in
+  common"); Browse's actions also have **Relatives…**, which opens the window below;
+- on a **tray** item, for the file shown, and in the **inbox** filing panel, where they
+  show where files like this one were filed (both folded until you open them);
+- in **Quick Look** from any list, with the **Relatives** button in its toolbar.
 
 A file is a relative when it shares at least one **link** with this one. Each row names its
 links in short labels: **folder** (the same folder; sharing the inbox does not count, since

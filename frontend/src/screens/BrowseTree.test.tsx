@@ -379,6 +379,7 @@ describe("The details beside two panes", () => {
       "Open",
       "Quick Look",
       expect.stringMatching(/^Show in /),
+      "Relatives…",
       "Move to…",
       "Rename",
       "Add to collection…",
@@ -395,6 +396,12 @@ describe("The details beside two panes", () => {
     expect(within(actions).getByRole("button", { name: /^Quick Look/ })).toHaveTextContent("Space");
     expect(within(actions).getByRole("button", { name: /^Move to…/ })).toHaveTextContent("⇧⌘M");
     expect(within(actions).getByRole("button", { name: /^Move to To Delete/ })).toHaveTextContent("⌘⌫");
+    // Relatives… opens the Relatives window of this file
+    await user.click(within(actions).getByRole("button", { name: /^Relatives…/ }));
+    const window = await screen.findByRole("dialog", { name: "Relatives" });
+    expect(within(window).getByText("a.pdf")).toBeInTheDocument();
+    await user.click(within(window).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Relatives" })).toBeNull();
     // the other pane's file takes over when that pane becomes the active one
     await user.click(await within(pane("Right pane")).findByText("t.pdf"));
     expect(await within(details).findByRole("heading", { name: "t.pdf" })).toBeInTheDocument();

@@ -1,10 +1,15 @@
 /** Space opens Quick Look on the list's current document (a plain Space outside text
  * fields and controls, with no dialog open). Inside, Space or Esc closes it and ←/→ (or
- * j/k, ↑/↓) move through the list, moving the list's own selection along. */
+ * j/k, ↑/↓) move through the list, moving the list's own selection along. In the New
+ * look its Relatives button closes it and opens the Relatives window of that document,
+ * so every list with Quick Look reaches Relatives. */
 import { createElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { useStyle } from "../appearance";
+import { inToDelete } from "../toDelete";
 import { dialogOpen, isShortcut, isTyping, useKeydown } from "../keyboard";
 import { useDialogStatus } from "./FileLaunch";
 import { type QLFile, QuickLook } from "./QuickLook";
+import { RelativesDialog } from "./RelativesDialog";
 import { useToast } from "./Toasts";
 import { isTrashKey } from "./Trash";
 
@@ -85,6 +90,22 @@ export function useQuickLook(
     if (allowed()) show();
   };
   const close = () => setWanted(false);
+  // the Relatives window opened from Quick Look (which closes for it)
+  const [look] = useStyle();
+  const [relativesOf, setRelativesOf] = useState<QLFile | null>(null);
+  const toRelatives = (file: QLFile) => {
+    forDialog.current = true; // the focus goes back where it was once that window closes
+    setWanted(false);
+    setRelativesOf(file);
+  };
+  const closeRelatives = () => {
+    setRelativesOf(null);
+    forDialog.current = false;
+    const el = back.current;
+    back.current = null;
+    if (el?.isConnected) el.focus();
+  };
+  const hasRelatives = (f: QLFile) => look === "new" && !f.is_link && !inToDelete(f.path);
   const { onTrash, trashRefusal } = options;
   const shown = files[at] as QLFile | undefined;
   const refusal = shown && trashRefusal ? trashRefusal(shown) : null;
@@ -151,7 +172,10 @@ export function useQuickLook(
         onClose: close,
         status,
         trash: trash && { run: trash, refusal, busy: !!options.trashBusy },
+        onRelatives: shown && hasRelatives(shown) ? () => toRelatives(shown) : undefined,
       })
-    : null;
+    : relativesOf
+      ? createElement(RelativesDialog, { file: relativesOf, onClose: closeRelatives })
+      : null;
   return { isOpen, open, close, view };
 }

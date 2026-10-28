@@ -27,6 +27,7 @@ import { CollectionNamesInput } from "../components/CollectionInput";
 import { pendingCollection } from "../components/CollectionPicker";
 import { DetectedFields } from "../components/DetectedFields";
 import { folderOf } from "../components/FileDetails";
+import { RelativesBlock } from "../components/RelativesBlock";
 import { FilePreview } from "../components/FilePreview";
 import { editText } from "../components/FieldInput";
 import { FolderPicker } from "../components/FolderPicker";
@@ -593,6 +594,14 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip }: Props
           <summary>Collection and note</summary>
           {collectionAndNote}
         </details>
+      )}
+      {/* where the files it shares a sender, tag or IBAN with were filed: a hint for this one */}
+      {isNew && (
+        <RelativesBlock
+          key={entry.record.drive_id}
+          compact
+          file={{ drive_id: entry.record.drive_id, path: entry.record.path, name: entry.record.name ?? null, ext: entry.record.ext }}
+        />
       )}
       {/* After the form, so showing it never pushes the fields down; it sticks to the
           bottom of the inspector while the form scrolls. */}

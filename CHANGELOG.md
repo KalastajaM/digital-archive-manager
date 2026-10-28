@@ -55,6 +55,11 @@ All notable changes are listed here. The format follows
   action shows what it will do first and has Undo. The crossed eye on a row says the two files
   are **not related**: they stay out of each other's list, and **N marked not related** brings
   them back. Classic does not have the block; nothing in your archive changes when you look.
+  The block is also on a tray item (for the file shown) and in the inbox filing panel, where
+  it shows where files like this one were filed; Quick Look has a **Relatives** button from
+  any list, and Browse's details list **Relatives…** with the other actions. A file inside a
+  folder that is in a collection counts as being in that collection. Help explains it with a
+  diagram.
 - **Show connections for Relatives (New look).** The Relatives block has a **Show connections**
   link that opens the folder outline cut down to the folders with a relative, with an arc from
   this file to each one (thicker for more in common, orange and dashed for a file not filed

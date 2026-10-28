@@ -1,5 +1,6 @@
 /** The diagrams under "How dam works" in Help: the filing flow, where a filed document
- * lands, when the trays remind, the safety loop and what stays on the computer. Plain SVG
+ * lands, when the trays remind, the safety loop and what stays on the computer; and the
+ * one under "Relatives" (``RelativesDiagram``). Plain SVG
  * coloured from the theme tokens (styles.css, `.hdw`), so they follow Light and Dark. The
  * folder names are the default ones. Wide diagrams scroll sideways in a narrow window
  * rather than shrink their text. */
@@ -287,9 +288,72 @@ function StaysLocal() {
   );
 }
 
+/** One kind of link, with what it adds to a relative's score. */
+function LinkPill({ y, text, weight, tone = "plain", dashed }: { y: number; text: string; weight: string; tone?: Tone; dashed?: boolean }) {
+  return (
+    <g>
+      <rect x={300} y={y} width={240} height={36} rx={18} className="hdw-base" />
+      <rect x={300} y={y} width={240} height={36} rx={18} className={`hdw-box ${tone}${dashed ? " hdw-dash" : ""}`} />
+      <text x={320} y={y + 23} className={`hdw-s ${tone === "plain" ? "ink" : tone}`}>{text}</text>
+      <text x={522} y={y + 23} textAnchor="end" className={`hdw-m ${tone === "plain" ? "ink" : tone} hdw-strong`}>{weight}</text>
+    </g>
+  );
+}
+
+const LINKS: [string, string][] = [
+  ["same reference number", "+5"],
+  ["same sender", "+3"],
+  ["same collection", "+3"],
+  ["each shared tag", "+2"],
+  ["same folder", "+2"],
+  ["same IBAN", "+2"],
+  ["same person (For)", "+1"],
+];
+
+function Relatives() {
+  const pillY = (i: number) => 24 + i * 46;
+  return (
+    <Figure title="How Relatives works" note="Only what you stored counts; nothing is guessed from names.">
+      <svg viewBox="0 0 1080 440" role="img" aria-label="Relatives: this document shares links with other files: the same reference number adds 5, the same sender or collection 3, each shared tag, the same folder or IBAN 2, the same person 1, and the same month adds 1 only to a file that already shares something. The scores rank the relatives, best first, with files not filed yet and, on a click, AI picks. Tick some to tag, collect, move or link them together, compare them side by side in Quick Look, or mark one not related so it stays out.">
+        <Doc x={60} y={150} w={96} h={120} tone="accent" />
+        <path d="M76 190H136M76 206H136M76 222H120" className="hdw-faint hdw-thick" />
+        <Label x={108} y={298} tone="accent" strong>this document</Label>
+
+        {LINKS.map((_, i) => (
+          <Line key={i} d={`M162 210C230 210 230 ${pillY(i) + 18} 294 ${pillY(i) + 18}`} />
+        ))}
+        {LINKS.map(([text, weight], i) => (
+          <LinkPill key={text} y={pillY(i)} text={text} weight={weight} />
+        ))}
+        <LinkPill y={pillY(7) + 10} text="same month, with another link" weight="+1" tone="tray" dashed />
+        <Label x={420} y={pillY(8) + 22} small>never a relative on its own</Label>
+
+        <Line d="M548 190H612" tone="accent" />
+        <Label x={580} y={178} tone="accent">add up</Label>
+
+        <Label x={740} y={30} strong tone="ink">Relatives, best first</Label>
+        <Box x={620} y={44} w={240} h={56} title="Earlier bill" sub="reference + sender · 8" left tone="accent" />
+        <Box x={620} y={114} w={240} h={56} title="The contract" sub="collection + tag · 5" left />
+        <Box x={620} y={184} w={240} h={56} title="A new scan" sub="sender · not filed yet" left tone="tray" dashed />
+        <Box x={620} y={254} w={240} h={56} title="AI pick" sub="on a click, with a reason" left dashed />
+        <Label x={740} y={336} small>Show connections draws them by folder</Label>
+
+        <Line d="M866 176L910 76" tone="safe" />
+        <Line d="M866 182L910 182" />
+        <Line d="M866 188L910 290" tone="warn" />
+        <Box x={914} y={46} w={150} h={62} title="Act together" sub="tag · move · link" tone="safe" />
+        <Box x={914} y={152} w={150} h={62} title="Quick Look" sub="side by side" />
+        <Box x={914} y={258} w={150} h={62} title="Not related" sub="stays out for good" tone="warn" />
+        <Label x={989} y={346} small tone="safe">previewed · undoable</Label>
+      </svg>
+    </Figure>
+  );
+}
+
 const TONES: Tone[] = ["plain", "accent", "safe", "tray", "warn"];
 
-export function HowDamWorks() {
+/** The arrowheads (one per tone, ids unique to this instance) around some diagrams. */
+function Diagrams({ children }: { children: ReactNode }) {
   const ids = `hdw${useId().replace(/[^\w-]/g, "")}`;
   return (
     <Markers.Provider value={ids}>
@@ -303,15 +367,32 @@ export function HowDamWorks() {
             ))}
           </defs>
         </svg>
-        <FilingFlow />
-        <WhereItLands />
-        <Reminders />
-        <div className="hdw-pair">
-          <SafetyLoop />
-          <NeverDeletes />
-        </div>
-        <StaysLocal />
+        {children}
       </div>
     </Markers.Provider>
+  );
+}
+
+export function HowDamWorks() {
+  return (
+    <Diagrams>
+      <FilingFlow />
+      <WhereItLands />
+      <Reminders />
+      <div className="hdw-pair">
+        <SafetyLoop />
+        <NeverDeletes />
+      </div>
+      <StaysLocal />
+    </Diagrams>
+  );
+}
+
+/** Under "Relatives" in Help: how a relative is found and what you can do with it. */
+export function RelativesDiagram() {
+  return (
+    <Diagrams>
+      <Relatives />
+    </Diagrams>
   );
 }

@@ -63,6 +63,7 @@ import { visible } from "../text";
 import { AddFile } from "../components/AddFile";
 import { FileMeta } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
+import { RelativesBlock } from "../components/RelativesBlock";
 import { FileCollections } from "./FileActions";
 import { backToInbox, deletionRefusal, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../components/MoveTo";
 import { isTrashKey, useTrash } from "../components/Trash";
@@ -822,6 +823,15 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   );
   const collectionsBlock =
     shown?.path && shown.state !== "missing" ? <FileCollections key={shown.drive_id} driveId={shown.drive_id} hideItem={item.id} /> : null;
+  // Relatives of the file shown (one in To Delete or missing has none to act on)
+  const relativesBlock =
+    shown?.path && shown.state === "ok" ? (
+      <RelativesBlock
+        key={shown.drive_id}
+        compact
+        file={{ drive_id: shown.drive_id, path: shown.path, name: baseName(shown.path), ext: shown.ext }}
+      />
+    ) : null;
   const previewBlock = (
     <>
       <div className="item-files" ref={setPreviewSlot} />
@@ -934,6 +944,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             <div className="item-file-head" ref={setHeadSlot} />
             <div className="item-tags-slot" ref={setTagSlot} />
             {collectionsBlock}
+            {relativesBlock}
           </div>
         </div>
         {sheets}

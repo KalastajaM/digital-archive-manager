@@ -2,7 +2,7 @@
  * preview and the document's details beside it. A modal <dialog>, so the page's own
  * shortcuts are off while it is open (``dialogOpen()``); its keys (Space/Esc to close,
  * ←/→ and j/k to move) are handled by ``useQuickLook``. */
-import { ChevronLeft, ChevronRight, Link2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Link2, Network, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { isTyping } from "../keyboard";
 import { visible } from "../text";
@@ -45,6 +45,8 @@ type Props = {
    * next (which only moves on: being related is computed, never stored). This mode handles
    * its own keys (Space, ←/→, j/k, N, Y, and + / - / 0 for the pane last clicked, or for
    * both while "Zoom together" is on), so the host adds none. */
+  /** Relatives of the shown file (New look; ``useQuickLook`` closes this and opens them). */
+  onRelatives?: () => void;
   compare?: {
     subject: QLFile;
     shared: (file: QLFile) => string[];
@@ -54,7 +56,7 @@ type Props = {
   };
 };
 
-export function QuickLook({ files, index, onIndex, onClose, status: given, trash, boxTool = {}, compare }: Props) {
+export function QuickLook({ files, index, onIndex, onClose, status: given, trash, boxTool = {}, onRelatives, compare }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -134,6 +136,9 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
           <InlineResults.Provider value={status.report}>
             <MarkToggles driveId={file.drive_id} name={qlName(file)} path={file.path} />
           </InlineResults.Provider>
+          {onRelatives && !compare && (
+            <IconButton icon={<Network />} label="Relatives" tip="Relatives: the files this one belongs with" onClick={onRelatives} />
+          )}
           {trash && <TrashButton disabled={trash.busy} disabledReason={trash.refusal} onClick={trash.run} />}
           <IconButton
             icon={<ChevronLeft />}

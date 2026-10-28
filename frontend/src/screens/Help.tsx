@@ -3,19 +3,24 @@
  * the guide's own Contents list is left out here, the side list replaces it. A heading's
  * id is GitHub's anchor for it, so `/help#trays` and the guide's own `#trays` links both
  * work. Links to the technical reference open it on GitHub, in a new tab. The diagrams of
- * how dam works sit under that section's heading (they are app code, so GitHub has the
- * text only). */
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef } from "react";
+ * how dam works, and the one of Relatives, sit under their section's heading (they are
+ * app code, so GitHub has the text only). */
+import { type MouseEvent, type ReactElement, type ReactNode, useEffect, useMemo, useRef } from "react";
 import Markdown, { type Components } from "react-markdown";
 import { useLocation, useNavigate } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import guide from "../../../docs/guide.md?raw";
-import { HowDamWorks } from "../components/HowDamWorks";
+import { HowDamWorks, RelativesDiagram } from "../components/HowDamWorks";
 import { Toolbar } from "../components/ui/Toolbar";
 
 const DOCS_URL = "https://github.com/KalastajaM/digital-archive-manager/blob/main/docs/";
 /** The section the diagrams are shown under. */
 export const DIAGRAMS_SECTION = "how-dam-works";
+/** Diagrams drawn as code (not screenshots, so they never go stale), under their section's heading. */
+const SECTION_DIAGRAMS: Record<string, () => ReactElement> = {
+  [DIAGRAMS_SECTION]: HowDamWorks,
+  relatives: RelativesDiagram,
+};
 
 /** GitHub's anchor for a heading: lower case, punctuation dropped, spaces as hyphens. */
 export function slug(text: string): string {
@@ -80,7 +85,8 @@ export default function Help() {
     h2: ({ children }) => {
       const id = slug(textOf(children));
       const heading = <h2 id={id}>{children}</h2>;
-      return id === DIAGRAMS_SECTION ? <>{heading}<HowDamWorks /></> : heading;
+      const Diagram = SECTION_DIAGRAMS[id];
+      return Diagram ? <>{heading}<Diagram /></> : heading;
     },
     h3: ({ children }) => <h3 id={slug(textOf(children))}>{children}</h3>,
     a: ({ href = "", children }) => {

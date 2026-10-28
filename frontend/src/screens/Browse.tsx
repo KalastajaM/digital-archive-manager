@@ -76,6 +76,8 @@ import { publishSelection } from "../selection";
 import { formatSize, groupDigits, shortDate } from "../format";
 import { visible } from "../text";
 import { inToDelete, toDeleteReasonFor } from "../toDelete";
+import { RelativesDialog } from "../components/RelativesDialog";
+import type { BlockFile } from "../components/relativesShared";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
@@ -2085,6 +2087,8 @@ export default function Browse() {
   };
   const several = acted.length > 1;
   const noFiles = moveTargets.length === 0;
+  // the Relatives window of the file in the details (from "Relatives…" in its actions)
+  const [relativesOf, setRelativesOf] = useState<BlockFile | null>(null);
   const inDetails = (selector: string) => document.querySelector<HTMLElement>(`.browse-preview ${selector}`);
   const inspectorActions: InspectorAction[] = [];
   if (isNew) {
@@ -2101,6 +2105,10 @@ export default function Browse() {
         },
         { label: showInLabel(), run: () => void launch.run("reveal"), disabled: launch.busy || away, reason: away ? "Not connected" : null },
       );
+      if (!here.is_dir && !here.is_link && !inToDelete(here.path)) {
+        const file = { drive_id: here.drive_id, path: here.path, name: here.name };
+        inspectorActions.push({ label: "Relatives…", run: () => setRelativesOf(file) });
+      }
     }
     inspectorActions.push(
       {
@@ -2524,6 +2532,7 @@ export default function Browse() {
       )}
       <KeyHints hints={KEYS} className="browse-keys" />
       {quickLook.view}
+      {relativesOf && <RelativesDialog file={relativesOf} onClose={() => setRelativesOf(null)} />}
       {move.view}
       {filingAI.sheet}
       {moveTo && (
