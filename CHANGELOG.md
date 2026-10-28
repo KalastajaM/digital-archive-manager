@@ -26,6 +26,36 @@ All notable changes are listed here. The format follows
   history stand beside the summary and the document. Starred, Important, nested collections,
   reordering, drag and drop, Pay mode and every other feature work as before. Classic is
   unchanged.
+- **Relatives (New look).** The file panel has a new block, **Relatives**: the other files
+  this one belongs with, and why. A file is a relative when it shares a folder, sender,
+  collection, tag, IBAN, reference number or person with this one; each row says which, and
+  the best match comes first. A relative still in the inbox is shown first as "not filed
+  yet". Tick some and act on them together with this file: **Tag…**, **Add to collection…**,
+  **Move to folder…**, **Link them here** (a link in this file's folder) and **Link this file
+  there** (a link to this file in each of their folders, as one batch with one Undo). Every
+  action shows what it will do first and has Undo. The crossed eye on a row says the two files
+  are **not related**: they stay out of each other's list, and **N marked not related** brings
+  them back. Classic does not have the block; nothing in your archive changes when you look.
+- **Show connections for Relatives (New look).** The Relatives block has a **Show connections**
+  link that opens the folder outline cut down to the folders with a relative, with an arc from
+  this file to each one (thicker for more in common, orange and dashed for a file not filed
+  yet). The **In common** strip lights up the files that share one value. Pointing at a row
+  shows exactly what it shares in a card in the panel on the right, beside the outline rather
+  than over it; the panel also has the block's actions plus **2+ links**, **Same sender** and
+  **Outside this folder**. Quick Look from Relatives now shows this file beside the relative
+  with what they share, and **N** (Not related), **→** (Skip) and **Y** (Related, next) to go
+  through them. Each side zooms on its own (`+` and `-` zoom the side clicked last), and
+  **Zoom together** links them for documents of the same size.
+- **Find more relatives with AI (New look, optional).** When AI is on, the Relatives block
+  and window have **Find more with AI…**. It first shows what will be sent: this document's
+  name, folder and first 2,000 characters, and up to 28 candidate files (chosen by a free
+  local text search, without files from excluded folders, in To Delete, marked not related
+  or already relatives), each with its name, folder and 300 characters. Nothing leaves
+  until you press Send; the worst-case cost and this month's spend are shown. The files the
+  AI picks appear as extra rows marked **AI** with a one-line reason, in the block and as a
+  dotted arc in the window. You can tick, tag, move, link, Quick Look or mark them **Not
+  related** like any relative; nothing is stored until you do something with them. **Hide**
+  removes them, and asking again for the same files is answered from earlier at no cost.
 - **The New look: Browse laid out as drawn.** A **folder tree** on the left (the top folders of
   every archive folder, each opening onto its subfolders when you expand it; the folder each
   pane is in is highlighted and marked L or R, and its parents open by themselves). Click a

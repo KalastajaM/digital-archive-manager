@@ -62,6 +62,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   const next = useRef(1);
+  // the auto-dismiss timers, cleared on unmount so none fires into a page that is gone
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const t of pending) clearTimeout(t);
+      pending.clear();
+    };
+  }, []);
 
   const dismiss = useCallback((id: number) => {
     setToasts((all) => all.filter((t) => t.id !== id));
@@ -71,7 +80,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (toast: NewToast) => {
       const id = next.current++;
       setToasts((all) => [...all, { ...toast, id }]);
-      setTimeout(() => dismiss(id), TIMEOUT_MS[toast.kind]);
+      const timer = setTimeout(() => {
+        timers.current.delete(timer);
+        dismiss(id);
+      }, TIMEOUT_MS[toast.kind]);
+      timers.current.add(timer);
     },
     [dismiss],
   );

@@ -116,6 +116,12 @@ export type MoveBody = Schemas["MoveBody"];
 export type MoveResult = Schemas["MoveResultOut"];
 export type RenameBody = Schemas["RenameBody"];
 export type FileSuggestions = Schemas["FileSuggestionsOut"];
+// Relatives: the files a document belongs with
+export type Relatives = Schemas["RelativesOut"];
+export type Relative = Schemas["RelativeOut"];
+export type RelativeLink = Schemas["RelativeLinkOut"];
+export type RelativeKind = RelativeLink["kind"];
+export type RelativeDismissed = Schemas["RelativeDismissedOut"];
 // Phase 2
 export type Today = Schemas["TodayOut"];
 export type AttentionItem = Schemas["AttentionItemOut"];
@@ -181,7 +187,12 @@ export type CollectionSummaryAnswer = { summary: string; per_group: Record<strin
 export type AskCitation = { drive_id: string; quote: string; name: string; marks?: Mark[] };
 export type AskAnswer = { answer: string; citations: AskCitation[]; rejected: Record<string, string> };
 /** The AI tasks (``/api/ai/{task}``). */
-export type AITask = "suggest-filing" | "summarize-document" | "summarize-collection" | "ask-archive";
+export type AITask =
+  | "suggest-filing"
+  | "summarize-document"
+  | "summarize-collection"
+  | "ask-archive"
+  | "find-relatives";
 /** suggest-filing's answer, after the server's checks: a field it could not use is null
  * (or left out) and ``rejected`` says why, by field (``tray_fields.<name>`` for one field). */
 export type FilingSuggestion = {
@@ -1200,6 +1211,8 @@ export const useTagActions = () => {
     deleteGroup: (id: number) =>
       run<{ name: string; members: string[]; message: string }>(`/api/tags/groups/${id}/delete`, {}),
     restoreGroup: (name: string, members: string[]) => run<TagGroup>("/api/tags/groups/restore", { name, members }),
+    /** One tag on several files as one step; the answer's ``undo`` takes it off again. */
+    apply: (tag: string, driveIds: string[]) => run<TagChange>("/api/tags/apply", { tag, drive_ids: driveIds }),
   };
 };
 
@@ -1209,6 +1222,55 @@ export const useFileLinks = (driveId: string, enabled = true) =>
     queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/links", { path: { drive_id: driveId }, signal }),
     enabled,
   });
+
+/** The files a document belongs with, best first, and why (``GET /api/files/{id}/relatives``).
+ * Under the file key: every change to files, tags or collections reloads it. */
+const relativesKey = (driveId: string) => [...keys.file, "relatives", driveId] as const;
+export const useRelatives = (driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: relativesKey(driveId),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/relatives", { path: { drive_id: driveId }, signal }),
+    enabled,
+  });
+
+/** The files marked "Not related" to this one. */
+export const useRelativesDismissed = (driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...relativesKey(driveId), "dismissed"],
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/relatives/dismissed", { path: { drive_id: driveId }, signal }),
+    enabled,
+  });
+
+/** Mark a pair "Not related", or show it again (an index mark, never a file). */
+export const useRelativeMark = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveId, other, mark }: { driveId: string; other: string; mark: "dismiss" | "restore" }) =>
+      apiPost(mark === "dismiss" ? "/api/files/{drive_id}/relatives/dismiss" : "/api/files/{drive_id}/relatives/restore", {
+        path: { drive_id: driveId },
+        body: { drive_id: other },
+      }),
+    onSettled: (_data, _error, vars) => {
+      void client.invalidateQueries({ queryKey: relativesKey(vars.driveId) });
+      void client.invalidateQueries({ queryKey: relativesKey(vars.other) });
+    },
+  });
+};
+
+/** A link to one file in each of several folders, as one batch (one Undo). */
+export const useLinkThere = () => {
+  const refresh = useRefresh();
+  return {
+    preview: (body: Schemas["LinkThereBody"]) => apiPost("/api/browse/link-there/preview", { body }),
+    apply: async (body: Schemas["LinkThereBody"]) => {
+      try {
+        return await apiPost("/api/browse/link-there", { body });
+      } finally {
+        refresh();
+      }
+    },
+  };
+};
 
 /** Every tray/collection/note change can show up on Today and in the lists. */
 function useRefreshTrays() {

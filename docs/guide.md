@@ -49,6 +49,7 @@
 - [Browse](#browse)
 - [Searching](#searching)
 - [Tags](#tags)
+- [Relatives](#relatives)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
 - [Maintenance](#maintenance)
@@ -1222,6 +1223,119 @@ and Browse shows the files with that tag (see [Searching](#searching)). With sev
 **All / Any** in the filter row picks files with every tag or with at least one.
 
 Tags are kept in dam's own database, not in the archive, so changing them moves no file.
+
+## Relatives
+
+Relatives are the other files a document belongs with, and why. They show in the file's
+panel under **Relatives**, in the **New look** only (Classic does not have them). Select a
+file in Browse or in a collection and the block lists up to four of them, best first, with
+a count of the rest ("2 more with one link in common").
+
+A file is a relative when it shares at least one **link** with this one. Each row names its
+links in short labels: **folder** (the same folder; sharing the inbox does not count, since
+it holds what is not filed yet), **sender**, **collection**, **tag**,
+**IBAN**, **reference** (the number of a tray item) and **person** (the "For" of the
+document). Hover the labels for the exact values. Every link adds to a score, and the list
+is ranked by it: a shared reference number counts most, then a sender or a collection, then
+each shared tag, folder or IBAN, and a shared person least. A document dated in the same
+month as this one adds a little (**+ same month**), but only to a file that already has a
+link: the same month alone never makes a relative. A tag, IBAN, sender or person that very
+many files share (more than 200) counts for half, and for nothing above 1,000, so a
+catch-all tag or a payment service's IBAN does not fill the list. The weights are in
+[the reference](reference.md#relatives).
+
+Only files that are there count: not missing ones, not folders, and not what is in To
+Delete. A link in the archive stands for the file it points to, which is listed once.
+
+- **Not filed yet.** A relative still in the inbox comes first, on an orange card ("Same
+  sender, not filed yet") with **Go to the inbox**, where the usual filing takes over.
+- **Quick Look and Show in Browse.** Each row has a Quick Look icon (or click its name)
+  and a Show in Browse icon.
+- **Not related.** The crossed eye on a row says the two files do not belong together.
+  They are left out of each other's list from then on, whatever they share. The message
+  has **Undo**, and **N marked not related** under the list shows them again with **Show
+  again**. This is a note in dam's index; no file is touched.
+- **Act on several at once.** Tick the checkboxes and a bar appears: "This file and N
+  related". Each button shows what will happen before it does anything, and each can be
+  undone:
+  - **Tag…** puts the tags you add on this file and the ticked ones. **Undo** in the
+    message takes them off again.
+  - **Add to collection…** adds this file and the ticked ones to a collection; files that
+    are in it already are left out of the count. **Undo** takes the added files out again.
+  - **Move to folder…** is the usual move, with its preview, for this file and the ticked
+    ones.
+  - **Link them here** makes a link in this file's folder to each ticked file that is not
+    in that folder already. The button says how many, and is off ("No links needed: all 3
+    are already in 13. Taxes") when none are needed.
+  - **Link this file there** makes a link to this file in each folder the ticked files are
+    in (not this file's own folder, and not the inbox), as one batch. The preview lists
+    every link, and one **Undo** in Activity removes them all.
+
+  The two link buttons are hidden where links cannot be made (Windows without Developer
+  Mode), as in Browse.
+
+### Show connections
+
+**Show connections** in the block's heading opens the Relatives window: the folder outline
+cut down to the folders that hold a relative (and this file's own), nested by path, one row
+per relative with its checkbox, its link labels and **+ same month**. This file's row is
+highlighted in its folder; files still in the inbox sit under **Inbox** on an orange tint. A
+folder with more than eight relatives is folded to its name and a count; click it to open it.
+
+An arc runs from this file's row to each relative's row. A thicker arc means more in common,
+and an orange dashed one means the file is not filed yet. An arc to a folded folder ends at
+the folder's row. The list scrolls up and down; there is no zoom or panning.
+
+- **In common.** The strip above the list shows each value shared with some relatives once,
+  with how many share it. Press one to light up those files and fade the rest; press it again
+  (or another one) to change or clear it.
+- **What a row shares.** Point at a row, or move to it with the keyboard, and the card at
+  the top of the panel on the right lists the exact values (Folder, Sender, Tag and so on)
+  with **Quick look** and **Not related**. The row and its arc are outlined. The card sits
+  beside the outline, never over it, and stays on the last row you pointed at, so you can
+  move over to its buttons.
+- **Act on several at once.** The panel on the right has the same buttons as the block
+  (**Tag…**, **Add to collection…**, **Move to folder…**, **Link them here**, **Link this
+  file there**), with the same previews, Undo and reasons when a button is off. **2+
+  links**, **Same sender** and **Outside this folder** tick a group in one click. **N marked
+  not related** is there too, with **Show again**.
+- **Keys.** `↑`/`↓` move between rows, **Space** opens Quick Look, `X` ticks the row, `N`
+  marks it not related, **Esc** closes the window.
+
+Quick Look from the block or the window opens in **compare mode**: this file on the left, the
+relative on the right, and below them what the two share. **N** (Not related) marks the
+relative and moves to the next, **→** (Skip) moves on, and **Y** (Related, next) also moves
+on and stores nothing, since being related is worked out from what the files share, never
+saved. `←`/`→` still step through the relatives, and **Space** or **Esc** closes it.
+Each side zooms on its own, since the two documents are often of different sizes: `+`, `-`
+and `0` zoom the side you clicked last (a line along its top shows which). **Zoom together**
+below them makes both sides zoom as one, for documents of the same size; press it again to
+zoom them apart.
+
+Nothing here is guessed from names or text: a file lacks the **sender** link until a sender
+has been set on it (see [From and For on a document](#from-and-for-on-a-document)).
+
+### Find more with AI
+
+When AI is on ([AI (optional)](#ai-optional)), the block and the window show **Find more
+with AI…**. It finds files that go together with this one but share nothing in the index,
+such as the reply to a letter or the next bill of a series.
+
+Pressing it sends nothing yet. The sheet **What will be sent** shows this document's name,
+folder and first 2,000 characters, and a list of up to 28 candidates (open it to read each
+one). The candidates are chosen on your computer by a free text search on this document's
+rarer words, its reference numbers, IBANs and sender. They never include a file in an
+excluded folder, in To Delete, marked not related, or already a relative. Each goes out as
+its name, folder and its first 300 characters; tags, notes and whole files do not. The sheet
+also shows the model, the worst-case cost and this month's spend against the budget. Press
+**Send** to ask, or **Cancel** to send nothing.
+
+The files the AI picks (it must be at least 60% sure) show after the regular relatives,
+marked **AI**, with its reason in one line, and as a dotted arc in the window. A line says
+how many it found out of how many candidates, what it cost, and has **Hide**. They work
+like relatives: tick them to tag, collect, move or link, open Quick Look to compare, or mark
+them **Not related**. They are not saved as relatives; the answer is kept for later, so
+pressing the button again for the same files shows it as **from earlier** at no cost.
 
 ## Quick Look and the viewer window
 

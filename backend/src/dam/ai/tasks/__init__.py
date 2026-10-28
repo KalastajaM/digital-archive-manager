@@ -66,6 +66,7 @@ def register(task: AITask) -> AITask:
 # the shipped tasks register themselves (after ``register`` exists)
 from dam.ai.tasks import (  # noqa: E402, F401
     ask_archive,
+    find_relatives,
     suggest_filing,
     summarize_collection,
     summarize_document,

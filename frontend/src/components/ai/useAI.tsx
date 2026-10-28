@@ -19,6 +19,7 @@ export const TASK_LABEL: Record<AITask, string> = {
   "summarize-document": "Summarize document",
   "summarize-collection": "Summarize collection",
   "ask-archive": "Ask the archive",
+  "find-relatives": "Find relatives",
 };
 
 /** The button that starts each task, as the sheet's "press it again" note names it. */
@@ -27,6 +28,7 @@ const ASK_BUTTON: Record<AITask, string> = {
   "summarize-document": "Summarize with AI",
   "summarize-collection": "Summarize with AI",
   "ask-archive": "Ask…",
+  "find-relatives": "Find more with AI",
 };
 
 /** ``on``: AI buttons are shown. ``off``: the status says AI is off (no key, or switched

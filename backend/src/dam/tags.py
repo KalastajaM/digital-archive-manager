@@ -182,6 +182,49 @@ class TagAdmin:
             conn.execute(insert(tags).values(name=name))
         return TagUndo(drop=[name])
 
+    def apply(self, name: str, drive_ids: list[str]) -> TagUndo:
+        """Put the tag on these files (a tag that is the same but for case and accents is
+        used as it is spelled; a new one is made). One undo step: files that had it
+        already are not touched, and Undo takes it off the others (and drops the tag
+        again if this made it)."""
+        name = _clean(name)
+        ids = list(dict.fromkeys(drive_ids))
+        if not ids:
+            raise TagError("invalid", "No files given")
+        now = time.time()
+        with write_tx(self.engine) as conn:
+            known = set()
+            for part in _chunks(ids):
+                known.update(
+                    conn.execute(
+                        select(files.c.drive_id).where(files.c.drive_id.in_(part), _live)
+                    ).scalars()
+                )
+            for drive_id in ids:
+                if drive_id not in known:
+                    raise TagError("missing", f"There is no file {drive_id}")
+            existing = self._clash(conn, name)
+            created = existing is None
+            if created:
+                conn.execute(insert(tags).values(name=name))
+            else:
+                name = existing
+            tag_id = self._id(conn, name)
+            added = []
+            for drive_id in ids:
+                put = conn.execute(
+                    sqlite_insert(file_tags)
+                    .values(drive_id=drive_id, tag_id=tag_id)
+                    .on_conflict_do_nothing()
+                )
+                if put.rowcount:
+                    added.append(drive_id)
+            if added:
+                conn.execute(update(tags).where(tags.c.id == tag_id).values(last_used_at=now))
+        if created:
+            return TagUndo(drop=[name])
+        return TagUndo(detach=[Unlink(name, added)] if added else [])
+
     def rename_tag(self, old: str, new: str) -> TagUndo:
         new = _clean(new)
         with write_tx(self.engine) as conn:

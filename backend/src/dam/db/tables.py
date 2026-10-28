@@ -502,6 +502,17 @@ file_assignments = Table(
     Column("set_at", Float, nullable=False),
 )
 
+# Pairs of files the owner marked "Not related" (0041): left out of each other's Relatives.
+# ``drive_a`` is the smaller of the two drive ids. Keyed by drive id so the mark survives
+# moves and renames; no FK (rows may be parked or purged).
+related_dismissed = Table(
+    "related_dismissed",
+    metadata,
+    Column("drive_a", Text, primary_key=True),
+    Column("drive_b", Text, primary_key=True),
+    Column("created", Float, nullable=False),
+)
+
 # Files the owner locked: a safety catch against file changes (``dam.locks``). Keyed by
 # drive id so the lock survives moves and renames; no FK (rows may be parked or purged).
 # Important files are always locked and need no row. Temporary unlocks are never stored.

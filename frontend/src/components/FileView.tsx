@@ -7,15 +7,16 @@
  *  4. summary      foldable
  *  5. own          what only this view has (a tray's fields and Mark done, a collection's
  *                  group and Remove, Browse's Put in tray)
- *  6. preview      with its toolbar
- *  7. notes        notes, checklist, history (foldable), where the view has them
+ *  6. relatives    the files it belongs with (foldable; the New look only)
+ *  7. preview      with its toolbar
+ *  8. notes        notes, checklist, history (foldable), where the view has them
  *
  * A screen fills the blocks; it cannot reorder them, and the keyboard order is the DOM
  * order. A block left empty is not rendered. The block wrappers take no space of their
  * own (``display: contents``), so each screen styles its content as before. */
 import type { HTMLAttributes, ReactNode } from "react";
 
-export const FILE_VIEW_BLOCKS = ["header", "tags", "collections", "summary", "own", "preview", "notes"] as const;
+export const FILE_VIEW_BLOCKS = ["header", "tags", "collections", "summary", "own", "relatives", "preview", "notes"] as const;
 export type FileViewBlock = (typeof FILE_VIEW_BLOCKS)[number];
 
 export type FileViewBlocks = Partial<Record<FileViewBlock, ReactNode>>;
