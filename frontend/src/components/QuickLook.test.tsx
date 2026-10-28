@@ -308,6 +308,45 @@ describe("useQuickLook", () => {
     expect(look).toHaveFocus();
   });
 
+  it("in the New look its Relatives button closes it and opens the Relatives window, then gives the focus back", async () => {
+    document.documentElement.dataset.style = "new";
+    try {
+      mockFetch({ "GET /api/files/a/relatives": { body: { drive_id: "a", relatives: [], common: [], total: 0, hidden: 0 } } });
+      const user = userEvent.setup();
+      renderWithProviders(
+        <MemoryRouter>
+          <Harness files={[FILE("a"), { drive_id: "l1", name: "l", path: "a/l", ext: null, is_link: true }]} />
+        </MemoryRouter>,
+      );
+      const look = screen.getByRole("button", { name: "Look" });
+      await user.click(look);
+      await user.click(within(quickLook()!).getByRole("button", { name: "Relatives" }));
+      expect(quickLook()).not.toBeInTheDocument();
+      const window = await screen.findByRole("dialog", { name: "Relatives" });
+      expect(within(window).getByText("a.png")).toBeInTheDocument();
+      await user.click(within(window).getByRole("button", { name: "Close" }));
+      expect(screen.queryByRole("dialog", { name: "Relatives" })).toBeNull();
+      expect(look).toHaveFocus();
+      // a link stands for its target, which has its own: no button on it
+      await user.click(look);
+      await user.keyboard("{ArrowRight}");
+      expect(within(quickLook()!).queryByRole("button", { name: "Relatives" })).toBeNull();
+    } finally {
+      delete document.documentElement.dataset.style;
+    }
+  });
+
+  it("has no Relatives button in Classic", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter>
+        <Harness files={[FILE("a")]} />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole("button", { name: "Look" }));
+    expect(within(quickLook()!).queryByRole("button", { name: "Relatives" })).toBeNull();
+  });
+
   it("Go to target on a link closes Quick Look, then opens Browse at the target", async () => {
     mockFetch({
       "GET /api/files/l1": {
