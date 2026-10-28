@@ -928,12 +928,13 @@ effort (`ai.effort`, default `low`), the output limits and the excluded folders.
 - **Budget**: `ai.monthly_budget_eur` (default €5). A call is blocked before sending when
   this month's spend plus the worst-case estimate would go over it. The estimate counts
   input as characters ÷ 3.5 and prices the output at the task's `max_tokens` (filing
-  2500, document summary 1500, collection summary 3000, questions 3000). The model's
+  2500, document summary 1500, collection summary 3000, questions 3000, finding
+  relatives 2000). The model's
   thinking counts against `max_tokens` too, even at `ai.effort: low`, so these leave room
   for it; a typical call costs far less than its estimate.
 - **Costs**: tokens × the per-model price table `ai.prices` (USD per million tokens),
   converted at `ai.usd_to_eur` (default 0.92). The defaults are `claude-haiku-5-5`
-  ($0.10 in, $0.50 out) for filing and summaries and `claude-sonnet-5-5` ($2 in, $10
+  ($0.10 in, $0.50 out) for filing, summaries and finding relatives and `claude-sonnet-5-5` ($2 in, $10
   out) for questions. **Check these against Anthropic's current price list** and edit
   `ai.prices` and `ai.models` in `settings.yaml` when they change; the app cannot know.
 - **Time limit**: 60 s plus 1 s per 500 estimated input tokens and 1 s per 50 output
@@ -1175,6 +1176,34 @@ undo record; the UI undoes a mark by restoring it.
 
 Moving, linking to a folder and adding to a collection use the existing endpoints
 (`/api/browse/move` with `mode`, `/api/collections/{id}/members`).
+
+**AI: find relatives** (task `find-relatives`, `dam/ai/tasks/find_relatives.py`, through
+`POST /api/ai/find-relatives/prepare` and `/run` with `{params: {drive_id}}` like every AI
+task). Only on a click, after the preview.
+
+- *Shortlist (local, free).* One FTS5 query from the file's indexed text, ORed: up to 10 of
+  its words of four or more characters that 2 to 300 other files also contain (least common
+  first), the reference numbers and up to 2 IBANs written in it, and its stored sender.
+  `search.ranked` returns the best matches; the top 28 are kept after dropping this file, its
+  relatives, pairs marked not related, missing, parked, To Delete, files under
+  `ai.exclude_folders` (SQL and `guard.is_excluded`), inbox files the rules would file under
+  an excluded folder, and files without text. No candidate: prepare answers "Nothing to ask:
+  no candidate files found" and nothing can be sent. A subject in an excluded folder is
+  refused like every other task.
+- *Sent.* The file's name, folder and first 2,000 characters, and per candidate a short id
+  (`c1` to `c28`), name, folder and 300 characters around its best match, each inside a
+  delimited data block. Not sent: tags, notes, checklists, whole files, excluded folders.
+  Instructions are written for `ai.language`.
+- *Answer.* `{matches: [{id, reason, confidence 0..1}]}`, an empty list for none. Ids that
+  were not in the shortlist are dropped; picks under 0.6 confidence are hidden and counted
+  (`hidden`). The task keeps the answer in `ai_cache` by the file, the shortlist ids and
+  the text sent, so the same request is free ("from earlier"). `/run` answers each pick with
+  the file as it is now (`name`, `path`, `folder`, `ext`, `in_inbox`) and leaves out a file
+  that has since gone, been marked not related or become a relative.
+- *Cost.* Model tier small (`ai.models.small`, Haiku by default), `ai.max_tokens` entry
+  `find-relatives` 2000. The worst-case estimate is the input ÷ 3.5 characters at the model's
+  price plus 1000 output tokens, checked against the budget as for the other tasks.
+- Nothing is written to the archive, and a pick is not stored as a relative.
 
 ## Safety model in detail
 

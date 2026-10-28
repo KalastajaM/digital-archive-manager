@@ -39,6 +39,56 @@ export function ResultView({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+const block = (text: string, label: string) =>
+  [...text.matchAll(new RegExp(`<${label}>\\n([\\s\\S]*?)\\n</${label}>`, "g"))].map((m) => m[1]);
+
+/** What "Find relatives" sends, in parts: this document's excerpt and the shortlisted
+ * candidates (expandable), then the exact text. */
+function RelativesPayload({ text }: { text: string }) {
+  const subject = block(text, "subject")[0] ?? "";
+  const candidates = block(text, "candidate");
+  const head = subject.split("\n\n", 1)[0];
+  const excerpt = subject.slice(head.length).trim();
+  return (
+    <>
+      <div className="ai-payload-sections">
+        <details>
+          <summary>This document: its name, folder and the first 2,000 characters of its text</summary>
+          <pre className="ai-payload" aria-label="This document">
+            {visibleText(`${head}\n\n${excerpt}`)}
+          </pre>
+        </details>
+        <details>
+          <summary>
+            {candidates.length} {candidates.length === 1 ? "candidate" : "candidates"}: picked by a local text search
+            (free), each with its name, folder and 300 characters
+          </summary>
+          <ol className="ai-candidates" aria-label="Candidates">
+            {candidates.map((c, i) => {
+              const [info, ...rest] = c.split("\n\n");
+              const lines = info.split("\n").filter((l) => !l.startsWith("id: "));
+              return (
+                <li key={i}>
+                  <strong>{visibleText(lines[0]?.replace(/^name: /, "") ?? "")}</strong>{" "}
+                  <span className="hint">{visibleText(lines[1]?.replace(/^folder: /, "") ?? "")}</span>
+                  <br />
+                  {visibleText(rest.join("\n\n"))}
+                </li>
+              );
+            })}
+          </ol>
+        </details>
+      </div>
+      <details className="ai-system">
+        <summary>The exact text sent</summary>
+        <pre className="ai-payload" aria-label="Text that will be sent" tabIndex={0}>
+          {visibleText(text)}
+        </pre>
+      </details>
+    </>
+  );
+}
+
 /** This month's spend against the budget (and this call's worst case), as a meter. */
 export function Budget({ status, estimate }: { status: AIStatus | undefined; estimate: number }) {
   if (!status) return null;
@@ -193,14 +243,22 @@ export function SendSheet({
             <Tag tone="blue">from earlier</Tag> An answer for this same text was saved: using it costs nothing.
             Ask again sends the text anew.
           </p>
-          <ResultView data={cached} />
+          {prepared.task === "find-relatives" ? (
+            <p className="hint">The files the AI picked are shown once you press Use this.</p>
+          ) : (
+            <ResultView data={cached} />
+          )}
         </section>
       ) : prepared.payload_text ? (
         <>
           <h3 className="ai-payload-head">The text</h3>
-          <pre className="ai-payload" aria-label="Text that will be sent" tabIndex={0}>
-            {visibleText(prepared.payload_text)}
-          </pre>
+          {prepared.task === "find-relatives" ? (
+            <RelativesPayload text={prepared.payload_text} />
+          ) : (
+            <pre className="ai-payload" aria-label="Text that will be sent" tabIndex={0}>
+              {visibleText(prepared.payload_text)}
+            </pre>
+          )}
           {prepared.system && (
             <details className="ai-system">
               <summary>Instructions sent with it</summary>

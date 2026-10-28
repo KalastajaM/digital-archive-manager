@@ -187,7 +187,12 @@ export type CollectionSummaryAnswer = { summary: string; per_group: Record<strin
 export type AskCitation = { drive_id: string; quote: string; name: string; marks?: Mark[] };
 export type AskAnswer = { answer: string; citations: AskCitation[]; rejected: Record<string, string> };
 /** The AI tasks (``/api/ai/{task}``). */
-export type AITask = "suggest-filing" | "summarize-document" | "summarize-collection" | "ask-archive";
+export type AITask =
+  | "suggest-filing"
+  | "summarize-document"
+  | "summarize-collection"
+  | "ask-archive"
+  | "find-relatives";
 /** suggest-filing's answer, after the server's checks: a field it could not use is null
  * (or left out) and ``rejected`` says why, by field (``tray_fields.<name>`` for one field). */
 export type FilingSuggestion = {

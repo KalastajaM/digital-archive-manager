@@ -22,6 +22,7 @@ import {
   useNotRelated,
   useRelativeLook,
 } from "./relativesShared";
+import { AIMark, FindMoreButton, type Finder, FoundLine, isAIPick, useFindRelatives } from "./relativesAI";
 import { IconButton } from "./ui/IconButton";
 import { Sheet } from "./ui/Sheet";
 
@@ -101,10 +102,24 @@ const arcPath = (y0: number, y1: number) => {
 type Common = { kind: Relative["links"][number]["kind"]; value: string; count: number };
 const sharesValue = (r: Relative, c: Common) => r.links.some((l) => l.kind === c.kind && l.value === c.value);
 
-export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: () => void }) {
+/** ``finder``: the block's AI search, so what it found shows here too; without it the
+ * dialog runs its own. */
+export function RelativesDialog({
+  file,
+  onClose,
+  finder: given,
+}: {
+  file: BlockFile;
+  onClose: () => void;
+  finder?: Finder;
+}) {
   const query = useRelatives(file.drive_id);
   const data = query.data;
-  const relatives = useMemo(() => data?.relatives ?? [], [data]);
+  const regular = useMemo(() => data?.relatives ?? [], [data]);
+  const own = useFindRelatives(file, regular);
+  const finder = given ?? own;
+  // the AI's picks sit in the outline beside the regular relatives
+  const relatives = useMemo<Relative[]>(() => [...regular, ...finder.picks], [regular, finder.picks]);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [lit, setLit] = useState<Common | null>(null);
@@ -130,13 +145,14 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
     return list;
   }, [rows, relatives]);
 
-  const notRelated = useNotRelated(file, (r) =>
+  const notRelated = useNotRelated(file, (r) => {
+    finder.drop(r.drive_id);
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(r.drive_id);
       return next;
-    }),
-  );
+    });
+  });
   const look = useRelativeLook(file, lookList, notRelated);
 
   const here = parentOf(file.path);
@@ -172,12 +188,12 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
   }, [rows, relatives]);
 
   const quick = [
-    { label: "2+ links", ids: relatives.filter((r) => kindsOf(r).length >= 2).map((r) => r.drive_id) },
+    { label: "2+ links", ids: regular.filter((r) => kindsOf(r).length >= 2).map((r) => r.drive_id) },
     {
       label: "Same sender",
-      ids: relatives.filter((r) => r.links.some((l) => l.kind === "sender")).map((r) => r.drive_id),
+      ids: regular.filter((r) => r.links.some((l) => l.kind === "sender")).map((r) => r.drive_id),
     },
-    { label: "Outside this folder", ids: relatives.filter((r) => fold(r.folder) !== fold(here)).map((r) => r.drive_id) },
+    { label: "Outside this folder", ids: regular.filter((r) => fold(r.folder) !== fold(here)).map((r) => r.drive_id) },
   ];
 
   const shownCard = hover ?? focused;
@@ -228,7 +244,11 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
         ) : !data ? (
           <p className="hint">Looking for relatives…</p>
         ) : relatives.length === 0 ? (
-          <p className="hint">{EMPTY_TEXT}</p>
+          <div className="rel-empty">
+            <p className="hint">{EMPTY_TEXT}</p>
+            <FindMoreButton finder={finder} />
+            <FoundLine finder={finder} />
+          </div>
         ) : (
           <>
             {data.common.length > 0 && (
@@ -296,6 +316,7 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
                       }
                       const r = row.r;
                       const rname = visible(r.name);
+                      const pick = isAIPick(r) ? r : null;
                       const faded = lit !== null && !sharesValue(r, lit);
                       const showCard = shownCard === r.drive_id;
                       return (
@@ -303,8 +324,8 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
                           key={r.drive_id}
                           data-rel={r.drive_id}
                           tabIndex={r.drive_id === outline[0]?.drive_id ? 0 : -1}
-                          aria-label={`${rname}, ${kindsOf(r).map((k) => KIND_LABEL[k]).join(", ")}`}
-                          className={`rel-row${selected.has(r.drive_id) ? " checked" : ""}${r.in_inbox ? " unfiled" : ""}${faded ? " faded" : ""}${lit && !faded ? " lit" : ""}`}
+                          aria-label={`${rname}, ${pick ? `found by AI: ${visible(pick.reason)}` : kindsOf(r).map((k) => KIND_LABEL[k]).join(", ")}`}
+                          className={`rel-row${selected.has(r.drive_id) ? " checked" : ""}${pick ? " ai" : ""}${r.in_inbox ? " unfiled" : ""}${faded ? " faded" : ""}${lit && !faded ? " lit" : ""}`}
                           style={{ paddingLeft: 8 + row.depth * INDENT }}
                           onMouseEnter={() => setHover(r.drive_id)}
                           onMouseLeave={() => setHover((h) => (h === r.drive_id ? null : h))}
@@ -321,17 +342,31 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
                             aria-label={`Select ${rname}`}
                           />
                           <span className="rel-name trunc">{rname}</span>
-                          <span className="rel-kinds">
-                            {kindsOf(r).map((k) => (
-                              <span key={k} className={`tag ${KIND_CLASS[k]}`}>
-                                {KIND_LABEL[k]}
+                          {pick ? (
+                            <span className="rel-kinds rel-ai-line">
+                              <AIMark pick={pick} />
+                              <span className="trunc" title={visible(pick.reason)}>
+                                {visible(pick.reason)}
                               </span>
-                            ))}
-                            {r.same_month && <span className="tag tag-grey">+ same month</span>}
-                          </span>
+                            </span>
+                          ) : (
+                            <span className="rel-kinds">
+                              {kindsOf(r).map((k) => (
+                                <span key={k} className={`tag ${KIND_CLASS[k]}`}>
+                                  {KIND_LABEL[k]}
+                                </span>
+                              ))}
+                              {r.same_month && <span className="tag tag-grey">+ same month</span>}
+                            </span>
+                          )}
                           {showCard && (
                             <div className="rel-card" role="group" aria-label={`What ${rname} shares`}>
                               <span className="rel-card-name trunc">{rname}</span>
+                              {pick && (
+                                <p className="rel-card-reason">
+                                  <AIMark pick={pick} /> {visible(pick.reason)}
+                                </p>
+                              )}
                               <dl className="rel-card-list">
                                 {r.links.map((l) => (
                                   <div key={`${l.kind}:${l.value}`}>
@@ -359,7 +394,8 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
                     {selfAt >= 0 &&
                       arcs.map((a) => {
                         const faded = lit !== null && !a.rels.some((r) => sharesValue(r, lit));
-                        const cls = `rel-arc${a.inbox ? " inbox" : ""}${faded ? " faded" : ""}`;
+                        const ai = a.rels.every(isAIPick);
+                        const cls = `rel-arc${a.inbox ? " inbox" : ""}${ai ? " ai" : ""}${faded ? " faded" : ""}`;
                         return (
                           <g key={a.key} className={cls} data-target={a.key}>
                             <path
@@ -401,6 +437,13 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
                     ))}
                   </div>
                 </div>
+                {(finder.available || finder.answered) && (
+                  <div className="rel-side-block">
+                    <span className="rel-side-label">AI</span>
+                    <FindMoreButton finder={finder} />
+                    <FoundLine finder={finder} />
+                  </div>
+                )}
                 {data.hidden > 0 && (
                   <div className="relatives-hidden">
                     <button
@@ -435,6 +478,7 @@ export function RelativesDialog({ file, onClose }: { file: BlockFile; onClose: (
         )}
       </Sheet>
       {look.view}
+      {given ? null : own.sheet}
     </>
   );
 }

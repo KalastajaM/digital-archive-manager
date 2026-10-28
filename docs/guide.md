@@ -1269,6 +1269,28 @@ saved. `←`/`→` still step through the relatives, and **Space** or **Esc** cl
 Nothing here is guessed from names or text: a file lacks the **sender** link until a sender
 has been set on it (see [From and For on a document](#from-and-for-on-a-document)).
 
+### Find more with AI
+
+When AI is on ([AI (optional)](#ai-optional)), the block and the window show **Find more
+with AI…**. It finds files that go together with this one but share nothing in the index,
+such as the reply to a letter or the next bill of a series.
+
+Pressing it sends nothing yet. The sheet **What will be sent** shows this document's name,
+folder and first 2,000 characters, and a list of up to 28 candidates (open it to read each
+one). The candidates are chosen on your computer by a free text search on this document's
+rarer words, its reference numbers, IBANs and sender. They never include a file in an
+excluded folder, in To Delete, marked not related, or already a relative. Each goes out as
+its name, folder and its first 300 characters; tags, notes and whole files do not. The sheet
+also shows the model, the worst-case cost and this month's spend against the budget. Press
+**Send** to ask, or **Cancel** to send nothing.
+
+The files the AI picks (it must be at least 60% sure) show after the regular relatives,
+marked **AI**, with its reason in one line, and as a dotted arc in the window. A line says
+how many it found out of how many candidates, what it cost, and has **Hide**. They work
+like relatives: tick them to tag, collect, move or link, open Quick Look to compare, or mark
+them **Not related**. They are not saved as relatives; the answer is kept for later, so
+pressing the button again for the same files shows it as **from earlier** at no cost.
+
 ## Quick Look and the viewer window
 
 **Space** opens the selected document nearly full window: zoom (the buttons, ⌘-scroll,

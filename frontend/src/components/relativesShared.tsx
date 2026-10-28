@@ -24,6 +24,7 @@ import { CollectionPicker } from "./CollectionPicker";
 import { folderLabel, MoveToSheet, useMoveFlow } from "./MoveTo";
 import { ConfirmPlan, snapshotKey } from "./PlanPreview";
 import { QuickLook, type QLFile } from "./QuickLook";
+import { isAIPick } from "./relativesAI";
 import { TagInput } from "./TagInput";
 import { undoAction, useToast } from "./Toasts";
 import { useUndoConfirm } from "./UndoConfirm";
@@ -156,6 +157,7 @@ export function useRelativeLook(file: BlockFile, list: Relative[], notRelated: (
 
 /** What a relative shares with the file, as short lines: "Tag: Taxes", "+ same month". */
 export const sharedLabels = (r: Relative): string[] => [
+  ...(isAIPick(r) ? [`AI: ${visible(r.reason)}`] : []),
   ...r.links.map((l) => `${KIND_NAME[l.kind]}: ${visible(l.value)}`),
   ...(r.same_month ? ["+ same month"] : []),
 ];

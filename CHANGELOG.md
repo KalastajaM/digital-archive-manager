@@ -26,6 +26,16 @@ All notable changes are listed here. The format follows
   **2+ links**, **Same sender** and **Outside this folder**. Quick Look from Relatives now
   shows this file beside the relative with what they share, and **N** (Not related), **→**
   (Skip) and **Y** (Related, next) to go through them.
+- **Find more relatives with AI (New look, optional).** When AI is on, the Relatives block
+  and window have **Find more with AI…**. It first shows what will be sent: this document's
+  name, folder and first 2,000 characters, and up to 28 candidate files (chosen by a free
+  local text search, without files from excluded folders, in To Delete, marked not related
+  or already relatives), each with its name, folder and 300 characters. Nothing leaves
+  until you press Send; the worst-case cost and this month's spend are shown. The files the
+  AI picks appear as extra rows marked **AI** with a one-line reason, in the block and as a
+  dotted arc in the window. You can tick, tag, move, link, Quick Look or mark them **Not
+  related** like any relative; nothing is stored until you do something with them. **Hide**
+  removes them, and asking again for the same files is answered from earlier at no cost.
 - **Mark a bill paid from Pay mode.** The large barcode (press **b** on a bill) now has
   the tray's own done button, such as **Mark paid**, next to **Close**. It closes Pay mode
   and opens the same form as the button on the bill, so you confirm the paid date there

@@ -163,7 +163,7 @@ A new task `dam/ai/tasks/find_relatives.py` next to `suggest_filing`, through
    block, as the other tasks do.
 3. **Answer schema**: `[{id, reason, confidence 0..1}]`, ids only from the shortlist
    (anything else is dropped), and "none" allowed. Picks below 0.6 are hidden.
-4. **Model** Haiku, `max_tokens` 1,000, cached per (file, shortlist) in `ai_cache` so
+4. **Model** Haiku, `max_tokens` 2,000 (thinking counts against it), cached per (file, shortlist) in `ai_cache` so
    reopening costs nothing.
 
 The preview sheet shows what is sent, what is not (excluded folders, whole files, tags,

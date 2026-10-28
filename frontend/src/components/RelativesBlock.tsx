@@ -6,7 +6,7 @@
  * change shows what it will do first and can be undone, through the flows the rest of the
  * app uses. "Not related" takes a file out of the list for good (Show again brings it back). */
 import { Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { errorText, type Relative, useRelatives } from "../api/client";
 import { visible } from "../text";
@@ -26,6 +26,7 @@ import {
   useRelativeLook,
 } from "./relativesShared";
 import { RelativesDialog } from "./RelativesDialog";
+import { AIMark, type AIPick, FindMoreButton, type Finder, FoundLine, isAIPick, useFindRelatives } from "./relativesAI";
 import { baseName } from "../paths";
 import { IconButton } from "./ui/IconButton";
 
@@ -38,6 +39,8 @@ export function RelativesBlock({ file }: { file: BlockFile }) {
   const query = useRelatives(file.drive_id);
   const data = query.data;
   const [map, setMap] = useState(false);
+  const regular = useMemo(() => data?.relatives ?? [], [data]);
+  const finder = useFindRelatives(file, regular);
   return (
     <>
     <Collapsible
@@ -60,15 +63,26 @@ export function RelativesBlock({ file }: { file: BlockFile }) {
       ) : !data ? (
         <p className="hint">Looking for relatives…</p>
       ) : (
-        <RelativesList key={file.drive_id} file={file} relatives={data.relatives} hidden={data.hidden} />
+        <RelativesList key={file.drive_id} file={file} relatives={data.relatives} hidden={data.hidden} finder={finder} />
       )}
     </Collapsible>
-    {map && <RelativesDialog file={file} onClose={() => setMap(false)} />}
+    {finder.sheet}
+    {map && <RelativesDialog file={file} onClose={() => setMap(false)} finder={finder} />}
     </>
   );
 }
 
-function RelativesList({ file, relatives, hidden }: { file: BlockFile; relatives: Relative[]; hidden: number }) {
+function RelativesList({
+  file,
+  relatives,
+  hidden,
+  finder,
+}: {
+  file: BlockFile;
+  relatives: Relative[];
+  hidden: number;
+  finder: Finder;
+}) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -78,7 +92,9 @@ function RelativesList({ file, relatives, hidden }: { file: BlockFile; relatives
   const shown = showAll ? ordered : ordered.slice(0, SHOWN);
   const more = ordered.length - shown.length;
   const moreAllSingle = ordered.slice(SHOWN).every((r) => r.links.length === 1);
-  const ticked = ordered.filter((r) => selected.has(r.drive_id));
+  const picks = finder.picks;
+  const everyone: Relative[] = [...ordered, ...picks];
+  const ticked = everyone.filter((r) => selected.has(r.drive_id));
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -87,16 +103,25 @@ function RelativesList({ file, relatives, hidden }: { file: BlockFile; relatives
       return next;
     });
 
-  const notRelated = useNotRelated(file, (r) =>
+  const notRelated = useNotRelated(file, (r) => {
+    finder.drop(r.drive_id);
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(r.drive_id);
       return next;
-    }),
-  );
-  const look = useRelativeLook(file, ordered, notRelated);
+    });
+  });
+  const look = useRelativeLook(file, everyone, notRelated);
 
-  if (relatives.length === 0 && hidden === 0) return <p className="hint">{EMPTY_TEXT}</p>;
+  if (relatives.length === 0 && hidden === 0 && picks.length === 0) {
+    return (
+      <div className="relatives-body">
+        <p className="hint">{EMPTY_TEXT}</p>
+        <FindMoreButton finder={finder} />
+        <FoundLine finder={finder} />
+      </div>
+    );
+  }
   return (
     <div className="relatives-body">
       {relatives.length === 0 && <p className="hint">{EMPTY_TEXT}</p>}
@@ -117,6 +142,22 @@ function RelativesList({ file, relatives, hidden }: { file: BlockFile; relatives
           {more} more{moreAllSingle ? " with one link in common" : ""}
         </button>
       )}
+      {picks.length > 0 && (
+        <ul className="relatives-list relatives-ai-list" aria-label="Found by AI">
+          {picks.map((r) => (
+            <RelativeRow
+              key={r.drive_id}
+              relative={r}
+              checked={selected.has(r.drive_id)}
+              onToggle={() => toggle(r.drive_id)}
+              onLook={() => look.open(r.drive_id)}
+              onNotRelated={() => notRelated(r)}
+            />
+          ))}
+        </ul>
+      )}
+      <FoundLine finder={finder} />
+      <FindMoreButton finder={finder} />
       {ticked.length > 0 && <ActionBar file={file} ticked={ticked} onClear={() => setSelected(new Set())} />}
       {hidden > 0 && (
         <div className="relatives-hidden">
@@ -150,10 +191,14 @@ function RelativeRow({
   onNotRelated: () => void;
 }) {
   const name = visible(r.name);
+  const pick: AIPick | null = isAIPick(r) ? r : null;
   const kinds = kindsOf(r);
-  const unfiled = r.in_inbox;
+  const unfiled = r.in_inbox && !pick;
   return (
-    <li className={`relative-row${checked ? " checked" : ""}${unfiled ? " unfiled" : ""}`} data-drive-id={r.drive_id}>
+    <li
+      className={`relative-row${checked ? " checked" : ""}${unfiled ? " unfiled" : ""}${pick ? " ai" : ""}`}
+      data-drive-id={r.drive_id}
+    >
       <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`Select ${name}`} />
       <div className="relative-main">
         <div className="relative-line">
@@ -161,7 +206,7 @@ function RelativeRow({
             {name}
           </button>
           <span className="relative-folder trunc" title={visible(r.folder)}>
-            {unfiled ? "Inbox" : visible(baseName(r.folder)) || "Archive"}
+            {r.in_inbox ? "Inbox" : visible(baseName(r.folder)) || "Archive"}
           </span>
         </div>
         {unfiled && (
@@ -172,14 +217,21 @@ function RelativeRow({
             </Link>
           </div>
         )}
-        <div className="relative-kinds" title={linkTip(r)}>
-          {kinds.map((kind) => (
-            <span key={kind} className={`tag ${KIND_CLASS[kind]}`}>
-              {KIND_LABEL[kind]}
-            </span>
-          ))}
-          {r.same_month && <span className="tag tag-grey">+ same month</span>}
-        </div>
+        {pick ? (
+          <div className="relative-ai-reason">
+            <AIMark pick={pick} />
+            <span>{visible(pick.reason)}</span>
+          </div>
+        ) : (
+          <div className="relative-kinds" title={linkTip(r)}>
+            {kinds.map((kind) => (
+              <span key={kind} className={`tag ${KIND_CLASS[kind]}`}>
+                {KIND_LABEL[kind]}
+              </span>
+            ))}
+            {r.same_month && <span className="tag tag-grey">+ same month</span>}
+          </div>
+        )}
       </div>
       <div className="relative-tools">
         <IconButton icon={<Eye size={14} />} label={`Quick Look ${name}`} tip="Quick Look" onClick={onLook} />

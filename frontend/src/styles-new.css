@@ -1666,6 +1666,22 @@
 [data-style="new"] .rel-arc.inbox .rel-arc-line, [data-style="new"] .rel-arc-line.inbox { stroke: var(--orange); stroke-dasharray: 5 5; }
 [data-style="new"] .rel-dot { fill: var(--accent); }
 [data-style="new"] .rel-arc.inbox .rel-dot { fill: var(--orange); }
+/* Find more with AI: picks are marked with a dashed outline badge and a dotted arc */
+[data-style="new"] .rel-ai-badge { flex: none; display: inline-block; padding: 0 6px; border: 1px dashed var(--accent); border-radius: var(--r-sm); background: var(--panel); color: var(--accent); font-size: var(--fs-xs); font-weight: 600; line-height: 1.5; cursor: help; }
+[data-style="new"] .rel-ai-badge:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+[data-style="new"] .relative-ai-reason { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; font-size: var(--fs-sm); color: var(--text-2); }
+[data-style="new"] .rel-ai-line { flex: 0 1 55%; min-width: 0; align-items: center; color: var(--text-2); font-size: var(--fs-xs); }
+[data-style="new"] .rel-ai-line .trunc { min-width: 0; }
+[data-style="new"] .rel-card-reason { margin: 0; color: var(--text-2); }
+[data-style="new"] .rel-arc.ai .rel-arc-line { stroke-dasharray: 1 6; }
+[data-style="new"] .rel-arc.ai .rel-dot { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+[data-style="new"] .relatives-ai-ask { align-self: flex-start; font-size: var(--fs-sm); }
+[data-style="new"] .relatives-ai-found { display: flex; align-items: center; gap: var(--sp-2); margin: 0; padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--border-strong); border-radius: var(--r-lg); font-size: var(--fs-sm); color: var(--text-2); }
+[data-style="new"] .relatives-ai-found svg { flex: none; color: var(--accent); }
+[data-style="new"] .relatives-ai-found > span { flex: 1; min-width: 0; }
+[data-style="new"] .rel-empty { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
+[data-style="new"] .ai-payload-sections { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+[data-style="new"] .ai-candidates { margin: var(--sp-2) 0 0; padding-left: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
 [data-style="new"] .rel-card { position: absolute; z-index: 3; top: 100%; left: 36px; width: 260px; box-sizing: border-box; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--r-lg); background: var(--panel); color: var(--text); font-size: var(--fs-sm); font-weight: 400; box-shadow: var(--shadow-pop); }
 [data-style="new"] .rel-card-name { font-weight: 600; }
 [data-style="new"] .rel-card-list { margin: 0; display: flex; flex-direction: column; gap: 3px; }
