@@ -151,6 +151,7 @@ function FullSize({
   updating,
   pay,
   title,
+  done,
   onClose,
 }: {
   code: string;
@@ -159,6 +160,7 @@ function FullSize({
   pay?: PayFact[];
   /** The bill's title, for the New look's heading. */
   title?: string;
+  done?: PayDone;
   onClose: () => void;
 }) {
   const [look] = useStyle();
@@ -173,9 +175,27 @@ function FullSize({
       footer={
         <>
           <CopyButton value={code} label="barcode number" />
-          <button type="button" className="primary" onClick={onClose}>
-            Done
-          </button>
+          {done ? (
+            <>
+              <button type="button" onClick={onClose}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  onClose();
+                  done.onDone();
+                }}
+              >
+                {visible(done.label)}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="primary" onClick={onClose}>
+              Done
+            </button>
+          )}
         </>
       }
     >
@@ -270,7 +290,21 @@ function Mismatch({ itemId, barcode }: { itemId: number; barcode: ItemBarcode })
   );
 }
 
-export function Barcode({ itemId, pay, title }: { itemId: number; pay?: PayFact[]; title?: string }) {
+/** The item's own done action ("Mark paid"), offered in Pay mode once the bill is paid:
+ * it closes Pay mode and opens the item's done form, the same as its button. */
+export type PayDone = { label: string; onDone: () => void };
+
+export function Barcode({
+  itemId,
+  pay,
+  title,
+  done,
+}: {
+  itemId: number;
+  pay?: PayFact[];
+  title?: string;
+  done?: PayDone;
+}) {
   const query = useItemBarcode(itemId);
   const [fullSize, setFullSize] = useState(false);
   const canShow = !!query.data?.code && !!query.data?.modules;
@@ -320,6 +354,7 @@ export function Barcode({ itemId, pay, title }: { itemId: number; pay?: PayFact[
           updating={updating}
           pay={pay}
           title={title}
+          done={done}
           onClose={() => setFullSize(false)}
         />
       )}
