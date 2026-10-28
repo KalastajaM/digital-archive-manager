@@ -117,6 +117,9 @@ export function buildOutline(file: BlockFile, relatives: Relative[], expanded: R
   return rows;
 }
 
+/** A bundle's branch from its folder's heading to one file: short and thin. */
+const BRANCH_W = 1.5;
+const branchPath = (y0: number, y1: number) => `M0 ${y0} C18 ${y0} 18 ${y1} 0 ${y1}`;
 const strokeOf = (score: number) => Math.min(4.5, Math.max(1.5, 1 + score * 0.4));
 const arcPath = (y0: number, y1: number) => {
   const bulge = Math.min(MAX_BULGE, 24 + Math.abs(y1 - y0) * 0.6);
@@ -211,28 +214,42 @@ export function RelativesDialog({
       return next;
     });
 
-  // arcs: from this file's row to each relative's row (to its folder's row when folded away)
+  // arcs: from this file's row to each relative's row. A folder (other than this file's
+  // own) with two or more relatives gets one arc to its heading, thick as its best
+  // relative, and a short branch from there to each file; a folded folder is the arc alone.
   const rowY = (i: number) => i * ROW_H + ROW_H / 2;
   const selfAt = rows.findIndex((r) => r.t === "self");
   const arcs = useMemo(() => {
-    const out = new Map<number, { key: string; ids: string[]; score: number; inbox: boolean; folded: boolean; rels: Relative[] }>();
-    const rowIndexOf = (r: Relative) => {
-      const own = rows.findIndex((x) => x.t === "file" && x.r.drive_id === r.drive_id);
-      if (own >= 0) return { i: own, folded: false };
-      return { i: rows.findIndex((x) => x.t === "folder" && x.key === fold(r.folder)), folded: true };
-    };
-    for (const r of relatives) {
-      const { i, folded } = rowIndexOf(r);
-      if (i < 0) continue;
-      const cur = out.get(i) ?? { key: folded ? `folder:${fold(r.folder)}` : r.drive_id, ids: [], score: 0, inbox: true, folded, rels: [] };
-      cur.ids.push(r.drive_id);
-      cur.rels.push(r);
-      cur.score = Math.max(cur.score, r.score);
-      cur.inbox = cur.inbox && r.in_inbox;
-      out.set(i, cur);
+    type Arc = { key: string; i: number; from: number | null; ids: string[]; score: number; inbox: boolean; rels: Relative[] };
+    const out: Arc[] = [];
+    const arcOf = (key: string, i: number, from: number | null, rels: Relative[]): Arc => ({
+      key,
+      i,
+      from,
+      ids: rels.map((r) => r.drive_id),
+      score: Math.max(...rels.map((r) => r.score)),
+      inbox: rels.every((r) => r.in_inbox),
+      rels,
+    });
+    const own = fold(parentOf(file.path));
+    const byFolder = new Map<string, Relative[]>();
+    for (const r of relatives) byFolder.set(fold(r.folder), [...(byFolder.get(fold(r.folder)) ?? []), r]);
+    for (const [key, rels] of byFolder) {
+      const head = rows.findIndex((x) => x.t === "folder" && x.key === key);
+      const shown = rels
+        .map((r) => ({ r, i: rows.findIndex((x) => x.t === "file" && x.r.drive_id === r.drive_id) }))
+        .filter((x) => x.i >= 0);
+      if (shown.length === 0) {
+        if (head >= 0) out.push(arcOf(`folder:${key}`, head, null, rels));
+      } else if (shown.length >= 2 && head >= 0 && key !== own) {
+        out.push(arcOf(`folder:${key}`, head, null, rels));
+        for (const { r, i } of shown) out.push(arcOf(r.drive_id, i, head, [r]));
+      } else {
+        for (const { r, i } of shown) out.push(arcOf(r.drive_id, i, null, [r]));
+      }
     }
-    return [...out].map(([i, a]) => ({ i, ...a }));
-  }, [rows, relatives]);
+    return out;
+  }, [rows, relatives, file.path]);
 
   const quick = [
     { label: "2+ links", ids: regular.filter((r) => kindsOf(r).length >= 2).map((r) => r.drive_id) },
@@ -443,19 +460,20 @@ export function RelativesDialog({
                       );
                     })}
                   </ul>
-                  <svg className="rel-arcs" width={ARC_W} height={rows.length * ROW_H} aria-hidden="true">
+                  <svg className={`rel-arcs${carded ? " pointing" : ""}`} width={ARC_W} height={rows.length * ROW_H} aria-hidden="true">
                     {selfAt >= 0 &&
                       arcs.map((a) => {
                         const faded = lit !== null && !a.rels.some((r) => sharesValue(r, lit));
                         const ai = a.rels.every(isAIPick);
                         const on = carded !== null && a.ids.includes(carded);
-                        const cls = `rel-arc${a.inbox ? " inbox" : ""}${ai ? " ai" : ""}${faded ? " faded" : ""}${on ? " on" : ""}`;
+                        const branch = a.from !== null;
+                        const cls = `rel-arc${branch ? " branch" : ""}${a.inbox ? " inbox" : ""}${ai ? " ai" : ""}${faded ? " faded" : ""}${on ? " on" : ""}`;
                         return (
                           <g key={a.key} className={cls} data-target={a.key}>
                             <path
                               className="rel-arc-line"
-                              d={arcPath(rowY(selfAt), rowY(a.i))}
-                              strokeWidth={strokeOf(a.score)}
+                              d={branch ? branchPath(rowY(a.from as number), rowY(a.i)) : arcPath(rowY(selfAt), rowY(a.i))}
+                              strokeWidth={branch ? BRANCH_W : strokeOf(a.score)}
                             />
                             <circle className="rel-dot" cx={0} cy={rowY(a.i)} r={3} />
                           </g>

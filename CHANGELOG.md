@@ -79,10 +79,12 @@ All notable changes are listed here. The format follows
   **Outside this folder**. Quick Look from Relatives now shows this file beside the relative
   with what they share, and **N** (Not related), **→** (Skip) and **Y** (Related, next) to go
   through them. Each side zooms on its own (`+` and `-` zoom the side clicked last), and
-  **Zoom together** links them for documents of the same size.
+  **Move together** makes both zoom, scroll and turn pages as one.
   Click a relative's name (or press **Enter**, or **Its relatives** on its card) to see that
   file's own relatives in the same window, and keep going from file to file; the trail at
   the top and **Back** (or **Backspace**) lead back, and the file you came from is marked.
+  A folder with several relatives gets one arc to its name and short branches to its files,
+  and pointing at a file brings its arc forward, so a busy window stays readable.
   Folders that only lead to one other folder share a row (**11. Bills & Receipts / 2026**),
   so the outline is shorter.
 - **Find more relatives with AI (New look, optional).** When AI is on, the Relatives block
