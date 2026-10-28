@@ -86,8 +86,16 @@ def pending(app: AppDep) -> list:
 
 
 @router.post("/recovery", response_model=RecoveryResultOut)
-def recover(app: AppDep):
+def recover(app: AppDep, snaps: SnapshotsDep):
     """Settle interrupted operations from the disk. Archive files are never changed; an
     interrupted move of a rule picture across disks is finished by removing dam's own
     copy in its settings folder once the archive copy is verified."""
-    return app.activity.recover()
+    result = app.activity.recover()
+    if special_folders.has_unfinished(app.engine) and snaps.reopener is not None:
+        # a rename of a special folder that waited for this recovery is finished (or taken
+        # back) now, as the archive is opened again; without a server it waits for a restart
+        try:
+            snaps.reopener.close_and_reopen(lambda: special_folders.reconcile(app.app_paths))
+        except Conflict:
+            pass  # a job runs now: it is finished at the next start
+    return result

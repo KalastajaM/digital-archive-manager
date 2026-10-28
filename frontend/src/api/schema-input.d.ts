@@ -7753,7 +7753,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "manual" | "before-restore" | "before-relabel";
+            kind: "manual" | "before-restore" | "before-relabel" | "before-rename";
             /** Imported */
             imported: boolean;
             /** Revision */

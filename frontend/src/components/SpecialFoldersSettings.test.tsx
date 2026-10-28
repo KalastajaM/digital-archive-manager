@@ -144,5 +144,11 @@ describe("To Delete follows its configured name", () => {
     expect(inToDelete("##. To Delete/a.pdf")).toBe(false);
     setQuarantineName(undefined);
     expect(inToDelete("##. To Delete")).toBe(true);
+    // each archive folder has its own To Delete, found while the name starts with ##.
+    expect(inToDelete("Old years/##. To Delete/a.pdf")).toBe(true);
+    expect(inToDelete("10. Home/##. To Delete")).toBe(true);
+    expect(inToDelete("Old years/2009/a.pdf")).toBe(false);
+    setQuarantineName("99. Bin");
+    expect(inToDelete("Old years/99. Bin/a.pdf")).toBe(false);
   });
 });

@@ -590,7 +590,8 @@ readopted = Table(
 # folder itself is renamed by a journaled batch (``batch_id``); the row says which settings,
 # rules and stored paths followed it, and how far the rename got, so an interruption is
 # finished (or undone) at the next start. ``state``: planned (the rename started),
-# done, undone, failed (the folder never moved). ``key``: inbox | ongoing | important |
+# done, undone, failed (the folder never moved), attention (some of it is done and dam
+# could not finish or take it back). ``key``: inbox | ongoing | important |
 # quarantine; ``old`` and ``new`` are the folder's names.
 special_folder_renames = Table(
     "special_folder_renames",
@@ -603,6 +604,11 @@ special_folder_renames = Table(
     Column("state", Text, nullable=False),
     # how many folders the batch renames (one per disk for To Delete)
     Column("folders", Integer, nullable=False, server_default="1"),
+    # what followed the folder: JSON {"files": {config file: [[yaml path, old, new]]},
+    # "db": {table: [[row id, old, new]]}}; Undo puts back exactly these
+    Column("changes", Text, nullable=True),
+    # why a rename is ``attention`` (or waits for recovery), in words
+    Column("note", Text, nullable=True),
     Column("created", Float, nullable=False),
     Column("finished", Float, nullable=True),
 )

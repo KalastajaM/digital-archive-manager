@@ -13,10 +13,15 @@ export function setQuarantineName(name: string | null | undefined): void {
   quarantine = name ? name.normalize("NFC").toLowerCase() : DEFAULT_NAME;
 }
 
-/** ``path`` is ``##. To Delete`` itself or inside it (by the configured name, which is the
- * default one unless Settings renamed the folder). */
-export const inToDelete = (path: string | null | undefined): boolean =>
-  !!path && path.split("/")[0].normalize("NFC").toLowerCase() === quarantine;
+/** ``path`` is the To Delete folder itself or inside it (by the configured name, which is
+ * the default one unless Settings renamed the folder). Each archive folder has its own To
+ * Delete, ``Old years/##. To Delete``: that is covered while the name starts with ``##.``,
+ * which no other folder may (a renamed folder could share its name with an ordinary one). */
+export const inToDelete = (path: string | null | undefined): boolean => {
+  if (!path) return false;
+  const parts = path.split("/").map((p) => p.normalize("NFC").toLowerCase());
+  return parts[0] === quarantine || (quarantine.startsWith("##.") && parts.length > 1 && parts[1] === quarantine);
+};
 
 /** The reason a change is off for the file at ``path`` (null: it is allowed). */
 export const toDeleteReason = (path: string | null | undefined): string | null =>

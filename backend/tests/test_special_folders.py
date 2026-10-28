@@ -3,6 +3,7 @@ preview, the journaled rename through the operation layer, everything that follo
 name (settings, rules, stored paths, the publisher's links), undo, the refusals and an
 interruption half way. All on temporary fake archives."""
 
+import json
 import os
 import shutil
 
@@ -10,6 +11,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 import archive_guard
 import dam.serve as serve_mod
@@ -21,7 +23,8 @@ from dam.db.engine import make_engine
 from dam.db.tables import collections as collections_table
 from dam.db.tables import ongoing_entries, operations, special_folder_renames
 from dam.errors import Conflict
-from dam.ops.model import OpKind
+from dam.ops.executor import Executor
+from dam.ops.model import GuardError, OpKind
 from dam.profiles import ProfileStore, ServeLock
 from dam.serve import Host, Switchboard
 
@@ -70,7 +73,7 @@ def block_settings(app_paths, fake_archive):
     """settings.yaml as a user has it: the shipped file (special_folders spelled out, with
     comments) plus the archive folder."""
     text = (DEFAULTS_DIR / "settings.yaml").read_text(encoding="utf-8")
-    text += f'archive_root: "{fake_archive.root}"\n'
+    text += f"archive_root: {json.dumps(str(fake_archive.root))}\n"  # a Windows path needs escapes
     (app_paths.config_dir / "settings.yaml").write_text(text, encoding="utf-8")
     return text
 
@@ -80,7 +83,7 @@ def extra(tmp_path, block_settings, app_paths):
     """A second archive folder ("Old years") on another fake disk, in the settings file."""
     folder = FakeArchive(tmp_path / "disk" / "Archive 2000-2015")
     with open(app_paths.config_dir / "settings.yaml", "a", encoding="utf-8") as f:
-        f.write(f'extra_folders:\n  - label: "Old years"\n    path: "{folder.root}"\n')
+        f.write(f"extra_folders:\n  - label: Old years\n    path: {json.dumps(str(folder.root))}\n")
     return folder
 
 
@@ -691,6 +694,15 @@ def closed(app_paths, block_settings):
     return app_paths
 
 
+def _batch(app_paths):
+    engine = make_engine(app_paths.db_path)
+    try:
+        with engine.connect() as conn:
+            return conn.execute(select(special_folder_renames.c.batch_id)).scalar_one()
+    finally:
+        engine.dispose()
+
+
 def _state(app_paths):
     engine = make_engine(app_paths.db_path)
     try:
@@ -727,6 +739,12 @@ def test_starting_the_app_finishes_an_interrupted_rename(closed, fake_archive, m
     with pytest.raises(ZeroDivisionError):
         special_folders.rename_folder(closed, "important", "##. Keep")
     monkeypatch.undo()
+    # opening the app alone (``dam remind``, a read-only command, which do not hold the
+    # archive's lock) leaves the rename alone: it could undo a batch another process runs
+    App.create(closed.data_dir).close()
+    assert load_settings(closed).special_folders.important == "##. Important"
+    assert _state(closed) == ["planned"]
+    special_folders.reconcile(closed)  # what ``dam serve`` does before it opens the archive
     app = App.create(closed.data_dir)
     try:
         assert app.paths.important == "##. Keep"
@@ -791,3 +809,315 @@ def test_a_rename_that_stopped_part_way_across_disks_is_put_back(
     assert "##. To Delete" in names_on_disk(extra.root)
     assert load_settings(closed).special_folders.quarantine == "##. To Delete"
     assert _state(closed) == ["failed"]
+
+
+# -- the review's findings ----------------------------------------------------------------------
+
+
+def _locked_once(monkeypatch):
+    """The journal cannot record the first op as finished ("database is locked"): the folder
+    has moved, the row stays ``planned``."""
+    real = Executor._journal_finish
+    seen = []
+
+    def finish(self, op_id, state, *args, **kwargs):
+        if state == "done" and not seen:
+            seen.append(op_id)
+            raise OperationalError("UPDATE", {}, Exception("database is locked"))
+        return real(self, op_id, state, *args, **kwargs)
+
+    monkeypatch.setattr(Executor, "_journal_finish", finish)
+
+
+def _recover(app_paths):
+    from dam.app import App
+
+    app = App.create(app_paths.data_dir)
+    try:
+        app.activity.recover()
+    finally:
+        app.close()
+
+
+def test_a_moved_folder_is_never_recorded_as_failed(closed, fake_archive, monkeypatch):
+    """B1: the folder moved but its journal row could not be finished. The rename is not
+    marked failed; after Run recovery the next start finishes it, and Undo works."""
+    _locked_once(monkeypatch)
+    with pytest.raises(Conflict) as e:
+        special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    assert "Run recovery" in str(e.value) and "Nothing was changed" not in str(e.value)
+    monkeypatch.undo()
+    assert (fake_archive.root / "00. Inbox").is_dir()
+    assert _state(closed) == ["planned"]  # not "failed"
+    assert special_folders.reconcile(closed) == 0  # the journal row waits for recovery
+    _recover(closed)
+    assert special_folders.reconcile(closed) == 1
+    assert load_settings(closed).special_folders.inbox == "00. Inbox"
+    assert _state(closed) == ["done"]
+    batch = _batch(closed)
+    special_folders.undo(closed, batch)
+    assert (fake_archive.root / "##. Organize").is_dir()
+    assert load_settings(closed).special_folders.inbox == "##. Organize"
+
+
+def test_recovery_in_the_app_finishes_the_rename_at_once(served, app_paths, monkeypatch):
+    """S4: Run recovery reopens the archive, which finishes the rename without a restart."""
+    host, c = served
+    _locked_once(monkeypatch)
+    assert rename(c, "inbox", "00. Inbox").status_code == 409
+    monkeypatch.undo()
+    assert load_settings(app_paths).special_folders.inbox == "##. Organize"
+    r = rename(c, "ongoing", "Projects", dry_run=True)
+    assert r.status_code == 409 and "Run recovery" in r.json()["error"]
+    r = post(c, "/api/recovery")
+    assert r.status_code == 200, r.text
+    assert load_settings(app_paths).special_folders.inbox == "00. Inbox"
+    assert host.current.app.paths.inbox == "00. Inbox"
+    assert rename(c, "ongoing", "Projects", dry_run=True).status_code == 200
+
+
+def test_a_rename_stopped_by_an_index_error_is_taken_back_not_called_done(
+    extra, closed, fake_archive, monkeypatch
+):
+    """S1: the index update of a folder fails: the half-renamed To Delete is put back, never
+    reported as renamed with one disk still on the old name."""
+    from dam.index.repo import FileRepo
+
+    real = FileRepo.update_path
+    calls = []
+
+    def update_path(self, *args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            raise OperationalError("UPDATE", {}, Exception("database is locked"))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(FileRepo, "update_path", update_path)
+    with pytest.raises(Conflict, match="Nothing was changed"):
+        special_folders.rename_folder(closed, "quarantine", "99. Bin")
+    monkeypatch.undo()
+    assert "##. To Delete" in names_on_disk(fake_archive.root)
+    assert "##. To Delete" in names_on_disk(extra.root)
+    assert load_settings(closed).special_folders.quarantine == "##. To Delete"
+    assert _state(closed) == ["failed"]
+
+
+def _second_disk_fails(monkeypatch):
+    real = Executor._act
+    calls = []
+
+    def act(self, rop, *args, **kwargs):
+        calls.append(rop.src)
+        if len(calls) == 2:
+            raise OSError("disk unplugged")
+        return real(self, rop, *args, **kwargs)
+
+    monkeypatch.setattr(Executor, "_act", act)
+
+
+def test_a_failed_take_back_is_not_swallowed(extra, closed, fake_archive, monkeypatch):
+    """S2: the second disk fails and the first cannot be put back: the rename is kept as
+    ``attention`` with the reason, later renames are refused with it, and Undo takes it."""
+    _second_disk_fails(monkeypatch)
+
+    def refuse(self, batch_id):
+        raise GuardError("the origin is occupied")
+
+    monkeypatch.setattr(Executor, "undo", refuse)
+    with pytest.raises(Conflict, match="could not be taken back"):
+        special_folders.rename_folder(closed, "quarantine", "99. Bin")
+    assert "99. Bin" in names_on_disk(fake_archive.root)  # the first disk is still renamed
+    assert _state(closed) == ["attention"]
+    monkeypatch.undo()  # also removes the failing second disk
+    assert special_folders.reconcile(closed) == 1  # the next start tries again, and succeeds
+    assert "##. To Delete" in names_on_disk(fake_archive.root)
+    assert _state(closed) == ["failed"]
+
+
+def test_an_attention_rename_blocks_later_ones_until_it_is_undone(
+    extra, closed, fake_archive, monkeypatch
+):
+    _second_disk_fails(monkeypatch)
+    real_undo = Executor.undo
+    monkeypatch.setattr(Executor, "undo", lambda self, b: (_ for _ in ()).throw(GuardError("busy")))
+    with pytest.raises(Conflict):
+        special_folders.rename_folder(closed, "quarantine", "99. Bin")
+    with pytest.raises(Conflict, match="left unfinished"):
+        special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    monkeypatch.undo()
+    batch = _batch(closed)
+    assert real_undo  # the real undo is back
+    special_folders.undo(closed, batch)  # Undo in Activity clears it
+    assert _state(closed) == ["undone"]
+    special_folders.rename_folder(closed, "inbox", "00. Inbox")
+
+
+def test_a_reconcile_that_cannot_settle_does_not_block_for_ever(
+    extra, closed, fake_archive, monkeypatch
+):
+    """S2: a take-back that fails at the next start leaves ``attention`` (Undo clears it),
+    not a ``planned`` row nothing can clear."""
+    _second_disk_fails(monkeypatch)
+    monkeypatch.setattr(special_folders, "_back_out", lambda *a, **k: "nope")
+    with pytest.raises(Conflict):
+        special_folders.rename_folder(closed, "quarantine", "99. Bin")
+    monkeypatch.undo()
+    engine = make_engine(closed.db_path)
+    try:
+        with engine.begin() as conn:
+            conn.execute(special_folder_renames.update().values(state="planned"))
+    finally:
+        engine.dispose()
+
+    def broken(*args, **kwargs):
+        raise GuardError("cannot plan the undo")
+
+    monkeypatch.setattr(special_folders, "_executor", broken)
+    assert special_folders.reconcile(closed) == 0
+    assert _state(closed) == ["attention"]
+
+
+def test_the_settings_must_be_writable_before_anything_moves(closed, fake_archive):
+    import stat
+
+    settings = closed.config_dir / "settings.yaml"
+    settings.chmod(stat.S_IRUSR)
+    try:
+        if os.access(settings, os.W_OK):
+            pytest.skip("this account can write a read-only file")
+        with pytest.raises(Conflict, match="cannot be written"):
+            special_folders.rename_folder(closed, "inbox", "00. Inbox")
+        assert (fake_archive.root / "##. Organize").is_dir()
+        assert _state(closed) == []
+    finally:
+        settings.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_a_settings_file_without_protected_paths_follows_a_renamed_important(
+    served, app_paths, fake_archive
+):
+    """S5: the built-in default protected path is written out and follows the name."""
+    host, c = served
+    (app_paths.config_dir / "settings.yaml").write_text(
+        yaml.safe_dump({"archive_root": str(fake_archive.root)}), encoding="utf-8"
+    )
+    preview = rename(c, "important", "##. Keep", dry_run=True).json()
+    places = {p["place"]: p for p in preview["places"]}
+    assert "protected_paths is written out" in places["config/settings.yaml"]["what"]
+    r = rename(c, "important", "##. Keep")
+    assert r.status_code == 200, r.text
+    assert load_settings(app_paths).protected_paths == ["##. Keep"]
+    assert host.current.app.paths.is_protected("##. Keep/x")
+    assert post(c, f"/api/activity/{r.json()['batch_id']}/undo").status_code == 200
+    assert load_settings(app_paths).protected_paths == ["##. Important"]
+
+
+def test_a_snapshot_is_taken_first_and_a_restore_keeps_the_current_names(
+    served, app_paths, fake_archive, tmp_path
+):
+    """S6: the rename is preceded by a snapshot, and restoring it does not bring the old
+    names back against the folders that now have new ones."""
+    from dam import snapshots
+
+    host, c = served
+    assert rename(c, "inbox", "00. Inbox").status_code == 200
+    taken = [s for s in snapshots.list_snapshots(app_paths) if s.kind == "before-rename"]
+    assert len(taken) == 1 and taken[0].name.endswith("-before-rename.zip")
+    work = tmp_path / "work"
+    work.mkdir()
+    snapshots.stage(
+        app_paths, taken[0].name, snapshots.Folders(fake_archive.root, ()), True, work
+    )
+    staged = yaml.safe_load((work / "config" / "settings.yaml").read_text(encoding="utf-8"))
+    assert staged["special_folders"]["inbox"] == "00. Inbox"  # not the snapshot's old name
+
+
+def test_undo_puts_back_only_what_the_rename_changed(served, app_paths, fake_archive):
+    """M1: values that already had the new name are not touched by Undo."""
+    host, c = served
+    rules = app_paths.config_dir / "rules" / "zz-mine.yaml"
+    rules.write_text(
+        "- id: a\n  when: {folder_is: '##. Organize', text_contains: [x]}\n  then: {name: x}\n"
+        "- id: b\n  when: {folder_is: '00. Inbox', text_contains: [y]}\n  then: {name: y}\n",
+        encoding="utf-8",
+    )
+    from dam.db.engine import write_tx
+    from dam.db.tables import maintenance_ignored
+
+    with write_tx(host.current.app.engine) as conn:
+        for key in ("##. Organize/a.pdf", "00. Inbox/b.pdf"):
+            conn.execute(
+                maintenance_ignored.insert().values(
+                    kind="bad-name", key=key, label=key, created=1.0
+                )
+            )
+    r = rename(c, "inbox", "00. Inbox")
+    assert r.status_code == 200, r.text
+    assert post(c, f"/api/activity/{r.json()['batch_id']}/undo").status_code == 200
+    text = rules.read_text(encoding="utf-8")
+    assert "folder_is: '##. Organize'" in text and "folder_is: '00. Inbox'" in text  # b stays
+    with host.current.app.engine.connect() as conn:
+        keys = sorted(conn.execute(select(maintenance_ignored.c.key)).scalars())
+    assert keys == ["##. Organize/a.pdf", "00. Inbox/b.pdf"]
+
+
+def test_a_partial_undo_is_reported_and_can_be_repeated(extra, closed, fake_archive, monkeypatch):
+    """M2: only the first disk can be renamed back: it says so, keeps the settings on the new
+    name, and a second Undo finishes."""
+    renamed = special_folders.rename_folder(closed, "quarantine", "99. Bin")
+    _second_disk_fails(monkeypatch)
+    with pytest.raises(Conflict, match="Only 1 of 2 folders were renamed back"):
+        special_folders.undo(closed, renamed.batch_id)
+    assert load_settings(closed).special_folders.quarantine == "99. Bin"
+    assert _state(closed) == ["done"]
+    monkeypatch.undo()
+    special_folders.undo(closed, renamed.batch_id)
+    assert load_settings(closed).special_folders.quarantine == "##. To Delete"
+    assert "##. To Delete" in names_on_disk(extra.root) and "##. To Delete" in names_on_disk(
+        fake_archive.root
+    )
+    assert _state(closed) == ["undone"]
+
+
+def test_windows_line_endings_survive_a_rename_and_its_undo(closed, fake_archive):
+    """M3: a CRLF file stays CRLF, and Undo gives it back byte for byte."""
+    settings = closed.config_dir / "settings.yaml"
+    rules = closed.config_dir / "rules" / "zz-crlf.yaml"
+    rules.write_bytes(
+        b"- id: a\r\n  when: {folder_is: '##. Organize', text_contains: [x]}\r\n"
+        b"  then: {name: x}\r\n"
+    )
+    settings.write_bytes(settings.read_bytes().replace(b"\n", b"\r\n"))
+    before = {p: p.read_bytes() for p in (settings, rules)}
+    renamed = special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    for p in (settings, rules):
+        data = p.read_bytes()
+        assert b"00. Inbox" in data and b"\n" not in data.replace(b"\r\n", b"")
+    special_folders.undo(closed, renamed.batch_id)
+    assert {p: p.read_bytes() for p in (settings, rules)} == before
+
+
+def test_to_delete_can_be_renamed_when_only_an_extra_folder_has_one(
+    extra, closed, fake_archive
+):
+    """M4."""
+    shutil.rmtree(fake_archive.root / "##. To Delete")
+    special_folders.rename_folder(closed, "quarantine", "99. Bin")
+    assert "99. Bin" in names_on_disk(extra.root)
+    assert "99. Bin" not in names_on_disk(fake_archive.root)
+    assert load_settings(closed).special_folders.quarantine == "99. Bin"
+
+
+def test_a_settings_file_with_a_windows_path_is_edited_safely(app_paths):
+    """A Windows path in double quotes (backslashes escaped) stays what it was when the
+    special_folders entry is written next to it, and the edit reads back."""
+    windows = "C:\\Users\\me\\My Drive\\Archive"
+    path = app_paths.config_dir / "settings.yaml"
+    path.write_text(f"archive_root: {json.dumps(windows)}\nserver_port: 8765\n", encoding="utf-8")
+    edits = special_folders.config_edits(app_paths, "inbox", "##. Organize", "00. Inbox", ())
+    (change,) = [e for e in edits if e.path == path]
+    data = yaml.safe_load(change.written)
+    assert data["archive_root"] == windows
+    assert data["special_folders"]["inbox"] == "00. Inbox"
+    assert data["special_folders"]["ongoing"] == "##. Ongoing"
+    assert data["server_port"] == 8765

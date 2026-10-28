@@ -25,6 +25,7 @@ one an interruption left half done, at the next start. Undo (``undo``) runs the 
 undo of the batch and then puts the settings, rules and stored paths back.
 """
 
+import json
 import logging
 import os
 import time
@@ -37,7 +38,7 @@ import yaml
 from sqlalchemy import Connection, Engine, func, insert, inspect, select, update
 
 from dam.codes.configfile import write_config_file
-from dam.config import AppPaths, SpecialFolders, load_settings
+from dam.config import AppPaths, Settings, SpecialFolders, load_settings
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.paths import ArchivePaths, fold_name, nfc
 from dam.core.yamledit import YamlEditError, replace_values
@@ -60,6 +61,7 @@ from dam.ops.undo import ACTED
 from dam.rules.model import load_rule_file, rule_files
 from dam.rules.picture import AREAS_DIR
 from dam.settings_write import with_keys
+from dam.snapshots import BEFORE_RENAME, create_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +82,15 @@ SYNC_NOTE = (
     "The folder is on Google Drive. The rename has to sync to every device before they "
     "see it; keep Google Drive running until it has finished."
 )
+UNFINISHED = (
+    "An earlier rename of a special folder was left unfinished{why}. Run recovery if the app "
+    "offers it and restart dam, so it can finish it, or undo that change in Activity."
+)
+# planned: started, finishes or is taken back at the next start; done; undone; failed: the
+# folder never moved (nothing to undo); attention: some of it is done and dam could not finish
+# or take it back by itself (Undo in Activity retries, ``note`` says why)
 _DONE, _UNDONE, _PLANNED, _FAILED = "done", "undone", "planned", "failed"
+_ATTENTION = "attention"
 
 
 @dataclass
@@ -114,10 +124,20 @@ class Renamed:
 
 @dataclass
 class FileChange:
+    """One config file with some values changed. ``text`` and ``before`` use ``\\n``;
+    ``crlf``: the file has Windows line endings, which are kept. ``edits``: each value
+    changed as ``[yaml path, old value, new value]``, what an undo puts back."""
+
     path: Path
     lines: list[int]
     text: str  # the new content
     before: str  # the content now
+    edits: list[list] = field(default_factory=list)
+    crlf: bool = False
+
+    @property
+    def written(self) -> str:
+        return self.text.replace("\n", "\r\n") if self.crlf else self.text
 
 
 # --- names -----------------------------------------------------------------------------
@@ -228,13 +248,22 @@ def _refusals(key: str, paths: ArchivePaths, engine: Engine) -> None:
             select(operations.c.id).where(operations.c.state == "planned").limit(1)
         ).first():
             raise Conflict(INTERRUPTED)
-        pending = conn.execute(
-            select(special_folder_renames.c.id)
-            .where(special_folder_renames.c.state == _PLANNED)
+        unfinished = conn.execute(
+            select(special_folder_renames.c.note)
+            .where(special_folder_renames.c.state.in_((_PLANNED, _ATTENTION)))
             .limit(1)
         ).first()
-    if pending:
-        raise Conflict(INTERRUPTED)
+    if unfinished is not None:
+        why = f" ({unfinished[0]})" if unfinished[0] else ""
+        raise Conflict(UNFINISHED.format(why=why))
+
+
+def _nothing_to_rename(key: str, rels: list[str], old: str) -> bool:
+    """No folder to rename: none of them is there, or (for the folders that live in the main
+    folder only) the main one is not. To Delete may exist in an extra folder alone."""
+    if not rels:
+        return True
+    return key != "quarantine" and fold_name(rels[0]) != fold_name(old)
 
 
 def _plan(key: str, rels: list[str], new: str, title: str, old: str) -> Plan:
@@ -284,37 +313,66 @@ def _expected(data, change: Callable, path: tuple = ()):
     return data
 
 
+def _read(path: Path) -> tuple[str, bool]:
+    """The file's text with ``\\n`` line ends, and whether it had Windows ones."""
+    raw = path.read_bytes().decode("utf-8")
+    return raw.replace("\r\n", "\n"), "\r\n" in raw
+
+
 def _edit(path: Path, change: Callable) -> FileChange | None:
-    before = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    before, crlf = _read(path)
+    applied: list[list] = []
+
+    def recording(at: tuple, value: str) -> str | None:
+        new = change(at, value)
+        if new is not None and new != value:
+            applied.append([list(at), value, new])
+        return new
+
     try:
-        after, lines = replace_values(before, change)
+        after, lines = replace_values(before, recording)
     except YamlEditError as e:
         raise YamlEditError(f"{path.name}, {e}") from None
     if not lines:
         return None
     if yaml.safe_load(after) != _expected(yaml.safe_load(before), change):
         raise YamlEditError(f"{path.name}: the edit could not be checked; change it by hand")
-    return FileChange(path, lines, after, before)
+    return FileChange(path, lines, after, before, applied, crlf)
 
 
 def _settings_edit(
     app_paths: AppPaths, key: str, old: str, new: str, labels: tuple[str, ...]
 ) -> FileChange | None:
-    """The settings file with the name changed. When the file does not spell the name
-    out (the built-in default is in use) the whole ``special_folders`` entry is written."""
+    """The settings file with the name changed. What the file does not spell out, because
+    the built-in default is in use, is written out: the ``special_folders`` entry, and for
+    Important the default ``protected_paths`` (which has to follow the name)."""
     path = app_paths.config_dir / "settings.yaml"
     edit = _edit(path, _settings_change(key, old, new, labels))
-    before = edit.before if edit else path.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    before, crlf = (edit.before, edit.crlf) if edit else _read(path)
     text = edit.text if edit else before
+    edits = list(edit.edits) if edit else []
+    lines = list(edit.lines) if edit else []
     data = yaml.safe_load(text) or {}
     written = (data.get("special_folders") or {}).get(key)
-    if isinstance(written, str) and fold_name(written) == fold_name(new):
-        return edit
-    names = SpecialFolders().model_dump()
-    names.update(data.get("special_folders") or {})
-    names[key] = new
-    text = with_keys(text, {"special_folders": names})
-    return FileChange(path, edit.lines if edit else [], text, before)
+    if not (isinstance(written, str) and fold_name(written) == fold_name(new)):
+        names = SpecialFolders().model_dump()
+        names.update(data.get("special_folders") or {})
+        names[key] = new
+        text = with_keys(text, {"special_folders": names})
+        edits.append([["special_folders", key], old, new])
+    if key == "important" and "protected_paths" not in (yaml.safe_load(before) or {}):
+        default = Settings().protected_paths
+        moved = [swap(v, old, new, labels) or v for v in default]
+        if moved != default:
+            text = with_keys(text, {"protected_paths": moved})
+            edits += [
+                [["protected_paths", i], v, m]
+                for i, (v, m) in enumerate(zip(default, moved, strict=True))
+                if v != m
+            ]
+    if text == before:
+        return None
+    return FileChange(path, lines, text, before, edits, crlf)
 
 
 def config_edits(
@@ -339,11 +397,22 @@ def _verify(change: FileChange, app_paths: AppPaths) -> Callable[[], bool]:
                 yaml.safe_load(change.path.read_text(encoding="utf-8"))
             else:
                 load_rule_file(change.path)
-            return change.path.read_bytes().decode("utf-8") == change.text
+            return change.path.read_bytes().decode("utf-8") == change.written
         except (ValueError, yaml.YAMLError, OSError):
             return False
 
     return check
+
+
+def _check_writable(changes: list[FileChange]) -> None:
+    """``Conflict`` before anything moves when a file that has to change cannot be written
+    (a rename that stops half way on this would leave the folder and the settings apart)."""
+    for change in changes:
+        if not os.access(change.path, os.W_OK) or not os.access(change.path.parent, os.W_OK):
+            raise Conflict(
+                f"{change.path.name} cannot be written ({change.path.parent}). Make it "
+                "writable and try again; nothing was changed."
+            )
 
 
 def _write_config(app_paths: AppPaths, changes: list[FileChange]) -> None:
@@ -352,51 +421,51 @@ def _write_config(app_paths: AppPaths, changes: list[FileChange]) -> None:
     is kept as ``.bak-<time>`` (``write_config_file``)."""
     ordered = sorted(changes, key=lambda c: c.path.name == "settings.yaml")
     for change in ordered:
-        write_config_file(change.path, change.text, _verify(change, app_paths))
+        write_config_file(change.path, change.written, _verify(change, app_paths))
 
 
 # --- what stores the name: the database --------------------------------------------------
 
 
-def _db(
-    conn: Connection, old: str, new: str, labels: tuple[str, ...], write: bool
-) -> dict[str, int]:
-    """Rewrite (or, without ``write``, count) the stored paths under ``old`` that are
-    state, not history: the publisher's records and Maintenance's ignored results."""
-    counts = {"ongoing_entries": 0, "collections": 0, "maintenance_ignored": 0}
+_DB_COLUMNS = {
+    "ongoing_entries": (ongoing_entries, "rel"),
+    "collections": (collections, "ongoing_rel"),
+    "maintenance_ignored": (maintenance_ignored, "key"),
+}
+
+
+def _db_changes(
+    conn: Connection, old: str, new: str, labels: tuple[str, ...]
+) -> dict[str, list[list]]:
+    """The stored paths under ``old`` that are state, not history (the publisher's records
+    and Maintenance's ignored results), as ``[row id, old value, new value]`` per table.
+    Nothing is written."""
+    out: dict[str, list[list]] = {t: [] for t in _DB_COLUMNS}
     for row_id, rel in conn.execute(select(ongoing_entries.c.id, ongoing_entries.c.rel)).all():
-        moved = swap(rel, old, new, labels)
-        if moved is None:
-            continue
-        counts["ongoing_entries"] += 1
-        if write:
-            conn.execute(
-                update(ongoing_entries).where(ongoing_entries.c.id == row_id).values(rel=moved)
-            )
+        if (moved := swap(rel, old, new, labels)) is not None:
+            out["ongoing_entries"].append([row_id, rel, moved])
     for row_id, rel in conn.execute(select(collections.c.id, collections.c.ongoing_rel)).all():
-        moved = swap(rel, old, new, labels)
-        if moved is None:
-            continue
-        counts["collections"] += 1
-        if write:
-            conn.execute(
-                update(collections).where(collections.c.id == row_id).values(ongoing_rel=moved)
-            )
+        if (moved := swap(rel, old, new, labels)) is not None:
+            out["collections"].append([row_id, rel, moved])
     ignored = conn.execute(
         select(maintenance_ignored.c.id, maintenance_ignored.c.kind, maintenance_ignored.c.key)
     )
     for row_id, kind, found in ignored.all():
-        moved = None if kind in GROUPS else swap(found, old, new, labels)
-        if moved is None:
-            continue
-        counts["maintenance_ignored"] += 1
-        if write:
+        if kind not in GROUPS and (moved := swap(found, old, new, labels)) is not None:
+            out["maintenance_ignored"].append([row_id, found, moved])
+    return out
+
+
+def _db_set(conn: Connection, changes: dict[str, list[list]], forward: bool) -> None:
+    """Apply (or take back) recorded ``changes``: a row is only changed while it still has
+    the value the change started from, so what else was written since stays."""
+    for table, rows in changes.items():
+        t, column = _DB_COLUMNS[table]
+        for row_id, was, now in rows:
+            start, end = (was, now) if forward else (now, was)
             conn.execute(
-                update(maintenance_ignored)
-                .where(maintenance_ignored.c.id == row_id)
-                .values(key=moved)
+                update(t).where(t.c.id == row_id, t.c[column] == start).values({column: end})
             )
-    return counts
 
 
 def _links_into(conn: Connection, paths: ArchivePaths, rels: list[str]) -> tuple[int, int]:
@@ -455,7 +524,7 @@ def preview(
     title = TITLES[key]
     _refusals(key, paths, engine)
     rels = targets(key, paths)
-    if not rels or fold_name(rels[0]) != fold_name(old):
+    if _nothing_to_rename(key, rels, old):
         raise InvalidRequest(
             f"The {title} folder '{old}' is not in the archive yet, so there is nothing to "
             "rename. Create it first (Settings, or the first-run layout)."
@@ -473,6 +542,7 @@ def preview(
         raise InvalidRequest(
             f"A setting or rule that holds the name cannot be edited safely: {e}"
         ) from None
+    _check_writable(edits)
     out = Preview(key, title, old, new, google_drive=on_google_drive(paths.root))
     places = out.places
     where = "" if len(rels) == 1 else f" in each of the {len(rels)} archive folders"
@@ -490,7 +560,7 @@ def preview(
             ).scalar_one()
             for r in rels
         )
-        db = _db(conn, old, new, labels, write=False)
+        db = {k: len(v) for k, v in _db_changes(conn, old, new, labels).items()}
         managed, other = _links_into(conn, paths, rels)
     places.append(
         Place("Index", RENAMED, f"{indexed} file and folder paths in the index follow the folder.")
@@ -537,17 +607,22 @@ def _config_places(app_paths: AppPaths, key: str, edits: list[FileChange]) -> li
     settings_edit = next((e for e in edits if e.path.name == "settings.yaml"), None)
     rule_edits = [e for e in edits if e.path.parent == config / "rules"]
     code_edit = next((e for e in edits if e.path == app_paths.filing_codes_path), None)
+    more = ""
+    if settings_edit is not None:
+        followed = [e for e in settings_edit.edits if e[0][0] in ("protected_paths", "ai")]
+        if followed:
+            more = ", and the protected or excluded folders that start with the old name follow"
+            if "protected_paths" not in (yaml.safe_load(settings_edit.before) or {}):
+                more = (
+                    ", and protected_paths is written out, because the built-in default "
+                    "list has to follow the name too"
+                )
     out = [
         Place(
             "config/settings.yaml",
             RENAMED,
-            f"special_folders: {key} gets the new name"
-            + (
-                ", and the protected or excluded folders that start with the old name follow"
-                if settings_edit and len(settings_edit.lines) > 1
-                else ""
-            )
-            + ". The old file is kept next to it as settings.yaml.bak-<time>.",
+            f"special_folders: {key} gets the new name{more}. The old file is kept next to "
+            "it as settings.yaml.bak-<time>.",
         )
     ]
     if rule_edits:
@@ -652,12 +727,33 @@ def _executor(app_paths: AppPaths, engine: Engine) -> tuple[Executor, ArchivePat
     return executor, paths
 
 
+def _journal_states(engine: Engine, batch_id: str) -> list[str]:
+    with engine.connect() as conn:
+        return [
+            s
+            for (s,) in conn.execute(
+                select(operations.c.state).where(operations.c.batch_id == batch_id)
+            ).all()
+        ]
+
+
+def _set_state(engine: Engine, batch_id: str, state: str, note: str | None = None) -> None:
+    with write_tx(engine) as conn:
+        conn.execute(
+            update(special_folder_renames)
+            .where(special_folder_renames.c.batch_id == batch_id)
+            .values(state=state, note=note, finished=time.time())
+        )
+
+
 def rename_folder(app_paths: AppPaths, key: str, raw_name: str) -> Renamed:
     """Rename the special folder ``key``. Call with the archive closed
-    (``Host.close_and_reopen``). The checks of ``preview`` run again; then the rename is
-    recorded, the folder is renamed through the executor, and the settings, rules and stored
-    paths follow. If the folder cannot be renamed on every disk, what was done is undone and
-    nothing else changes."""
+    (``Host.close_and_reopen``). The checks of ``preview`` run again; a snapshot is taken;
+    the rename is recorded, the folder is renamed through the executor, and the settings,
+    rules and stored paths follow. The folder is only left renamed when every disk's folder
+    was; otherwise what was done is undone, and when that cannot be done the rename stays
+    recorded (``planned`` or ``attention``) with the reason, for the next start or for Undo
+    in Activity. It is never marked failed while a folder has moved."""
     engine = make_engine(app_paths.db_path)
     try:
         executor, paths = _executor(app_paths, engine)
@@ -665,16 +761,21 @@ def rename_folder(app_paths: AppPaths, key: str, raw_name: str) -> Renamed:
         old = getattr(paths.settings.special_folders, key)
         _refusals(key, paths, engine)
         rels = targets(key, paths)
-        if not rels or fold_name(rels[0]) != fold_name(old):
+        if _nothing_to_rename(key, rels, old):
             raise InvalidRequest(f"The {TITLES[key]} folder '{old}' is not in the archive yet.")
         labels = _labels(key, paths.settings)
         # the config edits are computed (and checked) before anything moves
         try:
-            config_edits(app_paths, key, old, new, labels)
+            changes = config_edits(app_paths, key, old, new, labels)
         except (YamlEditError, OSError, yaml.YAMLError) as e:
             raise InvalidRequest(
                 f"A setting or rule that holds the name cannot be edited safely: {e}"
             ) from None
+        _check_writable(changes)
+        try:
+            create_snapshot(app_paths, kind=BEFORE_RENAME)
+        except OSError as e:
+            raise Conflict(f"Could not take a snapshot first ({e}). Nothing was changed.") from None
         plan = _plan(key, rels, new, TITLES[key], old)
         batch_id = uuid4().hex
         with write_tx(engine) as conn:
@@ -689,39 +790,134 @@ def rename_folder(app_paths: AppPaths, key: str, raw_name: str) -> Renamed:
                     created=time.time(),
                 )
             )
+        failure: Exception | None = None
+        result = None
         try:
             result = executor.apply(plan, batch_id=batch_id)
-        except BaseException:
-            _fail(engine, batch_id)
-            raise
-        if result.failed is not None or result.error is not None:
-            message = result.error or f"{result.failed.src} could not be renamed."
-            _roll_back_partial(executor, engine, batch_id, result)
-            raise Conflict(f"The folder could not be renamed ({message}). Nothing was changed.")
+        except Exception as e:
+            failure = e
+        complete = (
+            failure is None
+            and result is not None
+            and result.failed is None
+            and result.error is None
+            and result.index_error is None
+            and not result.stopped
+            and len(result.done) == len(plan.ops)
+        )
+        if not complete:
+            why = str(failure) if failure else _why(result)
+            stuck = _back_out(engine, executor, batch_id, why)
+            if stuck is None:
+                if isinstance(failure, InvalidRequest | GuardError):
+                    raise failure
+                raise Conflict(f"The folder could not be renamed ({why}). Nothing was changed.")
+            raise Conflict(stuck)
         roll_forward(app_paths, engine, batch_id, key, old, new, labels)
         return Renamed(batch_id, key, old, new)
     finally:
         engine.dispose()
 
 
-def _fail(engine: Engine, batch_id: str) -> None:
-    with write_tx(engine) as conn:
-        conn.execute(
-            update(special_folder_renames)
-            .where(special_folder_renames.c.batch_id == batch_id)
-            .values(state=_FAILED, finished=time.time())
+def _why(result) -> str:
+    if result is None:
+        return "it did not run"
+    if result.error:
+        return result.error
+    if result.failed is not None:
+        return f"{result.failed.src} could not be renamed"
+    if result.index_error:
+        return result.index_error
+    if result.stopped:
+        return "it was stopped"
+    return f"only {len(result.done)} of its folders were renamed"
+
+
+def _back_out(engine: Engine, executor: Executor, batch_id: str, why: str) -> str | None:
+    """Take back whatever the batch did, from the journal and not from what the call saw.
+    None: nothing is left renamed, and the rename is marked failed (the only time it is).
+    Otherwise the message for the owner: an operation still ``planned`` in the journal waits
+    for Run recovery (the rename stays ``planned``, finished at the next start), anything
+    else that could not be put back is marked ``attention`` with the reason, and Undo in
+    Activity tries again."""
+    states = _journal_states(engine, batch_id)
+    if "planned" in states:
+        note = "a move was not recorded as finished"
+        with write_tx(engine) as conn:
+            conn.execute(
+                update(special_folder_renames)
+                .where(special_folder_renames.c.batch_id == batch_id)
+                .values(note=note)
+            )
+        return (
+            f"The folder rename stopped ({why}) and a folder may have moved. Run recovery "
+            "(Run recovery in the app), then restart dam: it finishes or takes back the "
+            "rename then."
         )
-
-
-def _roll_back_partial(executor: Executor, engine: Engine, batch_id: str, result) -> None:
-    """A rename that stopped part way (one disk done, a later one not): put the done ones
-    back through the executor's undo, and note that the rename did not happen."""
-    if result.done:
+    if any(s in ACTED for s in states):
+        problem = None
         try:
-            executor.undo(batch_id)
-        except Exception:
-            log.exception("could not undo the part of the rename that was done")
-    _fail(engine, batch_id)
+            undone = executor.undo(batch_id)
+            if undone.failed is not None or undone.error is not None:
+                problem = undone.error or f"{undone.failed.src} could not be renamed back"
+        except Exception as e:
+            problem = str(e)
+        if problem is None and any(s in ACTED for s in _journal_states(engine, batch_id)):
+            problem = "some folders are still renamed"
+        if problem is not None:
+            _set_state(engine, batch_id, _ATTENTION, problem)
+            return (
+                f"The folder rename stopped ({why}) and could not be taken back ({problem}). "
+                "Some folders have the new name. Undo this change in Activity once the "
+                "problem is fixed; dam also tries again at the next start."
+            )
+    _set_state(engine, batch_id, _FAILED)
+    return None
+
+
+# --- the record of what changed ---------------------------------------------------------------
+
+
+def _record(engine: Engine, batch_id: str) -> dict:
+    row = _row(engine, batch_id)
+    raw = row["changes"] if row is not None else None
+    data = json.loads(raw) if raw else {}
+    data.setdefault("files", {})
+    data.setdefault("db", {})
+    return data
+
+
+def _merged(record: dict, files: list[FileChange], config: Path, db: dict) -> dict:
+    """``record`` with these changes added (a change already in it is not added twice)."""
+    for change in files:
+        name = change.path.relative_to(config).as_posix()
+        have = record["files"].setdefault(name, [])
+        have += [e for e in change.edits if e not in have]
+    for table, rows in db.items():
+        have = record["db"].setdefault(table, [])
+        known = {r[0] for r in have}
+        have += [r for r in rows if r[0] not in known]
+    return record
+
+
+def _undo_edits(app_paths: AppPaths, record: dict) -> list[FileChange]:
+    """The files with exactly the recorded values put back (a value is only changed while
+    it is still what the rename made it)."""
+    out: list[FileChange] = []
+    for name, edits in record["files"].items():
+        path = app_paths.config_dir / name
+        if not path.is_file():
+            continue
+        wanted = {tuple(at): (was, now) for at, was, now in edits}
+
+        def change(at: tuple, value: str, wanted=wanted) -> str | None:
+            was, now = wanted.get(tuple(at), (None, None))
+            return was if now is not None and value == now else None
+
+        edit = _edit(path, change)
+        if edit is not None:
+            out.append(edit)
+    return out
 
 
 def roll_forward(
@@ -733,36 +929,49 @@ def roll_forward(
     new: str,
     labels: tuple[str, ...],
 ) -> None:
-    """The folder is renamed: make the settings, rules and stored paths say so, then mark
-    the rename done. Safe to run again (a value already changed is left as it is)."""
-    _write_config(app_paths, config_edits(app_paths, key, old, new, labels))
+    """Every folder is renamed: make the settings, rules and stored paths say so, then mark
+    the rename done. What is going to change is recorded first, so Undo (and a rerun after
+    an interruption) puts back exactly that and nothing else. Safe to run again. If a file
+    cannot be written the rename stays recorded as ``attention`` with the reason, and the
+    error is raised."""
+    changes = config_edits(app_paths, key, old, new, labels)
+    known = _record(engine, batch_id)
     with write_tx(engine) as conn:
-        _db(conn, old, new, labels, write=True)
+        db = _db_changes(conn, old, new, labels)
+        record = _merged(known, changes, app_paths.config_dir, db)
         conn.execute(
             update(special_folder_renames)
             .where(special_folder_renames.c.batch_id == batch_id)
-            .values(state=_DONE, finished=time.time())
+            .values(changes=json.dumps(record))
+        )
+    try:
+        _write_config(app_paths, changes)
+    except Exception as e:
+        _set_state(engine, batch_id, _ATTENTION, f"a setting could not be written: {e}")
+        raise Conflict(
+            f"The folder was renamed, but {e}. Make the file writable and restart dam, or undo "
+            "this change in Activity."
+        ) from None
+    with write_tx(engine) as conn:
+        _db_set(conn, db, forward=True)
+        conn.execute(
+            update(special_folder_renames)
+            .where(special_folder_renames.c.batch_id == batch_id)
+            .values(state=_DONE, note=None, finished=time.time())
         )
 
 
-def roll_back(
-    app_paths: AppPaths,
-    engine: Engine,
-    batch_id: str,
-    key: str,
-    old: str,
-    new: str,
-    labels: tuple[str, ...],
-) -> None:
-    """The folder has its old name again: put back the settings, rules and stored paths
-    (``roll_forward`` the other way round), and mark the rename undone."""
-    _write_config(app_paths, config_edits(app_paths, key, new, old, labels))
+def roll_back(app_paths: AppPaths, engine: Engine, batch_id: str) -> None:
+    """The folders have their old names again: put back the recorded values in the settings,
+    rules and stored paths, and mark the rename undone. Safe to run again."""
+    record = _record(engine, batch_id)
+    _write_config(app_paths, _undo_edits(app_paths, record))
     with write_tx(engine) as conn:
-        _db(conn, new, old, labels, write=True)
+        _db_set(conn, record["db"], forward=False)
         conn.execute(
             update(special_folder_renames)
             .where(special_folder_renames.c.batch_id == batch_id)
-            .values(state=_UNDONE, finished=time.time())
+            .values(state=_UNDONE, note=None, finished=time.time())
         )
 
 
@@ -786,9 +995,11 @@ def is_rename(engine: Engine, batch_id: str) -> bool:
 
 
 def undo(app_paths: AppPaths, batch_id: str):
-    """Undo the rename ``batch_id``: the executor renames the folder(s) back, then the
-    settings, rules and stored paths are restored. Call with the archive closed. Returns
-    the executor's ``BatchResult`` of the undo."""
+    """Undo the rename ``batch_id``: the executor renames the folder(s) back, then exactly
+    the recorded values in the settings, rules and stored paths are put back. Call with the
+    archive closed. Returns the executor's ``BatchResult`` of the undo. When only some
+    folders could be renamed back, ``Conflict`` says so and the rename stays undoable: undo
+    again once the problem is fixed."""
     engine = make_engine(app_paths.db_path)
     try:
         row = _row(engine, batch_id)
@@ -796,22 +1007,29 @@ def undo(app_paths: AppPaths, batch_id: str):
             raise NotFound(f"batch {batch_id}")
         if row["state"] == _UNDONE:
             raise Conflict("This rename was undone already.")
-        if row["state"] != _DONE:
-            raise Conflict(INTERRUPTED)
+        if row["state"] == _FAILED:
+            raise Conflict("This rename never happened, so there is nothing to undo.")
+        if row["state"] == _PLANNED:
+            raise Conflict(UNFINISHED.format(why=""))
         executor, paths = _executor(app_paths, engine)
-        with engine.connect() as conn:
-            if conn.execute(
-                select(operations.c.id).where(operations.c.state == "planned").limit(1)
-            ).first():
-                raise Conflict(INTERRUPTED)
+        try:
+            _check_writable(_undo_edits(app_paths, _record(engine, batch_id)))
+        except (YamlEditError, yaml.YAMLError, OSError) as e:
+            raise InvalidRequest(f"A setting or rule cannot be put back safely: {e}") from None
+        if "planned" in _journal_states(engine, batch_id):
+            raise Conflict(INTERRUPTED)
         result = executor.undo(batch_id)
-        if result.failed is not None or result.error is not None:
-            message = result.error or f"{result.failed.src} could not be renamed back."
-            raise Conflict(f"The rename could not be undone ({message}).")
-        roll_back(
-            app_paths, engine, batch_id, row["key"], row["old"], row["new"],
-            _labels(row["key"], paths.settings),
-        )
+        left = [s for s in _journal_states(engine, batch_id) if s in ACTED]
+        if result.failed is not None or result.error is not None or left:
+            message = result.error or (
+                f"{result.failed.src} could not be renamed back" if result.failed else "see the log"
+            )
+            raise Conflict(
+                f"Only {len(result.done)} of {row['folders']} folders were renamed back "
+                f"({message}). The settings and rules are still on the new name. Fix the "
+                "problem and undo this change again."
+            )
+        roll_back(app_paths, engine, batch_id)
         return result
     finally:
         engine.dispose()
@@ -820,12 +1038,42 @@ def undo(app_paths: AppPaths, batch_id: str):
 # --- an interruption ----------------------------------------------------------------------
 
 
+def _unfinished(engine: Engine) -> list:
+    """The renames that are not settled: ``planned`` and ``attention``, and ``done`` ones
+    whose folders were all undone (an undo cut short before it put the settings back)."""
+    with engine.connect() as conn:
+        rows = (
+            conn.execute(
+                select(special_folder_renames).where(
+                    special_folder_renames.c.state.in_((_PLANNED, _DONE, _ATTENTION))
+                )
+            )
+            .mappings()
+            .all()
+        )
+    out = []
+    for row in rows:
+        if row["state"] != _DONE:
+            out.append(row)
+            continue
+        states = _journal_states(engine, row["batch_id"])
+        if states and not any(s in ACTED for s in states) and all(s == "undone" for s in states):
+            out.append(row)
+    return out
+
+
+def has_unfinished(engine: Engine) -> bool:
+    return bool(_unfinished(engine))
+
+
 def reconcile(app_paths: AppPaths) -> int:
-    """Finish a rename an interruption left half done; called before the settings are read.
-    A planned rename whose folder moved gets its settings and stored paths (forward); one
-    whose journal shows nothing acted is marked failed; a done rename whose folder was
-    undone gets them back. A journal row still ``planned`` is left for Run recovery.
-    Returns how many renames it settled."""
+    """Finish a rename an interruption left half done (``dam serve`` calls it with the
+    archive closed and the lock held, never another process). A planned rename whose folders
+    all moved gets its settings and stored paths; one with only some folders moved is taken
+    back; one whose journal shows nothing acted is marked failed; a done rename whose
+    folders were undone gets the old settings back. A journal row still ``planned`` waits for
+    Run recovery. Whatever cannot be settled is marked ``attention`` with the reason, so
+    Undo in Activity can take it. Returns how many renames it settled."""
     if not app_paths.db_path.exists():
         return 0
     engine = make_engine(app_paths.db_path)
@@ -833,56 +1081,36 @@ def reconcile(app_paths: AppPaths) -> int:
     try:
         if "special_folder_renames" not in inspect(engine).get_table_names():
             return 0
-        with engine.connect() as conn:
-            rows = (
-                conn.execute(
-                    select(special_folder_renames).where(
-                        special_folder_renames.c.state.in_((_PLANNED, _DONE))
-                    )
-                )
-                .mappings()
-                .all()
-            )
-        for row in rows:
+        for row in _unfinished(engine):
             try:
                 settled += _settle(app_paths, engine, row)
-            except Exception:
+            except Exception as e:
                 log.exception("could not finish the rename of %s", row["old"])
+                if row["state"] == _PLANNED:
+                    _set_state(engine, row["batch_id"], _ATTENTION, str(e))
     finally:
         engine.dispose()
     return settled
 
 
 def _settle(app_paths: AppPaths, engine: Engine, row) -> int:
-    with engine.connect() as conn:
-        states = [
-            s
-            for (s,) in conn.execute(
-                select(operations.c.state).where(operations.c.batch_id == row["batch_id"])
-            ).all()
-        ]
+    states = _journal_states(engine, row["batch_id"])
     if "planned" in states:
         return 0  # an interrupted move: Run recovery settles it, then this
     acted = [s for s in states if s in ACTED]
+    if row["state"] == _DONE:  # the folders were undone, the settings were not put back
+        roll_back(app_paths, engine, row["batch_id"])
+        return 1
+    if not acted:
+        _set_state(engine, row["batch_id"], _FAILED)
+        return 1
+    if len(acted) < row["folders"]:
+        # some disks were renamed and some not: put the renamed ones back
+        executor, _ = _executor(app_paths, engine)
+        stuck = _back_out(engine, executor, row["batch_id"], "it was interrupted")
+        return 0 if stuck else 1
     labels: tuple[str, ...] = ()
     if row["key"] == "quarantine":
         labels = tuple(e.label for e in load_settings(app_paths).extra_folders)
-    if row["state"] == _PLANNED:
-        if not acted:
-            _fail(engine, row["batch_id"])
-            return 1
-        if len(acted) < row["folders"]:
-            # some disks were renamed and some not: put the renamed ones back
-            executor, _ = _executor(app_paths, engine)
-            executor.undo(row["batch_id"])
-            _fail(engine, row["batch_id"])
-            return 1
-        # every folder moved, the rest did not finish: go on from there
-        roll_forward(
-            app_paths, engine, row["batch_id"], row["key"], row["old"], row["new"], labels
-        )
-        return 1
-    if states and not acted and all(s == "undone" for s in states):
-        roll_back(app_paths, engine, row["batch_id"], row["key"], row["old"], row["new"], labels)
-        return 1
-    return 0
+    roll_forward(app_paths, engine, row["batch_id"], row["key"], row["old"], row["new"], labels)
+    return 1

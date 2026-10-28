@@ -1802,7 +1802,8 @@ In the New look you can give them other names, for example `00. Inbox`:
    rules and filing codes, the shortcuts dam keeps in Ongoing and Important, and what stays
    as it is and why. If your archive is in Google Drive, it also says that the rename has to
    sync to your other devices.
-3. Click **Rename folder**. dam stops for a few seconds while it opens the archive again.
+3. Click **Rename folder**. dam first takes a snapshot, then stops for a few seconds while it
+   opens the archive again.
    A message offers **Undo**; the change is also one entry in Activity, and its Undo puts the
    folder name, the settings, the rules and the index paths back.
 
@@ -1810,7 +1811,9 @@ A name may start with `##.` but need not. It cannot be the name of another speci
 of an archive folder, or of anything already there. To Delete exists once in every archive
 folder; renaming it renames them all, so every archive folder must be connected. dam refuses
 the rename while a move or another job is running, when the archive's disk is not connected,
-or after an interrupted operation (run recovery first).
+or after an interrupted operation (run recovery first). If dam is stopped half way, it
+finishes or takes back the rename when it starts again. Undo puts back exactly what the rename
+changed; if it can only rename some folders back it says so, and you can click Undo again.
 
 If you prefer, you can do it by hand: close dam, rename the folder in your file manager,
 change its name under `special_folders` in `settings.yaml`, and change any rule or filing

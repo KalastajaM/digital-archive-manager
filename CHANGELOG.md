@@ -17,7 +17,8 @@ All notable changes are listed here. The format follows
   to sync. It is refused while a move or other job runs, when a disk is not connected, or after
   an interrupted operation. The rename is one entry in Activity; a toast offers Undo, and Undo
   gives back the folder name, the settings line, the rules and the paths. If dam is stopped
-  half way, it finishes (or takes back) the rename the next time it starts. Editing
+  half way, it finishes (or takes back) the rename the next time it starts. A snapshot is taken
+  first, and Undo puts back exactly the values the rename changed. Editing
   `settings.yaml` by hand still works.
 
 - **One file panel for Browse, the Inbox, the trays and a collection (New look).** The panel

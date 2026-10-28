@@ -24,6 +24,8 @@ def upgrade() -> None:
             sa.Column("new", sa.Text, nullable=False),
             sa.Column("state", sa.Text, nullable=False),
             sa.Column("folders", sa.Integer, nullable=False, server_default="1"),
+            sa.Column("changes", sa.Text, nullable=True),
+            sa.Column("note", sa.Text, nullable=True),
             sa.Column("created", sa.Float, nullable=False),
             sa.Column("finished", sa.Float, nullable=True),
         )
