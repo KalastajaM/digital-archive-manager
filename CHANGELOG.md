@@ -8,6 +8,24 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **The New look: collections and trays laid out as drawn.** A **collection** now has one
+  header across the page: a line saying where it sits ("Collection, no parent, Put inside
+  another collection…"), its name, a state pill (Open, Closed, Built in), "7 files, 4 groups",
+  and the buttons **Add files**, **Show folder**, **Export…** and the "..." menu (a new
+  **Add files** finder puts any file of the archive in the collection). Below it come the
+  notice, **Summary** (as text, with Summarize with AI… and Edit), **Needs attention** (a
+  list: the tray and date, then the item or file), your **Files by group** as one bordered
+  tree with **New group** in its heading, and **Notes** beside the **Checklist**. The selected
+  file's panel has its **Open**, **Show in folder**, **Note on this file** and **Remove from
+  collection** buttons under the preview, with its other actions (tray, inbox, move, star and
+  so on) as a row of icons below them. In a **tray**, the list pane has its own header (name,
+  count, Add file, Open and Done with their counts) and a second line on each row (who it
+  waits for, how many files, the checklist), and the item pane has its own header with
+  **Move to tray…**, the file's actions and Close; the Check by and Waiting for fields sit in
+  a card with **Mark done** (and its key d), then the files on the item, checklist, note and
+  history stand beside the summary and the document. Starred, Important, nested collections,
+  reordering, drag and drop, Pay mode and every other feature work as before. Classic is
+  unchanged.
 - **The New look: Browse laid out as drawn.** A **folder tree** on the left (the top folders of
   every archive folder, each opening onto its subfolders when you expand it; the folder each
   pane is in is highlighted and marked L or R, and its parents open by themselves). Click a

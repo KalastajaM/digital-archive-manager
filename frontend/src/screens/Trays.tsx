@@ -3,14 +3,17 @@
  * ``/trays/<tray>?item=<id>`` opens that item (Today links here). Space opens Quick
  * Look on the selected row's file, and the viewer window follows the selection. */
 import { ChevronRight, Inbox as InboxIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useStyle } from "../appearance";
 import {
   archiveKey,
   errorText,
   type ItemState,
   type TrayDef,
   type TrayItem,
+  trayItemsQuery,
   useItemFileChange,
   useItems,
   useMergeItem,
@@ -88,6 +91,14 @@ function Row({
   const payee = hasText(payeeValue) ? payeeValue : null;
   const open = item.state === "open";
   const cls = ["tray-row", item.level && `tray-row-${item.level}`].filter(Boolean).join(" ");
+  const [look] = useStyle();
+  // The New look's second line, from what the item already has: who it waits for, its files, its checklist
+  const waiting = typeof item.fields.waiting_for === "string" && item.fields.waiting_for !== "" ? item.fields.waiting_for : null;
+  const meta = [
+    waiting ? `Waiting for: ${waiting}` : null,
+    item.files.length > 1 ? plural(item.files.length, "file") : null,
+    item.checklist_total > 0 ? `Checklist ${item.checklist_total - item.checklist_open} of ${item.checklist_total}` : null,
+  ].filter((m): m is string => m !== null);
 
   return (
     <article className={cls} aria-label={visible(item.title)}>
@@ -99,6 +110,7 @@ function Row({
           <MarkIcons marks={item.first_file?.marks} driveId={item.first_file?.drive_id} />
         </p>
         {payee && <p className="tray-row-sub">{visible(payee)}</p>}
+        {look === "new" && meta.length > 0 && <p className="tray-row-meta">{visible(meta.join(" · "))}</p>}
         <ItemBadges fileState={item.file_state} />
         {!open && (
           <p className="tray-row-done">
@@ -270,10 +282,15 @@ function TrayPage({ today: fixed }: { today?: string }) {
   const defs = trays.data?.trays ?? [];
   const trayId = params.trayId ?? defs[0]?.id ?? "";
   const tray = defs.find((t) => t.id === trayId);
+  const [look] = useStyle();
+  const isNew = look === "new";
   // The filter is in the URL (?state=done); a sidebar link has none, so it resets.
   const state: ItemState = search.get("state") === "done" ? "done" : "open";
   const items = useItems(trayId, state);
   const list = useMemo(() => (trayId ? (items.data ?? []) : []), [trayId, items.data]);
+  // The New look's Open and Done counts: the list of the other state, read for its length only
+  const otherState: ItemState = state === "open" ? "done" : "open";
+  const other = useQuery({ ...trayItemsQuery(trayId, otherState), enabled: isNew && trayId !== "" });
   const opened = Number(search.get("item")) || null;
   const [doneAt, setDoneAt] = useState<DoneAt>(null);
   // where the open item's file actions are drawn: the right part of the header
@@ -516,40 +533,55 @@ function TrayPage({ today: fixed }: { today?: string }) {
   if (state === "open" && tray?.summary && count?.sum != null) subtitle = formatMoney(count.sum);
   else if (items.data) subtitle = `${list.length} ${state}`;
 
+  const openCount = state === "open" ? list.length : other.data?.length;
+  const doneCount = state === "done" ? list.length : other.data?.length;
+  const withCount = (word: string, n: number | undefined): ReactNode =>
+    isNew && n !== undefined ? (
+      <>
+        {word} <span className="seg-count">{n}</span>
+      </>
+    ) : (
+      word
+    );
+  const toolbar = (
+    <Toolbar
+      className="trays-toolbar"
+      style={split.hostStyle}
+      title={visible(tray?.name ?? trayId)}
+      subtitle={subtitle}
+      actions={
+        <>
+          <TipButton
+            className="tray-add-file"
+            tip="Add another file to the tray"
+            disabled={!tray}
+            disabledReason={trays.isPending ? "The trays are still loading" : "This tray no longer exists"}
+            aria-expanded={addingFile}
+            onClick={() => setAddingFile((a) => !a)}
+          >
+            Add file
+          </TipButton>
+          <Segmented
+            ariaLabel="Show"
+            value={state}
+            onChange={(s) => setSearch(query(s, opened))}
+            options={[
+              { value: "open", label: withCount("Open", openCount) },
+              { value: "done", label: withCount("Done", doneCount) },
+            ]}
+          />
+        </>
+      }
+      trailing={isNew ? undefined : <div className="file-action-slot" ref={setBarSlot} />}
+    />
+  );
+
   return (
     <div className="trays">
-      <Toolbar
-        className="trays-toolbar"
-        style={split.hostStyle}
-        title={visible(tray?.name ?? trayId)}
-        subtitle={subtitle}
-        actions={
-          <>
-            <TipButton
-              className="tray-add-file"
-              tip="Add another file to the tray"
-              disabled={!tray}
-              disabledReason={trays.isPending ? "The trays are still loading" : "This tray no longer exists"}
-              aria-expanded={addingFile}
-              onClick={() => setAddingFile((a) => !a)}
-            >
-              Add file
-            </TipButton>
-            <Segmented
-              ariaLabel="Show"
-              value={state}
-              onChange={(s) => setSearch(query(s, opened))}
-              options={[
-                { value: "open", label: "Open" },
-                { value: "done", label: "Done" },
-              ]}
-            />
-          </>
-        }
-        trailing={<div className="file-action-slot" ref={setBarSlot} />}
-      />
+      {!isNew && toolbar}
       <div className="trays-main" ref={split.hostRef} style={split.hostStyle}>
       <section className="trays-list" aria-label="Tray items">
+        {isNew && toolbar}
         {addingFile && tray && (
           <AddFile
             taken={list.flatMap((i) => i.files)}

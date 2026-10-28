@@ -50,6 +50,7 @@ import {
 } from "../api/client";
 import { AIProposal } from "../components/ai/AIProposal";
 import { AIHint, useAISend, useAIState } from "../components/ai/useAI";
+import { AddFile } from "../components/AddFile";
 import { Banner } from "../components/Banner";
 import { Checklist } from "../components/Checklist";
 import { Collapsible, firstLine } from "../components/Collapsible";
@@ -70,6 +71,7 @@ import {
   subtreeOf,
 } from "../components/collectionTree";
 import { CopyButton } from "../components/CopyButton";
+import { useFileLaunch } from "../components/FileLaunch";
 import { FileDetails } from "../components/FileDetails";
 import { useCollectionOrder } from "../components/useCollectionOrder";
 import {
@@ -113,6 +115,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { IconButton } from "../components/ui/IconButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { Sheet } from "../components/ui/Sheet";
+import { ClickToEdit } from "../components/ui/ClickToEdit";
 import { Tag } from "../components/ui/Tag";
 import { Toolbar } from "../components/ui/Toolbar";
 import { useAutoGrow } from "../components/useAutoGrow";
@@ -121,7 +124,7 @@ import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { FileMeta } from "../components/FileMeta";
 import { FilePanel } from "./FilePanel";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
-import { dayOf, formatSize, plural } from "../format";
+import { dayOf, formatDate, formatSize, plural } from "../format";
 import { isShortcut, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
 import { inFileManager, showInLabel } from "../fileManager";
@@ -294,6 +297,47 @@ function Summary({
   const ref = useRef<HTMLTextAreaElement>(null);
   const auto = useAutoSave(value, async (summary: string) => (await save({ op: "summary", id, summary })).collection.summary);
   useAutoGrow(ref, auto.shown);
+  const [look] = useStyle();
+  const [editing, setEditing] = useState(false);
+  if (look === "new") {
+    // As drawn: a heading with Summarize with AI… and Edit, then the text as a paragraph; Edit opens the field.
+    const showField = editing || auto.status?.kind === "error";
+    return (
+      <section className="collection-summary-new" aria-labelledby={`${fieldId}-h`}>
+        <div className="section-head">
+          <h2 id={`${fieldId}-h`}>Summary</h2>
+          {ai && <div className="collection-summary-tools">{ai}</div>}
+          <button type="button" className="link-button" aria-expanded={showField} onClick={() => setEditing((e) => !e)}>
+            {showField ? "Done" : "Edit"}
+          </button>
+        </div>
+        {showField ? (
+          <>
+            <label htmlFor={fieldId} className="visually-hidden">
+              Summary
+            </label>
+            <textarea
+              id={fieldId}
+              ref={ref}
+              className="collection-summary-text"
+              rows={3}
+              maxLength={4000}
+              autoFocus={editing}
+              placeholder="What is this collection about? Where does it stand?"
+              value={auto.shown}
+              onChange={(e) => auto.change(e.target.value)}
+              onBlur={() => void auto.commit()}
+            />
+          </>
+        ) : (
+          <p className={auto.shown.trim() ? "summary-text" : "summary-text is-empty"}>{auto.shown.trim() ? visible(auto.shown) : "No summary yet."}</p>
+        )}
+        <SaveState status={auto.status} />
+        {proposal}
+        <AIHint what="to summarize" />
+      </section>
+    );
+  }
   return (
     <Collapsible name="summary" title="Summary" className="collection-summary" hint={firstLine(auto.shown) || "No summary yet"}>
       <div className="collection-summary-head">
@@ -337,8 +381,34 @@ function Attention({
   attention: ReturnType<typeof useCollectionAttention>["data"];
   onSelect: (driveId: string) => void;
 }) {
+  const [look] = useStyle();
   if (!attention || attention.length === 0) return null;
   const byId = new Map(members.map((m) => [m.drive_id, m]));
+  if (look === "new") {
+    // As drawn: a list, a pill (the tray and its date, or "In inbox") and the item or file as a link
+    return (
+      <section className="attention-list" aria-label="Needs attention">
+        <h2>Needs attention</h2>
+        <ul>
+          {attention.flatMap((a) => {
+            const m = byId.get(a.drive_id);
+            const name = m ? memberName(m) : visible(a.drive_id);
+            return attentionTags(a, { long: true }).map((t) => {
+              const item = a.items.find(({ item: i }) => `i${i.id}` === t.key)?.item;
+              return (
+                <li key={`${a.drive_id}-${t.key}`}>
+                  <Tag tone={t.tone}>{item ? visible(`${item.tray_name}${item.date ? ` · ${formatDate(item.date)}` : ""}`) : "In inbox"}</Tag>
+                  <button type="button" className="link-button" onClick={() => onSelect(a.drive_id)} title={name}>
+                    {item ? visible(item.title) : name}
+                  </button>
+                </li>
+              );
+            });
+          })}
+        </ul>
+      </section>
+    );
+  }
   return (
     <section className="attention-strip" aria-label="Needs attention">
       <span className="collection-caption">Needs attention</span>
@@ -579,6 +649,56 @@ function NewChildSheet({
   );
 }
 
+/** The New look's foot of the side panel: Open, Show in folder, Note on this file and Remove
+ * from collection as drawn, then the file's other actions (the icon bar) as a second row. */
+type Foot = { remove?: { run: () => void; disabled: boolean }; bar: ReactNode };
+
+function InspectorFoot({
+  driveId,
+  connected,
+  canOpen,
+  showButton,
+  foot,
+}: {
+  driveId: string;
+  connected: boolean | undefined;
+  canOpen: boolean;
+  showButton: ReactNode;
+  foot: Foot;
+}) {
+  const launch = useFileLaunch(driveId);
+  const away = connected === false;
+  const toNote = () => {
+    const box = document.querySelector<HTMLElement>(".collection-inspector .item-note");
+    const toggle = box?.querySelector<HTMLButtonElement>(".collapsible-toggle[aria-expanded='false']");
+    toggle?.click(); // a folded note opens first
+    requestAnimationFrame(() => box?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
+  };
+  return (
+    <div className="inspector-foot">
+      <div className="inspector-buttons" role="group" aria-label="This file">
+        {canOpen && (
+          <button type="button" className="primary" disabled={launch.busy || away} title={away ? "Not connected" : undefined} onClick={() => void launch.run("open")}>
+            Open
+          </button>
+        )}
+        {showButton}
+        {canOpen && (
+          <button type="button" onClick={toNote}>
+            Note on this file
+          </button>
+        )}
+        {foot.remove && (
+          <button type="button" className="is-quiet-danger" disabled={foot.remove.disabled} onClick={foot.remove.run}>
+            Remove from collection
+          </button>
+        )}
+      </div>
+      {foot.bar}
+    </div>
+  );
+}
+
 /** The selected member. A file in the index gets the shared file panel (as in Browse),
  * with Quick Look in its preview's toolbar and, in its own block, its group (the keyboard
  * way to move it). What acts on the file (Put in tray, Remove from collection, Ask AI, ★,
@@ -592,9 +712,12 @@ function Inspector({
   onGroup,
   onQuickLook,
   ai,
+  foot,
 }: {
   /** The page's Ask AI, whose answer shows in the file's details. */
   ai: FilingAI;
+  /** The New look: the buttons under the preview (they are in the page's header in Classic). */
+  foot?: Foot;
   member: Member | null;
   groups: { group: Group; path: string }[];
   busy: boolean;
@@ -649,14 +772,15 @@ function Inspector({
           view={quickLookButton}
           headerActions={{ ai }}
           extras={
-            (group || showButton) && (
+            (group || (showButton && !foot)) && (
               <section className="inspector-collection" aria-label="In this collection">
                 {group}
-                {showButton && <div className="inspector-actions">{showButton}</div>}
+                {showButton && !foot && <div className="inspector-actions">{showButton}</div>}
               </section>
             )
           }
         />
+        {foot && <InspectorFoot driveId={member.drive_id} connected={member.connected} canOpen showButton={showButton} foot={foot} />}
       </aside>
     );
   }
@@ -704,6 +828,7 @@ function Inspector({
           {actions()}
         </>
       )}
+      {foot && <InspectorFoot driveId={member.drive_id} connected={member.connected} canOpen={false} showButton={null} foot={foot} />}
     </aside>
   );
 }
@@ -715,11 +840,14 @@ function EntryInspector({
   busy,
   onQuickLook,
   ai,
+  bar,
 }: {
   entry: DirEntry;
   busy: boolean;
   onQuickLook: () => void;
   ai: FilingAI;
+  /** The New look: the file's actions under the preview. */
+  bar?: ReactNode;
 }) {
   const folder = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
   return (
@@ -732,6 +860,11 @@ function EntryInspector({
         view={<IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />}
         headerActions={{ ai }}
       />
+      {bar && (
+        <div className="inspector-foot">
+          {bar}
+        </div>
+      )}
     </aside>
   );
 }
@@ -821,6 +954,7 @@ export default function CollectionDetail({
     };
   }, [finder]);
   const [exporting, setExporting] = useState(false);
+  const [addingFiles, setAddingFiles] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [folded, setFolded] = useState<Set<FoldKey>>(() => new Set());
   const [chosen, setChosen] = useState<string | null>(null);
@@ -1307,7 +1441,7 @@ export default function CollectionDetail({
           : undefined
       }
       removeFromCollection={
-        !browsed && selected && !builtin
+        !isNew && !browsed && selected && !builtin
           ? { name: memberName(selected), run: () => void removeMember(selected), disabled: busy }
           : undefined
       }
@@ -1377,10 +1511,137 @@ export default function CollectionDetail({
     : more;
   const foldable = isNew && !builtin ? "hdr-wide" : undefined;
 
+  const finderPopover = finder && (
+    <div className="popover finder-popover" role="group" aria-label={showInLabel()}>
+      {builtin ? (
+        <>
+          <p>
+            {builtin === "important" ? (
+              <>
+                Open <code>{visible(builtinRoot ?? "##. Important")}</code> {inFileManager()} to see its links
+                {c.groups.length > 0 && ", a folder per group"}.
+              </>
+            ) : (
+              <>
+                Its links are at the top of <code>{visible(builtinRoot ?? "##. Ongoing")}</code>, next to the
+                collection folders.
+              </>
+            )}
+          </p>
+          {builtinRoot && <CopyButton value={builtinRoot} label="path" />}
+        </>
+      ) : c.ongoing_rel ? (
+        <>
+          <p>
+            Open <code>{visible(c.ongoing_rel)}</code> {inFileManager()} to see its links{c.groups.length > 0 && ", a folder per group"}.
+          </p>
+          <CopyButton value={c.ongoing_rel} label="path" />
+        </>
+      ) : (
+        <p>
+          {c.ongoing_status?.startsWith(NOT_SHOWN)
+            ? visible(c.ongoing_status) // hidden with its parent: the status says so
+            : published && !isOpen
+              ? "A closed collection is not shown in ##. Ongoing until reopened."
+              : "Not shown in ##. Ongoing. Turn on “Show in ##. Ongoing” in the ⋯ menu to get a folder of links."}
+        </p>
+      )}
+    </div>
+  );
+
+  const parentLinks = pathOf(c).slice(0, -1);
+  const counts = (
+    <>
+      {!builtin && !isOpen && c.closed_at !== null && (
+        <>
+          <RelativeDate date={dayOf(c.closed_at)} today={today} />
+          {" · "}
+        </>
+      )}
+      {holdsText(c, allCollections.data?.find((x) => x.id === id)?.files)}
+      {c.groups.length > 0 && ` · ${plural(c.groups.length, "group")}`}
+      {subtitleExtra && ` · ${subtitleExtra}`}
+    </>
+  );
+
   const parentName = (g: Group) => (g.parent_id === null ? null : c.groups.find((x) => x.id === g.parent_id)?.name ?? null);
 
   return (
     <div className="collection">
+        {isNew ? (
+          <header className="collection-head">
+            <div className="collection-head-main">
+              <span className="collection-head-parent">
+                {builtin ? (
+                  "Built in collection"
+                ) : (
+                  <>
+                    Collection ·{" "}
+                    {parentLinks.length === 0 ? (
+                      "no parent"
+                    ) : (
+                      <>
+                        inside{" "}
+                        {parentLinks.map((n, i) => {
+                          const at = (allCollections.data ?? []).find((x) => x.name === n);
+                          return (
+                            <span key={i}>
+                              {i > 0 && PATH_SEP}
+                              {at ? <Link to={`/collections/${at.id}`}>{visible(n)}</Link> : visible(n)}
+                            </span>
+                          );
+                        })}
+                      </>
+                    )}{" "}
+                    ·{" "}
+                    <button type="button" className="link-button" disabled={busy} onClick={() => setMovingTo(true)}>
+                      {parentLinks.length === 0 ? "Put inside another collection…" : "Move to another collection…"}
+                    </button>
+                  </>
+                )}
+              </span>
+              <div className="collection-head-line">
+                {renaming ? (
+                  <RenameField name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} />
+                ) : (
+                  <h2 aria-label={builtin ? undefined : name}>
+                    {builtin ? (
+                      name
+                    ) : (
+                      <ClickToEdit label={`Rename ${name}`} tip="Click to rename" onClick={() => !busy && setRenaming(true)}>
+                        {name}
+                      </ClickToEdit>
+                    )}
+                  </h2>
+                )}
+                <span className={`collection-state is-${builtin ? "built" : isOpen ? "open" : "closed"}`}>
+                  {builtin ? "Built in" : isOpen ? "Open" : "Closed"}
+                </span>
+                <span className="collection-head-count">{counts}</span>
+              </div>
+            </div>
+            <div className="toolbar-actions" role="toolbar" aria-label={`${name} actions`}>
+              <button type="button" className="details-button" aria-expanded={detailsOpen} title="Show the selected file" onClick={() => setDetailsOpen((o) => !o)}>
+                File details
+              </button>
+              {!builtin && (
+                <button type="button" disabled={busy || !isOpen} title={isOpen ? "Put more files of the archive in this collection" : "A closed collection takes no new files"} onClick={() => setAddingFiles(true)}>
+                  Add files
+                </button>
+              )}
+              <span className="menu-wrap" ref={finderRef}>
+                <button type="button" className={foldable} aria-expanded={finder} title={showInLabel()} onClick={() => setFinder((f) => !f)}>
+                  Show folder
+                </button>
+                {finderPopover}
+              </span>
+              <button type="button" className={foldable} onClick={() => setExporting(true)}>
+                Export…
+              </button>
+              {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={moreEntries} align="end" />}
+            </div>
+          </header>
+        ) : (
         <Toolbar
           className="collection-toolbar"
           style={split.hostStyle}
@@ -1391,70 +1652,24 @@ export default function CollectionDetail({
           onEditTitle={builtin ? undefined : () => !busy && setRenaming(true)}
           actions={
             <>
-              {isNew && (
-                <button
-                  type="button"
-                  className="details-button"
-                  aria-expanded={detailsOpen}
-                  title="Show the selected file"
-                  onClick={() => setDetailsOpen((o) => !o)}
-                >
-                  File details
-                </button>
-              )}
-              {builtin !== "starred" && (
+              {builtin !== "starred" && !isNew && (
                 <IconButton icon={<FolderPlus {...ICON} />} label="New group" tip="New group: sort files into groups" disabled={addBusy} onClick={() => void newGroup()} />
               )}
               <span className="menu-wrap" ref={finderRef}>
                 <IconButton icon={<FolderOpen {...ICON} />} label={showInLabel()} pressed={finder} className={foldable} onClick={() => setFinder((f) => !f)} />
-                {finder && (
-                  <div className="popover finder-popover" role="group" aria-label={showInLabel()}>
-                    {builtin ? (
-                      <>
-                        <p>
-                          {builtin === "important" ? (
-                            <>
-                              Open <code>{visible(builtinRoot ?? "##. Important")}</code> {inFileManager()} to see its links
-                              {c.groups.length > 0 && ", a folder per group"}.
-                            </>
-                          ) : (
-                            <>
-                              Its links are at the top of <code>{visible(builtinRoot ?? "##. Ongoing")}</code>, next to the
-                              collection folders.
-                            </>
-                          )}
-                        </p>
-                        {builtinRoot && <CopyButton value={builtinRoot} label="path" />}
-                      </>
-                    ) : c.ongoing_rel ? (
-                      <>
-                        <p>
-                          Open <code>{visible(c.ongoing_rel)}</code> {inFileManager()} to see its links{c.groups.length > 0 && ", a folder per group"}.
-                        </p>
-                        <CopyButton value={c.ongoing_rel} label="path" />
-                      </>
-                    ) : (
-                      <p>
-                        {c.ongoing_status?.startsWith(NOT_SHOWN)
-                          ? visible(c.ongoing_status) // hidden with its parent: the status says so
-                          : published && !isOpen
-                            ? "A closed collection is not shown in ##. Ongoing until reopened."
-                            : "Not shown in ##. Ongoing. Turn on “Show in ##. Ongoing” in the ⋯ menu to get a folder of links."}
-                      </p>
-                    )}
-                  </div>
-                )}
+                {finderPopover}
               </span>
               <IconButton icon={<Share {...ICON} />} label="Export…" className={foldable} onClick={() => setExporting(true)} />
               {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={moreEntries} align="end" />}
             </>
           }
         />
+        )}
       <div className="collection-cols" ref={split.hostRef} style={split.hostStyle} data-details={isNew && detailsOpen ? "open" : undefined}>
       <div className="collection-main">
         <div className="collection-body">
           {banner}
-          {!builtin && <Where c={c} all={allCollections.data ?? []} />}
+          {!isNew && !builtin && <Where c={c} all={allCollections.data ?? []} />}
           {c.ongoing_status && <Banner message={visible(c.ongoing_status)} />}
           {error && (
             <p className="error" role="alert">
@@ -1488,13 +1703,23 @@ export default function CollectionDetail({
           />
           <Attention members={c.members} attention={attention.data} onSelect={select} />
           {!builtin && <ChildCollections id={id} all={allCollections.data ?? []} />}
-          {builtin !== "starred" && c.groups.length === 0 && c.members.length >= 2 && (
+          {!isNew && builtin !== "starred" && c.groups.length === 0 && c.members.length >= 2 && (
             <p className="hint group-hint">
               Group files:{" "}
               <button type="button" className="link-button" disabled={addBusy} onClick={() => void newGroup()}>
                 New group
               </button>
             </p>
+          )}
+          {isNew && (
+            <div className="section-head">
+              <h2>Files by group</h2>
+              {builtin !== "starred" && (
+                <button type="button" className="link-button" disabled={addBusy} title="Sort the files into groups" onClick={() => void newGroup()}>
+                  New group
+                </button>
+              )}
+            </div>
           )}
           <div className="collection-members">
           <GroupTree
@@ -1522,16 +1747,13 @@ export default function CollectionDetail({
       </div>
       <Splitter split={split} label="Resize the inspector" />
       {isNew && detailsOpen && (
-        // narrow page: the panel opens over the list, with the file's actions on top of it
+        // narrow page: the panel opens over the list
         <>
           <div className="details-scrim" aria-hidden="true" onClick={() => setDetailsOpen(false)} />
-          <div className="inspector-bar" role="toolbar" aria-label="File actions">
-            {fileBar}
-          </div>
         </>
       )}
       {browsed ? (
-        <EntryInspector entry={browsed} busy={busy} onQuickLook={quickLook.open} ai={filingAI} />
+        <EntryInspector entry={browsed} busy={busy} onQuickLook={quickLook.open} ai={filingAI} bar={isNew ? fileBar : undefined} />
       ) : (
       <Inspector
         member={selected}
@@ -1544,6 +1766,14 @@ export default function CollectionDetail({
         }}
         onQuickLook={selected && looks.includes(selected) ? quickLook.open : undefined}
         ai={filingAI}
+        foot={
+          isNew
+            ? {
+                remove: selected && !builtin ? { run: () => void removeMember(selected), disabled: busy } : undefined,
+                bar: fileBar,
+              }
+            : undefined
+        }
       />
       )}
       </div>
@@ -1565,6 +1795,30 @@ export default function CollectionDetail({
         />
       )}
       {assigning && <AssignSheet kind={assigning.kind} driveIds={assigning.ids} onClose={() => setAssigning(null)} />}
+      {addingFiles && (
+        <Sheet
+          open
+          title={`Add files to ${name}`}
+          onClose={() => setAddingFiles(false)}
+          onKeyDown={(e) => e.stopPropagation()}
+          footer={
+            <button type="button" className="primary" onClick={() => setAddingFiles(false)}>
+              Done
+            </button>
+          }
+        >
+          <AddFile
+            taken={c.members.map((m) => m.drive_id)}
+            takenMode="mark"
+            takenLabel="already in this collection"
+            choose={async (hit) => {
+              setError(null);
+              report(`File added: what happened in ${rootName}`, `Added ${visible(hit.name)} to the collection`, await members.mutateAsync({ id, add: [hit.drive_id] }));
+            }}
+            onDone={() => setAddingFiles(false)}
+          />
+        </Sheet>
+      )}
       <Sheet
         open={exporting}
         title={`Export ${name}`}

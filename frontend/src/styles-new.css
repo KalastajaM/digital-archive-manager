@@ -1691,59 +1691,104 @@
 [data-style="new"] .quicklook-details { border-left-width: 1px; border-left-color: var(--hairline); }
 [data-style="new"] .quicklook-preview { background: var(--desk); }
 
-/* ==== Collections: header, groups, notes and the selected file's panel ======================
- * The page is a container (the main element). Its header is one line: the title truncates,
- * and the subtitle gives way before it; the file actions sit over the side panel, as in
- * Classic. In a set order by the page's own width: under ~900px the side panel leaves the
- * row and opens over the list from a "File details" button (with the file's actions on top
- * of it), under ~760px Show folder and Export fold into the "..." menu. The two columns
- * never stack: Classic's 900px rules are undone below. The divider is remembered, and
- * double-click resets it. Starred and Important are the same page. */
+/* ==== Collections: header, sections, groups, notes and the selected file's panel ============
+ * As drawn on the Collection board. The page is a container (the main element). The header
+ * spans the page: the parent line over the name, the state pill and the counts, with the
+ * buttons at its right. Then the notice, Summary, Needs attention, Files by group (one
+ * bordered tree), Notes beside Checklist, and the selected file's panel at the right with
+ * its buttons under the preview. In a set order by the page's own width: under ~900px the
+ * side panel leaves the row and opens over the list from a "File details" button, under
+ * ~760px Show folder and Export fold into the "..." menu. The two columns never stack:
+ * Classic's 900px rules are undone below. The divider is remembered, and double-click
+ * resets it. Starred and Important are the same page. */
 [data-style="new"] main:has(> .collection-page) { container: coll / inline-size; }
 [data-style="new"] .collection { background: var(--panel); }
 
-/* -- the header: one line -- */
-[data-style="new"] .collection-toolbar { flex-wrap: nowrap; align-content: normal; gap: 0; padding: 0; }
-[data-style="new"] .collection-toolbar .toolbar-lead {
-  flex: 0 0 calc(100% - var(--split));
-  max-width: calc(100% - var(--split));
-  box-sizing: border-box;
-  flex-wrap: nowrap;
-  gap: var(--sp-3);
-  padding: 8px var(--sp-3) 8px var(--sp-5);
-}
-[data-style="new"] .collection-toolbar .toolbar-title { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; }
-[data-style="new"] .collection-toolbar .toolbar-title h2 { flex: 0 1 auto; min-width: 0; font-size: 20px; font-weight: 600; }
-[data-style="new"] .collection-toolbar .toolbar-subtitle { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-[data-style="new"] .collection-toolbar .toolbar-lead .toolbar-actions { flex: none; margin-left: 0; }
-[data-style="new"] .collection-toolbar .toolbar-trailing {
-  flex: 1 1 0;
+/* -- the header -- */
+[data-style="new"] .collection-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
-  max-width: none;
-  align-self: stretch;
-  align-content: center;
-  margin-left: 0;
-  padding: 6px var(--sp-3);
-  justify-content: flex-start;
-  border-left: 1px solid var(--hairline);
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--hairline);
 }
-[data-style="new"] .collection-toolbar .details-button,
-[data-style="new"] .collection-cols > .details-scrim,
-[data-style="new"] .collection-cols > .inspector-bar { display: none; }
+[data-style="new"] .collection-head-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+[data-style="new"] .collection-head-parent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--muted); }
+[data-style="new"] .collection-head-parent a,
+[data-style="new"] .collection-head-parent .link-button { font-size: inherit; color: var(--accent); }
+[data-style="new"] .collection-head-parent .link-button:hover:not(:disabled) { text-decoration: underline; }
+[data-style="new"] .collection-head-line { display: flex; align-items: baseline; gap: 10px; min-width: 0; white-space: nowrap; }
+[data-style="new"] .collection-head-line h2 {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+[data-style="new"] .collection-head-line .toolbar-rename { flex: 1 1 0; font-size: 20px; font-weight: 600; }
+[data-style="new"] .collection-state { flex: none; border-radius: var(--r-sm); padding: 1px 7px; font-size: 12px; font-weight: 500; background: var(--grey-bg); color: var(--grey-text); }
+[data-style="new"] .collection-state.is-open { background: var(--green-bg); color: var(--green-text); }
+[data-style="new"] .collection-head-count { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+[data-style="new"] .collection-head .toolbar-actions { flex: none; display: flex; align-items: center; gap: 8px; margin-left: 0; }
+[data-style="new"] .collection-head .toolbar-actions > .menu-wrap > button,
+[data-style="new"] .collection-head .toolbar-actions > button { min-height: 32px; padding: 0 12px; }
+[data-style="new"] .collection-head .details-button,
+[data-style="new"] .collection-cols > .details-scrim { display: none; }
 
 /* -- the page: the list, the divider, the side panel -- */
 [data-style="new"] .collection-cols { grid-template-columns: minmax(0, 1fr) var(--split); }
 [data-style="new"] .collection-cols > .splitter { display: block; }
-[data-style="new"] .collection-body { display: flex; flex-direction: column; gap: 18px; padding: 20px 20px var(--sp-8); }
-[data-style="new"] .collection-body > * { margin-top: 0; margin-bottom: 0; max-width: none; }
-[data-style="new"] .collection-where { font-size: var(--fs-sm); }
+[data-style="new"] .collection-body { display: flex; flex-direction: column; gap: 20px; padding: 20px 20px var(--sp-8); }
+[data-style="new"] .collection-body > * { flex-shrink: 0; margin-top: 0; margin-bottom: 0; max-width: none; }
+[data-style="new"] .collection-body > .banner { align-items: flex-start; padding: 10px 14px; border-radius: var(--r-lg); }
 [data-style="new"] .collection-caption { font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0; color: var(--text); }
-[data-style="new"] .collection-summary { background: var(--panel-2); border: 1px solid var(--hairline); border-radius: var(--r-xl); }
-[data-style="new"] .collection-inspector { overflow-y: auto; background: var(--panel-2); border-left: 1px solid var(--hairline); padding: 18px; }
+[data-style="new"] .section-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+[data-style="new"] .section-head h2,
+[data-style="new"] .attention-list h2 { flex: 1; margin: 0; font-size: var(--fs-md); font-weight: 600; }
+[data-style="new"] .section-head .link-button,
+[data-style="new"] .collection-summary-tools .ai-action { flex: none; min-height: 26px; padding: 0 8px; border-radius: 5px; font-size: 12px; color: var(--accent); white-space: nowrap; }
+[data-style="new"] .section-head .link-button:hover:not(:disabled),
+[data-style="new"] .collection-summary-tools .ai-action:hover:not(:disabled) { background: var(--hover); text-decoration: none; }
+[data-style="new"] .collection-summary-tools { display: flex; gap: 0; }
+[data-style="new"] .collection-summary-tools .ai-action { border-color: transparent; background: transparent; box-shadow: none; }
+[data-style="new"] .collection-summary-tools .ai-action svg { display: none; }
+[data-style="new"] .collection-summary-new { display: flex; flex-direction: column; gap: 6px; }
+[data-style="new"] .collection-summary-new .summary-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+[data-style="new"] .collection-summary-new .summary-text.is-empty { color: var(--muted); }
+[data-style="new"] .collection-summary-new .collection-summary-text { border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 10px; background: var(--panel); color: var(--text); }
+[data-style="new"] .attention-list { display: flex; flex-direction: column; gap: 6px; }
+[data-style="new"] .attention-list h2 { flex: none; }
+[data-style="new"] .attention-list ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+[data-style="new"] .attention-list li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+[data-style="new"] .attention-list .tag { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-style="new"] .attention-list .link-button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); text-decoration: underline; }
+[data-style="new"] .collection-inspector { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; background: var(--panel-2); border-left: 1px solid var(--hairline); padding: 18px; }
 [data-style="new"] .collection-inspector .file-meta-title h2 { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+/* the panel's blocks in the drawn order: name and folder, tags, group, summary, preview, buttons, note */
+[data-style="new"] .collection-inspector .file-panel { display: contents; }
+[data-style="new"] .collection-inspector .file-view-block { display: block; min-width: 0; }
+[data-style="new"] .collection-inspector [data-block="header"] { order: 1; }
+[data-style="new"] .collection-inspector [data-block="tags"] { order: 2; }
+[data-style="new"] .collection-inspector [data-block="own"] { order: 3; }
+[data-style="new"] .collection-inspector [data-block="collections"] { order: 4; }
+[data-style="new"] .collection-inspector [data-block="summary"] { order: 5; }
+[data-style="new"] .collection-inspector [data-block="preview"] { order: 6; }
+[data-style="new"] .collection-inspector .inspector-foot { order: 7; display: flex; flex-direction: column; gap: 10px; }
+[data-style="new"] .collection-inspector [data-block="notes"] { order: 8; }
+[data-style="new"] .collection-inspector > :not(.file-panel):not(.inspector-foot) { order: 3; }
+[data-style="new"] .inspector-collection { margin-top: 0; }
+[data-style="new"] .inspector-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-style="new"] .inspector-buttons > button { min-height: 32px; padding: 0 12px; }
+[data-style="new"] .inspector-buttons > button.is-quiet-danger { border-color: transparent; background: transparent; box-shadow: none; color: var(--red-text); }
+[data-style="new"] .inspector-buttons > button.is-quiet-danger:hover:not(:disabled) { background: var(--red-bg); }
+[data-style="new"] .inspector-foot .file-action-bar { display: flex; flex-wrap: wrap; gap: 2px; }
 
 /* -- groups and files: one bordered card, file names in the fixed-width face -- */
-[data-style="new"] .collection-members { max-height: none; margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-xl); background: var(--panel); }
+[data-style="new"] .collection-members { max-height: none; overflow: visible; margin: 0; border: 1px solid var(--hairline); border-radius: var(--r-xl); background: var(--panel); }
 [data-style="new"] .group-tree { padding: 4px; }
 [data-style="new"] .group-header { margin-top: 2px; padding: 2px 4px 2px 0; border-radius: var(--r-md); background: var(--panel-2); min-height: 32px; }
 [data-style="new"] .group-body > .group > .group-header { margin-top: 2px; }
@@ -1768,7 +1813,12 @@
 [data-style="new"] .member[aria-current="true"] .mark-important, [data-style="new"] .tray-items > li[aria-current="true"] .mark-important { color: var(--red-text); }
 [data-style="new"] .member-row { min-height: 32px; border: 0; background: transparent; }
 [data-style="new"] .member-text { flex-wrap: nowrap; }
-[data-style="new"] .member-text .entry-name { flex: 0 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 12.5px; }
+[data-style="new"] .member-text .entry-name { flex: 0 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 12.5px; font-weight: 400; }
+[data-style="new"] .member[aria-current="true"] .member-text .entry-name { font-weight: 500; }
+/* as drawn: a group is a chevron, its name and its count; a file is its name, folder and pills (a folder keeps its icon) */
+[data-style="new"] .collection-members .group-icon,
+[data-style="new"] .collection-members .member-icon { display: none; }
+[data-style="new"] .collection-members .member-row:has(.member-dir) .member-icon { display: inline; }
 [data-style="new"] .member-text .entry-name.member-dir { font-family: inherit; font-weight: 500; }
 [data-style="new"] .member-folder { flex: 0 100 auto; font-family: var(--font-mono); font-size: 11.5px; }
 [data-style="new"] .member-note { font-size: var(--fs-sm); }
@@ -1779,15 +1829,19 @@
 /* -- notes and checklist: side by side while there is room -- */
 [data-style="new"] .collection-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; border-top: 0; padding-top: 0; }
 [data-style="new"] .collection-notes > * { min-width: 0; margin-top: 0; }
+[data-style="new"] .collection-notes .collapsible-head { gap: 8px; }
+[data-style="new"] .collection-notes .collapsible-toggle { font-size: var(--fs-md); font-weight: 600; color: var(--text); }
+[data-style="new"] .collection-notes .collapsible-toggle svg { display: none; }
+[data-style="new"] .collection-notes .item-note .field > label,
+[data-style="new"] .collection-notes .checklist .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[data-style="new"] .check-count { font-size: var(--fs-sm); color: var(--muted); }
 
 /* -- the folding order -- */
 @container coll (max-width: 900px) {
   [data-style="new"] .collection-cols { grid-template-columns: minmax(0, 1fr); }
   [data-style="new"] .collection-cols > .splitter { display: none; }
   [data-style="new"] .collection-cols > .collection-inspector { display: none; }
-  [data-style="new"] .collection-toolbar .toolbar-trailing { display: none; }
-  [data-style="new"] .collection-toolbar .toolbar-lead { flex: 1 1 auto; max-width: none; padding-right: var(--sp-4); }
-  [data-style="new"] .collection-toolbar .details-button { display: inline-flex; }
+  [data-style="new"] .collection-head .details-button { display: inline-flex; align-items: center; gap: 6px; }
   [data-style="new"] .collection-cols[data-details="open"] > .details-scrim {
     display: block;
     position: absolute;
@@ -1796,34 +1850,18 @@
     background: color-mix(in srgb, var(--text) 10%, transparent);
   }
   [data-style="new"] .collection-cols[data-details="open"] > .collection-inspector {
-    display: block;
+    display: flex;
     position: absolute;
     z-index: 6;
     top: 0;
     right: 0;
     bottom: 0;
     width: min(440px, 92%);
-    padding-top: 62px;
     box-shadow: var(--shadow-pop);
-  }
-  [data-style="new"] .collection-cols[data-details="open"] > .inspector-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-content: center;
-    position: absolute;
-    z-index: 7;
-    top: 0;
-    right: 0;
-    width: min(440px, 92%);
-    box-sizing: border-box;
-    min-height: 50px;
-    padding: 6px var(--sp-3);
-    border-bottom: 1px solid var(--hairline);
-    background: var(--panel);
   }
 }
 @container coll (max-width: 760px) {
-  [data-style="new"] .collection-toolbar .hdr-wide { display: none; }
+  [data-style="new"] .collection-head .hdr-wide { display: none; }
 }
 
 /* Classic's narrow-window rules stack the columns and let the page scroll; New keeps them
@@ -1848,47 +1886,48 @@
 [data-style="new"] .new-collection-row { border: 1px solid var(--hairline); border-radius: var(--r-lg); }
 
 /* ==== Trays: the list, the divider, the item ===============================================
- * The header is the two panes' header: the tray's name, count, Add file and Open / Done sit
- * over the list (as drawn, the name on a line of its own with the controls), the open item's
- * file actions over the item. The list is as wide as the divider says (remembered,
- * double-click resets) and the panes never stack: Classic's 900px rules are undone below.
- * The item takes two columns (the details, then the document beside them) when its pane is
- * wide, and one when it is not. */
+ * As drawn on the Tray board. The list pane has its own header: the tray's name and count, Add
+ * file, and the Open / Done choice with its counts; the rows, and the keys at its foot. The item
+ * pane has its own header: title, where it is, Move to tray…, the file's actions and Close; then
+ * the fields card with Mark done; then two columns, the files, checklist, note and history
+ * beside the summary and the document (one column when the pane is narrow). The list is as wide
+ * as the divider says (remembered, double-click resets) and the panes never stack: Classic's
+ * 900px rules are undone below. */
 [data-style="new"] main:has(> .trays) { container: trays / inline-size; }
 [data-style="new"] .trays { background: var(--panel); }
-[data-style="new"] .trays-toolbar { flex-wrap: nowrap; align-content: normal; gap: 0; padding: 0; }
-[data-style="new"] .trays-toolbar .toolbar-lead {
-  flex: 0 0 var(--split);
+[data-style="new"] .trays-list > .trays-toolbar {
+  flex: none;
+  height: auto;
+  min-height: 0;
   box-sizing: border-box;
-  /* the title and the Add file button share the first line, the Open / Done choice has the
-   * second; the actions group keeps its own element (it is a toolbar with a name) and lays its
-   * children out in the same grid */
+  /* the title and Add file share the first line, the Open / Done choice has the second; the
+   * actions group keeps its own element (it is a toolbar with a name) and lays its children out in
+   * the same grid */
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
-  align-content: center;
-  align-self: stretch;
-  gap: 8px 10px;
-  padding: 12px var(--sp-4);
-  border-right: 1px solid var(--hairline);
+  align-content: start;
+  gap: 12px 10px;
+  padding: 18px var(--sp-4) 12px;
+  border-bottom: 1px solid var(--hairline);
 }
-[data-style="new"] .trays-toolbar .toolbar-title { grid-area: 1 / 1; min-width: 0; }
-[data-style="new"] .trays-toolbar .toolbar-title h2 { flex: 0 1 auto; font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; }
-[data-style="new"] .trays-toolbar .toolbar-subtitle { font-family: var(--font-mono); font-size: var(--fs-sm); }
-[data-style="new"] .trays-toolbar .toolbar-lead .toolbar-actions {
+[data-style="new"] .trays-toolbar .toolbar-title { grid-area: 1 / 1; display: flex; align-items: baseline; gap: 10px; min-width: 0; flex-wrap: nowrap; }
+[data-style="new"] .trays-toolbar .toolbar-title h2 { flex: 0 1 auto; min-width: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+[data-style="new"] .trays-toolbar .toolbar-subtitle { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); color: var(--muted); }
+[data-style="new"] .trays-toolbar .toolbar-actions {
   grid-area: 1 / 1 / 3 / 3;
   display: grid;
   grid-template-columns: subgrid;
   grid-template-rows: subgrid;
-  gap: 8px 10px;
+  gap: 12px 10px;
   margin: 0;
   pointer-events: none; /* the group sits over the title; only its buttons take the pointer */
 }
-[data-style="new"] .trays-toolbar .toolbar-lead .toolbar-actions > * { pointer-events: auto; }
-[data-style="new"] .trays-toolbar .tray-add-file { grid-area: 1 / 2; min-height: 28px; padding: 3px 10px; font-size: var(--fs-sm); }
+[data-style="new"] .trays-toolbar .toolbar-actions > * { pointer-events: auto; }
+[data-style="new"] .trays-toolbar .tray-add-file { grid-area: 1 / 2; min-height: 30px; padding: 0 10px; font-size: 12px; }
 [data-style="new"] .trays-toolbar .segmented { grid-area: 2 / 1 / 3 / 3; display: flex; }
 [data-style="new"] .trays-toolbar .segmented-option { flex: 1 1 0; justify-content: center; }
-[data-style="new"] .trays-toolbar .toolbar-trailing { flex: 1 1 0; min-width: 0; margin-left: 0; padding: 8px var(--sp-4); }
+[data-style="new"] .trays-toolbar .seg-count { margin-left: 4px; font-weight: 400; }
 
 [data-style="new"] .trays-main { grid-template-columns: var(--split) minmax(0, 1fr); }
 [data-style="new"] .trays-main > .splitter { display: block; }
@@ -1907,11 +1946,13 @@
 [data-style="new"] .tray-row-title,
 [data-style="new"] .tray-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 [data-style="new"] .tray-row-title { font-weight: 500; }
+[data-style="new"] .tray-row-meta { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
 [data-style="new"] .tray-row-side { min-width: 0; }
 [data-style="new"] .tray-row-amount,
 [data-style="new"] .tray-row-age { font-family: var(--font-mono); font-size: var(--fs-sm); }
 [data-style="new"] .tray-row-age { font-size: var(--fs-xs); }
 [data-style="new"] li[aria-current="true"] .tray-row-sub,
+[data-style="new"] li[aria-current="true"] .tray-row-meta,
 [data-style="new"] li[aria-current="true"] .tray-row-age,
 [data-style="new"] li[aria-current="true"] .row-icons,
 [data-style="new"] li[aria-current="true"] .tray-row-done { color: var(--muted); opacity: 1; }
@@ -1943,20 +1984,52 @@
 [data-style="new"] .fact-value { font-family: var(--font-mono); font-size: 12.5px; }
 [data-style="new"] .fact > * { border-bottom-width: 1px; }
 [data-style="new"] .item-files-line { font-size: var(--fs-sm); }
-[data-style="new"] .item-dated .checklist { box-shadow: none; border: 1px solid var(--hairline); border-radius: var(--r-xl); }
 [data-style="new"] .history { font-size: var(--fs-sm); }
-@container tdetail (min-width: 780px) {
-  [data-style="new"] .item-detail {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    grid-template-rows: repeat(6, auto) 1fr;
-    column-gap: 28px;
-    align-content: start;
-  }
-  [data-style="new"] .item-detail > .file-view-block { display: block; min-width: 0; grid-column: 1; }
-  [data-style="new"] .item-detail > .file-view-block[data-block="header"] { grid-column: 1 / -1; }
-  [data-style="new"] .item-detail > .file-view-block[data-block="preview"] { grid-column: 2; grid-row: 2 / 8; }
+/* the item header: title and where it is, then Move to tray…, the file's actions and Close */
+[data-style="new"] .item-new { display: flex; flex-direction: column; gap: 18px; }
+[data-style="new"] .item-new > * { margin-top: 0; margin-bottom: 0; }
+[data-style="new"] .item-new .item-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title close" "actions actions"; align-items: start; gap: 10px; }
+[data-style="new"] .item-new .item-header > .item-heading { grid-area: title; }
+[data-style="new"] .item-new .item-header > .item-actions { grid-area: actions; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 10px; }
+[data-style="new"] .item-new .item-header > button { grid-area: close; }
+@container tdetail (min-width: 640px) {
+  [data-style="new"] .item-new .item-header { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "title actions close"; }
 }
+[data-style="new"] .item-new .item-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+[data-style="new"] .item-new .item-sub { margin: 0; color: var(--muted); }
+[data-style="new"] .item-new .item-sub a { color: var(--accent); }
+[data-style="new"] .item-new .item-actions > .menu-wrap > button { min-height: 32px; padding: 0 12px; }
+[data-style="new"] .item-bar-slot { flex: none; display: flex; align-items: center; gap: 2px; min-height: 32px; }
+[data-style="new"] .item-new .item-fields { flex-wrap: wrap; }
+[data-style="new"] .item-new .item-done-buttons { align-self: flex-end; }
+[data-style="new"] .item-new .item-done-buttons .primary kbd { margin-left: 8px; padding: 0 5px; border: 0; background: rgb(255 255 255 / 0.16); color: inherit; font-size: 11px; line-height: 18px; }
+/* the two columns */
+[data-style="new"] .item-cols { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+[data-style="new"] .item-col-main { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+[data-style="new"] .item-col-side { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+[data-style="new"] .item-col-main > *,
+[data-style="new"] .item-col-side > * { margin-top: 0; margin-bottom: 0; min-width: 0; }
+[data-style="new"] .item-files-list { display: flex; flex-direction: column; gap: 6px; }
+[data-style="new"] .item-files-list h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+[data-style="new"] .item-files-list ul { margin: 0; padding: 0; list-style: none; border: 1px solid var(--hairline); border-radius: var(--r-lg); overflow: hidden; }
+[data-style="new"] .item-files-list li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 10px; border-bottom: 1px solid var(--hairline); }
+[data-style="new"] .item-files-list li:last-child { border-bottom: 0; }
+[data-style="new"] .item-files-list li[data-shown="true"] { background: var(--selected); }
+[data-style="new"] .item-files-list .item-file-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0; border: 0; background: transparent; box-shadow: none; text-align: left; font: inherit; }
+[data-style="new"] .item-files-list .item-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-style="new"] .item-file-shown { flex: none; font-size: 12px; color: var(--muted); }
+[data-style="new"] .item-files-list .tab-close { flex: none; opacity: 0.6; }
+[data-style="new"] .item-files-list .tab-close:hover,
+[data-style="new"] .item-files-list .tab-close:focus-visible { opacity: 1; }
+[data-style="new"] .item-files-list .item-file-add .link-button { font-size: 12px; color: var(--accent); }
+[data-style="new"] .item-new .collapsible-head { gap: 8px; }
+[data-style="new"] .item-new .collapsible-toggle { font-size: var(--fs-md); font-weight: 600; color: var(--text); }
+[data-style="new"] .item-new .item-col-main .collapsible-toggle svg { display: none; }
+[data-style="new"] .item-new .item-note .field > label,
+[data-style="new"] .item-new .checklist .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[data-style="new"] .item-new .history { font-size: var(--fs-sm); color: var(--muted); }
+[data-style="new"] .item-new .item-summary .summary-file { display: flex; align-items: center; gap: 8px; }
+[data-style="new"] .item-new .item-summary .summary-file select { min-height: 28px; font-size: 12px; }
 
 /* Classic's narrow-window rules stack the panes and let the page scroll; New keeps the panes
  * side by side and scrolls inside */

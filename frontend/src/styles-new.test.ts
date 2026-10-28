@@ -121,7 +121,7 @@ describe("styles-new.css: Collections and Trays", () => {
     const order = ["900px", "760px"].map((w) => plain.indexOf(`@container coll (max-width: ${w})`));
     expect(order.every((i) => i > 0)).toBe(true);
     expect(order[0]).toBeLessThan(order[1]);
-    expect(plain).toMatch(/@container coll \(max-width: 760px\) \{\s*\[data-style="new"\] \.collection-toolbar \.hdr-wide \{ display: none; \}/);
+    expect(plain).toMatch(/@container coll \(max-width: 760px\) \{\s*\[data-style="new"\] \.collection-head \.hdr-wide \{ display: none; \}/);
   });
 
   it("keeps the collection's list and side panel side by side where Classic stacks them at 900px", () => {
@@ -132,8 +132,8 @@ describe("styles-new.css: Collections and Trays", () => {
   });
 
   it("keeps the header on one line: the subtitle shrinks before the title", () => {
-    expect(plain).toMatch(/\.collection-toolbar \{ flex-wrap: nowrap;/);
-    expect(plain).toMatch(/\.collection-toolbar \.toolbar-subtitle \{ flex: 0 100 auto;/);
+    expect(plain).toMatch(/\.collection-head-line \{ display: flex; align-items: baseline;/);
+    expect(plain).toMatch(/\.collection-head-count \{ flex: 0 100 auto;/);
   });
 
   it("makes the trays a container, lists the items with the calm selection and keeps the panes side by side", () => {
@@ -146,6 +146,7 @@ describe("styles-new.css: Collections and Trays", () => {
   it("puts the document beside the item's details when the item's pane is wide", () => {
     expect(plain).toMatch(/\.trays-detail \{ container: tdetail \/ inline-size;/);
     expect(plain).toMatch(/@container tdetail \(min-width: \d+px\)/);
-    expect(plain).toMatch(/\[data-block="preview"\] \{ grid-column: 2;/);
+    expect(plain).toMatch(/\.item-cols \{ display: flex; flex-wrap: wrap;/);
+    expect(plain).toMatch(/\.item-col-side \{ flex: 1 1 260px;/);
   });
 });

@@ -871,6 +871,13 @@ A tray's screen has the list (Open / Done) and the selected item beside it; ↑/
 highlight and open the item. An item has a title, one or more files, the tray's fields, a
 note, a checklist and a history.
 
+In the New look the list has its own header (the tray's name and count, **Add file**, and
+**Open** / **Done** with their counts) and each row has a second line (who the item waits
+for, how many files, the checklist). The item has its own header with **Move to tray…**, the
+file's icons and **Close**; the date and "Waiting for" fields sit in a card with **Mark
+done** (key `d`); under it the files on the item, the checklist, the note and the history
+stand beside the summary and the document.
+
 ### Row icons
 
 At the right end of a row, before the date, small icons say what the item has: a pencil
@@ -961,6 +968,14 @@ when they are moved or renamed. A file can be in several collections.
 A collection's page has a summary, a **Needs attention** strip (members in an open tray
 item or still in the inbox), its child collections, its groups of files, a note and a
 checklist. The selected file shows on the right with its details.
+
+The New look draws the page as one header across the top (where the collection sits, its
+name, an Open / Closed pill, the counts, and **Add files**, **Show folder**, **Export…**
+and **⋯**), then the summary, **Needs attention** as a list, **Files by group** as one tree
+with **New group** in its heading, and the note beside the checklist. **Add files** finds any
+file of the archive and puts it in the collection. The selected file's panel has **Open**,
+**Show in folder**, **Note on this file** and **Remove from collection** under its preview, with
+the other file actions (listed below) as a row of icons under them instead of in the header.
 
 The header has the same two parts as Browse and the trays. The left part is for the
 collection: its name and subtitle, **New group**, the folder button, **Export…** and **⋯**.
