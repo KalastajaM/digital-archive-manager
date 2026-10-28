@@ -484,3 +484,27 @@ def test_migration_0041_creates_the_table_on_an_older_database(tmp_path, new_eng
         pk = [r[1] for r in conn.execute(text("PRAGMA table_info(related_dismissed)")) if r[5]]
         assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0041"
     assert cols == ["drive_a", "drive_b", "created"] and pk == ["drive_a", "drive_b"]
+
+
+def _folder_id(app, path):
+    with app.engine.connect() as conn:
+        return conn.execute(
+            select(files.c.drive_id).where(files.c.path == path, files.c.is_dir.is_(True))
+        ).scalar_one()
+
+
+def test_same_collection_through_a_member_folder(app, archive):
+    """A collection can hold a folder: every file inside it (at any depth) is a member, as
+    the file panel's collection chips say, so it is a collection link both ways."""
+    archive.add(f"{HOME}/Sauna/deep/plan.pdf", b"plan", drive_id="plan")
+    app.scan()
+    c = app.collections.create("Sauna build")
+    app.collections.add_members(c.id, [_folder_id(app, HOME), "bank"])
+    # "far" and "plan" are in the collection through 20. Home; "bank" directly
+    got = by_id(app.relatives.of("bank"))
+    assert kinds(got["far"]) == {("collection", "Sauna build")}
+    assert kinds(got["plan"]) == {("collection", "Sauna build")}
+    got = by_id(app.relatives.of("plan"))
+    assert kinds(got["bank"]) == {("collection", "Sauna build")}
+    assert ("collection", "Sauna build") in kinds(got["far"])
+    assert "me" not in got  # outside the member folder

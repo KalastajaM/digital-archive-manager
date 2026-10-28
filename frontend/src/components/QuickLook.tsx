@@ -48,6 +48,8 @@ type Props = {
   compare?: {
     subject: QLFile;
     shared: (file: QLFile) => string[];
+    /** Why the AI picked the shown file (a sentence), on its own line above the verdict. */
+    reason?: (file: QLFile) => string | null;
     onNotRelated: (file: QLFile) => void;
   };
 };
@@ -101,6 +103,7 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
     e.preventDefault();
   };
   const shared = compare?.shared(file) ?? [];
+  const reason = compare?.reason?.(file) ?? null;
   const toggleTogether = () => {
     // apart again: this file keeps the shared zoom, so nothing jumps
     if (together) subjectZoom[1](zoomControl[0]);
@@ -179,6 +182,11 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
             </div>
           </div>
           </ZoomKeys.Provider>
+          {reason && (
+            <p className="quicklook-reason">
+              <span className="rel-ai-badge">AI</span> {reason}
+            </p>
+          )}
           <div className="quicklook-verdict">
             <button
               type="button"
@@ -193,10 +201,10 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
             >
               <Link2 size={14} aria-hidden="true" /> Zoom together
             </button>
-            <span className="quicklook-shared-label">In common</span>
+            {shared.length > 0 && <span className="quicklook-shared-label">In common</span>}
             <ul className="quicklook-shared" aria-label="In common">
               {shared.map((s) => (
-                <li key={s} className="tag tag-grey">
+                <li key={s} className="tag tag-grey" title={s}>
                   {s}
                 </li>
               ))}
