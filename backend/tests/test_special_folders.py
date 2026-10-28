@@ -1216,3 +1216,59 @@ def test_undo_finds_a_rule_by_its_id_when_rules_were_added_since(
     text = rules.read_text(encoding="utf-8")
     assert "- id: z\n  when: {text_contains: [y]}\n  then: {folder: '00. Inbox/A'}" in text
     assert "folder: '##. Organize/A'" in text
+
+
+def _make_attention(app_paths):
+    engine = make_engine(app_paths.db_path)
+    try:
+        with engine.begin() as conn:
+            conn.execute(special_folder_renames.update().values(state="attention"))
+    finally:
+        engine.dispose()
+
+
+def test_undo_of_a_rename_whose_folders_are_already_back_puts_the_settings_back(
+    closed, fake_archive, monkeypatch
+):
+    """Undo in Activity, as the unfinished-rename message says, settles an ``attention``
+    rename whose journal has nothing left to undo."""
+    renamed = special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    monkeypatch.setattr(special_folders, "roll_back", lambda *a, **k: 1 / 0)
+    with pytest.raises(ZeroDivisionError):
+        special_folders.undo(closed, renamed.batch_id)
+    monkeypatch.undo()
+    _make_attention(closed)
+    assert (fake_archive.root / "##. Organize").is_dir()
+    assert load_settings(closed).special_folders.inbox == "00. Inbox"
+    special_folders.undo(closed, renamed.batch_id)
+    assert load_settings(closed).special_folders.inbox == "##. Organize"
+    assert _state(closed) == ["undone"]
+
+
+def test_a_done_rename_whose_folders_were_undone_blocks_a_new_one(
+    closed, fake_archive, monkeypatch
+):
+    renamed = special_folders.rename_folder(closed, "inbox", "00. Inbox")
+    monkeypatch.setattr(special_folders, "roll_back", lambda *a, **k: 1 / 0)
+    with pytest.raises(ZeroDivisionError):
+        special_folders.undo(closed, renamed.batch_id)
+    monkeypatch.undo()
+    assert _state(closed) == ["done"]  # folders undone, settings not yet put back
+    with pytest.raises(Conflict, match="left unfinished"):
+        special_folders.rename_folder(closed, "ongoing", "Projects")
+    assert special_folders.reconcile(closed) == 1
+    special_folders.rename_folder(closed, "ongoing", "Projects")
+
+
+def test_migration_0042_makes_the_final_table(new_engine, tmp_path):
+    from sqlalchemy import inspect
+
+    from dam.db.engine import migrate
+
+    engine = new_engine(tmp_path / "m.sqlite")
+    migrate(engine)
+    columns = {c["name"] for c in inspect(engine).get_columns("special_folder_renames")}
+    assert columns == {
+        "id", "batch_id", "key", "old", "new", "state", "folders", "changes", "note",
+        "created", "finished",
+    }

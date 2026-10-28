@@ -14,14 +14,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    inspector = sa.inspect(op.get_bind())
-    if "special_folder_renames" in inspector.get_table_names():
-        # a database that ran this revision before ``changes`` and ``note`` were added to it
-        have = {c["name"] for c in inspector.get_columns("special_folder_renames")}
-        for name in ("changes", "note"):
-            if name not in have:
-                op.add_column("special_folder_renames", sa.Column(name, sa.Text, nullable=True))
-    else:
+    if "special_folder_renames" not in sa.inspect(op.get_bind()).get_table_names():
         op.create_table(
             "special_folder_renames",
             sa.Column("id", sa.Integer, primary_key=True),

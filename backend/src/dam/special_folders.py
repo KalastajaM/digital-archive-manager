@@ -56,7 +56,7 @@ from dam.index.repo import FileRepo
 from dam.index.repo.model import at_or_below
 from dam.maintenance.ignored import GROUPS
 from dam.ops.executor import Executor
-from dam.ops.model import ABS_TARGET, GuardError, Op, OpKind, Plan
+from dam.ops.model import ABS_TARGET, BatchResult, GuardError, Op, OpKind, Plan
 from dam.ops.undo import ACTED
 from dam.rules.model import load_rule_file, rule_files
 from dam.rules.picture import AREAS_DIR
@@ -248,14 +248,10 @@ def _refusals(key: str, paths: ArchivePaths, engine: Engine) -> None:
             select(operations.c.id).where(operations.c.state == "planned").limit(1)
         ).first():
             raise Conflict(INTERRUPTED)
-        unfinished = conn.execute(
-            select(special_folder_renames.c.note)
-            .where(special_folder_renames.c.state.in_((_PLANNED, _ATTENTION)))
-            .limit(1)
-        ).first()
-    if unfinished is not None:
-        why = f" ({unfinished[0]})" if unfinished[0] else ""
-        raise Conflict(UNFINISHED.format(why=why))
+    unfinished = _unfinished(engine)  # the same renames reconcile and Run recovery settle
+    if unfinished:
+        note = unfinished[0]["note"]
+        raise Conflict(UNFINISHED.format(why=f" ({note})" if note else ""))
 
 
 def _nothing_to_rename(key: str, rels: list[str], old: str) -> bool:
@@ -1032,6 +1028,11 @@ def undo(app_paths: AppPaths, batch_id: str):
             raise InvalidRequest(f"A setting or rule cannot be put back safely: {e}") from None
         if "planned" in _journal_states(engine, batch_id):
             raise Conflict(INTERRUPTED)
+        if not any(s in ACTED for s in _journal_states(engine, batch_id)):
+            # the folders are back already (an undo cut short): only the settings and the
+            # stored paths are left to put back
+            roll_back(app_paths, engine, batch_id)
+            return BatchResult(batch_id=uuid4().hex, dry_run=False)
         result = executor.undo(batch_id)
         left = [s for s in _journal_states(engine, batch_id) if s in ACTED]
         if result.failed is not None or result.error is not None or left:
