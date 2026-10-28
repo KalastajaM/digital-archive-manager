@@ -49,6 +49,7 @@
 - [Browse](#browse)
 - [Searching](#searching)
 - [Tags](#tags)
+- [Relatives](#relatives)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
 - [Maintenance](#maintenance)
@@ -1183,6 +1184,59 @@ and Browse shows the files with that tag (see [Searching](#searching)). With sev
 **All / Any** in the filter row picks files with every tag or with at least one.
 
 Tags are kept in dam's own database, not in the archive, so changing them moves no file.
+
+## Relatives
+
+Relatives are the other files a document belongs with, and why. They show in the file's
+panel under **Relatives**, in the **New look** only (Classic does not have them). Select a
+file in Browse or in a collection and the block lists up to four of them, best first, with
+a count of the rest ("2 more with one link in common").
+
+A file is a relative when it shares at least one **link** with this one. Each row names its
+links in short labels: **folder** (the same folder; sharing the inbox does not count, since
+it holds what is not filed yet), **sender**, **collection**, **tag**,
+**IBAN**, **reference** (the number of a tray item) and **person** (the "For" of the
+document). Hover the labels for the exact values. Every link adds to a score, and the list
+is ranked by it: a shared reference number counts most, then a sender or a collection, then
+each shared tag, folder or IBAN, and a shared person least. A document dated in the same
+month as this one adds a little (**+ same month**), but only to a file that already has a
+link: the same month alone never makes a relative. A tag, IBAN, sender or person that very
+many files share (more than 200) counts for half, and for nothing above 1,000, so a
+catch-all tag or a payment service's IBAN does not fill the list. The weights are in
+[the reference](reference.md#relatives).
+
+Only files that are there count: not missing ones, not folders, and not what is in To
+Delete. A link in the archive stands for the file it points to, which is listed once.
+
+- **Not filed yet.** A relative still in the inbox comes first, on an orange card ("Same
+  sender, not filed yet") with **Go to the inbox**, where the usual filing takes over.
+- **Quick Look and Show in Browse.** Each row has a Quick Look icon (or click its name)
+  and a Show in Browse icon.
+- **Not related.** The crossed eye on a row says the two files do not belong together.
+  They are left out of each other's list from then on, whatever they share. The message
+  has **Undo**, and **N marked not related** under the list shows them again with **Show
+  again**. This is a note in dam's index; no file is touched.
+- **Act on several at once.** Tick the checkboxes and a bar appears: "This file and N
+  related". Each button shows what will happen before it does anything, and each can be
+  undone:
+  - **Tag…** puts the tags you add on this file and the ticked ones. **Undo** in the
+    message takes them off again.
+  - **Add to collection…** adds this file and the ticked ones to a collection; files that
+    are in it already are left out of the count. **Undo** takes the added files out again.
+  - **Move to folder…** is the usual move, with its preview, for this file and the ticked
+    ones.
+  - **Link them here** makes a link in this file's folder to each ticked file that is not
+    in that folder already. The button says how many, and is off ("No links needed: all 3
+    are already in 13. Taxes") when none are needed.
+  - **Link this file there** makes a link to this file in each folder the ticked files are
+    in (not this file's own folder, and not the inbox), as one batch. The preview lists
+    every link, and one **Undo** in Activity removes them all.
+
+  The two link buttons are hidden where links cannot be made (Windows without Developer
+  Mode), as in Browse.
+
+Nothing here is guessed from names or text: a file lacks the **sender** link until a sender
+has been set on it (see [From and For on a document](#from-and-for-on-a-document)).
 
 ## Quick Look and the viewer window
 

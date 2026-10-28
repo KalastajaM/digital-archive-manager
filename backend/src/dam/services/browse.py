@@ -777,6 +777,61 @@ class BrowseService:
             )
         return move
 
+    def link_there_plan(self, drive_id: str, folders: list[str], origin: str = "ui") -> "_Move":
+        """A link to one file in each of several folders, as one plan (so one batch and
+        one Undo): each folder is planned as a link drop of the file (``_link_copy_ops``),
+        so every check of a single drop holds per folder. A folder named twice counts
+        once; one the file is already in needs no link (``unchanged``)."""
+        if isinstance(folders, str) or not isinstance(folders, list | tuple) or not folders:
+            raise InvalidRequest("No folders given")
+        move = _Move(Plan([], origin=origin), [], [], "")
+        seen: set[tuple[str, ...]] = set()
+        for folder in folders:
+            part = self._link_copy_ops([drive_id], folder, origin, "link")
+            key = fold_parts(part.folder)
+            if key in seen:
+                continue
+            seen.add(key)
+            move.plan.ops += part.plan.ops
+            move.ids += part.ids
+            move.unchanged += part.unchanged
+        if move.ids:
+            rec = self.repo.get(drive_id)
+            what = rec.name if rec is not None else "the file"
+            move.plan.label = (
+                f"Linked {what} in {len(move.ids)} folders"
+                if len(move.ids) > 1
+                else f"Linked {what} in {move.plan.ops[0].dst.rpartition('/')[0]}"
+            )
+        return move
+
+    def link_there_preview(
+        self, drive_id: str, folders: list[str], origin: str = "ui"
+    ) -> list[ResolvedOp]:
+        """The ops ``link_there`` would run. Nothing is journaled or changed."""
+        move = self.link_there_plan(drive_id, folders, origin)
+        resolved = self.executor.preview(move.plan)
+        self._check_drop(move.ids, resolved, "link")
+        return resolved
+
+    def link_there(
+        self, drive_id: str, folders: list[str], origin: str = "ui", dry_run: bool = False
+    ) -> MoveResult:
+        """Links to the file in every folder as one journaled batch: Undo removes them all."""
+        move = self.link_there_plan(drive_id, folders, origin)
+
+        def check(ops: list[ResolvedOp]) -> None:
+            self._check_drop(move.ids, ops, "link")
+
+        result = self.executor.apply(move.plan, dry_run=dry_run, check=check)
+        if result.done and not dry_run and self.rescan is not None:
+            for folder in dict.fromkeys(op.dst.rpartition("/")[0] for op in result.done):
+                try:
+                    self.rescan(folder)
+                except Exception:  # the batch is done; the watcher's next scan picks them up
+                    log.warning("indexing the new links failed", exc_info=True)
+        return MoveResult(**vars(result), unchanged=move.unchanged, folder="")
+
     def _move_label(
         self, drive_ids: list[str], name: str | None, dest: str, move: "_Move"
     ) -> str | None:

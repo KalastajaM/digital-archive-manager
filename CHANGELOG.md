@@ -8,6 +8,16 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Relatives (New look).** The file panel has a new block, **Relatives**: the other files
+  this one belongs with, and why. A file is a relative when it shares a folder, sender,
+  collection, tag, IBAN, reference number or person with this one; each row says which, and
+  the best match comes first. A relative still in the inbox is shown first as "not filed
+  yet". Tick some and act on them together with this file: **Tag…**, **Add to collection…**,
+  **Move to folder…**, **Link them here** (a link in this file's folder) and **Link this file
+  there** (a link to this file in each of their folders, as one batch with one Undo). Every
+  action shows what it will do first and has Undo. The crossed eye on a row says the two files
+  are **not related**: they stay out of each other's list, and **N marked not related** brings
+  them back. Classic does not have the block; nothing in your archive changes when you look.
 - **Mark a bill paid from Pay mode.** The large barcode (press **b** on a bill) now has
   the tray's own done button, such as **Mark paid**, next to **Close**. It closes Pay mode
   and opens the same form as the button on the bill, so you confirm the paid date there

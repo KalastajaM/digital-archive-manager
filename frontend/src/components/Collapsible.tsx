@@ -9,7 +9,7 @@ import { type ReactNode, useId, useState } from "react";
 const KEY = "dam.collapsed.";
 
 /** The sections that remember their state. */
-export type CollapsibleName = "summary" | "checklist" | "notes" | "history";
+export type CollapsibleName = "summary" | "checklist" | "notes" | "history" | "relatives";
 
 function readCollapsed(name: CollapsibleName): boolean {
   try {

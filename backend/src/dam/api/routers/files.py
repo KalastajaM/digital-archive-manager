@@ -23,6 +23,9 @@ from dam.api.schemas import (
     FileTagsOut,
     Page1BoxIn,
     Page1Out,
+    RelativeMarkIn,
+    RelativesDismissedOut,
+    RelativesOut,
     ScanFieldsIn,
     ScanFieldsOut,
     TextPreviewOut,
@@ -39,6 +42,7 @@ from dam.services.preview import (
     THUMB_MAX_WIDTH,
     THUMB_MIN_WIDTH,
 )
+from dam.services.relatives import MAX_RELATIVES
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -155,6 +159,41 @@ def put_file_tags(app: AppDep, drive_id: str, body: FileTagsIn) -> dict:
     require_editable(app, [drive_id])
     app.tags.set_for_file(drive_id, normalise_tags(body.tags))
     return {"tags": app.tags.for_file(drive_id)}
+
+
+@router.get("/{drive_id}/relatives", response_model=RelativesOut)
+def file_relatives(
+    app: AppDep, drive_id: str, limit: Annotated[int, Query(ge=1, le=MAX_RELATIVES)] = MAX_RELATIVES
+) -> dict:
+    """The files this one belongs with, best first, each with the links that make it a
+    relative (same reference, sender, collection, tag, folder, IBAN or person), plus the
+    values they share and how many pairs are marked "Not related". A link in the archive
+    is answered as its target. 404 for an unknown, missing or parked file."""
+    return asdict(app.relatives.of(drive_id, limit))
+
+
+@router.get("/{drive_id}/relatives/dismissed", response_model=RelativesDismissedOut)
+def file_relatives_dismissed(app: AppDep, drive_id: str) -> dict:
+    """The files marked "Not related" to this one (that still exist)."""
+    live_record(app, drive_id)
+    return {"dismissed": [asdict(d) for d in app.relatives.dismissed(drive_id)]}
+
+
+@router.post("/{drive_id}/relatives/dismiss", response_model=RelativesDismissedOut)
+def dismiss_relative(app: AppDep, drive_id: str, body: RelativeMarkIn) -> dict:
+    """Mark the two files "Not related": each is left out of the other's list. Answers
+    the files now marked for this one."""
+    live_record(app, drive_id)
+    app.relatives.dismiss(drive_id, body.drive_id)
+    return {"dismissed": [asdict(d) for d in app.relatives.dismissed(drive_id)]}
+
+
+@router.post("/{drive_id}/relatives/restore", response_model=RelativesDismissedOut)
+def restore_relative(app: AppDep, drive_id: str, body: RelativeMarkIn) -> dict:
+    """Take the "Not related" mark off the pair again. Answers the files still marked."""
+    live_record(app, drive_id)
+    app.relatives.restore(drive_id, body.drive_id)
+    return {"dismissed": [asdict(d) for d in app.relatives.dismissed(drive_id)]}
 
 
 @router.get("/{drive_id}/summary", response_model=FileSummaryOut)

@@ -22,6 +22,7 @@ the app's sidebar).
 - [AI setup](#ai-setup)
 - [Moves across disks](#moves-across-disks)
 - [Folder moves](#folder-moves)
+- [Relatives](#relatives)
 - [Safety model in detail](#safety-model-in-detail)
 - [Maintenance](#maintenance)
 - [Index errors](#index-errors)
@@ -1119,6 +1120,61 @@ are copied"; when it finishes, "Moved folder <name> (M files) to <place>". Activ
 "Moved folder <name> to <folder>" on one disk. Stop for a folder move ends the batch after
 the file in hand; unlike a file move, no `quarantine` follows each copy, so the source
 stays whole.
+
+## Relatives
+
+The files a document belongs with (user guide: [Relatives](guide.md#relatives)). Computed
+from the index on each request; only the "Not related" marks are stored.
+
+**Links and weights** (`dam/services/relatives.py`, the `WEIGHTS` table). A file is a
+relative when it shares at least one link; the score is the sum of the weights of its links.
+
+| Link | Source | Weight |
+| --- | --- | --- |
+| `reference` | `items.fields.reference` of the tray items the files are on | 5 |
+| `sender` | `file_assignments.sender` (case and accents ignored) | 3 |
+| `collection` | `collection_members` (not the built-in Starred and Important) | 3 |
+| `tag` (each) | `file_tags` | 2 |
+| `folder` | the folder the file is directly in (not the inbox, a code's inbox folder or the archive root) | 2 |
+| `iban` | `items.fields.iban` | 2 |
+| `person` | `file_assignments.person` | 1 |
+
+The booster `+1` (`same_month`) is added when both files have a `doc_date` in the same year
+and month, and only to a file that has at least one link. A tag, IBAN, sender or person
+shared by more than `COMMON_LIMIT` (200, a constant) live files counts half, by more than 5
+times that not at all, and then is no link. Only live files are listed: not missing, parked,
+folders or links (a link stands for its target, which is listed once; asking about a link
+answers for its target), and not what is in `##. To Delete`. Ties are ordered by name, then
+path.
+
+**Marks.** Table `related_dismissed(drive_a, drive_b, created)` (migration 0041): a pair of
+drive ids, the smaller first, no foreign key. It is index data, so there is no journal and no
+undo record; the UI undoes a mark by restoring it.
+
+**API**
+
+- `GET /api/files/{drive_id}/relatives?limit=` (1 to 200, default 200) answers
+  `{drive_id, relatives, common, total, hidden}`. Each relative has `drive_id`, `path`,
+  `name`, `ext`, `folder`, `score`, `links` (`{kind, value, weight}`), `same_month` and
+  `in_inbox`. `common` lists each shared value once with the number of relatives that share
+  it, `total` the relatives before `limit` cut the list, `hidden` the pairs marked not
+  related. 404 for an unknown, missing or parked file.
+- `GET /api/files/{drive_id}/relatives/dismissed` answers `{dismissed: [{drive_id, path,
+  name}]}`. `POST .../relatives/dismiss` and `.../restore` take `{drive_id}` (the other file)
+  and answer the same list.
+- `POST /api/tags/apply` `{drive_ids, tag}` puts one tag on several files as one step and
+  answers `{message, undo}` like the other tag changes; `POST /api/tags/undo` takes the
+  `undo` unchanged. A tag spelled differently only in case or accents is used as it already
+  is written. 404 for an unknown file, 400 for one in To Delete.
+- `POST /api/browse/link-there/preview` and `POST /api/browse/link-there`, body
+  `{drive_id, folders}`: a link to the file in each folder, planned through the same link
+  rules as a link drop (`mode: "link"` of `/api/browse/move`) for every folder, as one
+  plan. One batch is journaled, so one Undo (`POST /api/activity/{batch_id}/undo`) removes
+  all the links. A folder named twice counts once and one the file is already in needs no
+  link; any folder the planner refuses refuses the whole batch before anything is made.
+
+Moving, linking to a folder and adding to a collection use the existing endpoints
+(`/api/browse/move` with `mode`, `/api/collections/{id}/members`).
 
 ## Safety model in detail
 
