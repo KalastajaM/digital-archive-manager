@@ -7,8 +7,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from dam.api.deps import AppDep
+from dam.api.deps import AppDep, live_record, require_editable
 from dam.api.schemas import (
+    FileTagApplyIn,
     SidebarTagOut,
     TagChangeOut,
     TagCountOut,
@@ -87,6 +88,21 @@ def sidebar_tags(app: AppDep) -> list[dict]:
 def create_tag(app: AppDep, body: TagNameIn) -> dict:
     undo = _guard(lambda: app.tag_admin.create(body.name))
     return {"message": f"Created '{undo.drop[0]}'", "undo": _undo_out(undo)}
+
+
+@router.post("/apply", response_model=TagChangeOut)
+def apply_tag(app: AppDep, body: FileTagApplyIn) -> dict:
+    """Put one tag on several files as one step; ``undo`` takes it off again (and
+    drops the tag if this made it). Files marked for deletion are read-only (400)."""
+    for drive_id in dict.fromkeys(body.drive_ids):
+        live_record(app, drive_id)
+    require_editable(app, body.drive_ids)
+    undo = _guard(lambda: app.tag_admin.apply(body.tag, body.drive_ids))
+    n = len(dict.fromkeys(body.drive_ids))
+    return {
+        "message": f"Tagged {_files(n)} '{' '.join(body.tag.split())}'",
+        "undo": _undo_out(undo),
+    }
 
 
 @router.post("/rename", response_model=TagChangeOut)

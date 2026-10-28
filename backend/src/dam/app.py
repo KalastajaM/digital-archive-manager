@@ -56,6 +56,7 @@ from dam.services.intake import IntakeService
 from dam.services.launch import LaunchService
 from dam.services.layout import LayoutService
 from dam.services.preview import PreviewService
+from dam.services.relatives import RelativesService
 from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService
 from dam.services.summaries import SummaryService
@@ -218,6 +219,7 @@ class ServiceParts:
     previews: PreviewService
     ai: AIService
     summaries: SummaryService
+    relatives: RelativesService
 
 
 def build_services(
@@ -351,6 +353,7 @@ def build_services(
         previews=PreviewService(paths, app_paths.cache_dir / "thumbs"),
         ai=AIService(live, provider),
         summaries=SummaryService(engine, repo),
+        relatives=RelativesService(engine, repo, paths),
     )
 
 
@@ -408,6 +411,7 @@ class App:
     previews: PreviewService = field(init=False)
     ai: AIService = field(init=False)
     summaries: SummaryService = field(init=False)
+    relatives: RelativesService = field(init=False)
     # where the shipped default tray files live (tests point it elsewhere)
     defaults_dir: Path = field(init=False, default=DEFAULTS_DIR)
     # ends the background indexer's idle wait (``dam serve`` wires it); a no-op otherwise

@@ -11,10 +11,12 @@ import type { FilingAI } from "../components/ai/useFilingAI";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
+import { RelativesBlock } from "../components/RelativesBlock";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
 import { Breakable } from "../components/PlanPreview";
 import type { RestoreTo } from "../components/Restore";
 import { SavedNote } from "../components/SavedNote";
+import { useStyle } from "../appearance";
 import { inToDelete, toDeleteReason } from "../toDelete";
 import { visible } from "../text";
 import { type BackToInbox, FileActions, FileCollections, FolderActions, type FolderMoveTo } from "./FileActions";
@@ -53,6 +55,9 @@ export function FilePanel({
 }) {
   // A file in ##. To Delete is read-only until it is restored
   const readOnly = toDeleteReason(file.path);
+  // Relatives is New look only; a link stands for its target, which has its own panel
+  const [look] = useStyle();
+  const relatives = look === "new" && !readOnly && !file.is_link && !file.is_dir && file.path !== null;
   return (
     <FileMeta key={`meta-${file.drive_id}`} file={file} disabled={disabled} ai={headerActions?.ai}>
       {(meta) => (
@@ -82,6 +87,7 @@ export function FilePanel({
             </>
             )
           }
+          relatives={relatives && file.path !== null ? <RelativesBlock file={{ ...file, path: file.path, name: file.name ?? null }} /> : undefined}
           preview={
             <FilePreview
               file={preview}

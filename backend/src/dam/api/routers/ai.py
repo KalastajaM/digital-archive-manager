@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from dam.ai.tasks import find_relatives
 from dam.api.deps import AppDep
 from dam.api.marks import with_marks
 from dam.api.schemas import (
@@ -61,6 +62,8 @@ def ai_run(app: AppDep, task: str, body: AIRunIn) -> dict:
     """Send exactly the prepared payload; 400 if anything changed since the preview."""
     app.ai.get_task(task)  # 404 for an unknown task before the token is looked at
     out = asdict(app.ai.run(body.token, task))
+    if task == "find-relatives":
+        out["data"] = find_relatives.resolve(app, out["data"])  # the files as they are now
     citations = out["data"].get("citations")
     if isinstance(citations, list) and citations:
         # each cited file's ★ / ! marks, as they are now (a cached answer too): one query

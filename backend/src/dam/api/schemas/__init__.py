@@ -122,6 +122,17 @@ from dam.api.schemas.maintenance import (
     WaitingFileOut,
     WaitingOut,
 )
+from dam.api.schemas.relatives import (
+    FileTagApplyIn,
+    LinkThereBody,
+    RelativeCommonOut,
+    RelativeDismissedOut,
+    RelativeLinkOut,
+    RelativeMarkIn,
+    RelativeOut,
+    RelativesDismissedOut,
+    RelativesOut,
+)
 from dam.api.schemas.requests import (
     ApplyTrayDefaultsIn,
     CheckAddBody,
@@ -641,4 +652,13 @@ __all__ = [
     "CarryOverOut",
     "DuplicateResolveOut",
     "LinkRemoveIn",
+    "FileTagApplyIn",
+    "LinkThereBody",
+    "RelativeCommonOut",
+    "RelativeDismissedOut",
+    "RelativeLinkOut",
+    "RelativeMarkIn",
+    "RelativeOut",
+    "RelativesDismissedOut",
+    "RelativesOut",
 ]

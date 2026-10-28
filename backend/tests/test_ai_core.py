@@ -906,6 +906,7 @@ def test_max_tokens_defaults_leave_room_for_thinking():
         "summarize-document": 1500,
         "summarize-collection": 3000,
         "ask-archive": 3000,
+        "find-relatives": 2000,
     }
     assert AISettings().effort == "low"
 

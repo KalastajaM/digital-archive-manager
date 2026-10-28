@@ -101,6 +101,7 @@ def _default_max_tokens() -> dict[str, int]:
         "summarize-document": 1500,
         "summarize-collection": 3000,
         "ask-archive": 3000,
+        "find-relatives": 2000,
     }
 
 

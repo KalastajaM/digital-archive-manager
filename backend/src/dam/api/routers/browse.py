@@ -11,6 +11,7 @@ from dam.api.schemas import (
     CopyJobOut,
     DirEntryOut,
     FlatFilesOut,
+    LinkThereBody,
     MoveBody,
     MoveResultOut,
     QuarantineBody,
@@ -91,6 +92,18 @@ def move_preview(app: AppDep, body: MoveBody) -> list:
 @router.post("/browse/move", response_model=MoveResultOut)
 def move(app: AppDep, body: MoveBody):
     return app.browse.move(body.drive_ids, body.folder, origin=UI_ORIGIN, mode=body.mode)
+
+
+@router.post("/browse/link-there/preview", response_model=list[ResolvedOpOut])
+def link_there_preview(app: AppDep, body: LinkThereBody) -> list:
+    """The links ``link-there`` would make: one in each folder (Relatives)."""
+    return app.browse.link_there_preview(body.drive_id, body.folders, origin=UI_ORIGIN)
+
+
+@router.post("/browse/link-there", response_model=MoveResultOut)
+def link_there(app: AppDep, body: LinkThereBody):
+    """A link to one file in each of several folders, as one batch: one Undo removes all."""
+    return app.browse.link_there(body.drive_id, body.folders, origin=UI_ORIGIN)
 
 
 def _copy_job_out(job: Job) -> dict:

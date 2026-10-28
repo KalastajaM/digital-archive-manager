@@ -163,6 +163,25 @@ def _demo_ask(user: str) -> dict:
     }
 
 
+_CANDIDATE = re.compile(
+    r"<candidate>\nid: (.*?)\nname: (.*?)\nfolder: .*?\n\n.*?\n</candidate>", re.S
+)
+
+
+def _demo_relatives(user: str) -> dict:
+    picks = _CANDIDATE.findall(user)[:2]
+    return {
+        "matches": [
+            {
+                "id": cid,
+                "reason": f"Demo (DAM_AI_FAKE=1, nothing was sent): {name} may go with it.",
+                "confidence": 0.8,
+            }
+            for cid, name in picks
+        ]
+    }
+
+
 def demo_reply(*, model: str, system: str, user: str, schema: dict, max_tokens: int) -> Any:
     """The ``DAM_AI_FAKE=1`` provider's answers, read from the payload: a filing, a
     document summary, a collection summary with a line per group, and an answer that
@@ -170,6 +189,8 @@ def demo_reply(*, model: str, system: str, user: str, schema: dict, max_tokens: 
     props = schema.get("properties", {})
     if "per_group" in props:
         return _demo_collection(user)
+    if "matches" in props:
+        return _demo_relatives(user)
     if "citations" in props:
         return _demo_ask(user)
     if "tray_fields" in props and "confidence" in props:
