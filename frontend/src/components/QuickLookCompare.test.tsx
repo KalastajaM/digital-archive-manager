@@ -11,7 +11,7 @@ const file = (id: string, name: string): QLFile => ({ drive_id: id, name, path: 
 const FILES = [file("a", "a.pdf"), file("b", "b.pdf"), file("c", "c.pdf")];
 const SUBJECT = file("s", "subject.pdf");
 
-function setup(compare: boolean, index = 0) {
+function setup(compare: boolean, index = 0, reason: ((f: QLFile) => string | null) | undefined = undefined) {
   mockFetch({});
   const onIndex = vi.fn();
   const onClose = vi.fn();
@@ -23,7 +23,7 @@ function setup(compare: boolean, index = 0) {
         index={index}
         onIndex={onIndex}
         onClose={onClose}
-        compare={compare ? { subject: SUBJECT, shared: (f) => [`Tag: Taxes (${f.name})`, "+ same month"], onNotRelated } : undefined}
+        compare={compare ? { subject: SUBJECT, shared: (f) => [`Tag: Taxes (${f.name})`, "+ same month"], reason, onNotRelated } : undefined}
       />
     </MemoryRouter>,
   );
@@ -44,6 +44,19 @@ describe("compare mode", () => {
     expect(within(d).getByRole("button", { name: /Not related/ })).toBeInTheDocument();
     expect(within(d).getByRole("button", { name: /Skip/ })).toBeInTheDocument();
     expect(within(d).getByRole("button", { name: /Related, next/ })).toBeInTheDocument();
+  });
+
+  it("puts an AI pick's reason on a line of its own, not among the In common labels", () => {
+    setup(true, 0, (f) => (f.drive_id === "a" ? "the power of attorney this letter refers to" : null));
+    const d = dialog();
+    const line = within(d).getByText(/the power of attorney this letter refers to/);
+    expect(line.closest(".quicklook-reason")).not.toBeNull();
+    expect(within(d).getByRole("list", { name: "In common" })).not.toHaveTextContent("power of attorney");
+    // a long label keeps its full text on hover
+    expect(within(d).getByText("Tag: Taxes (a.pdf)")).toHaveAttribute("title", "Tag: Taxes (a.pdf)");
+    cleanup();
+    setup(true, 1, () => null);
+    expect(document.querySelector(".quicklook-reason")).toBeNull();
   });
 
   it("N marks the shown file not related through the caller and does not move itself", () => {

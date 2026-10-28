@@ -2422,3 +2422,7 @@
 [data-style="new"] .quicklook-verdict { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); border-top: 1px solid var(--hairline); }
 [data-style="new"] .quicklook-shared-label { font-size: var(--fs-sm); color: var(--muted); }
 [data-style="new"] .quicklook-shared { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1); list-style: none; margin: 0; padding: 0; }
+/* a long value ends in "…" (the full text on hover) instead of running under the buttons */
+[data-style="new"] .quicklook-shared > li { display: block; max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-style="new"] .quicklook-reason { flex: none; margin: 0; padding: var(--sp-2) var(--sp-4) 0; border-top: 1px solid var(--hairline); font-size: var(--fs-sm); color: var(--text-2); overflow-wrap: anywhere; }
+[data-style="new"] .quicklook-reason + .quicklook-verdict { border-top: none; }

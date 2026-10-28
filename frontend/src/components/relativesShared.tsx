@@ -135,6 +135,10 @@ export function useRelativeLook(file: BlockFile, list: Relative[], notRelated: (
             const r = byId.get(f.drive_id);
             return r ? sharedLabels(r) : [];
           },
+          reason: (f) => {
+            const r = byId.get(f.drive_id);
+            return r && isAIPick(r) ? visible(r.reason) : null;
+          },
           onNotRelated: (f) => {
             const r = byId.get(f.drive_id);
             if (!r) return;
@@ -155,9 +159,9 @@ export function useRelativeLook(file: BlockFile, list: Relative[], notRelated: (
   };
 }
 
-/** What a relative shares with the file, as short lines: "Tag: Taxes", "+ same month". */
+/** What a relative shares with the file, as short lines: "Tag: Taxes", "+ same month".
+ * An AI pick's reason is a sentence, not a label: Quick Look shows it on a line of its own. */
 export const sharedLabels = (r: Relative): string[] => [
-  ...(isAIPick(r) ? [`AI: ${visible(r.reason)}`] : []),
   ...r.links.map((l) => `${KIND_NAME[l.kind]}: ${visible(l.value)}`),
   ...(r.same_month ? ["+ same month"] : []),
 ];
