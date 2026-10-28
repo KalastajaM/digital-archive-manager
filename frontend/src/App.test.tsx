@@ -168,7 +168,10 @@ describe("App shell", () => {
       mockFetch({ "GET /api/status": { body: STATUS }, ...BASE });
       renderApp();
       const line = await screen.findByTestId("status-line");
-      expect(line).toHaveAttribute("title", line.textContent);
+      // the full one-line status, though the line itself shows two lines
+      expect(line).toHaveAttribute("title", "3 in inbox · 8 searchable · 1 waiting · 1 error");
+      expect(line).toHaveTextContent("8 of 10 files searchable");
+      expect(line).toHaveTextContent("3 in inbox · 1 waiting · 1 error");
     } finally {
       delete document.documentElement.dataset.style;
     }

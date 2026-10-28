@@ -7755,6 +7755,11 @@ export interface components {
              * @default
              */
             reason: string;
+            /**
+             * Area Scores
+             * @default []
+             */
+            area_scores: (number | null)[];
         };
         /** SpecialFoldersOut */
         SpecialFoldersOut: {

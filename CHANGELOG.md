@@ -38,6 +38,62 @@ All notable changes are listed here. The format follows
   dotted arc in the window. You can tick, tag, move, link, Quick Look or mark them **Not
   related** like any relative; nothing is stored until you do something with them. **Hide**
   removes them, and asking again for the same files is answered from earlier at no cost.
+- **Pay mode steps through your bills.** Pay mode now says "Bill 2 of 5 · 412,90 € open in
+  total" and has **Previous bill** and **Next bill** buttons (the ← and → keys too) that go
+  through every open bill, across all your bill trays by due date, without closing. The
+  barcode, the values, the title and **Mark paid** follow the bill on screen, and **Mark paid**
+  now marks it paid at once (today's date, with a toast to undo it; a form only when your tray
+  asks for a value) and moves on to the next bill. Works in both looks.
+- **The New look: Today laid out as drawn.** A headline built from your counts ("One bill is
+  overdue, seven documents to file") with **Start filing** and **Customize**, the Convert notice
+  as one line, four tiles (**To file**, **Overdue**, **Due in 14 days**, **Waiting on others**,
+  each linking to what it counts), and two columns. On the left a **To pay** table with each
+  bill's due tag and amount, **Pay** (opens Pay mode on that bill) and **Paid**, the overdue
+  bill opened up with its copy buttons and note, and every other tray as a short list with
+  **Show all**. On the right the **Inbox** summary with a bar for the files the rules
+  recognised and Ask AI, **Collections to do**, **Starred**, **Reminders** and **Search**.
+  **Customize** turns the sections into an arrange mode (fold, Move up and Move down, drag by
+  the heading, **Reset layout**), kept apart from Classic's arrangement. In a narrow window the
+  right column moves under the left. Classic is unchanged.
+- **Skip a file in the Inbox.** **Skip** (or the **s** key, in both looks) leaves the file you
+  are looking at where it is and goes on to the next one in the list, round to the first from
+  the last. Nothing in the archive changes. In the New look Skip is a button at the foot of the
+  filing panel and **s** is in the shortcut list.
+- **Edit the rule behind a suggestion.** When a rule gave the filing suggestion, the New look's
+  filing panel says "Suggested by rule ..." and **Edit rule** opens that rule in the rule sheet,
+  with the document on screen as the one it is tested against.
+- **A picture area shows how this document scores.** Under **Match needed** the rule sheet says
+  "This document scores 0.97. Lower is looser, higher is stricter." for the document the rule
+  is made from or edited with, whether or not it matches, so the slider can be set with a
+  real number in front of you.
+- **The New look: the Inbox, Draw a box and the rule sheet laid out as drawn.** The list has a
+  header with the number to file and an **All / Bills / New** filter with counts (Bills: the
+  scan found a due date or an amount; New: no rule suggests anything yet). A row shows a title,
+  the file's own name and date, and one pill: how many days overdue, the due date, the amount,
+  the rule, or "Not recognised"; the foot says what is checked and has a **Shortcuts** list
+  (**?** opens it). The document has one bar with its name, the zoom, **Draw a box**, **Open** and
+  a **...** menu for Print, Open in window and Show in Finder. The filing panel has its own
+  header (rule, title, star, Important, lock, Ask AI), the form, and a foot that says what
+  filing will do ("Renames and moves 1 file, adds it to To pay. Undo any time.") with Skip,
+  To Delete and File it. From and For are two buttons side by side. In Draw a box, each box has
+  a number and a colour on the page and in the panel, its words as chips, and the panel ends with
+  **Back to filing** and **Make a rule...**. The rule sheet has a header with what it is made from
+  and a close button, labels in a column beside what they set, "The proof", and **Save rule**.
+
+- **Search and jump (Cmd+K, Ctrl+K elsewhere).** One box that finds files, folders, collections,
+  trays, tags and the screens themselves as you type. The arrow keys move, Enter opens the
+  choice where it lives (a file opens in Browse with it selected, a folder in Browse, a tray,
+  collection or tag on its page), and Esc closes it. It works in both looks and also while you
+  are typing in a field. In the New look the sidebar has a search field under the archive's
+  name that opens it, shown as an icon when the sidebar is narrow.
+- **The New look: the sidebar as drawn.** The archive block shows an initial tile, the name and
+  under it where the archive folder lives and how many files it holds (for example "Google
+  Drive · 2 418 files"). Rows have a drag handle on hover where they can be moved (collections),
+  collections show how many files they hold, and Collections has a **+** that takes you to the
+  new-collection field. Pinned tags and recent tags are their own sections, the Tags screen is
+  a row under Archive with the number of tags, and the foot shows how many files are searchable
+  and what is waiting. The archive block, the search field and the foot stay in place while the
+  list scrolls.
 - **Mark a bill paid from Pay mode.** The large barcode (press **b** on a bill) now has
   the tray's own done button, such as **Mark paid**, next to **Close**. It closes Pay mode
   and opens the same form as the button on the bill, so you confirm the paid date there

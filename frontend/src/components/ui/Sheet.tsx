@@ -15,12 +15,16 @@ type Props = {
   /** Runs before the sheet's own Esc handling; ``preventDefault`` to take over. */
   onKeyDown?: (e: KeyboardEvent<HTMLDialogElement>) => void;
   className?: string;
+  /** A line under the title (the New look's rule sheet: what the rule is made from). */
+  subtitle?: ReactNode;
+  /** A × at the right of the title that closes the sheet like Esc. */
+  closeButton?: boolean;
 };
 
 /** A Mac-style sheet over the native modal <dialog>: ``dialog[open]`` while ``open``.
  * Focus is trapped by the browser. Mounted only while open, so closing resets it.
  * The title and the footer are fixed; only the body between them scrolls. */
-export function Sheet({ open, title, onClose, children, footer, ref, onKeyDown, className }: Props) {
+export function Sheet({ open, title, onClose, children, footer, ref, onKeyDown, className, subtitle, closeButton }: Props) {
   const inner = useRef<HTMLDialogElement | null>(null);
   const headingId = useId();
   const setRef = useCallback(
@@ -61,9 +65,25 @@ export function Sheet({ open, title, onClose, children, footer, ref, onKeyDown, 
         }
       }}
     >
-      <h2 id={headingId} className="sheet-title">
-        {title}
-      </h2>
+      {subtitle !== undefined || closeButton ? (
+        <header className="sheet-head">
+          <div className="sheet-head-text">
+            <h2 id={headingId} className="sheet-title">
+              {title}
+            </h2>
+            {subtitle !== undefined && <span className="sheet-subtitle">{subtitle}</span>}
+          </div>
+          {closeButton && (
+            <button type="button" className="sheet-close" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+              ×
+            </button>
+          )}
+        </header>
+      ) : (
+        <h2 id={headingId} className="sheet-title">
+          {title}
+        </h2>
+      )}
       <div className="sheet-body">{children}</div>
       {footer && <div className="sheet-footer">{footer}</div>}
     </dialog>

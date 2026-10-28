@@ -150,6 +150,11 @@ describe("Collections list", () => {
     expect(await within(panel()).findByRole("heading", { name: "Sauna" })).toBeInTheDocument();
   });
 
+  it("the sidebar's + (/collections?new=1) puts the focus in the name field", async () => {
+    renderCollections("/collections?new=1");
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "New collection" })).toHaveFocus());
+  });
+
   it("a double Create makes one collection", async () => {
     const created = deferred<{ body: unknown }>();
     const { calls, user } = renderCollections("/collections", { "POST /api/collections": () => created.promise });

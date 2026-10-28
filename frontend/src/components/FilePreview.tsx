@@ -1,4 +1,4 @@
-import { Maximize2, Printer } from "lucide-react";
+import { Maximize2, MoreHorizontal, Printer } from "lucide-react";
 import {
   createContext,
   type Dispatch,
@@ -26,12 +26,13 @@ import {
 } from "../api/client";
 import { isShortcutIn, useKeydown } from "../keyboard";
 import { openViewer } from "../selection";
-import { inFileManager } from "../fileManager";
+import { inFileManager, showInLabel } from "../fileManager";
 import { visible, visibleText } from "../text";
 import { InlineResults, LaunchButtons, notConnected, useFileLaunch } from "./FileLaunch";
 import { pageSrcs, printImages } from "./print";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
+import { Menu } from "./ui/Menu";
 import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
 import { parentOf } from "../paths";
 
@@ -81,9 +82,12 @@ function OpenInWindow({ driveId }: { driveId: string }) {
   return <IconButton icon={<Maximize2 />} label="Open in window" className="doc-wide" onClick={() => openViewer(driveId)} />;
 }
 
+/** What a preview can print: its pages' (or the image's) addresses and a name. */
+type PrintSpec = { srcs: () => Iterable<string>; name: string };
+
 /** Print: the PDF's pages (sharp: the widest render) or the image. A failure goes to
  * the dialog's status line inside Quick Look, else a toast. */
-function PrintButton({ srcs, name }: { srcs: () => Iterable<string>; name: string }) {
+function usePrint({ srcs, name }: PrintSpec) {
   const [busy, setBusy] = useState(false);
   const inline = useContext(InlineResults);
   const toast = useToast();
@@ -97,6 +101,11 @@ function PrintButton({ srcs, name }: { srcs: () => Iterable<string>; name: strin
       setBusy(false);
     }
   };
+  return { busy, print };
+}
+
+function PrintButton(spec: PrintSpec) {
+  const { busy, print } = usePrint(spec);
   return (
     <IconButton
       icon={<Printer />}
@@ -109,7 +118,93 @@ function PrintButton({ srcs, name }: { srcs: () => Iterable<string>; name: strin
   );
 }
 
+/** The New Inbox's document bar: what leads the row of tools (the name of the file and what
+ * is known about it). Set by ``FilePreview``'s ``bar``; Classic never has one. */
+const BarContext = createContext<ReactNode>(null);
+
+/** One row for the document: the bar's lead, then (to the right) the tools. */
+function DocBar({ lead, children, className }: { lead: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <div className={className ? `doc-bar ${className}` : "doc-bar"} role="toolbar" aria-label="Document">
+      {lead}
+      <span className="doc-bar-gap" aria-hidden="true" />
+      {children}
+    </div>
+  );
+}
+
+/** The New look's tools after the zoom: Open as a text button, and one ⋯ menu for Open,
+ * Print, Open in window and Show in Finder (``print``: only a page or an image can be printed). */
+function DocTools({
+  driveId,
+  launch,
+  offline,
+  windowButton,
+  print,
+  extra,
+}: {
+  driveId: string;
+  launch: ReturnType<typeof useFileLaunch>;
+  offline: boolean;
+  windowButton: boolean;
+  print?: PrintSpec;
+  extra?: ReactNode;
+}) {
+  const printing = usePrint(print ?? { srcs: () => [], name: "" });
+  const off = launch.busy || offline;
+  return (
+    <>
+      <button type="button" className="doc-open doc-wide" disabled={off} onClick={() => void launch.run("open")}>
+        Open
+      </button>
+      <Menu
+        label="More: Print, Open in window, Show in Finder"
+        icon={<MoreHorizontal />}
+        align="end"
+        className="doc-more"
+        entries={[
+          // the button gives way to this one when the bar is narrow
+          { label: "Open", disabled: off, reason: offline ? "Not connected" : undefined, onSelect: () => void launch.run("open") },
+          ...(print
+            ? [{ label: "Print", disabled: printing.busy, reason: "Preparing to print…", onSelect: () => void printing.print() }]
+            : []),
+          ...(windowButton ? [{ label: "Open in window", onSelect: () => openViewer(driveId) }] : []),
+          { label: showInLabel(), disabled: off, reason: offline ? "Not connected" : undefined, onSelect: () => void launch.run("reveal") },
+        ]}
+      />
+      {extra}
+    </>
+  );
+}
+
 function ZoomControls({ zoom, children }: { zoom: Zoom; children?: ReactNode }) {
+  const bar = useContext(BarContext);
+  if (bar !== null) {
+    return (
+      <DocBar lead={bar}>
+        <div className="zoom-controls" role="group" aria-label="Zoom">
+          <button type="button" aria-label="Zoom out" disabled={zoom.level === 0} onClick={zoom.zoomOut}>
+            −
+          </button>
+          <button
+            type="button"
+            className="zoom-level"
+            data-testid="zoom-level"
+            aria-label="Fit"
+            title={zoom.level === FIT ? "The whole page fits" : "Fit the whole page (0)"}
+            disabled={zoom.level === FIT}
+            onClick={zoom.fit}
+          >
+            {zoom.level === FIT ? "Fit" : `${Math.round(zoom.zoom * 100)}%`}
+          </button>
+          <button type="button" aria-label="Zoom in" disabled={zoom.level === ZOOM_LEVELS.length - 1} onClick={zoom.zoomIn}>
+            +
+          </button>
+        </div>
+        {children}
+      </DocBar>
+    );
+  }
   return (
     <div className="zoom-controls" role="group" aria-label="Zoom">
       <button type="button" aria-label="Zoom out" disabled={zoom.level === 0} onClick={zoom.zoomOut}>
@@ -312,6 +407,8 @@ function NoPreview({ path, onOpen }: { path: string; onOpen: () => void }) {
 
 /** Tools above a preview without zoom (text, thumbnail, none). */
 function PreviewTools({ children }: { children: ReactNode }) {
+  const bar = useContext(BarContext);
+  if (bar !== null) return <DocBar lead={bar}>{children}</DocBar>;
   return (
     <div className="preview-tools" role="group" aria-label="File">
       {children}
@@ -434,29 +531,40 @@ function ThumbPreview({ file, tools, onFail }: { file: PreviewFile; tools: React
 function PdfPages({
   driveId,
   tools,
+  newTools,
   control,
   boxTool,
   onFail,
 }: {
   driveId: string;
   tools?: ReactNode;
+  /** The New document bar's tools (Open and the ⋯ menu), given what can be printed. */
+  newTools?: (print: PrintSpec) => ReactNode;
   control?: ZoomControl;
   boxTool?: BoxTool;
   onFail: () => void;
 }) {
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState<number | null>(null);
+  const inBar = useContext(BarContext) !== null;
   const root = useRef<HTMLElement>(null);
   const zoom = useZoom(root, control);
 
   return (
-    <WithBoxes driveId={driveId} tool={boxTool} pageOne={page === 1}>
+    <WithBoxes driveId={driveId} tool={boxTool} pageOne={page === 1} splitNote={inBar}>
       {(boxes) => (
         <figure className="pdf-pages" ref={root}>
           <ZoomControls zoom={zoom}>
             {boxes.button}
-            <PrintButton srcs={() => pageSrcs((n) => pageUrl(driveId, n, 2000))} name="Document" />
-            {tools}
+            {boxes.note}
+            {newTools ? (
+              newTools({ srcs: () => pageSrcs((n) => pageUrl(driveId, n, 2000)), name: "Document" })
+            ) : (
+              <>
+                <PrintButton srcs={() => pageSrcs((n) => pageUrl(driveId, n, 2000))} name="Document" />
+                {tools}
+              </>
+            )}
           </ZoomControls>
           <ZoomFrame zoom={zoom}>
             {boxes.around(
@@ -510,6 +618,7 @@ function ImagePreview({
   driveId,
   path,
   tools,
+  newTools,
   control,
   boxTool,
   onFail,
@@ -517,20 +626,29 @@ function ImagePreview({
   driveId: string;
   path: string;
   tools?: ReactNode;
+  newTools?: (print: PrintSpec) => ReactNode;
   control?: ZoomControl;
   boxTool?: BoxTool;
   onFail: () => void;
 }) {
+  const inBar = useContext(BarContext) !== null;
   const root = useRef<HTMLElement>(null);
   const zoom = useZoom(root, control);
   return (
-    <WithBoxes driveId={driveId} tool={boxTool} pageOne>
+    <WithBoxes driveId={driveId} tool={boxTool} pageOne splitNote={inBar}>
       {(boxes) => (
         <figure className="image-figure" ref={root}>
           <ZoomControls zoom={zoom}>
             {boxes.button}
-            <PrintButton srcs={() => [rawUrl(driveId)]} name={path} />
-            {tools}
+            {boxes.note}
+            {newTools ? (
+              newTools({ srcs: () => [rawUrl(driveId)], name: path })
+            ) : (
+              <>
+                <PrintButton srcs={() => [rawUrl(driveId)]} name={path} />
+                {tools}
+              </>
+            )}
           </ZoomControls>
           <ZoomFrame zoom={zoom}>
             {boxes.around(
@@ -565,6 +683,9 @@ type PreviewProps = {
   extraTools?: ReactNode;
   /** The "Draw a box" tool on page 1 of a PDF or an image (off when left out). */
   boxTool?: BoxTool;
+  /** The New Inbox's document bar: this leads the row of tools (the file's name and what is
+   * known about it), and Open and a ⋯ menu stand in for the icon buttons. */
+  bar?: ReactNode;
 };
 
 type LinkProps = {
@@ -590,7 +711,16 @@ function Preview({ file, windowButton, zoomControl, extraTools, boxTool }: Previ
   const [stage, setStage] = useState<Stage>(() => firstStage(kind));
   const launch = useFileLaunch(driveId);
   const offline = file.connected === false;
-  const tools = (
+  // the New Inbox's document bar: Open and one ⋯ menu instead of the icon buttons
+  const bar = useContext(BarContext) !== null;
+  const newTools = bar
+    ? (print?: PrintSpec) => (
+        <DocTools driveId={driveId} launch={launch} offline={offline} windowButton={windowButton} print={print} extra={extraTools} />
+      )
+    : undefined;
+  const tools = newTools ? (
+    newTools()
+  ) : (
     <>
       <LaunchButtons launch={launch} offline={offline} />
       {windowButton && <OpenInWindow driveId={driveId} />}
@@ -608,8 +738,8 @@ function Preview({ file, windowButton, zoomControl, extraTools, boxTool }: Previ
       </figure>
     );
   }
-  if (stage === "doc" && kind === "pdf") return <PdfPages driveId={driveId} tools={tools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
-  if (stage === "doc") return <ImagePreview driveId={driveId} path={path} tools={tools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
+  if (stage === "doc" && kind === "pdf") return <PdfPages driveId={driveId} tools={newTools ? undefined : tools} newTools={newTools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
+  if (stage === "doc") return <ImagePreview driveId={driveId} path={path} tools={newTools ? undefined : tools} newTools={newTools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
   if (stage === "text") return <TextPreview driveId={driveId} tools={tools} onFail={next("thumb")} />;
   if (stage === "thumb") return <ThumbPreview file={file} tools={tools} onFail={next("none")} />;
   return (
@@ -713,7 +843,16 @@ function LinkPreview({
   );
 }
 
-export function FilePreview({
+export function FilePreview({ bar, ...props }: PreviewProps & LinkProps) {
+  if (bar === undefined) return <PreviewOf {...props} />;
+  return (
+    <BarContext.Provider value={bar}>
+      <PreviewOf {...props} />
+    </BarContext.Provider>
+  );
+}
+
+function PreviewOf({
   file,
   windowButton = true,
   goToTarget = true,

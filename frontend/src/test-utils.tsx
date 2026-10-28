@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { expect, vi } from "vitest";
+import { PayModeProvider } from "./components/PayMode";
 import { RecoveryProvider } from "./components/Recovery";
 import { ToastProvider } from "./components/Toasts";
 import { UndoProvider } from "./components/UndoConfirm";
@@ -107,7 +108,9 @@ export function renderWithProviders(ui: ReactElement) {
     <QueryClientProvider client={client}>
       <ToastProvider>
         <UndoProvider>
-          <RecoveryProvider>{ui}</RecoveryProvider>
+          <RecoveryProvider>
+            <PayModeProvider>{ui}</PayModeProvider>
+          </RecoveryProvider>
         </UndoProvider>
       </ToastProvider>
     </QueryClientProvider>,

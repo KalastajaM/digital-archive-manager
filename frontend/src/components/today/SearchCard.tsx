@@ -19,7 +19,7 @@ export function browseSearchUrl(text: string): string {
   return `/browse?${p}`;
 }
 
-export function SearchCard({ frame }: { frame: CardFrame }) {
+export function SearchCard({ frame, Shell = Card }: { frame: CardFrame; Shell?: typeof Card }) {
   const id = useId();
   const [text, setText] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -29,7 +29,7 @@ export function SearchCard({ frame }: { frame: CardFrame }) {
     if (text.trim()) navigate(browseSearchUrl(text));
   };
   return (
-    <Card
+    <Shell
       title="Search"
       icon={<Search />}
       className="today-card today-card-compact"
@@ -58,6 +58,6 @@ export function SearchCard({ frame }: { frame: CardFrame }) {
           />
         </form>
       )}
-    </Card>
+    </Shell>
   );
 }

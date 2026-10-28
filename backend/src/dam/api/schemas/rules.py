@@ -282,6 +282,9 @@ class SourceDocOut(BaseModel):
     path: str
     matched: bool | None
     reason: str = ""
+    # one entry per area of the rule: this document's score for a picture area, null for a
+    # text area or while the picture of page 1 is not made yet (empty: no picture areas)
+    area_scores: list[float | None] = []
 
 
 class ReplayOut(BaseModel):

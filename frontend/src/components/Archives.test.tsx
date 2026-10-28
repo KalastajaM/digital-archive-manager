@@ -86,6 +86,23 @@ describe("the archive menu", () => {
     expect(within(menu).getByRole("menuitem", { name: "Manage archives…" })).toBeInTheDocument();
   });
 
+  it("in the New look shows the archive's initial and, under its name, where the folder is and how many files", async () => {
+    document.documentElement.dataset.style = "new";
+    try {
+      mockFetch({
+        "GET /api/status": { body: { ...STATUS, files: 2418 } },
+        "GET /api/archives": listing([{ ...MAIN, archive_root: "/Users/a/Library/CloudStorage/GoogleDrive-a@b.fi/My Drive/Archive" }, TEST]),
+      });
+      renderWithProviders(<ArchiveSwitcher />);
+      const button = await screen.findByRole("button", { name: "Archive: Main" });
+      await waitFor(() => expect(button).toHaveTextContent("Google Drive · 2 418 files"));
+      expect(button.querySelector(".archive-tile")).toHaveTextContent("M");
+      expect(button.querySelector(".archive-dot")).toBeNull();
+    } finally {
+      delete document.documentElement.dataset.style;
+    }
+  });
+
   it("is reachable and usable with the keyboard", async () => {
     const { user, calls } = renderSwitcher({ "POST /api/archives/test/switch": { body: { archive: TEST, restart_needed: false } } });
     const button = await screen.findByRole("button", { name: "Archive: Main" });

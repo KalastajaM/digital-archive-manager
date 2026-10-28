@@ -10,6 +10,8 @@ import { useCallback, useMemo, useState } from "react";
 import { archiveKey } from "../api/client";
 
 export const LAYOUT_KEY = "dam.today.layout.v1";
+/** The New look arranges its own sections (a different set from Classic's cards). */
+export const LAYOUT_KEY_NEW = "dam.today.layout.new.v1";
 /** A dragged Today card: never ``application/x-dam-files``, so a card can never be
  * dropped as files and files never as a card. */
 export const CARD_DRAG_TYPE = "application/x-dam-card";
@@ -35,10 +37,10 @@ export type CardLayout = {
 
 const EMPTY: Saved = { order: null, collapsed: {} };
 
-function read(): Saved {
+function read(key: string): Saved {
   let raw: string | null = null;
   try {
-    raw = localStorage.getItem(archiveKey(LAYOUT_KEY));
+    raw = localStorage.getItem(archiveKey(key));
   } catch {
     return EMPTY;
   }
@@ -60,10 +62,10 @@ function read(): Saved {
   }
 }
 
-function write(saved: Saved | null) {
+function write(key: string, saved: Saved | null) {
   try {
-    if (saved === null) localStorage.removeItem(archiveKey(LAYOUT_KEY));
-    else localStorage.setItem(archiveKey(LAYOUT_KEY), JSON.stringify(saved));
+    if (saved === null) localStorage.removeItem(archiveKey(key));
+    else localStorage.setItem(archiveKey(key), JSON.stringify(saved));
   } catch {
     // Not saved: the layout still applies until the page reloads.
   }
@@ -99,8 +101,9 @@ export function useCardLayout(
   defaults: string[][],
   defaultCollapsed: Record<string, boolean> = {},
   hidden: string[] = [],
+  key: string = LAYOUT_KEY,
 ): CardLayout {
-  const [saved, setSaved] = useState<Saved>(read);
+  const [saved, setSaved] = useState<Saved>(() => read(key));
   const defaultsKey = JSON.stringify(defaults);
   // Keyed by the defaults' value: callers pass a new array on every render.
   const columns = useMemo(() => resolve(saved.order, JSON.parse(defaultsKey) as string[][]), [saved.order, defaultsKey]);
@@ -112,9 +115,9 @@ export function useCardLayout(
       const folds = Object.fromEntries(Object.entries(next.collapsed).filter(([id]) => known.has(id)));
       const pruned = { order: next.order, collapsed: folds };
       setSaved(pruned);
-      write(pruned);
+      write(key, pruned);
     },
-    [defaultsKey],
+    [defaultsKey, key],
   );
 
   const collapsed = (id: string) => saved.collapsed[id] ?? defaultCollapsed[id] ?? false;
@@ -161,7 +164,7 @@ export function useCardLayout(
   };
   const reset = () => {
     setSaved(EMPTY);
-    write(null);
+    write(key, null);
   };
 
   return { columns, collapsed, toggle, canMove, move, place, reset };

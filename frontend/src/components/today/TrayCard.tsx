@@ -2,13 +2,13 @@
  * buttons), later items compact, each with a round checkbox that marks it done, with urgency tags and amounts. */
 import { BookOpen, CircleCheck, Euro, Hourglass, ListTodo, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
-import { type AttentionItem, errorText, type Item, type Today as TodayData, type TrayCount, type TrayDef, useItemDone, useItemReopen } from "../../api/client";
+import type { AttentionItem, Item, Today as TodayData, TrayCount, TrayDef } from "../../api/client";
 import { dayOf, fieldLabel, fieldWord, formatField, formatMoney, plural } from "../../format";
 import { visible } from "../../text";
 import { CopyButton } from "../CopyButton";
 import { DoneForm } from "../DoneForm";
 import { ItemBadges } from "../ItemBadges";
-import { useToast } from "../Toasts";
+import { useMarkDone } from "../useMarkDone";
 import { Card } from "../ui/Card";
 import { urgency, UrgencyTag } from "../UrgencyTag";
 import type { CardFrame } from "./frame";
@@ -114,43 +114,15 @@ export function TrayRow({
   const tone = item.date ? urgency(item.date, today).tone : level === "undated" ? "orange" : "grey";
   const age = daysBetween(dayOf(item.created), today);
   const doneFields = tray?.done?.fields ?? {};
-  const markDone = useItemDone();
-  const reopen = useItemReopen();
-  const toast = useToast();
+  const done = useMarkDone(item, tray, today);
   const title = visible(item.title);
   const checkName = doneName(title, visible(doneLabel));
-  const doneWord = visible(doneLabel).replace(/^mark\s+/i, "").toLowerCase();
-  // Completes at once, sending each done field's default (paid_on: today); only a done
-  // field that is required and has no default opens the small form.
-  const needsForm = Object.values(doneFields).some((f) => f.required && f.type !== "checkbox" && !f.default);
-  const defaults = Object.fromEntries(
-    Object.entries(doneFields).flatMap(([n, f]): [string, string | boolean][] =>
-      f.type === "checkbox" ? [[n, false]] : f.default === "today" ? [[n, today]] : [],
-    ),
-  );
   const onCheck = async () => {
-    if (needsForm) {
+    if (done.needsForm) {
       setFormOpen(!formOpen);
       return;
     }
-    try {
-      await markDone.mutateAsync({ id: item.id, fields: defaults });
-    } catch (err) {
-      toast({ kind: "error", text: `Could not mark ${title} ${doneWord}: ${visible(errorText(err))}` });
-      return;
-    }
-    toast({
-      kind: "info",
-      text: `Marked ${doneWord}: ${title}`,
-      action: {
-        label: "Undo",
-        run: () =>
-          void reopen.mutateAsync(item.id).then(
-            () => toast({ kind: "info", text: `Reopened: ${title}` }),
-            (err) => toast({ kind: "error", text: `Could not reopen ${title}: ${visible(errorText(err))}` }),
-          ),
-      },
-    });
+    await done.run();
   };
 
   return (
@@ -163,8 +135,8 @@ export function TrayRow({
         className={`round-check round-check-${tone}`}
         aria-label={checkName}
         data-tip={checkName}
-        checked={markDone.isPending}
-        disabled={traysUnknown || markDone.isPending}
+        checked={done.pending}
+        disabled={traysUnknown || done.pending}
         onChange={() => void onCheck()}
       />
       <div className="today-row-main">
@@ -210,7 +182,7 @@ export function TrayRow({
   );
 }
 
-const byDate = (a: Item, b: Item) => {
+export const byDate = (a: Item, b: Item) => {
   if (a.date === b.date) return a.created - b.created || a.id - b.id;
   if (a.date === null) return 1;
   if (b.date === null) return -1;
@@ -220,7 +192,7 @@ const byCreated = (a: Item, b: Item) => a.created - b.created || a.id - b.id;
 
 /** The tray's rows: its first open items from Today (so later items show too) plus any
  * attention entry beyond them; attention entries carry their level, file state, note. */
-function trayRows(info: TrayCardInfo, attention: AttentionItem[], items: Item[]): Row[] {
+export function trayRows(info: TrayCardInfo, attention: AttentionItem[], items: Item[]): Row[] {
   const byId = new Map(attention.map((a) => [a.item.id, a]));
   const listed = new Set(items.map((i) => i.id));
   const rows: Row[] = [

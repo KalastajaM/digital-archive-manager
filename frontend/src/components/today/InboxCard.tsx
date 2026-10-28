@@ -146,7 +146,7 @@ function AskRow({
 
 /** "Not recognised: N files — Ask AI": the inbox files without a rule guess, listed on
  * request. Nothing is prepared or sent until a file's own Ask AI. */
-function NotRecognised({ put, pendingId }: { put: (p: QuickPut) => void; pendingId: string | null }) {
+export function NotRecognised({ put, pendingId }: { put: (p: QuickPut) => void; pendingId: string | null }) {
   const inbox = useInbox();
   const trays = useTrays();
   const [open, setOpen] = useState(false);
@@ -177,14 +177,42 @@ function NotRecognised({ put, pendingId }: { put: (p: QuickPut) => void; pending
   );
 }
 
+/** "Found in the inbox": the files the scan rules recognised as a bill or the like, each
+ * with a one-click Put in <tray>; the first ``FOUND_SHOWN``, then "Show N more". */
+export function FoundList({ found, quick }: { found: Found[]; quick: ReturnType<typeof useQuickPut> }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? found : found.slice(0, FOUND_SHOWN);
+  const putIn = (f: Found) => void quick.put({ tray: f.tray, trayName: f.tray_name, ids: [f.drive_id], name: f.name });
+  return (
+    <>
+      <h4 className="today-subhead">Found in the inbox</h4>
+      <ul className="found-list" aria-label="Found in the inbox">
+        {shown.map((f) => (
+          <FoundRow
+            key={`${f.drive_id} ${f.tray}`}
+            found={f}
+            busy={quick.pendingIds?.[0] === f.drive_id}
+            onPut={() => putIn(f)}
+          />
+        ))}
+      </ul>
+      {found.length > FOUND_SHOWN && (
+        <p className="today-more">
+          <button type="button" className="link-button" onClick={() => setAll((a) => !a)}>
+            {all ? "Show fewer" : `Show ${found.length - FOUND_SHOWN} more`}
+          </button>
+        </p>
+      )}
+      <p className="hint">Found by the scan rules (a due date and an amount, with an IBAN or a reference).</p>
+    </>
+  );
+}
+
 export function InboxCard({ data, frame }: { data: TodayData; frame?: CardFrame }) {
   const { inbox_stats: stats, found } = data;
   const folded = frame?.fold.folded ?? false;
-  const [all, setAll] = useState(false);
-  const shown = all ? found : found.slice(0, FOUND_SHOWN);
   const quick = useQuickPut();
   const aiState = useAIState();
-  const putIn = (f: Found) => void quick.put({ tray: f.tray, trayName: f.tray_name, ids: [f.drive_id], name: f.name });
 
   return (
     <Card
@@ -236,29 +264,7 @@ export function InboxCard({ data, frame }: { data: TodayData; frame?: CardFrame 
       {folded && found.length > 0 && (
         <p className="today-sub today-found-count">{plural(found.length, "file")} found by the scan rules</p>
       )}
-      {!folded && found.length > 0 && (
-        <>
-          <h4 className="today-subhead">Found in the inbox</h4>
-          <ul className="found-list" aria-label="Found in the inbox">
-            {shown.map((f) => (
-              <FoundRow
-                key={`${f.drive_id} ${f.tray}`}
-                found={f}
-                busy={quick.pendingIds?.[0] === f.drive_id}
-                onPut={() => putIn(f)}
-              />
-            ))}
-          </ul>
-          {found.length > FOUND_SHOWN && (
-            <p className="today-more">
-              <button type="button" className="link-button" onClick={() => setAll((a) => !a)}>
-                {all ? "Show fewer" : `Show ${found.length - FOUND_SHOWN} more`}
-              </button>
-            </p>
-          )}
-          <p className="hint">Found by the scan rules (a due date and an amount, with an IBAN or a reference).</p>
-        </>
-      )}
+      {!folded && found.length > 0 && <FoundList found={found} quick={quick} />}
       {!folded && stats.count > 0 && aiState.on && (
         <NotRecognised put={(p) => void quick.put(p)} pendingId={quick.pendingIds?.[0] ?? null} />
       )}

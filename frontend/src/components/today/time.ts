@@ -14,3 +14,6 @@ export function waited(days: number): string {
   if (days < 60) return plural(Math.floor(days / 7), "week");
   return plural(Math.floor(days / 30), "month");
 }
+
+/** The date ``n`` days after (negative: before) ``iso`` ("YYYY-MM-DD"). */
+export const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);

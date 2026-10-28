@@ -915,10 +915,16 @@ export function useTodayFollowsInbox(status: Status | undefined) {
 export const useTrays = (enabled = true) =>
   useQuery({ queryKey: keys.trays, queryFn: () => apiGet("/api/trays"), enabled });
 
+/** A tray's items in one state (shared by ``useItems`` and the lists that read several trays). */
+export const trayItemsQuery = (trayId: string, state: ItemState = "open") => ({
+  queryKey: [...keys.items, "tray", trayId, state],
+  queryFn: ({ signal }: { signal?: AbortSignal }) =>
+    apiGet("/api/trays/{tray_id}/items", { path: { tray_id: trayId }, query: { state }, signal }),
+});
+
 export const useItems = (trayId: string, state: ItemState = "open") =>
   useQuery({
-    queryKey: [...keys.items, "tray", trayId, state],
-    queryFn: ({ signal }) => apiGet("/api/trays/{tray_id}/items", { path: { tray_id: trayId }, query: { state }, signal }),
+    ...trayItemsQuery(trayId, state),
     enabled: trayId !== "", // no tray yet (the definitions are loading)
   });
 
