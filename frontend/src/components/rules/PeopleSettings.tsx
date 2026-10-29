@@ -68,6 +68,12 @@ function People() {
         A letter is for the person whose name is found in the address area of page 1. Use {"{person}"} in a rule’s folder or
         name to file by it.
       </p>
+      <p className="hint">
+        Each line is looked for anywhere in the address area, ignoring case and accents, so a short line finds more than
+        you may want: “Anna” is also found in “Hanna” and “Johanna Laine”. Write names the way senders write them, for
+        example “Anna Virtanen”, “Anna Maria Virtanen” and “Virtanen Anna” (some put the surname first). A letter where
+        two people are found is for nobody.
+      </p>
       <ul className="people-list">
         {rows.map((r, i) => (
           <li key={i} className="people-row">
@@ -80,6 +86,7 @@ function People() {
               <textarea
                 id={`${ids}-match-${i}`}
                 rows={2}
+                placeholder={"Anna Virtanen\nVirtanen Anna"}
                 value={r.match}
                 onChange={(e) => edit(i, { match: e.target.value })}
               />
@@ -135,7 +142,7 @@ function People() {
       {error && <p className="error" role="alert">{visible(error)}</p>}
       <div className="actions">
         <button type="button" className="primary" disabled={save.isPending} onClick={() => void submit()}>
-          Save people
+          Save people and address area
         </button>
         {saved && <span className="hint" role="status">Saved.</span>}
       </div>
