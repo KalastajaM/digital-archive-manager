@@ -8,6 +8,19 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Rename the special folders (New look).** Settings, Archive folders, Special folders lists
+  the Inbox, Ongoing, Important and To Delete folders with a Rename for each. You type a new
+  name (it may start with `##.` or not), and a preview lists every place that holds the old
+  name and what happens there: the folder on your disk and its index paths, the settings, your
+  rules and filing codes, and the shortcuts dam keeps in Ongoing and Important (renamed,
+  rebuilt or still valid), plus a note when your archive is in Google Drive that the rename has
+  to sync. It is refused while a move or other job runs, when a disk is not connected, or after
+  an interrupted operation. The rename is one entry in Activity; a toast offers Undo, and Undo
+  gives back the folder name, the settings line, the rules and the paths. If dam is stopped
+  half way, it finishes (or takes back) the rename the next time it starts. A snapshot is taken
+  first, and Undo puts back exactly the values the rename changed. Editing
+  `settings.yaml` by hand still works.
+
 - **One file panel for Browse, the Inbox, the trays and a collection (New look).** The panel
   on the right shows a file the same way everywhere: its name (click to rename) and folder
   (click to move) with the lock, then one row of boxed icon buttons on the right (like the
@@ -475,6 +488,11 @@ All notable changes are listed here. The format follows
 - **Browse has no Collection filter any more.** To see a collection's files, search for
   `collection:"House sale"` (add `in:"50. Medical"` to stay in one folder). An old link with
   a collection filter opens the folder unfiltered.
+- **People settings explain how names are found.** Settings → Filing rules → People now
+  says that each line is looked for anywhere in the address area, so a short line such as a
+  first name also finds longer names that contain it, and gives examples of lines to write
+  (full name, with a middle name, and surname first). An empty row shows example lines. The
+  save button is now "Save people and address area", since it saves both.
 - **The search palette no longer lists screens** (Today, Inbox, Settings and so on). It finds
   files, folders, collections, trays and tags. This applies to both looks.
 - **The New look has no Search card on Today** (the palette and Browse's search box do that

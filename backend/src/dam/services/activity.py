@@ -6,11 +6,12 @@ from dataclasses import dataclass
 
 from sqlalchemy import case, func, or_, select
 
+from dam import special_folders
 from dam.collections.ongoing import OngoingPublisher
 from dam.collections.service import CollectionService
 from dam.core.text import fold
 from dam.db.tables import operations
-from dam.errors import InvalidRequest, NotFound
+from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.notes import NotesService
 from dam.ops.executor import Executor
 from dam.ops.model import BatchResult, ResolvedOp
@@ -267,6 +268,12 @@ class ActivityService:
         # the watcher triggers - plans against a half-undone Ongoing. Lock order:
         # sync_lock, then INDEX_LOCK (inside the executor), as in a sync. The re-sync
         # runs after the lock is released.
+        if special_folders.is_rename(self.executor.engine, batch_id):
+            # the folder alone would go back, leaving the settings and rules on the new name
+            raise Conflict(
+                "That is a rename of a special folder: undo it from Activity in the app, "
+                "which also puts the settings, rules and stored paths back."
+            )
         lock = self.ongoing.sync_lock if self.ongoing is not None else nullcontext()
         removed = None
         forgotten = None

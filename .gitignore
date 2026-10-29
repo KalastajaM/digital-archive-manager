@@ -26,3 +26,7 @@ DigitalArchiveManager/
 /data/
 /.dam-data/
 *.bak-*
+
+# internal assistant instructions and planning notes: not part of the public repo
+/CLAUDE.md
+/docs/superpowers/

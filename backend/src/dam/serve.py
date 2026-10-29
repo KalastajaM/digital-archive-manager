@@ -39,7 +39,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 
-from dam import setup
+from dam import setup, special_folders
 from dam.api.auth import ApiTokenMiddleware, auth_url, hide_token_in_logs, load_token
 from dam.app import App
 from dam.config import AppPaths
@@ -364,6 +364,7 @@ class Host:
         archives = ArchiveService(self.store, profile.id, self, paths)
         opened = Opened(profile.id, None, None, True, archives, lock=lock, paths=paths)  # type: ignore[arg-type]
         if setup.is_configured(paths):
+            special_folders.reconcile(paths)
             app = App.create(paths.data_dir)
             try:
                 opened.api = create_api(app, self.static_dir, archives)
@@ -382,6 +383,7 @@ class Host:
         with self.lock:
             if self.stopping or self.current is not opened or opened.paths is None:
                 return False
+            special_folders.reconcile(opened.paths)
             app = App.create(opened.paths.data_dir)
             try:
                 api = create_api(app, self.static_dir, opened.archives)
@@ -472,6 +474,7 @@ class Host:
                 raise Conflict("The archive is not open yet.")
             held.enter_context(old.app.held())  # no move or batch starts until done
             paths = old.paths or old.app.app_paths
+            special_folders.reconcile(paths)
             app = App.create(paths.data_dir)
             try:
                 api = create_api(app, self.static_dir, old.archives)

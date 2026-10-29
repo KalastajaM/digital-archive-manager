@@ -264,7 +264,7 @@ describe("FilingRules", () => {
       await user.type(within(people).getAllByLabelText(/Found in the address area as/)[1], "Michiel Visser");
       await user.clear(within(people).getByLabelText("Right"));
       await user.type(within(people).getByLabelText("Right"), "60");
-      await user.click(within(people).getByRole("button", { name: "Save people" }));
+      await user.click(within(people).getByRole("button", { name: "Save people and address area" }));
       await waitFor(() => expect(ofMethod(calls, "PUT", "/api/settings/people")).toHaveLength(1));
       expect(ofMethod(calls, "PUT", "/api/settings/people")[0].body).toEqual({
         people: [
@@ -284,7 +284,7 @@ describe("FilingRules", () => {
       await user.click(within(people).getByRole("button", { name: "Reset to default" }));
       expect(within(people).getByLabelText("Left")).toHaveValue(5);
       await user.click(within(people).getByRole("button", { name: "Remove Tiina" }));
-      await user.click(within(people).getByRole("button", { name: "Save people" }));
+      await user.click(within(people).getByRole("button", { name: "Save people and address area" }));
       await waitFor(() => expect(ofMethod(calls, "PUT", "/api/settings/people")).toHaveLength(1));
       expect(ofMethod(calls, "PUT", "/api/settings/people")[0].body).toEqual({ people: [], address_zone: [0.05, 0.12, 0.5, 0.28] });
     });
@@ -293,7 +293,7 @@ describe("FilingRules", () => {
       const { user } = setup(DATA(), { "PUT /api/settings/people": { status: 400, body: { error: "Two people are called Tiina." } } });
       const people = await screen.findByRole("region", { name: "People" });
       await within(people).findByLabelText("Name");
-      await user.click(within(people).getByRole("button", { name: "Save people" }));
+      await user.click(within(people).getByRole("button", { name: "Save people and address area" }));
       expect(await within(people).findByText("Two people are called Tiina.")).toBeInTheDocument();
       expect(within(people).queryByText("Saved.")).toBeNull();
     });

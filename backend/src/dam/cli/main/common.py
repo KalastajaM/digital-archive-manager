@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from dam import special_folders
 from dam.app import App
 from dam.config import AppPaths
 from dam.core.paths import OutsideArchiveError
@@ -137,6 +138,8 @@ def session(
         application: App | None = None
         try:
             configure_logging(AppPaths(ctx.obj))
+            if write:  # holds the archive's lock: it may finish a half-done special folder rename
+                special_folders.reconcile(AppPaths(ctx.obj))
             application = App.create(ctx.obj, require_archive=require_archive)
             if warn_pending and application.activity.pending() and _alone(ctx):
                 print_error("warning: interrupted operations found; run `dam recover` first.")

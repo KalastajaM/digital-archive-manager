@@ -9,6 +9,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { setQuarantineName } from "../toDelete";
 import type { components } from "./schema";
 import { buildUrl, type CallArgs, type Operation, type PathOf, type ResponseOf } from "./typed";
 
@@ -473,8 +474,9 @@ export const useInbox = () =>
 export const useFolders = (enabled = true) =>
   useQuery({ queryKey: keys.folders, queryFn: () => apiGet("/api/folders"), enabled });
 
-const knowArchive = <T extends { archive?: { id: string } | null }>(status: T): T => {
+const knowArchive = <T extends { archive?: { id: string } | null; special_folders?: { quarantine: string } }>(status: T): T => {
   if (status.archive) setActiveArchive(status.archive.id);
+  setQuarantineName(status.special_folders?.quarantine);
   return status;
 };
 
@@ -600,6 +602,14 @@ export type Relabel = Schemas["RelabelOut"];
  * under it is rewritten; nothing on the disk changes. */
 export const relabelArchiveFolder = (label: string, newLabel: string, dry_run: boolean) =>
   apiPost("/api/archive-folders/{label}/relabel", { path: { label }, body: { label: newLabel, dry_run } });
+
+export type SpecialFolderRename = Schemas["SpecialFolderRenameOut"];
+export type SpecialFolderKey = SpecialFolderRename["key"];
+/** Rename the Inbox, Ongoing, Important or To Delete folder (``dry_run``: only say every place
+ * that changes). Applying journals one batch (``batch_id``) that Undo in Activity reverses,
+ * and the server opens the archive again, which takes a few seconds. */
+export const renameSpecialFolder = (key: SpecialFolderKey, name: string, dry_run: boolean) =>
+  apiPost("/api/special-folders/{key}/rename", { path: { key }, body: { name, dry_run } });
 
 export const useSetupCandidates = () =>
   useQuery({

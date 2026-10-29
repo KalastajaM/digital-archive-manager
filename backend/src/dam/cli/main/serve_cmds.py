@@ -7,6 +7,7 @@ import typer
 
 from dam import serve as dam_serve
 from dam import setup as dam_setup
+from dam import special_folders
 from dam.api import create_api
 from dam.api.auth import auth_url, load_token, read_token
 from dam.cli.main.common import EXIT_USER, USER_ERRORS, app, print_error, session, store_of
@@ -82,6 +83,9 @@ def serve(
                 raise typer.Exit(EXIT_USER) from None
             print_error("stopped")
             return
+        # a rename of a special folder that was cut short is finished (or taken back) now,
+        # with the lock held and before the settings are read; it never stops the server
+        special_folders.reconcile(app_paths)
         with session(ctx, warn_pending=False) as a:
             if a.activity.pending():  # `dam recover` is refused while this serves
                 print_error("warning: interrupted operations found; use Run recovery in the app.")

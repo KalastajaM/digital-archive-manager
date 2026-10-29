@@ -62,6 +62,7 @@
 - [AI (optional)](#ai-optional)
 - [Several archives](#several-archives)
 - [Several archive folders](#several-archive-folders)
+- [Rename a special folder](#rename-a-special-folder)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Drag and drop](#drag-and-drop)
 - [What dam never does](#what-dam-never-does)
@@ -1547,8 +1548,10 @@ each area, grouped by what it applies to; one section shows at a time.
     [Filing rules](#filing-rules).
   - **Archive folders**: the main folder and any extra folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
-    **Forget**.
-    See [Several archive folders](#several-archive-folders).
+    **Forget**. In the New look, **Special folders** lists the Inbox, Ongoing, Important and
+    To Delete folders, each with **Rename**.
+    See [Several archive folders](#several-archive-folders) and
+    [Rename a special folder](#rename-a-special-folder).
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
     [Reading page 1](#reading-page-1).
@@ -1791,6 +1794,35 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   crash or a power cut), it finishes the change the next time it opens the archive.
 - While a Maintenance check, a rule replay or a move to another disk runs, adding,
   detaching, attaching and changing a label are refused until it has finished.
+
+## Rename a special folder
+
+dam keeps four folders of its own in your archive: the Inbox, Ongoing, Important and To
+Delete. They start as `##. Organize`, `##. Ongoing`, `##. Important` and `##. To Delete`.
+In the New look you can give them other names, for example `00. Inbox`:
+
+1. Settings, **Archive folders**, **Special folders**, **Rename** beside the folder.
+2. Type the new name and click **Preview**. The list shows every place that holds the old
+   name and what happens there: the folder on your disk and the index, the settings, your
+   rules and filing codes, the shortcuts dam keeps in Ongoing and Important, and what stays
+   as it is and why. If your archive is in Google Drive, it also says that the rename has to
+   sync to your other devices.
+3. Click **Rename folder**. dam first takes a snapshot, then stops for a few seconds while it
+   opens the archive again.
+   A message offers **Undo**; the change is also one entry in Activity, and its Undo puts the
+   folder name, the settings, the rules and the index paths back.
+
+A name may start with `##.` but need not. It cannot be the name of another special folder,
+of an archive folder, or of anything already there. To Delete exists once in every archive
+folder; renaming it renames them all, so every archive folder must be connected. dam refuses
+the rename while a move or another job is running, when the archive's disk is not connected,
+or after an interrupted operation (run recovery first). If dam is stopped half way, it
+finishes or takes back the rename when it starts again. Undo puts back exactly what the rename
+changed; if it can only rename some folders back it says so, and you can click Undo again.
+
+If you prefer, you can do it by hand: close dam, rename the folder in your file manager,
+change its name under `special_folders` in `settings.yaml`, and change any rule or filing
+code that names it. The Settings route does all of that for you and can be undone.
 
 ## Keyboard shortcuts
 

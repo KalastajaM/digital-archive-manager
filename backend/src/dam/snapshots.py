@@ -73,6 +73,7 @@ STATE_FILES = (
 )
 MANUAL, BEFORE_RESTORE = "manual", "before-restore"
 BEFORE_RELABEL = "before-relabel"  # taken before an archive folder's label changes
+BEFORE_RENAME = "before-rename"  # taken before a special folder is renamed
 IMPORTED_SUFFIX = "-imported"
 MAX_IMPORT_BYTES = 2 * 1024**3
 # what one snapshot may unpack to (a zip bomb stops here): members, bytes in all, and how
@@ -85,7 +86,7 @@ _COPY_CHUNK = 1024**2
 # Windows device names: a member called one of these (with any extension) is a device there
 _RESERVED = {"con", "prn", "aux", "nul", *(f"{p}{n}" for p in ("com", "lpt") for n in range(10))}
 _NAME = re.compile(
-    r"dam-snapshot-\d{8}-\d{6}(?:-\d+)?(?:-before-restore|-before-relabel)?(?:-imported)?\.zip"
+    r"dam-snapshot-\d{8}-\d{6}(?:-\d+)?(?:-before-restore|-before-relabel|-before-rename)?(?:-imported)?\.zip"
 )
 
 
@@ -233,7 +234,7 @@ def create_snapshot(
                 "files": files,
             }
             zf.writestr(MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=2))
-        suffix = f"-{kind}" if kind in (BEFORE_RESTORE, BEFORE_RELABEL) else ""
+        suffix = f"-{kind}" if kind in (BEFORE_RESTORE, BEFORE_RELABEL, BEFORE_RENAME) else ""
         name = _free_name(folder, now.strftime("%Y%m%d-%H%M%S"), suffix)
         rename_excl(zip_path, folder / name)
     log.info("snapshot %s taken (%s, revision %s)", name, kind, revision)
@@ -571,6 +572,11 @@ def _keep_safety_settings(settings_file: Path, folders: Folders, current: Settin
     protected = _with_current(current.protected_paths, snap.protected_paths)
     if protected != snap.protected_paths:
         updates["protected_paths"] = protected
+    # the folders on disk keep the names this archive has now (a special folder may have
+    # been renamed since the snapshot), so the restored settings must say the same
+    if snap.special_folders != current.special_folders:
+        updates["special_folders"] = current.special_folders.model_dump()
+        log.info("restore keeps this archive's special folder names")
     excluded = _with_current(current.ai.exclude_folders, snap.ai.exclude_folders)
     if excluded != snap.ai.exclude_folders:
         ai = raw.get("ai") if isinstance(raw.get("ai"), dict) else {}
@@ -585,6 +591,7 @@ def _keep_safety_settings(settings_file: Path, folders: Folders, current: Settin
     if (
         folders.archive_root is not None
         and not _same_folder(written.archive_root, folders.archive_root)
+        or written.special_folders != current.special_folders
         or not set(current.protected_paths) <= set(written.protected_paths)
         or not set(current.ai.exclude_folders) <= set(written.ai.exclude_folders)
     ):

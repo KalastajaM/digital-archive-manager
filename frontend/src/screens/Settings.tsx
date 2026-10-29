@@ -1,7 +1,6 @@
 /** Settings: a row of section tabs above the section, grouped by what they apply to (this
  * archive, or this browser), and one section at a time at its own address (``/settings/<id>``);
- * ``/settings`` opens the first. A section is listed once it is built (see
- * docs/superpowers/specs/2026-10-23-settings-screen-design.md). */
+ * ``/settings`` opens the first. A section is listed once it is built. */
 import type { ReactNode } from "react";
 import { Navigate, NavLink, useParams } from "react-router-dom";
 import { useArchives } from "../api/client";

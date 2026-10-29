@@ -70,6 +70,7 @@ HIGHER = (
     "services",
     "settings_write",
     "setup",
+    "special_folders",
     "snapshots",
     "trays",
 )
