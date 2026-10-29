@@ -54,6 +54,14 @@ without ever deleting a file.
 
 <table>
   <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/relatives-dark.png"><img alt="Browse, a contract's file panel: its Relatives, best first, with the two bills still in the inbox on orange cards" src="docs/images/relatives-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/connections-dark.png"><img alt="Show connections: the contract's relatives by folder with lines to each, and what it has in common with the plan" src="docs/images/connections-light.png"></picture></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Relatives</b>: the files a document belongs with, and why</td>
+    <td align="center"><b>Show connections</b>: the whole family by folder</td>
+  </tr>
+  <tr>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png"><img alt="Today: what is due, what is waiting in the inbox, a search box and the reminders" src="docs/images/today-light.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/paymode-dark.png"><img alt="Pay mode: payee, IBAN, reference, amount and a bank barcode in large type" src="docs/images/paymode-light.png"></picture></td>
   </tr>
@@ -62,7 +70,7 @@ without ever deleting a file.
     <td align="center"><b>Pay mode</b>: check the details, scan, done</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/browse-dark.png"><img alt="Browse: folders on the left, and for the selected file its tags, collections, summary, tray, a locked padlock, a preview and notes" src="docs/images/browse-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/browse-dark.png"><img alt="Browse: folders on the left, and for the selected file its tags, collection, summary, a locked padlock and its Relatives" src="docs/images/browse-light.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/activity-dark.png"><img alt="Activity: every change in plain words, each with its own Undo" src="docs/images/activity-light.png"></picture></td>
   </tr>
   <tr>
@@ -86,22 +94,17 @@ without ever deleting a file.
     <td align="center"><b>Rule sheet</b>: proven against your filed documents first</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/rules-dark.png"><img alt="Settings, Filing rules: the rules made from areas on page 1 above the example rules, and the people list" src="docs/images/rules-light.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/filing-codes-dark.png"><img alt="File N marked: each coded inbox file with its codes, folder, tray and tags; the ones that need a look start unticked" src="docs/images/filing-codes-light.png"></picture></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Filing rules</b>: yours first, and the people they file for</td>
-    <td align="center"><b>File N marked</b>: a whole batch, checked and filed at once</td>
-  </tr>
-  <tr>
     <td><picture><img alt="A sheet of QR stickers for the filing codes P, A and R, each with star and Important tick boxes" src="docs/images/sticker-sheet.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/ai-settings-dark.png"><img alt="Activity, AI: this month's spend, the AI switch and the folders that are never sent" src="docs/images/ai-settings-light.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/ai-settings-dark.png"><img alt="Activity, AI calls: this month's spend, the AI switch and the folders that are never sent" src="docs/images/ai-settings-light.png"></picture></td>
   </tr>
   <tr>
     <td align="center"><b>QR stickers</b>: decide on the paper before you scan</td>
     <td align="center"><b>AI settings</b>: spend, the switch and the folders never sent</td>
   </tr>
 </table>
+
+The screenshots show the New look. dam still opens in the Classic look; switch with
+**Look** at the bottom of the sidebar. Relatives are in the New look only.
 
 ## Quick start
 
