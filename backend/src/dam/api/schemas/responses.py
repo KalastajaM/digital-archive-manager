@@ -43,7 +43,8 @@ class IndexSummaryOut(BaseModel):
     not_readable_by_type: list[TypeCountOut]  # most common first
     rows: list[IndexErrorOut]  # the not readable files, one page, newest file first
     offset: int
-    page1: "Page1ProgressOut"  # how far the page-1 pass has come
+    page1: "Page1SummaryOut"  # how far the page-1 pass has come
+    identifiers: "IdentifiersSummaryOut"  # how far business IDs, IBANs and domains are read
 
 
 class RetryIndexOut(BaseModel):
@@ -524,6 +525,20 @@ class UndoResultOut(BatchResultOut):
     kept: list[str] = []  # folders the undo left alone because something is in them now
 
 
+class RowItemOut(BaseModel):
+    """An open tray item on a listed file: enough for its tag (tray, date, title)."""
+
+    id: int
+    tray_name: str
+    title: str
+    date: date | None
+
+
+class RowAttentionOut(BaseModel):
+    item: RowItemOut
+    level: Literal["overdue", "today", "soon", "undated"] | None  # None: dated later
+
+
 class DirEntryOut(BaseModel):
     name: str
     path: str
@@ -537,6 +552,7 @@ class DirEntryOut(BaseModel):
     # folder is connected now (always True for the main folder)
     folder: str | None = None
     connected: bool = True
+    open_items: list[RowAttentionOut] = []  # a file's open tray items, oldest first
 
 
 class FlatFilesOut(BaseModel):
@@ -559,6 +575,7 @@ class SearchHitOut(BaseModel):
     # folder is connected now (always True for the main folder)
     folder: str | None = None
     connected: bool = True
+    open_items: list[RowAttentionOut] = []  # a file's open tray items, oldest first
 
 
 class FileNowOut(BaseModel):
@@ -634,12 +651,23 @@ class Page1BlockedOut(BaseModel):
     count: int
 
 
+class IdentifierFoundOut(BaseModel):
+    label: str  # "business IDs", "IBANs", "web or mail domains"
+    count: int  # files there whose current content carries one
+
+
 class IdentifiersProgressOut(BaseModel):
     """The identifiers pass: indexed documents whose text was read with the current
     packs, of all with text."""
 
     read: int
     total: int
+
+
+class IdentifiersSummaryOut(IdentifiersProgressOut):
+    """With how many files carry each kind (the enabled countries' only)."""
+
+    found: list[IdentifierFoundOut]
 
 
 class Page1ProgressOut(BaseModel):
@@ -660,6 +688,10 @@ class Page1ProgressOut(BaseModel):
     scans_left: int = 0
     text_per_min: int = 0
     scans_per_min: int = 0
+
+
+class Page1SummaryOut(Page1ProgressOut):
+    with_text: int  # of those read, how many have text on page 1
 
 
 class StatusOut(BaseModel):

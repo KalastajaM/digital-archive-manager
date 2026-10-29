@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from dam import countries
+from dam import countries, packs
 from dam.api.deps import AppDep, ArchivesDep
 from dam.api.schemas import IndexErrorsOut, IndexSummaryOut, RetryIndexIn, RetryIndexOut, StatusOut
 from dam.app import App
@@ -50,6 +50,19 @@ def status(app: AppDep, archives: ArchivesDep) -> dict:
 def _identifiers(app: App) -> dict:
     read, total = app.repo.identifier_progress(countries.signature())
     return {"read": read, "total": total}
+
+
+def _found(app: App) -> list[dict]:
+    """How many files carry a business ID, an IBAN, a web or mail domain (enabled packs)."""
+    profile = packs.active()
+    business = packs.business_id_kinds(profile)
+    every = [s.kind for p in profile.countries for s in p.identifiers]
+    groups = [
+        ("business IDs", business),
+        ("IBANs", [k for k in every if k.endswith(".iban")]),
+        ("web or mail domains", [k for k in every if k.endswith(".domain")]),
+    ]
+    return [{"label": label, "count": app.repo.files_with_kinds(kinds)} for label, kinds in groups]
 
 
 def _page1(app: App) -> dict:
@@ -112,7 +125,8 @@ def index_summary(
             for p in repo.index_problems(limit=limit, offset=offset, only_unsupported=True)
         ],
         "offset": offset,
-        "page1": _page1(app),
+        "page1": {**_page1(app), "with_text": repo.layout_with_text()},
+        "identifiers": {**_identifiers(app), "found": _found(app)},
     }
 
 

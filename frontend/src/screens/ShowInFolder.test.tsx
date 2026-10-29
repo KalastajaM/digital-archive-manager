@@ -52,7 +52,7 @@ const row = (name: string, id: string): DirEntry => ({
   size: 10,
   mtime: 1,
   drive_id: id,
-  connected: true, marks: [],
+  connected: true, marks: [], open_items: [],
 });
 
 function Where() {

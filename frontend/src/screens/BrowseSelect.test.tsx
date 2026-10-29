@@ -18,6 +18,7 @@ const entry = (name: string, id: string, marks: DirEntry["marks"] = [], is_dir =
   drive_id: id,
   connected: true,
   marks,
+  open_items: [],
 });
 const CHANGE = { collection: { id: 1, name: "Ongoing", kind: "starred", members: [], groups: [] }, batch: null, problems: [], ongoing_status: null };
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);

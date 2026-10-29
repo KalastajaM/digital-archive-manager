@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FILTER_HELP, type FilterName, IS_VALUES, filterToken, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
+import { FILTER_HELP, type FilterName, IS_VALUES, filterToken, positiveTags, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
 
 const f = (name: FilterName, value: string, negated = false) => ({ name, value, negated });
 
@@ -75,5 +75,11 @@ describe("is:disconnected", () => {
     expect(splitSearch("-is:disconnected ")).toMatchObject({ filters: [f("is", "disconnected", true)] });
     const help = FILTER_HELP.find((h) => h.name === "is");
     expect(help?.text).toContain("disconnected (files in an archive folder that is not connected now)");
+  });
+});
+
+describe("tag:*", () => {
+  it("is not counted as a tag for All / Any", () => {
+    expect(positiveTags(splitSearch("tag:* tag:paid ").filters).map((f) => f.value)).toEqual(["paid"]);
   });
 });

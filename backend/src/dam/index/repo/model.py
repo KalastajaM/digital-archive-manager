@@ -194,9 +194,7 @@ FTS_ROWID = "(SELECT fts_rowid FROM file_fts_map WHERE drive_id = :id)"
 # from: ``fts_remove`` runs while the view still shows them (before ``file_text`` or the
 # map row changes) and ``fts_index`` after. Nothing UPDATEs or DELETEs ``file_fts``
 # itself; a wrong order is not an error, it leaves stale tokens behind.
-_FTS_SRC = (
-    "SELECT fts_rowid, drive_id, name, path, text FROM file_fts_src WHERE fts_rowid = :rowid"
-)
+_FTS_SRC = "SELECT fts_rowid, drive_id, name, path, text FROM file_fts_src WHERE fts_rowid = :rowid"
 
 
 def _fts_rowid(conn: Connection, drive_id: str) -> int | None:

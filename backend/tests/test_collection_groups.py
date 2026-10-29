@@ -478,3 +478,35 @@ def test_collection_attention(client, app, api_files, fake_archive, freeze_today
     assert got == (item["id"], "To pay", "overdue")
     assert rows["f3"] == {"drive_id": "f3", "in_inbox": True, "items": []}
     assert client.get("/api/collections/999/attention").status_code == 404
+
+
+def test_browse_rows_carry_open_items(client, app, api_files, freeze_today):
+    """Browse, the Files view and search tag a file by its open tray items, as the
+    collection page does: an overdue bill shows there too. Done items and folders get none."""
+    due = (freeze_today(date(2026, 10, 26)) - timedelta(days=2)).isoformat()
+    item = send(
+        client,
+        "POST",
+        "/api/items",
+        {"tray": "to-pay", "drive_ids": ["f1"], "fields": {"due_date": due}},
+    ).json()
+    done = send(client, "POST", "/api/items", {"tray": "to-pay", "drive_ids": ["f2"]}).json()
+    send(client, "POST", f"/api/items/{done['id']}/done", {"fields": {}})
+
+    def by_id(rows):
+        return {r["drive_id"]: r["open_items"] for r in rows}
+
+    listed = by_id(client.get("/api/browse", params={"path": BANKS}).json())
+    flat = by_id(client.get("/api/browse/files", params={"path": BANKS}).json()["rows"])
+    found = by_id(client.get("/api/search", params={"q": f'in:"{BANKS}"'}).json())
+    for rows in (listed, flat, found):
+        [a] = rows["f1"]
+        assert (a["item"]["id"], a["item"]["tray_name"], a["item"]["date"], a["level"]) == (
+            item["id"],
+            "To pay",
+            due,
+            "overdue",
+        )
+        assert rows["f2"] == []
+    folders = client.get("/api/browse", params={"path": "10. Financial"}).json()
+    assert all(r["open_items"] == [] for r in folders if r["is_dir"])

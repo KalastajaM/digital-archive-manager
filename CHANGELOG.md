@@ -8,6 +8,15 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Due dates in Browse.** A file with an open tray item shows the tray and its date on
+  its row, in the folder view, Files and search results, coloured by urgency as on a
+  collection's page.
+- **`id:*`** finds every file that has a business ID, whatever it is: `from:Telia id:*`
+  lists Telia's documents that carry one.
+- **`*` for "any" in more filters.** `tag:*`, `collection:*`, `from:*`, `for:*` and `tray:*`
+  find files with any tag, collection, sender, person or open tray item, and with a `-` the
+  files without: `-tag:*` lists what still needs tagging, `id:* -from:*` what has a business
+  ID but no sender yet.
 - A Netherlands country pack: the betalingskenmerk, the btw-id, the KvK-nummer (near its
   label) and the RSIN (right after its label), the address area of a Dutch letter, and
   commented Netherlands example rules with a layout. A nine-digit number without the RSIN
@@ -24,6 +33,13 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **The Index sheet adds up.** Files in the archive shows a Total and the four states that
+  make it up, with the missing files apart; Other indexes shows Page 1 and Business IDs, each
+  as how many of how many.
+- **The other indexes say what they found and whether they are still reading.** Business IDs
+  says in how many files business IDs, IBANs and domains were found, and Page 1 on how many
+  pages it found text; a turning circle shows an index that is still reading, a check one
+  that is done.
 - The address area setting moved from Filing rules to Settings, Reading documents. It
   says whether it follows the countries or was set by you, and **Reset to default** makes
   it follow the countries again.
@@ -33,6 +49,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **Relatives no longer runs into the identifiers above it.** In the file panel a hairline
+  and a little space now separate what the document mentions from its Relatives.
 - Saving the People list no longer pins the address area: it is sent only when it
   changed, so it keeps following the countries.
 

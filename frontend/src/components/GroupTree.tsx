@@ -106,8 +106,12 @@ export function memberCount(members: Member[]): string {
 
 const LEVEL_TONE: Record<string, TagTone> = { overdue: "red", today: "orange", soon: "orange", undated: "grey" };
 
+/** What a tag needs of a file's open items: a collection member's attention, or a
+ * Browse row's ``open_items`` (no inbox flag there). */
+type Attention = { in_inbox?: boolean; items: { item: Pick<MemberAttention["items"][number]["item"], "id" | "tray_name" | "title" | "date">; level: MemberAttention["items"][number]["level"] }[] };
+
 /** The tags of a member that needs attention: one per open tray item, and "In inbox". */
-export function attentionTags(a: MemberAttention | undefined, { long = false } = {}): { key: string; tone: TagTone; text: string }[] {
+export function attentionTags(a: Attention | undefined, { long = false } = {}): { key: string; tone: TagTone; text: string }[] {
   if (!a) return [];
   const tags = a.items.map(({ item, level }) => {
     const date = item.date ? ` · ${formatDate(item.date)}` : "";

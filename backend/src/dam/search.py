@@ -199,9 +199,36 @@ def _id_keys(value: str) -> list[str]:
     return [compact, vat[1]] if vat else [compact]
 
 
+# ``name:*``: the file has any value of that kind (``-name:*``: none at all)
+ANY = "*"
+_HAS_ANY = {
+    "tag": "f.drive_id IN (SELECT drive_id FROM file_tags)",
+    "from": "f.drive_id IN (SELECT drive_id FROM file_assignments WHERE sender IS NOT NULL)",
+    "for": "f.drive_id IN (SELECT drive_id FROM file_assignments WHERE person IS NOT NULL)",
+    "tray": (
+        "f.drive_id IN (SELECT x.drive_id FROM item_files x JOIN items i ON i.id = x.item_id "
+        "WHERE i.state = 'open')"
+    ),
+}
+
+
+def _own_collection_ids(engine: Engine) -> list[int]:
+    """Every collection the owner made (not the built-in Starred and Important)."""
+    with engine.connect() as conn:
+        return list(
+            conn.execute(select(collections.c.id).where(collections.c.kind.is_(None))).scalars()
+        )
+
+
 def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> None:
     neg = f.negated
     v = f.value
+    if v == ANY and f.name in _HAS_ANY:
+        w.add(_HAS_ANY[f.name], neg)
+        return
+    if v == ANY and f.name == "collection":
+        w.add(_member_cond(engine, w, _own_collection_ids(engine)), neg)
+        return
     if f.name == "name":
         if not any(c in v for c in "*?"):
             v = f"*{v}*"  # no wildcard: the text anywhere in the name
@@ -218,6 +245,17 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
             f"f.drive_id IN (SELECT drive_id FROM file_assignments WHERE {column} IN "
             f"({w.marks(names)}))"
             if names
+            else "0",
+            neg,
+        )
+    elif f.name == "id" and v == ANY:
+        # any business ID of the enabled packs (not IBANs or domains); current content only
+        kinds = packs.business_id_kinds(packs.active())
+        w.add(
+            "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
+            "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "
+            f"WHERE i.kind IN ({w.marks(kinds)}))"
+            if kinds
             else "0",
             neg,
         )
@@ -320,10 +358,12 @@ def search(
     parsed = parse_query(query)
     match = _fts_query(parsed.words)
     any_mode = tag_mode == "any"
-    positive = [f.value for f in parsed.filters if f.name == "tag" and not f.negated]
+    # tag:* (any tag) is a filter like the others, not a tag name
+    named = [f for f in parsed.filters if f.name == "tag" and f.value != ANY]
+    positive = [f.value for f in named if not f.negated]
     positive += list(tag_names or [])
-    negative = [f.value for f in parsed.filters if f.name == "tag" and f.negated]
-    others = [f for f in parsed.filters if f.name != "tag"]
+    negative = [f.value for f in named if f.negated]
+    others = [f for f in parsed.filters if f.name != "tag" or f.value == ANY]
     wanted = _tag_ids(engine, positive, skip_unknown=any_mode) if positive else []
     if wanted is None or (not match and not wanted and not negative and not others):
         return []

@@ -4,8 +4,8 @@
  * queues every listed error again. Unsupported types (no text to read) are listed on
  * request only: nothing is wrong with them. Outcomes show on the sheet's own status
  * line (a toast would sit under the modal sheet). */
-import { RotateCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { Check, LoaderCircle, RotateCw } from "lucide-react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   errorText,
@@ -72,7 +72,9 @@ export function typeSummary(byType: IndexProblems["unsupported_by_type"]): strin
     .join(", ");
 }
 
-const STATE_NOTES: [key: "searchable" | "waiting" | "not_readable" | "errors" | "missing", label: string, note: string][] = [
+/** The four states every file in the archive folder is in, one each: they add up to the
+ * total. */
+const PARTS: [key: "searchable" | "waiting" | "not_readable" | "errors", label: string, note: string][] = [
   ["searchable", "Searchable", "The text of these files is indexed, so search finds them by their content."],
   ["waiting", "Waiting", "Not read yet, or waiting for Google Drive to download them."],
   [
@@ -81,8 +83,26 @@ const STATE_NOTES: [key: "searchable" | "waiting" | "not_readable" | "errors" | 
     "The app has no reader for this type; the file is still archived and findable by name.",
   ],
   ["errors", "Errors", "Reading these failed. Retrying may help."],
-  ["missing", "Missing", "Gone from the archive folder since the last scan."],
 ];
+
+/** Whether an index is still reading (a turning circle) or done (a check). */
+function ReadingIcon({ done }: { done: boolean }) {
+  return done ? (
+    <Check size={14} role="img" aria-label="Done" className="index-reading-done" />
+  ) : (
+    <LoaderCircle size={14} role="img" aria-label="Still reading" className="index-reading" />
+  );
+}
+
+function SummaryRow({ label, value, note, part }: { label: string; value: ReactNode; note: ReactNode; part?: boolean }) {
+  return (
+    <div className={part ? "index-summary-row index-summary-part" : "index-summary-row"}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+      <dd className="hint">{note}</dd>
+    </div>
+  );
+}
 
 const minutesText = (minutes: number) =>
   minutes < 60 ? `${minutes} min` : minutes < 60 * 48 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes / 1440)} days`;
@@ -97,7 +117,7 @@ export function timeLeft(remaining: number, perMinute: number | null | undefined
 /** The time left for the page-1 pass from what is left of each kind and how fast each is read:
  * "about 40 min left (5 735 PDFs with text at 300 a minute, 12 scans at 30 a minute)". Null
  * when nothing is left or the speeds are not known. */
-export function page1TimeLeft(page1: IndexSummary["page1"]): string | null {
+export function page1TimeLeft(page1: Omit<IndexSummary["page1"], "with_text">): string | null {
   const { text_left: text = 0, scans_left: scans = 0, text_per_min: fast = 0, scans_per_min: slow = 0 } = page1;
   if ((text > 0 && fast <= 0) || (scans > 0 && slow <= 0) || text + scans <= 0) return null;
   const minutes = Math.ceil(text / (fast || 1) + scans / (slow || 1));
@@ -115,13 +135,15 @@ function Page1Row({ page1, onSettings }: { page1: IndexSummary["page1"]; onSetti
   const left = done ? null : (page1TimeLeft(page1) ?? timeLeft(page1.total - page1.read, page1.rate_per_min));
   const blocked = page1.blocked ?? [];
   return (
-    <div className="index-summary-row">
+    <div className="index-summary-row index-summary-part">
       <dt>Page 1</dt>
       <dd>
-        {groupDigits(page1.read)} of {groupDigits(page1.total)}
+        {groupDigits(page1.read)} of {groupDigits(page1.total)} <ReadingIcon done={done} />
       </dd>
       <dd className="hint">
-        Where the text sits on page 1, for rules by area{left ? `; ${left}` : ""}.
+        Where the text sits on page 1, for rules by area
+        {page1.with_text != null ? `; text on page 1 in ${groupDigits(page1.with_text)} of them` : ""}
+        {left ? `; ${left}` : ""}.
         {blocked.map((b) => (
           <span key={b.reason} className="index-page1-blocked">
             {" "}
@@ -138,6 +160,8 @@ function Page1Row({ page1, onSettings }: { page1: IndexSummary["page1"]; onSetti
 
 function SummaryBlock({ onSettings }: { onSettings?: () => void }) {
   const summary = useIndexSummary();
+  const filesId = useId();
+  const otherId = useId();
   if (summary.isError) {
     return (
       <p className="error" role="alert">
@@ -147,18 +171,50 @@ function SummaryBlock({ onSettings }: { onSettings?: () => void }) {
   }
   if (!summary.data) return null;
   const data = summary.data;
+  const total = PARTS.reduce((sum, [key]) => sum + data[key], 0);
+  const ids = data.identifiers;
   return (
     <>
-      <dl className="index-summary" aria-label="Totals">
-        {STATE_NOTES.map(([key, label, note]) => (
-          <div key={key} className="index-summary-row">
-            <dt>{label}</dt>
-            <dd>{groupDigits(data[key])}</dd>
-            <dd className="hint">{note}</dd>
-          </div>
-        ))}
-        {data.page1 && <Page1Row page1={data.page1} onSettings={onSettings} />}
-      </dl>
+      <div role="group" aria-labelledby={filesId} className="index-group">
+        <h4 id={filesId}>Files in the archive</h4>
+        <dl className="index-summary">
+          <SummaryRow label="Total" value={groupDigits(total)} note="Every file in the archive folder, in one of these states:" />
+          {PARTS.map(([key, label, note]) => (
+            <SummaryRow key={key} label={label} value={groupDigits(data[key])} note={note} part />
+          ))}
+          <SummaryRow
+            label="Missing"
+            value={groupDigits(data.missing)}
+            note="Gone from the archive folder since the last scan, so not in the total."
+          />
+        </dl>
+      </div>
+      <div role="group" aria-labelledby={otherId} className="index-group">
+        <h4 id={otherId}>Other indexes</h4>
+        <dl className="index-summary">
+          {data.page1 && <Page1Row page1={data.page1} onSettings={onSettings} />}
+          {ids && (
+            <SummaryRow
+              part
+              label="Business IDs"
+              value={
+                <>
+                  {groupDigits(ids.read)} of {groupDigits(ids.total)} <ReadingIcon done={ids.read >= ids.total} />
+                </>
+              }
+              note={
+                <>
+                  Business IDs, IBANs and domains read from the searchable files&apos; text, for id: search and Relatives.
+                  {ids.found.length > 0 &&
+                    ` Found: ${ids.found
+                      .map((f, i) => `${f.label} in ${groupDigits(f.count)}${i === 0 ? " files" : ""}`)
+                      .join(", ")}.`}
+                </>
+              }
+            />
+          )}
+        </dl>
+      </div>
     </>
   );
 }
