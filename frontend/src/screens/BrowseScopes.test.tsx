@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CollectionRow } from "../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
+import css from "../styles-new.css?raw";
 import Browse from "./Browse";
 
 const coll = (id: number, name: string): CollectionRow => ({
@@ -127,5 +128,14 @@ describe("Browse's tree switch", () => {
     await user.click(await screen.findByText("Car"));
     const tree = screen.getByRole("navigation", { name: "Collections" });
     await waitFor(() => expect(within(tree).getByText("Car").closest('[role="treeitem"]')).toHaveAttribute("aria-current", "true"));
+  });
+
+  it("the switch keeps its words in a narrow tree: icons with the name on hover", async () => {
+    setup("/browse");
+    const buttons = await waitFor(() => within(switcher()).getAllByRole("button"));
+    expect(buttons.map((b) => b.getAttribute("data-tip"))).toEqual(["Folders", "Collections", "Tags"]);
+    expect(buttons.every((b) => b.querySelector("svg"))).toBe(true);
+    expect(css).toMatch(/\.tree\s*{[^}]*container:\s*tree\s*\/\s*inline-size/);
+    expect(css).toMatch(/@container tree \(max-width: \d+px\)\s*{[^}]*\.tree-switch-label\s*{\s*display:\s*none/);
   });
 });

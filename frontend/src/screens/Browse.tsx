@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, Network, PanelRight, X } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, Layers, Network, PanelRight, Tag as TagIcon, X } from "lucide-react";
 import {
   cloneElement,
   type CSSProperties,
@@ -2247,11 +2247,24 @@ export default function Browse() {
       className="tree-switch"
       value={treeKind}
       onChange={setTreeKind}
-      options={[
-        { value: "folders", label: "Folders" },
-        { value: "collections", label: "Collections" },
-        { value: "tags", label: "Tags" },
-      ]}
+      options={(
+        [
+          ["folders", "Folders", Folder],
+          ["collections", "Collections", Layers],
+          ["tags", "Tags", TagIcon],
+        ] as const
+      ).map(([value, name, Icon]) => ({
+        value,
+        // in a narrow tree only the icon shows; the name stays the button's name and tip
+        label: (
+          <>
+            <Icon size={13} strokeWidth={1.75} aria-hidden="true" />
+            <span className="tree-switch-label">{name}</span>
+          </>
+        ),
+        title: name,
+        ariaLabel: name,
+      }))}
     />
   );
   // is the tree on screen: docked (one pane always, two panes when chosen) or open over the panes
