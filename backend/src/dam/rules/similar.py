@@ -13,6 +13,7 @@ from pathlib import PurePosixPath
 
 from sqlalchemy import Engine, text
 
+from dam import languages
 from dam.core.naming import fix_mojibake
 from dam.core.paths import fold_name, nfc
 from dam.db.generation import WriteGeneration
@@ -25,11 +26,7 @@ MAX_TOKENS = 10
 TEXT_CHARS = 400  # of the text searched for words
 _WORD = re.compile(r"[^\W\d_]{4,}", re.UNICODE)
 # words that say what kind of document it is or how it was made, not who it is from
-_STOP = frozenset(
-    "scan scanned document documents image images invoice lasku kuitti receipt letter "
-    "kirje page pages copy final draft print this that with from your have been will "
-    "oikea sivu liite attachment screenshot".split()
-)
+_STOP = languages.kind_words()
 
 
 def word_tokens(stem: str, body: str) -> list[str]:

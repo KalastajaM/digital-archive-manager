@@ -477,6 +477,11 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Finland-specific detection in its own pack (no change in behaviour).** The Finnish
+  reference number, the address area of Finnish letters and the Finnish, English and Swedish
+  label words and stopwords now live in country and language packs, the first step towards
+  switching them per country. The README has a new section, Countries and languages, that
+  lists what is country-specific today.
 - **Browse's panes have their own controls (New look).** **Split** in the header opens the
   second pane; in two panes the first pane's bar has a **Swap** button and the second's an
   **X** that goes back to one pane (the One pane / Two panes switch and the Swap panes button

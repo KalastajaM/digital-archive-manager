@@ -53,10 +53,10 @@ def test_domestic_reference_requires_label():
 
 
 def test_grouped_domestic_reference():
-    from dam.rules.fields import _check_731
+    from dam.checks import check_731
 
     base = "123456789"
-    ref = base + str(_check_731(base))
+    ref = base + str(check_731(base))
     grouped = f"{ref[:5]} {ref[5:]}" if len(ref) > 5 else ref
     assert detect_fields(f"Viitenumero {grouped}").reference == ref
 
@@ -87,10 +87,10 @@ def test_rf_prefers_longest_valid_on_group_boundary():
 
 
 def test_check_digit_731_hand_checked_vectors():
-    from dam.rules.fields import _check_731
+    from dam.checks import check_731
 
-    assert _check_731("123456") == 1  # 1234561
-    assert _check_731("123") == 2  # 1232
+    assert check_731("123456") == 1  # 1234561
+    assert check_731("123") == 2  # 1232
     assert detect_fields("Viite 1234561").reference == "1234561"
     assert detect_fields("Viite 1232").reference == "1232"
 

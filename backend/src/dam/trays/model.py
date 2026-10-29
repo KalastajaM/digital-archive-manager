@@ -30,8 +30,8 @@ from pydantic import (
     model_validator,
 )
 
+from dam.checks import valid_iban
 from dam.rules.engine import TemplateError, check_template
-from dam.rules.fields import valid_iban
 from dam.rules.model import TOO_DEEP_MESSAGE, RuleError, read_yaml
 
 # --- field types -------------------------------------------------------------------
