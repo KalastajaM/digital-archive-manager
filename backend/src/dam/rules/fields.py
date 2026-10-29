@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from dam import countries
+from dam import countries, languages
 from dam.checks import valid_iban
 from dam.countries import CountryPack
 
@@ -102,12 +102,15 @@ def _references(text: str, packs: Sequence[CountryPack]) -> str | None:
 
 
 _LABEL_WINDOW = 40
-_DUE_LABELS = re.compile(r"erapaiva|erapvm|due date|forfallodag|maksettava|\bdue\b")
+_LANGUAGES = languages.enabled()
+_DUE_LABELS = languages.label_pattern(w for p in _LANGUAGES for w in p.due_labels)
 # Whole words on folded text, so "subtotal" and "valisumma" are never labels.
-_TOTAL_STRONG = re.compile(
-    r"\b(?:yhteensa|total|totalt|maksettava|att betala|loppusumma|kokonaissumma)\b"
+_TOTAL_STRONG = languages.label_pattern(
+    (w for p in _LANGUAGES for w in p.total_strong), whole_words=True
 )
-_TOTAL_WEAK = re.compile(r"\bsumma\b")
+_TOTAL_WEAK = languages.label_pattern(
+    (w for p in _LANGUAGES for w in p.total_weak), whole_words=True
+)
 
 
 def _fold(text: str) -> tuple[str, list[int]]:
