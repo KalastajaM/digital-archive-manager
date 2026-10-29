@@ -20,6 +20,7 @@ from dam.core.fs import readlink, realpath
 from dam.db.tables import collection_groups, ongoing_entries, operations
 from dam.errors import InvalidRequest, StalePreview
 from dam.index.driveid import DRIVE_ID_XATTR, read_drive_id
+from dam.ops import identity
 from dam.ops.model import GuardError
 
 IMP = "##. Important"
@@ -534,6 +535,19 @@ def test_undo_of_a_top_level_link_puts_the_users_link_back(app, demo):
     assert points_at(root / "Tax 2025.pdf", demo, f"{TAXES}/2025.pdf")
     assert "2025.pdf" not in listing(root)
     assert members(app) == {} and records(app) == []
+
+
+def test_undo_of_a_top_level_link_forgets_the_record_when_the_inode_is_reused(
+    app, demo, monkeypatch
+):
+    # ext4 gives the restored link the inode number of the app's link the undo removed
+    result = convert(app, f"{IMP}/Tax 2025.pdf", None)
+    monkeypatch.setattr(identity, "same_object", lambda recorded, current: recorded is not None)
+    outcome = app.activity.undo(result.batch.batch_id)
+    assert outcome.batch.failed is None and outcome.follow_up_error is None
+    assert records(app) == []
+    app.ongoing.sync()
+    assert points_at(demo.root / IMP / "Tax 2025.pdf", demo, f"{TAXES}/2025.pdf")
 
 
 # --- refusals ------------------------------------------------------------------------
