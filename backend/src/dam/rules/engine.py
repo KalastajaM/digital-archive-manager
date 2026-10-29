@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import PurePosixPath
 from typing import Literal
 
+from dam.address_areas import NONE
 from dam.config import SpecialFolders
 from dam.core.naming import fix_mojibake, matches_convention, parse_doc_date
 from dam.core.paths import nfc
@@ -54,7 +55,8 @@ class Area:
     picture the place where it fits best).
     ``matched``: the rule matched the document; ``reason``: why this area or its rule did
     not (a short phrase); ``wins``: the rule gave the document its folder or name;
-    ``score``: for a picture, how well it matched (0 to 1)."""
+    ``score``: for a picture, how well it matched (0 to 1); ``document``: an address area
+    the owner drew for this document only."""
 
     rule_id: str
     index: int
@@ -65,6 +67,7 @@ class Area:
     matched: bool = True
     reason: str | None = None
     wins: bool = False
+    document: bool = False
 
 
 @dataclass
@@ -130,6 +133,10 @@ class TemplateError(ValueError):
     pass
 
 
+# the source of a person found in the address area the owner drew for this document
+DOCUMENT_AREA = "document area"
+
+
 class NeedsPerson(TemplateError):
     """The template has ``{person}`` and the document has no person (yet)."""
 
@@ -147,11 +154,20 @@ def person_for(
     ctx: PeopleContext | None, layout: Page1Layout | None, rule: Rule | None = None
 ) -> PersonResult:
     """The document's person: the owner's assignment beats what page 1 says. Found in the
-    ``person_zone`` of ``rule`` when it has one, else in the archive's address zone."""
+    document's own address area when the owner drew one (none: nobody is looked for), else
+    in the ``person_zone`` of ``rule`` when it has one, else in the archive's address zone."""
     if ctx is None:
         return PersonResult()
-    own_zone = rule is not None and rule.person_zone is not None
-    zone = rule.person_zone if own_zone else ctx.address_zone
+    if ctx.document_zone == NONE:
+        return PersonResult(ctx.assigned, "assigned" if ctx.assigned else None)
+    document = ctx.document_zone is not None
+    own_zone = not document and rule is not None and rule.person_zone is not None
+    if document:
+        zone = ctx.document_zone
+    elif own_zone:
+        zone = rule.person_zone
+    else:
+        zone = ctx.address_zone
     found = detect_people(layout, zone, ctx.people)
     if ctx.assigned:
         return PersonResult(
@@ -166,7 +182,7 @@ def person_for(
         return PersonResult(None, None, found, tuple(zone))
     return PersonResult(
         one,
-        f"rule:{rule.id}" if own_zone else "address area",
+        DOCUMENT_AREA if document else f"rule:{rule.id}" if own_zone else "address area",
         found,
         tuple(zone),
         person_line(layout, zone, ctx.people, one),
@@ -652,13 +668,15 @@ def suggest(
         for a in rule_areas(r, layout, wins=r.id in winners, rec=rec, pictures=pictures)
     ]
     if layout is not None and people is not None and people.people and who.zone is not None:
+        document = people.document_zone is not None
         areas.append(
             Area(
-                person_rule.id if person_rule is not None else "",
+                person_rule.id if person_rule is not None and not document else "",
                 0,
                 who.zone,
                 "address",
                 [who.line] if who.line is not None else [],
+                document=document,
             )
         )
 

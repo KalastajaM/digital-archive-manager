@@ -107,3 +107,11 @@ def test_write_keys_restores_the_file_when_the_value_does_not_read_back(app_path
     with pytest.raises(OSError):
         write_keys(app_paths, {"page1_backfill": value}, lambda s: False)
     assert (app_paths.config_dir / "settings.yaml").read_bytes() == before
+
+
+def test_remove_takes_a_key_and_its_block_out():
+    from dam.settings_write import REMOVE, with_keys
+
+    text = "a: 1\naddress_zone:\n  - 0.1\n  - 0.2\n# about b\nb: 2\n"
+    assert with_keys(text, {"address_zone": REMOVE}) == "a: 1\n# about b\nb: 2\n"
+    assert with_keys("a: 1\n", {"address_zone": REMOVE}) == "a: 1\n"

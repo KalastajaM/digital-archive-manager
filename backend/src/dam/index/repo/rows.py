@@ -24,6 +24,7 @@ from dam.core.paths import nfc
 from dam.db.tables import (
     checklist_items,
     collection_members,
+    file_address_zones,
     file_assigned_codes,
     file_assignments,
     file_barcodes,
@@ -204,6 +205,7 @@ class RowsMixin:
                 item_files,
                 file_locks,
                 file_assignments,
+                file_address_zones,
                 file_summaries,
                 file_fields,
                 rule_outcomes,
@@ -471,6 +473,7 @@ class RowsMixin:
                     file_summaries,
                     file_fields,
                     file_assignments,
+                    file_address_zones,
                     file_locks,
                 ):
                     conn.execute(table.delete().where(table.c.drive_id.in_(chunk)))

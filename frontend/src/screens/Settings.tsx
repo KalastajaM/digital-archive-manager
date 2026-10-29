@@ -8,6 +8,7 @@ import { ArchiveFoldersSettings } from "../components/ArchiveFoldersSettings";
 import { AppearanceSettings } from "../components/AppearanceSettings";
 import { SnapshotSettings } from "../components/SnapshotSettings";
 import { FilingCodes } from "../components/codes/FilingCodes";
+import { AddressAreaSettings } from "../components/AddressAreaSettings";
 import { CountriesSettings } from "../components/CountriesSettings";
 import { IndexingSettings } from "../components/IndexingSettings";
 import { SendersSettings } from "../components/SendersSettings";
@@ -24,7 +25,13 @@ export const SECTIONS: Section[] = [
   { id: "filing-rules", label: "Filing rules", scope: "archive", render: () => <FilingRules /> },
   { id: "folders", label: "Archive folders", scope: "archive", render: () => <ArchiveFoldersSettings /> },
   { id: "indexing", label: "Indexing", scope: "archive", render: () => <IndexingSettings /> },
-  { id: "countries", label: "Reading documents", scope: "archive", render: () => <CountriesSettings /> },
+  { id: "countries", label: "Reading documents", scope: "archive", render: () => (
+      <>
+        <CountriesSettings />
+        <AddressAreaSettings />
+      </>
+    ),
+  },
   { id: "senders", label: "Senders", scope: "archive", render: () => <SendersSettings />, newOnly: true },
   { id: "snapshots", label: "Snapshots", scope: "archive", render: () => <SnapshotSettings /> },
   { id: "appearance", label: "Appearance", scope: "browser", render: () => <AppearanceSettings /> },

@@ -12,7 +12,9 @@ import {
   usePeople,
   useRules,
   useSavePeople,
+  useSetAddressArea,
 } from "../../api/client";
+import { useStyle } from "../../appearance";
 import { visible } from "../../text";
 import { RuleSheet } from "../rules/RuleSheet";
 import { useToast } from "../Toasts";
@@ -30,7 +32,8 @@ export function withChangedArea(rule: Rule, area: Area, box: PageBox, image?: st
 
 /** ``driveId``: the document the area was changed on (a picture area is cut again from it). */
 export function AreaChange({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
-  if (area.kind === "address" && area.rule_id === "") return <AddressAreaSheet box={box} onClose={onClose} />;
+  if (area.kind === "address" && area.rule_id === "")
+    return <AddressAreaSheet driveId={driveId} document={area.document ?? false} box={box} onClose={onClose} />;
   return <RuleAreaSheet driveId={driveId} area={area} box={box} onClose={onClose} />;
 }
 
@@ -77,19 +80,34 @@ function RuleAreaSheet({ driveId, area, box, onClose }: { driveId: string; area:
   );
 }
 
-function AddressAreaSheet({ box, onClose }: { box: PageBox; onClose: () => void }) {
+/** The address area was moved on ``driveId``. The New look asks whether the new place is
+ * for this document only or for all letters (``document``: it was this document's own
+ * area, which "All letters" then takes away so the document follows them again). */
+function AddressAreaSheet({ driveId, document, box, onClose }: { driveId: string; document: boolean; box: PageBox; onClose: () => void }) {
+  const [look] = useStyle();
+  const isNew = look === "new";
   const people = usePeople();
   const save = useSavePeople();
+  const setArea = useSetAddressArea();
   const toast = useToast();
-  const doSave = async () => {
+  const [problem, setProblem] = useState<string | null>(null);
+  const busy = save.isPending || setArea.isPending;
+  const act = async (action: () => Promise<unknown>, done: string) => {
+    setProblem(null);
     try {
-      await save.mutateAsync({ people: people.data?.people ?? [], address_zone: box });
-      toast({ kind: "info", text: "Address area saved for all letters." });
+      await action();
+      toast({ kind: "info", text: done });
       onClose();
-    } catch {
-      /* the message is shown below */
+    } catch (e) {
+      setProblem(errorText(e));
     }
   };
+  const saveAll = () =>
+    act(async () => {
+      await save.mutateAsync({ people: people.data?.people ?? [], address_zone: box });
+      if (document) await setArea.mutateAsync({ driveId, box: "general" });
+    }, "Address area saved for all letters.");
+  const saveThis = () => act(() => setArea.mutateAsync({ driveId, box }), "Address area saved for this document.");
   return (
     <Sheet
       open
@@ -98,17 +116,39 @@ function AddressAreaSheet({ box, onClose }: { box: PageBox; onClose: () => void 
       footer={
         <>
           <button type="button" onClick={onClose}>Cancel</button>
-          <button type="button" className="primary" disabled={!people.data || save.isPending} onClick={() => void doSave()}>
-            Save
+          {isNew && (
+            <button type="button" className={document ? "primary" : undefined} disabled={busy} onClick={() => void saveThis()}>
+              This document only
+            </button>
+          )}
+          <button
+            type="button"
+            className={isNew && document ? undefined : "primary"}
+            disabled={!people.data || busy}
+            onClick={() => void saveAll()}
+          >
+            {isNew ? "All letters" : "Save"}
           </button>
         </>
       }
     >
-      <p>Look for the person a letter is for in this area on every letter?</p>
-      <p className="hint">It changes who is found on letters that are read from now on and on the ones in the Inbox.</p>
-      {save.isError && (
+      {isNew ? (
+        <>
+          <p>Look for the person a letter is for in this area on this document only, or on all letters?</p>
+          <p className="hint">
+            All letters changes who is found on letters that are read from now on and on the ones in the Inbox. Documents
+            with an address area of their own keep it.
+          </p>
+        </>
+      ) : (
+        <>
+          <p>Look for the person a letter is for in this area on every letter?</p>
+          <p className="hint">It changes who is found on letters that are read from now on and on the ones in the Inbox.</p>
+        </>
+      )}
+      {problem && (
         <p className="error" role="alert">
-          {visible(errorText(save.error))}
+          {visible(problem)}
         </p>
       )}
     </Sheet>

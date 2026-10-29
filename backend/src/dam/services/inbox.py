@@ -9,6 +9,7 @@ from pathlib import Path
 
 from sqlalchemy import text as sql_text
 
+from dam.address_areas import DocumentZone
 from dam.bills.barcode import BarcodeError
 from dam.bills.barcode import parse as parse_barcode
 from dam.codes.apply import apply_codes, apply_ticks, codes_for, known_reads
@@ -217,6 +218,7 @@ class InboxService:
         people: Callable[[], Sequence[Person]] = list,
         address_zone: Callable[[], Sequence[float]] = lambda: DEFAULT_ADDRESS_ZONE,
         assigned_person: Callable[[str], str | None] = lambda drive_id: None,
+        document_zone: Callable[[str], DocumentZone | None] = lambda drive_id: None,
         assignments: AssignmentService | None = None,
         pictures: Pictures | None = None,
         area_pictures: AreaPictures | None = None,
@@ -244,6 +246,8 @@ class InboxService:
         self._people = people
         self._address_zone = address_zone
         self._assigned_person = assigned_person
+        # the address area the owner drew for one document (``dam.address_areas``)
+        self._document_zone = document_zone
         self._assignments = assignments
         # the page-1 pictures, for rules with picture areas
         self.pictures = pictures
@@ -262,7 +266,9 @@ class InboxService:
 
     def people_context(self, drive_id: str, rows: _Rows | None = None) -> PeopleContext:
         person = self._assigned_person(drive_id) if rows is None else rows.persons.get(drive_id)
-        return PeopleContext(self._people(), tuple(self._address_zone()), person)
+        return PeopleContext(
+            self._people(), tuple(self._address_zone()), person, self._document_zone(drive_id)
+        )
 
     def list(self) -> list[InboxEntry]:
         """Files directly in the inbox or in a filing code's inbox folder (no folders,

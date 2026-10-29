@@ -466,6 +466,7 @@ const keys = {
   countries: ["countries"],
   senders: ["senders"],
   identifierNames: ["identifier-names"],
+  addressArea: ["address-area"],
   // under the inbox's key: whatever reloads the inbox reloads the marked batch too
   markedBatch: ["inbox", "marked"],
 } as const;
@@ -1137,11 +1138,39 @@ export const usePeople = (enabled = true) =>
 export const useSavePeople = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { people: Person[]; address_zone?: PageBox }) => apiPut("/api/settings/people", { body }),
+    mutationFn: (body: { people: Person[]; address_zone?: PageBox | null }) => apiPut("/api/settings/people", { body }),
     onSuccess: (saved) => client.setQueryData(keys.people, saved),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.people });
       void client.invalidateQueries({ queryKey: keys.inbox }); // who a letter is for follows the list
+      void client.invalidateQueries({ queryKey: keys.file });
+    },
+  });
+};
+
+export type AddressArea = Schemas["AddressAreaOut"];
+
+/** Where people are looked for on one document: the usual area, its own, or none. */
+export const useAddressArea = (driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...keys.addressArea, driveId],
+    queryFn: () => apiGet("/api/files/{drive_id}/address-area", { path: { drive_id: driveId } }),
+    enabled,
+  });
+
+/** Give one document its own address area (a box), none (null), or the usual one again
+ * ("general"). */
+export const useSetAddressArea = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveId, box }: { driveId: string; box: PageBox | null | "general" }) =>
+      box === "general"
+        ? apiDelete("/api/files/{drive_id}/address-area", { path: { drive_id: driveId } })
+        : apiPut("/api/files/{drive_id}/address-area", { path: { drive_id: driveId }, body: { box } }),
+    onSuccess: (saved, { driveId }) => client.setQueryData([...keys.addressArea, driveId], saved),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.addressArea });
+      void client.invalidateQueries({ queryKey: keys.inbox }); // who the letter is for follows it
       void client.invalidateQueries({ queryKey: keys.file });
     },
   });
