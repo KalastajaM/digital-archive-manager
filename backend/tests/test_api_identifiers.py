@@ -45,3 +45,9 @@ def test_a_country_that_is_off_is_not_shown(app, fake_archive):
 def test_an_unknown_file_is_404(app):
     with make_client(app) as c:
         assert c.get("/api/files/nope/identifiers").status_code == 404
+
+
+def test_status_says_how_far_the_identifiers_pass_is(app, fake_archive):
+    _two_bills(app, fake_archive)
+    with make_client(app) as c:
+        assert c.get("/api/status").json()["identifiers"] == {"read": 2, "total": 2}

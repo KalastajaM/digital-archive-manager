@@ -56,7 +56,11 @@ describe("Settings", () => {
     const calls = mockFetch({
       "GET /api/archives": { body: { archives: [{ id: "main", name: "Home", color: "#3b6fd4", current: true }], can_switch: true } },
       "GET /api/status": {
-        body: { files: 1, page1: { read: 1, total: 2, backfill: true, blocked: [], text_per_min: 300, scans_per_min: 30, text_left: 1, scans_left: 0 } },
+        body: {
+          files: 1,
+          page1: { read: 1, total: 2, backfill: true, blocked: [], text_per_min: 300, scans_per_min: 30, text_left: 1, scans_left: 0 },
+          identifiers: { read: 1200, total: 10452 },
+        },
       },
       "PUT /api/settings/page1-speed": { body: { reads_per_minute: 600 } },
       "PUT /api/settings/page1-backfill": { body: { enabled: false } },
@@ -69,6 +73,7 @@ describe("Settings", () => {
       </MemoryRouter>,
     );
     const user = userEvent.setup();
+    expect(await screen.findByText(/^Business IDs, IBANs and domains read from 1\D200 of 10\D452 documents\.$/)).toBeInTheDocument();
     const section = await screen.findByRole("region", { name: "Indexing" });
     const speed = await within(section).findByRole("combobox", { name: "Page 1 reading speed" });
     expect(speed).toHaveValue("300");

@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Business IDs, IBANs and domains are remembered.** dam reads the business IDs (for Finland
+  the Y-tunnus, also in its VAT form), IBANs and web or mail domains from each document's
+  text, in the background and without opening the files again, and keeps them up to date when
+  a document changes. The file panel shows them under **Found in this document**, each linking
+  to the other files that carry it; the search filter `id:` finds them (`id:0112038-9`);
+  Relatives links documents with the same business ID; Settings, Indexing says how far the
+  reading is. Mail services anyone can use (Gmail, Outlook and the like) are left out.
 - **Countries and languages.** Settings has a new section, Countries and languages, under
   This archive: the countries your post comes from and the languages it is written in, each
   listed with what it adds, English always on. The first-run screen asks once where your post

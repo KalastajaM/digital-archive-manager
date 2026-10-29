@@ -634,6 +634,14 @@ class Page1BlockedOut(BaseModel):
     count: int
 
 
+class IdentifiersProgressOut(BaseModel):
+    """The identifiers pass: indexed documents whose text was read with the current
+    packs, of all with text."""
+
+    read: int
+    total: int
+
+
 class Page1ProgressOut(BaseModel):
     """The page-1 layout pass: documents whose page 1 is read, of all it reads, and
     whether the backfill of documents outside the inbox is on."""
@@ -672,6 +680,7 @@ class StatusOut(BaseModel):
     # links can be made (False only on Windows without Developer Mode): Link is then off
     can_link: bool = True
     page1: Page1ProgressOut | None = None  # None only from the setup-mode server
+    identifiers: IdentifiersProgressOut | None = None  # None only from the setup-mode server
     # False only from the setup-mode server (then only ``archive`` and ``profiles_count``
     # are set besides it): no archive folder yet
     configured: bool = True

@@ -5869,6 +5869,17 @@ export interface components {
             /** Identifiers */
             identifiers: components["schemas"]["IdentifierOut"][];
         };
+        /**
+         * IdentifiersProgressOut
+         * @description The identifiers pass: indexed documents whose text was read with the current
+         *     packs, of all with text.
+         */
+        IdentifiersProgressOut: {
+            /** Read */
+            read: number;
+            /** Total */
+            total: number;
+        };
         /** ImportantConvertApplyBody */
         ImportantConvertApplyBody: {
             /** Rel */
@@ -8048,6 +8059,7 @@ export interface components {
              */
             can_link?: boolean;
             page1?: components["schemas"]["Page1ProgressOut"] | null;
+            identifiers?: components["schemas"]["IdentifiersProgressOut"] | null;
             /**
              * Configured
              * @default true

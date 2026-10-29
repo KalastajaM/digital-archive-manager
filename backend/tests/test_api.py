@@ -100,6 +100,7 @@ def test_status(client, app, fake_archive):
             "text_per_min": 300,
             "scans_per_min": 30,
         },
+        "identifiers": {"read": 0, "total": 0},
         "files": 3,
         "indexed": 1,
         "pending": 1,
