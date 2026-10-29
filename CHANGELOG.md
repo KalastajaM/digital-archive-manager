@@ -21,6 +21,11 @@ All notable changes are listed here. The format follows
   pages it found text; a turning circle shows an index that is still reading, a check one
   that is done.
 
+### Fixed
+
+- **Relatives no longer runs into the identifiers above it.** In the file panel a hairline
+  and a little space now separate what the document mentions from its Relatives.
+
 ## [0.9.0] - 2026-10-29
 
 First public release. In short:

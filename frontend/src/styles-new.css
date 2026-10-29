@@ -2655,6 +2655,9 @@
 [data-style="new"] .file-skeleton [data-block="top"] { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--hairline); }
 [data-style="new"] .file-skeleton [data-block="top"] > * { margin-top: 0; margin-bottom: 0; }
 [data-style="new"] .file-skeleton [data-block="group"] .inspector-collection { margin-top: 0; }
+/* what the document mentions, then its relatives: apart by a hairline, like the top block */
+[data-style="new"] .file-skeleton [data-block="relatives"] { display: flex; flex-direction: column; gap: 12px; }
+[data-style="new"] .file-skeleton .found-ids + .relatives { padding-top: 12px; border-top: 1px solid var(--hairline); }
 /* the icon row: look at it │ file it, right-aligned like the preview's toolbar; each part wraps
    as a whole when the panel is narrow. Every control a 28px box (the toolbar's), groups apart by a rule. */
 [data-style="new"] .file-actions-icons { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px 0; min-width: 0; }
