@@ -7068,7 +7068,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "reference" | "sender" | "collection" | "tag" | "folder" | "iban" | "person";
+            kind: "reference" | "sender" | "business_id" | "collection" | "tag" | "folder" | "iban" | "person";
             /** Value */
             value: string;
             /** Count */
@@ -7089,7 +7089,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "reference" | "sender" | "collection" | "tag" | "folder" | "iban" | "person";
+            kind: "reference" | "sender" | "business_id" | "collection" | "tag" | "folder" | "iban" | "person";
             /** Value */
             value: string;
             /** Weight */

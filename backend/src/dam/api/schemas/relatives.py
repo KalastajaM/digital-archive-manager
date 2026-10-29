@@ -6,7 +6,9 @@ from pydantic import BaseModel
 
 from dam.api.schemas.base import StrictIn
 
-RelativeKind = Literal["reference", "sender", "collection", "tag", "folder", "iban", "person"]
+RelativeKind = Literal[
+    "reference", "sender", "business_id", "collection", "tag", "folder", "iban", "person"
+]
 
 
 class RelativeLinkOut(BaseModel):

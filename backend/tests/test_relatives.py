@@ -508,3 +508,35 @@ def test_same_collection_through_a_member_folder(app, archive):
     assert kinds(got["bank"]) == {("collection", "Sauna build")}
     assert ("collection", "Sauna build") in kinds(got["far"])
     assert "me" not in got  # outside the member folder
+
+
+def _identifiers(app, found: dict[str, list[tuple[str, str]]]) -> None:
+    from dam import countries
+    from dam.extract.base import ExtractedText
+
+    for drive_id, values in found.items():
+        app.repo.save_content(drive_id, f"sha-{drive_id}", ExtractedText("x", "t"), "indexed")
+        app.repo.save_identifiers(drive_id, f"sha-{drive_id}", countries.signature(), values)
+
+
+def test_the_same_business_id(app, archive):
+    _identifiers(
+        app,
+        {
+            "me": [("fi.ytunnus", "0112038-9"), ("core.domain", "kela.fi")],
+            "far": [("fi.ytunnus", "0112038-9")],
+            "bank": [("core.domain", "kela.fi")],
+        },
+    )
+    got = by_id(app.relatives.of("me"))
+    assert kinds(got["far"]) == {("business_id", "0112038-9")}
+    assert got["far"].score == 3
+    assert "bank" not in got  # a domain alone links nothing
+
+
+def test_no_business_id_link_when_its_country_is_off(app, archive):
+    from dam import packs
+
+    _identifiers(app, {"me": [("fi.ytunnus", "0112038-9")], "far": [("fi.ytunnus", "0112038-9")]})
+    packs.activate(packs.build([], ["en"]))
+    assert "far" not in by_id(app.relatives.of("me"))
