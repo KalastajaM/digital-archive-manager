@@ -21,6 +21,7 @@ const entry = (name: string, id: string, is_dir = false): DirEntry => ({
   drive_id: id,
   connected: true,
   marks: [],
+  open_items: [],
 });
 
 function setup(url: string, listing: DirEntry[] = [entry("Money", "d1", true), entry("a.pdf", "f1")]) {
@@ -301,5 +302,24 @@ describe("This folder's columns (New)", () => {
     setup("/browse", rows);
     await screen.findByText("a.pdf");
     expect(screen.queryByRole("group", { name: "Sort by" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Browse rows with open tray items", () => {
+  it("tags a file with each open item's tray and date, as a collection's page does", async () => {
+    document.documentElement.dataset.style = "new";
+    const due: DirEntry = {
+      ...entry("receipt.pdf", "f2"),
+      open_items: [{ item: { id: 7, tray_name: "To action", title: "Botox Receipt", date: "2026-10-30" }, level: "soon" }],
+    };
+    setup("/browse", [entry("Money", "d1", true), entry("a.pdf", "f1"), due]);
+    const row = (await screen.findByText("receipt.pdf")).closest("li") as HTMLElement;
+    const tag = within(row).getByText("To action · 30.10.2026");
+    expect(tag).toHaveClass("tag-orange");
+    // the item's title on hover
+    expect(tag).toHaveAttribute("title", "To action: Botox Receipt · 30.10.2026");
+    // a file without open items and a folder carry none
+    const rows = [...row.parentElement!.querySelectorAll("li")];
+    expect(rows.filter((li) => li.querySelector(".entry-tags")).map((li) => li.textContent)).toEqual([row.textContent]);
   });
 });

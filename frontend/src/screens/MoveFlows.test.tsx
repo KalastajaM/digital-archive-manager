@@ -13,10 +13,10 @@ import Browse from "./Browse";
 
 const SPECIAL = { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" };
 const file = (path: string, drive_id: string): DirEntry => ({
-  name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false, is_link: false, size: 1, mtime: 1, drive_id, connected: true, marks: [],
+  name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false, is_link: false, size: 1, mtime: 1, drive_id, connected: true, marks: [], open_items: [],
 });
 const dir = (path: string): DirEntry => ({
-  name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id: `id-${path}`, connected: true, marks: [],
+  name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: true, is_link: false, size: null, mtime: 1, drive_id: `id-${path}`, connected: true, marks: [], open_items: [],
 });
 const LISTING = [dir("13. Taxes"), file("a.pdf", "f1"), file("b.pdf", "f2")];
 const op = (id: string, dst: string) => ({ kind: "move", src: `${id}.pdf`, dst, drive_id: id, note: null });

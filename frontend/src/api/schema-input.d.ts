@@ -5128,6 +5128,11 @@ export interface components {
              * @default true
              */
             connected?: boolean;
+            /**
+             * Open Items
+             * @default []
+             */
+            open_items?: components["schemas"]["RowAttentionOut"][];
         };
         /** DismissTrayDefaultsIn */
         DismissTrayDefaultsIn: {
@@ -7499,6 +7504,26 @@ export interface components {
             /** Queued */
             queued: number;
         };
+        /** RowAttentionOut */
+        RowAttentionOut: {
+            item: components["schemas"]["RowItemOut"];
+            /** Level */
+            level: ("overdue" | "today" | "soon" | "undated") | null;
+        };
+        /**
+         * RowItemOut
+         * @description An open tray item on a listed file: enough for its tag (tray, date, title).
+         */
+        RowItemOut: {
+            /** Id */
+            id: number;
+            /** Tray Name */
+            tray_name: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+        };
         /** RuleDraftOut */
         RuleDraftOut: {
             /** Id */
@@ -7823,6 +7848,11 @@ export interface components {
              * @default true
              */
             connected?: boolean;
+            /**
+             * Open Items
+             * @default []
+             */
+            open_items?: components["schemas"]["RowAttentionOut"][];
         };
         /** SenderOut */
         SenderOut: {

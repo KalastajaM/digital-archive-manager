@@ -19,7 +19,7 @@ const hit = (id: string, path: string, rank = -1): SearchHit => ({
   rank,
   size: 10,
   mtime: 1_700_000_000,
-  connected: true, marks: [],
+  connected: true, marks: [], open_items: [],
 });
 // best match first; the folders are not in tree order on purpose
 const HITS = [

@@ -24,6 +24,7 @@ const ROWS: DirEntry[] = Array.from({ length: COUNT }, (_, k) => ({
   drive_id: `f${k}`,
   connected: true,
   marks: [],
+  open_items: [],
 }));
 
 function setup(query = "") {

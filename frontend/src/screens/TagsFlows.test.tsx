@@ -27,7 +27,7 @@ const hit = (id: string, name: string): SearchHit => ({
   rank: 0,
   size: 1,
   mtime: 1,
-  connected: true, marks: [],
+  connected: true, marks: [], open_items: [],
 });
 const queryOf = (call: Call) => new URL(call.url, "http://x").searchParams;
 const searches = (calls: Call[]) => calls.filter((c) => c.url.startsWith("/api/search"));

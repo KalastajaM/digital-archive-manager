@@ -33,6 +33,7 @@ import {
 } from "../api/client";
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
+import { attentionTags } from "../components/GroupTree";
 import { WindowedList } from "../components/WindowedList";
 import { notConnected } from "../components/FileLaunch";
 import type { PreviewFile } from "../components/FilePreview";
@@ -65,6 +66,7 @@ import { IconButton } from "../components/ui/IconButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { Segmented } from "../components/ui/Segmented";
 import { Splitter, useSplitWidth } from "../components/ui/SplitPane";
+import { Tag } from "../components/ui/Tag";
 import { Toolbar } from "../components/ui/Toolbar";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
@@ -121,6 +123,8 @@ type Item = {
   /** The extra archive folder the entry is in (null or left out: the main folder). */
   folder?: string | null;
   connected?: boolean;
+  /** A file's open tray items: tagged on the row, as on a collection's page. */
+  open_items?: DirEntry["open_items"];
 };
 
 type PaneId = "left" | "right";
@@ -491,6 +495,9 @@ function EntryRow({
   const driveRoot = item.is_dir && item.folder != null && !item.path.includes("/"); // an extra folder's own root
   const Icon = driveRoot ? HardDrive : item.is_dir ? Folder : File;
   const cls = [checked && "checked", item.is_dir && "entry-row-dir", stripe && "stripe"].filter(Boolean).join(" ");
+  const open = { items: item.open_items ?? [] };
+  const tags = attentionTags(open);
+  const tips = attentionTags(open, { long: true });
   const main = (
     <>
       <Icon className="entry-icon" size={16} strokeWidth={1.5} aria-hidden="true" />
@@ -500,6 +507,16 @@ function EntryRow({
         <span className="entry-name">{visible(item.name)}</span>
       )}
       <MarkIcons marks={item.marks} driveId={item.is_dir ? undefined : item.drive_id} path={item.path} />
+      {tags.length > 0 && (
+        <span className="entry-tags">
+          {tags.map((t, i) => (
+            // the full line (tray, item title, date) on hover
+            <Tag key={t.key} tone={t.tone} title={tips[i].text}>
+              {t.text}
+            </Tag>
+          ))}
+        </span>
+      )}
       {item.connected === false && <span className="entry-offline">Not connected</span>}
       {item.is_link && (
         <span className="link-icon" role="img" aria-label="Symbolic link" title="Symbolic link">

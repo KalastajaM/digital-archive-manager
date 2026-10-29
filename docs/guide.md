@@ -1185,6 +1185,10 @@ list's width.
   from To Delete" and Undo puts them back in To Delete. The tags, collections, notes and
   tray items the files had are still there. A file that stood at the top of the archive,
   or in `##. Ongoing`, can only be restored to the inbox.
+- **Due and follow-up dates.** A file with an open tray item shows it on its row as on a
+  collection's page: the tray and the item's date (`To pay · 30.10.2026`), red when
+  overdue, orange when due today or within 3 days, grey otherwise. Hover it for the item's
+  title. The same tag shows in **Files** and in search results.
 - **Folders / Files** switches between the folder view and a flat list of every file below
   the current folder, with sortable Name, Folder, Date and Size columns (up to 500 rows). A
   collection's files are a search: `collection:"House sale"`.

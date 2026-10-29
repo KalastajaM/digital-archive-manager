@@ -8,6 +8,9 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Due dates in Browse.** A file with an open tray item shows the tray and its date on
+  its row, in the folder view, Files and search results, coloured by urgency as on a
+  collection's page.
 - **`id:*`** finds every file that has a business ID, whatever it is: `from:Telia id:*`
   lists Telia's documents that carry one.
 - **`*` for "any" in more filters.** `tag:*`, `collection:*`, `from:*`, `for:*` and `tray:*`
