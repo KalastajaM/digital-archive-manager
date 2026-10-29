@@ -204,11 +204,20 @@ function SummaryBlock({ onSettings }: { onSettings?: () => void }) {
               }
               note={
                 <>
-                  Business IDs, IBANs and domains read from the searchable files&apos; text, for id: search and Relatives.
-                  {ids.found.length > 0 &&
-                    ` Found: ${ids.found
-                      .map((f, i) => `${f.label} in ${groupDigits(f.count)}${i === 0 ? " files" : ""}`)
-                      .join(", ")}.`}
+                  Business IDs, IBANs and domains read from the searchable files&apos; text, for id:, iban: and domain: search and Relatives.
+                  {ids.found.length > 0 && (
+                    <>
+                      {" Found: "}
+                      {ids.found.map((f, i) => (
+                        <span key={f.search}>
+                          {i > 0 && ", "}
+                          {f.label} in {groupDigits(f.count)}
+                          {i === 0 ? " files" : ""} (<code>{f.search}</code>)
+                        </span>
+                      ))}
+                      .
+                    </>
+                  )}
                 </>
               }
             />

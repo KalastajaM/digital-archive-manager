@@ -64,6 +64,17 @@ def business_id_kinds(profile: Profile) -> list[str]:
     ]
 
 
+def identifier_kinds(profile: Profile) -> dict[str, list[str]]:
+    """The enabled identifier kinds by the search filter that finds them: ``id`` the
+    business IDs, ``iban`` the IBANs, ``domain`` the web and mail domains."""
+    every = [s.kind for p in profile.countries for s in p.identifiers]
+    return {
+        "id": business_id_kinds(profile),
+        "iban": [k for k in every if k.endswith(".iban")],
+        "domain": [k for k in every if k.endswith(".domain")],
+    }
+
+
 _active: Profile | None = None
 
 

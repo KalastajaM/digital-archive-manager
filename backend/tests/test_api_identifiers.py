@@ -58,10 +58,26 @@ def test_the_index_summary_says_what_was_found(app, fake_archive):
     with make_client(app) as c:
         got = c.get("/api/index/summary").json()["identifiers"]
     assert got["found"] == [
-        {"label": "business IDs", "count": 2},
-        {"label": "IBANs", "count": 0},
-        {"label": "web or mail domains", "count": 1},
+        {"label": "business IDs", "count": 2, "search": "id:*"},
+        {"label": "IBANs", "count": 0, "search": "iban:*"},
+        {"label": "web or mail domains", "count": 1, "search": "domain:*"},
     ]
+
+
+def test_the_found_counts_are_one_query_and_follow_the_countries(app, fake_archive):
+    from test_inbox_cost import statements
+
+    _two_bills(app, fake_archive)
+    with statements(app) as seen:
+        with make_client(app) as c:
+            c.get("/api/index/summary")
+    # the three counts: one grouped query over file_identifiers
+    counts = [s for s in seen if "FROM file_identifiers" in s]
+    assert len(counts) == 1 and "GROUP BY" in counts[0]
+    packs.activate(packs.build([], ["en"]))  # Finland off: its Y-tunnus no longer counts
+    with make_client(app) as c:
+        got = c.get("/api/index/summary").json()["identifiers"]["found"]
+    assert [f["count"] for f in got] == [0, 0, 1]
 
 
 def test_page1_with_text_counts_pages_that_have_some(app, fake_archive):
