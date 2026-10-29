@@ -26,6 +26,7 @@ from dam.config import AppPaths
 from dam.errors import Conflict
 from dam.services.archives import ArchiveService, solo
 from dam.services.layout import LayoutOutcome
+from dam.snapshots import app_version
 
 
 def create_setup_api(
@@ -40,7 +41,7 @@ def create_setup_api(
     answers ``/api/archives`` (adding or switching to another archive needs no folder)."""
     api = FastAPI(
         title="Digital Archive Manager (setup)",
-        version="0.1.0",
+        version=app_version(),
         responses=ERROR_RESPONSES,
         docs_url=None,
         redoc_url=None,

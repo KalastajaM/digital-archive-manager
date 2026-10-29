@@ -6,6 +6,38 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-29
+
+First public release. In short:
+
+- Inbox filing: dam suggests a name, folder and tags for each new file in
+  `##. Organize`; you preview the change, confirm, and can undo it.
+- Browse and full-text search over file names, text and OCR (Apple Vision on macOS,
+  optional Tesseract on Windows and Linux).
+- Trays, including To pay with the Finnish bank barcode read from bills, plus Today and
+  reminders (desktop and e-mail).
+- Collections with groups and child collections, kept in a managed `##. Ongoing` folder;
+  export of a collection.
+- Activity page that journals every change, with undo of a whole batch.
+- Quick Look previews, drag and drop, keyboard shortcuts, and a two-pane Browse.
+- Optional AI (your own Anthropic key, in the OS keychain): suggestions, summaries and
+  questions, only on click, after a preview of exactly what is sent, with a monthly
+  budget and a call log.
+- First-run setup: `dam init` or a welcome screen finds your cloud-drive folders
+  (Google Drive, OneDrive, Dropbox, iCloud Drive, Nextcloud and others) and asks before
+  saving anything.
+- Several archives: add a test or demo archive next to your real one and switch between
+  them (menu in the sidebar, `dam archives ...`, `dam --archive NAME ...`). Each has its
+  own settings, index, logs and reminders; forgetting one never deletes a folder.
+- Cross-platform install for macOS, Windows and Linux, with CI on all three.
+- Safety by design: never deletes your files, every change previewed and undoable,
+  local-only server on `127.0.0.1`.
+- Optional `dam[msg]` extra for Outlook `.msg` e-mails (GPL-3.0 dependency, not part of
+  the core).
+- MIT licence.
+
+Everything below was added, changed or fixed on the way from that outline to this release.
+
 ### Added
 
 - **Senders named from their business ID (New look).** Settings has a new section,
@@ -498,165 +530,6 @@ All notable changes are listed here. The format follows
   including a folder that is gone and is made again and a name that is taken (the file
   gets a number), you confirm, and Activity shows "Restored 3 files from To Delete" with
   Undo, which puts them back in To Delete.
-
-### Changed
-
-- **A smaller database.** The search index no longer keeps its own copy of every file's
-  text: it reads the text dam already stores (migration 0044). Page-1 layouts are stored
-  compressed (0045). After the update dam compacts the database once, when the disk has room
-  for it, so the space is given back. On an archive of about 12,000 files the database went
-  from 874 MB to 517 MB, with the same search results. The update takes about a minute on a
-  database that size, and the usual copy is written next to it first.
-
-- **The New look is the default.** dam opens in the New look. Classic is still there, in
-  Settings, Appearance (and Ctrl+Alt+L), for now; the Look switch at the bottom of the
-  sidebar is gone. If you chose Classic before, dam opens in the New look once: choose
-  Classic again in Settings and it stays.
-- **README screenshots in the New look**, with two of Relatives: the file panel's list and
-  the Show connections window.
-- **Finland-specific detection in its own pack (no change in behaviour).** The Finnish
-  reference number, the address area of Finnish letters and the Finnish, English and Swedish
-  label words and stopwords now live in country and language packs, the first step towards
-  switching them per country. The README has a new section, Countries and languages, that
-  lists what is country-specific today.
-- **Browse's panes have their own controls (New look).** **Split** in the header opens the
-  second pane; in two panes the first pane's bar has a **Swap** button and the second's an
-  **X** that goes back to one pane (the One pane / Two panes switch and the Swap panes button
-  are gone). Swap trades what the two panes show and keeps you on the side you were on.
-  **New folder** is an icon in the pane it makes the folder in. The search box is wider and
-  ends where the panes end, so it no longer reaches over the details panel. **This folder**
-  has Date and Size columns and sorts by Name, Date or Size like All files below, with the
-  folders first.
-- **Browse has no Collection filter any more.** To see a collection's files, search for
-  `collection:"House sale"` (add `in:"50. Medical"` to stay in one folder). An old link with
-  a collection filter opens the folder unfiltered.
-- **People settings explain how names are found.** Settings → Filing rules → People now
-  says that each line is looked for anywhere in the address area, so a short line such as a
-  first name also finds longer names that contain it, and gives examples of lines to write
-  (full name, with a middle name, and surname first). An empty row shows example lines. The
-  save button is now "Save people and address area", since it saves both.
-- **The search palette no longer lists screens** (Today, Inbox, Settings and so on). It finds
-  files, folders, collections, trays and tags. This applies to both looks.
-- **The New look has no Search card on Today** (the palette and Browse's search box do that
-  job). Classic keeps it. A layout you saved with it loses its place quietly.
-- **New look, Browse.** A path too long for its pane now folds its parent folders into one
-  **...** menu ("... > Parent > Current"); each folder in the menu opens that folder, and
-  accepts a drop like the path does. The details panel now stays beside the list in a
-  window down to about 1000 px wide (it used to leave at 1350 px or so): it gives way only
-  when the list would get less than 420 px or the panel less than 340 px.
-- **New look, narrow window.** In the icon rail the status line is a dot; hovering it now
-  shows the whole line ("7 in inbox, 15 searchable") as a tooltip.
-- **Large folders scroll smoothly in Browse.** A folder, Files view or search with
-  hundreds or thousands of entries now builds only the rows near what you see, so
-  opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
-  view), Go to target, Quick Look and dragging work as before.
-- **dam needs Python 3.14 or newer.** It never ran on 3.13 (the code relies on how 3.14
-  reads type hints), so the stated minimum now says so. `uv` installs the right Python
-  by itself.
-- **Browse and the status bar stay fast on large archives.** Opening a folder in
-  Browse reads only that folder's entries instead of going through every file in the
-  archive (about 30 ms down to under 1 ms for a folder in an archive of 200,000 files).
-  The status bar, which checks every five seconds, now reuses its counts until a file
-  actually changes, so an idle app no longer counts the whole archive each time. The
-  app also loads less up front: the code for Help is fetched only when Help opens.
-- **Faster indexing and folder moves on large archives.** Updating the search index for
-  one file no longer reads the whole index, so the first indexing of a large archive
-  and moving a whole folder are much faster (a folder of 300 files in an archive of
-  50,000 now takes well under a second instead of about 16 seconds). The status check
-  for interrupted changes is cheaper too. The first start after the update maps the
-  existing search index once, which takes about a second for 50,000 files.
-- **Filing and moves no longer rescan the whole archive.** Filing a document from the
-  inbox into another folder, or moving files between folders or disks, used to make the
-  folder watcher scan every archive folder, including slow USB and network disks, and
-  other changes waited while it ran. The watcher now looks only at the files and folders
-  that changed, and skips the changes dam made and indexed itself. Changes made outside
-  dam at the same time are still picked up.
-- **The Inbox opens and refreshes faster with many files.** dam reads what each card
-  needs for all inbox files at once, and remembers where similar filed documents live
-  until a file is indexed, filed or moved, instead of searching the whole archive again
-  for every card each time the list loads (100 inbox files: under 0.1 seconds instead of
-  about 1.7). While several cards wait for page 1 to be read, the list reloads at most
-  once every 2 seconds, not once for each waiting card. Suggestions still change as soon
-  as a rule, a document's text or its page 1 does.
-- **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
-  folder's name under the file's name; it names only a folder inside the inbox (such
-  as a code's folder). In Maintenance, **Show in Browse** is an icon button (the
-  Browse icon, with a tooltip), and a group's **Apply…** button lines up with the text
-  beside it.
-- **The Inbox list shows each file's own name.** The name dam suggests is on the line
-  under it, marked "Suggested:", so a file no longer looks renamed before it is filed.
-- **Planned changes** (the Inbox's Preview) has a border, an × to close it and its own
-  **File it** button.
-- **Messages with buttons** (such as "Filed as …" with Undo and Make a rule…) put the
-  text on top, at full width, and the buttons under it, so a long path stays readable.
-- **Snapshots** have tooltips on Import, Export and Restore (a snapshot that cannot be
-  restored says why), and the help says that Export only copies the file, so copying it
-  from the snapshots folder yourself works too.
-- **Previews list a new folder structure as one step.** When a change needs several
-  missing folders, one inside the other (such as the same folder path in To Delete), the
-  preview shows one "New folders" line with the deepest folder and how many are made,
-  instead of a step per folder.
-- **Trays and collections:** the list buttons in the header (Add file, Open and Done; the
-  collection's folder and share buttons) sit at the right edge of the list column, over
-  the list they act on, instead of right after the title.
-- **Undo may now remove a shortcut dam made anywhere in the archive**, not only in
-  `##. Ongoing` and `##. Important`. It applies to the shortcut a Link drop made, only
-  while it is still a shortcut pointing at the same file. It never removes a regular
-  file, a folder or a shortcut you made yourself.
-- Dropping files on `##. To Delete` now says "use Mark for deletion", and dropping on
-  `##. Important` is refused.
-
-- Files in `##. To Delete` are read-only. Starring, marking Important, putting in a tray,
-  adding to a collection, tags, From and For, the summary and the notes are all off for
-  them in Browse, with "Marked for deletion: restore it first" as the reason, and the app
-  refuses the same changes if they are asked for another way. Their tags, collections,
-  notes and tray items are kept, so a restored file comes back with them.
-- The search filter `is:locked` now finds only the files you locked yourself. Important
-  files are always locked, but you find them with `is:important`.
-- The Browse header no longer spans the whole window, and the trays have the same header.
-  The left part is for the list: in Browse the
-  **Folder / Archive** switch, the search and the **New folder** and two-panes buttons, in a tray its name, count, **Add file** and **Open / Done**. The right part,
-  over the file, is one group of icon buttons for the file actions, the same in both and
-  in the same order: **Put in tray** (a menu of the trays, **Move to tray** inside a
-  tray), **Remove from tray** (in a tray), **Back to inbox** (in a tray it moves the shown file; the item stays), **Move to…**, **From…**,
-  **For…**, **Ask AI**, **Star**, **Important**, **Restore** (files in To Delete) and
-  **Move to To Delete**. In Browse they act on the selected files, **Star** and
-  **Important** also for a single file. The preview's toolbar keeps only the viewing
-  tools (zoom, select box, open, show in Finder, open in window, Quick Look), and the
-  Browse file panel no longer repeats **Put in tray** and **Back to inbox**. On a narrow
-  window the list part takes the row and the file actions follow at the right.
-- A collection (your own, **Important** and **Starred**) now has the same header: its
-  name, subtitle and list buttons (**New group**, the folder button, **Export…**, **⋯**)
-  at the left, and over the selected file one group of icon buttons, in Browse's order:
-  **Put in tray**, **Remove from collection**, **Back to inbox**, **Move to…**, **From…**,
-  **For…**, **Ask AI**, **Star**, **Important**, **Restore** (a file in To Delete) and
-  **Move to To Delete**. Moves and Restore show their preview first and have Undo, as in
-  Browse, and a moved file stays in the collection. **Remove from collection** sits where
-  **Remove from tray** does in a tray. The file panel
-  no longer repeats these buttons, and its toolbar keeps only the viewing tools. The group
-  and **Show in folder** stay in the file panel.
-- In a tray's header the name with its count, **Add file** and **Open / Done** now sit on
-  one row at the left, level with the file buttons, instead of **Add file** and the
-  switch on a second row at the right. They wrap only in a narrow window.
-- Collections are now a chip field like tags, everywhere a file's collections are set:
-  the file view in Browse, a collection and a tray, the Inbox card and batch ("Also add
-  to collection"), the rule sheet and the filing codes. The collections show as chips
-  (the x takes one out), matching collections are suggested as you type, and a name that
-  is no collection yet is offered as **Create collection "name"**. The **...** button
-  still opens the collection tree. On a file the change applies at once, with Undo in
-  the toast (adding now has an Undo too); in the Inbox and in rules it is kept until
-  filing or saving. This replaces the **Add to collection...** button and its box.
-- Tag fields have a **...** button too. It lists every tag by group with its number of
-  files, and a click adds the tag.
-
-- The file view has one order in Browse, in a collection and in a tray: name and folder
-  with the lock, tags, the collections the file is in, the summary, what is specific to
-  that view (a tray's fields and Mark done, a collection's group and Remove, Browse's
-  Put in tray), the preview, then notes, checklist and history. Tags and the summary used
-  to be below the preview in Browse and above it in trays.
-
-### Added
-
 - Search filters. Beside words, the search box in Browse (and Today's Search card) takes
   `name:` (file names only, with `*` and `?`), `in:` (a folder and below), `tag:`,
   `collection:` (with the collections inside it), `from:` and `for:`, `type:` (an
@@ -980,6 +853,315 @@ All notable changes are listed here. The format follows
 - Activity cards are collapsible (collapsed by default), with Expand all / Collapse all
   remembered per browser; a search shows them open.
 
+### Changed
+
+- **A smaller database.** The search index no longer keeps its own copy of every file's
+  text: it reads the text dam already stores (migration 0044). Page-1 layouts are stored
+  compressed (0045). After the update dam compacts the database once, when the disk has room
+  for it, so the space is given back. On an archive of about 12,000 files the database went
+  from 874 MB to 517 MB, with the same search results. The update takes about a minute on a
+  database that size, and the usual copy is written next to it first.
+
+- **The New look is the default.** dam opens in the New look. Classic is still there, in
+  Settings, Appearance (and Ctrl+Alt+L), for now; the Look switch at the bottom of the
+  sidebar is gone. If you chose Classic before, dam opens in the New look once: choose
+  Classic again in Settings and it stays.
+- **README screenshots in the New look**, with two of Relatives: the file panel's list and
+  the Show connections window.
+- **Finland-specific detection in its own pack (no change in behaviour).** The Finnish
+  reference number, the address area of Finnish letters and the Finnish, English and Swedish
+  label words and stopwords now live in country and language packs, the first step towards
+  switching them per country. The README has a new section, Countries and languages, that
+  lists what is country-specific today.
+- **Browse's panes have their own controls (New look).** **Split** in the header opens the
+  second pane; in two panes the first pane's bar has a **Swap** button and the second's an
+  **X** that goes back to one pane (the One pane / Two panes switch and the Swap panes button
+  are gone). Swap trades what the two panes show and keeps you on the side you were on.
+  **New folder** is an icon in the pane it makes the folder in. The search box is wider and
+  ends where the panes end, so it no longer reaches over the details panel. **This folder**
+  has Date and Size columns and sorts by Name, Date or Size like All files below, with the
+  folders first.
+- **Browse has no Collection filter any more.** To see a collection's files, search for
+  `collection:"House sale"` (add `in:"50. Medical"` to stay in one folder). An old link with
+  a collection filter opens the folder unfiltered.
+- **People settings explain how names are found.** Settings → Filing rules → People now
+  says that each line is looked for anywhere in the address area, so a short line such as a
+  first name also finds longer names that contain it, and gives examples of lines to write
+  (full name, with a middle name, and surname first). An empty row shows example lines. The
+  save button is now "Save people and address area", since it saves both.
+- **The search palette no longer lists screens** (Today, Inbox, Settings and so on). It finds
+  files, folders, collections, trays and tags. This applies to both looks.
+- **The New look has no Search card on Today** (the palette and Browse's search box do that
+  job). Classic keeps it. A layout you saved with it loses its place quietly.
+- **New look, Browse.** A path too long for its pane now folds its parent folders into one
+  **...** menu ("... > Parent > Current"); each folder in the menu opens that folder, and
+  accepts a drop like the path does. The details panel now stays beside the list in a
+  window down to about 1000 px wide (it used to leave at 1350 px or so): it gives way only
+  when the list would get less than 420 px or the panel less than 340 px.
+- **New look, narrow window.** In the icon rail the status line is a dot; hovering it now
+  shows the whole line ("7 in inbox, 15 searchable") as a tooltip.
+- **Large folders scroll smoothly in Browse.** A folder, Files view or search with
+  hundreds or thousands of entries now builds only the rows near what you see, so
+  opening and scrolling it stays quick. Keys, selection (also ⇧-click across rows out of
+  view), Go to target, Quick Look and dragging work as before.
+- **dam needs Python 3.14 or newer.** It never ran on 3.13 (the code relies on how 3.14
+  reads type hints), so the stated minimum now says so. `uv` installs the right Python
+  by itself.
+- **Browse and the status bar stay fast on large archives.** Opening a folder in
+  Browse reads only that folder's entries instead of going through every file in the
+  archive (about 30 ms down to under 1 ms for a folder in an archive of 200,000 files).
+  The status bar, which checks every five seconds, now reuses its counts until a file
+  actually changes, so an idle app no longer counts the whole archive each time. The
+  app also loads less up front: the code for Help is fetched only when Help opens.
+- **Faster indexing and folder moves on large archives.** Updating the search index for
+  one file no longer reads the whole index, so the first indexing of a large archive
+  and moving a whole folder are much faster (a folder of 300 files in an archive of
+  50,000 now takes well under a second instead of about 16 seconds). The status check
+  for interrupted changes is cheaper too. The first start after the update maps the
+  existing search index once, which takes about a second for 50,000 files.
+- **Filing and moves no longer rescan the whole archive.** Filing a document from the
+  inbox into another folder, or moving files between folders or disks, used to make the
+  folder watcher scan every archive folder, including slow USB and network disks, and
+  other changes waited while it ran. The watcher now looks only at the files and folders
+  that changed, and skips the changes dam made and indexed itself. Changes made outside
+  dam at the same time are still picked up.
+- **The Inbox opens and refreshes faster with many files.** dam reads what each card
+  needs for all inbox files at once, and remembers where similar filed documents live
+  until a file is indexed, filed or moved, instead of searching the whole archive again
+  for every card each time the list loads (100 inbox files: under 0.1 seconds instead of
+  about 1.7). While several cards wait for page 1 to be read, the list reloads at most
+  once every 2 seconds, not once for each waiting card. Suggestions still change as soon
+  as a rule, a document's text or its page 1 does.
+- **Inbox and Maintenance tidied.** The Inbox review card no longer repeats the inbox
+  folder's name under the file's name; it names only a folder inside the inbox (such
+  as a code's folder). In Maintenance, **Show in Browse** is an icon button (the
+  Browse icon, with a tooltip), and a group's **Apply…** button lines up with the text
+  beside it.
+- **The Inbox list shows each file's own name.** The name dam suggests is on the line
+  under it, marked "Suggested:", so a file no longer looks renamed before it is filed.
+- **Planned changes** (the Inbox's Preview) has a border, an × to close it and its own
+  **File it** button.
+- **Messages with buttons** (such as "Filed as …" with Undo and Make a rule…) put the
+  text on top, at full width, and the buttons under it, so a long path stays readable.
+- **Snapshots** have tooltips on Import, Export and Restore (a snapshot that cannot be
+  restored says why), and the help says that Export only copies the file, so copying it
+  from the snapshots folder yourself works too.
+- **Previews list a new folder structure as one step.** When a change needs several
+  missing folders, one inside the other (such as the same folder path in To Delete), the
+  preview shows one "New folders" line with the deepest folder and how many are made,
+  instead of a step per folder.
+- **Trays and collections:** the list buttons in the header (Add file, Open and Done; the
+  collection's folder and share buttons) sit at the right edge of the list column, over
+  the list they act on, instead of right after the title.
+- **Undo may now remove a shortcut dam made anywhere in the archive**, not only in
+  `##. Ongoing` and `##. Important`. It applies to the shortcut a Link drop made, only
+  while it is still a shortcut pointing at the same file. It never removes a regular
+  file, a folder or a shortcut you made yourself.
+- Dropping files on `##. To Delete` now says "use Mark for deletion", and dropping on
+  `##. Important` is refused.
+
+- Files in `##. To Delete` are read-only. Starring, marking Important, putting in a tray,
+  adding to a collection, tags, From and For, the summary and the notes are all off for
+  them in Browse, with "Marked for deletion: restore it first" as the reason, and the app
+  refuses the same changes if they are asked for another way. Their tags, collections,
+  notes and tray items are kept, so a restored file comes back with them.
+- The search filter `is:locked` now finds only the files you locked yourself. Important
+  files are always locked, but you find them with `is:important`.
+- The Browse header no longer spans the whole window, and the trays have the same header.
+  The left part is for the list: in Browse the
+  **Folder / Archive** switch, the search and the **New folder** and two-panes buttons, in a tray its name, count, **Add file** and **Open / Done**. The right part,
+  over the file, is one group of icon buttons for the file actions, the same in both and
+  in the same order: **Put in tray** (a menu of the trays, **Move to tray** inside a
+  tray), **Remove from tray** (in a tray), **Back to inbox** (in a tray it moves the shown file; the item stays), **Move to…**, **From…**,
+  **For…**, **Ask AI**, **Star**, **Important**, **Restore** (files in To Delete) and
+  **Move to To Delete**. In Browse they act on the selected files, **Star** and
+  **Important** also for a single file. The preview's toolbar keeps only the viewing
+  tools (zoom, select box, open, show in Finder, open in window, Quick Look), and the
+  Browse file panel no longer repeats **Put in tray** and **Back to inbox**. On a narrow
+  window the list part takes the row and the file actions follow at the right.
+- A collection (your own, **Important** and **Starred**) now has the same header: its
+  name, subtitle and list buttons (**New group**, the folder button, **Export…**, **⋯**)
+  at the left, and over the selected file one group of icon buttons, in Browse's order:
+  **Put in tray**, **Remove from collection**, **Back to inbox**, **Move to…**, **From…**,
+  **For…**, **Ask AI**, **Star**, **Important**, **Restore** (a file in To Delete) and
+  **Move to To Delete**. Moves and Restore show their preview first and have Undo, as in
+  Browse, and a moved file stays in the collection. **Remove from collection** sits where
+  **Remove from tray** does in a tray. The file panel
+  no longer repeats these buttons, and its toolbar keeps only the viewing tools. The group
+  and **Show in folder** stay in the file panel.
+- In a tray's header the name with its count, **Add file** and **Open / Done** now sit on
+  one row at the left, level with the file buttons, instead of **Add file** and the
+  switch on a second row at the right. They wrap only in a narrow window.
+- Collections are now a chip field like tags, everywhere a file's collections are set:
+  the file view in Browse, a collection and a tray, the Inbox card and batch ("Also add
+  to collection"), the rule sheet and the filing codes. The collections show as chips
+  (the x takes one out), matching collections are suggested as you type, and a name that
+  is no collection yet is offered as **Create collection "name"**. The **...** button
+  still opens the collection tree. On a file the change applies at once, with Undo in
+  the toast (adding now has an Undo too); in the Inbox and in rules it is kept until
+  filing or saving. This replaces the **Add to collection...** button and its box.
+- Tag fields have a **...** button too. It lists every tag by group with its number of
+  files, and a click adds the tag.
+
+- The file view has one order in Browse, in a collection and in a tray: name and folder
+  with the lock, tags, the collections the file is in, the summary, what is specific to
+  that view (a tray's fields and Mark done, a collection's group and Remove, Browse's
+  Put in tray), the preview, then notes, checklist and history. Tags and the summary used
+  to be below the preview in Browse and above it in trays.
+- On the Index page, reading page 1 is a row like the other totals ("Page 1, 8 914 of
+  8 914"), with the time left while it runs and what waits. Its switch and speed are no
+  longer repeated there; a link opens them in Settings, Indexing.
+- The lock button next to a file name shows the file's state: a closed padlock while the
+  file is locked (click to unlock), an open one while it is not (click to lock).
+- Marking an item done (Mark done, Mark paid, and the "and file" button) now asks in a small
+  popover under the button you pressed, instead of in a box further down the page. Enter
+  confirms, Esc or a click outside cancels, and the focus goes back to the button.
+- The header of a tray list has two rows: the tray name with its count on the first, and
+  Add file with the Open / Done switch on the second, so the name and count are no longer
+  cut off.
+- The rule test explains why documents "could not be judged yet" instead of "Not
+  checked yet": they are grouped by reason, and each group says what it means and what
+  happens next (page 1 is read in the background, the address area does not say who the
+  letter is for, no OCR engine, the file is missing, reading took too long). The line
+  above says "2 documents could not be judged yet" rather than "Not tested yet".
+- Rule sheet tidying: **Words match** sits next to the word box, the picture score has a
+  small reset icon ("Use the default (0.85)") instead of a text link, "The document needs
+  a word or the picture in every area" is a ? beside "When a document matches", **Use the
+  person in the folder** sits on the Anyone / Only for row with a ? that says how the two
+  relate, and areas are called "Words in area 1" and "Picture in area 2" (no more "of page
+  1"). The message for a box with nothing in it now has its own line under the box.
+- To rename a file, click its name (in Browse, a collection or an item);
+  the separate pencil button is gone. The same goes for an item's title and a collection's
+  name. The name takes the keyboard focus, so Enter or Space on it works too, and the
+  rename is still previewed and can be undone.
+- In the box panel, the choice between **Words** and **Picture** for each box is now a
+  switch like the rule's "Anyone / Only for": the selected side is filled, so you can see
+  which one is on.
+- The rule sheet is split into **When a document matches** (the areas, From, For and More
+  conditions) and **Then file it like this** (Folder, Name, Tags, Tray, Payee). Payee only
+  shows when the chosen tray has a payee field, such as To pay, or when the rule already
+  has a payee.
+- The item view in the trays is tidier. The title is edited in the header: click it or the
+  pencil beside it, press Enter or click away to save, Esc to cancel (an empty title is
+  refused). The separate Title field is gone. The icon buttons (move to tray, remove from
+  tray, ask AI, take the file off, move to To Delete) now sit at the right end of the same
+  row as the date and **Mark done**, and wrap on a narrow window. **Quick Look** is now in
+  the toolbar of the file preview, next to zoom and the star, and Space still opens it.
+  The file's tags are shown right under the title.
+- Summary, Checklist, Notes and History can be folded to their heading and a one-line hint
+  (such as "2 of 5 done"). dam remembers each choice in this browser. This applies to
+  tray items, collections and documents. The name of a collection is edited the same way
+  in its header.
+
+- The rule sheet is easier to read. The "Leave out" boxes are gone: an empty Folder, Name,
+  Tags, Tray or Payee is one the rule does not set, and clearing a field never saves an
+  empty pattern. The explanations (the From sender, the Folder and Name patterns, and the
+  file name pattern, which is a regular expression with examples) are tooltips beside the
+  labels. More conditions starts closed and a line beside it says what is set, such as
+  "Only in the inbox". The test at the bottom has the heading "Test against your filed
+  documents", and when no filed document matches it says so in plain words.
+- Draw a box: every box you draw is kept at once, numbered Box 1, Box 2 and so on, and the
+  panel "Boxes on page 1" lists each with the words found in it (or "No text found", or
+  its picture) and its own x. There is no "Add another box" step any more. Each box has a
+  **Words** or **Picture** choice. Esc drops the box you are dragging, then the last box,
+  then closes the tool, and the panel's x now reads "Close and drop the boxes".
+- "Sender…" in the box panel is now **Make a rule…**, because boxes can pick out the kind
+  of letter as well as who it is from. "Address area for this sender" is now "Address area
+  for this rule's letters". Both address choices show when exactly one box is drawn.
+- Stray marks that OCR reads as one-letter words, like "•ö", are left out of the words a box
+  lists and of the word chips in a new rule.
+
+- The sidebar has Browse at the top, under Inbox, and Trays, Collections and Archive
+  fold with a chevron beside their caption. A folded Trays still shows how many items
+  are open, and the browser remembers which sections are folded.
+- A filing code's empty Name pattern now shows `{doc_date:%Y%m%d}_{stem}` (the date, then
+  the file's own name) as its example, which fits any code, not a sample sender.
+- Settings has a row of sections at the top, grouped by what they apply to (this
+  archive, or this browser), and shows one section at a time, each at its own address.
+  Filing codes is now a short list, one line per code with its sticker and what it does;
+  click a code to edit it. Unsaved changes get a bar at the bottom with Save and Discard,
+  are kept when you leave Settings, and closing the window asks first. Print stickers
+  opens as a sheet from Filing codes.
+- Print stickers says how many labels fit on the chosen sheet and, with codes chosen,
+  how many sheets they take and how many labels stay empty on the last one. Plain paper
+  now shows its size in the sheet list (65 per sheet, like the Avery L7651).
+- A filing code's Name is now called Name pattern, with an example and a line on what
+  `{doc_date:%Y%m%d}`, `{year}` and `{stem}` do. A pattern that would give every file
+  the same name is pointed out.
+- Settings → Filing codes shows each code as a row: its sticker on the left as it
+  prints (redrawn as you type the code or label), then Code and Label, Tray and Inbox
+  folder, Folder and Collections, Name pattern and Tags, and Remove above File as
+  suggested, which lines up with the Tags field. Collections are picked like folders, tags work as in the Inbox, and every
+  field explains itself when you hold the pointer on it.
+- Today's Starred card shows a file's buttons (Quick Look, Open, Show in Finder, Remove
+  the star) only for the row under the pointer or with keyboard focus, so the list reads
+  calmer. On touch screens they stay visible.
+- Renaming works the same way everywhere, as in Finder: the name turns into a field in
+  place, Enter saves, Esc cancels. A collection is renamed in its title (no separate
+  form, and the ⋯ menu says Rename), an archive in Manage archives with a pencil button.
+  A rename that changes a folder on disk still shows its preview first.
+- A file's actions come in one order on every screen: view (Quick Look, Open, Show in
+  Finder), then the star and Important, then Ask AI, and the To Delete bin last. Quick
+  Look's Close button moved to the right end of its bar.
+- Red is kept for the last step of a removal: the confirm button of Move to To Delete,
+  Remove group and Forget archive. Menus no longer show red items.
+- Ask AI on a single file is always the sparkle button with the same tooltip, also on
+  Today's "Not recognised" list; Summarize with AI… carries the sparkle and an ellipsis
+  because it opens the What will be sent sheet.
+- Key hints under Browse, the Inbox and Trays look the same: arrows for moving, ↩ for
+  Enter and one key for a shortcut (⌘↩).
+- Tooltips on segmented choices (Folders/Files, This folder/Everywhere, the tray picker)
+  now look like every other tooltip.
+- The starred built-in collection is called "★ Starred" everywhere (the Browse collection
+  filter, its page title, the collection picker and Convert Ongoing), matching the
+  sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
+- Collections and Activity: the toolbar's right-hand controls line up with the right edge
+  of the list or timeline.
+- Selecting a file in a collection shows the same panel as in Browse: the full preview,
+  Put in tray, Add to collection, Back to inbox, the summary and the note, with the
+  collection's own Group and Remove from collection added. The panel starts wider and can
+  be dragged as wide as you like (the list keeps 320px). A link's bin and ★ / ! stay
+  while its preview loads.
+- A tray item's panel: Quick Look, Move to tray (now an icon) and Remove from tray sit
+  together with the file's icons on its action row, instead of a Move to tray pull-down at
+  the left and Quick Look in the header. Dragging the item onto a tray in the sidebar
+  still moves it too.
+- The user guide is rewritten for people using the app. Installing, the command line,
+  config files and technical details moved to a new technical reference
+  (`docs/reference.md`).
+- Buttons follow one order and wording across the app: Cancel comes before Save in the
+  detected-field editor and in Save to notes (which Esc now closes); "Don't offer these"
+  stands at the left of the tray settings sheet; the Barcode and Export sheets close with
+  Done; removing a star is "Remove the star" everywhere and unmarking is "Unmark
+  Important"; tooltips show shortcuts the same way (Quick Look Space, ⇧⌘M); the Inbox and
+  Quick Look say "files", not "documents"; the folder picker calls the deletion folder To
+  Delete; the preview toggle on the review card has its own icon instead of the Quick Look
+  eye.
+- The item panel's title, fields and the done buttons ("Mark done", "Mark paid and file…") sit on one row that wraps only when the panel is narrow, in every tray; the title takes the spare width and a date's "in 3 days" tag follows the date.
+- No more "needs a …" text for an empty required field on tray items (Today cards, the
+  item's fields, the filing form). The tray list rows no longer show a file count.
+- More space between the tag box and the Collections line in the file panel.
+- Inbox: the tags field (review card and multi-file card) is the chip field with tag
+  suggestions used on a filed file's details; Ask AI is the sparkle icon button; Preview,
+  File it and File N have tooltips saying what they do.
+- Tray items: the header shows the Quick Look eye button (tooltip "Quick Look Space")
+  instead of a text link and key hint, and the "needs a due date" chip is gone from the
+  tray list and the item header. Quick Look buttons on Today's Starred card and on
+  Convert Ongoing also name Space.
+- Ask AI is an icon button on each screen's action row (Browse, a collection's selected
+  file, a tray item) instead of a text button beside the file name.
+- A collection's selected file: Quick Look is an icon button; the built-in ★ Ongoing and
+  ! Important no longer repeat the ★ / ! toggle as "Unstar" / "Remove from Important";
+  the member list scrolls in its own box.
+- Tray items: "Done" reads "Mark done" and "Done & file it…" reads "Done and file…"
+  (shown only while a file of the item is in the inbox), both with tooltips; the Note
+  button is gone; the selected file's buttons (Ask AI, Move to To Delete, "Take this file
+  off the item") share the action row; one-file items no longer repeat the path above the
+  file; a dated item (To action) leads with its title and date.
+- A plan with a single step is shown as a sentence, not a numbered list.
+- Text that is cut off shows in full on hover; folder paths are shortened in the middle,
+  keeping the last folder.
+
 ### Fixed
 
 - Undoing the conversion of an entry in `##. Ongoing` or `##. Important` no longer, on
@@ -1160,162 +1342,6 @@ All notable changes are listed here. The format follows
 - On Windows and Linux the app no longer says "Finder": Show in Explorer, or Show in file
   manager.
 
-### Changed
-
-- On the Index page, reading page 1 is a row like the other totals ("Page 1, 8 914 of
-  8 914"), with the time left while it runs and what waits. Its switch and speed are no
-  longer repeated there; a link opens them in Settings, Indexing.
-- The lock button next to a file name shows the file's state: a closed padlock while the
-  file is locked (click to unlock), an open one while it is not (click to lock).
-- Marking an item done (Mark done, Mark paid, and the "and file" button) now asks in a small
-  popover under the button you pressed, instead of in a box further down the page. Enter
-  confirms, Esc or a click outside cancels, and the focus goes back to the button.
-- The header of a tray list has two rows: the tray name with its count on the first, and
-  Add file with the Open / Done switch on the second, so the name and count are no longer
-  cut off.
-- The rule test explains why documents "could not be judged yet" instead of "Not
-  checked yet": they are grouped by reason, and each group says what it means and what
-  happens next (page 1 is read in the background, the address area does not say who the
-  letter is for, no OCR engine, the file is missing, reading took too long). The line
-  above says "2 documents could not be judged yet" rather than "Not tested yet".
-- Rule sheet tidying: **Words match** sits next to the word box, the picture score has a
-  small reset icon ("Use the default (0.85)") instead of a text link, "The document needs
-  a word or the picture in every area" is a ? beside "When a document matches", **Use the
-  person in the folder** sits on the Anyone / Only for row with a ? that says how the two
-  relate, and areas are called "Words in area 1" and "Picture in area 2" (no more "of page
-  1"). The message for a box with nothing in it now has its own line under the box.
-- To rename a file, click its name (in Browse, a collection or an item);
-  the separate pencil button is gone. The same goes for an item's title and a collection's
-  name. The name takes the keyboard focus, so Enter or Space on it works too, and the
-  rename is still previewed and can be undone.
-- In the box panel, the choice between **Words** and **Picture** for each box is now a
-  switch like the rule's "Anyone / Only for": the selected side is filled, so you can see
-  which one is on.
-- The rule sheet is split into **When a document matches** (the areas, From, For and More
-  conditions) and **Then file it like this** (Folder, Name, Tags, Tray, Payee). Payee only
-  shows when the chosen tray has a payee field, such as To pay, or when the rule already
-  has a payee.
-- The item view in the trays is tidier. The title is edited in the header: click it or the
-  pencil beside it, press Enter or click away to save, Esc to cancel (an empty title is
-  refused). The separate Title field is gone. The icon buttons (move to tray, remove from
-  tray, ask AI, take the file off, move to To Delete) now sit at the right end of the same
-  row as the date and **Mark done**, and wrap on a narrow window. **Quick Look** is now in
-  the toolbar of the file preview, next to zoom and the star, and Space still opens it.
-  The file's tags are shown right under the title.
-- Summary, Checklist, Notes and History can be folded to their heading and a one-line hint
-  (such as "2 of 5 done"). dam remembers each choice in this browser. This applies to
-  tray items, collections and documents. The name of a collection is edited the same way
-  in its header.
-
-- The rule sheet is easier to read. The "Leave out" boxes are gone: an empty Folder, Name,
-  Tags, Tray or Payee is one the rule does not set, and clearing a field never saves an
-  empty pattern. The explanations (the From sender, the Folder and Name patterns, and the
-  file name pattern, which is a regular expression with examples) are tooltips beside the
-  labels. More conditions starts closed and a line beside it says what is set, such as
-  "Only in the inbox". The test at the bottom has the heading "Test against your filed
-  documents", and when no filed document matches it says so in plain words.
-- Draw a box: every box you draw is kept at once, numbered Box 1, Box 2 and so on, and the
-  panel "Boxes on page 1" lists each with the words found in it (or "No text found", or
-  its picture) and its own x. There is no "Add another box" step any more. Each box has a
-  **Words** or **Picture** choice. Esc drops the box you are dragging, then the last box,
-  then closes the tool, and the panel's x now reads "Close and drop the boxes".
-- "Sender…" in the box panel is now **Make a rule…**, because boxes can pick out the kind
-  of letter as well as who it is from. "Address area for this sender" is now "Address area
-  for this rule's letters". Both address choices show when exactly one box is drawn.
-- Stray marks that OCR reads as one-letter words, like "•ö", are left out of the words a box
-  lists and of the word chips in a new rule.
-
-- The sidebar has Browse at the top, under Inbox, and Trays, Collections and Archive
-  fold with a chevron beside their caption. A folded Trays still shows how many items
-  are open, and the browser remembers which sections are folded.
-- A filing code's empty Name pattern now shows `{doc_date:%Y%m%d}_{stem}` (the date, then
-  the file's own name) as its example, which fits any code, not a sample sender.
-- Settings has a row of sections at the top, grouped by what they apply to (this
-  archive, or this browser), and shows one section at a time, each at its own address.
-  Filing codes is now a short list, one line per code with its sticker and what it does;
-  click a code to edit it. Unsaved changes get a bar at the bottom with Save and Discard,
-  are kept when you leave Settings, and closing the window asks first. Print stickers
-  opens as a sheet from Filing codes.
-- Print stickers says how many labels fit on the chosen sheet and, with codes chosen,
-  how many sheets they take and how many labels stay empty on the last one. Plain paper
-  now shows its size in the sheet list (65 per sheet, like the Avery L7651).
-- A filing code's Name is now called Name pattern, with an example and a line on what
-  `{doc_date:%Y%m%d}`, `{year}` and `{stem}` do. A pattern that would give every file
-  the same name is pointed out.
-- Settings → Filing codes shows each code as a row: its sticker on the left as it
-  prints (redrawn as you type the code or label), then Code and Label, Tray and Inbox
-  folder, Folder and Collections, Name pattern and Tags, and Remove above File as
-  suggested, which lines up with the Tags field. Collections are picked like folders, tags work as in the Inbox, and every
-  field explains itself when you hold the pointer on it.
-- Today's Starred card shows a file's buttons (Quick Look, Open, Show in Finder, Remove
-  the star) only for the row under the pointer or with keyboard focus, so the list reads
-  calmer. On touch screens they stay visible.
-- Renaming works the same way everywhere, as in Finder: the name turns into a field in
-  place, Enter saves, Esc cancels. A collection is renamed in its title (no separate
-  form, and the ⋯ menu says Rename), an archive in Manage archives with a pencil button.
-  A rename that changes a folder on disk still shows its preview first.
-- A file's actions come in one order on every screen: view (Quick Look, Open, Show in
-  Finder), then the star and Important, then Ask AI, and the To Delete bin last. Quick
-  Look's Close button moved to the right end of its bar.
-- Red is kept for the last step of a removal: the confirm button of Move to To Delete,
-  Remove group and Forget archive. Menus no longer show red items.
-- Ask AI on a single file is always the sparkle button with the same tooltip, also on
-  Today's "Not recognised" list; Summarize with AI… carries the sparkle and an ellipsis
-  because it opens the What will be sent sheet.
-- Key hints under Browse, the Inbox and Trays look the same: arrows for moving, ↩ for
-  Enter and one key for a shortcut (⌘↩).
-- Tooltips on segmented choices (Folders/Files, This folder/Everywhere, the tray picker)
-  now look like every other tooltip.
-- The starred built-in collection is called "★ Starred" everywhere (the Browse collection
-  filter, its page title, the collection picker and Convert Ongoing), matching the
-  sidebar's Starred row. Its folder in `##. Ongoing` is unchanged.
-- Collections and Activity: the toolbar's right-hand controls line up with the right edge
-  of the list or timeline.
-- Selecting a file in a collection shows the same panel as in Browse: the full preview,
-  Put in tray, Add to collection, Back to inbox, the summary and the note, with the
-  collection's own Group and Remove from collection added. The panel starts wider and can
-  be dragged as wide as you like (the list keeps 320px). A link's bin and ★ / ! stay
-  while its preview loads.
-- A tray item's panel: Quick Look, Move to tray (now an icon) and Remove from tray sit
-  together with the file's icons on its action row, instead of a Move to tray pull-down at
-  the left and Quick Look in the header. Dragging the item onto a tray in the sidebar
-  still moves it too.
-- The user guide is rewritten for people using the app. Installing, the command line,
-  config files and technical details moved to a new technical reference
-  (`docs/reference.md`).
-- Buttons follow one order and wording across the app: Cancel comes before Save in the
-  detected-field editor and in Save to notes (which Esc now closes); "Don't offer these"
-  stands at the left of the tray settings sheet; the Barcode and Export sheets close with
-  Done; removing a star is "Remove the star" everywhere and unmarking is "Unmark
-  Important"; tooltips show shortcuts the same way (Quick Look Space, ⇧⌘M); the Inbox and
-  Quick Look say "files", not "documents"; the folder picker calls the deletion folder To
-  Delete; the preview toggle on the review card has its own icon instead of the Quick Look
-  eye.
-- The item panel's title, fields and the done buttons ("Mark done", "Mark paid and file…") sit on one row that wraps only when the panel is narrow, in every tray; the title takes the spare width and a date's "in 3 days" tag follows the date.
-- No more "needs a …" text for an empty required field on tray items (Today cards, the
-  item's fields, the filing form). The tray list rows no longer show a file count.
-- More space between the tag box and the Collections line in the file panel.
-- Inbox: the tags field (review card and multi-file card) is the chip field with tag
-  suggestions used on a filed file's details; Ask AI is the sparkle icon button; Preview,
-  File it and File N have tooltips saying what they do.
-- Tray items: the header shows the Quick Look eye button (tooltip "Quick Look Space")
-  instead of a text link and key hint, and the "needs a due date" chip is gone from the
-  tray list and the item header. Quick Look buttons on Today's Starred card and on
-  Convert Ongoing also name Space.
-- Ask AI is an icon button on each screen's action row (Browse, a collection's selected
-  file, a tray item) instead of a text button beside the file name.
-- A collection's selected file: Quick Look is an icon button; the built-in ★ Ongoing and
-  ! Important no longer repeat the ★ / ! toggle as "Unstar" / "Remove from Important";
-  the member list scrolls in its own box.
-- Tray items: "Done" reads "Mark done" and "Done & file it…" reads "Done and file…"
-  (shown only while a file of the item is in the inbox), both with tooltips; the Note
-  button is gone; the selected file's buttons (Ask AI, Move to To Delete, "Take this file
-  off the item") share the action row; one-file items no longer repeat the path above the
-  file; a dated item (To action) leads with its title and date.
-- A plan with a single step is shown as a sentence, not a numbered list.
-- Text that is cut off shows in full on hover; folder paths are shortened in the middle,
-  keeping the last folder.
-
 ### Security
 
 - **Only your browser and dam commands can use the app's local server now.** Before,
@@ -1345,35 +1371,3 @@ All notable changes are listed here. The format follows
 - **Open no longer hands web pages to the browser.** Open refuses `.html`, `.htm`,
   `.xhtml`, `.svg`, `.svgz`, `.xml`, `.webarchive`, `.mht` and `.mhtml` files from the
   archive, as their scripts would run in the browser; Show in Finder still works.
-
-## [0.1.0] - Unreleased
-
-First public release.
-
-### Added
-
-- Inbox filing: dam suggests a name, folder and tags for each new file in
-  `##. Organize`; you preview the change, confirm, and can undo it.
-- Browse and full-text search over file names, text and OCR (Apple Vision on macOS,
-  optional Tesseract on Windows and Linux).
-- Trays, including To pay with the Finnish bank barcode read from bills, plus Today and
-  reminders (desktop and e-mail).
-- Collections with groups and child collections, kept in a managed `##. Ongoing` folder;
-  export of a collection.
-- Activity page that journals every change, with undo of a whole batch.
-- Quick Look previews, drag and drop, keyboard shortcuts, and a two-pane Browse.
-- Optional AI (your own Anthropic key, in the OS keychain): suggestions, summaries and
-  questions, only on click, after a preview of exactly what is sent, with a monthly
-  budget and a call log.
-- First-run setup: `dam init` or a welcome screen finds your cloud-drive folders
-  (Google Drive, OneDrive, Dropbox, iCloud Drive, Nextcloud and others) and asks before
-  saving anything.
-- Several archives: add a test or demo archive next to your real one and switch between
-  them (menu in the sidebar, `dam archives ...`, `dam --archive NAME ...`). Each has its
-  own settings, index, logs and reminders; forgetting one never deletes a folder.
-- Cross-platform install for macOS, Windows and Linux, with CI on all three.
-- Safety by design: never deletes your files, every change previewed and undoable,
-  local-only server on `127.0.0.1`.
-- Optional `dam[msg]` extra for Outlook `.msg` e-mails (GPL-3.0 dependency, not part of
-  the core).
-- MIT licence.
