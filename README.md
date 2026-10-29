@@ -150,6 +150,26 @@ settings, and switch between them from the top of the sidebar.
 
 Details are in the [technical reference](docs/reference.md#platform-support).
 
+## Countries and languages
+
+dam was built for Finnish post, and some of what it reads from a document belongs to one
+country or one language:
+
+| | Today |
+|---|---|
+| Bank barcode on bills (pankkiviivakoodi) | Finland |
+| Payment reference numbers | RF (international) and the Finnish viitenumero |
+| IBAN | Finnish accounts |
+| Where the address sits on page 1 of a letter | the Finnish letter standard (SFS 2487); you can draw your own |
+| Due-date and total labels on bills | Finnish, Swedish and English |
+| OCR | the languages you set in `ocr_languages` |
+
+These parts are kept in **country packs** and **language packs**, so support for another
+country can be added as a pack without changing the rest of dam. Choosing the packs in
+Settings, a Netherlands pack and IBANs from any country are planned. If you would like
+your country supported, open an issue with a few example bills and letters (with personal
+details removed), or see [Contributing](CONTRIBUTING.md).
+
 ## Documentation
 
 - [User guide](docs/guide.md): how dam works, every screen, keyboard shortcuts, trays,

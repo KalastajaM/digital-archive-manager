@@ -16,6 +16,7 @@ from contextlib import closing
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from dam import languages
 from dam.ai import guard
 from dam.ai.tasks import Built, register
 from dam.ai.tasks._common import digest, language, rules_point_excluded, shorten
@@ -37,31 +38,8 @@ LEAD = 200  # characters of context kept before the best match
 SCAN_CHARS = 200_000  # of a file's text searched for the snippet
 MAX_HITS = 5_000
 
-STOPWORDS = frozenset(
-    # English
-    """
-    a an the and or but nor so if then than that this these those there here of in on at
-    to for from by with without about into onto over under after before between during
-    is are was were be been being am do does did done have has had having will would
-    shall should can could may might must not no yes i me my mine we us our ours you
-    your yours he him his she her hers it its they them their theirs what which who
-    whom whose when where why how all any some each every both few more most other
-    such only own same too very just also as up down out off again once please tell
-    show find give get got know much many lot lots one ones
-    """.split()
-    # Finnish
-    + """
-    ja tai mutta sekä vai eli kuin kun jos niin että jotta koska vaikka myös vain jo
-    nyt sitten siis ei en et emme ette eivät olla olen olet on olemme olette ovat oli
-    olin olit olimme olitte olivat ollut olleet onko onkos ole minä sinä hän me te he
-    minun sinun hänen meidän teidän heidän minua sinua häntä meitä teitä heitä minulla
-    sinulla hänellä meillä teillä heillä se ne sen niiden sitä niitä siitä niistä
-    siihen niihin sillä niillä tämä tuo nämä nuo tämän tuon tätä tuota tässä tuossa
-    täällä siellä mikä mitkä mitä minkä missä mistä mihin millä milloin miten miksi
-    kuka ketkä kenen kenelle kuinka paljonko montako mikäli joka jotka jonka joita
-    jossa josta johon jolla kanssa ilman yli alle ennen jälkeen aikana välillä
-    """.split()
-)
+# the stopwords of the language packs (Finnish, English and Swedish)
+STOPWORDS = languages.stopwords()
 
 _WORD = re.compile(r"[^\W_]+")
 
