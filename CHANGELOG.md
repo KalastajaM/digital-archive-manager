@@ -10,6 +10,10 @@ All notable changes are listed here. The format follows
 
 - **`id:*`** finds every file that has a business ID, whatever it is: `from:Telia id:*`
   lists Telia's documents that carry one.
+- **`*` for "any" in more filters.** `tag:*`, `collection:*`, `from:*`, `for:*` and `tray:*`
+  find files with any tag, collection, sender, person or open tray item, and with a `-` the
+  files without: `-tag:*` lists what still needs tagging, `id:* -from:*` what has a business
+  ID but no sender yet.
 
 ### Changed
 

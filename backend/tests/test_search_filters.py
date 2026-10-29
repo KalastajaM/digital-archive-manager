@@ -356,3 +356,46 @@ def test_id_star_follows_the_countries_that_are_on(with_ids):
 
     packs.activate(packs.build([], ["en"]))
     assert ids(with_ids, "id:*") == []
+
+
+ALL_FILES = sorted(FILES)
+
+
+def test_tag_star_is_any_tag(archive):
+    archive.tags.add("kela", ["insurance"])
+    archive.tags.add("doc", ["medical"])
+    assert ids(archive, "tag:*") == ["doc", "kela"]
+    assert ids(archive, "-tag:*") == [f for f in ALL_FILES if f not in ("doc", "kela")]
+    assert ids(archive, "tag:* tag:insurance") == ["kela"]
+
+
+def test_collection_star_is_any_of_your_collections(archive):
+    house = archive.collections.create("House sale")
+    photos = archive.collections.create("Photos", parent_id=house.id)
+    archive.collections.add_members(house.id, ["sale1"])
+    archive.collections.add_members(photos.id, ["sale2"])
+    archive.marks.star(["kela"])  # Starred is a built-in collection: not counted
+    assert ids(archive, "collection:*") == ["sale1", "sale2"]
+    assert "sale1" not in ids(archive, "-collection:*") and "kela" in ids(archive, "-collection:*")
+
+
+def test_from_and_for_star(archive):
+    archive.assignments.set(["kela", "doc"], sender="Kela")
+    archive.assignments.set(["doc"], person="Tiina")
+    assert ids(archive, "from:*") == ["doc", "kela"]
+    assert ids(archive, "for:*") == ["doc"]
+    assert ids(archive, "from:* -for:*") == ["kela"]
+    assert "kela" not in ids(archive, "-from:*")
+
+
+def test_tray_star_is_any_open_item(archive):
+    archive.trays.create_quick("to-pay", ["bill", "tax"])
+    archive.trays.create_quick("to-read", ["doc"])
+    assert ids(archive, "tray:*") == ["bill", "doc", "tax"]
+    assert ids(archive, "type:pdf -tray:*") == ["kela", "other", "sale1"]
+
+
+def test_star_as_a_word_is_still_a_word(archive):
+    # a literal value that merely contains * is not "any": from:*kela* looks for that text
+    archive.assignments.set(["kela"], sender="Kela")
+    assert ids(archive, "from:*kela*") == []
