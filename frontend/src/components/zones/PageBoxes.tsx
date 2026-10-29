@@ -5,7 +5,7 @@
  *
  * Boxes are fractions of the rendered image (origin top left), so the zoom never matters. */
 import { Layers, SquareDashed } from "lucide-react";
-import { type PointerEvent, type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import {
   type Area,
   errorText,
@@ -28,6 +28,7 @@ import { AreaChange } from "./AreaChange";
 import { AreaLayer, percent } from "./AreaLayer";
 import { BoxPanel, type KeptBox } from "./BoxPanel";
 import { DocumentAddressArea } from "./DocumentAddressArea";
+import { useDragBox } from "./useDragBox";
 
 /** Turns the tool on for a preview. ``suggestion``: what the file's current suggestion
  * came from, when the owner already has it (the Inbox card); otherwise it is asked for. */
@@ -38,12 +39,6 @@ export type BoxTool = {
   suggestion?: Pick<FileSuggestions, "name_source" | "folder_source"> &
     Partial<Pick<FileSuggestions, "areas" | "person_line">> & { person?: string | null };
 };
-
-type Drag = { x0: number; y0: number; x1: number; y1: number };
-
-/** Smallest side of a box (a share of the page): a click or a twitch draws nothing. */
-const MIN_SIDE = 0.01;
-const clamp = (n: number) => Math.min(1, Math.max(0, n));
 
 /** The id of the rule that gave the suggestion its folder or name, if one did. */
 export function ruleIdOf(s: Pick<FileSuggestions, "name_source" | "folder_source">): string | null {
@@ -106,7 +101,6 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
   const [on, setOn] = useState(false);
   const [look] = useStyle();
   const isNew = look === "new";
-  const [drag, setDrag] = useState<Drag | null>(null);
   // every box drawn is kept (numbered) until it is removed or the panel is closed
   const [boxes, setBoxes] = useState<KeptBox[]>([]);
   const nextId = useRef(1);
@@ -148,7 +142,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
     setBoxes((all) => all.map((k) => (k.id === id ? { ...k, ...over } : k)));
   const close = () => {
     setBoxes([]);
-    setDrag(null);
+    cancelDrag();
   };
   const toggle = () => {
     close();
@@ -183,39 +177,16 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
     if (mode === "picture" && !k.picture) void cutPicture(k.id, k.box);
   };
 
+  const { drawing, cancel: cancelDrag, surface } = useDragBox(addBox);
+
   // Esc: first the box being drawn, then the last box, then the tool.
   useKeydown((e) => {
     if (!active || !on || e.key !== "Escape" || !isShortcut(e)) return;
     e.preventDefault();
-    if (drag) setDrag(null);
+    if (drawing) cancelDrag();
     else if (boxes.length > 0) setBoxes((all) => all.slice(0, -1));
     else setOn(false);
   });
-
-  const start = (e: PointerEvent<HTMLElement>) => {
-    if (e.button !== 0) return;
-    const at = point(e);
-    if (!at) return;
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    setDrag({ x0: at[0], y0: at[1], x1: at[0], y1: at[1] });
-  };
-  const move = (e: PointerEvent<HTMLElement>) => {
-    const at = point(e);
-    if (drag && at) setDrag({ ...drag, x1: at[0], y1: at[1] });
-  };
-  const end = (e: PointerEvent<HTMLElement>) => {
-    if (!drag) return;
-    const at = point(e) ?? [drag.x1, drag.y1];
-    const drawn: PageBox = [
-      Math.min(drag.x0, at[0]),
-      Math.min(drag.y0, at[1]),
-      Math.max(drag.x0, at[0]),
-      Math.max(drag.y0, at[1]),
-    ];
-    setDrag(null);
-    if (drawn[2] - drawn[0] < MIN_SIDE || drawn[3] - drawn[1] < MIN_SIDE) return;
-    addBox(drawn);
-  };
 
   if (!active) return NONE;
 
@@ -254,28 +225,14 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
         />
       )}
       {ready && (
-        <span
-          className="page-surface"
-          data-testid="box-surface"
-          onMouseDown={(e) => e.stopPropagation()} // the frame's own pan stays off while drawing
-          onPointerDown={start}
-          onPointerMove={move}
-          onPointerUp={end}
-          onPointerCancel={() => setDrag(null)}
-        />
+        <span className="page-surface" data-testid="box-surface" {...surface} />
       )}
       {boxes.map((k, i) => (
         <span key={k.id} className="page-box page-box-kept" data-testid="kept-box" data-tone={i % 5} style={percent(k.box)}>
           <span className="page-box-number">{i + 1}</span>
         </span>
       ))}
-      {drag && (
-        <span
-          className="page-box"
-          data-testid="drawn-box"
-          style={percent([Math.min(drag.x0, drag.x1), Math.min(drag.y0, drag.y1), Math.max(drag.x0, drag.x1), Math.max(drag.y0, drag.y1)])}
-        />
-      )}
+      {drawing && <span className="page-box" data-testid="drawn-box" style={percent(drawing)} />}
     </span>
   );
   const note = !on ? null : unavailable !== null ? (
@@ -321,11 +278,4 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
     </>
   );
   return { button, note: splitNote ? note : null, around, panel };
-}
-
-/** A pointer's place on the layer under it, as fractions of it (null: it has no size). */
-function point(e: PointerEvent<HTMLElement>): [number, number] | null {
-  const r = e.currentTarget.getBoundingClientRect();
-  if (r.width <= 0 || r.height <= 0) return null;
-  return [clamp((e.clientX - r.left) / r.width), clamp((e.clientY - r.top) / r.height)];
 }

@@ -53,6 +53,9 @@ export type ZoneIn = Schemas["ZoneIn"];
 /** One score of a picture rule's replay: a document, how well it matched, and whether the rule did. */
 export type PictureScore = Schemas["PictureScoreOut"];
 export type People = Schemas["PeopleOut"];
+/** Page 1 of a sample letter (Settings > Reading documents), never added to the archive. */
+export type SampleLetter = Schemas["SampleLetterOut"];
+export type SampleLine = Schemas["SampleLineOut"];
 export type Person = Schemas["PersonIO"];
 export type Countries = Schemas["CountriesOut"];
 export type IdentifierName = Schemas["IdentifierNameOut"];
@@ -1133,6 +1136,20 @@ export const usePutIdentifierName = () => {
 /** The people list and the address area. */
 export const usePeople = (enabled = true) =>
   useQuery({ queryKey: keys.people, queryFn: () => apiGet("/api/settings/people"), enabled });
+
+/** Page 1 of a sample letter to draw the address area on. The file is read in a temporary
+ * file and removed: nothing is added to the archive. A 400 says why not; over 50 MB is a 413.
+ * Not JSON: the file itself is the body. */
+export async function readSampleLetter(file: File): Promise<SampleLetter> {
+  const response = await fetch(`/api/settings/address-area/sample?name=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", Accept: "application/json" },
+    credentials: "same-origin",
+    body: file,
+  });
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as SampleLetter;
+}
 
 /** Save the people list (and the address area when given); a 400 says why not. */
 export const useSavePeople = () => {

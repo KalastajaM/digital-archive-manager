@@ -3795,6 +3795,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/address-area/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Address Area Sample
+         * @description Page 1 of a sample letter, to draw the address area on. The body is the file itself
+         *     (``Content-Type: application/octet-stream``, a PDF, JPG or PNG; ``name`` is its file
+         *     name). It is never added to the archive or the index: it is kept in a temporary file in
+         *     the cache while page 1 is read, and removed then. 400 for another kind of file or one
+         *     whose page 1 cannot be shown, 413 over 50 MB.
+         */
+        post: operations["address_area_sample_api_settings_address_area_sample_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/countries": {
         parameters: {
             query?: never;
@@ -7847,6 +7871,37 @@ export interface components {
             cost_eur: number;
             /** Cached */
             cached: boolean;
+        };
+        /**
+         * SampleLetterOut
+         * @description Page 1 of a sample letter: ``image`` a ``data:image/png;base64`` URL, and its lines
+         *     with their words (``read`` false: none could be read, ``unavailable`` says why).
+         */
+        SampleLetterOut: {
+            /** Image */
+            image: string;
+            /** Read */
+            read: boolean;
+            /** Lines */
+            lines: components["schemas"]["SampleLineOut"][];
+            /** Unavailable */
+            unavailable?: string | null;
+        };
+        /** SampleLineOut */
+        SampleLineOut: {
+            /** Text */
+            text: string;
+            /** Box */
+            box: number[];
+            /** Words */
+            words: components["schemas"]["SampleWordOut"][];
+        };
+        /** SampleWordOut */
+        SampleWordOut: {
+            /** Text */
+            text: string;
+            /** Box */
+            box: number[];
         };
         /** ScanFieldIn */
         ScanFieldIn: {
@@ -28771,6 +28826,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeopleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    address_area_sample_api_settings_address_area_sample_post: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleLetterOut"];
                 };
             };
             /** @description Bad Request */

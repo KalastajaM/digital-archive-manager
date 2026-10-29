@@ -2545,3 +2545,11 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .first-run-country { border: 0; padding: 0; margin: var(--sp-4) 0 0; min-width: 0; }
 .first-run-country legend { font-weight: 600; margin-bottom: var(--sp-2); }
 .first-run-country .check { margin-right: var(--sp-4); }
+
+/* ---- Settings > Reading documents: the address area from a sample letter ------------- */
+.sample-letter { margin-top: var(--sp-4); min-width: 0; }
+.sample-letter .actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: var(--sp-2); }
+.sample-letter-page { max-width: 32rem; border: 0.5px solid var(--border); }
+.sample-letter-found { margin: var(--sp-2) 0; max-width: 32rem; }
+.sample-lines { margin: 0; padding-left: var(--sp-4); max-height: 8rem; overflow-y: auto; font-size: var(--fs-sm); }
+.sample-line { overflow-wrap: anywhere; }

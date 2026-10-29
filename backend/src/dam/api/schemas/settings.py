@@ -46,6 +46,27 @@ class PeopleOut(BaseModel):
     address_zone_set: bool
 
 
+class SampleWordOut(BaseModel):
+    text: str
+    box: list[float]  # x0, y0, x1, y1 as fractions of page 1, origin top left
+
+
+class SampleLineOut(BaseModel):
+    text: str
+    box: list[float]
+    words: list[SampleWordOut]
+
+
+class SampleLetterOut(BaseModel):
+    """Page 1 of a sample letter: ``image`` a ``data:image/png;base64`` URL, and its lines
+    with their words (``read`` false: none could be read, ``unavailable`` says why)."""
+
+    image: str
+    read: bool
+    lines: list[SampleLineOut]
+    unavailable: str | None = None
+
+
 class AssignmentsIn(StrictIn):
     """``PUT /api/assignments``: set From and/or For on documents. A field left out stays
     as it is; an explicit null clears it. ``person`` must be in the people list."""

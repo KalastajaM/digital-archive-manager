@@ -315,6 +315,9 @@ from dam.api.schemas.settings import (
     PeopleIn,
     PeopleOut,
     PersonIO,
+    SampleLetterOut,
+    SampleLineOut,
+    SampleWordOut,
     SenderOut,
 )
 from dam.api.schemas.setup import (
@@ -641,6 +644,9 @@ __all__ = [
     "Page1SpeedIn",
     "Page1SpeedOut",
     "PersonIO",
+    "SampleLetterOut",
+    "SampleLineOut",
+    "SampleWordOut",
     "PeopleIn",
     "PeopleOut",
     "AssignmentsIn",
