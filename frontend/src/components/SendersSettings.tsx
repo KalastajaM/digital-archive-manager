@@ -129,7 +129,7 @@ export function SendersSettings() {
       {query.data && query.data.names.length === 0 && (
         <p className="hint">
           No business ID is on two or more documents yet. They are read from the documents&apos; text in the background,
-          with Finland on under Countries and languages.
+          with Finland on under Reading documents.
         </p>
       )}
       {query.data && query.data.names.length > 0 && (

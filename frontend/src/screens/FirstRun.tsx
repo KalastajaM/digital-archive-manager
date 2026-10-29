@@ -318,7 +318,7 @@ export default function FirstRun() {
           </label>
           <p className="first-run-hint">
             It decides which payment reference numbers dam reads from bills, and the example rules it offers. You can
-            change it later in Settings, Countries and languages.
+            change it later in Settings, Reading documents.
           </p>
         </fieldset>
 
