@@ -7699,6 +7699,8 @@ export interface components {
              */
             create: boolean;
             layout?: components["schemas"]["LayoutIn"] | null;
+            /** Countries */
+            countries?: string[] | null;
         };
         /** SetupLayoutPreviewIn */
         SetupLayoutPreviewIn: {
