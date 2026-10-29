@@ -13,7 +13,7 @@ def test_countries_does_not_import_config():
     out = subprocess.run(
         [sys.executable, "-c", "import sys, dam.countries; print('dam.config' in sys.modules)"],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     )
     assert out.stdout.strip() == "False"
