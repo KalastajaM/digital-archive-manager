@@ -571,7 +571,15 @@ All in the data folder under `config/`:
   `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings), `address_zone`
   (`[x0, y0, x1, y1]` as fractions of page 1, origin top left; unset, it follows the first
   country that has a standard; `PUT /api/settings/people` with `address_zone: null` takes it
-  out of the file again, and the reply's `address_zone_set` says whether the file sets it),
+  out of the file again, and the reply's `address_zone_set` says whether the file sets it;
+  `POST /api/settings/address-area/sample?name=<file name>` with the file itself as the
+  body, `application/octet-stream`, a PDF, JPG or PNG of at most 50 MB, gives page 1 of a
+  sample letter to draw the area on: `{image, read, lines, unavailable}`, `image` a
+  `data:image/png;base64` URL 900 pixels wide (an image is never made larger), `lines` with
+  their `words` and boxes, `read` false with `unavailable` saying why when no text could be
+  read; the file is kept in a temporary file in the cache while page 1 is read and removed
+  then, never added to the archive or the index; 400 for another kind of file or one whose
+  page 1 cannot be shown, 413 over the limit),
   `countries` (country packs: `fi`, `nl`; unset reads as `[fi]`, `[]` is none) and
   `languages` (language packs: `fi`, `sv`, `nl`, `en`; unset, the countries' languages;
   English is always added). The four
@@ -1562,10 +1570,11 @@ The user guide's "What dam never does" gives the short version. The details:
 - **Local-only API.** The server binds `127.0.0.1`, checks the `Host` header (DNS
   rebinding), refuses `Sec-Fetch-Site: cross-site`, and requires mutating requests to
   carry a local `Origin` (or, without `Origin`, `Sec-Fetch-Site` of `same-origin` or
-  `none`). POST requests must be JSON (`Content-Type: application/json`), except the two
-  file uploads, "Choose files…" (`POST /api/inbox/upload`) and snapshot Import
-  (`POST /api/snapshots/import`), which take `application/octet-stream` and pass the same
-  host and origin checks. The UI is served with a strict CSP. Other
+  `none`). POST requests must be JSON (`Content-Type: application/json`), except the
+  three file uploads, "Choose files…" (`POST /api/inbox/upload`), snapshot Import
+  (`POST /api/snapshots/import`) and a sample letter for the address area
+  (`POST /api/settings/address-area/sample`), which take `application/octet-stream` and
+  pass the same host and origin checks. The UI is served with a strict CSP. Other
   web pages cannot read or change your archive.
 - **Signed-in API.** The checks above stop web pages, not other programs on the same
   computer, which can all reach `127.0.0.1`. So every request under `/api` (file

@@ -1,10 +1,17 @@
 """Archive settings the app writes to ``settings.yaml``."""
 
-from fastapi import APIRouter
+import base64
+import tempfile
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import ValidationError
 
 from dam import countries, languages
 from dam.api.deps import AppDep
+from dam.api.sample_letter import read_sample, sample_ext
 from dam.api.schemas import (
     CountriesIn,
     CountriesOut,
@@ -14,12 +21,16 @@ from dam.api.schemas import (
     Page1SpeedOut,
     PeopleIn,
     PeopleOut,
+    SampleLetterOut,
 )
 from dam.codes.model import format_validation
 from dam.config import Person, Settings
-from dam.errors import InvalidRequest
+from dam.errors import InvalidRequest, TooLarge
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+SAMPLE_MAX_BYTES = 50 * 1024 * 1024  # a letter, not an archive: 50 MB is plenty
+SAMPLE_LIMIT_MB = SAMPLE_MAX_BYTES // (1024 * 1024)
 
 
 @router.put("/page1-backfill", response_model=Page1BackfillOut)
@@ -76,6 +87,49 @@ def put_people(app: AppDep, body: PeopleIn) -> dict:
         follow_countries="address_zone" in body.model_fields_set and body.address_zone is None,
     )
     return _people_out(app)
+
+
+@router.post("/address-area/sample", response_model=SampleLetterOut)
+async def address_area_sample(
+    app: AppDep, request: Request, name: Annotated[str, Query(max_length=255)]
+) -> dict:
+    """Page 1 of a sample letter, to draw the address area on. The body is the file itself
+    (``Content-Type: application/octet-stream``, a PDF, JPG or PNG; ``name`` is its file
+    name). It is never added to the archive or the index: it is kept in a temporary file in
+    the cache while page 1 is read, and removed then. 400 for another kind of file or one
+    whose page 1 cannot be shown, 413 over 50 MB."""
+    ext = sample_ext(name)
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > SAMPLE_MAX_BYTES:
+        raise TooLarge(f"A sample letter can be at most {SAMPLE_LIMIT_MB} MB.")
+    uploads = app.app_paths.cache_dir / "uploads"
+    uploads.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        dir=uploads, suffix=f".{ext}", delete=True, delete_on_close=False
+    ) as tmp:
+        total = 0
+        async for chunk in request.stream():
+            total += len(chunk)
+            if total > SAMPLE_MAX_BYTES:
+                raise TooLarge(f"A sample letter can be at most {SAMPLE_LIMIT_MB} MB.")
+            await run_in_threadpool(tmp.write, chunk)
+        if total == 0:
+            raise InvalidRequest("That file is empty.")
+        await run_in_threadpool(tmp.flush)
+        page = await run_in_threadpool(read_sample, Path(tmp.name), ext, app.settings.ocr_languages)
+    return {
+        "image": "data:image/png;base64," + base64.b64encode(page.png).decode("ascii"),
+        "read": page.unavailable is None,
+        "lines": [
+            {
+                "text": ln.text,
+                "box": list(ln.box),
+                "words": [{"text": w.text, "box": list(w.box)} for w in ln.words],
+            }
+            for ln in page.lines
+        ],
+        "unavailable": page.unavailable,
+    }
 
 
 def _countries_out(app) -> dict:

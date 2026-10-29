@@ -30,6 +30,11 @@ All notable changes are listed here. The format follows
   offers **Address area for this document only**, **No address area on this document**
   and **Use the usual address area**, and moving the drawn address area asks whether it
   is for this document only or for all letters.
+- **The address area from a sample letter.** In the New look, Settings, Reading documents
+  has **Choose a sample letter…** under Address area: pick a PDF, JPG or PNG on your
+  computer, drag a box around the address on page 1, see which lines of the letter fall in
+  it, and **Use for all letters**. The letter is read in a temporary file and removed; it is
+  never added to the archive or the index. Documents with their own address area keep it.
 
 ### Changed
 

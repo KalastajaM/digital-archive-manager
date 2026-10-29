@@ -799,6 +799,16 @@ standard, for the Netherlands an estimate); change it there, under **Address are
 with Draw a box. **Reset to default** there makes it follow the countries again. One
 document can have an area of its own, or none (see Draw a box above).
 
+To set the area from a letter that is not in the archive (New look), click **Choose a
+sample letter…** under Address area and pick a PDF, JPG or PNG on your computer. Page 1
+shows with the area in use now as a dashed box. Drag a box around the address: the lines
+of the letter that fall in it are listed (when the letter has text, or a scan can be
+read), and **Use for all letters** saves the box as the address area, replacing the one
+you set before. Drawing again replaces the box, Esc drops it, and **Close** leaves the
+area as it was. The letter is only read to show page 1: it is never added to the archive
+or the index, and dam removes its temporary copy straight away. Documents with an address
+area of their own keep it.
+
 The rule sheet's **For** row says who the address area found on the document the rule was
 made from ("Tiina, found in the address area", "Nobody found", "Tiina and Michiel found",
 or, when the People list is empty, where to add people). Choose **Anyone** or **Only for**
