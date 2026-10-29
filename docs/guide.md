@@ -876,8 +876,12 @@ when it reads it, and for picture areas a small grayscale picture of the page; t
 costs no extra reading for new scans. Documents read before this feature, and PDFs that
 have a text layer, get theirs in the background, inbox first, when dam has nothing else
 to do.
-The Index sheet (click the status line at the foot of the sidebar) has a **Page 1** row in
-its totals: how many documents are read, an estimate of the time left while reading goes
+The Index sheet (click the status line at the foot of the sidebar) lists the **Files in
+the archive**: a **Total** and the four states that make it up (Searchable, Waiting, Not
+readable, Errors), and apart from them the **Missing** files, which are no longer in the
+archive folder. Under **Other indexes** come **Business IDs** (how many searchable files
+have had their business IDs, IBANs and domains read) and a **Page 1** row: how many
+documents are read, an estimate of the time left while reading goes
 on, and how many wait because page 1 cannot be read now and why (for example no OCR
 engine, or it took too long). The row links to Settings → Indexing. While reading is not
 complete, the status line also says "page 1 read 1 240 of 10 875". Settings → Indexing

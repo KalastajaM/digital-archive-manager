@@ -1744,11 +1744,16 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 dialog.sheet, dialog.quicklook { -webkit-user-select: text; user-select: text; }
 
 .status-badge .status-line-button { font-size: inherit; color: inherit; text-align: left; }
-.index-summary { margin: 0 0 var(--sp-3); }
-.index-summary-row { display: grid; grid-template-columns: 7rem 4rem 1fr; gap: var(--sp-2); align-items: baseline; padding: var(--sp-1) 0; }
-.index-summary-row dt { font-weight: 600; }
-.index-summary-row dd { margin: 0; }
-.index-summary-row dd:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; }
+/* Each list is one grid, so the number column is as wide as its widest value ("8 956 of
+   8 956" never wraps) and the notes line up; a row's cells sit straight in it. */
+.index-group { margin: 0 0 var(--sp-3); }
+.index-group h4 { margin: 0 0 var(--sp-1); }
+.index-summary { display: grid; grid-template-columns: minmax(7rem, max-content) max-content minmax(0, 1fr); column-gap: var(--sp-3); align-items: baseline; margin: 0; }
+.index-summary-row { display: contents; }
+.index-summary-row dt { font-weight: 600; padding: var(--sp-1) 0; }
+.index-summary-row dd { margin: 0; padding: var(--sp-1) 0; min-width: 0; overflow-wrap: anywhere; }
+.index-summary-row dd:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.index-summary-part dt { font-weight: 400; padding-left: var(--sp-3); }
 
 dialog.sheet.index-errors { width: min(720px, calc(100vw - 32px)); }
 .index-errors-toggle { display: inline-flex; gap: var(--sp-1); align-items: center; margin-top: var(--sp-1); }

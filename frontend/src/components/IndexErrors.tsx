@@ -5,7 +5,7 @@
  * request only: nothing is wrong with them. Outcomes show on the sheet's own status
  * line (a toast would sit under the modal sheet). */
 import { RotateCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   errorText,
@@ -72,7 +72,9 @@ export function typeSummary(byType: IndexProblems["unsupported_by_type"]): strin
     .join(", ");
 }
 
-const STATE_NOTES: [key: "searchable" | "waiting" | "not_readable" | "errors" | "missing", label: string, note: string][] = [
+/** The four states every file in the archive folder is in, one each: they add up to the
+ * total. */
+const PARTS: [key: "searchable" | "waiting" | "not_readable" | "errors", label: string, note: string][] = [
   ["searchable", "Searchable", "The text of these files is indexed, so search finds them by their content."],
   ["waiting", "Waiting", "Not read yet, or waiting for Google Drive to download them."],
   [
@@ -81,8 +83,17 @@ const STATE_NOTES: [key: "searchable" | "waiting" | "not_readable" | "errors" | 
     "The app has no reader for this type; the file is still archived and findable by name.",
   ],
   ["errors", "Errors", "Reading these failed. Retrying may help."],
-  ["missing", "Missing", "Gone from the archive folder since the last scan."],
 ];
+
+function SummaryRow({ label, value, note, part }: { label: string; value: string; note: ReactNode; part?: boolean }) {
+  return (
+    <div className={part ? "index-summary-row index-summary-part" : "index-summary-row"}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+      <dd className="hint">{note}</dd>
+    </div>
+  );
+}
 
 const minutesText = (minutes: number) =>
   minutes < 60 ? `${minutes} min` : minutes < 60 * 48 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes / 1440)} days`;
@@ -138,6 +149,8 @@ function Page1Row({ page1, onSettings }: { page1: IndexSummary["page1"]; onSetti
 
 function SummaryBlock({ onSettings }: { onSettings?: () => void }) {
   const summary = useIndexSummary();
+  const filesId = useId();
+  const otherId = useId();
   if (summary.isError) {
     return (
       <p className="error" role="alert">
@@ -147,18 +160,37 @@ function SummaryBlock({ onSettings }: { onSettings?: () => void }) {
   }
   if (!summary.data) return null;
   const data = summary.data;
+  const total = PARTS.reduce((sum, [key]) => sum + data[key], 0);
+  const ids = data.identifiers;
   return (
     <>
-      <dl className="index-summary" aria-label="Totals">
-        {STATE_NOTES.map(([key, label, note]) => (
-          <div key={key} className="index-summary-row">
-            <dt>{label}</dt>
-            <dd>{groupDigits(data[key])}</dd>
-            <dd className="hint">{note}</dd>
-          </div>
-        ))}
-        {data.page1 && <Page1Row page1={data.page1} onSettings={onSettings} />}
-      </dl>
+      <div role="group" aria-labelledby={filesId} className="index-group">
+        <h4 id={filesId}>Files in the archive</h4>
+        <dl className="index-summary">
+          <SummaryRow label="Total" value={groupDigits(total)} note="Every file in the archive folder, in one of these states:" />
+          {PARTS.map(([key, label, note]) => (
+            <SummaryRow key={key} label={label} value={groupDigits(data[key])} note={note} part />
+          ))}
+          <SummaryRow
+            label="Missing"
+            value={groupDigits(data.missing)}
+            note="Gone from the archive folder since the last scan, so not in the total."
+          />
+        </dl>
+      </div>
+      <div role="group" aria-labelledby={otherId} className="index-group">
+        <h4 id={otherId}>Other indexes</h4>
+        <dl className="index-summary">
+          {data.page1 && <Page1Row page1={data.page1} onSettings={onSettings} />}
+          {ids && (
+            <SummaryRow
+              label="Business IDs"
+              value={`${groupDigits(ids.read)} of ${groupDigits(ids.total)}`}
+              note="Business IDs, IBANs and domains read from the searchable files' text, for id: search and Relatives."
+            />
+          )}
+        </dl>
+      </div>
     </>
   );
 }

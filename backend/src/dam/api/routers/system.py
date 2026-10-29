@@ -113,6 +113,7 @@ def index_summary(
         ],
         "offset": offset,
         "page1": _page1(app),
+        "identifiers": _identifiers(app),
     }
 
 

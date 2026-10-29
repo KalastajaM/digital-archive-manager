@@ -44,6 +44,7 @@ class IndexSummaryOut(BaseModel):
     rows: list[IndexErrorOut]  # the not readable files, one page, newest file first
     offset: int
     page1: "Page1ProgressOut"  # how far the page-1 pass has come
+    identifiers: "IdentifiersProgressOut"  # how far business IDs, IBANs and domains are read
 
 
 class RetryIndexOut(BaseModel):
