@@ -221,6 +221,17 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
             else "0",
             neg,
         )
+    elif f.name == "id" and v == "*":
+        # any business ID of the enabled packs (not IBANs or domains); current content only
+        kinds = packs.business_id_kinds(packs.active())
+        w.add(
+            "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
+            "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "
+            f"WHERE i.kind IN ({w.marks(kinds)}))"
+            if kinds
+            else "0",
+            neg,
+        )
     elif f.name == "id":
         # business IDs, IBANs and domains of the enabled packs, compared without spaces,
         # dashes or case; the current content's only

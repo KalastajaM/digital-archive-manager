@@ -316,12 +316,7 @@ class RelativesService:
     def _business_ids(self, conn: Connection, subject: str, hits: dict) -> None:
         """Files whose current content carries a business ID this one carries: the enabled
         packs' identifiers that name a sender, not a web domain (shared too widely)."""
-        kinds = [
-            s.kind
-            for p in packs.active().countries
-            for s in p.identifiers
-            if s.names_sender and not s.kind.endswith(".domain")
-        ]
+        kinds = packs.business_id_kinds(packs.active())
         if not kinds:
             return
         current = and_(

@@ -1215,7 +1215,7 @@ the box. A search with only filters lists the matching files by name.
 | `collection:` | Files in a collection, including the collections inside it and, for a folder that is a member, the files in that folder. | `collection:"House sale"` |
 | `from:` | Files whose sender (From, as you set it on the file) contains the text. | `from:Kela` |
 | `for:` | Files whose person (For) is that person. Only what you set, or what a confirmed filing recorded, is searched; the names found on page 1 are not. | `for:Tiina` |
-| `id:` | Files whose text carries this business ID, IBAN or web or mail domain, written with or without spaces and dashes (a Y-tunnus also in its VAT form). Only the countries that are on in Settings, Reading documents. | `id:0112038-9` |
+| `id:` | Files whose text carries this business ID, IBAN or web or mail domain, written with or without spaces and dashes (a Y-tunnus also in its VAT form). `id:*` finds every file that has a business ID (not an IBAN or domain), for example `from:Telia id:*`. Only the countries that are on in Settings, Reading documents. | `id:0112038-9`, `id:*` |
 | `type:` | The kind of file: an extension (`pdf`, `docx`) or a group: `image`, `doc`, `sheet`, `slides`, `text`, `mail`, `archive`, `audio`, `video`. | `type:pdf`, `type:image` |
 | `date:` | The document date: the date at the start of the file name (`20261003_...`), and for a file without one the date it was last modified, which is the Date column in Browse. Takes `YYYY`, `YYYY-MM` or `YYYY-MM-DD`. | `date:2026-10` |
 | `after:` | Dated on or after the first day of that year, month or day. | `after:2025` |
