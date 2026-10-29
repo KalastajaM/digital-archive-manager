@@ -64,7 +64,15 @@ export function CountriesSettings() {
                 <input
                   type="checkbox"
                   checked={choice.countries.includes(c.code)}
-                  onChange={(e) => setDraft({ ...choice, countries: toggled(choice.countries, c.code, e.target.checked) })}
+                  onChange={(e) =>
+                    setDraft({
+                      countries: toggled(choice.countries, c.code, e.target.checked),
+                      // a country turned on brings its languages; turned off, they stay
+                      languages: e.target.checked
+                        ? [...choice.languages, ...c.languages.filter((l) => !choice.languages.includes(l))]
+                        : choice.languages,
+                    })
+                  }
                 />
                 <span className="countries-text">
                   <span className="countries-name">{c.name}</span>
