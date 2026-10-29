@@ -1,4 +1,4 @@
-/** Settings → Countries and languages: the country packs and language packs this archive's
+/** Settings → Reading documents: the country packs and language packs this archive's
  * documents are read with (``countries`` and ``languages`` in settings.yaml). English is
  * always on. */
 import { useState } from "react";
@@ -37,18 +37,18 @@ export function CountriesSettings() {
       {
         onSuccess: () => {
           setDraft(null);
-          toast({ kind: "info", text: "Countries and languages saved." });
+          toast({ kind: "info", text: "Saved. dam reads your documents with these from now on." });
         },
       },
     );
   };
 
   return (
-    <section aria-label="Countries and languages" className="countries-settings">
-      <h3>Countries and languages</h3>
+    <section aria-label="Reading documents" className="countries-settings">
+      <h3>Reading documents</h3>
       <p className="hint">
-        What dam reads from your documents depends on the country they come from and the languages they are written in.
-        Kept in this archive's settings.
+        dam uses these to find reference numbers, dates, due dates and totals in your documents. Kept in this
+        archive's settings.
       </p>
       {query.isError && (
         <p className="error" role="alert">
@@ -58,7 +58,7 @@ export function CountriesSettings() {
       {query.data && choice && (
         <>
           <fieldset className="countries-group">
-            <legend>Countries</legend>
+            <legend>Where your post comes from</legend>
             {query.data.countries.map((c) => (
               <label key={c.code} className="check countries-row">
                 <input
@@ -79,7 +79,7 @@ export function CountriesSettings() {
             <p className="hint">Without a country, dam still reads RF references, IBANs, dates and amounts.</p>
           </fieldset>
           <fieldset className="countries-group">
-            <legend>Languages</legend>
+            <legend>Languages your documents are written in</legend>
             {query.data.languages.map((l) => (
               <label key={l.code} className="check countries-row">
                 <input
@@ -90,7 +90,7 @@ export function CountriesSettings() {
                 />
                 <span className="countries-text">
                   <span className="countries-name">{l.name}</span>
-                  {l.always && <span className="hint countries-adds">always on</span>}
+                  {l.always && <span className="hint countries-adds">always on (dam itself is in English)</span>}
                 </span>
               </label>
             ))}

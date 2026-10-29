@@ -22,9 +22,9 @@ All notable changes are listed here. The format follows
   to the other files that carry it; the search filter `id:` finds them (`id:0112038-9`);
   Relatives links documents with the same business ID; Settings, Indexing says how far the
   reading is. Mail services anyone can use (Gmail, Outlook and the like) are left out.
-- **Countries and languages.** Settings has a new section, Countries and languages, under
-  This archive: the countries your post comes from and the languages it is written in, each
-  listed with what it adds, English always on. The first-run screen asks once where your post
+- **Reading documents.** Settings has a new section, Reading documents, under This archive:
+  where your post comes from and the languages your documents are written in (not dam's own
+  language), each listed with what it adds, English always on. The first-run screen asks once where your post
   comes from (Finland or another country). Without Finland, dam no longer looks for the
   viitenumero, and a rules file it writes later has no Finland examples (yours stay as they
   are); RF references, IBANs, dates and amounts are

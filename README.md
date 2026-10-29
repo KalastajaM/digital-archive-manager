@@ -168,7 +168,7 @@ country or one language:
 | Due-date and total labels, month names | Finnish, Swedish and English |
 | OCR | the languages you set in `ocr_languages` |
 
-You choose the countries and languages in **Settings, Countries and languages**, and the
+You choose the countries and languages in **Settings, Reading documents**, and the
 first-run screen asks where your post comes from. Each country and language is a **pack**:
 another country's reference numbers and address area, or another language's words, are
 added as a pack. Still to come: the bank barcode as a pack, and a Netherlands pack. If you would like

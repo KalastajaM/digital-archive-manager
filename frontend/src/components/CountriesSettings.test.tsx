@@ -24,7 +24,11 @@ describe("CountriesSettings", () => {
   it("lists Finland with what it adds, and English always on", async () => {
     mockFetch({ "GET /api/settings/countries": { body: state } });
     renderWithProviders(<CountriesSettings />);
-    const finlandBox = await screen.findByRole("checkbox", { name: /Finland/ });
+    expect(await screen.findByRole("heading", { name: "Reading documents" })).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: "Where your post comes from" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Languages your documents are written in" })).toBeInTheDocument();
+    expect(screen.getByText("always on (dam itself is in English)")).toBeInTheDocument();
+    const finlandBox = screen.getByRole("checkbox", { name: /Finland/ });
     expect(finlandBox).toBeChecked();
     expect(screen.getByText("Payment reference (viitenumero)")).toBeInTheDocument();
     expect(screen.getByText("Finland example rules")).toBeInTheDocument();
@@ -47,7 +51,7 @@ describe("CountriesSettings", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
     const put = calls.find((c) => c.method === "PUT");
     expect(put?.body).toEqual({ countries: [], languages: ["fi", "en"] });
-    expect(await screen.findByText("Countries and languages saved.")).toBeInTheDocument();
+    expect(await screen.findByText("Saved. dam reads your documents with these from now on.")).toBeInTheDocument();
   });
 
   it("shows why a save failed", async () => {
@@ -59,7 +63,7 @@ describe("CountriesSettings", () => {
     renderWithProviders(<CountriesSettings />);
     await user.click(await screen.findByRole("checkbox", { name: /Swedish/ }));
     await user.click(screen.getByRole("button", { name: "Save countries and languages" }));
-    const region = screen.getByRole("region", { name: "Countries and languages" });
+    const region = screen.getByRole("region", { name: "Reading documents" });
     expect(await within(region).findByRole("alert")).toHaveTextContent("disk full");
   });
 });
