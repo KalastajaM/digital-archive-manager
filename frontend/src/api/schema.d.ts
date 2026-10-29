@@ -2728,6 +2728,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/identifier-names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Identifier Names
+         * @description Settings, Senders: every business ID on two or more documents, and every named one,
+         *     most documents first, with the name printed next to it most often.
+         */
+        get: operations["identifier_names_api_identifier_names_get"];
+        /**
+         * Put Identifier Name
+         * @description Name a business ID: From becomes the name on every document that carries it, except
+         *     where the owner set From or For. ``null`` clears the name and takes those senders
+         *     back. Answers how many documents changed and the name as kept (spelled as another
+         *     name already is). 400 for a blank name, or a kind or value that cannot be named.
+         */
+        put: operations["put_identifier_name_api_identifier_names_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/filing-codes": {
         parameters: {
             query?: never;
@@ -5848,6 +5876,55 @@ export interface components {
             position?: number | null;
             /** Summary */
             summary?: string | null;
+        };
+        /** IdentifierNameDoneOut */
+        IdentifierNameDoneOut: {
+            /** Changed */
+            changed: number;
+            /** Name */
+            name: string | null;
+        };
+        /**
+         * IdentifierNameIn
+         * @description Name a business ID (From on every document that carries it), or clear its name
+         *     (``null``: the senders it gave are taken back).
+         */
+        IdentifierNameIn: {
+            /** Kind */
+            kind: string;
+            /** Value */
+            value: string;
+            /** Name */
+            name: string | null;
+        };
+        /**
+         * IdentifierNameOut
+         * @description A business ID found on two or more documents (or named), for Settings, Senders:
+         *     ``suggested`` is the company name printed next to it most often, ``name`` the owner's
+         *     confirmed name, ``filled`` how many of its ``files`` have that name as From.
+         */
+        IdentifierNameOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+            /** Files */
+            files: number;
+            /** Suggested */
+            suggested: string | null;
+            /** Name */
+            name: string | null;
+            /** Set At */
+            set_at: number | null;
+            /** Filled */
+            filled: number;
+        };
+        /** IdentifierNamesOut */
+        IdentifierNamesOut: {
+            /** Names */
+            names: components["schemas"]["IdentifierNameOut"][];
         };
         /** IdentifierOut */
         IdentifierOut: {
@@ -22943,6 +23020,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SenderOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    identifier_names_api_identifier_names_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentifierNamesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_identifier_name_api_identifier_names_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentifierNameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentifierNameDoneOut"];
                 };
             };
             /** @description Bad Request */

@@ -60,6 +60,7 @@ from dam.services.preview import PreviewService
 from dam.services.relatives import RelativesService
 from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService
+from dam.services.senders import SenderNames
 from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
 from dam.settings_write import write_keys
@@ -221,6 +222,7 @@ class ServiceParts:
     ai: AIService
     summaries: SummaryService
     relatives: RelativesService
+    sender_names: SenderNames
 
 
 def build_services(
@@ -355,6 +357,7 @@ def build_services(
         ai=AIService(live, provider),
         summaries=SummaryService(engine, repo),
         relatives=RelativesService(engine, repo, paths),
+        sender_names=SenderNames(engine, repo),
     )
 
 
@@ -415,6 +418,7 @@ class App:
     ai: AIService = field(init=False)
     summaries: SummaryService = field(init=False)
     relatives: RelativesService = field(init=False)
+    sender_names: SenderNames = field(init=False)
     # where the shipped default tray files live (tests point it elsewhere)
     defaults_dir: Path = field(init=False, default=DEFAULTS_DIR)
     # ends the background indexer's idle wait (``dam serve`` wires it); a no-op otherwise

@@ -1248,10 +1248,37 @@ what each pack's identifier finders return: `core.iban` (valid IBANs of SEPA cou
 `core.domain` (web and mail domains, lower case, not free mail services or file names) and
 `fi.ytunnus` (business IDs with a valid check digit, the VAT form as `0112038-9`). A file is
 read again when its content or text changes, or when `countries.signature()` (every pack and
-its `version`, `"core:1 fi:1"`) changes. What is shown, searched (`id:`) and linked is limited
+its `version`, `"core:1 fi:2"`) changes. What is shown, searched (`id:`) and linked is limited
 to the enabled countries. `GET /api/files/{drive_id}/identifiers` lists a file's identifiers
 with `others`, the number of other files carrying each; `/api/status` has `identifiers:
 {read, total}`.
+
+**Senders from business IDs.** `file_identifiers` has a `name` column and a table
+`identifier_names(kind, value, name, set_by, set_at)` keeps the owner's names (migration
+0046). An identifier whose pack gives it a name finder (`IdentifierSpec.name`; today
+`fi.ytunnus`, Finland pack version 2) stores the company name printed on the line of the
+value, on up to four lines with text above it or two below (blank lines are skipped),
+recognised by a legal form at its end (`Oy`, `Oyj`, `Ab`, `Abp`, `Oy Ab`, `Oyj Abp`, `Ky`,
+`Ay`, `ry`, `rf`, `osk`, `kb`, `Tmi`) or start (`Tmi`, `Asunto Oy`, `As Oy`, `Kiinteistö
+Oy`), matched on folded text. The name is the capitalised words before (or after) the form
+within one field of the line (fields end at punctuation or a gap of two spaces), joined by
+`ja`, `and`, `och` or `&`, without labels such as `Laskuttaja` or `Y-tunnus`; the closest
+wins, a line above before one below. `GET /api/identifier-names` lists every such identifier on two or more live files
+(and every named one), most files first, with `suggested` (the name stored most often, case
+ignored), `name`, `set_at` and `filled` (files carrying it whose From is `name`). `PUT
+/api/identifier-names {kind, value, name}` sets a name (400 for a blank one, over 80
+characters, or a kind or value that cannot be named); `name: null` clears it. A name
+another identifier or an owner's From already spells without case is kept in that spelling.
+Both answer `{changed, name}`: the number of files whose From changed and the name as
+kept. A file's From
+(`file_assignments.sender`, `set_by` `"filing"`) is the name its named identifiers agree on
+(case ignored), counting only the enabled countries' identifiers; it is set when a name is
+set or changed and when the identifiers pass reads the file, and taken back when they no
+longer name one sender (a cleared name, two different names, new content or text) and it is
+one of the names. Clearing or changing a name also revisits every non-owner row whose From
+is the old name, wherever the file is now. A row with `set_by` `"owner"` is never touched; a
+filing row keeps its person. When the owner clears a From that a name gave, the row stays
+as an owner row with both fields empty, so the name does not give it again.
 
 **Marks.** Table `related_dismissed(drive_a, drive_b, created)` (migration 0041): a pair of
 drive ids, the smaller first, no foreign key. It is index data, so there is no journal and no

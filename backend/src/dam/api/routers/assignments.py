@@ -6,7 +6,14 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from dam.api.deps import AppDep, require_editable
-from dam.api.schemas import AssignmentOut, AssignmentsIn, SenderOut
+from dam.api.schemas import (
+    AssignmentOut,
+    AssignmentsIn,
+    IdentifierNameDoneOut,
+    IdentifierNameIn,
+    IdentifierNamesOut,
+    SenderOut,
+)
 from dam.services.assignments import UNSET
 
 router = APIRouter(prefix="/api", tags=["assignments"])
@@ -45,3 +52,23 @@ def put_assignments(app: AppDep, body: AssignmentsIn) -> list:
 def senders(app: AppDep) -> list:
     """The senders in use, by name, with the number of documents each has."""
     return [{"sender": name, "count": n} for name, n in app.assignments.senders()]
+
+
+@router.get("/identifier-names", response_model=IdentifierNamesOut)
+def identifier_names(app: AppDep) -> dict:
+    """Settings, Senders: every business ID on two or more documents, and every named one,
+    most documents first, with the name printed next to it most often."""
+    return {"names": [asdict(r) for r in app.sender_names.list()]}
+
+
+@router.put("/identifier-names", response_model=IdentifierNameDoneOut)
+def put_identifier_name(app: AppDep, body: IdentifierNameIn) -> dict:
+    """Name a business ID: From becomes the name on every document that carries it, except
+    where the owner set From or For. ``null`` clears the name and takes those senders
+    back. Answers how many documents changed and the name as kept (spelled as another
+    name already is). 400 for a blank name, or a kind or value that cannot be named."""
+    if body.name is None:
+        changed = app.sender_names.clear(body.kind, body.value)
+    else:
+        changed = app.sender_names.confirm(body.kind, body.value, body.name)
+    return {"changed": changed, "name": app.sender_names.name_of(body.kind, body.value)}

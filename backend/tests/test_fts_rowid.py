@@ -165,7 +165,7 @@ def test_migration_0037_maps_existing_fts_rows(tmp_path: Path, new_engine):
         conn.execute(fts, {"d": "d1", "n": "Invoice.pdf", "p": "a/Invoice.pdf", "t": "power"})
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0045"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0046"
         index = conn.execute(
             text("SELECT sql FROM sqlite_master WHERE name = 'ix_operations_planned'")
         ).scalar()

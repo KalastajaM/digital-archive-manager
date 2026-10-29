@@ -58,6 +58,39 @@ class SenderOut(BaseModel):
     count: int
 
 
+class IdentifierNameOut(BaseModel):
+    """A business ID found on two or more documents (or named), for Settings, Senders:
+    ``suggested`` is the company name printed next to it most often, ``name`` the owner's
+    confirmed name, ``filled`` how many of its ``files`` have that name as From."""
+
+    kind: str
+    label: str
+    value: str
+    files: int
+    suggested: str | None
+    name: str | None
+    set_at: float | None
+    filled: int
+
+
+class IdentifierNamesOut(BaseModel):
+    names: list[IdentifierNameOut]
+
+
+class IdentifierNameIn(StrictIn):
+    """Name a business ID (From on every document that carries it), or clear its name
+    (``null``: the senders it gave are taken back)."""
+
+    kind: str
+    value: str
+    name: str | None
+
+
+class IdentifierNameDoneOut(BaseModel):
+    changed: int  # documents whose From changed
+    name: str | None  # the name as kept, None once cleared
+
+
 class CountryOut(BaseModel):
     code: str
     name: str

@@ -175,6 +175,11 @@ class AssignmentService:
                 if new_person is not UNSET:
                     p = new_person
                 if s is None and p is None:
+                    if old is not None and old.set_by != OWNER and old.sender is not None:
+                        # a From a name gave, cleared: kept empty as the owner's word, so
+                        # the name does not give it again
+                        self._upsert(conn, drive_id, None, None, OWNER, now)
+                        continue
                     conn.execute(
                         delete(file_assignments).where(file_assignments.c.drive_id == drive_id)
                     )
@@ -185,10 +190,12 @@ class AssignmentService:
     def record_filing(self, drive_id: str, person: str) -> bool:
         """A confirmed filing used ``person`` for the folder: remember it as this file's
         person, unless the owner has set something for it. Returns whether it was written."""
-        old = self.get([drive_id]).get(drive_id)
-        if old is not None and old.set_by == OWNER:
-            return False
-        with write_tx(self.engine) as conn:
+        with write_tx(self.engine) as conn:  # read inside: a name may fill From meanwhile
+            old = conn.execute(
+                select(file_assignments).where(file_assignments.c.drive_id == drive_id)
+            ).first()
+            if old is not None and old.set_by == OWNER:
+                return False
             self._upsert(conn, drive_id, old.sender if old else None, person, FILING, time.time())
         return True
 

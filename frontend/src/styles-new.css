@@ -2687,3 +2687,25 @@
 [data-style="new"] .found-id-label { grid-column: 1 / -1; overflow-wrap: anywhere; }
 [data-style="new"] .found-id-value { font-family: var(--font-mono, monospace); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-style="new"] .found-id-others { white-space: nowrap; }
+
+/* Settings → Senders (components/SendersSettings.tsx): one row per business ID, the ID and
+ * its document count on top, the name field and its buttons below; text wraps or ends in an
+ * ellipsis, never past the row. */
+[data-style="new"] .senders-find { width: 100%; max-width: 360px; margin: var(--sp-3) 0; }
+[data-style="new"] .senders-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+[data-style="new"] .senders-row {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+[data-style="new"] .senders-head { display: flex; align-items: baseline; gap: var(--sp-3); min-width: 0; }
+[data-style="new"] .senders-id { flex: 0 1 auto; }
+[data-style="new"] .senders-count { flex: none; white-space: nowrap; }
+[data-style="new"] .senders-form { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+[data-style="new"] .senders-form input { flex: 1 1 auto; min-width: 0; max-width: 480px; }
+[data-style="new"] .senders-form button { flex: none; }
+[data-style="new"] .senders-state { margin: 0; overflow-wrap: anywhere; }
+[data-style="new"] .senders-row .error { margin: 0; overflow-wrap: anywhere; }

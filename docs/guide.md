@@ -29,6 +29,7 @@
   - [Changing an area](#changing-an-area)
   - [People and the address area](#people-and-the-address-area)
   - [From and For on a document](#from-and-for-on-a-document)
+  - [Senders](#senders)
   - [Where rules are kept, and in what order](#where-rules-are-kept-and-in-what-order)
   - [The record](#the-record)
   - [The rules list in Settings](#the-rules-list-in-settings)
@@ -803,7 +804,35 @@ The Inbox card shows **From** (who sent a document) and **For** (who it is for) 
 each came from (address area, a rule, you). Click one to change it. To set them for many documents at once, use
 **From…** and **For…** in an Inbox batch or on a selection in Browse. What you set always
 wins over what dam detects. Filing a document into a folder made with `{person}` also
-records the person. These are kept in dam's index, not in the files.
+records the person. A company name you confirm in Settings, **Senders** (New look) fills
+From on every document that carries its business ID; see [Senders](#senders). These are
+kept in dam's index, not in the files.
+
+### Senders
+
+Settings, **Senders** (under This archive, New look only) names senders from their business
+IDs. For Finland that is the Y-tunnus: most letters from a company print it, often on the
+same line as the company's name. dam reads the name printed next to each Y-tunnus (it ends
+in a legal form such as Oy, Oyj, Ab, Abp, Ky, Ay, ry or osk, or starts with Tmi or Asunto
+Oy) and lists every Y-tunnus found on two or more documents, the most documents first, with
+the name read most often already in the name field.
+
+- **Confirm** keeps the name and makes it **From** on every document that carries the
+  Y-tunnus. Documents read later get it too. A toast says how many documents changed, with
+  **Undo**.
+- Change the name of a confirmed row and press **Save** (or Enter): From follows on the
+  documents it filled.
+- **Clear** forgets the name and takes back the From it gave, also on documents that no
+  longer carry the Y-tunnus.
+- A document where you set From or For yourself is never changed, and a From you clear on
+  a document stays cleared. A document that carries two named business IDs with different
+  names gets no From from them, since dam cannot tell which company sent it.
+- **Find a name or ID** narrows the list. The row says **Confirmed · From on N of M** once
+  named: N documents have that name as From, of the M that carry the ID.
+
+The list needs Finland on in Countries and languages (with Finland off, its names fill
+nothing more), and fills as the background reading of business IDs goes (Settings,
+Indexing says how far it is).
 
 ### Where rules are kept, and in what order
 
@@ -1572,6 +1601,8 @@ each area, grouped by what it applies to; one section shows at a time.
     amounts. **Save countries and languages** applies them at once. The first-run screen
     asks the same question once (**Your post comes from**), guessed from your browser and
     time zone.
+  - **Senders** (New look): a company name for each business ID found on two or more
+    documents, which then becomes From on them. See [Senders](#senders).
   - **Snapshots**: take a snapshot of this archive's database and settings, export or
     import one, and restore one. See [Snapshots](#snapshots).
 - **This browser** (every archive alike):

@@ -39,3 +39,21 @@ def fold_name(s: str) -> str:
     """A name compared the way the disk does: NFC and case-insensitive. Not the
     accent-insensitive ``fold`` that search uses."""
     return unicodedata.normalize("NFC", s).casefold()
+
+
+def fold_indexed(text: str) -> tuple[str, list[int]]:
+    """Fold for matching words in text (NFKD, no combining marks, casefold).
+
+    Returns the folded text and, for each folded character, the index of the
+    original character it came from.
+    """
+    chars: list[str] = []
+    index: list[int] = []
+    for i, ch in enumerate(text):
+        for out in unicodedata.normalize("NFKD", ch):
+            if unicodedata.combining(out):
+                continue
+            for c in out.casefold():
+                chars.append(c)
+                index.append(i)
+    return "".join(chars), index

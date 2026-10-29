@@ -634,6 +634,8 @@ file_identifiers = Table(
     Column("kind", Text, primary_key=True),
     Column("value", Text, primary_key=True),
     Column("sha256", Text, nullable=False),
+    # the company name printed next to the value in this file, when the pack reads one (0046)
+    Column("name", Text, nullable=True),
     Index("ix_file_identifiers_kind_value", "kind", "value"),
 )
 
@@ -646,4 +648,17 @@ file_identifier_reads = Table(
     Column("sha256", Text, nullable=False),
     Column("signature", Text, nullable=False),
     Column("read_at", Float, nullable=False),
+)
+
+# The owner's name for an identifier (0046): "Vesilaitos Oy" for Y-tunnus 0112038-9. It
+# fills From (``file_assignments.sender``, set_by "filing") on the files that carry it,
+# never on a row the owner set. ``set_by`` is "owner" (confirmed in Settings, Senders).
+identifier_names = Table(
+    "identifier_names",
+    metadata,
+    Column("kind", Text, primary_key=True),
+    Column("value", Text, primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("set_by", Text, nullable=False),
+    Column("set_at", Float, nullable=False),
 )

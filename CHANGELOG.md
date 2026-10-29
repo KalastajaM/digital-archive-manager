@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Senders named from their business ID (New look).** Settings has a new section,
+  Senders, under This archive: each Y-tunnus found on two or more documents, most documents
+  first, with the company name printed next to it (read from the documents' text). Confirm
+  a name once and it becomes From on every document with that Y-tunnus, also on documents
+  read later; a From or For you set yourself is never changed. Clear takes the names back,
+  and the toast after each change has Undo. Documents are read again once in the
+  background to find the names.
 - **Business IDs, IBANs and domains are remembered.** dam reads the business IDs (for Finland
   the Y-tunnus, also in its VAT form), IBANs and web or mail domains from each document's
   text, in the background and without opening the files again, and keeps them up to date when
