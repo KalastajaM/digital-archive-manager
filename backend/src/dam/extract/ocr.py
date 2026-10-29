@@ -25,7 +25,7 @@ TESSERACT = "tesseract"
 NO_OCR = "no OCR engine installed"
 
 # settings use Vision-style codes (fi-FI, en-US); Tesseract wants ISO 639-2 ones
-TESSERACT_LANGUAGES = {"fi": "fin", "en": "eng", "sv": "swe", "de": "deu", "fr": "fra"}
+TESSERACT_LANGUAGES = {"fi": "fin", "en": "eng", "sv": "swe", "de": "deu", "fr": "fra", "nl": "nld"}
 
 
 def engine() -> str | None:

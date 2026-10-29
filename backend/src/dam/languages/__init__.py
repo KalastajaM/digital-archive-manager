@@ -8,6 +8,7 @@ from collections.abc import Iterable, Sequence
 from dam.languages.en import ENGLISH
 from dam.languages.fi import FINNISH
 from dam.languages.model import LanguagePack
+from dam.languages.nl import DUTCH
 from dam.languages.sv import SWEDISH
 
 __all__ = [
@@ -21,7 +22,7 @@ __all__ = [
     "stopwords",
 ]
 
-PACKS: dict[str, LanguagePack] = {p.code: p for p in (FINNISH, ENGLISH, SWEDISH)}
+PACKS: dict[str, LanguagePack] = {p.code: p for p in (FINNISH, ENGLISH, SWEDISH, DUTCH)}
 DEFAULT_LANGUAGES: tuple[str, ...] = ("fi", "sv", "en")  # the Finland pack's, then English
 
 

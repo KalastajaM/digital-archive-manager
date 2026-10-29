@@ -260,25 +260,44 @@ _RULES_HEADER = """\
 #                     (name is the stem only; the extension is added automatically)
 #   tags:             tags to suggest
 #
-# The Finland bank examples at the end are optional: remove the # to use them.
+# The country examples at the end are optional: remove the # to use them.
 
 """
 
 
-def _finland_examples(defaults_dir: Path) -> str:
-    """The shipped example rules (Finland), commented out, from the first rule on."""
+def _commented_rules(path: Path) -> list[str]:
+    """The rules of an example file, commented out, from the first rule on (with the
+    comment lines that belong to it)."""
     try:
-        lines = (defaults_dir / "rules" / RULES_FILE).read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        return ""
+        return []
     start = next((i for i, line in enumerate(lines) if line.startswith("- id:")), None)
     if start is None:
-        return ""
+        return []
     while start > 0 and lines[start - 1].startswith("#"):
         start -= 1  # the comment lines that belong to the first rule
-    body = [line if line.startswith("#") else f"# {line}".rstrip() for line in lines[start:]]
+    return [line if line.startswith("#") else f"# {line}".rstrip() for line in lines[start:]]
+
+
+def _finland_examples(defaults_dir: Path) -> str:
+    """The shipped example rules (Finland), commented out."""
+    body = _commented_rules(defaults_dir / "rules" / RULES_FILE)
+    if not body:
+        return ""
     return (
         "\n# --- Optional: Finland examples (they point at folders of the older "
+        "numbered layout; change the folder names to yours) ---\n" + "\n".join(body) + "\n"
+    )
+
+
+def _netherlands_examples(defaults_dir: Path) -> str:
+    """The Netherlands example rules, commented out."""
+    body = _commented_rules(defaults_dir / "countries" / "nl" / "rules.yaml")
+    if not body:
+        return ""
+    return (
+        "\n# --- Optional: Netherlands examples (they point at folders of the older "
         "numbered layout; change the folder names to yours) ---\n" + "\n".join(body) + "\n"
     )
 
@@ -286,13 +305,15 @@ def _finland_examples(defaults_dir: Path) -> str:
 def rules_text(
     rules: list[dict], defaults_dir: Path = DEFAULTS_DIR, countries: list[str] | None = None
 ) -> str:
-    """The rules file for a layout; the commented Finland examples only when Finland is
-    on (``countries`` None: not chosen, which reads as Finland)."""
+    """The rules file for a layout; the commented examples of the countries that are on
+    (``countries`` None: not chosen, which reads as Finland)."""
     body = (
         yaml.safe_dump(rules, sort_keys=False, allow_unicode=True, width=100) if rules else "[]\n"
     )
-    finland = countries is None or "fi" in countries
-    return _RULES_HEADER + body + (_finland_examples(defaults_dir) if finland else "")
+    on = ["fi"] if countries is None else countries
+    finland = _finland_examples(defaults_dir) if "fi" in on else ""
+    netherlands = _netherlands_examples(defaults_dir) if "nl" in on else ""
+    return _RULES_HEADER + body + finland + netherlands
 
 
 def seedable(app_paths: AppPaths, defaults_dir: Path = DEFAULTS_DIR) -> bool:

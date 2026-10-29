@@ -50,7 +50,7 @@ def test_free_mail_domains_name_nobody():
 
 
 def test_signature_names_every_pack_and_version():
-    assert countries.signature() == "core:1 fi:2"
+    assert countries.signature() == "core:1 fi:2 nl:1"
     assert [p.code for p in countries.ALL] == ["core", "fi"]
 
 
