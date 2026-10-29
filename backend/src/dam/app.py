@@ -393,6 +393,8 @@ class App:
     ongoing: OngoingPublisher = field(init=False)
     convert: OngoingConverter = field(init=False)
     convert_important: ImportantConverter = field(init=False)
+    _packs: packs.Profile = field(init=False, repr=False)  # the packs this archive reads with
+    _packs_before: packs.Profile = field(init=False, repr=False)
     trays: TrayService = field(init=False)
     scan_fields: ScanFieldService = field(init=False)
     rule_record: RuleRecord = field(init=False)
@@ -428,7 +430,11 @@ class App:
     last_reminders: RemindResult | None = field(init=False, default=None)
 
     def __post_init__(self, index_parts: IndexParts, ops_parts: OpsParts) -> None:
-        packs.activate(packs.build(self.settings.country_codes(), self.settings.language_codes()))
+        # the packs this archive reads with; the ones before come back when it closes, in
+        # case another App (a demo being built, a switch that failed) was opened meanwhile
+        self._packs_before = packs.active()
+        self._packs = packs.build(self.settings.country_codes(), self.settings.language_codes())
+        packs.activate(self._packs)
         _take(self, index_parts)
         _take(self, ops_parts)
         cols = build_collections(self.settings, self.paths, self.engine, self.repo, self.executor)
@@ -646,7 +652,8 @@ class App:
         if not self.settings.zone_is_set():
             # not a set field: the zone keeps following the countries
             object.__setattr__(self.settings, "address_zone", self.settings.countries_zone())
-        packs.activate(packs.build(self.settings.country_codes(), self.settings.language_codes()))
+        self._packs = packs.build(self.settings.country_codes(), self.settings.language_codes())
+        packs.activate(self._packs)
 
     def set_people(
         self, people: list[Person], address_zone: tuple[float, float, float, float] | None
@@ -828,6 +835,8 @@ class App:
             yield
 
     def close(self) -> None:
+        if packs.active() is self._packs:  # still this archive's: give the ones before back
+            packs.activate(self._packs_before)
         self.executor.cancel_copies.set()  # a copy in progress ends at its next chunk
         self.copy_jobs.close()
         self.replay_jobs.close()

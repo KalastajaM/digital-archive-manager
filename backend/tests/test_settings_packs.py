@@ -59,3 +59,27 @@ def test_the_app_activates_its_settings(app_paths: AppPaths, fake_archive):
         assert [lang.code for lang in packs.active().languages] == ["en"]
     finally:
         application.close()
+
+
+def test_a_second_app_gives_the_packs_back_when_it_closes(app_paths: AppPaths, tmp_path):
+    """A demo archive built from a running server, or a switch that fails, opens a second
+    App in the same process: closing it must not leave its packs active."""
+    from dam.app import App
+
+    raw = yaml.safe_load((app_paths.config_dir / "settings.yaml").read_text(encoding="utf-8"))
+    raw["countries"] = []
+    (app_paths.config_dir / "settings.yaml").write_text(yaml.safe_dump(raw), encoding="utf-8")
+    first = App.create(app_paths.data_dir)
+    try:
+        other = AppPaths(tmp_path / "other-data")
+        other.ensure()
+        (tmp_path / "other-archive").mkdir()
+        (other.config_dir / "settings.yaml").write_text(
+            yaml.safe_dump({"archive_root": str(tmp_path / "other-archive")}), encoding="utf-8"
+        )
+        second = App.create(other.data_dir)
+        assert [c.code for c in packs.active().countries] == ["core", "fi"]
+        second.close()
+        assert [c.code for c in packs.active().countries] == ["core"]
+    finally:
+        first.close()
