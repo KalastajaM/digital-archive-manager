@@ -88,6 +88,7 @@ class IdentifierNameIn(StrictIn):
 
 class IdentifierNameDoneOut(BaseModel):
     changed: int  # documents whose From changed
+    name: str | None  # the name as kept, None once cleared
 
 
 class CountryOut(BaseModel):

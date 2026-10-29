@@ -20,8 +20,8 @@ from dam.db.engine import write_tx
 from dam.db.tables import file_assignments, file_identifiers, files, identifier_names
 from dam.errors import InvalidRequest
 from dam.index.repo import FileRepo
-from dam.index.repo.names import OWNER, fill_senders
-from dam.services.assignments import AssignmentService, check_sender
+from dam.index.repo.names import OWNER, carriers, fill_senders, given
+from dam.services.assignments import check_sender
 
 MIN_FILES = 2  # an ID on one file only is not worth a question
 
@@ -155,22 +155,40 @@ class SenderNames:
             )
         ).scalar()
 
-    def _spelled(self, name: str) -> str:
-        """``name`` as already spelled by another named ID or a sender in use, so
-        "elisa oyj" does not become a second "Elisa Oyj"."""
+    def _spelled(self, conn, kind: str, value: str, name: str) -> str:
+        """``name`` as another named ID or a sender the owner set already spells it, so
+        "elisa oyj" does not become a second "Elisa Oyj". Not this ID's own name, so a
+        change of case is kept."""
+        others = conn.execute(
+            select(identifier_names.c.name).where(
+                (identifier_names.c.kind != kind) | (identifier_names.c.value != value)
+            )
+        ).scalars()
+        owners = conn.execute(
+            select(file_assignments.c.sender).where(
+                file_assignments.c.sender.is_not(None), file_assignments.c.set_by == OWNER
+            )
+        ).scalars()
+        want = name.casefold()
+        return next((n for n in [*others, *owners] if n.casefold() == want), name)
+
+    def name_of(self, kind: str, value: str) -> str | None:
+        """The owner's name for the ID, else None."""
         with self.engine.connect() as conn:
-            known = conn.execute(select(identifier_names.c.name)).scalars().all()
-        known += [n for n, _ in AssignmentService(self.engine, self.repo).senders()]
-        return next((n for n in known if n.casefold() == name.casefold()), name)
+            return self._name(conn, kind, value)
 
     def confirm(self, kind: str, value: str, name: str) -> int:
         """The owner names the ID: From becomes ``name`` on every live file that carries
-        it, where the owner has not set From or For. Returns how many files changed."""
+        it, where the owner has not set From or For, and follows a changed name on the
+        files the old one gave. Returns how many files changed."""
         self._check(kind, value)
-        clean = self._spelled(check_sender(name))
-        carriers = self.repo.files_with_identifier(kind, value)
+        clean = check_sender(name)
+        # all in one write: a file the identifiers pass saves meanwhile is either a carrier
+        # here or reads the name when it saves
         with write_tx(self.engine) as conn:
             old = self._name(conn, kind, value)
+            clean = self._spelled(conn, kind, value, clean)
+            touched = carriers(conn, kind, value) + (given(conn, old) if old else [])
             stmt = sqlite_insert(identifier_names).values(
                 kind=kind, value=value, name=clean, set_by=OWNER, set_at=time.time()
             )
@@ -180,20 +198,21 @@ class SenderNames:
                     set_={c: stmt.excluded[c] for c in ("name", "set_by", "set_at")},
                 )
             )
-            return fill_senders(conn, carriers, forget=old)
+            return fill_senders(conn, touched, forget=old)
 
     def clear(self, kind: str, value: str) -> int:
         """Forget the owner's name for the ID: the senders it gave are taken back (or
-        follow another named ID on the same file). Returns how many files changed."""
+        follow another named ID on the same file), also on files that no longer carry it.
+        Returns how many files changed."""
         self._check(kind, value)
-        carriers = self.repo.files_with_identifier(kind, value)
         with write_tx(self.engine) as conn:
             old = self._name(conn, kind, value)
             if old is None:
                 return 0
+            touched = carriers(conn, kind, value) + given(conn, old)
             conn.execute(
                 identifier_names.delete().where(
                     identifier_names.c.kind == kind, identifier_names.c.value == value
                 )
             )
-            return fill_senders(conn, carriers, forget=old)
+            return fill_senders(conn, touched, forget=old)

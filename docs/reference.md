@@ -1257,20 +1257,28 @@ with `others`, the number of other files carrying each; `/api/status` has `ident
 `identifier_names(kind, value, name, set_by, set_at)` keeps the owner's names (migration
 0044). An identifier whose pack gives it a name finder (`IdentifierSpec.name`; today
 `fi.ytunnus`, Finland pack version 2) stores the company name printed on the line of the
-value or within two lines of it, recognised by a legal form at its end (`Oy`, `Oyj`, `Ab`,
-`Abp`, `Oy Ab`, `Oyj Abp`, `Ky`, `Ay`, `ry`, `rf`, `osk`, `kb`) or start (`Tmi`, `Asunto Oy`,
-`As Oy`, `Kiinteistö Oy`), matched on folded text; the closest wins, a line above before
-one below. `GET /api/identifier-names` lists every such identifier on two or more live files
+value, on up to four lines with text above it or two below (blank lines are skipped),
+recognised by a legal form at its end (`Oy`, `Oyj`, `Ab`, `Abp`, `Oy Ab`, `Oyj Abp`, `Ky`,
+`Ay`, `ry`, `rf`, `osk`, `kb`, `Tmi`) or start (`Tmi`, `Asunto Oy`, `As Oy`, `Kiinteistö
+Oy`), matched on folded text. The name is the capitalised words before (or after) the form
+within one field of the line (fields end at punctuation or a gap of two spaces), joined by
+`ja`, `and`, `och` or `&`, without labels such as `Laskuttaja` or `Y-tunnus`; the closest
+wins, a line above before one below. `GET /api/identifier-names` lists every such identifier on two or more live files
 (and every named one), most files first, with `suggested` (the name stored most often, case
 ignored), `name`, `set_at` and `filled` (files carrying it whose From is `name`). `PUT
 /api/identifier-names {kind, value, name}` sets a name (400 for a blank one, over 80
-characters, or a kind or value that cannot be named); `name: null` clears it. Both answer
-`{changed}`, the number of files whose From changed. A file's From
+characters, or a kind or value that cannot be named); `name: null` clears it. A name
+another identifier or an owner's From already spells without case is kept in that spelling.
+Both answer `{changed, name}`: the number of files whose From changed and the name as
+kept. A file's From
 (`file_assignments.sender`, `set_by` `"filing"`) is the name its named identifiers agree on
-(case ignored); it is set when a name is set or changed and when the identifiers pass reads
-the file, and taken back when they no longer name one sender (a cleared name, two different
-names, new content without the identifier) and it is one of the names. A row with
-`set_by` `"owner"` is never touched; a filing row keeps its person.
+(case ignored), counting only the enabled countries' identifiers; it is set when a name is
+set or changed and when the identifiers pass reads the file, and taken back when they no
+longer name one sender (a cleared name, two different names, new content or text) and it is
+one of the names. Clearing or changing a name also revisits every non-owner row whose From
+is the old name, wherever the file is now. A row with `set_by` `"owner"` is never touched; a
+filing row keeps its person. When the owner clears a From that a name gave, the row stays
+as an owner row with both fields empty, so the name does not give it again.
 
 **Marks.** Table `related_dismissed(drive_a, drive_b, created)` (migration 0041): a pair of
 drive ids, the smaller first, no foreign key. It is index data, so there is no journal and no

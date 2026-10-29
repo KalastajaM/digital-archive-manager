@@ -29,6 +29,7 @@ from dam.index.repo.model import (
     record,
     unmarked,
 )
+from dam.index.repo.names import fill_senders
 
 
 class IndexingMixin:
@@ -251,6 +252,7 @@ class IndexingMixin:
             conn.execute(
                 file_identifier_reads.delete().where(file_identifier_reads.c.drive_id == drive_id)
             )
+            fill_senders(conn, [drive_id])  # a From its names gave goes with them
             fts_delete(conn, drive_id)
             if extracted and extracted.page1 is not None:
                 sha = (

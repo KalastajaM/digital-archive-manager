@@ -45,12 +45,12 @@ def test_the_list_and_a_confirmed_name(app, fake_archive):
             ]
         }
         done = _put(c, {"kind": "fi.ytunnus", "value": YT, "name": "Vesi Oy"})
-        assert done.status_code == 200 and done.json() == {"changed": 3}
+        assert done.status_code == 200 and done.json() == {"changed": 3, "name": "Vesi Oy"}
         row = c.get("/api/identifier-names").json()["names"][0]
         assert (row["name"], row["filled"]) == ("Vesi Oy", 3)
         assert c.get("/api/assignments?drive_id=b0").json()[0]["sender"] == "Vesi Oy"
         undone = _put(c, {"kind": "fi.ytunnus", "value": YT, "name": None})
-        assert undone.json() == {"changed": 3}
+        assert undone.json() == {"changed": 3, "name": None}
         assert c.get("/api/assignments?drive_id=b0").json() == []
 
 

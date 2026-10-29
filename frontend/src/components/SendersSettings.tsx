@@ -2,20 +2,23 @@
  * documents first, with the company name read next to it. A confirmed name becomes From on
  * every document that carries the ID, except where you set From or For yourself; clearing
  * it takes those back. */
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useId, useState } from "react";
 import { errorText, type IdentifierName, useIdentifierNames, usePutIdentifierName } from "../api/client";
 import { visible } from "../text";
 import { undoAction, useToast } from "./Toasts";
+
+type Put = { kind: string; value: string; name: string | null };
 
 const documents = (n: number) => (n === 1 ? "1 document" : `${n} documents`);
 
 /** "Y-tunnus" from "Business ID (Y-tunnus)". */
 const shortLabel = (label: string) => /\(([^)]+)\)/.exec(label)?.[1] ?? label;
 
-function SenderRow({ row }: { row: IdentifierName }) {
+function SenderRow({ row, undo }: { row: IdentifierName; undo: (body: Put) => void }) {
   const put = usePutIdentifierName();
   const toast = useToast();
   const [draft, setDraft] = useState<string | null>(null);
+  const stateId = useId();
   const shown = draft ?? row.name ?? row.suggested ?? "";
   const clean = shown.trim();
   const changed = row.name === null ? clean !== "" : clean !== "" && clean !== row.name;
@@ -25,12 +28,12 @@ function SenderRow({ row }: { row: IdentifierName }) {
     put.mutate(
       { ...body, name },
       {
-        onSuccess: ({ changed: n }) => {
+        onSuccess: ({ changed: n, name: kept }) => {
           setDraft(null);
           toast({
             kind: "info",
-            text: name === null ? `${row.value} has no name now; From taken back on ${documents(n)}.` : `${name} is now From on ${documents(n)}.`,
-            action: undoAction(() => put.mutate({ ...body, name: before })),
+            text: kept === null ? `${row.value} has no name now; From taken back on ${documents(n)}.` : `${kept} is now From on ${documents(n)}.`,
+            action: undoAction(() => undo({ ...body, name: before })),
           });
         },
       },
@@ -53,6 +56,8 @@ function SenderRow({ row }: { row: IdentifierName }) {
         <input
           type="text"
           aria-label={`Name for ${row.value}`}
+          aria-describedby={stateId}
+          readOnly={put.isPending}
           value={shown}
           maxLength={80}
           placeholder="Company name"
@@ -75,7 +80,7 @@ function SenderRow({ row }: { row: IdentifierName }) {
           </>
         )}
       </form>
-      <p className="hint senders-state">
+      <p className="hint senders-state" id={stateId}>
         {row.name !== null
           ? `Confirmed · From on ${row.filled} of ${row.files}`
           : row.suggested
@@ -93,6 +98,12 @@ function SenderRow({ row }: { row: IdentifierName }) {
 
 export function SendersSettings() {
   const query = useIdentifierNames();
+  const toast = useToast();
+  // Undo outlives its row (a cleared ID on one document leaves the list), so it is sent
+  // from here and says when it fails
+  const undoPut = usePutIdentifierName();
+  const undo = (body: Put) =>
+    undoPut.mutate(body, { onError: (e) => toast({ kind: "error", text: `Could not undo: ${errorText(e)}` }) });
   const [find, setFind] = useState("");
   const want = find.trim().toLocaleLowerCase();
   const rows = (query.data?.names ?? []).filter(
@@ -133,7 +144,7 @@ export function SendersSettings() {
           />
           <ul className="senders-list">
             {rows.map((r) => (
-              <SenderRow key={`${r.kind} ${r.value}`} row={r} />
+              <SenderRow key={`${r.kind} ${r.value}`} row={r} undo={undo} />
             ))}
           </ul>
           {rows.length === 0 && <p className="hint">No sender matches.</p>}

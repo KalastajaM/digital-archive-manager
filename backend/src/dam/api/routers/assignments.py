@@ -65,7 +65,10 @@ def identifier_names(app: AppDep) -> dict:
 def put_identifier_name(app: AppDep, body: IdentifierNameIn) -> dict:
     """Name a business ID: From becomes the name on every document that carries it, except
     where the owner set From or For. ``null`` clears the name and takes those senders
-    back. 400 for a blank name, or a kind or value that cannot be named."""
+    back. Answers how many documents changed and the name as kept (spelled as another
+    name already is). 400 for a blank name, or a kind or value that cannot be named."""
     if body.name is None:
-        return {"changed": app.sender_names.clear(body.kind, body.value)}
-    return {"changed": app.sender_names.confirm(body.kind, body.value, body.name)}
+        changed = app.sender_names.clear(body.kind, body.value)
+    else:
+        changed = app.sender_names.confirm(body.kind, body.value, body.name)
+    return {"changed": changed, "name": app.sender_names.name_of(body.kind, body.value)}

@@ -1118,12 +1118,14 @@ export const usePutIdentifierName = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: { kind: string; value: string; name: string | null }) => apiPut("/api/identifier-names", { body }),
-    onSettled: () => {
-      void client.invalidateQueries({ queryKey: keys.identifierNames });
-      void client.invalidateQueries({ queryKey: keys.senders });
-      void client.invalidateQueries({ queryKey: keys.inbox });
-      void client.invalidateQueries({ queryKey: keys.file });
-    },
+    // returned: the caller's onSuccess runs once the list shows the change
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.identifierNames }),
+        client.invalidateQueries({ queryKey: keys.senders }),
+        client.invalidateQueries({ queryKey: keys.inbox }),
+        client.invalidateQueries({ queryKey: keys.file }),
+      ]),
   });
 };
 

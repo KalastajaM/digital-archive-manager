@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from sqlalchemy import Connection, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from dam import packs
 from dam.db.tables import file_assignments, file_identifiers, files, identifier_names
 from dam.index.repo.model import chunks
 
@@ -16,8 +17,42 @@ OWNER = "owner"  # as ``services.assignments``
 FILING = "filing"
 
 
+def _active_kinds() -> list[str]:
+    return [s.kind for p in packs.active().countries for s in p.identifiers]
+
+
+def carriers(conn: Connection, kind: str, value: str) -> list[str]:
+    """The live files (not missing, not parked) whose current content carries the value."""
+    return list(
+        conn.execute(
+            select(file_identifiers.c.drive_id)
+            .join(files, files.c.drive_id == file_identifiers.c.drive_id)
+            .where(
+                file_identifiers.c.kind == kind,
+                file_identifiers.c.value == value,
+                files.c.sha256 == file_identifiers.c.sha256,
+                files.c.missing.is_not(True),
+                files.c.parked_at.is_(None),
+            )
+        ).scalars()
+    )
+
+
+def given(conn: Connection, name: str) -> list[str]:
+    """The files whose From is ``name`` (case ignored) and not the owner's word: those a
+    name gave, wherever they are now."""
+    want = name.casefold()
+    rows = conn.execute(
+        select(file_assignments.c.drive_id, file_assignments.c.sender).where(
+            file_assignments.c.sender.is_not(None), file_assignments.c.set_by != OWNER
+        )
+    ).all()
+    return [r.drive_id for r in rows if r.sender.casefold() == want]
+
+
 def _named_senders(conn: Connection, drive_ids: list[str]) -> dict[str, list[str]]:
-    """drive_id -> the names of the named identifiers its current content carries."""
+    """drive_id -> the names of the named identifiers its current content carries, of the
+    enabled countries."""
     rows = conn.execute(
         select(file_identifiers.c.drive_id, identifier_names.c.name)
         .join(files, files.c.drive_id == file_identifiers.c.drive_id)
@@ -29,6 +64,7 @@ def _named_senders(conn: Connection, drive_ids: list[str]) -> dict[str, list[str
         .where(
             file_identifiers.c.drive_id.in_(drive_ids),
             files.c.sha256 == file_identifiers.c.sha256,
+            identifier_names.c.kind.in_(_active_kinds()),
         )
         .order_by(identifier_names.c.kind, identifier_names.c.value)
     ).all()

@@ -822,15 +822,17 @@ the name read most often already in the name field.
   **Undo**.
 - Change the name of a confirmed row and press **Save** (or Enter): From follows on the
   documents it filled.
-- **Clear** forgets the name and takes back the From it gave.
-- A document where you set From or For yourself is never changed. A document that carries
-  two named business IDs with different names gets no From from them, since dam cannot tell
-  which company sent it.
+- **Clear** forgets the name and takes back the From it gave, also on documents that no
+  longer carry the Y-tunnus.
+- A document where you set From or For yourself is never changed, and a From you clear on
+  a document stays cleared. A document that carries two named business IDs with different
+  names gets no From from them, since dam cannot tell which company sent it.
 - **Find a name or ID** narrows the list. The row says **Confirmed · From on N of M** once
   named: N documents have that name as From, of the M that carry the ID.
 
-The list needs Finland on in Countries and languages, and fills as the background reading
-of business IDs goes (Settings, Indexing says how far it is).
+The list needs Finland on in Countries and languages (with Finland off, its names fill
+nothing more), and fills as the background reading of business IDs goes (Settings,
+Indexing says how far it is).
 
 ### Where rules are kept, and in what order
 

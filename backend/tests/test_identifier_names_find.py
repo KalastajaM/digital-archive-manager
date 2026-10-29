@@ -26,6 +26,16 @@ def name(text: str, value: str = "0112038-9") -> str | None:
         ("Helsingin Tennisseura ry 0112038-9", "Helsingin Tennisseura ry"),
         ("VESILAITOS OY Y-TUNNUS 0112038-9", "VESILAITOS OY"),
         ("Osuuskauppa Keskimaa osk, 0112038-9", "Osuuskauppa Keskimaa osk"),
+        ("Telia Finland Oyj, Y-tunnus 0112038-9", "Telia Finland Oyj"),
+        ("Teleste Oyj 0112038-9", "Teleste Oyj"),
+        ("Vattenfall Oy 0112038-9", "Vattenfall Oy"),
+        ("Alvar Aalto Oy 0112038-9", "Alvar Aalto Oy"),
+        ("Fortum Power and Heat Oy, 0112038-9", "Fortum Power and Heat Oy"),
+        ("Rakennus Virtanen Tmi 0112038-9", "Rakennus Virtanen Tmi"),
+        ("Asunto  Oy Kotikatu 5\nY-tunnus 0112038-9", "Asunto Oy Kotikatu 5"),
+        ("Laskuttaja Elisa Oyj, Y-tunnus 0112038-9", "Elisa Oyj"),
+        ("Elisa Oyj\nPL 1\n00061 ELISA\nPuh. 010 190\nY-tunnus 0112038-9", "Elisa Oyj"),
+        ("DNA Oyj\n\n\nY-tunnus 0112038-9", "DNA Oyj"),
     ],
 )
 def test_the_name_next_to_the_id(text, want):
@@ -33,7 +43,7 @@ def test_the_name_next_to_the_id(text, want):
 
 
 def test_the_closest_line_wins():
-    text = "Asiakas Oy\n\n\nVesilaitos Oy\nY-tunnus 0112038-9"
+    text = "Asiakas Oy\nrivi\nVesilaitos Oy\nY-tunnus 0112038-9"
     assert name(text) == "Vesilaitos Oy"
 
 
@@ -41,7 +51,8 @@ def test_the_closest_line_wins():
     "text",
     [
         "Y-tunnus 0112038-9",  # no legal form near
-        "Asiakas Oy\n\n\n\nY-tunnus 0112038-9",  # too far away
+        "Asiakas Oy\nrivi\nrivi\nrivi\nrivi\nY-tunnus 0112038-9",  # too far away
+        "Vähennettävät AY-jäsenmaksut 0112038-9",  # not a legal form
         "Vesilaitos Oy, Y-tunnus 2345678-1",  # another ID only
         "Oy 0112038-9",  # a legal form with no name
         "Lisätietoja saat osoitteesta oy.fi 0112038-9",  # a word that only looks like one

@@ -212,3 +212,78 @@ def test_migration_0044_adds_the_name_column_and_table(tmp_path, new_engine):
         assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
     assert cols == ["kind", "value", "name", "set_by", "set_at"]
     assert tuple(row) == ("0112038-9", None)
+
+
+def test_clearing_takes_back_from_files_that_no_longer_carry_the_id(fake_archive, engine):
+    repo, indexer, names, assign = _setup(fake_archive, engine)
+    for d in ("a", "b"):
+        _file(repo, d, "Vesilaitos Oy, Y-tunnus 0112038-9")
+    indexer.run_identifiers_once()
+    names.confirm(*YT, "Vesilaitos Oy")
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE files SET missing = 1 WHERE drive_id = 'b'"))
+    assert names.clear(*YT) == 2
+    assert assign.get(["a", "b"]) == {}
+
+
+def test_new_text_takes_the_named_sender_back_at_once(fake_archive, engine):
+    repo, indexer, names, assign = _setup(fake_archive, engine)
+    _file(repo, "a", "Vesilaitos Oy, Y-tunnus 0112038-9")
+    indexer.run_identifiers_once()
+    names.confirm(*YT, "Vesilaitos Oy")
+    _file(repo, "a", "", sha="sha-new")  # no text: the identifiers pass never reads it
+    assert "a" not in assign.get(["a"])
+
+
+def test_a_case_only_correction_is_saved(fake_archive, engine):
+    repo, indexer, names, assign = _setup(fake_archive, engine)
+    _file(repo, "a", "ELISA OYJ 0112038-9")
+    indexer.run_identifiers_once()
+    names.confirm(*YT, "ELISA OYJ")
+    assert names.confirm(*YT, "Elisa Oyj") == 1
+    assert _row(names).name == "Elisa Oyj"
+    assert assign.get(["a"])["a"].sender == "Elisa Oyj"
+
+
+def test_a_from_the_owner_cleared_stays_cleared(fake_archive, engine):
+    repo, indexer, names, assign = _setup(fake_archive, engine)
+    _file(repo, "a", "Vesilaitos Oy, Y-tunnus 0112038-9")
+    indexer.run_identifiers_once()
+    names.confirm(*YT, "Vesilaitos Oy")
+    assign.set(["a"], sender=None)
+    names.confirm(*YT, "Helsingin Vesi")
+    _file(repo, "a", "Vesilaitos Oy, Y-tunnus 0112038-9", sha="sha-2")
+    indexer.run_identifiers_once()
+    got = assign.get(["a"])["a"]
+    assert (got.sender, got.person, got.set_by) == (None, None, "owner")
+
+
+def test_names_of_a_country_that_is_off_fill_nothing(fake_archive, engine):
+    from dam import packs
+
+    repo, indexer, names, assign = _setup(fake_archive, engine)
+    _file(repo, "a", "Vesilaitos Oy, Y-tunnus 0112038-9")
+    indexer.run_identifiers_once()
+    names.confirm(*YT, "Vesilaitos Oy")
+    packs.activate(packs.build([], ["en"]))
+    _file(repo, "b", "Y-tunnus 0112038-9")
+    indexer.run_identifiers_once()
+    assert "b" not in assign.get(["b"])
+
+
+def test_a_failing_name_finder_keeps_the_identifiers(fake_archive, engine, monkeypatch):
+    import dataclasses
+
+    repo, indexer, _, _ = _setup(fake_archive, engine)
+
+    def boom(text, value):
+        raise ValueError("no")
+
+    def broken(pack):
+        specs = tuple(dataclasses.replace(s, name=boom) if s.name else s for s in pack.identifiers)
+        return dataclasses.replace(pack, identifiers=specs)
+
+    monkeypatch.setattr(countries, "ALL", tuple(broken(p) for p in countries.ALL))
+    _file(repo, "a", "Vesilaitos Oy, Y-tunnus 0112038-9")
+    indexer.run_identifiers_once()
+    assert ("fi.ytunnus", "0112038-9") in repo.identifiers_for("a")

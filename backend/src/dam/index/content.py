@@ -699,6 +699,18 @@ class ContentIndexer:
             if why is not None:
                 self._layout_why[drive_id] = why
 
+    @staticmethod
+    def _name(spec, text: str, value: str, drive_id: str) -> str | None:
+        """The company name next to ``value``; None when the pack reads none or fails (the
+        identifiers are kept either way)."""
+        if spec.name is None:
+            return None
+        try:
+            return spec.name(text, value)
+        except Exception:
+            log.warning("a name could not be read for %s", drive_id, exc_info=True)
+            return None
+
     def run_identifiers_once(self, limit: int = 50) -> int:
         """Read business IDs, IBANs and domains (and the company name printed next to a
         business ID) from the stored text of up to ``limit`` files not read with the
@@ -715,7 +727,7 @@ class ContentIndexer:
                     for spec in pack.identifiers:
                         for value in spec.find(text):
                             found.append((spec.kind, value))
-                            name = spec.name(text, value) if spec.name else None
+                            name = self._name(spec, text, value, drive_id)
                             if name:
                                 names[spec.kind, value] = name
             except Exception:

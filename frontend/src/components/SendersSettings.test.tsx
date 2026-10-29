@@ -41,7 +41,7 @@ describe("SendersSettings", () => {
     const user = userEvent.setup();
     const calls = mockFetch({
       "GET /api/identifier-names": { body: { names: [row()] } },
-      "PUT /api/identifier-names": { body: { changed: 12 } },
+      "PUT /api/identifier-names": { body: { changed: 12, name: "Vesilaitos Oy" } },
     });
     renderWithProviders(<SendersSettings />);
     const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
@@ -58,7 +58,7 @@ describe("SendersSettings", () => {
     const user = userEvent.setup();
     const calls = mockFetch({
       "GET /api/identifier-names": { body: { names: [row({ name: "Vesilaitos Oy", set_at: 1, filled: 14 })] } },
-      "PUT /api/identifier-names": { body: { changed: 14 } },
+      "PUT /api/identifier-names": { body: { changed: 14, name: "Helsingin Vesi" } },
     });
     renderWithProviders(<SendersSettings />);
     const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });

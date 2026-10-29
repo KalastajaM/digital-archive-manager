@@ -2745,7 +2745,8 @@ export interface paths {
          * Put Identifier Name
          * @description Name a business ID: From becomes the name on every document that carries it, except
          *     where the owner set From or For. ``null`` clears the name and takes those senders
-         *     back. 400 for a blank name, or a kind or value that cannot be named.
+         *     back. Answers how many documents changed and the name as kept (spelled as another
+         *     name already is). 400 for a blank name, or a kind or value that cannot be named.
          */
         put: operations["put_identifier_name_api_identifier_names_put"];
         post?: never;
@@ -5880,6 +5881,8 @@ export interface components {
         IdentifierNameDoneOut: {
             /** Changed */
             changed: number;
+            /** Name */
+            name: string | null;
         };
         /**
          * IdentifierNameIn
