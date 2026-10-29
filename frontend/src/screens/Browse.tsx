@@ -84,6 +84,9 @@ import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { FolderTree } from "../components/FolderTree";
+import { CollectionTree } from "../components/BrowseCollectionTree";
+import { TagTree } from "../components/BrowseTagTree";
+import { applyPick, type ScopePick, scopeOf, type TreeKind, treeParam } from "../browseScope";
 import { InspectorHint, SelectionSummary } from "../components/BrowseInspector";
 import { FileActionBar, type FileActionBarProps, useAskAction } from "../components/FileActionBar";
 import { FileActionIcons } from "../components/FileActionIcons";
@@ -2224,6 +2227,33 @@ export default function Browse() {
   const treeMarks = split
     ? PANES.map((pane) => ({ path: paths[pane], label: pane === "left" ? "L" : "R" }))
     : [{ path: paths.left, label: "" }];
+  // the left pane shows folders, collections or tags (?tree=); a collection or tag picked there
+  // is a search filter, so the list, its chips and Back work as for any search
+  const treeKind = treeParam(params.get("tree"));
+  const setTreeKind = (kind: TreeKind) => {
+    const p = new URLSearchParams(params);
+    if (kind === "folders") p.delete("tree");
+    else p.set("tree", kind);
+    setParams(p, { replace: true });
+  };
+  const pickScope = (pick: ScopePick, add: boolean) => {
+    setFilters(applyPick(filters, pick, add));
+    setScope("everywhere"); // a collection's files are anywhere in the archive
+    setTreeOpen(false);
+  };
+  const treeSwitch = (
+    <Segmented<TreeKind>
+      ariaLabel="Tree"
+      className="tree-switch"
+      value={treeKind}
+      onChange={setTreeKind}
+      options={[
+        { value: "folders", label: "Folders" },
+        { value: "collections", label: "Collections" },
+        { value: "tags", label: "Tags" },
+      ]}
+    />
+  );
   // is the tree on screen: docked (one pane always, two panes when chosen) or open over the panes
   const treeDocked = !split || treeShown;
   const treeOverlay = treeOpen && (!split || narrow);
@@ -2364,14 +2394,21 @@ export default function Browse() {
         >
           {(treeDocked || treeOverlay) && (
             <>
-              <FolderTree
-                marks={treeMarks}
-                onOpen={(entry) => {
-                  open(act, entry);
-                  setTreeOpen(false);
-                }}
-                dropFor={dropTo}
-              />
+              {treeKind === "collections" ? (
+                <CollectionTree active={scopeOf(filters)} onPick={pickScope} head={treeSwitch} />
+              ) : treeKind === "tags" ? (
+                <TagTree active={scopeOf(filters)} onPick={pickScope} head={treeSwitch} />
+              ) : (
+                <FolderTree
+                  marks={treeMarks}
+                  onOpen={(entry) => {
+                    open(act, entry);
+                    setTreeOpen(false);
+                  }}
+                  dropFor={dropTo}
+                  head={treeSwitch}
+                />
+              )}
               <Splitter split={treeSplit} label="Resize the folder tree" className="tree-splitter" />
             </>
           )}

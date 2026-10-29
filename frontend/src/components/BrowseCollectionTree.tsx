@@ -148,7 +148,7 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
   );
 }
 
-export function CollectionTree({ active, onPick }: { active: ScopeState; onPick: Pick }) {
+export function CollectionTree({ active, onPick, head }: { active: ScopeState; onPick: Pick; head?: ReactNode }) {
   const list = useCollections("open");
   const collect = useAddToCollection();
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
@@ -180,6 +180,7 @@ export function CollectionTree({ active, onPick }: { active: ScopeState; onPick:
   };
   return (
     <nav className="tree" aria-label="Collections">
+      {head}
       <ul role="tree" aria-label="Collection tree" className="tree-list" onKeyDown={onKeyDown}>
         <Row
           rowKey="important"

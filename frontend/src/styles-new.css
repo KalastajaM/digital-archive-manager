@@ -1424,6 +1424,9 @@
 [data-style="new"] .tree-pane { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--muted); }
 [data-style="new"] .tree-offline { flex: none; font-size: var(--fs-xs); color: var(--orange-text); }
 [data-style="new"] .tree-note { margin: 0; padding: 4px 8px; font-size: var(--fs-sm); color: var(--muted); list-style: none; }
+/* Browse's Folders | Collections | Tags switch: the tree's full width, three equal parts that keep their text in */
+[data-style="new"] .tree-switch { display: flex; flex: none; width: 100%; margin: 0 0 8px; }
+[data-style="new"] .tree-switch .segmented-option { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Browse's tag tree: the box that narrows the tags (a tree row's height), each tag's number of files */
 [data-style="new"] .tree-filter { flex: none; height: 28px; margin: 0 0 6px; padding: 0 8px; min-width: 0; font-size: var(--fs-sm); }
 [data-style="new"] .tree-count { flex: none; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }

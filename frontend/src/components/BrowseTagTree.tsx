@@ -6,7 +6,7 @@
  * Keyboard (the tree view pattern): ↑ and ↓ move, → opens a group, ← closes it (or steps
  * out to it), Home and End go to the first and last, Enter picks (with Cmd: adds). */
 import { ChevronRight, Tag as TagIcon } from "lucide-react";
-import { type KeyboardEvent, type MouseEvent, useState } from "react";
+import { type KeyboardEvent, type MouseEvent, type ReactNode, useState } from "react";
 import { useAllTags } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
 import { visible } from "../text";
@@ -23,7 +23,7 @@ const go = (from: HTMLElement, key: string) =>
     .find((n) => n.dataset.key === key)
     ?.focus();
 
-export function TagTree({ active, onPick }: { active: ScopeState; onPick: Pick }) {
+export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: Pick; head?: ReactNode }) {
   const [typed, setTyped] = useState("");
   const list = useAllTags(typed.trim());
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
@@ -108,6 +108,7 @@ export function TagTree({ active, onPick }: { active: ScopeState; onPick: Pick }
   const empty = list.isSuccess && tags.length === 0;
   return (
     <nav className="tree" aria-label="Tags">
+      {head}
       <input
         type="search"
         className="tree-filter"
