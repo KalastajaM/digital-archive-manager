@@ -1561,7 +1561,7 @@ each area, grouped by what it applies to; one section shows at a time.
     [Rename a special folder](#rename-a-special-folder).
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
-    [Reading page 1](#reading-page-1) It also says how far dam is
+    [Reading page 1](#reading-page-1). It also says how far dam is
     with reading business IDs, IBANs and domains from your documents' text (done in the
     background from the text it already has; no file is opened again).
   - **Countries and languages**: the countries your post comes from and the languages it

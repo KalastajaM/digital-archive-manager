@@ -34,7 +34,7 @@ export const FILTER_HELP: { name: FilterName; example: string; text: string }[] 
   { name: "collection", example: 'collection:"House sale"', text: "Files in a collection, and in the collections inside it." },
   { name: "from", example: "from:Kela", text: "Files whose sender (From) contains this." },
   { name: "for", example: "for:Tiina", text: "Files assigned to this person (For)." },
-  { name: "id", example: "id:0112038-9", text: "Files that carry this business ID, IBAN or web domain." },
+  { name: "id", example: "id:0112038-9", text: "Files that carry this business ID, IBAN or web or mail domain." },
   { name: "type", example: "type:pdf", text: "Kind of file: an extension (pdf, docx) or a group (image, doc, sheet, text)." },
   { name: "date", example: "date:2026-10", text: "Document date: a year, a month or a day (YYYY, YYYY-MM, YYYY-MM-DD)." },
   { name: "after", example: "after:2025", text: "Dated on or after the first day of that year, month or day." },

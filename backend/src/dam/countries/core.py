@@ -58,7 +58,15 @@ def _once(values) -> list[str]:
 
 
 _WWW = re.compile(r"(?i)\bwww\.([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,})\b")
-_MAIL = re.compile(r"(?i)\b[a-z0-9._%+-]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,})\b")
+# anchored at the start of its run (not at every word boundary inside it): linear time
+_MAIL = re.compile(
+    r"(?i)(?<![a-z0-9._%+-])[a-z0-9._%+-]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,})\b"
+)
+# endings of file names, not of domains ("logo@2x.png", "www.report.docx")
+FILE_ENDINGS = frozenset(
+    "png jpg jpeg gif svg webp bmp tif tiff heic pdf doc docx xls xlsx ppt pptx odt ods txt "
+    "csv rtf zip html htm xml json".split()
+)
 # mail services anyone can use: an address there names a person, not an organisation
 FREE_MAIL = frozenset(
     "gmail.com googlemail.com outlook.com hotmail.com live.com msn.com icloud.com me.com "
@@ -68,7 +76,10 @@ FREE_MAIL = frozenset(
 
 def find_domains(text: str) -> list[str]:
     hits = sorted([(m.start(), m[1]) for p in (_WWW, _MAIL) for m in p.finditer(text)])
-    return _once(d.lower() for _, d in hits if d.lower() not in FREE_MAIL)
+    domains = (d.lower() for _, d in hits)
+    return _once(
+        d for d in domains if d not in FREE_MAIL and d.rsplit(".", 1)[1] not in FILE_ENDINGS
+    )
 
 
 CORE = CountryPack(

@@ -31,7 +31,7 @@ def find_reference(text: str) -> list[tuple[int, str]]:
     return found
 
 
-_YTUNNUS = re.compile(r"(?<![\d-])(\d{7})-(\d)(?![\d-])", re.ASCII)
+_YTUNNUS = re.compile(r"(?<![\dA-Za-z-])(\d{7})-(\d)(?![\d-])", re.ASCII)
 _VAT = re.compile(r"(?<![A-Za-z0-9])FI ?(\d{7})(\d)(?!\d)", re.ASCII)
 
 

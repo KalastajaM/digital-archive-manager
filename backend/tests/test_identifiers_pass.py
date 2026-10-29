@@ -100,3 +100,13 @@ def test_the_step_runs_the_pass(fake_archive, engine):
     _file(repo, "f1", BILL)
     indexer.step()
     assert repo.identifiers_for("f1") != []
+
+
+def test_new_text_for_the_same_content_is_read_again(fake_archive, engine):
+    """OCR or an extractor can give other text for the same bytes."""
+    repo, indexer = _setup(fake_archive, engine)
+    _file(repo, "f1", BILL)
+    indexer.run_identifiers_once()
+    _file(repo, "f1", "Now from www.other.fi")  # same sha256, other text
+    assert indexer.run_identifiers_once() == 1
+    assert repo.identifiers_for("f1") == [("core.domain", "other.fi")]

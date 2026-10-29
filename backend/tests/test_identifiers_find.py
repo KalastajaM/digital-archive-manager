@@ -52,3 +52,21 @@ def test_free_mail_domains_name_nobody():
 def test_signature_names_every_pack_and_version():
     assert countries.signature() == "core:1 fi:1"
     assert [p.code for p in countries.ALL] == ["core", "fi"]
+
+
+def test_a_long_run_without_spaces_is_quick():
+    import time
+
+    t = time.perf_counter()
+    found("a-" * 40_000 + " info@firma.fi", "core.domain")
+    assert time.perf_counter() - t < 1.0
+    assert found("a-" * 40_000 + " info@firma.fi", "core.domain") == ["firma.fi"]
+
+
+def test_file_names_are_no_domains():
+    assert found("logo@2x.png and WWW.report.docx", "core.domain") == []
+
+
+@pytest.mark.parametrize("text", ["SE0112038-9", "ABC0112038-9", "x0112038-9"])
+def test_a_ytunnus_does_not_follow_letters(text):
+    assert found(text, "fi.ytunnus") == []
