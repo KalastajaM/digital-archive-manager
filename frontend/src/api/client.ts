@@ -54,6 +54,7 @@ export type ZoneIn = Schemas["ZoneIn"];
 export type PictureScore = Schemas["PictureScoreOut"];
 export type People = Schemas["PeopleOut"];
 export type Person = Schemas["PersonIO"];
+export type Countries = Schemas["CountriesOut"];
 /** Who a document is from (``sender``) and for (``person``), as the owner said or a filing recorded. */
 export type Assignment = Schemas["AssignmentOut"];
 export type Sender = Schemas["SenderOut"];
@@ -461,6 +462,7 @@ const keys = {
   filingCodes: ["filing-codes"],
   rules: ["rules"],
   people: ["people"],
+  countries: ["countries"],
   senders: ["senders"],
   // under the inbox's key: whatever reloads the inbox reloads the marked batch too
   markedBatch: ["inbox", "marked"],
@@ -1112,6 +1114,25 @@ export const useSavePeople = () => {
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.people });
       void client.invalidateQueries({ queryKey: keys.inbox }); // who a letter is for follows the list
+      void client.invalidateQueries({ queryKey: keys.file });
+    },
+  });
+};
+
+/** The country and language packs documents are read with, and which are on. */
+export const useCountries = () =>
+  useQuery({ queryKey: keys.countries, queryFn: () => apiGet("/api/settings/countries") });
+
+/** Save the countries and languages; a 400 says why not. What the inbox suggests follows. */
+export const useSaveCountries = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { countries: string[]; languages: string[] }) => apiPut("/api/settings/countries", { body }),
+    onSuccess: (saved) => client.setQueryData(keys.countries, saved),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.countries });
+      void client.invalidateQueries({ queryKey: keys.people }); // the default address area follows
+      void client.invalidateQueries({ queryKey: keys.inbox });
       void client.invalidateQueries({ queryKey: keys.file });
     },
   });
