@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Collections and tags in Browse.** The tree beside Browse's panes switches between
+  Folders, Collections and Tags. A click on a collection or tag lists its files from the
+  whole archive, as a search with its chip; the tag list has a box that narrows it.
+- **`collection:`** finds a collection whose name has a quote mark in it.
 - **Due dates in Browse.** A file with an open tray item shows the tray and its date on
   its row, in the folder view, Files and search results, coloured by urgency as on a
   collection's page.

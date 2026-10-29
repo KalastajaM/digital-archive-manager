@@ -1016,7 +1016,8 @@ with **New group** in its heading, and the note beside the checklist. **Add file
 file of the archive and puts it in the collection. The selected file's panel has the file
 actions (listed below) as one row of icons under its name instead of in the header, with
 **Show in folder** (the file's folder in Browse) and **Remove from collection** among them. To
-see a collection's files across folders in Browse, search for `collection:"House sale"`.
+see a collection's files across folders in Browse, choose **Collections** at the top of Browse's
+folder tree and click the collection (see Browse).
 
 The header has the same two parts as Browse and the trays. The left part is for the
 collection: its name and subtitle, **New group**, the folder button, **Export…** and **⋯**.
@@ -1189,6 +1190,16 @@ list's width.
   collection's page: the tray and the item's date (`To pay · 30.10.2026`), red when
   overdue, orange when due today or within 3 days, grey otherwise. Hover it for the item's
   title. The same tag shows in **Files** and in search results.
+- **Folders, Collections, Tags** at the top of the tree beside the panes (New look) choose
+  what the tree shows. **Folders** is the folder tree. **Collections** lists Important and
+  Starred, then the open collections as they nest. **Tags** lists the tags by group, as on
+  the Tags screen, each with its number of files, under a box that narrows the list as you
+  type. A click on a collection or tag lists its files from the whole archive: it is a
+  search, shown as its chip (`collection:Car`, `tag:medical`), and a collection includes the
+  collections inside it. A second click replaces the first; Cmd-click (Ctrl-click) on a tag
+  adds it, and the chips' **All** / **Any** choose between both tags and either. Files
+  dropped on a collection in the tree are added to it, as in the sidebar. The choice of tree
+  is kept in the address, so Back and a copied link keep it.
 - **Folders / Files** switches between the folder view and a flat list of every file below
   the current folder, with sortable Name, Folder, Date and Size columns (up to 500 rows). A
   collection's files are a search: `collection:"House sale"`.
