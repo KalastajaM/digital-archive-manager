@@ -196,7 +196,7 @@ def build(
             layouts += 1
             layout_rows.append(
                 dict(
-                    drive_id=drive_id, sha256=sha, lines=lay.lines_json(), source="text-layer",
+                    drive_id=drive_id, sha256=sha, lines=lay.stored(), source="text-layer",
                     read_at=1.7e9,
                 )
             )  # fmt: skip

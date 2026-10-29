@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -73,6 +74,19 @@ class Page1Layout:
                 ]
             rows.append(row)
         return json.dumps(rows, ensure_ascii=False)
+
+    def stored(self) -> bytes:
+        """``lines_json`` as ``file_layouts.lines`` keeps it: zlib-compressed (migration
+        0044; about a fifth of the size)."""
+        return zlib.compress(self.lines_json().encode(), 6)
+
+    @classmethod
+    def from_stored(cls, lines: bytes | str, source: str) -> Page1Layout:
+        """``from_json`` of a ``file_layouts.lines`` value (a str: JSON stored before
+        0044). ``zlib.error`` or ``ValueError`` when it cannot be read."""
+        if isinstance(lines, bytes):
+            lines = zlib.decompress(lines).decode()
+        return cls.from_json(lines, source)
 
     @classmethod
     def from_json(cls, lines: str, source: str) -> Page1Layout:

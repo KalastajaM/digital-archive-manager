@@ -7,6 +7,7 @@ from alembic.migration import MigrationContext
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from conftest import fts_intact, put_fts_row
 from dam.db.engine import migrate, schema_differences
 
 TABLES = {"files", "file_text", "tags", "file_tags", "operations", "file_fts"}
@@ -41,11 +42,11 @@ def test_wal_enabled(engine):
 
 def test_fts_accepts_rows(engine):
     with engine.begin() as conn:
-        conn.execute(
-            text("INSERT INTO file_fts(drive_id, name, path, text) VALUES ('a','Café','p','t')")
-        )
+        conn.execute(text("INSERT INTO files(drive_id, path, path_nfc) VALUES ('a', 'p', 'p')"))
+        put_fts_row(conn, "a", "Café", "p", "t")
         hit = conn.execute(text("SELECT drive_id FROM file_fts WHERE file_fts MATCH 'cafe'"))
         assert hit.scalar() == "a"
+        assert fts_intact(conn)
 
 
 def test_operations_has_is_file_column(engine):
@@ -81,6 +82,8 @@ EXPECTED_INDEXES = {
     "ix_operations_batch_id": ("operations", ["batch_id"]),
     "ix_file_tags_tag_id": ("file_tags", ["tag_id"]),  # 0033: files of a tag, by tag
     "ix_operations_planned": ("operations", ["state"]),  # 0037: planned rows only
+    # 0043: the search index reads its rows from the view by this rowid
+    "ix_file_fts_map_fts_rowid": ("file_fts_map", ["fts_rowid"]),
     "ix_reconnects_batch_id": ("reconnects", ["batch_id"]),  # 0039: undo of a reconnect
     "ix_readopted_batch_id": ("readopted", ["batch_id"]),  # 0040: undo of a take-over
 }

@@ -482,7 +482,7 @@ def test_migration_0041_creates_the_table_on_an_older_database(tmp_path, new_eng
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(related_dismissed)"))]
         pk = [r[1] for r in conn.execute(text("PRAGMA table_info(related_dismissed)")) if r[5]]
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0042"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
     assert cols == ["drive_a", "drive_b", "created"] and pk == ["drive_a", "drive_b"]
 
 

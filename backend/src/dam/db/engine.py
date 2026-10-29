@@ -1,4 +1,5 @@
 import logging
+import shutil
 import sqlite3
 import tempfile
 import threading
@@ -242,6 +243,47 @@ def _check_identity(
     return True
 
 
+# An update that leaves more than this share of the file as free pages (0043 dropped the
+# index's copy of the text) is followed by one VACUUM: SQLite never gives space back to
+# the disk by itself.
+COMPACT_FREE_SHARE = 0.25
+
+
+def compact(db: Path) -> bool:
+    """VACUUM ``db`` when more than ``COMPACT_FREE_SHARE`` of it is free pages and the disk
+    has room for what VACUUM writes (twice the file: the new copy and, in WAL mode, its
+    log); returns whether it ran. A failure is logged, never raised: SQLite leaves the
+    database as it was."""
+    con = sqlite3.connect(db, isolation_level=None, timeout=30)
+    try:
+        free = con.execute("PRAGMA freelist_count").fetchone()[0]
+        pages = con.execute("PRAGMA page_count").fetchone()[0]
+        if not pages or free / pages <= COMPACT_FREE_SHARE:
+            return False
+        size = db.stat().st_size
+        if shutil.disk_usage(db.parent).free < 2 * size:
+            log.warning(
+                "database %s is %d%% free space, but the disk has too little room to compact it",
+                db.name,
+                round(100 * free / pages),
+            )
+            return False
+        con.execute("VACUUM")
+        con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        log.info(
+            "database %s compacted from %.0f MB to %.0f MB",
+            db.name,
+            size / 1e6,
+            db.stat().st_size / 1e6,
+        )
+        return True
+    except sqlite3.Error as e:
+        log.warning("database %s could not be compacted: %s", db.name, e)
+        return False
+    finally:
+        con.close()
+
+
 def migrate(engine: Engine, backup: bool = True) -> list:
     """Bring the database to the newest revision, then compare its tables with what this
     version of dam expects; returns the differences (empty when none).
@@ -254,7 +296,8 @@ def migrate(engine: Engine, backup: bool = True) -> list:
     ``backup``: before a pending migration is applied to an existing database (one that
     has a revision), a consistent copy is written next to it (``backup_name``). A
     database whose tables differ after the update is still opened (it may carry history
-    from an older app); the difference is logged as a warning, once per process."""
+    from an older app); the difference is logged as a warning, once per process. An
+    update that left much of the file free is followed by ``compact``."""
     config = _config()
     script = ScriptDirectory.from_config(config)
     head = script.get_current_head()
@@ -274,6 +317,8 @@ def migrate(engine: Engine, backup: bool = True) -> list:
                 {"app": APP_ID},
             )
             log.info("database %s marked as %s's (tables matched %s)", db, APP_ID, current)
+    if db and db != ":memory:" and current is not None and current != head:
+        compact(Path(db))
     differences = schema_differences(engine)
     if differences:
         shown = ", ".join(_describe(d) for d in differences[:5])

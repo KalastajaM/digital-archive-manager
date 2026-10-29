@@ -186,29 +186,83 @@ class IndexProblem:
 # UNINDEXED, so a ``WHERE drive_id = ...`` on it reads the whole table.
 FTS_ROWID = "(SELECT fts_rowid FROM file_fts_map WHERE drive_id = :id)"
 
+# ``file_fts`` keeps no copy of what it indexes (migration 0043): it reads the view
+# ``file_fts_src``, the map's name and path with the file's ``file_text``. FTS5 cannot see
+# those rows change, so a file's tokens are taken out with the values they were indexed
+# from: ``fts_remove`` runs while the view still shows them (before ``file_text`` or the
+# map row changes) and ``fts_index`` after. Nothing UPDATEs or DELETEs ``file_fts``
+# itself; a wrong order is not an error, it leaves stale tokens behind.
+_FTS_SRC = (
+    "SELECT fts_rowid, drive_id, name, path, text FROM file_fts_src WHERE fts_rowid = :rowid"
+)
 
-def fts_insert(conn: Connection, drive_id: str, name: str, path: str, body: str) -> None:
-    """Add the FTS row of ``drive_id`` and map it (the caller removed any earlier one)."""
-    conn.execute(
-        text("INSERT INTO file_fts(drive_id, name, path, text) VALUES (:id, :name, :path, :text)"),
-        {"id": drive_id, "name": name, "path": path, "text": body},
-    )
+
+def _fts_rowid(conn: Connection, drive_id: str) -> int | None:
+    return conn.execute(text(f"SELECT {FTS_ROWID}"), {"id": drive_id}).scalar()
+
+
+def fts_remove(conn: Connection, drive_id: str) -> bool:
+    """Take the tokens of ``drive_id`` out of the index, keeping its map row (before its
+    text or map row changes); False when it has none."""
+    rowid = _fts_rowid(conn, drive_id)
+    if rowid is None:
+        return False
+    row = conn.execute(text(_FTS_SRC), {"rowid": rowid}).one()
     conn.execute(
         text(
-            "INSERT OR REPLACE INTO file_fts_map(drive_id, fts_rowid) "
-            "VALUES (:id, last_insert_rowid())"
+            "INSERT INTO file_fts(file_fts, rowid, drive_id, name, path, text) "
+            "VALUES ('delete', :rowid, :d, :n, :p, :t)"
         ),
-        {"id": drive_id},
+        {"rowid": rowid, "d": row.drive_id, "n": row.name, "p": row.path, "t": row.text},
     )
+    return True
+
+
+def fts_index(conn: Connection, drive_id: str) -> None:
+    """Index ``drive_id`` as its map row and ``file_text`` stand now (its earlier tokens
+    were taken out with ``fts_remove``)."""
+    conn.execute(
+        text(f"INSERT INTO file_fts(rowid, drive_id, name, path, text) {_FTS_SRC}"),
+        {"rowid": _fts_rowid(conn, drive_id)},
+    )
+
+
+def fts_insert(conn: Connection, drive_id: str, name: str, path: str) -> None:
+    """Map ``drive_id`` with ``name``/``path`` and index it with its ``file_text`` (any
+    earlier tokens were taken out with ``fts_remove``; its rowid is kept)."""
+    conn.execute(
+        text(
+            "INSERT OR REPLACE INTO file_fts_map(drive_id, fts_rowid, name, path) VALUES "
+            "(:id, coalesce((SELECT fts_rowid FROM file_fts_map WHERE drive_id = :id), "
+            "(SELECT coalesce(max(fts_rowid), 0) + 1 FROM file_fts_map)), :name, :path)"
+        ),
+        {"id": drive_id, "name": name, "path": path},
+    )
+    fts_index(conn, drive_id)
 
 
 def fts_delete(conn: Connection, drive_id: str) -> None:
-    conn.execute(text(f"DELETE FROM file_fts WHERE rowid = {FTS_ROWID}"), {"id": drive_id})
+    """Drop ``drive_id`` from the index and the map (before its ``file_text`` goes)."""
+    fts_remove(conn, drive_id)
     conn.execute(text("DELETE FROM file_fts_map WHERE drive_id = :id"), {"id": drive_id})
 
 
+def fts_rename(conn: Connection, drive_id: str, **values: str) -> bool:
+    """Set the indexed ``name`` and/or ``path`` of ``drive_id``; False when it has no
+    entry (nothing changes)."""
+    assert values and set(values) <= {"name", "path"}, values
+    if not fts_remove(conn, drive_id):
+        return False
+    sets = ", ".join(f"{column} = :{column}" for column in values)
+    conn.execute(
+        text(f"UPDATE file_fts_map SET {sets} WHERE drive_id = :id"), {"id": drive_id, **values}
+    )
+    fts_index(conn, drive_id)
+    return True
+
+
 def fts_clear_path(conn: Connection, drive_id: str) -> None:
-    conn.execute(text(f"UPDATE file_fts SET path = '' WHERE rowid = {FTS_ROWID}"), {"id": drive_id})
+    fts_rename(conn, drive_id, path="")
 
 
 def keys_besides(table, column) -> list:

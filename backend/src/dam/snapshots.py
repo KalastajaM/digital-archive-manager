@@ -416,12 +416,17 @@ def _objects(db: Path) -> list[tuple[str, str, str | None]]:
 
 def _foreign_objects(db: Path, revision: str, work: Path) -> str | None:
     """Why the snapshot's database holds something dam's migrations never make at
-    ``revision`` (a trigger, a view, an unknown or changed table), or None. Compared
-    with a fresh database migrated to that revision."""
+    ``revision`` (a trigger, a view other than dam's own, an unknown or changed table), or
+    None. Compared with a fresh database migrated to that revision."""
     reference = work / ".reference.sqlite"
     build_reference(reference, revision)
-    known = {name: sql for kind, name, sql in _objects(reference) if kind == "table"}
+    objects = _objects(reference)
+    known = {name: sql for kind, name, sql in objects if kind == "table"}
+    # dam's own views (``file_fts_src``, 0043), only as dam's migrations write them
+    views = {name: sql for kind, name, sql in objects if kind == "view"}
     for kind, name, sql in _objects(db):
+        if kind == "view" and name in views and sql == views[name]:
+            continue
         if kind in ("trigger", "view"):
             return f"The snapshot's database holds a {kind} ({name}), which dam never makes."
         if kind != "table" or name.startswith("sqlite_"):

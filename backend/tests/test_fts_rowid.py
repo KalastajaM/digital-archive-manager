@@ -1,5 +1,7 @@
 """FTS rows are written by rowid (via ``file_fts_map``), never by a ``drive_id`` scan;
-migration 0037 maps existing rows and adds the partial index for planned operations."""
+migration 0037 maps existing rows and adds the partial index for planned operations.
+Since 0043 the index reads what it indexes through ``file_fts_src``, and every write keeps
+it intact (FTS5's integrity check)."""
 
 from pathlib import Path
 
@@ -7,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import event, select, text
 
+from conftest import fts_intact
 from dam.db.engine import MIGRATIONS_DIR, migrate, write_tx
 from dam.db.tables import operations
 from dam.extract.base import ExtractedText
@@ -27,11 +30,13 @@ def hits(engine, query: str) -> list[str]:
 
 
 def fts_consistent(engine) -> bool:
-    """Every FTS row has exactly one map row pointing at it, and vice versa."""
+    """Every FTS row has exactly one map row pointing at it, and vice versa, and the index
+    holds exactly the tokens of what it reads (no stale ones from a write out of order)."""
     with engine.connect() as conn:
         fts = conn.execute(text("SELECT rowid, drive_id FROM file_fts")).all()
         mapped = conn.execute(text("SELECT fts_rowid, drive_id FROM file_fts_map")).all()
-    return sorted(fts) == sorted(mapped) and len({d for _, d in fts}) == len(fts)
+        intact = fts_intact(conn)
+    return intact and sorted(fts) == sorted(mapped) and len({d for _, d in fts}) == len(fts)
 
 
 def body(words: str) -> ExtractedText:
@@ -70,11 +75,15 @@ def test_insert_update_rekey_park_delete_keep_search_right(engine):
     assert hits(engine, "other") == [] and fts_consistent(engine)
 
 
-def _fts_writes(engine, run) -> list[tuple[str, object]]:
+def _fts_statements(engine, run) -> list[tuple[str, object]]:
+    """The statements ``run`` sends that write ``file_fts`` or read the rows it indexes."""
     seen: list[tuple[str, object]] = []
 
     def grab(conn, cursor, statement, parameters, context, executemany):
-        if statement.lstrip().upper().startswith(("UPDATE FILE_FTS ", "DELETE FROM FILE_FTS ")):
+        upper = " ".join(statement.split()).upper()
+        if upper.startswith(("UPDATE FILE_FTS ", "DELETE FROM FILE_FTS ", "INSERT INTO FILE_FTS(")):
+            seen.append((statement, parameters))
+        elif "FROM FILE_FTS_SRC" in upper:
             seen.append((statement, parameters))
 
     event.listen(engine, "before_cursor_execute", grab)
@@ -104,14 +113,18 @@ def test_fts_writes_look_rows_up_by_rowid(engine):
         repo.index_name("d3")
         repo.update_path("e/z.pdf", "c/y.pdf")  # parks d2 (_park_occupants)
 
-    writes = _fts_writes(engine, run)
-    assert {w[0].split()[0].upper() for w in writes} == {"UPDATE", "DELETE"}
+    statements = _fts_statements(engine, run)
+    # the index is only ever written by INSERT (rows, and FTS5's 'delete' command)
+    assert statements and {s.split()[0].upper() for s, _ in statements} <= {"INSERT", "SELECT"}
     with engine.connect() as conn:
-        for statement, params in writes:
-            plan = conn.exec_driver_sql("EXPLAIN QUERY PLAN " + statement, params).all()
-            fts = [r[3] for r in plan if "VIRTUAL TABLE" in r[3]]
-            # FTS5 reports a rowid lookup as "INDEX 0:=" and a full scan as "INDEX 0:"
-            assert fts and all(":=" in d for d in fts), (statement, plan)
+        for statement, params in statements:
+            if "file_fts_src" not in statement:
+                continue
+            select_part = statement[statement.index("SELECT") :]
+            plan = conn.exec_driver_sql("EXPLAIN QUERY PLAN " + select_part, params).all()
+            # the view's rows are read through the map's unique rowid index, not a scan
+            assert any("ix_file_fts_map_fts_rowid" in r[3] for r in plan), (statement, plan)
+            assert not any(r[3].startswith("SCAN m") for r in plan), (statement, plan)
     assert fts_consistent(engine)
 
 
@@ -140,6 +153,11 @@ def test_migration_0037_maps_existing_fts_rows(tmp_path: Path, new_engine):
                 text("INSERT INTO files(drive_id, path, path_nfc, name) VALUES (:d, :p, :p, :n)"),
                 {"d": drive_id, "p": path, "n": path.split("/")[-1]},
             )
+        for drive_id, words in [("d1", "power"), ("d2", "water")]:
+            conn.execute(
+                text("INSERT INTO file_text(drive_id, text) VALUES (:d, :t)"),
+                {"d": drive_id, "t": words},
+            )
         fts = text("INSERT INTO file_fts(drive_id, name, path, text) VALUES (:d, :n, :p, :t)")
         # an older duplicate for d1 (the newest row wins) and a plain row for d2
         conn.execute(fts, {"d": "d1", "n": "Invoice.pdf", "p": "a/Invoice.pdf", "t": "stale"})
@@ -147,7 +165,7 @@ def test_migration_0037_maps_existing_fts_rows(tmp_path: Path, new_engine):
         conn.execute(fts, {"d": "d1", "n": "Invoice.pdf", "p": "a/Invoice.pdf", "t": "power"})
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0042"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
         index = conn.execute(
             text("SELECT sql FROM sqlite_master WHERE name = 'ix_operations_planned'")
         ).scalar()

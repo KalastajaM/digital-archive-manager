@@ -477,6 +477,13 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **A smaller database.** The search index no longer keeps its own copy of every file's
+  text: it reads the text dam already stores (migration 0043). Page-1 layouts are stored
+  compressed (0044). After the update dam compacts the database once, when the disk has room
+  for it, so the space is given back. On an archive of about 12,000 files the database went
+  from 874 MB to 517 MB, with the same search results. The update takes about a minute on a
+  database that size, and the usual copy is written next to it first.
+
 - **The New look is the default.** dam opens in the New look. Classic is still there, in
   Settings, Appearance (and Ctrl+Alt+L), for now; the Look switch at the bottom of the
   sidebar is gone. If you chose Classic before, dam opens in the New look once: choose
