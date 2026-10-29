@@ -1,6 +1,6 @@
 /** Browse's collection tree: Important and Starred first, then the open collections as
  * they nest; a click picks one, the picked one is current, and a long name stays in its row. */
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
@@ -80,4 +80,14 @@ describe("CollectionTree", () => {
     expect(await screen.findByText("No open collections")).toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Collections" })).getByText("Important")).toBeInTheDocument();
   });
+
+  it("stays in the Tab order when the focused collection is folded away", async () => {
+    const { user } = setup([coll(1, "Legal"), coll(2, "Michiel", 1)]);
+    await user.click(await screen.findByText("Michiel"));
+    const legal = screen.getByText("Legal").closest('[role="treeitem"]') as HTMLElement;
+    fireEvent.click(legal.querySelector(".tree-chevron") as HTMLElement); // a click that leaves the focus where it was
+    expect(screen.queryByText("Michiel")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("treeitem").filter((li) => li.tabIndex === 0)).toHaveLength(1);
+  });
 });
+

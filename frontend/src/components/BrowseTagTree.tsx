@@ -35,7 +35,12 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
   // with no groups at all the tags stand alone, as on the Tags screen
   const flat = groups.length === 0;
   const firstKey = flat ? (loose[0] ? `t${loose[0].name}` : "") : (sections[0]?.key ?? "");
-  const focusKey = focused ?? firstKey;
+  const groupId = (key: string) => (key === "g-none" ? -1 : Number(key.slice(1)));
+  // the row that takes Tab: the one last focused while it is still shown, else the first
+  const shown = flat
+    ? loose.map((t) => `t${t.name}`)
+    : sections.flatMap((s) => [s.key, ...(folded.has(groupId(s.key)) ? [] : s.tags.map((t) => `t${t.name}`))]);
+  const focusKey = focused !== null && shown.includes(focused) ? focused : firstKey;
   const picked = (name: string) => active.tags.some((t) => t.toLowerCase() === name.toLowerCase());
   const toggle = (id: number, open?: boolean) =>
     setFolded((old) => {
@@ -44,7 +49,6 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
       else next.add(id);
       return next;
     });
-  const groupId = (key: string) => (key === "g-none" ? -1 : Number(key.slice(1)));
 
   const onTreeKeys = (e: KeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;

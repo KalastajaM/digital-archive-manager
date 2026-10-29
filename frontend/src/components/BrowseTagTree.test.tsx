@@ -65,4 +65,14 @@ describe("TagTree", () => {
     expect(name).toHaveClass("tree-name");
     expect(name).toHaveAttribute("title", long);
   });
+
+  it("stays in the Tab order when the focused tag is filtered away", async () => {
+    const { user } = setup((q) => (q ? { tags: [tag("dental", 3, 1)], groups: HEALTH.groups } : HEALTH));
+    await user.click(await screen.findByText("medical"));
+    expect(document.activeElement).toBe(screen.getByText("medical").closest('[role="treeitem"]'));
+    await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "den");
+    await waitFor(() => expect(screen.queryByText("medical")).not.toBeInTheDocument());
+    expect(screen.getAllByRole("treeitem").filter((li) => li.tabIndex === 0)).toHaveLength(1);
+  });
 });
+

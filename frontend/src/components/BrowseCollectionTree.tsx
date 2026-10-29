@@ -162,7 +162,11 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
     });
   const kids = childrenOf(list.data ?? []);
   const top = kids.get(null) ?? [];
-  const shared: Shared = { kids, folded, toggle, focusKey: focused ?? "important", setFocusKey: setFocused, active, onPick, collect };
+  // the row that takes Tab: the one last focused while it is still shown, else Important
+  const shownKeys = (level: CollectionRow[]): string[] =>
+    level.flatMap((c) => [`c${c.id}`, ...(folded.has(c.id) ? [] : shownKeys(kids.get(c.id) ?? []))]);
+  const focusKey = focused !== null && ["important", "starred", ...shownKeys(top)].includes(focused) ? focused : "important";
+  const shared: Shared = { kids, folded, toggle, focusKey, setFocusKey: setFocused, active, onPick, collect };
   const onKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]'));
