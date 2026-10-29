@@ -8,6 +8,8 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- In Settings, Senders, the number of documents is a link that opens Browse on the
+  documents carrying that business ID.
 - **Due dates in Browse.** A file with an open tray item shows the tray and its date on
   its row, in the folder view, Files and search results, coloured by urgency as on a
   collection's page.
@@ -49,6 +51,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- In Reading documents, **Reset to default** lines up with the address area fields and
+  **Save address area** sits on the left.
 - **Relatives no longer runs into the identifiers above it.** In the file panel a hairline
   and a little space now separate what the document mentions from its Relatives.
 - Saving the People list no longer pins the address area: it is sent only when it

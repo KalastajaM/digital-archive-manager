@@ -1,8 +1,9 @@
 /** Settings → Senders (New look): each business ID found on two or more documents, most
- * documents first, with the company name read next to it. A confirmed name becomes From on
+ * documents first (the count opens Browse on them), with the company name read next to it. A confirmed name becomes From on
  * every document that carries the ID, except where you set From or For yourself; clearing
  * it takes those back. */
 import { type FormEvent, useId, useState } from "react";
+import { Link } from "react-router-dom";
 import { errorText, type IdentifierName, useIdentifierNames, usePutIdentifierName } from "../api/client";
 import { visible } from "../text";
 import { undoAction, useToast } from "./Toasts";
@@ -50,7 +51,13 @@ function SenderRow({ row, undo }: { row: IdentifierName; undo: (body: Put) => vo
         <span className="senders-id mono trunc" title={`${row.label} ${row.value}`}>
           {row.value}
         </span>
-        <span className="hint senders-count">{documents(row.files)}</span>
+        <Link
+          className="hint senders-count"
+          to={`/browse?q=${encodeURIComponent(`id:${row.value}`)}`}
+          title={`Show the documents that carry ${row.value} in Browse`}
+        >
+          {documents(row.files)}
+        </Link>
       </div>
       <form className="senders-form" onSubmit={submit}>
         <input
