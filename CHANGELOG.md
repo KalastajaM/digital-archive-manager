@@ -921,6 +921,12 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- Undoing the conversion of an entry in `##. Ongoing` or `##. Important` no longer, on
+  Linux, mistakes the restored link or folder for the app's own. The link could then be
+  removed by the next sync, or the collection marked "changed outside the app". Linux
+  file systems often give the restored entry the inode number of the one the undo removed,
+  so the app now goes by what the undo itself removed.
+
 - **Tooltips are never cut off (New look).** A tooltip next to a pane edge, such as the Quick
   Look eye at the right end of a Browse row, used to be hidden behind the neighbouring
   panel. Tooltips now show above everything, stay inside the window and wrap when long.

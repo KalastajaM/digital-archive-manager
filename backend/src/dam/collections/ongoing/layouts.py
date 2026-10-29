@@ -254,11 +254,12 @@ class LayoutsMixin:
 
     def forget_undone(self, batch_id: str) -> int:
         """After an undo of ``batch_id``: forget the records of entries it created
-        that the undo removed (the record no longer matches), so the next sync does
-        not report them as "changed outside the app"; and record again an ancestor's
-        link the batch had switched to a folder (``ongoing_switched``) when the undo
-        put it back: a link at the recorded rel with exactly the recorded readlink
-        value, and no record at that rel any more. Returns how many were forgotten."""
+        that the undo removed, or that are otherwise gone (the record no longer
+        matches), so the next sync does not report them as "changed outside the app";
+        and record again an ancestor's link the batch had switched to a folder
+        (``ongoing_switched``) when the undo put it back: a link at the recorded rel
+        with exactly the recorded readlink value, and no record at that rel any more.
+        Returns how many were forgotten."""
         with self.engine.connect() as conn:
             rels = set(
                 fold_parts(r)
@@ -271,6 +272,24 @@ class LayoutsMixin:
                 ).scalars()
                 if r is not None
             )
+            # The entries the undo itself removed. What is at such a rel now is what the
+            # undo put back there (the user's link or folder), so it is never compared
+            # with the record: it can look the same, since ext4 gives the inode number
+            # the undo just freed to the entry it restores next, and a restored link has
+            # the same readlink value. (A created folder the undo kept is not here.)
+            removed = set(
+                fold_parts(r)
+                for r in conn.execute(
+                    select(operations.c.src).where(
+                        operations.c.undo_of == batch_id,
+                        operations.c.kind.in_(
+                            [str(OpKind.UNLINK_SYMLINK), str(OpKind.REMOVE_EMPTY_DIR)]
+                        ),
+                        operations.c.state == "done",
+                    )
+                ).scalars()
+                if r is not None
+            )
             switched = conn.execute(
                 select(ongoing_switched).where(ongoing_switched.c.batch_id == batch_id)
             ).all()
@@ -278,7 +297,7 @@ class LayoutsMixin:
             r.id
             for recs in self._records().values()
             for r in recs
-            if fold_parts(r.rel) in rels and self._gone(r)
+            if fold_parts(r.rel) in rels and (fold_parts(r.rel) in removed or self._gone(r))
         ]
         if stale:
             with write_tx(self.engine) as conn:
