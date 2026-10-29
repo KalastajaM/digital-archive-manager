@@ -56,3 +56,34 @@ class AssignmentsIn(StrictIn):
 class SenderOut(BaseModel):
     sender: str
     count: int
+
+
+class CountryOut(BaseModel):
+    code: str
+    name: str
+    enabled: bool
+    adds: list[str]  # what it adds to reading documents, in plain words
+    languages: list[str]  # its documents' languages
+
+
+class LanguageOut(BaseModel):
+    code: str
+    name: str
+    enabled: bool
+    always: bool  # English: always on
+
+
+class CountriesOut(BaseModel):
+    """The country and language packs, and which are on. ``chosen``: the settings name the
+    countries (else Finland is on, as before there was a choice)."""
+
+    chosen: bool
+    countries: list[CountryOut]
+    languages: list[LanguageOut]
+
+
+class CountriesIn(StrictIn):
+    """The countries and languages to read documents with; English is always added."""
+
+    countries: list[str]
+    languages: list[str]

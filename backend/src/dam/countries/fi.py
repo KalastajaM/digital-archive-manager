@@ -44,4 +44,5 @@ FINLAND = CountryPack(
     references=(ReferenceSpec("fi.reference", find_reference),),
     address_zone=ADDRESS_ZONE,
     languages=("fi", "sv"),
+    adds=("Payment reference (viitenumero)", "Address area of letters (SFS 2487)"),
 )
