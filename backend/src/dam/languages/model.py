@@ -16,3 +16,5 @@ class LanguagePack:
     stopwords: tuple[str, ...] = ()  # left out of questions to the archive
     # words that say what kind of document it is or how it was made, not who it is from
     kind_words: tuple[str, ...] = ()
+    # the 12 months, each as the folded forms written in dates ("15 oktober 2026")
+    months: tuple[tuple[str, ...], ...] = ()
