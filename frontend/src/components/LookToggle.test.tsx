@@ -1,18 +1,11 @@
 import { act, fireEvent, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { STYLE_KEY } from "../appearance";
 import { renderWithProviders } from "../test-utils";
-import { LookToggle, useLookShortcut } from "./LookToggle";
+import { useLookShortcut } from "./LookToggle";
 
 function Host() {
   useLookShortcut();
-  return (
-    <>
-      <LookToggle />
-      <input aria-label="Name" />
-    </>
-  );
+  return <input aria-label="Name" />;
 }
 
 const look = () => document.documentElement.dataset.style;
@@ -24,18 +17,7 @@ beforeEach(() => {
   delete document.documentElement.dataset.style;
 });
 
-describe("the temporary Look switch", () => {
-  it("the sidebar toggle switches the look and says so", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<Host />);
-    expect(screen.getByRole("button", { name: "Classic" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(screen.getByRole("button", { name: "New" }));
-    expect(look()).toBe("new");
-    expect(localStorage.getItem(STYLE_KEY)).toBe("new");
-    expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("aria-pressed", "true");
-    expect(await screen.findByText("Look: New")).toBeInTheDocument();
-  });
-
+describe("the Look shortcut", () => {
   it("Ctrl+Alt+L toggles the look back and forth", async () => {
     renderWithProviders(<Host />);
     act(() => chord());
@@ -44,7 +26,6 @@ describe("the temporary Look switch", () => {
     act(() => chord());
     expect(look()).toBe("classic");
     expect(await screen.findByText("Look: Classic")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Classic" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("the shortcut needs both modifiers and stays quiet while typing", () => {

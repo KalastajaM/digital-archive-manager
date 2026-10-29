@@ -477,6 +477,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **The New look is the default.** dam opens in the New look. Classic is still there, in
+  Settings, Appearance (and Ctrl+Alt+L), for now; the Look switch at the bottom of the
+  sidebar is gone. If you chose Classic before, dam opens in the New look once: choose
+  Classic again in Settings and it stays.
+- **README screenshots in the New look**, with two of Relatives: the file panel's list and
+  the Show connections window.
 - **Finland-specific detection in its own pack (no change in behaviour).** The Finnish
   reference number, the address area of Finnish letters and the Finnish, English and Swedish
   label words and stopwords now live in country and language packs, the first step towards

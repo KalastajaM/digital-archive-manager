@@ -6,15 +6,12 @@ It talks only to the demo server on localhost:8766, never to a real archive.
 
     cd backend && uv run python -m dam.demo /tmp/dam-shots
     uv run dam --data-dir /tmp/dam-shots/data serve --no-open --port 8766
+    export DAM_TOKEN=$(cat /tmp/dam-shots/data/api-token)  # the demo's sign-in token
     python3 scripts/screenshots/stage.py        # once, on the fresh demo
     uv run --no-project --with playwright python scripts/screenshots/shoot.py docs/images
-    python3 scripts/screenshots/stage.py codes  # last: files into the code folders
-    uv run --no-project --with playwright python scripts/screenshots/shoot.py docs/images filing-codes rules
     uv run --no-project --with playwright python scripts/screenshots/social.py docs/images
 
-The ``codes`` step moves inbox files into the filing codes' folders (for the File N marked
-shot) and adds two rules (shown in the rules shot), which changes every other inbox view, so
-it comes after the other shots.
+The screenshots show the New look.
 
 ``shoot.py`` uses the installed Google Chrome (``channel="chrome"``).
 """
@@ -23,14 +20,17 @@ import json
 import sys
 import time
 import urllib.error
+import os
 import urllib.request
 
 BASE = "http://localhost:8766"
+# the demo server's API token (its data folder's api-token file): every API call needs it
+TOKEN = os.environ.get("DAM_TOKEN") or sys.exit("set DAM_TOKEN to the demo's api-token")
 
 
 def call(method: str, path: str, body: dict | None = None, fail: bool = True):
     data = None if body is None else json.dumps(body).encode()
-    req = urllib.request.Request(BASE + path, data=data, method=method, headers={"Content-Type": "application/json", "Origin": BASE})
+    req = urllib.request.Request(BASE + path, data=data, method=method, headers={"Content-Type": "application/json", "Origin": BASE, "X-Dam-Token": TOKEN})
     try:
         with urllib.request.urlopen(req) as r:
             raw = r.read()
@@ -62,38 +62,6 @@ def wait_idle(reminders: bool = True) -> None:
     sys.exit("the demo did not settle within four minutes")
 
 
-def stage_codes() -> None:
-    """Make the code folders in the inbox and put some inbox files in them, so they carry
-    a filing code and the File N marked panel has rows."""
-    # two rules give the bills a folder, so those rows are ready to tick (the water bill's
-    # is made from its letterhead, as the boxes shot shows)
-    inbox = "##. Organize"
-    call("PUT", "/api/rules/vesilaitos", {
-        "id": "vesilaitos",
-        "when": {"folder_is": inbox, "zones": [{"box": [0.05, 0.06, 0.6, 0.14], "text_contains": ["vesilaitos"], "match": "word_start"}]},
-        "then": {"folder": "30. Home", "tags": ["water"]},
-    })
-    call("PUT", "/api/rules/sahkoyhtio", {
-        "id": "sahkoyhtio",
-        "when": {"folder_is": inbox, "text_contains": ["sahkoyhtio"]},
-        "then": {"folder": "30. Home/Electricity", "tags": ["electricity"]},
-    })
-    call("POST", "/api/filing-codes/folders")
-    for drive_ids, folder in (
-        (["demo-12", "demo-4"], "To pay"),
-        (["demo-10"], "To read"),
-        (["demo-2", "demo-1"], "File as suggested"),
-    ):
-        call("POST", "/api/browse/move", {"drive_ids": drive_ids, "folder": f"{inbox}/{folder}"})
-    print("files put in the code folders")
-
-
-if sys.argv[1:] == ["codes"]:
-    stage_codes()
-    wait_idle()
-    sys.exit(0)
-
-
 def convert(kind: str, body: dict) -> None:
     left = {e["rel"] for e in call("GET", f"/api/{kind}/entries") if not e.get("managed")}
     if body["rel"] not in left:
@@ -115,7 +83,7 @@ def wait_read(drive_ids: list[str]) -> None:
     sys.exit(f"the demo files {drive_ids} were not read within three minutes")
 
 
-wait_read(["demo-12", "demo-4", "demo-3"])
+wait_read(["demo-18", "demo-4", "demo-3"])
 
 # Ongoing: two collections, two stars (as in the old Activity shot)
 convert("ongoing", {"rel": "##. Ongoing/2026 Sauna conversion", "collection": "2026 Sauna conversion"})
@@ -126,7 +94,7 @@ convert("important", {"rel": "##. Important/passport.pdf", "destination": "40. F
 
 # To pay: three bills with a payee and a title
 BILLS = [
-    ("demo-12", "Water bill — Q4", "Example Water Co"),
+    ("demo-18", "Water bill — Q4", "Example Water Co"),
     ("demo-4", "Electricity — September", "Northpower"),
     ("demo-3", "Home insurance", "Northwind Insurance"),
 ]
@@ -146,15 +114,15 @@ print("excluded folders set")
 
 # Tags: a few tagged files, a group with a pinned tag (sidebar Tags section, Tags screen)
 FILE_TAGS = {
-    "demo-15": ["plan", "2026", "home"],
+    "demo-21": ["plan", "2026", "home"],
     "demo-11": ["electricity", "contract", "home"],
     "demo-5": ["bank", "2026"],
     "demo-6": ["tax", "2026"],
     "demo-9": ["photos", "2026"],
     "demo-4": ["electricity"],
     "demo-3": ["insurance", "home"],
-    "demo-13": ["legal", "contract"],
-    "demo-14": ["legal"],
+    "demo-19": ["legal", "contract"],
+    "demo-20": ["legal"],
 }
 for drive_id, tags in FILE_TAGS.items():
     call("PUT", f"/api/files/{drive_id}/tags", {"tags": tags})
@@ -189,8 +157,14 @@ rule = {
     "then": {"folder": "10. Financial/Banks", "tags": ["bank"]},
 }
 call("PUT", "/api/rules/northbank", rule)
-print("rule saved")
-WATER = "demo-12"
+# the water bill's letterhead (as the boxes shot draws it) gives the inbox shot its folder
+call("PUT", "/api/rules/vesilaitos", {
+    "id": "vesilaitos",
+    "when": {"folder_is": "##. Organize", "zones": [{"box": [0.05, 0.06, 0.6, 0.14], "text_contains": ["vesilaitos"], "match": "word_start"}]},
+    "then": {"folder": "30. Home", "tags": ["water"]},
+})
+print("rules saved")
+WATER = "demo-18"
 
 # Notes, checklists and a summary, so the row icons show. The files were just moved: a
 # summary saved before they are read again would show as outdated.
@@ -199,15 +173,15 @@ call("PUT", f"/api/notes/item/{ITEM_IDS['demo-4']}", {"text": "Ask Northpower wh
 for text in ("Compare with last year's bill", "Call Northpower about the meter reading"):
     call("POST", f"/api/checklist/item/{ITEM_IDS['demo-4']}", {"text": text})
 call("POST", f"/api/checklist/file/{WATER}", {"text": "Check the reference number before paying"})
-call("POST", "/api/checklist/file/demo-15", {"text": "Send the plan to the architect"})
-call("PUT", "/api/notes/file/demo-15", {"text": "Draft from the spring meeting, still to be agreed."})
-call("PUT", "/api/files/demo-15/summary", {"source": "user", "summary": "The 2026 plan for the house: the sauna conversion and the electricity contract.", "key_facts": [], "replace": True})
+call("POST", "/api/checklist/file/demo-21", {"text": "Send the plan to the architect"})
+call("PUT", "/api/notes/file/demo-21", {"text": "Draft from the spring meeting, still to be agreed."})
+call("PUT", "/api/files/demo-21/summary", {"source": "user", "summary": "The 2026 plan for the house: the sauna conversion and the electricity contract.", "key_facts": [], "replace": True})
 call("PUT", "/api/files/demo-11/summary", {"source": "user", "summary": "Fixed-price electricity contract for the house.", "key_facts": [], "replace": True})
 print("notes, checklists and summaries added")
 
 # A locked file (shown with its lock in Browse)
-call("POST", "/api/files/demo-15/lock")
-print("locked demo-15")
+call("POST", "/api/files/demo-21/lock")
+print("locked demo-21")
 
 wait_idle()
 print("settled")

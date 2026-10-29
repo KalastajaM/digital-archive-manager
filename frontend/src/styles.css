@@ -229,11 +229,6 @@ a.sidebar-section-title[aria-current="page"] { color: var(--text); }
 .sidebar-foot { padding: var(--sp-3) var(--sp-2) 0; border-top: 0.5px solid var(--hairline); margin-top: var(--sp-2); }
 .status-badge { margin: 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.4; cursor: default; }
 .status-badge.status-attention { color: var(--orange-text); }
-/* The temporary Look switch in the sidebar footer (see components/LookToggle.tsx). */
-.look-toggle { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
-.look-toggle-label { flex: none; color: var(--muted); font-size: var(--fs-xs); }
-.look-toggle .segmented { flex: 1; min-width: 0; }
-.look-toggle .segmented-option { flex: 1; padding: 0 var(--sp-2); font-size: var(--fs-xs); white-space: nowrap; }
 
 .content { min-width: 0; min-height: 0; height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
 main { flex: 1; padding: var(--sp-4) var(--sp-5); min-width: 0; }

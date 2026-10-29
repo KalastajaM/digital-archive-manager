@@ -1,10 +1,11 @@
-"""The README screenshots, light and dark, from the staged demo server (see stage.py):
-1600x1000 PNGs written to the folder given; more arguments take only those shots (the
-shots taken only when named are in AFTER_CODES, and ``sticker-sheet``).
+"""The README screenshots, light and dark, in the New look, from the staged demo server
+(see stage.py): 1600x1000 PNGs written to the folder given; more arguments take only those
+shots (``sticker-sheet`` is taken only when named). ``DAM_TOKEN`` is the demo's api-token.
 
     uv run --no-project --with playwright python scripts/screenshots/shoot.py docs/images [inbox ...]
 """
 
+import os
 import re
 import sys
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 BASE = "http://localhost:8766"
+TOKEN = os.environ.get("DAM_TOKEN") or sys.exit("set DAM_TOKEN to the demo's api-token")
 OUT = Path(sys.argv[1])
 ONLY = set(sys.argv[2:])
 
@@ -47,7 +49,7 @@ def expand(page):
 
 
 def ai(page):
-    page.get_by_role("button", name="AI", exact=True).click()
+    page.get_by_role("button", name="AI calls", exact=True).click()
     page.wait_for_selector("[aria-label='Excluded folders']")
 
 
@@ -109,51 +111,47 @@ def rule_sheet(page):
     dialog.get_by_label("Document is in folder").fill("")
     more.click()
     dialog.get_by_label("Folder", exact=True).fill("13. Taxes")
-    tags = dialog.get_by_label("Tags")
+    tags = dialog.get_by_placeholder("Add a tag")
     tags.fill("tax")
     tags.press("Enter")
     dialog.get_by_text(re.compile(r"Matches \d+ documents? you filed before")).wait_for(timeout=90000)
-    dialog.get_by_role("button", name="Save", exact=True).wait_for()
+    dialog.get_by_role("button", name=re.compile(r"^Save")).first.wait_for()
     page.evaluate("document.activeElement.blur()")  # no focus ring on the tags field
 
 
-AFTER_CODES = {"filing-codes", "rules"}  # taken only when named: see stage.py
+def connections(page):
+    """The Relatives window, with the plan (two links in common) pointed at, so the side
+    panel says what the two files share."""
+    page.get_by_role("button", name="Show connections").click()
+    dialog = page.get_by_role("dialog")
+    dialog.get_by_text("In common", exact=True).wait_for()
+    page.keyboard.press("ArrowDown")
+
+
 TALL = (1920, 1200)
 TALL_SHOTS = {"rule-sheet"}
 
 
-def rules_settings(page):
-    page.get_by_role("button", name="Filing rules").or_(page.get_by_text("Filing rules", exact=True)).first.click()
-    page.get_by_text("Address area (percent of page 1)").wait_for()
-    page.get_by_role("button", name="Add a person").scroll_into_view_if_needed()
-
-
-def marked(page):
-    page.get_by_text("Marked files").wait_for()
-    page.get_by_role("button", name=re.compile(r"^File \d+$")).wait_for()
-
-
 SHOTS = {
-    "inbox": ("/inbox?file=demo-12", areas_off),
+    "inbox": ("/inbox?file=demo-18", areas_off),
     "today": ("/", None),
     "paymode": ("/trays/to-pay?item=1", paymode),
-    "browse": ("/browse?path=30.%20Home&select=demo-15", None),
+    "browse": ("/browse?path=30.%20Home&select=demo-21", None),
     "activity": ("/activity", expand),
     "collection": ("/collections/3", areas_off_if_shown),
     "ai-settings": ("/activity", ai),
     "tags": ("/tags", None),
-    "boxes": ("/inbox?file=demo-12", boxes),
+    "relatives": ("/browse?path=30.%20Home%2FElectricity&select=demo-11", None),
+    "connections": ("/browse?path=30.%20Home%2FElectricity&select=demo-11", connections),
+    "boxes": ("/inbox?file=demo-18", boxes),
     "rule-sheet": ("/inbox?file=demo-1", rule_sheet),
-    # after ``stage.py codes`` only (it moves inbox files into the code folders)
-    "filing-codes": ("/inbox?marked=1", marked),
-    "rules": ("/settings", rules_settings),
 }
 
 with sync_playwright() as p:
     browser = p.chromium.launch(channel="chrome")
     for scheme in ("light", "dark"):
         for name, (url, then) in SHOTS.items():
-            if (ONLY and name not in ONLY) or (not ONLY and name in AFTER_CODES):
+            if ONLY and name not in ONLY:
                 continue
             # the rule sheet is tall: a taller window at a smaller scale, same 1600x1000 image
             width, height = TALL if name in TALL_SHOTS else (1440, 900)
@@ -163,7 +161,9 @@ with sync_playwright() as p:
                 color_scheme=scheme,
                 timezone_id=TZ,
             )
+            ctx.add_init_script("localStorage.setItem('dam.style', 'new')")  # the New look
             page = ctx.new_page()
+            page.goto(f"{BASE}/auth?t={TOKEN}")  # signs this context in (a cookie)
             page.goto(BASE + url)
             page.wait_for_load_state("networkidle")
             if then:
@@ -180,6 +180,7 @@ with sync_playwright() as p:
         # the printable sticker sheet (plain paper), the top of the page at 800 px wide, doubled
         ctx = browser.new_context(viewport={"width": 800, "height": 500}, device_scale_factor=2)
         page = ctx.new_page()
+        page.goto(f"{BASE}/auth?t={TOKEN}")
         page.goto(BASE + "/api/filing-codes/sheet?layout=plain&codes=P:10,A:10,R:10")
         page.wait_for_load_state("networkidle")
         page.screenshot(path=str(OUT / "sticker-sheet.png"))

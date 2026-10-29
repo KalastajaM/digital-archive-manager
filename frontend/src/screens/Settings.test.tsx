@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { navigation } from "../api/client";
-import { APPEARANCE_KEY, STYLE_KEY } from "../appearance";
+import { APPEARANCE_KEY, applyStyle, STYLE_KEY } from "../appearance";
 import { forgetKeptEdits } from "../components/codes/FilingCodes";
 import { mockFetch, renderWithProviders } from "../test-utils";
 import Settings from "./Settings";
@@ -209,20 +209,22 @@ describe("Settings", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
   });
 
-  it("Appearance offers the Look: Classic is on, New applies at once and Classic returns", async () => {
+  it("Appearance offers the Look: New first, Classic applies at once and New returns", async () => {
+    applyStyle(); // as at start: nothing stored, so New
     const user = setup("/settings/appearance");
     const appearance = await screen.findByRole("region", { name: "Appearance" });
-    const classic = within(appearance).getByRole("radio", { name: /Classic/ });
-    const fresh = within(appearance).getByRole("radio", { name: /New/ });
-    expect(classic).toBeChecked();
-    expect(within(appearance).getByText("The look you know. Here until the new look has everything.")).toBeInTheDocument();
-    await user.click(fresh);
-    expect(document.documentElement.dataset.style).toBe("new");
-    expect(localStorage.getItem(STYLE_KEY)).toBe("new");
-    expect(fresh).toBeChecked();
+    const radios = within(appearance).getAllByRole("radio", { name: /^(New|Classic)/ });
+    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(["new", "classic"]);
+    const [fresh, classic] = radios;
+    expect(within(appearance).getByText("The earlier look, kept for now. Relatives are in the New look only.")).toBeInTheDocument();
     await user.click(classic);
     expect(document.documentElement.dataset.style).toBe("classic");
+    expect(localStorage.getItem(STYLE_KEY)).toBe("classic");
+    expect(classic).toBeChecked();
+    await user.click(fresh);
+    expect(document.documentElement.dataset.style).toBe("new");
     expect(localStorage.getItem(STYLE_KEY)).toBeNull();
+    expect(fresh).toBeChecked();
   });
 
   it("Reset layout forgets the pane widths and Today's cards for every archive, and Undo brings them back", async () => {

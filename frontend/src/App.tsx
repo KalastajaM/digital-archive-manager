@@ -9,7 +9,7 @@ import { hasBand } from "./components/archivePalette";
 import { EmptyState } from "./components/ui/EmptyState";
 import { SearchPalette, useSearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/ui/Sidebar";
-import { LookToggle, useLookShortcut } from "./components/LookToggle";
+import { useLookShortcut } from "./components/LookToggle";
 import { CopyJobProgress } from "./components/CopyJobProgress";
 import { groupDigits, plural } from "./format";
 import { visible } from "./text";
@@ -172,7 +172,6 @@ function Shell() {
   const foot = (
     <>
       {status.data && <StatusBadge status={status.data} />}
-      <LookToggle />
       {status.isError && <p className="status-badge status-attention">{errorText(status.error)}</p>}
     </>
   );

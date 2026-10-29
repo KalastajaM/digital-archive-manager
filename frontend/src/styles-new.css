@@ -365,8 +365,7 @@
   [data-style="new"] .archive-name,
   [data-style="new"] .archive-chevron,
   [data-style="new"] .sidebar-children > li > .sidebar-disclosure,
-  [data-style="new"] .sidebar-tree-item > .sidebar-disclosure,
-  [data-style="new"] .look-toggle { display: none !important; }
+  [data-style="new"] .sidebar-tree-item > .sidebar-disclosure { display: none !important; }
   [data-style="new"] .sidebar-row { justify-content: center; margin-left: 0; padding: 0 !important; }
   [data-style="new"] .sidebar-grip,
   [data-style="new"] .sidebar-section-add,

@@ -9,8 +9,10 @@ export type Appearance = "light" | "dark" | "auto";
 
 export const APPEARANCE_KEY = "dam.appearance";
 
-/** The look: Classic (the default) or New. ``<html data-style>``, next to ``data-theme``,
- * set before the first paint by public/appearance.js with the same rule as ``readStyle``. */
+/** The look: New (the default) or Classic, kept for now. ``<html data-style>``, next to
+ * ``data-theme``, set before the first paint by public/appearance.js with the same rule as
+ * ``readStyle``. Only Classic is stored, so a "new" stored when Classic was the default
+ * still means New. */
 export type Look = "classic" | "new";
 
 export const STYLE_KEY = "dam.style";
@@ -37,12 +39,14 @@ export const resolve = (choice: Appearance): "light" | "dark" =>
 
 export function readStyle(): Look {
   try {
-    return localStorage.getItem(STYLE_KEY) === "new" ? "new" : "classic";
+    return localStorage.getItem(STYLE_KEY) === "classic" ? "classic" : "new";
   } catch {
-    return "classic";
+    return "new";
   }
 }
 
+// ``data-style`` is set before the first paint, so it is unset only in component tests,
+// which were written for Classic and set New where they test it.
 const currentStyle = (): Look => (document.documentElement.dataset.style === "new" ? "new" : "classic");
 const styleListeners = new Set<() => void>();
 
@@ -63,7 +67,7 @@ export function applyStyle(look: Look = readStyle()): void {
 
 export function saveStyle(look: Look): void {
   try {
-    if (look === "classic") localStorage.removeItem(STYLE_KEY);
+    if (look === "new") localStorage.removeItem(STYLE_KEY);
     else localStorage.setItem(STYLE_KEY, look);
   } catch {
     // Storage blocked: the choice still applies until the window is reloaded.
@@ -100,8 +104,8 @@ export function useAppearance(): [Appearance, (choice: Appearance) => void] {
   return [choice, set];
 }
 
-/** The look and a setter; every user of the hook (Settings, the sidebar toggle, the
- * Ctrl+Alt+L shortcut) sees a change made by any of the others. */
+/** The look and a setter; every user of the hook (Settings, the Ctrl+Alt+L shortcut)
+ * sees a change made by any of the others. */
 export function useStyle(): [Look, (look: Look) => void] {
   const look = useSyncExternalStore(
     (fn) => {
