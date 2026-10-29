@@ -5,8 +5,8 @@ decimals: on a real archive 126 MB, 28 MB compressed. The table is made again wi
 ``lines`` (the rest unchanged) and every row compressed in place. A row whose JSON is
 already unreadable stays as it was; the reader skips it, as before.
 
-Revision ID: 0044
-Revises: 0043
+Revision ID: 0045
+Revises: 0044
 """
 
 import zlib
@@ -14,8 +14,8 @@ import zlib
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0044"
-down_revision = "0043"
+revision = "0045"
+down_revision = "0044"
 branch_labels = None
 depends_on = None
 

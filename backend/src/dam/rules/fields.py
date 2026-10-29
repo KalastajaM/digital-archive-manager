@@ -7,24 +7,30 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from dam import countries, languages
-from dam.checks import valid_iban
-from dam.countries import CountryPack
+from dam import packs
+from dam.countries import CountryPack, find_ibans
 
 _CENT = Decimal("0.01")
 
 _DATE_DMY = re.compile(r"(?<!\d)(?<!\d\.)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)", re.ASCII)
 _DATE_ISO = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)", re.ASCII)
+# day first with dashes or slashes ("15-10-2026", "15/10/2026"), never a run of digits
+_DATE_DMY_SEP = re.compile(
+    r"(?<!\d)(?<!\d[-/])(\d{1,2})([-/])(\d{1,2})\2(\d{4})(?![\d/-])", re.ASCII
+)
+# a month name, on folded text: "15 oktober 2026", "15. lokakuuta 2026", "October 15, 2026"
+_DATE_DAY_MONTH = re.compile(r"(?<!\d)(\d{1,2})\.?\s+([a-z]+)\.?\s+(\d{4})(?!\d)")
+_DATE_MONTH_DAY = re.compile(r"\b([a-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})(?!\d)")
 
 _SEP = r"[ .  ]"
 _AMOUNT_SUFFIX = re.compile(
     rf"(?<![\d,.])(\d{{1,3}}(?:{_SEP}\d{{3}})+|\d+),(\d{{2}})(?!\d)\s?(?:€|EUR\b)", re.ASCII
 )
 _AMOUNT_PREFIX = re.compile(
-    r"(?:€|EUR\b)\s?(\d{1,3}(?:,\d{3})+|\d+)[.,](\d{2})(?![\d]|[.,]\d)", re.ASCII
+    r"(?:€|EUR\b)\s?(?:(\d{1,3}(?:[.  ]\d{3})+),(\d{2})|(\d{1,3}(?:,\d{3})+|\d+)[.,](\d{2}))"
+    r"(?![\d]|[.,]\d)",
+    re.ASCII,
 )
-
-_IBAN = re.compile(r"(?<![A-Za-z0-9])FI\d{2}(?: ?\d{4}){3} ?\d{2}(?!\d)", re.ASCII)
 
 
 @dataclass
@@ -53,18 +59,33 @@ def _max_date() -> date:
     return date(today.year + 2, today.month, min(today.day, 28))
 
 
-def _dated(text: str) -> list[tuple[int, date]]:
+def _dated(text: str, folded: tuple[str, list[int]] | None = None) -> list[tuple[int, date]]:
+    """Dates in text order; ``folded``: ``_fold(text)`` when the caller has it already."""
     latest = _max_date()
     found: list[tuple[int, date]] = []
+
+    def add(start: int, y: int, mo: int, d: int) -> None:
+        try:
+            parsed = date(y, mo, d)
+        except ValueError:
+            return
+        if _MIN_DATE <= parsed <= latest:
+            found.append((start, parsed))
+
     for pattern, order in ((_DATE_DMY, (3, 2, 1)), (_DATE_ISO, (1, 2, 3))):
         for m in pattern.finditer(text):
-            y, mo, d = (int(m[i]) for i in order)
-            try:
-                parsed = date(y, mo, d)
-            except ValueError:
-                continue
-            if _MIN_DATE <= parsed <= latest:
-                found.append((m.start(), parsed))
+            add(m.start(), *(int(m[i]) for i in order))
+    for m in _DATE_DMY_SEP.finditer(text):
+        add(m.start(), int(m[4]), int(m[3]), int(m[1]))
+    months = packs.active().months
+    if months:
+        folded_text, index = folded if folded is not None else _fold(text)
+        for m in _DATE_DAY_MONTH.finditer(folded_text):
+            if (mo := months.get(m[2])) is not None:
+                add(index[m.start()], int(m[3]), mo, int(m[1]))
+        for m in _DATE_MONTH_DAY.finditer(folded_text):
+            if (mo := months.get(m[1])) is not None:
+                add(index[m.start()], int(m[3]), mo, int(m[2]))
     return sorted(found, key=lambda t: t[0])
 
 
@@ -78,8 +99,11 @@ def _priced(text: str) -> list[tuple[int, Decimal]]:
         whole = re.sub(_SEP, "", m[1])
         found.append((m.start(), Decimal(f"{whole}.{m[2]}").quantize(_CENT)))
     for m in _AMOUNT_PREFIX.finditer(text):
-        whole = m[1].replace(",", "")
-        found.append((m.start(), Decimal(f"{whole}.{m[2]}").quantize(_CENT)))
+        if m[1] is not None:  # dot or space thousands, decimal comma: "€ 1.234,56"
+            whole, cents = re.sub(_SEP, "", m[1]), m[2]
+        else:
+            whole, cents = m[3].replace(",", ""), m[4]
+        found.append((m.start(), Decimal(f"{whole}.{cents}").quantize(_CENT)))
     return sorted(found, key=lambda t: t[0])
 
 
@@ -88,11 +112,9 @@ def _amounts(text: str) -> list[Decimal]:
 
 
 def _iban(text: str) -> str | None:
-    for m in _IBAN.finditer(text):
-        compact = m[0].replace(" ", "")
-        if valid_iban(compact):
-            return compact
-    return None
+    """The first valid IBAN of a SEPA country (see ``countries.core.find_ibans``)."""
+    found = find_ibans(text)
+    return found[0][1] if found else None
 
 
 def _references(text: str, packs: Sequence[CountryPack]) -> str | None:
@@ -102,15 +124,6 @@ def _references(text: str, packs: Sequence[CountryPack]) -> str | None:
 
 
 _LABEL_WINDOW = 40
-_LANGUAGES = languages.enabled()
-_DUE_LABELS = languages.label_pattern(w for p in _LANGUAGES for w in p.due_labels)
-# Whole words on folded text, so "subtotal" and "valisumma" are never labels.
-_TOTAL_STRONG = languages.label_pattern(
-    (w for p in _LANGUAGES for w in p.total_strong), whole_words=True
-)
-_TOTAL_WEAK = languages.label_pattern(
-    (w for p in _LANGUAGES for w in p.total_weak), whole_words=True
-)
 
 
 def _fold(text: str) -> tuple[str, list[int]]:
@@ -148,13 +161,14 @@ def _first_in_window[T](end: int, candidates: list[tuple[int, T]]) -> T | None:
 
 
 def detect_fields(text: str) -> DetectedFields:
+    profile = packs.active()
     folded, index = _fold(text)
-    dated = _dated(text)
+    dated = _dated(text, (folded, index))
     priced = _priced(text)
     amounts = _dedupe(priced)
 
     due = None
-    for end in _label_ends(folded, index, text, _DUE_LABELS):
+    for end in _label_ends(folded, index, text, profile.due_labels):
         due = _first_in_window(end, dated)
         if due is not None:
             break
@@ -162,12 +176,12 @@ def detect_fields(text: str) -> DetectedFields:
     # Totals come after subtotals: last strong label wins, else first weak, else largest.
     strong = [
         v
-        for end in _label_ends(folded, index, text, _TOTAL_STRONG)
+        for end in _label_ends(folded, index, text, profile.total_strong)
         if (v := _first_in_window(end, priced)) is not None
     ]
     weak = [
         v
-        for end in _label_ends(folded, index, text, _TOTAL_WEAK)
+        for end in _label_ends(folded, index, text, profile.total_weak)
         if (v := _first_in_window(end, priced)) is not None
     ]
     total = strong[-1] if strong else weak[0] if weak else max(amounts, default=None)
@@ -175,7 +189,7 @@ def detect_fields(text: str) -> DetectedFields:
         dates=_dedupe(dated),
         amounts=amounts,
         iban=_iban(text),
-        reference=_references(text, countries.enabled()),
+        reference=_references(text, profile.countries),
         due_date=due,
         total=total,
     )

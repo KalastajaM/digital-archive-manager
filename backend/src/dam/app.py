@@ -9,7 +9,7 @@ from pathlib import Path
 
 from sqlalchemy import Engine, func, select
 
-from dam import relabel
+from dam import packs, relabel
 from dam.ai.service import AIService
 from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
 from dam.codes.model import save_codes as write_codes
@@ -393,6 +393,8 @@ class App:
     ongoing: OngoingPublisher = field(init=False)
     convert: OngoingConverter = field(init=False)
     convert_important: ImportantConverter = field(init=False)
+    _packs: packs.Profile = field(init=False, repr=False)  # the packs this archive reads with
+    _packs_before: packs.Profile = field(init=False, repr=False)
     trays: TrayService = field(init=False)
     scan_fields: ScanFieldService = field(init=False)
     rule_record: RuleRecord = field(init=False)
@@ -428,6 +430,11 @@ class App:
     last_reminders: RemindResult | None = field(init=False, default=None)
 
     def __post_init__(self, index_parts: IndexParts, ops_parts: OpsParts) -> None:
+        # the packs this archive reads with; the ones before come back when it closes, in
+        # case another App (a demo being built, a switch that failed) was opened meanwhile
+        self._packs_before = packs.active()
+        self._packs = packs.build(self.settings.country_codes(), self.settings.language_codes())
+        packs.activate(self._packs)
         _take(self, index_parts)
         _take(self, ops_parts)
         cols = build_collections(self.settings, self.paths, self.engine, self.repo, self.executor)
@@ -623,6 +630,31 @@ class App:
         self.settings.page1_text_reads_per_minute = reads_per_minute
         self.wake_indexer()
 
+    def set_countries(self, country_codes: list[str], language_codes: list[str]) -> None:
+        """Save the countries and languages documents are read with (``countries`` and
+        ``languages`` in settings.yaml) and use them from now on; an address zone the
+        owner never set follows the countries. The codes are checked by the caller.
+        ``InvalidRequest`` when the file could not be written."""
+
+        def read_back(s: Settings) -> bool:
+            return s.countries == country_codes and s.languages == language_codes
+
+        try:
+            write_keys(
+                self.app_paths,
+                {"countries": country_codes, "languages": language_codes},
+                read_back,
+            )
+        except OSError as e:
+            raise InvalidRequest(f"the setting could not be saved: {e}") from e
+        self.settings.countries = country_codes
+        self.settings.languages = language_codes
+        if not self.settings.zone_is_set():
+            # not a set field: the zone keeps following the countries
+            object.__setattr__(self.settings, "address_zone", self.settings.countries_zone())
+        self._packs = packs.build(self.settings.country_codes(), self.settings.language_codes())
+        packs.activate(self._packs)
+
     def set_people(
         self, people: list[Person], address_zone: tuple[float, float, float, float] | None
     ) -> None:
@@ -803,6 +835,8 @@ class App:
             yield
 
     def close(self) -> None:
+        if packs.active() is self._packs:  # still this archive's: give the ones before back
+            packs.activate(self._packs_before)
         self.executor.cancel_copies.set()  # a copy in progress ends at its next chunk
         self.copy_jobs.close()
         self.replay_jobs.close()

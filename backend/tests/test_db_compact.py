@@ -1,5 +1,5 @@
-"""The smaller database: the search index reads what it indexes (0043), page-1 layouts
-are stored compressed (0044), and an update that freed much of the file is compacted."""
+"""The smaller database: the search index reads what it indexes (0044), page-1 layouts
+are stored compressed (0045), and an update that freed much of the file is compacted."""
 
 import sqlite3
 import zlib
@@ -48,9 +48,9 @@ OLD_ROWS = [
 ]
 
 
-def test_migration_0043_keeps_what_every_search_finds(tmp_path: Path, new_engine):
+def test_migration_0044_keeps_what_every_search_finds(tmp_path: Path, new_engine):
     engine = new_engine(tmp_path / "old.sqlite")
-    _at(engine, "0042")
+    _at(engine, "0043")
     with write_tx(engine) as conn:
         for drive_id, path, indexed, words in OLD_ROWS:
             name = path.split("/")[-1]
@@ -134,9 +134,9 @@ def test_a_layout_is_stored_compressed_and_read_back(engine):
     assert repo.layout_for("d1") == _layout()
 
 
-def test_migration_0044_compresses_the_layouts_already_stored(tmp_path: Path, new_engine):
+def test_migration_0045_compresses_the_layouts_already_stored(tmp_path: Path, new_engine):
     engine = new_engine(tmp_path / "old.sqlite")
-    _at(engine, "0043")
+    _at(engine, "0044")
     with write_tx(engine) as conn:
         for drive_id, lines in [("d1", _layout().lines_json()), ("d2", "not json")]:
             conn.execute(

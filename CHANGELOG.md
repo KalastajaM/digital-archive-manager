@@ -8,6 +8,23 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Business IDs, IBANs and domains are remembered.** dam reads the business IDs (for Finland
+  the Y-tunnus, also in its VAT form), IBANs and web or mail domains from each document's
+  text, in the background and without opening the files again, and keeps them up to date when
+  a document changes. The file panel shows them under **Found in this document**, each linking
+  to the other files that carry it; the search filter `id:` finds them (`id:0112038-9`);
+  Relatives links documents with the same business ID; Settings, Indexing says how far the
+  reading is. Mail services anyone can use (Gmail, Outlook and the like) are left out.
+- **Countries and languages.** Settings has a new section, Countries and languages, under
+  This archive: the countries your post comes from and the languages it is written in, each
+  listed with what it adds, English always on. The first-run screen asks once where your post
+  comes from (Finland or another country). Without Finland, dam no longer looks for the
+  viitenumero, and a rules file it writes later has no Finland examples (yours stay as they
+  are); RF references, IBANs, dates and amounts are
+  still read. An archive that never chose reads as Finland, as before.
+- **More of a bill is read.** IBANs of any SEPA country (each checked against its country's
+  length), amounts written `€ 1.234,56`, and dates written `15-10-2026`, `15/10/2026`,
+  `15. lokakuuta 2026`, `15 oktober 2026` or `October 15, 2026`.
 - **Rename the special folders (New look).** Settings, Archive folders, Special folders lists
   the Inbox, Ongoing, Important and To Delete folders with a Rename for each. You type a new
   name (it may start with `##.` or not), and a preview lists every place that holds the old
@@ -478,8 +495,8 @@ All notable changes are listed here. The format follows
 ### Changed
 
 - **A smaller database.** The search index no longer keeps its own copy of every file's
-  text: it reads the text dam already stores (migration 0043). Page-1 layouts are stored
-  compressed (0044). After the update dam compacts the database once, when the disk has room
+  text: it reads the text dam already stores (migration 0044). Page-1 layouts are stored
+  compressed (0045). After the update dam compacts the database once, when the disk has room
   for it, so the space is given back. On an archive of about 12,000 files the database went
   from 874 MB to 517 MB, with the same search results. The update takes about a minute on a
   database that size, and the usual copy is written next to it first.

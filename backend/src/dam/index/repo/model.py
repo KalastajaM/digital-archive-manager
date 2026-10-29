@@ -186,7 +186,7 @@ class IndexProblem:
 # UNINDEXED, so a ``WHERE drive_id = ...`` on it reads the whole table.
 FTS_ROWID = "(SELECT fts_rowid FROM file_fts_map WHERE drive_id = :id)"
 
-# ``file_fts`` keeps no copy of what it indexes (migration 0043): it reads the view
+# ``file_fts`` keeps no copy of what it indexes (migration 0044): it reads the view
 # ``file_fts_src``, the map's name and path with the file's ``file_text``. FTS5 cannot see
 # those rows change, so a file's tokens are taken out with the values they were indexed
 # from: ``fts_remove`` runs while the view still shows them (before ``file_text`` or the

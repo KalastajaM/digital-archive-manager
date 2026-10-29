@@ -82,10 +82,12 @@ EXPECTED_INDEXES = {
     "ix_operations_batch_id": ("operations", ["batch_id"]),
     "ix_file_tags_tag_id": ("file_tags", ["tag_id"]),  # 0033: files of a tag, by tag
     "ix_operations_planned": ("operations", ["state"]),  # 0037: planned rows only
-    # 0043: the search index reads its rows from the view by this rowid
+    # 0044: the search index reads its rows from the view by this rowid
     "ix_file_fts_map_fts_rowid": ("file_fts_map", ["fts_rowid"]),
     "ix_reconnects_batch_id": ("reconnects", ["batch_id"]),  # 0039: undo of a reconnect
     "ix_readopted_batch_id": ("readopted", ["batch_id"]),  # 0040: undo of a take-over
+    # 0043: the files that carry an identifier
+    "ix_file_identifiers_kind_value": ("file_identifiers", ["kind", "value"]),
 }
 
 

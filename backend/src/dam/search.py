@@ -8,6 +8,7 @@ from datetime import date, datetime
 
 from sqlalchemy import Engine, select, text
 
+from dam import packs
 from dam.core.paths import nfc
 from dam.core.text import fold
 from dam.db.tables import collection_members, collections, file_assignments, files, tags
@@ -190,6 +191,14 @@ def _local_epoch(day: date) -> float:
     return datetime(day.year, day.month, day.day).timestamp()  # the machine's time zone
 
 
+def _id_keys(value: str) -> list[str]:
+    """``value`` without spaces, dashes or case, as stored values are compared; the VAT
+    form of a Finnish business ID (FI01120389) also as its eight digits."""
+    compact = re.sub(r"[\s-]", "", value).upper()
+    vat = re.fullmatch(r"FI(\d{8})", compact)
+    return [compact, vat[1]] if vat else [compact]
+
+
 def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> None:
     neg = f.negated
     v = f.value
@@ -210,6 +219,18 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
             f"({w.marks(names)}))"
             if names
             else "0",
+            neg,
+        )
+    elif f.name == "id":
+        # business IDs, IBANs and domains of the enabled packs, compared without spaces,
+        # dashes or case; the current content's only
+        kinds = [s.kind for p in packs.active().countries for s in p.identifiers]
+        w.add(
+            "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
+            "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "
+            f"WHERE i.kind IN ({w.marks(kinds)}) AND "
+            "REPLACE(REPLACE(UPPER(i.value), ' ', ''), '-', '') "
+            f"IN ({w.marks(_id_keys(v))}))",
             neg,
         )
     elif f.name == "type":

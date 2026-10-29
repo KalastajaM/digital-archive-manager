@@ -12,6 +12,7 @@ from sqlalchemy import (
     and_,
     case,
     func,
+    literal_column,
     not_,
     or_,
     select,
@@ -22,6 +23,8 @@ from dam.codes.qr_model import QrRead
 from dam.db.tables import (
     file_assigned_codes,
     file_barcodes,
+    file_identifier_reads,
+    file_identifiers,
     file_layouts,
     file_qr_codes,
     file_text,
@@ -107,6 +110,116 @@ class ReadsMixin:
                 )
             )
         return True
+
+    # -- identifiers (business IDs, IBANs, domains in the stored text) ----------------
+
+    @staticmethod
+    def _readable():
+        """Files whose stored text the identifiers pass reads."""
+        return and_(
+            files.c.is_dir.is_not(True),
+            files.c.is_link.is_not(True),
+            files.c.missing.is_not(True),
+            files.c.parked_at.is_(None),
+            files.c.index_state == "indexed",
+            files.c.sha256.is_not(None),
+        )
+
+    @staticmethod
+    def _read_with(signature: str):
+        return (
+            select(file_identifier_reads.c.drive_id)
+            .where(
+                file_identifier_reads.c.drive_id == files.c.drive_id,
+                file_identifier_reads.c.sha256 == files.c.sha256,
+                file_identifier_reads.c.signature == signature,
+            )
+            .exists()
+        )
+
+    def next_for_identifiers(self, limit: int, signature: str) -> list[tuple[str, str, str]]:
+        """(drive_id, sha256, text) of indexed files whose current content was not read
+        with the packs of ``signature``."""
+        stmt = (
+            select(files.c.drive_id, files.c.sha256, file_text.c.text)
+            .join(file_text, file_text.c.drive_id == files.c.drive_id)
+            .where(self._readable(), not_(self._read_with(signature)))
+            .order_by(files.c.drive_id)
+            .limit(limit)
+        )
+        with self._conn() as conn:
+            return [(r.drive_id, r.sha256, r.text or "") for r in conn.execute(stmt).all()]
+
+    def save_identifiers(
+        self, drive_id: str, sha256: str, signature: str, found: Sequence[tuple[str, str]]
+    ) -> bool:
+        """Replace the file's identifiers with ``found`` (kind, value), read from content
+        ``sha256`` with ``signature``. Not saved (False) when the content changed since."""
+        with self._conn(write=True) as conn:
+            current = conn.execute(
+                select(files.c.sha256).where(files.c.drive_id == drive_id)
+            ).scalar()
+            if current is None or current != sha256:
+                return False
+            conn.execute(file_identifiers.delete().where(file_identifiers.c.drive_id == drive_id))
+            rows = [
+                {"drive_id": drive_id, "kind": k, "value": v, "sha256": sha256} for k, v in found
+            ]
+            if rows:
+                conn.execute(sqlite_insert(file_identifiers).on_conflict_do_nothing(), rows)
+            stmt = sqlite_insert(file_identifier_reads).values(
+                drive_id=drive_id, sha256=sha256, signature=signature, read_at=time.time()
+            )
+            conn.execute(
+                stmt.on_conflict_do_update(
+                    index_elements=["drive_id"],
+                    set_={c: stmt.excluded[c] for c in ("sha256", "signature", "read_at")},
+                )
+            )
+        return True
+
+    def identifiers_for(self, drive_id: str) -> list[tuple[str, str]]:
+        """(kind, value) found in the file's current content, in the order found."""
+        stmt = (
+            select(file_identifiers.c.kind, file_identifiers.c.value)
+            .join(files, files.c.drive_id == file_identifiers.c.drive_id)
+            .where(
+                file_identifiers.c.drive_id == drive_id,
+                files.c.sha256 == file_identifiers.c.sha256,
+            )
+            .order_by(literal_column("file_identifiers.rowid"))
+        )
+        with self._conn() as conn:
+            return [(r.kind, r.value) for r in conn.execute(stmt).all()]
+
+    def files_with_identifier(self, kind: str, value: str) -> list[str]:
+        """The files there (not missing, not parked) whose current content carries it."""
+        stmt = (
+            select(file_identifiers.c.drive_id)
+            .join(files, files.c.drive_id == file_identifiers.c.drive_id)
+            .where(
+                file_identifiers.c.kind == kind,
+                file_identifiers.c.value == value,
+                files.c.sha256 == file_identifiers.c.sha256,
+                files.c.missing.is_not(True),
+                files.c.parked_at.is_(None),
+            )
+            .order_by(file_identifiers.c.drive_id)
+        )
+        with self._conn() as conn:
+            return [r.drive_id for r in conn.execute(stmt).all()]
+
+    def identifier_progress(self, signature: str) -> tuple[int, int]:
+        """(read, total): indexed files with text whose content was read with ``signature``."""
+        base = select(func.count()).select_from(
+            files.join(file_text, file_text.c.drive_id == files.c.drive_id)
+        )
+        with self._conn() as conn:
+            total = conn.execute(base.where(self._readable())).scalar() or 0
+            read = (
+                conn.execute(base.where(self._readable(), self._read_with(signature))).scalar() or 0
+            )
+        return read, total
 
     def qr_for(self, drive_id: str) -> list[QrRead]:
         """The QR stickers read from the file's current content; ``[]`` if none were

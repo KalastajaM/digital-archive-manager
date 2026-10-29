@@ -568,8 +568,11 @@ All in the data folder under `config/`:
   `ai` (see AI setup), `page1_backfill` (read page 1 of older documents in the background,
   default `true`), `page1_text_reads_per_minute` (how fast page 1 of PDFs with a text layer
   is read, 1 to 6000, default 300; scans, photos and slow reads keep
-  `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings) and `address_zone`
-  (`[x0, y0, x1, y1]` as fractions of page 1, origin top left). The four
+  `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings), `address_zone`
+  (`[x0, y0, x1, y1]` as fractions of page 1, origin top left; unset, it follows the first
+  country that has a standard), `countries` (country packs, for example `[fi]`; unset reads
+  as `[fi]`, `[]` is none) and `languages` (language packs: `fi`, `sv`, `en`; unset, the
+  countries' languages; English is always added). The four
   `special_folders` names can be changed in Settings (see Renaming a special folder) or by
   hand.
 - `trays/*.yaml`: one tray per file (see Tray files).
@@ -1222,6 +1225,7 @@ relative when it shares at least one link; the score is the sum of the weights o
 | --- | --- | --- |
 | `reference` | `items.fields.reference` of the tray items the files are on | 5 |
 | `sender` | `file_assignments.sender` (case and accents ignored) | 3 |
+| `business_id` | `file_identifiers` of the files' current content, the enabled countries' business IDs (`fi.ytunnus`); not IBANs or domains | 3 |
 | `collection` | `collection_members`, directly or through a member folder (every file inside it, at any depth); not the built-in Starred and Important | 3 |
 | `tag` (each) | `file_tags` | 2 |
 | `folder` | the folder the file is directly in (not the inbox, a code's inbox folder or the archive root) | 2 |
@@ -1229,12 +1233,25 @@ relative when it shares at least one link; the score is the sum of the weights o
 | `person` | `file_assignments.person` | 1 |
 
 The booster `+1` (`same_month`) is added when both files have a `doc_date` in the same year
-and month, and only to a file that has at least one link. A tag, IBAN, sender or person
-shared by more than `COMMON_LIMIT` (200, a constant) live files counts half, by more than 5
+and month, and only to a file that has at least one link. A tag, IBAN, sender, business ID
+or person shared by more than `COMMON_LIMIT` (200, a constant) live files counts half, by more than 5
 times that not at all, and then is no link. Only live files are listed: not missing, parked,
 folders or links (a link stands for its target, which is listed once; asking about a link
 answers for its target), and not what is in `##. To Delete`. Ties are ordered by name, then
 path.
+
+**Identifiers.** Tables `file_identifiers(drive_id, kind, value, sha256)` and
+`file_identifier_reads(drive_id, sha256, signature, read_at)` (migration 0043). A background
+pass (`ContentIndexer.run_identifiers_once`, part of each indexer step) reads the stored text
+of indexed files, never the files, with every country pack (`countries.ALL`), and stores
+what each pack's identifier finders return: `core.iban` (valid IBANs of SEPA countries),
+`core.domain` (web and mail domains, lower case, not free mail services or file names) and
+`fi.ytunnus` (business IDs with a valid check digit, the VAT form as `0112038-9`). A file is
+read again when its content or text changes, or when `countries.signature()` (every pack and
+its `version`, `"core:1 fi:1"`) changes. What is shown, searched (`id:`) and linked is limited
+to the enabled countries. `GET /api/files/{drive_id}/identifiers` lists a file's identifiers
+with `others`, the number of other files carrying each; `/api/status` has `identifiers:
+{read, total}`.
 
 **Marks.** Table `related_dismissed(drive_a, drive_b, created)` (migration 0041): a pair of
 drive ids, the smaller first, no foreign key. It is index data, so there is no journal and no

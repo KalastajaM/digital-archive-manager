@@ -28,6 +28,8 @@ from dam.db.tables import (
     file_assignments,
     file_barcodes,
     file_fields,
+    file_identifier_reads,
+    file_identifiers,
     file_layouts,
     file_locks,
     file_qr_codes,
@@ -90,6 +92,10 @@ class RowsMixin:
                 file_assigned_codes.delete().where(file_assigned_codes.c.drive_id == drive_id)
             )
             conn.execute(file_layouts.delete().where(file_layouts.c.drive_id == drive_id))
+            conn.execute(file_identifiers.delete().where(file_identifiers.c.drive_id == drive_id))
+            conn.execute(
+                file_identifier_reads.delete().where(file_identifier_reads.c.drive_id == drive_id)
+            )
             fts_delete(conn, drive_id)  # before its text goes
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             conn.execute(files.delete().where(files.c.drive_id == drive_id))
@@ -176,7 +182,8 @@ class RowsMixin:
     def rekey(self, old_id: str, new_id: str) -> None:
         """Give the row ``old_id`` the id ``new_id`` (a synthetic id replaced by the real
         one, or a file copied across disks), carrying along everything that names the file
-        by its id: text, fts, tags, the barcode, QR sticker and page-1 layout reads, notes
+        by its id: text, fts, tags, the barcode, QR sticker, page-1 layout and identifier
+        reads, notes
         and checklists, collection and tray item places, summaries, fields, sender and
         person, locks, rule outcomes and the filing code given in the app."""
         with self._conn(write=True) as conn:
@@ -190,6 +197,8 @@ class RowsMixin:
                 file_barcodes,
                 file_qr_codes,
                 file_layouts,
+                file_identifiers,
+                file_identifier_reads,
                 collection_members,
                 member_link_names,
                 item_files,

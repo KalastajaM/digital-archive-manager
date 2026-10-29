@@ -1,6 +1,6 @@
 """FTS rows are written by rowid (via ``file_fts_map``), never by a ``drive_id`` scan;
 migration 0037 maps existing rows and adds the partial index for planned operations.
-Since 0043 the index reads what it indexes through ``file_fts_src``, and every write keeps
+Since 0044 the index reads what it indexes through ``file_fts_src``, and every write keeps
 it intact (FTS5's integrity check)."""
 
 from pathlib import Path
@@ -165,7 +165,7 @@ def test_migration_0037_maps_existing_fts_rows(tmp_path: Path, new_engine):
         conn.execute(fts, {"d": "d1", "n": "Invoice.pdf", "p": "a/Invoice.pdf", "t": "power"})
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0045"
         index = conn.execute(
             text("SELECT sql FROM sqlite_master WHERE name = 'ix_operations_planned'")
         ).scalar()

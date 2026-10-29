@@ -118,7 +118,7 @@ def _at(new_engine, tmp_path: Path, revision: str):
 
 def test_migration_0017_creates_the_built_ins(engine):
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0045"
         rows = conn.execute(
             select(collections.c.name, collections.c.kind, collections.c.publish)
             .where(collections.c.kind.is_not(None))
@@ -143,7 +143,7 @@ def test_database_stamped_by_mains_short_lived_0017_heals(tmp_path: Path, new_en
         conn.execute(text("UPDATE alembic_version SET version_num = '0017'"))
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0045"
         kinds = (
             conn.execute(text("SELECT kind FROM collections WHERE kind IS NOT NULL ORDER BY kind"))
             .scalars()
@@ -186,7 +186,7 @@ def test_migration_0017_renames_a_clash_from_0016(tmp_path: Path, new_engine):
         )
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0045"
         rows = {
             r.id: (r.name, r.name_fold, r.kind, r.publish)
             for r in conn.execute(select(collections)).all()

@@ -147,14 +147,18 @@ def test_content_and_barcodes_go_before_layouts(fake_archive, engine, monkeypatc
     )
     order = []
     monkeypatch.setattr(indexer, "run_barcodes_once", lambda limit=1: order.append("barcodes") or 0)
+    monkeypatch.setattr(
+        indexer, "run_identifiers_once", lambda limit=50: order.append("identifiers") or 0
+    )
     real = indexer.run_layouts_once
     monkeypatch.setattr(
         indexer, "run_layouts_once", lambda limit=1: order.append("layouts") or real(limit)
     )
     assert indexer.step(now=NOW) == 1  # content first
     assert order == []
-    assert indexer.step(now=NOW) == 1  # nothing for barcodes (stubbed), then layouts
-    assert order == ["barcodes", "layouts"]
+    # nothing for barcodes or identifiers (stubbed), then layouts
+    assert indexer.step(now=NOW) == 1
+    assert order == ["barcodes", "identifiers", "layouts"]
     assert repo.layout_for("d1") is not None  # the indexer's fake extractor gave none: read here
 
 

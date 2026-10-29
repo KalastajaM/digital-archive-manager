@@ -77,13 +77,13 @@ class Page1Layout:
 
     def stored(self) -> bytes:
         """``lines_json`` as ``file_layouts.lines`` keeps it: zlib-compressed (migration
-        0044; about a fifth of the size)."""
+        0045; about a fifth of the size)."""
         return zlib.compress(self.lines_json().encode(), 6)
 
     @classmethod
     def from_stored(cls, lines: bytes | str, source: str) -> Page1Layout:
         """``from_json`` of a ``file_layouts.lines`` value (a str: JSON stored before
-        0044). ``zlib.error`` or ``ValueError`` when it cannot be read."""
+        0045). ``zlib.error`` or ``ValueError`` when it cannot be read."""
         if isinstance(lines, bytes):
             lines = zlib.decompress(lines).decode()
         return cls.from_json(lines, source)

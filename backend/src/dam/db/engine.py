@@ -243,7 +243,7 @@ def _check_identity(
     return True
 
 
-# An update that leaves more than this share of the file as free pages (0043 dropped the
+# An update that leaves more than this share of the file as free pages (0044 dropped the
 # index's copy of the text) is followed by one VACUUM: SQLite never gives space back to
 # the disk by itself.
 COMPACT_FREE_SHARE = 0.25

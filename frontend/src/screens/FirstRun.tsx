@@ -32,6 +32,16 @@ const joinPath = (base: string, name: string) => `${base.replace(/[\\/]+$/, "")}
  * dam will make), use it as it is, or use it as it is and also add a layout to it. */
 type Choice = "new" | "asis" | "add";
 
+/** Where the post probably comes from: Finland when the browser lists Finnish or a Finnish
+ * locale, or the clock is on Helsinki time (many in Finland use an English browser). */
+export function guessCountries(languages: readonly string[], timeZone: string): string[] {
+  const finnish = languages.some((l) => /^fi\b/i.test(l) || /-FI$/i.test(l));
+  return finnish || timeZone === "Europe/Helsinki" ? ["fi"] : [];
+}
+
+const browserGuess = () =>
+  guessCountries(navigator.languages?.length ? navigator.languages : [navigator.language], Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
+
 /** What the first screen shows while no archive folder is chosen yet: what dam does, the
  * safety promise, and the choice of the folder. Nothing is created or changed until the
  * user presses the button. */
@@ -45,6 +55,7 @@ export default function FirstRun() {
   const [failure, setFailure] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SetupResult | null>(null);
+  const [countries, setCountries] = useState<string[]>(browserGuess);
   const [picked, setPicked] = useState<Choice | null>(null);
   const [edited, setEdited] = useState<LayoutState | null>(null);
   const latest = useRef(0);
@@ -101,7 +112,7 @@ export default function FirstRun() {
     setSaving(true);
     setFailure(null);
     try {
-      setResult(await saveSetup(path.trim(), check?.can_create === true, body ?? undefined));
+      setResult(await saveSetup(path.trim(), check?.can_create === true, body ?? undefined, countries));
     } catch (e) {
       setFailure(errorText(e));
     } finally {
@@ -294,6 +305,22 @@ export default function FirstRun() {
             <CircleAlert size={14} aria-hidden="true" /> {failure}
           </p>
         )}
+
+        <fieldset className="first-run-country">
+          <legend>Your post comes from</legend>
+          <label className="check">
+            <input type="radio" name="country" checked={countries.includes("fi")} onChange={() => setCountries(["fi"])} />
+            Finland
+          </label>
+          <label className="check">
+            <input type="radio" name="country" checked={countries.length === 0} onChange={() => setCountries([])} />
+            Another country
+          </label>
+          <p className="first-run-hint">
+            It decides which payment reference numbers dam reads from bills, and the example rules it offers. You can
+            change it later in Settings, Countries and languages.
+          </p>
+        </fieldset>
 
         <div className="first-run-actions">
           <button

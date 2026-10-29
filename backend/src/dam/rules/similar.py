@@ -13,7 +13,7 @@ from pathlib import PurePosixPath
 
 from sqlalchemy import Engine, text
 
-from dam import languages
+from dam import packs
 from dam.core.naming import fix_mojibake
 from dam.core.paths import fold_name, nfc
 from dam.db.generation import WriteGeneration
@@ -25,16 +25,16 @@ MIN_SHARE = 0.5
 MAX_TOKENS = 10
 TEXT_CHARS = 400  # of the text searched for words
 _WORD = re.compile(r"[^\W\d_]{4,}", re.UNICODE)
-# words that say what kind of document it is or how it was made, not who it is from
-_STOP = languages.kind_words()
 
 
 def word_tokens(stem: str, body: str) -> list[str]:
+    # words that say what kind of document it is or how it was made, not who it is from
+    stop = packs.active().kind_words
     out: list[str] = []
     for source in (stem, body[:TEXT_CHARS]):
         for w in _WORD.findall(nfc(source)):
             w = w.casefold()
-            if w not in _STOP and w not in out:
+            if w not in stop and w not in out:
                 out.append(w)
     return out[:MAX_TOKENS]
 

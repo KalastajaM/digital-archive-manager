@@ -422,7 +422,7 @@ def _foreign_objects(db: Path, revision: str, work: Path) -> str | None:
     build_reference(reference, revision)
     objects = _objects(reference)
     known = {name: sql for kind, name, sql in objects if kind == "table"}
-    # dam's own views (``file_fts_src``, 0043), only as dam's migrations write them
+    # dam's own views (``file_fts_src``, 0044), only as dam's migrations write them
     views = {name: sql for kind, name, sql in objects if kind == "view"}
     for kind, name, sql in _objects(db):
         if kind == "view" and name in views and sql == views[name]:

@@ -9,10 +9,10 @@ import json
 import os
 from pathlib import Path
 
-from dam.ai.tasks.ask_archive import STOPWORDS
+from dam import packs
+from dam.ai.tasks.ask_archive import stopwords
 from dam.demo import PDFS
 from dam.rules.fields import detect_fields
-from dam.rules.similar import _STOP
 
 GOLDEN = Path(__file__).parent / "golden" / "fields.json"
 
@@ -100,8 +100,8 @@ def _fields(text: str) -> dict:
 def _snapshot() -> dict:
     return {
         "fields": [_fields(text) for text in CORPUS],
-        "stopwords": sorted(STOPWORDS),
-        "kind_words": sorted(_STOP),
+        "stopwords": sorted(stopwords()),
+        "kind_words": sorted(packs.active().kind_words),
     }
 
 

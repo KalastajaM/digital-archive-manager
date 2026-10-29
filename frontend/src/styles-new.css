@@ -2678,3 +2678,12 @@
 [data-style="new"] .file-skeleton .link-badges { flex-wrap: wrap; min-width: 0; max-width: 100%; }
 [data-style="new"] .file-skeleton .link-badges li { min-width: 0; max-width: 100%; }
 [data-style="new"] .file-skeleton .link-badges .tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
+/* Found in this document (components/FoundIdentifiers.tsx): label, value, where else. */
+[data-style="new"] .found-ids { margin: var(--sp-3) 0; }
+[data-style="new"] .found-ids h4 { margin: 0 0 var(--sp-2); }
+[data-style="new"] .found-ids ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+[data-style="new"] .found-id { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--sp-3); min-width: 0; }
+[data-style="new"] .found-id-label { grid-column: 1 / -1; overflow-wrap: anywhere; }
+[data-style="new"] .found-id-value { font-family: var(--font-mono, monospace); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-style="new"] .found-id-others { white-space: nowrap; }

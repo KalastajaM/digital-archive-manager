@@ -9,15 +9,15 @@ and rebuilt from it. What a file is found by does not change: its indexed text w
 ``file_text`` row, or '' without one. Derived rows only; the space comes back with the
 VACUUM after the update (``dam.db.engine.compact``).
 
-Revision ID: 0043
-Revises: 0042
+Revision ID: 0044
+Revises: 0043
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0043"
-down_revision = "0042"
+revision = "0044"
+down_revision = "0043"
 branch_labels = None
 depends_on = None
 

@@ -22,6 +22,7 @@ FILTER_NAMES = (
     "collection",
     "from",
     "for",
+    "id",
     "type",
     "date",
     "before",

@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from dam import countries
 from dam.api.deps import AppDep, ArchivesDep
 from dam.api.schemas import IndexErrorsOut, IndexSummaryOut, RetryIndexIn, RetryIndexOut, StatusOut
 from dam.app import App
@@ -41,8 +42,14 @@ def status(app: AppDep, archives: ArchivesDep) -> dict:
         "inbox_exists": _is_real_dir(app, app.paths.inbox),
         "can_link": can_make_links(),
         "page1": _page1(app),
+        "identifiers": _identifiers(app),
         **archives.summary(),
     }
+
+
+def _identifiers(app: App) -> dict:
+    read, total = app.repo.identifier_progress(countries.signature())
+    return {"read": read, "total": total}
 
 
 def _page1(app: App) -> dict:

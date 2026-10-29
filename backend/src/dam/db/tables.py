@@ -60,7 +60,7 @@ file_text = Table(
 
 # The FTS rowid of each file's ``file_fts`` row (migration 0037). ``file_fts`` cannot
 # index ``drive_id``, so every FTS write finds its row through this map, by rowid. Since
-# 0043 it also holds the name and path the index searches (NFC; a parked file's path is
+# 0044 it also holds the name and path the index searches (NFC; a parked file's path is
 # ''): ``file_fts`` keeps no copy and reads them, with ``file_text``, through the view
 # ``file_fts_src`` (see ``dam.index.repo.model`` for the order its writes need).
 file_fts_map = Table(
@@ -109,7 +109,7 @@ file_assigned_codes = Table(
 )
 
 # Where the text of page 1 sits (migration 0028): ``lines`` is a JSON list of
-# ``{text, box}`` (``[]``: read, no text on page 1), zlib-compressed since 0044
+# ``{text, box}`` (``[]``: read, no text on page 1), zlib-compressed since 0045
 # (``Page1Layout.stored``), ``source`` the reader
 # (``text-layer`` | ``vision`` | ``tesseract``). Same lifetime as ``file_barcodes``: a row
 # for other content than ``sha256`` is ignored and read again.
@@ -619,4 +619,31 @@ special_folder_renames = Table(
     Column("note", Text, nullable=True),
     Column("created", Float, nullable=False),
     Column("finished", Float, nullable=True),
+)
+
+
+# Business IDs, IBANs and domains found in a file's stored text by the country packs
+# (migration 0043): one row per (file, kind, value), ``kind`` namespaced by its pack
+# ("fi.ytunnus"). ``sha256`` is the content they were found in; rows for other content are
+# ignored and the identifiers pass reads the file's text again. No FK, as
+# ``file_assignments``; removed and rekeyed with the file.
+file_identifiers = Table(
+    "file_identifiers",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("kind", Text, primary_key=True),
+    Column("value", Text, primary_key=True),
+    Column("sha256", Text, nullable=False),
+    Index("ix_file_identifiers_kind_value", "kind", "value"),
+)
+
+# Which content of each file the identifiers pass read, and with which packs
+# (``countries.signature()``, "core:1 fi:1"): another signature reads it again (0043).
+file_identifier_reads = Table(
+    "file_identifier_reads",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("sha256", Text, nullable=False),
+    Column("signature", Text, nullable=False),
+    Column("read_at", Float, nullable=False),
 )

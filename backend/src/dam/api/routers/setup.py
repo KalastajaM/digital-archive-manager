@@ -47,7 +47,7 @@ def configure(setup: SetupDep, body: SetupIn) -> dict:
     ``layout`` (start a new archive): also write the special folder names to the settings
     and make the layout's folders, as a journaled batch you can undo."""
     layout = body.layout.model_dump() if body.layout is not None else None
-    return setup.apply(body.archive_root, body.create, layout)
+    return setup.apply(body.archive_root, body.create, layout, body.countries)
 
 
 __all__ = ["Path", "router"]

@@ -14,6 +14,8 @@ from sqlalchemy import (
 
 from dam.core.paths import nfc
 from dam.db.tables import (
+    file_identifier_reads,
+    file_identifiers,
     file_text,
     files,
 )
@@ -245,6 +247,11 @@ class IndexingMixin:
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
             fts_remove(conn, drive_id)  # while the view still shows the old text
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
+            # identifiers come from the text, which can change for the same bytes (OCR)
+            conn.execute(file_identifiers.delete().where(file_identifiers.c.drive_id == drive_id))
+            conn.execute(
+                file_identifier_reads.delete().where(file_identifier_reads.c.drive_id == drive_id)
+            )
             if extracted and extracted.page1 is not None:
                 sha = (
                     sha256
