@@ -18,6 +18,7 @@ const entry = (name: string, id: string, path: string): DirEntry => ({
   drive_id: id,
   connected: true,
   marks: [],
+  open_items: [],
 });
 const STATUS = { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } };
 

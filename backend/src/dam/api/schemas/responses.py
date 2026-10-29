@@ -525,6 +525,20 @@ class UndoResultOut(BatchResultOut):
     kept: list[str] = []  # folders the undo left alone because something is in them now
 
 
+class RowItemOut(BaseModel):
+    """An open tray item on a listed file: enough for its tag (tray, date, title)."""
+
+    id: int
+    tray_name: str
+    title: str
+    date: date | None
+
+
+class RowAttentionOut(BaseModel):
+    item: RowItemOut
+    level: Literal["overdue", "today", "soon", "undated"] | None  # None: dated later
+
+
 class DirEntryOut(BaseModel):
     name: str
     path: str
@@ -538,6 +552,7 @@ class DirEntryOut(BaseModel):
     # folder is connected now (always True for the main folder)
     folder: str | None = None
     connected: bool = True
+    open_items: list[RowAttentionOut] = []  # a file's open tray items, oldest first
 
 
 class FlatFilesOut(BaseModel):
@@ -560,6 +575,7 @@ class SearchHitOut(BaseModel):
     # folder is connected now (always True for the main folder)
     folder: str | None = None
     connected: bool = True
+    open_items: list[RowAttentionOut] = []  # a file's open tray items, oldest first
 
 
 class FileNowOut(BaseModel):

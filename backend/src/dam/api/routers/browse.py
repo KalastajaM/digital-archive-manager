@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query
 
 from dam.api.deps import UI_ORIGIN, AppDep
-from dam.api.marks import with_marks
+from dam.api.marks import with_marks, with_open_items
 from dam.api.schemas import (
     BatchResultOut,
     CopyJobOut,
@@ -28,7 +28,9 @@ router = APIRouter(prefix="/api", tags=["browse"])
 
 @router.get("/browse", response_model=list[DirEntryOut])
 def browse(app: AppDep, path: str = "", collection: int | None = None) -> list:
-    return with_marks(app, app.browse.list_dir(path, collection_id=collection))
+    return with_open_items(
+        app, with_marks(app, app.browse.list_dir(path, collection_id=collection))
+    )
 
 
 @router.get("/browse/files", response_model=FlatFilesOut)
@@ -43,7 +45,7 @@ def browse_files(
     rows, total = app.browse.files_below(
         path, collection_id=collection, sort=sort, desc=dir == "desc", limit=limit
     )
-    return {"rows": with_marks(app, rows), "total": total}
+    return {"rows": with_open_items(app, with_marks(app, rows)), "total": total}
 
 
 @router.get("/folders", response_model=list[str])
@@ -65,9 +67,8 @@ def search(
     ``is``; ``-`` in front excludes; quotes for values with spaces). Every filter must hold.
     ``tag`` (repeat it) adds tag filters. ``tag_mode`` ``all``: a file needs every tag;
     ``any``: at least one. 400 for a filter value that cannot be right (a bad date)."""
-    return with_marks(
-        app, app.search(q, folder=folder or None, limit=limit, tags=tag, tag_mode=tag_mode)
-    )
+    hits = app.search(q, folder=folder or None, limit=limit, tags=tag, tag_mode=tag_mode)
+    return with_open_items(app, with_marks(app, hits))
 
 
 @router.post("/quarantine", response_model=BatchResultOut)

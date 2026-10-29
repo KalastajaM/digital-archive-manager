@@ -28,7 +28,7 @@ const dir = (path: string): DirEntry => ({
   size: null,
   mtime: 1,
   drive_id: `d-${path}`,
-  connected: true, marks: [],
+  connected: true, marks: [], open_items: [],
 });
 const file = (path: string, drive_id: string, is_link = false): DirEntry => ({
   name: path.slice(path.lastIndexOf("/") + 1),
@@ -38,7 +38,7 @@ const file = (path: string, drive_id: string, is_link = false): DirEntry => ({
   size: 10,
   mtime: 1,
   drive_id,
-  connected: true, marks: [],
+  connected: true, marks: [], open_items: [],
 });
 
 const LISTINGS: Record<string, DirEntry[]> = {

@@ -39,7 +39,7 @@ const entry = (name: string, dir: string, is_dir: boolean, drive_id: string): Di
   size: is_dir ? null : 10,
   mtime: 1,
   drive_id,
-  connected: true, marks: [],
+  connected: true, marks: [], open_items: [],
 });
 
 function Where() {

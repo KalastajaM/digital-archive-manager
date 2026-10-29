@@ -6,6 +6,12 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Due dates in Browse.** A file with an open tray item shows the tray and its date on
+  its row, in the folder view, Files and search results, coloured by urgency as on a
+  collection's page.
+
 ### Changed
 
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that

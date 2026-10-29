@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import asdict, is_dataclass
+from datetime import date
 from typing import Any
 
 from dam.app import App
@@ -39,6 +40,24 @@ def with_marks(app: App, rows: Iterable[Any], key: str = "drive_id") -> list[dic
     for r in out:
         r["marks"] = found.get(r[key], [])
     return out
+
+
+def with_open_items(app: App, rows: list[dict]) -> list[dict]:
+    """Set ``open_items`` on every file row of ``rows`` (dicts with ``drive_id`` and
+    ``is_dir`` when it is a listing): its open tray items with their urgency, oldest
+    first, so Browse can tag a file that is due or followed up. One query for all rows;
+    folders get none."""
+    files = [r for r in rows if r.get("drive_id") and not r.get("is_dir")]
+    found: dict[str, list[dict]] = {r["drive_id"]: [] for r in files}
+    day = date.today()
+    for item in app.trays.open_for_files(found):
+        level = app.today.level(item, day)
+        for drive_id in dict.fromkeys(item.files):
+            if drive_id in found:
+                found[drive_id].append({"item": item, "level": level})
+    for r in rows:
+        r["open_items"] = found.get(r["drive_id"], []) if r.get("drive_id") else []
+    return rows
 
 
 def with_record_marks(app: App, rows: Iterable[Any]) -> list[dict]:

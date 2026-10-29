@@ -20,6 +20,7 @@ const dir = (path: string, extra: Partial<DirEntry> = {}): DirEntry => ({
   drive_id: `d-${path}`,
   connected: true,
   marks: [],
+  open_items: [],
   ...extra,
 });
 const file = (path: string, drive_id: string, size = 1000): DirEntry => ({
@@ -32,6 +33,7 @@ const file = (path: string, drive_id: string, size = 1000): DirEntry => ({
   drive_id,
   connected: true,
   marks: [],
+  open_items: [],
 });
 
 const LISTINGS: Record<string, DirEntry[]> = {

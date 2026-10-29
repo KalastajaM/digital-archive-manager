@@ -318,6 +318,7 @@ def freeze_today(monkeypatch: pytest.MonkeyPatch):
     ``day``."""
     import datetime
 
+    from dam.api import marks
     from dam.api.routers import collections, today, trays
     from dam.rules import fields
     from dam.services import today as today_service
@@ -333,7 +334,7 @@ def freeze_today(monkeypatch: pytest.MonkeyPatch):
             def today(cls):
                 return day
 
-        for module in (collections, today, trays, fields, service, today_service):
+        for module in (collections, marks, today, trays, fields, service, today_service):
             monkeypatch.setattr(module, "date", FrozenDate)
         return day
 
