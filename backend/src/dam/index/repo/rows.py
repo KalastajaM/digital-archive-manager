@@ -45,7 +45,6 @@ from dam.db.tables import (
 )
 from dam.index.repo.model import (
     COLUMNS,
-    FTS_ROWID,
     GIVEN,
     GIVEN_NOTES,
     PARKED,
@@ -56,7 +55,10 @@ from dam.index.repo.model import (
     ext_of,
     fts_clear_path,
     fts_delete,
+    fts_index,
     fts_insert,
+    fts_remove,
+    fts_rename,
     keys_besides,
     of_file,
 )
@@ -94,8 +96,8 @@ class RowsMixin:
             conn.execute(
                 file_identifier_reads.delete().where(file_identifier_reads.c.drive_id == drive_id)
             )
+            fts_delete(conn, drive_id)  # before its text goes
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
-            fts_delete(conn, drive_id)
             conn.execute(files.delete().where(files.c.drive_id == drive_id))
 
     def _drop_stale(self, conn: Connection, rel: str, keep_id: str) -> int:
@@ -186,6 +188,9 @@ class RowsMixin:
         person, locks, rule outcomes and the filing code given in the app."""
         with self._conn(write=True) as conn:
             conn.exec_driver_sql("PRAGMA defer_foreign_keys = ON")
+            # out of the index under the old id, back in under the new one once its text
+            # and map row carry it
+            indexed = fts_remove(conn, old_id)
             for table in (
                 file_text,
                 file_tags,
@@ -215,13 +220,11 @@ class RowsMixin:
                     .values(target_id=new_id)
                 )
             conn.execute(
-                text(f"UPDATE file_fts SET drive_id = :new WHERE rowid = {FTS_ROWID}"),
-                {"new": new_id, "id": old_id},
-            )
-            conn.execute(
                 text("UPDATE file_fts_map SET drive_id = :new WHERE drive_id = :old"),
                 {"new": new_id, "old": old_id},
             )
+            if indexed:
+                fts_index(conn, new_id)
 
     @staticmethod
     def _given_in(conn: Connection, drive_ids: Sequence[str]) -> dict[str, dict[str, int]]:
@@ -367,7 +370,7 @@ class RowsMixin:
                 last_error=None,
             )
             conn.execute(insert(files).values(row))
-            fts_insert(conn, old_id, nfc(row["name"] or ""), nfc(row["path"]), "")
+            fts_insert(conn, old_id, nfc(row["name"] or ""), nfc(row["path"]))
             journaled = json.loads(entry.moved)
             back: dict[str, int] = {}
             for what, table, column in RECONNECTED:
@@ -493,13 +496,8 @@ class RowsMixin:
     @staticmethod
     def _write_fts_name(conn: Connection, drive_id: str, name: str, path: str) -> None:
         """Set the FTS name/path of ``drive_id``, adding a row (empty text) if it has none."""
-        params = {"id": drive_id, "name": nfc(name), "path": nfc(path)}
-        updated = conn.execute(
-            text(f"UPDATE file_fts SET name = :name, path = :path WHERE rowid = {FTS_ROWID}"),
-            params,
-        ).rowcount
-        if not updated:
-            fts_insert(conn, drive_id, params["name"], params["path"], "")
+        if not fts_rename(conn, drive_id, name=nfc(name), path=nfc(path)):
+            fts_insert(conn, drive_id, nfc(name), nfc(path))
 
     def index_name(self, drive_id: str) -> None:
         """Make ``drive_id`` findable by name/path before its content is indexed.

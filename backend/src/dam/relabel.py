@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-from sqlalchemy import Connection, Engine, select, text, update
+from sqlalchemy import Connection, Engine, select, update
 
 from dam.codes.configfile import write_config_file
 from dam.config import AppPaths, load_settings
@@ -37,6 +37,7 @@ from dam.core.text import fold_name
 from dam.core.yamledit import YamlEditError, replace_values
 from dam.db.engine import make_engine, migrate
 from dam.db.tables import files, made_folders, maintenance_ignored, operations, reconnects
+from dam.index.repo import fts_rename
 from dam.maintenance.ignored import GROUPS
 from dam.ops.model import ABS_TARGET, OpFailed, OpKind, followed_json, read_followed
 from dam.rules.model import load_rule_file, rule_files
@@ -155,12 +156,6 @@ def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
         "maintenance_ignored": 0,
         "reconnects": 0,
     }
-    # the search rows by their rowid (drive_id is not indexed there), from file_fts_map
-    fts = (
-        dict(conn.execute(text("SELECT drive_id, fts_rowid FROM file_fts_map")).all())
-        if write
-        else {}
-    )
     for drive_id, path in conn.execute(select(files.c.drive_id, files.c.path)).all():
         moved = swap(path, old, new)
         if moved is None:
@@ -173,15 +168,10 @@ def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
         if top:
             values["name"] = moved
         conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
-        if drive_id in fts:
-            conn.execute(
-                text(
-                    "UPDATE file_fts SET path = :p"
-                    + (", name = :p" if top else "")
-                    + " WHERE rowid = :r"
-                ),
-                {"p": values["path_nfc"], "r": fts[drive_id]},
-            )
+        indexed = {"path": values["path_nfc"]}
+        if top:
+            indexed["name"] = values["path_nfc"]
+        fts_rename(conn, drive_id, **indexed)  # a file without a search entry keeps none
     journal = (
         operations.c.id,
         operations.c.kind,

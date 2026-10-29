@@ -1,15 +1,15 @@
 """identifier_names: the owner's name for a business ID; file_identifiers.name: the name
 printed next to the ID in each file
 
-Revision ID: 0044
-Revises: 0043
+Revision ID: 0046
+Revises: 0045
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0044"
-down_revision = "0043"
+revision = "0046"
+down_revision = "0045"
 branch_labels = None
 depends_on = None
 

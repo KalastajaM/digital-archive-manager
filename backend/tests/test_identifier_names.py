@@ -190,7 +190,7 @@ def test_signature_moves_on_so_stored_ids_are_read_again_for_names():
     assert "fi:2" in countries.signature()
 
 
-def test_migration_0044_adds_the_name_column_and_table(tmp_path, new_engine):
+def test_migration_0046_adds_the_name_column_and_table(tmp_path, new_engine):
     from alembic import command
     from alembic.config import Config
 
@@ -209,7 +209,7 @@ def test_migration_0044_adds_the_name_column_and_table(tmp_path, new_engine):
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(identifier_names)"))]
         row = conn.execute(text("SELECT value, name FROM file_identifiers")).one()
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0044"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0046"
     assert cols == ["kind", "value", "name", "set_by", "set_at"]
     assert tuple(row) == ("0112038-9", None)
 

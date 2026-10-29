@@ -3,7 +3,7 @@ import unicodedata
 
 import pytest
 import xattr
-from sqlalchemy import insert, select, text
+from sqlalchemy import select, text
 
 from conftest import posix_names, posix_permissions, put_fts_row
 from dam.config import Settings
@@ -199,8 +199,8 @@ OUT = "outside"
 
 def seed_children(engine, drive_id, path, body="hello"):
     with engine.begin() as conn:
-        conn.execute(insert(file_text), {"drive_id": drive_id, "text": body})
-        # the scan already wrote a name-only FTS row; replace it, as save_content does
+        # the scan already wrote a name-only FTS row; replace it with the text, as
+        # save_content does
         put_fts_row(conn, drive_id, "n", path, body)
     TagRepo(engine).add(drive_id, ["tagged"])
 

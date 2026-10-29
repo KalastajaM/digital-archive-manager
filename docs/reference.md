@@ -1255,7 +1255,7 @@ with `others`, the number of other files carrying each; `/api/status` has `ident
 
 **Senders from business IDs.** `file_identifiers` has a `name` column and a table
 `identifier_names(kind, value, name, set_by, set_at)` keeps the owner's names (migration
-0044). An identifier whose pack gives it a name finder (`IdentifierSpec.name`; today
+0046). An identifier whose pack gives it a name finder (`IdentifierSpec.name`; today
 `fi.ytunnus`, Finland pack version 2) stores the company name printed on the line of the
 value, on up to four lines with text above it or two below (blank lines are skipped),
 recognised by a legal form at its end (`Oy`, `Oyj`, `Ab`, `Abp`, `Oy Ab`, `Oyj Abp`, `Ky`,

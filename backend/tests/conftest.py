@@ -15,10 +15,12 @@ xattr_shim.install()  # before anything imports xattr (not on Windows; Linux nee
 import xattr
 import yaml
 from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import DatabaseError
 
 from dam.config import AppPaths, SpecialFolders
 from dam.db.engine import make_engine, migrate
 from dam.index.driveid import DRIVE_ID_XATTR
+from dam.index.repo import fts_insert, fts_remove
 from dam.ops import primitives
 
 archive_guard.install()  # one audit hook for the session: archive writes come from dam/ops
@@ -87,23 +89,26 @@ def pytest_collection_modifyitems(config, items):
 
 
 def put_fts_row(conn: Connection, drive_id: str, name: str, path: str, body: str) -> None:
-    """Write the FTS row of ``drive_id`` (replacing any) with its ``file_fts_map`` entry,
-    as the repo does."""
-    conn.execute(
-        text(
-            "DELETE FROM file_fts WHERE rowid IN "
-            "(SELECT fts_rowid FROM file_fts_map WHERE drive_id = :d)"
-        ),
-        {"d": drive_id},
-    )
-    conn.execute(
-        text("INSERT INTO file_fts(drive_id, name, path, text) VALUES (:d, :n, :p, :t)"),
-        {"d": drive_id, "n": name, "p": path, "t": body},
-    )
-    conn.execute(
-        text("INSERT OR REPLACE INTO file_fts_map VALUES (:d, last_insert_rowid())"),
-        {"d": drive_id},
-    )
+    """Index ``drive_id`` with ``name``/``path`` and ``body`` as its ``file_text`` (replacing
+    any), in the order the repo writes them (``dam.index.repo.model``)."""
+    fts_remove(conn, drive_id)
+    conn.execute(text("DELETE FROM file_text WHERE drive_id = :d"), {"d": drive_id})
+    if body:
+        conn.execute(
+            text("INSERT INTO file_text(drive_id, text) VALUES (:d, :t)"),
+            {"d": drive_id, "t": body},
+        )
+    fts_insert(conn, drive_id, name, path)
+
+
+def fts_intact(conn: Connection) -> bool:
+    """FTS5's own check of ``file_fts`` against what it indexes (the view): stale tokens of
+    a write in the wrong order fail it."""
+    try:
+        conn.execute(text("INSERT INTO file_fts(file_fts, rank) VALUES ('integrity-check', 1)"))
+    except DatabaseError:
+        return False
+    return True
 
 
 class FakeArchive:

@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     Table,
     Text,
@@ -58,12 +59,18 @@ file_text = Table(
 )
 
 # The FTS rowid of each file's ``file_fts`` row (migration 0037). ``file_fts`` cannot
-# index ``drive_id``, so every FTS write finds its row through this map, by rowid.
+# index ``drive_id``, so every FTS write finds its row through this map, by rowid. Since
+# 0044 it also holds the name and path the index searches (NFC; a parked file's path is
+# ''): ``file_fts`` keeps no copy and reads them, with ``file_text``, through the view
+# ``file_fts_src`` (see ``dam.index.repo.model`` for the order its writes need).
 file_fts_map = Table(
     "file_fts_map",
     metadata,
     Column("drive_id", Text, primary_key=True),
     Column("fts_rowid", Integer, nullable=False),
+    Column("name", Text, nullable=False, server_default=""),
+    Column("path", Text, nullable=False, server_default=""),
+    Index("ix_file_fts_map_fts_rowid", "fts_rowid", unique=True),
 )
 
 # The bank barcode read from the file's scan (migration 0009); ``code`` None: read, none
@@ -102,7 +109,8 @@ file_assigned_codes = Table(
 )
 
 # Where the text of page 1 sits (migration 0028): ``lines`` is a JSON list of
-# ``{text, box}`` (``[]``: read, no text on page 1), ``source`` the reader
+# ``{text, box}`` (``[]``: read, no text on page 1), zlib-compressed since 0045
+# (``Page1Layout.stored``), ``source`` the reader
 # (``text-layer`` | ``vision`` | ``tesseract``). Same lifetime as ``file_barcodes``: a row
 # for other content than ``sha256`` is ignored and read again.
 file_layouts = Table(
@@ -110,7 +118,7 @@ file_layouts = Table(
     metadata,
     Column("drive_id", Text, ForeignKey("files.drive_id"), primary_key=True),
     Column("sha256", Text, nullable=True),
-    Column("lines", Text, nullable=False),
+    Column("lines", LargeBinary, nullable=False),
     Column("source", Text, nullable=False),
     Column("read_at", Float, nullable=False),
 )
@@ -626,7 +634,7 @@ file_identifiers = Table(
     Column("kind", Text, primary_key=True),
     Column("value", Text, primary_key=True),
     Column("sha256", Text, nullable=False),
-    # the company name printed next to the value in this file, when the pack reads one (0044)
+    # the company name printed next to the value in this file, when the pack reads one (0046)
     Column("name", Text, nullable=True),
     Index("ix_file_identifiers_kind_value", "kind", "value"),
 )
@@ -642,7 +650,7 @@ file_identifier_reads = Table(
     Column("read_at", Float, nullable=False),
 )
 
-# The owner's name for an identifier (0044): "Vesilaitos Oy" for Y-tunnus 0112038-9. It
+# The owner's name for an identifier (0046): "Vesilaitos Oy" for Y-tunnus 0112038-9. It
 # fills From (``file_assignments.sender``, set_by "filing") on the files that carry it,
 # never on a row the owner set. ``set_by`` is "owner" (confirmed in Settings, Senders).
 identifier_names = Table(

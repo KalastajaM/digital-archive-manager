@@ -3,6 +3,7 @@ layouts. Part of ``FileRepo`` (``dam.index.repo``)."""
 
 import json
 import time
+import zlib
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import asdict
 
@@ -396,8 +397,8 @@ class ReadsMixin:
                 ).all()
                 for row in rows:
                     try:
-                        out[row.drive_id] = Page1Layout.from_json(row.lines, row.source)
-                    except (ValueError, KeyError, TypeError):
+                        out[row.drive_id] = Page1Layout.from_stored(row.lines, row.source)
+                    except (ValueError, KeyError, TypeError, zlib.error):
                         continue  # unreadable row: as if it was not read
         return out
 
@@ -406,7 +407,7 @@ class ReadsMixin:
         stmt = sqlite_insert(file_layouts).values(
             drive_id=drive_id,
             sha256=sha256,
-            lines=layout.lines_json(),
+            lines=layout.stored(),
             source=layout.source,
             read_at=time.time(),
         )
