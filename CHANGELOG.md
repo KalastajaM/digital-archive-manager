@@ -6,6 +6,11 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`id:*`** finds every file that has a business ID, whatever it is: `from:Telia id:*`
+  lists Telia's documents that carry one.
+
 ### Changed
 
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that
