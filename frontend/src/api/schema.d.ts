@@ -6054,6 +6054,7 @@ export interface components {
             /** Offset */
             offset: number;
             page1: components["schemas"]["Page1ProgressOut"];
+            identifiers: components["schemas"]["IdentifiersProgressOut"];
         };
         /**
          * ItemBarcodeOut

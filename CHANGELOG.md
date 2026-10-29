@@ -6,6 +6,12 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The Index sheet adds up.** Files in the archive shows a Total and the four states that
+  make it up, with the missing files apart; Other indexes shows Page 1 and Business IDs, each
+  as how many of how many.
+
 ## [0.9.0] - 2026-10-29
 
 First public release. In short:
