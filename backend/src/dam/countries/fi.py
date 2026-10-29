@@ -3,8 +3,8 @@ Finnish business letter."""
 
 import re
 
-from dam.checks import check_731
-from dam.countries.model import CountryPack, ReferenceSpec
+from dam.checks import check_731, ytunnus_check
+from dam.countries.model import CountryPack, IdentifierSpec, ReferenceSpec
 
 _DOMESTIC = re.compile(
     r"\b(?:viitenumero|viite|reference)\b\s*(?:nro\.?\s*)?:?\s*(\d+(?: \d{5})*)(?!\d|[-./]\d)",
@@ -31,6 +31,22 @@ def find_reference(text: str) -> list[tuple[int, str]]:
     return found
 
 
+_YTUNNUS = re.compile(r"(?<![\dA-Za-z-])(\d{7})-(\d)(?![\d-])", re.ASCII)
+_VAT = re.compile(r"(?<![A-Za-z0-9])FI ?(\d{7})(\d)(?!\d)", re.ASCII)
+
+
+def find_ytunnus(text: str) -> list[str]:
+    """Business IDs (Y-tunnus) with a valid check digit, also in the VAT form FI01120389,
+    as ``0112038-9``, in text order, each once."""
+    hits = sorted(
+        (m.start(), f"{m[1]}-{m[2]}")
+        for p in (_YTUNNUS, _VAT)
+        for m in p.finditer(text)
+        if ytunnus_check(m[1]) == int(m[2])
+    )
+    return list(dict.fromkeys(v for _, v in hits))
+
+
 # Where the addressee sits on page 1 of a Finnish business letter (SFS 2487, window
 # envelope), as fractions of an A4 page (210 x 297 mm), origin top left: about 20 mm from
 # the left edge, 90 mm wide, from roughly 40 to 80 mm from the top. This is an
@@ -46,4 +62,5 @@ FINLAND = CountryPack(
     languages=("fi", "sv"),
     # only what turning Finland off changes: its address zone is also the default for now
     adds=("Payment reference (viitenumero)", "Finland example rules"),
+    identifiers=(IdentifierSpec("fi.ytunnus", "Business ID (Y-tunnus)", find_ytunnus, True),),
 )

@@ -10,6 +10,7 @@ from fastapi import APIRouter, FastAPI, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 
+from dam import packs
 from dam.api import preview
 from dam.api.deps import AppDep, live_record, require_editable
 from dam.api.marks import with_record_marks
@@ -21,6 +22,7 @@ from dam.api.schemas import (
     FileSummaryOut,
     FileTagsIn,
     FileTagsOut,
+    IdentifiersOut,
     Page1BoxIn,
     Page1Out,
     RelativeMarkIn,
@@ -212,6 +214,32 @@ def put_file_summary(app: AppDep, drive_id: str, body: FileSummaryIn) -> dict:
     live_record(app, drive_id)
     require_editable(app, [drive_id])
     return app.summaries.put(drive_id, body.source, body.summary, body.key_facts, body.replace)
+
+
+@router.get("/{drive_id}/identifiers", response_model=IdentifiersOut)
+def file_identifiers(app: AppDep, drive_id: str) -> dict:
+    """Business IDs, IBANs and domains found in the file, with how many other files
+    carry each; the enabled packs' only."""
+    live_record(app, drive_id)
+    core, *others = packs.active().countries
+    order = [s for p in others for s in p.identifiers] + list(core.identifiers)
+    rank = {s.kind: i for i, s in enumerate(order)}
+    label = {s.kind: s.label for s in order}
+    found = [(k, v) for k, v in app.repo.identifiers_for(drive_id) if k in rank]
+    found.sort(key=lambda kv: rank[kv[0]])  # stable: in text order within a kind
+    return {
+        "identifiers": [
+            {
+                "kind": kind,
+                "label": label[kind],
+                "value": value,
+                "others": sum(
+                    1 for d in app.repo.files_with_identifier(kind, value) if d != drive_id
+                ),
+            }
+            for kind, value in found
+        ]
+    }
 
 
 @router.get("/{drive_id}/fields", response_model=ScanFieldsOut)

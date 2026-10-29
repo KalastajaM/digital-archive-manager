@@ -612,3 +612,30 @@ special_folder_renames = Table(
     Column("created", Float, nullable=False),
     Column("finished", Float, nullable=True),
 )
+
+
+# Business IDs, IBANs and domains found in a file's stored text by the country packs
+# (migration 0043): one row per (file, kind, value), ``kind`` namespaced by its pack
+# ("fi.ytunnus"). ``sha256`` is the content they were found in; rows for other content are
+# ignored and the identifiers pass reads the file's text again. No FK, as
+# ``file_assignments``; removed and rekeyed with the file.
+file_identifiers = Table(
+    "file_identifiers",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("kind", Text, primary_key=True),
+    Column("value", Text, primary_key=True),
+    Column("sha256", Text, nullable=False),
+    Index("ix_file_identifiers_kind_value", "kind", "value"),
+)
+
+# Which content of each file the identifiers pass read, and with which packs
+# (``countries.signature()``, "core:1 fi:1"): another signature reads it again (0043).
+file_identifier_reads = Table(
+    "file_identifier_reads",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("sha256", Text, nullable=False),
+    Column("signature", Text, nullable=False),
+    Column("read_at", Float, nullable=False),
+)

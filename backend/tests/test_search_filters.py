@@ -301,3 +301,39 @@ def test_not_is_disconnected(two_folders, extra_folder, tmp_path):
     os.rename(extra_folder.root, tmp_path / "unplugged")
     app.scan()
     assert ids(app, "-is:disconnected") == ["main"]
+
+
+@pytest.fixture
+def with_ids(archive):
+    from dam import countries
+
+    sig = countries.signature()
+    archive.repo.save_identifiers("bill", "sha-bill", sig, [("fi.ytunnus", "0112038-9")])
+    archive.repo.save_identifiers(
+        "tax", "sha-tax", sig, [("fi.ytunnus", "0112038-9"), ("core.iban", "FI2112345600000785")]
+    )
+    archive.repo.save_identifiers("kela", "sha-kela", sig, [("core.domain", "kela.fi")])
+    return archive
+
+
+@pytest.mark.parametrize("q", ["id:0112038-9", "id:01120389", "id:FI01120389", "id:'0112038 - 9'"])
+def test_id_finds_a_business_id_in_its_forms(with_ids, q):
+    assert ids(with_ids, q.replace("'", '"')) == ["bill", "tax"]
+
+
+def test_id_finds_an_iban_and_a_domain(with_ids):
+    assert ids(with_ids, 'id:"fi21 1234 5600 0007 85"') == ["tax"]
+    assert ids(with_ids, "id:KELA.fi") == ["kela"]
+
+
+def test_id_negated_and_unknown(with_ids):
+    assert "bill" not in ids(with_ids, "-id:0112038-9")
+    assert ids(with_ids, "id:9999999-9") == []
+
+
+def test_id_skips_a_country_that_is_off(with_ids):
+    from dam import packs
+
+    packs.activate(packs.build([], ["en"]))
+    assert ids(with_ids, "id:0112038-9") == []
+    assert ids(with_ids, "id:kela.fi") == ["kela"]

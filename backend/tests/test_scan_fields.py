@@ -244,7 +244,7 @@ def test_migration_0017_upgrades_a_db_at_0016(tmp_path: Path):
         command.upgrade(config, "0016")
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0042"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0043"
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(file_fields)"))]
     assert cols == ["drive_id", "fields", "updated"]
     engine.dispose()

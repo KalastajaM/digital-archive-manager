@@ -512,6 +512,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/files/{drive_id}/identifiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * File Identifiers
+         * @description Business IDs, IBANs and domains found in the file, with how many other files
+         *     carry each; the enabled packs' only.
+         */
+        get: operations["file_identifiers_api_files__drive_id__identifiers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/{drive_id}/fields": {
         parameters: {
             query?: never;
@@ -5828,6 +5849,37 @@ export interface components {
             /** Summary */
             summary?: string | null;
         };
+        /** IdentifierOut */
+        IdentifierOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+            /** Others */
+            others: number;
+        };
+        /**
+         * IdentifiersOut
+         * @description What the enabled packs found in the file's current content: business IDs first,
+         *     then IBANs, then domains.
+         */
+        IdentifiersOut: {
+            /** Identifiers */
+            identifiers: components["schemas"]["IdentifierOut"][];
+        };
+        /**
+         * IdentifiersProgressOut
+         * @description The identifiers pass: indexed documents whose text was read with the current
+         *     packs, of all with text.
+         */
+        IdentifiersProgressOut: {
+            /** Read */
+            read: number;
+            /** Total */
+            total: number;
+        };
         /** ImportantConvertApplyBody */
         ImportantConvertApplyBody: {
             /** Rel */
@@ -7027,7 +7079,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "reference" | "sender" | "collection" | "tag" | "folder" | "iban" | "person";
+            kind: "reference" | "sender" | "business_id" | "collection" | "tag" | "folder" | "iban" | "person";
             /** Value */
             value: string;
             /** Count */
@@ -7048,7 +7100,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "reference" | "sender" | "collection" | "tag" | "folder" | "iban" | "person";
+            kind: "reference" | "sender" | "business_id" | "collection" | "tag" | "folder" | "iban" | "person";
             /** Value */
             value: string;
             /** Weight */
@@ -8007,6 +8059,7 @@ export interface components {
              */
             can_link?: boolean;
             page1?: components["schemas"]["Page1ProgressOut"] | null;
+            identifiers?: components["schemas"]["IdentifiersProgressOut"] | null;
             /**
              * Configured
              * @default true
@@ -11119,6 +11172,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileSummaryOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    file_identifiers_api_files__drive_id__identifiers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentifiersOut"];
                 };
             };
             /** @description Bad Request */

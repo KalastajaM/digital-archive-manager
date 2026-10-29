@@ -8,8 +8,7 @@ from datetime import date
 from decimal import Decimal
 
 from dam import packs
-from dam.checks import IBAN_LENGTHS, valid_iban
-from dam.countries import CountryPack
+from dam.countries import CountryPack, find_ibans
 
 _CENT = Decimal("0.01")
 
@@ -32,10 +31,6 @@ _AMOUNT_PREFIX = re.compile(
     r"(?![\d]|[.,]\d)",
     re.ASCII,
 )
-
-# a country code and check digits, then what may follow; a lookahead, so a run that is no
-# IBAN does not hide one that starts inside it
-_IBAN = re.compile(r"(?<![A-Za-z0-9])(?=([A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}))", re.ASCII)
 
 
 @dataclass
@@ -116,30 +111,10 @@ def _amounts(text: str) -> list[Decimal]:
     return _dedupe(_priced(text))
 
 
-def _iban_end(text: str, start: int, length: int) -> int:
-    """Where an IBAN of ``length`` characters (spaces between them) starting at ``start``
-    ends in ``text``."""
-    pos, seen = start, 0
-    while seen < length:
-        if text[pos] != " ":
-            seen += 1
-        pos += 1
-    return pos
-
-
 def _iban(text: str) -> str | None:
-    """The first valid IBAN of a SEPA country: its country's length, and no letter or
-    digit right after it."""
-    for m in _IBAN.finditer(text):
-        compact = m[1].replace(" ", "")
-        length = IBAN_LENGTHS.get(compact[:2])
-        if length is None or len(compact) < length or not valid_iban(compact[:length]):
-            continue
-        end = _iban_end(text, m.start(), length)
-        if end < len(text) and text[end].isalnum():
-            continue
-        return compact[:length]
-    return None
+    """The first valid IBAN of a SEPA country (see ``countries.core.find_ibans``)."""
+    found = find_ibans(text)
+    return found[0][1] if found else None
 
 
 def _references(text: str, packs: Sequence[CountryPack]) -> str | None:

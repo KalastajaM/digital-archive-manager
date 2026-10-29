@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import Connection, Engine, and_, delete, func, literal, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from dam import packs
 from dam.core.paths import ArchivePaths
 from dam.core.text import fold
 from dam.db.engine import write_tx
@@ -29,6 +30,7 @@ from dam.db.tables import (
     collection_members,
     collections,
     file_assignments,
+    file_identifiers,
     file_tags,
     files,
     item_files,
@@ -44,6 +46,7 @@ from dam.services.links import link_target
 WEIGHTS: dict[str, float] = {
     "reference": 5,
     "sender": 3,
+    "business_id": 3,  # the same business ID found in both (fi.ytunnus)
     "collection": 3,
     "tag": 2,  # each shared tag
     "folder": 2,
@@ -57,7 +60,7 @@ KINDS = tuple(WEIGHTS)
 # this, not at all. Applies to tags, IBANs, senders and persons.
 COMMON_LIMIT = 200
 COMMON_FACTOR = 5
-DAMPED = frozenset({"tag", "iban", "sender", "person"})
+DAMPED = frozenset({"tag", "iban", "sender", "business_id", "person"})
 
 MAX_RELATIVES = 200
 _CHUNK = 500
@@ -188,6 +191,7 @@ class RelativesService:
             hits: dict[str, dict[tuple[str, str], float]] = {}
             self._tags(conn, subject, hits)
             self._assignments(conn, subject, hits)
+            self._business_ids(conn, subject, hits)
             self._collections(conn, rec, hits)
             self._folder(conn, rec, hits)
             self._items(conn, subject, hits)
@@ -308,6 +312,44 @@ class RelativesService:
             )
             for other in others:
                 self._add(hits, other, kind, value, len(others) + 1)
+
+    def _business_ids(self, conn: Connection, subject: str, hits: dict) -> None:
+        """Files whose current content carries a business ID this one carries: the enabled
+        packs' identifiers that name a sender, not a web domain (shared too widely)."""
+        kinds = [
+            s.kind
+            for p in packs.active().countries
+            for s in p.identifiers
+            if s.names_sender and not s.kind.endswith(".domain")
+        ]
+        if not kinds:
+            return
+        current = and_(
+            files.c.drive_id == file_identifiers.c.drive_id,
+            files.c.sha256 == file_identifiers.c.sha256,
+        )
+        mine = conn.execute(
+            select(file_identifiers.c.kind, file_identifiers.c.value)
+            .join(files, current)
+            .where(file_identifiers.c.drive_id == subject, file_identifiers.c.kind.in_(kinds))
+        ).all()
+        for kind, value in mine:
+            others = (
+                conn.execute(
+                    select(file_identifiers.c.drive_id)
+                    .join(files, current)
+                    .where(
+                        file_identifiers.c.kind == kind,
+                        file_identifiers.c.value == value,
+                        file_identifiers.c.drive_id != subject,
+                        _live,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for other in others:
+                self._add(hits, other, "business_id", value, len(others) + 1)
 
     def _collections(self, conn: Connection, rec: FileRecord, hits: dict) -> None:
         # A collection holds files directly or through a member folder (every file inside

@@ -6,7 +6,7 @@
  * it. A token still being typed (``partial``) is kept out of the words, so half a value
  * never searches. An unknown name before the colon (``http:``) is a plain word. */
 
-export const FILTER_NAMES = ["name", "in", "tag", "collection", "from", "for", "type", "date", "before", "after", "tray", "is"] as const;
+export const FILTER_NAMES = ["name", "in", "tag", "collection", "from", "for", "id", "type", "date", "before", "after", "tray", "is"] as const;
 export type FilterName = (typeof FILTER_NAMES)[number];
 
 export type SearchFilter = { name: FilterName; value: string; negated: boolean };
@@ -34,6 +34,7 @@ export const FILTER_HELP: { name: FilterName; example: string; text: string }[] 
   { name: "collection", example: 'collection:"House sale"', text: "Files in a collection, and in the collections inside it." },
   { name: "from", example: "from:Kela", text: "Files whose sender (From) contains this." },
   { name: "for", example: "for:Tiina", text: "Files assigned to this person (For)." },
+  { name: "id", example: "id:0112038-9", text: "Files that carry this business ID, IBAN or web or mail domain." },
   { name: "type", example: "type:pdf", text: "Kind of file: an extension (pdf, docx) or a group (image, doc, sheet, text)." },
   { name: "date", example: "date:2026-10", text: "Document date: a year, a month or a day (YYYY, YYYY-MM, YYYY-MM-DD)." },
   { name: "after", example: "after:2025", text: "Dated on or after the first day of that year, month or day." },

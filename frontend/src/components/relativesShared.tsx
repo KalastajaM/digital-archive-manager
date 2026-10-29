@@ -33,6 +33,7 @@ import { Sheet } from "./ui/Sheet";
 export const KIND_LABEL: Record<RelativeKind, string> = {
   folder: "folder",
   sender: "sender",
+  business_id: "business ID",
   tag: "tag",
   collection: "collection",
   iban: "IBAN",
@@ -42,6 +43,7 @@ export const KIND_LABEL: Record<RelativeKind, string> = {
 export const KIND_NAME: Record<RelativeKind, string> = {
   folder: "Folder",
   sender: "Sender",
+  business_id: "Business ID",
   tag: "Tag",
   collection: "Collection",
   iban: "IBAN",
@@ -51,6 +53,7 @@ export const KIND_NAME: Record<RelativeKind, string> = {
 export const KIND_PHRASE: Record<RelativeKind, string> = {
   folder: "Same folder",
   sender: "Same sender",
+  business_id: "Same business ID",
   tag: "Same tag",
   collection: "Same collection",
   iban: "Same IBAN",
@@ -60,6 +63,7 @@ export const KIND_PHRASE: Record<RelativeKind, string> = {
 export const KIND_CLASS: Record<RelativeKind, string> = {
   folder: "tag-blue",
   sender: "tag-orange",
+  business_id: "tag-orange",
   tag: "tag-green",
   collection: "tag-grey",
   iban: "tag-grey",

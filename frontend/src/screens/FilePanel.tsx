@@ -12,6 +12,7 @@ import { SummaryBox } from "../components/ai/SummaryBox";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FileView } from "../components/FileView";
 import { FilePanelSkeleton } from "../components/FilePanelSkeleton";
+import { FoundIdentifiers } from "../components/FoundIdentifiers";
 import { RelativesBlock } from "../components/RelativesBlock";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
 import { Breakable } from "../components/PlanPreview";
@@ -108,7 +109,14 @@ export function FilePanel({
             </>
             )
           }
-          relatives={relatives && file.path !== null ? <RelativesBlock compact={compactRelatives} file={{ ...file, path: file.path, name: file.name ?? null }} /> : undefined}
+          relatives={
+            relatives && file.path !== null ? (
+              <>
+                <FoundIdentifiers driveId={file.drive_id} />
+                <RelativesBlock compact={compactRelatives} file={{ ...file, path: file.path, name: file.name ?? null }} />
+              </>
+            ) : undefined
+          }
           preview={
             <FilePreview
               file={preview}
