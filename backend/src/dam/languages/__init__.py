@@ -22,7 +22,7 @@ __all__ = [
 ]
 
 PACKS: dict[str, LanguagePack] = {p.code: p for p in (FINNISH, ENGLISH, SWEDISH)}
-DEFAULT_LANGUAGES: tuple[str, ...] = ("fi", "en", "sv")
+DEFAULT_LANGUAGES: tuple[str, ...] = ("fi", "sv", "en")  # the Finland pack's, then English
 
 
 def get(code: str) -> LanguagePack:

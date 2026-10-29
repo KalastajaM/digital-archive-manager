@@ -8,7 +8,7 @@ from dam.rules.fields import detect_fields
 
 
 def test_default_languages():
-    assert [p.code for p in languages.enabled()] == ["fi", "en", "sv"]
+    assert [p.code for p in languages.enabled()] == ["fi", "sv", "en"]
 
 
 def test_unknown_language_is_named():

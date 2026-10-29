@@ -28,7 +28,7 @@ from sqlalchemy import select, text
 from dam.ai import guard
 from dam.ai.tasks import Built, register
 from dam.ai.tasks._common import digest, language, rules_point_excluded, shorten, source
-from dam.ai.tasks.ask_archive import STOPWORDS, snippet
+from dam.ai.tasks.ask_archive import snippet, stopwords
 from dam.core.paths import nfc
 from dam.db.tables import file_assignments
 from dam.errors import NotFound
@@ -107,10 +107,11 @@ def _quote(piece: str) -> str:
 def _words(body: str) -> list[str]:
     """Distinct words of four or more characters that are not stopwords, the most
     repeated first (then in order of appearance)."""
+    stop = stopwords()
     counts: dict[str, int] = {}
     for word in _WORD.findall(nfc(body)):
         word = word.lower()
-        if len(word) < 4 or word in STOPWORDS:
+        if len(word) < 4 or word in stop:
             continue
         counts[word] = counts.get(word, 0) + 1
     order = {w: i for i, w in enumerate(counts)}

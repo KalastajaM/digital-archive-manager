@@ -16,7 +16,7 @@ from contextlib import closing
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
-from dam import languages
+from dam import packs
 from dam.ai import guard
 from dam.ai.tasks import Built, register
 from dam.ai.tasks._common import digest, language, rules_point_excluded, shorten
@@ -38,8 +38,11 @@ LEAD = 200  # characters of context kept before the best match
 SCAN_CHARS = 200_000  # of a file's text searched for the snippet
 MAX_HITS = 5_000
 
-# the stopwords of the language packs (Finnish, English and Swedish)
-STOPWORDS = languages.stopwords()
+
+def stopwords() -> frozenset[str]:
+    """The enabled language packs' stopwords."""
+    return packs.active().stopwords
+
 
 _WORD = re.compile(r"[^\W_]+")
 
@@ -84,12 +87,13 @@ def system_prompt(lang: str) -> str:
 
 def terms(question: str) -> list[str]:
     """The question's search terms: words (NFC, lower-cased) of two or more characters
-    that are not Finnish or English stopwords, deduplicated, in order."""
+    that are not stopwords of the enabled languages, deduplicated, in order."""
+    stop = stopwords()
     out: list[str] = []
     for word in _WORD.findall(nfc(question)):
         # lower(), as the unicode61 tokenizer folds (casefold would turn ß into ss)
         word = word.lower()
-        if len(word) < 2 or word in STOPWORDS or word in out:
+        if len(word) < 2 or word in stop or word in out:
             continue
         out.append(word)
         if len(out) == MAX_TERMS:

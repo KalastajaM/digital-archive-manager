@@ -1,7 +1,6 @@
 import pytest
 
 from dam import packs
-from dam.rules import fields
 
 
 @pytest.fixture(autouse=True)
@@ -23,8 +22,11 @@ def _alternatives(pattern: str) -> set[str]:
 def test_labels_are_the_ones_detection_used_before():
     p = packs.build(["fi"], ["fi", "sv", "en"])
     alternatives = _alternatives
-    assert alternatives(p.due_labels.pattern) == alternatives(fields._DUE_LABELS.pattern)
-    assert alternatives(p.total_strong.pattern) == alternatives(fields._TOTAL_STRONG.pattern)
+    # the patterns detection used before there were packs
+    before_due = r"erapaiva|erapvm|due date|forfallodag|maksettava|\bdue\b"
+    before_total = r"\b(?:yhteensa|total|totalt|maksettava|att betala|loppusumma|kokonaissumma)\b"
+    assert alternatives(p.due_labels.pattern) == alternatives(before_due)
+    assert alternatives(p.total_strong.pattern) == alternatives(before_total)
 
 
 def test_months_from_every_language():

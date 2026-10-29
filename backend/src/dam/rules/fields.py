@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from dam import countries, languages
+from dam import packs
 from dam.checks import valid_iban
 from dam.countries import CountryPack
 
@@ -102,15 +102,6 @@ def _references(text: str, packs: Sequence[CountryPack]) -> str | None:
 
 
 _LABEL_WINDOW = 40
-_LANGUAGES = languages.enabled()
-_DUE_LABELS = languages.label_pattern(w for p in _LANGUAGES for w in p.due_labels)
-# Whole words on folded text, so "subtotal" and "valisumma" are never labels.
-_TOTAL_STRONG = languages.label_pattern(
-    (w for p in _LANGUAGES for w in p.total_strong), whole_words=True
-)
-_TOTAL_WEAK = languages.label_pattern(
-    (w for p in _LANGUAGES for w in p.total_weak), whole_words=True
-)
 
 
 def _fold(text: str) -> tuple[str, list[int]]:
@@ -148,13 +139,14 @@ def _first_in_window[T](end: int, candidates: list[tuple[int, T]]) -> T | None:
 
 
 def detect_fields(text: str) -> DetectedFields:
+    profile = packs.active()
     folded, index = _fold(text)
     dated = _dated(text)
     priced = _priced(text)
     amounts = _dedupe(priced)
 
     due = None
-    for end in _label_ends(folded, index, text, _DUE_LABELS):
+    for end in _label_ends(folded, index, text, profile.due_labels):
         due = _first_in_window(end, dated)
         if due is not None:
             break
@@ -162,12 +154,12 @@ def detect_fields(text: str) -> DetectedFields:
     # Totals come after subtotals: last strong label wins, else first weak, else largest.
     strong = [
         v
-        for end in _label_ends(folded, index, text, _TOTAL_STRONG)
+        for end in _label_ends(folded, index, text, profile.total_strong)
         if (v := _first_in_window(end, priced)) is not None
     ]
     weak = [
         v
-        for end in _label_ends(folded, index, text, _TOTAL_WEAK)
+        for end in _label_ends(folded, index, text, profile.total_weak)
         if (v := _first_in_window(end, priced)) is not None
     ]
     total = strong[-1] if strong else weak[0] if weak else max(amounts, default=None)
@@ -175,7 +167,7 @@ def detect_fields(text: str) -> DetectedFields:
         dates=_dedupe(dated),
         amounts=amounts,
         iban=_iban(text),
-        reference=_references(text, countries.enabled()),
+        reference=_references(text, profile.countries),
         due_date=due,
         total=total,
     )
