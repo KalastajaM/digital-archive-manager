@@ -2408,8 +2408,9 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .search-help-pop { width: min(400px, calc(100vw - 32px)); max-width: 100%; max-height: min(70vh, 540px); overflow-y: auto; font-size: var(--fs-sm); }
 .search-help-pop h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
 .search-help-list, .search-help-tips { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
-.search-help-list li { display: grid; grid-template-columns: 10.5rem 1fr; gap: var(--sp-2); align-items: baseline; padding: 2px 0; }
-.search-help-example { justify-self: start; border: none; background: var(--accent-soft); color: var(--text); font-family: var(--font-mono, monospace); font-size: var(--fs-xs); padding: 1px var(--sp-2); min-height: 0; border-radius: var(--r-sm); box-shadow: none; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.search-help-list li { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); gap: var(--sp-2); align-items: baseline; padding: 2px 0; }
+.search-help-example { justify-self: start; border: none; background: var(--accent-soft); color: var(--text); font-family: var(--font-mono, monospace); font-size: var(--fs-xs); padding: 1px var(--sp-2); min-height: 0; border-radius: var(--r-sm); box-shadow: none; cursor: pointer; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+.search-help-list .search-help-example { white-space: normal; } /* a long example wraps in its column; the New look's buttons do not */
 .search-help-example:hover { background: var(--hover); }
 .search-help-tips li { color: var(--muted); padding: 1px 0; }
 
