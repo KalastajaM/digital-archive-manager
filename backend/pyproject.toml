@@ -29,7 +29,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "xlrd>=2.0.2",
     "python-pptx>=1.0.2",
-    "httpx2>=2.14.0",  # ai/anthropic.py imports it directly
+    "httpx2>=2.16.0",  # ai/anthropic.py imports it directly
 ]
 
 [project.optional-dependencies]
