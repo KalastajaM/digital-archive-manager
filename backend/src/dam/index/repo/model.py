@@ -20,6 +20,7 @@ from dam.core.paths import nfc
 from dam.db.tables import (
     checklist_items,
     collection_members,
+    file_address_zones,
     file_assigned_codes,
     file_assignments,
     file_fields,
@@ -68,6 +69,7 @@ GIVEN_NOTES = (("note", notes), ("checklist", checklist_items))
 RECONNECTED = (
     *((what, column.table, column) for what, column in GIVEN),
     ("", member_link_names, member_link_names.c.drive_id),
+    ("", file_address_zones, file_address_zones.c.drive_id),
     *((what, table, table.c.target_id) for what, table in GIVEN_NOTES),
 )
 

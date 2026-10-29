@@ -1,0 +1,32 @@
+# Netherlands examples, in the format of rules/00-examples.yaml. The words are the usual
+# ones on Dutch post, not checked on real letters yet: change them to what yours say.
+
+# Netherlands example: the tax authority (Belastingdienst).
+- id: belastingdienst
+  when:
+    text_contains: ["belastingdienst", "aanslag inkomstenbelasting", "voorlopige aanslag"]
+    folder_is: "##. Organize"
+  then:
+    folder: "13. Taxes"
+    name: "{doc_date:%Y%m%d}_Belastingdienst"
+    tags: ["tax"]
+
+# Netherlands example: municipal taxes (the WOZ value and the gemeentelijke belastingen).
+- id: gemeente-belastingen
+  when:
+    text_contains: ["gemeentelijke belastingen", "WOZ-beschikking", "aanslagbiljet"]
+    folder_is: "##. Organize"
+  then:
+    folder: "13. Taxes"
+    name: "{doc_date:%Y%m%d}_Gemeente"
+    tags: ["tax"]
+
+# Netherlands example: an energy bill (the yearly statement or a monthly one).
+- id: energienota
+  when:
+    text_contains: ["jaarnota", "energienota", "termijnbedrag"]
+    folder_is: "##. Organize"
+  then:
+    folder: "11. Bills & Receipts/{doc_date:%Y}"
+    name: "{doc_date:%Y%m%d}_Energie"
+    tags: ["invoice"]

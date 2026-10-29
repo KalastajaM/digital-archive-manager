@@ -44,6 +44,7 @@ def _people_out(app) -> dict:
         "people": [p.model_dump() for p in app.settings.people],
         "address_zone": list(app.settings.address_zone),
         "default_address_zone": list(app.settings.countries_zone()),
+        "address_zone_set": app.settings.zone_is_set(),
     }
 
 
@@ -57,7 +58,8 @@ def get_people(app: AppDep) -> dict:
 @router.put("/people", response_model=PeopleOut)
 def put_people(app: AppDep, body: PeopleIn) -> dict:
     """Save the people list (the whole list) and, when given, the address zone to
-    settings.yaml; used at once. 400 for a bad name, a repeated name, an empty or blank
+    settings.yaml; used at once. A null zone takes it out of the file, so it follows the
+    countries again. 400 for a bad name, a repeated name, an empty or blank
     ``match``, or a bad zone; nothing is written then."""
     try:
         checked = Settings.model_validate(
@@ -71,6 +73,7 @@ def put_people(app: AppDep, body: PeopleIn) -> dict:
     app.set_people(
         [Person.model_validate(p.model_dump()) for p in checked.people],
         checked.address_zone if body.address_zone else None,
+        follow_countries="address_zone" in body.model_fields_set and body.address_zone is None,
     )
     return _people_out(app)
 

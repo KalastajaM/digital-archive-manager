@@ -340,6 +340,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/files/{drive_id}/address-area": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Address Area
+         * @description Where people are looked for on this document: the general area, its own, or none.
+         */
+        get: operations["address_area_api_files__drive_id__address_area_get"];
+        /**
+         * Put Address Area
+         * @description Give this document its own address area, used instead of the archive's and a
+         *     rule's; a null box: none, nobody is looked for on it. 400 for a box that is not one.
+         */
+        put: operations["put_address_area_api_files__drive_id__address_area_put"];
+        post?: never;
+        /**
+         * Delete Address Area
+         * @description The general address area applies to this document again.
+         */
+        delete: operations["delete_address_area_api_files__drive_id__address_area_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/{drive_id}": {
         parameters: {
             query?: never;
@@ -3754,7 +3783,8 @@ export interface paths {
         /**
          * Put People
          * @description Save the people list (the whole list) and, when given, the address zone to
-         *     settings.yaml; used at once. 400 for a bad name, a repeated name, an empty or blank
+         *     settings.yaml; used at once. A null zone takes it out of the file, so it follows the
+         *     countries again. 400 for a bad name, a repeated name, an empty or blank
          *     ``match``, or a bad zone; nothing is written then.
          */
         put: operations["put_people_api_settings_people_put"];
@@ -4243,6 +4273,29 @@ export interface components {
             /** Color */
             color: string;
         };
+        /**
+         * AddressAreaIn
+         * @description The address area of one document: a box (x0, y0, x1, y1 of page 1), or null for
+         *     none (nobody is looked for on it).
+         */
+        AddressAreaIn: {
+            /** Box */
+            box: number[] | null;
+        };
+        /**
+         * AddressAreaOut
+         * @description ``state``: "general" (the archive's area, or a rule's, applies), "document" (the
+         *     owner drew one for this document: ``box``) or "none" (nobody is looked for on it).
+         */
+        AddressAreaOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "general" | "document" | "none";
+            /** Box */
+            box?: number[] | null;
+        };
         /** ApplyTrayDefaultsIn */
         ApplyTrayDefaultsIn: {
             /** Paths */
@@ -4421,7 +4474,8 @@ export interface components {
          *     ``zones``. ``lines`` are the boxes of the lines that matched in it (for an address area,
          *     the line where the person was found). ``matched`` is whether the rule matched the
          *     document, ``reason`` why this area or the rule did not, ``wins`` whether the rule gave
-         *     the folder or name, and ``score`` how well a picture matched (0 to 1).
+         *     the folder or name, ``score`` how well a picture matched (0 to 1), and ``document``
+         *     whether the address area is one the owner drew for this document only.
          */
         AreaOut: {
             /** Rule Id */
@@ -4451,6 +4505,11 @@ export interface components {
              * @default false
              */
             wins?: boolean;
+            /**
+             * Document
+             * @default false
+             */
+            document?: boolean;
         };
         /**
          * AreaPictureIn
@@ -6942,7 +7001,7 @@ export interface components {
         /**
          * PeopleIn
          * @description The people list; ``address_zone`` (x0, y0, x1, y1 of page 1) is left as it is when
-         *     omitted.
+         *     omitted, and taken out of the settings when null: it then follows the countries.
          */
         PeopleIn: {
             /** People */
@@ -6958,6 +7017,8 @@ export interface components {
             address_zone: number[];
             /** Default Address Zone */
             default_address_zone: number[];
+            /** Address Zone Set */
+            address_zone_set: boolean;
         };
         /** PersonIO */
         PersonIO: {
@@ -10473,6 +10534,292 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page1Out"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    address_area_api_files__drive_id__address_area_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressAreaOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_address_area_api_files__drive_id__address_area_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddressAreaIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressAreaOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_address_area_api_files__drive_id__address_area_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressAreaOut"];
                 };
             };
             /** @description Bad Request */

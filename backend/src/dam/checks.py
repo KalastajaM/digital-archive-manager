@@ -44,3 +44,44 @@ def ytunnus_check(seven: str) -> int | None:
     7, 9, 10, 5, 8, 4, 2, mod 11; None when the remainder is 1 (no such ID)."""
     r = sum(int(d) * w for d, w in zip(seven, (7, 9, 10, 5, 8, 4, 2), strict=True)) % 11
     return None if r == 1 else (0 if r == 0 else 11 - r)
+
+
+def mod97_10(compact: str) -> int:
+    """ISO 7064 mod 97-10 of the string as it stands (not rearranged), letters as A=10 to
+    Z=35. A valid Dutch btw-id of a sole proprietor (from 2020) gives 1."""
+    return int("".join(str(int(c, 36)) for c in compact)) % 97
+
+
+def elfproef(nine: str) -> bool:
+    """The Dutch eleven test on nine digits: weights 9 to 2 on the first eight, -1 on the
+    last, a sum divisible by 11. Both the RSIN and the BSN (a personal number) pass it."""
+    if len(nine) != 9 or not nine.isdigit():
+        return False
+    weights = (9, 8, 7, 6, 5, 4, 3, 2, -1)
+    return sum(int(d) * w for d, w in zip(nine, weights, strict=True)) % 11 == 0
+
+
+def kenmerk_check(digits: str) -> int:
+    """The check digit of a Dutch betalingskenmerk for the ``digits`` after it: weights 2,
+    4, 8, 5, 10, 9, 7, 3, 6, 1 from the rightmost digit, repeating; 11 minus the sum mod
+    11, with 11 giving 0 and 10 giving 1 (nl.wikipedia.org "Elfproef")."""
+    weights = (2, 4, 8, 5, 10, 9, 7, 3, 6, 1)
+    total = sum(int(d) * weights[i % 10] for i, d in enumerate(reversed(digits)))
+    check = 11 - total % 11
+    return {11: 0, 10: 1}.get(check, check)
+
+
+# The length code (second digit) of a betalingskenmerk shorter than 16 digits: how many
+# digits follow it.
+_KENMERK_LENGTHS = {"0": 10, "1": 11, "2": 12, "7": 7, "8": 8, "9": 9}
+
+
+def valid_kenmerk(digits: str) -> bool:
+    """A Dutch betalingskenmerk, compact: 16 digits, or 9 to 14 whose second digit gives
+    the length; the first digit checks the rest. The 7-digit form has no check digit and is
+    never valid here."""
+    if not digits.isdigit() or digits.strip("0") == "":
+        return False
+    if len(digits) != 16 and _KENMERK_LENGTHS.get(digits[1:2]) != len(digits) - 2:
+        return False
+    return kenmerk_check(digits[1:]) == int(digits[0])

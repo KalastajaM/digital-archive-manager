@@ -634,6 +634,17 @@ all. The panel offers:
   somewhere unusual; shown when one box is drawn and a rule made the current suggestion.
 - **Address area for all letters**: where dam looks for who a letter is for; shown when
   one box is drawn.
+- **Address area for this document only** (New look): the box becomes this document's own
+  address area, used for it instead of the one for all letters and a rule's. Shown when
+  one box is drawn.
+
+In the New look, while Draw a box is on and you have people listed, a line under the hint
+says which address area this document uses: the usual one, its own, or none. **No address
+area on this document** stops dam looking for a person on it (useful for a letter whose
+page 1 is not addressed to anyone); **Use the usual address area** gives it back. When you
+move or resize the drawn address area on a document, dam asks whether the new place is
+for **This document only** or for **All letters**. All letters leaves the documents that
+have an area of their own as they are, except the one you moved it on.
 
 **How the words of an area match.** Each area with words has a choice, **Words match**:
 
@@ -783,7 +794,10 @@ never in the rest of the text, and allows one misread letter in a name of eight 
 letters. Use `{person}` in a rule's folder or name to file per person, such as
 `Insurance/Pohjola/{person}`. When nobody is found the rule gives no folder; a letter to
 two people asks **For whom?**. The address area starts at the usual place of the address
-on a Finnish business letter; change it there or with Draw a box.
+for the first country in Settings, Reading documents (for Finland the business letter
+standard, for the Netherlands an estimate); change it there, under **Address area**, or
+with Draw a box. **Reset to default** there makes it follow the countries again. One
+document can have an area of its own, or none (see Draw a box above).
 
 The rule sheet's **For** row says who the address area found on the document the rule was
 made from ("Tiina, found in the address area", "Nobody found", "Tiina and Michiel found",
@@ -1590,7 +1604,7 @@ each area, grouped by what it applies to; one section shows at a time.
     [QR stickers](#qr-stickers).
   - **Filing rules**: every rule in the order it applies, with its record; edit, test,
     delete or add rules, test a document from the inbox, and switch the offer to make a
-    rule on or off. The **People** list and the address area are here too. See
+    rule on or off. The **People** list is here too. See
     [Filing rules](#filing-rules).
   - **Archive folders**: the main folder and any extra folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
@@ -1605,12 +1619,18 @@ each area, grouped by what it applies to; one section shows at a time.
     background from the text it already has; no file is opened again).
   - **Reading documents**: where your post comes from and the languages your documents
     are written in (not the language of dam itself, which is English). A country adds what is particular to it (for Finland: the viitenumero
-    and the Finland example rules); a language adds the words for due
+    and the Finland example rules; for the Netherlands: the betalingskenmerk, the
+    KvK-nummer, btw-id and RSIN, the address area of a Dutch letter when Finland is off,
+    and the Netherlands example rules). Turning a country on also ticks its languages. A
+    language adds the words for due
     dates and totals, the month names and the stopwords of Ask. English is always on.
     Without a country dam still reads RF references, IBANs of any SEPA country, dates and
     amounts. **Save countries and languages** applies them at once. The first-run screen
-    asks the same question once (**Your post comes from**), guessed from your browser and
-    time zone.
+    asks the same question once (**Your post comes from**: Finland, the Netherlands or
+    another country), guessed from your browser and time zone. Below it, **Address area**
+    is where dam looks for the person a letter is for: four sides in percent of page 1,
+    **Reset to default** (follow the countries) and **Save address area**. It says whether
+    the area follows the countries or was set by you.
   - **Senders** (New look): a company name for each business ID found on two or more
     documents, which then becomes From on them. See [Senders](#senders).
   - **Snapshots**: take a snapshot of this archive's database and settings, export or
@@ -1978,7 +1998,10 @@ The full details are in [Safety model in detail](reference.md#safety-model-in-de
 
 - Apple Vision OCR (macOS) does not read Finnish, so scanned Finnish text is recognized
   poorly; PDFs with a text layer are unaffected. Tesseract, used on Windows and Linux,
-  does read Finnish.
+  does read Finnish. For Dutch scans add `nl-NL` to `ocr_languages`: Apple Vision on
+  recent macOS reads Dutch, and Tesseract reads it with its `nld` language data.
+- The Netherlands pack's label words (vervaldatum, totaal te betalen and so on) and its
+  address area are estimates, not yet checked on real Dutch letters and bills.
 - Previews show no page count.
 - No phone or tablet layout: narrow windows stack the columns, but the app is made for a
   desktop window. Pay mode covers paying from your phone.

@@ -2316,6 +2316,10 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .address-zone-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: end; }
 .address-zone-row label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
 .address-zone-row input { width: 5rem; }
+.address-area-settings { margin-top: var(--sp-4); }
+/* the address area of the document on show, under the Draw a box hint */
+.document-address-area { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0 0; min-width: 0; }
+.document-address-area .hint { overflow-wrap: anywhere; min-width: 0; }
 @media (max-width: 700px) {
   .people-row { grid-template-columns: minmax(0, 1fr) auto; }
   .people-row .field:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }

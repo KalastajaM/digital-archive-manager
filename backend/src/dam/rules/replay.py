@@ -18,6 +18,7 @@ from time import perf_counter
 
 from sqlalchemy import Engine, select
 
+from dam.address_areas import DocumentZone
 from dam.config import Person, SpecialFolders
 from dam.core.naming import DATE_PREFIX, parse_doc_date
 from dam.core.paths import nfc
@@ -379,6 +380,7 @@ class ReplayRun:
         people: Sequence[Person] = (),
         address_zone: Sequence[float] = (0.0, 0.0, 1.0, 1.0),
         assigned_persons: Callable[[], dict[str, str]] | None = None,
+        document_zones: Callable[[], dict[str, DocumentZone]] | None = None,
         sender_ids: Callable[[str], Sequence[str]] | None = None,
         pictures: Pictures | None = None,
         after: str | None = None,
@@ -420,6 +422,10 @@ class ReplayRun:
         self.own_layouts = has_text_zones(rule) or self.needs_person
         self.assigned = (
             assigned_persons() if assigned_persons is not None and self.needs_layouts else {}
+        )
+        # the address areas the owner drew for single documents
+        self.document_zones = (
+            document_zones() if document_zones is not None and self.needs_layouts else {}
         )
         self.with_marked = with_marked and bool(rule.sender) and sender_ids is not None
         self.near_folder = None if near_folder is None else nfc(near_folder)
@@ -548,7 +554,12 @@ class ReplayRun:
         return out
 
     def _context(self, drive_id: str) -> PeopleContext:
-        return PeopleContext(self.people, self.address_zone, self.assigned.get(drive_id))
+        return PeopleContext(
+            self.people,
+            self.address_zone,
+            self.assigned.get(drive_id),
+            self.document_zones.get(drive_id),
+        )
 
     def _unreadable(self, drive_id: str) -> str:
         """Why page 1 of this document is not there: waiting for the layout pass, or
@@ -909,6 +920,7 @@ def replay(
     people: Sequence[Person] = (),
     address_zone: Sequence[float] = (0.0, 0.0, 1.0, 1.0),
     assigned_persons: Callable[[], dict[str, str]] | None = None,
+    document_zones: Callable[[], dict[str, DocumentZone]] | None = None,
     sender_ids: Callable[[str], Sequence[str]] | None = None,
     pictures: Pictures | None = None,
     after: str | None = None,
@@ -969,6 +981,7 @@ def replay(
         people=people,
         address_zone=address_zone,
         assigned_persons=assigned_persons,
+        document_zones=document_zones,
         sender_ids=sender_ids,
         pictures=pictures,
         after=after,

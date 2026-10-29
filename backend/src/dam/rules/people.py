@@ -11,6 +11,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from dam.address_areas import DocumentZone
 from dam.config import Person
 from dam.core.text import fold
 from dam.extract.layout import Box, Line, Page1Layout, lines_in_zone
@@ -25,12 +26,14 @@ _SPACES = re.compile(r"\s+")
 
 @dataclass
 class PeopleContext:
-    """What person detection needs: the list, the archive-wide address zone, and the
-    person the owner assigned to this document (None: none)."""
+    """What person detection needs: the list, the archive-wide address zone, the person
+    the owner assigned to this document (None: none), and the document's own address area
+    (``dam.address_areas``: a box, ``"none"``, or None when the general one applies)."""
 
     people: Sequence[Person]
     address_zone: Box
     assigned: str | None = None
+    document_zone: DocumentZone | None = None
 
 
 def _norm(text: str) -> str:

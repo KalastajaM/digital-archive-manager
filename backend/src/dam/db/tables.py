@@ -521,6 +521,21 @@ related_dismissed = Table(
     Column("created", Float, nullable=False),
 )
 
+# Where the address sits on page 1 of one document, as the owner drew it (migration 0047):
+# used instead of the archive's address area and a rule's. All four sides null: the
+# document has no address area (nobody is looked for). No row: the general area applies.
+# Keyed by drive id so it survives moves and renames; no FK (rows may be parked or purged).
+file_address_zones = Table(
+    "file_address_zones",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("x0", Float, nullable=True),
+    Column("y0", Float, nullable=True),
+    Column("x1", Float, nullable=True),
+    Column("y1", Float, nullable=True),
+    Column("set_at", Float, nullable=False),
+)
+
 # Files the owner locked: a safety catch against file changes (``dam.locks``). Keyed by
 # drive id so the lock survives moves and renames; no FK (rows may be parked or purged).
 # Important files are always locked and need no row. Temporary unlocks are never stored.

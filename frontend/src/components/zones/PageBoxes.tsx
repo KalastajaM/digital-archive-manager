@@ -20,12 +20,14 @@ import {
   useFileSuggestions,
   useRules,
 } from "../../api/client";
+import { useStyle } from "../../appearance";
 import { isShortcut, useKeydown } from "../../keyboard";
 import { visible, withoutNoise } from "../../text";
 import { IconButton } from "../ui/IconButton";
 import { AreaChange } from "./AreaChange";
 import { AreaLayer, percent } from "./AreaLayer";
 import { BoxPanel, type KeptBox } from "./BoxPanel";
+import { DocumentAddressArea } from "./DocumentAddressArea";
 
 /** Turns the tool on for a preview. ``suggestion``: what the file's current suggestion
  * came from, when the owner already has it (the Inbox card); otherwise it is asked for. */
@@ -102,6 +104,8 @@ function ActiveBoxes({
 function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote: boolean): Boxes {
   const active = pageOne;
   const [on, setOn] = useState(false);
+  const [look] = useStyle();
+  const isNew = look === "new";
   const [drag, setDrag] = useState<Drag | null>(null);
   // every box drawn is kept (numbered) until it is removed or the panel is closed
   const [boxes, setBoxes] = useState<KeptBox[]>([]);
@@ -301,6 +305,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
       {on && (
     <>
       {!splitNote && note}
+      {isNew && <DocumentAddressArea driveId={driveId} />}
       {boxes.length > 0 && (
         <BoxPanel
           driveId={driveId}

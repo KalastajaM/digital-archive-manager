@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy import Engine, func, select
 
 from dam import packs, relabel
+from dam.address_areas import AddressAreas
 from dam.ai.service import AIService
 from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
 from dam.codes.model import save_codes as write_codes
@@ -63,7 +64,7 @@ from dam.services.scan_fields import ScanFieldService
 from dam.services.senders import SenderNames
 from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
-from dam.settings_write import write_keys
+from dam.settings_write import REMOVE, write_keys
 from dam.setup import NOT_CONFIGURED
 from dam.tags import TagAdmin
 from dam.trays import defaults as tray_defaults
@@ -223,6 +224,7 @@ class ServiceParts:
     summaries: SummaryService
     relatives: RelativesService
     sender_names: SenderNames
+    address_areas: AddressAreas
 
 
 def build_services(
@@ -257,6 +259,7 @@ def build_services(
         executor=executor,
     )
     assignments = AssignmentService(engine, repo, lambda: live.settings.people)
+    address_areas = AddressAreas(engine)
     inbox = InboxService(
         paths,
         repo,
@@ -277,6 +280,7 @@ def build_services(
         people=lambda: live.settings.people,
         address_zone=lambda: live.settings.address_zone,
         assigned_person=assignments.person_of,
+        document_zones=address_areas.of_many,
         assignments=assignments,
         pictures=pictures,
         area_pictures=area_pictures,
@@ -358,6 +362,7 @@ def build_services(
         summaries=SummaryService(engine, repo),
         relatives=RelativesService(engine, repo, paths),
         sender_names=SenderNames(engine, repo),
+        address_areas=address_areas,
     )
 
 
@@ -419,6 +424,7 @@ class App:
     summaries: SummaryService = field(init=False)
     relatives: RelativesService = field(init=False)
     sender_names: SenderNames = field(init=False)
+    address_areas: AddressAreas = field(init=False)
     # where the shipped default tray files live (tests point it elsewhere)
     defaults_dir: Path = field(init=False, default=DEFAULTS_DIR)
     # ends the background indexer's idle wait (``dam serve`` wires it); a no-op otherwise
@@ -660,24 +666,37 @@ class App:
         packs.activate(self._packs)
 
     def set_people(
-        self, people: list[Person], address_zone: tuple[float, float, float, float] | None
+        self,
+        people: list[Person],
+        address_zone: tuple[float, float, float, float] | None,
+        follow_countries: bool = False,
     ) -> None:
         """Save the people list (and, when given, the address zone of page 1) to
-        settings.yaml and use them from now on. ``InvalidRequest`` when the file could not
-        be written (it is left as it was)."""
+        settings.yaml and use them from now on. ``follow_countries``: take the zone out of
+        the file, so it follows the countries again. ``InvalidRequest`` when the file could
+        not be written (it is left as it was)."""
         updates: dict[str, object] = {"people": [p.model_dump() for p in people]}
-        if address_zone is not None:
+        if follow_countries:
+            updates["address_zone"] = REMOVE
+        elif address_zone is not None:
             updates["address_zone"] = list(address_zone)
 
         def read_back(s: Settings) -> bool:
-            return s.people == people and (address_zone is None or s.address_zone == address_zone)
+            if s.people != people:
+                return False
+            if follow_countries:
+                return not s.zone_is_set()
+            return address_zone is None or s.address_zone == address_zone
 
         try:
             write_keys(self.app_paths, updates, read_back)
         except OSError as e:
             raise InvalidRequest(f"the people could not be saved: {e}") from e
         self.settings.people = people
-        if address_zone is not None:
+        if follow_countries:
+            self.settings.model_fields_set.discard("address_zone")
+            object.__setattr__(self.settings, "address_zone", self.settings.countries_zone())
+        elif address_zone is not None:
             self.settings.address_zone = address_zone
 
     def save_codes(self, codes: list[FilingCode]) -> list[CodeProblem]:

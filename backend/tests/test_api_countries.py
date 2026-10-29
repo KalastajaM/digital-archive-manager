@@ -57,3 +57,37 @@ def test_a_zone_set_by_the_owner_stays(app, app_paths):
         people = c.get("/api/settings/people").json()
     assert people["address_zone"] == zone
     assert people["default_address_zone"] == list(DEFAULT_ADDRESS_ZONE)
+
+
+NL_ZONE = [0.071, 0.135, 0.548, 0.320]
+
+
+def test_the_zone_follows_the_countries_until_the_owner_sets_one(app, app_paths):
+    with make_client(app) as c:
+        people = c.get("/api/settings/people").json()
+        assert people["address_zone_set"] is False
+        # the people saved without a zone: the zone is not pinned
+        c.put("/api/settings/people", json={"people": []}, **PUT)
+        c.put("/api/settings/countries", json={"countries": ["nl"], "languages": ["nl"]}, **PUT)
+        people = c.get("/api/settings/people").json()
+    assert people["address_zone"] == NL_ZONE == people["default_address_zone"]
+    assert people["address_zone_set"] is False
+    assert "address_zone" not in settings_file(app_paths)
+
+
+def test_default_removes_the_zone_so_it_follows_the_countries_again(app, app_paths):
+    zone = [0.1, 0.2, 0.6, 0.4]
+    with make_client(app) as c:
+        c.put("/api/settings/people", json={"people": [], "address_zone": zone}, **PUT)
+        assert c.get("/api/settings/people").json()["address_zone_set"] is True
+        c.put("/api/settings/countries", json={"countries": ["nl"], "languages": ["nl"]}, **PUT)
+        got = c.put("/api/settings/people", json={"people": [], "address_zone": None}, **PUT)
+    assert got.status_code == 200
+    assert got.json()["address_zone"] == NL_ZONE
+    assert got.json()["address_zone_set"] is False
+    assert "address_zone" not in settings_file(app_paths)
+    assert not load_settings(app_paths).zone_is_set()
+
+
+def settings_file(app_paths) -> dict:
+    return yaml.safe_load((app_paths.config_dir / "settings.yaml").read_text(encoding="utf-8"))

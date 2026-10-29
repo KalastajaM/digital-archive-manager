@@ -251,6 +251,8 @@ from dam.api.schemas.responses import (
     UnlockIn,
 )
 from dam.api.schemas.rules import (
+    AddressAreaIn,
+    AddressAreaOut,
     AreaOut,
     AreaPictureIn,
     AreaPictureOut,
@@ -585,6 +587,8 @@ __all__ = [
     "FilingCodeFoldersOut",
     "FileRequestOut",
     "BatchRowOut",
+    "AddressAreaIn",
+    "AddressAreaOut",
     "AreaOut",
     "DraftWordOut",
     "RuleDraftOut",

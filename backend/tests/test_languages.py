@@ -40,3 +40,27 @@ def test_no_fragments_never_match():
     # a language set without, say, weak total labels must not match at every position
     assert languages.label_pattern([]).search("Alv 12,00 € 50,00 €") is None
     assert languages.label_pattern([], whole_words=True).search("Alv 12,00 € 50,00 €") is None
+
+
+def test_dutch_labels_and_months():
+    from dam import packs
+
+    before = packs.active()
+    try:
+        packs.activate(packs.build(["nl"], ["nl", "en"]))
+        found = detect_fields("Uiterste betaaldatum: 3 november 2026\nTotaalbedrag € 1.234,56")
+        assert found.due_date == date(2026, 11, 3)
+        assert str(found.total) == "1234.56"
+        assert detect_fields("Te betalen vóór 15 mrt 2027").due_date == date(2027, 3, 15)
+        assert (
+            detect_fields("Subtotaal € 10,00 Bedrag € 12,10").total
+            == detect_fields("Bedrag € 12,10").total
+        )
+    finally:
+        packs.activate(before)
+
+
+def test_dutch_reads_with_tesseract():
+    from dam.extract.ocr import tesseract_languages
+
+    assert tesseract_languages(["nl-NL", "en-US"]) == "nld+eng"
