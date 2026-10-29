@@ -649,42 +649,6 @@ function NewChildSheet({
   );
 }
 
-/** The New look's block under the collections box: the member's Group (the keyboard way to move
- * it), and two links for what only a collection's panel has: the file's own folder in Browse and
- * a jump to its note. */
-function CollectionSection({
-  group,
-  showButton,
-  noteLink,
-}: {
-  group: ReactNode;
-  showButton: ReactNode;
-  noteLink: boolean;
-}) {
-  const toNote = () => {
-    const box = document.querySelector<HTMLElement>(".collection-inspector .item-note");
-    const toggle = box?.querySelector<HTMLButtonElement>(".collapsible-toggle[aria-expanded='false']");
-    toggle?.click(); // a folded note opens first
-    requestAnimationFrame(() => box?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
-  };
-  if (!group && !showButton && !noteLink) return null;
-  return (
-    <section className="inspector-collection" aria-label="In this collection">
-      {group}
-      {(showButton || noteLink) && (
-        <div className="inspector-links">
-          {showButton}
-          {noteLink && (
-            <button type="button" className="link-button" onClick={toNote}>
-              Note on this file
-            </button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
 /** The selected member. A file in the index gets the shared file panel (as in Browse),
  * with Quick Look in its preview's toolbar and, in its own block, its group (the keyboard
  * way to move it). What acts on the file (Put in tray, Remove from collection, Ask AI, ★,
@@ -702,7 +666,7 @@ function Inspector({
 }: {
   /** The page's Ask AI, whose answer shows in the file's details. */
   ai: FilingAI;
-  /** The New look: the file's two icon rows (``FileActionIcons``; in Classic they are in the page's header). */
+  /** The New look: the file's icon row (``FileActionIcons``; in Classic they are in the page's header). */
   icons?: ReactNode;
   member: Member | null;
   groups: { group: Group; path: string }[];
@@ -724,7 +688,7 @@ function Inspector({
   // the file's own folder in Browse, with the file selected (a click on a member keeps the
   // collection's page; Today's Starred card opens Browse on a click)
   const showButton = !member.is_dir && member.path && (
-    <button type="button" className={icons !== undefined ? "link-button" : undefined} onClick={() => navigate(browseHref(member.path!, member.drive_id))}>
+    <button type="button" onClick={() => navigate(browseHref(member.path!, member.drive_id))}>
       Show in folder
     </button>
   );
@@ -760,8 +724,13 @@ function Inspector({
           compactRelatives
           actions={icons}
           extras={
+            // New look: Show in folder is an icon in the row, the note is its own block
             icons !== undefined ? (
-              <CollectionSection group={group} showButton={showButton} noteLink />
+              group && (
+                <section className="inspector-collection" aria-label="In this collection">
+                  {group}
+                </section>
+              )
             ) : (
               (group || showButton) && (
                 <section className="inspector-collection" aria-label="In this collection">
@@ -837,7 +806,7 @@ function EntryInspector({
   busy: boolean;
   onQuickLook: () => void;
   ai: FilingAI;
-  /** The New look: the file's two icon rows. */
+  /** The New look: the file's icon row. */
   icons?: ReactNode;
 }) {
   const folder = entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
@@ -1453,7 +1422,7 @@ export default function CollectionDetail({
         trash: { run: trashSelected, disabled: busy || trashWhy !== null, reason: trashWhy },
       }
     : null;
-  // Classic: one bar in the page's header. New: the file's two icon rows in its side panel,
+  // Classic: one bar in the page's header. New: the file's icon row in its side panel,
   // without Move to… (the folder in the panel's header does it).
   const fileBar = barProps ? <FileActionBar {...barProps} /> : <FileActionBar />;
   const fileIcons =
@@ -1467,6 +1436,7 @@ export default function CollectionDetail({
             : null
         }
         onQuickLook={shownIsFile && (browsed || (selected && looks.includes(selected))) ? quickLook.open : undefined}
+        showInFolder={shownIsFile && shownPath ? () => navigate(browseHref(shownPath, shownFile.drive_id)) : undefined}
       />
     ) : undefined;
 

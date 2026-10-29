@@ -1,6 +1,7 @@
-/** Browse in the New look: the extra controls the stylesheet shows when the room is short
- * (the "View" menu per pane, the "More" menu, the Details and folders buttons, the L / R
- * tabs) and the remembered divider between two panes. Classic renders none of them. */
+/** Browse in the New look: Split in the header, Swap and Close on the panes' bars, New folder
+ * in a pane, the extra controls the stylesheet shows when the room is short (the "View" menu
+ * per pane, the Details and folders buttons, the L / R tabs), This folder's columns and the
+ * remembered divider between two panes. Classic renders none of them. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -49,15 +50,21 @@ afterEach(() => {
 });
 
 describe("Browse in New, one pane", () => {
-  it("offers Details, the More menu and a View menu in the pane header", async () => {
+  it("offers Details and Split in the header, and View and New folder in the pane header", async () => {
     document.documentElement.dataset.style = "new";
     const { user } = setup("/browse");
     await screen.findByText("a.pdf");
     const details = screen.getByRole("button", { name: "Details" });
     expect(details).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: "More: panes and folders" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Split" })).toBeInTheDocument();
+    // no layout switch, Swap or New folder in the header any more
+    for (const name of ["One pane", "Two panes", "Swap panes", "More: panes and folders"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
     const pane = screen.getByRole("region", { name: "Browse" });
     expect(within(pane).getByRole("button", { name: "View" })).toBeInTheDocument();
+    expect(within(pane).getByRole("button", { name: "New folder" })).toBeInTheDocument();
+    expect(within(document.querySelector(".browse-toolbar") as HTMLElement).queryByRole("button", { name: "New folder" })).toBeNull();
     // the Details button opens the panel over the list, and the scrim closes it again
     const body = document.querySelector(".browse-body") as HTMLElement;
     expect(body.dataset.details).toBeUndefined();
@@ -69,7 +76,7 @@ describe("Browse in New, one pane", () => {
     expect(screen.queryByRole("tablist", { name: "Panes" })).not.toBeInTheDocument();
   });
 
-  it("the View menu holds This folder, All files below and the collection filter", async () => {
+  it("the View menu holds This folder and All files below, and no collection filter", async () => {
     document.documentElement.dataset.style = "new";
     const { user } = setup("/browse");
     await screen.findByText("a.pdf");
@@ -79,7 +86,7 @@ describe("Browse in New, one pane", () => {
     expect(within(menu).getByRole("menuitemcheckbox", { name: "All files below" })).not.toBeChecked();
     expect(within(menu).getByRole("menuitemcheckbox", { name: "This folder" })).toHaveAttribute("data-tip", expect.stringContaining("subfolders and its own files"));
     expect(within(menu).getByRole("menuitemcheckbox", { name: "All files below" })).toHaveAttribute("data-tip", expect.stringContaining("in one list"));
-    expect(within(menu).getByRole("menuitemcheckbox", { name: "All files" })).toBeChecked();
+    expect(within(menu).getAllByRole("menuitemcheckbox")).toHaveLength(2);
   });
 
   it("the view switch says This folder and All files below, with tooltips, and still switches", async () => {
@@ -145,9 +152,33 @@ describe("Browse in New, two panes", () => {
     expect(right).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("region", { name: "Right pane" })).toHaveClass("browse-pane-active");
     expect(screen.getByRole("region", { name: "Left pane" })).not.toHaveClass("browse-pane-active");
-    expect([...document.querySelectorAll(".pane-id")].map((n) => n.textContent)).toEqual(["L", "R"]);
+    // Swap on the left pane's bar, Close on the right one's; Split is gone from the header
+    expect(within(screen.getByRole("region", { name: "Left pane" })).getByRole("button", { name: "Swap panes" })).toHaveAttribute("data-tip", "Swap the two panes");
+    expect(within(screen.getByRole("region", { name: "Right pane" })).getByRole("button", { name: "Close this pane" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Split" })).not.toBeInTheDocument();
     // the details panel sits beside two panes too (a Details button opens it when the room is short)
     expect(screen.getByRole("button", { name: "Details" })).toBeInTheDocument();
+  });
+
+  it("Split opens the second pane, its X closes it, and Swap keeps you on your side", async () => {
+    document.documentElement.dataset.style = "new";
+    const { user } = setup("/browse?path=Money");
+    await screen.findByText("a.pdf");
+    await user.click(screen.getByRole("button", { name: "Split" }));
+    const left = await screen.findByRole("region", { name: "Left pane" });
+    const right = screen.getByRole("region", { name: "Right pane" });
+    // go to the archive's top on the left, then into the right pane
+    await user.click(within(within(left).getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Archive" }));
+    await user.click(within(right).getByRole("button", { name: /^a\.pdf/ }));
+    expect(right).toHaveClass("browse-pane-active");
+    await user.click(within(left).getByRole("button", { name: "Swap panes" }));
+    // the folders trade places; the right side stays the active one
+    await waitFor(() => expect(within(screen.getByRole("region", { name: "Right pane" })).getByRole("navigation", { name: "Breadcrumb" })).not.toHaveTextContent("Money"));
+    expect(within(screen.getByRole("region", { name: "Left pane" })).getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Money");
+    expect(screen.getByRole("region", { name: "Right pane" })).toHaveClass("browse-pane-active");
+    await user.click(within(screen.getByRole("region", { name: "Right pane" })).getByRole("button", { name: "Close this pane" }));
+    expect(await screen.findByRole("region", { name: "Browse" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Split" })).toBeInTheDocument();
   });
 
   it("remembers the divider's place and a double-click resets it", async () => {
@@ -236,5 +267,39 @@ describe("Browse in New, a long path", () => {
     const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(within(crumbs).getAllByRole("link")).toHaveLength(3);
     expect(within(crumbs).queryByRole("button")).not.toBeInTheDocument();
+  });
+});
+
+describe("This folder's columns (New)", () => {
+  const rows = [
+    { ...entry("Zeta", "d2", true), mtime: 5 },
+    { ...entry("Money", "d1", true), mtime: 9 },
+    { ...entry("big.pdf", "f2"), size: 9000, mtime: 2 },
+    { ...entry("a.pdf", "f1"), size: 10, mtime: 7 },
+  ];
+  const names = () =>
+    [...(screen.getByRole("list", { name: "Folder contents" }).querySelectorAll(".entry-name"))].map((n) => n.textContent);
+
+  it("has Name, Date and Size to sort by, folders first, and no size for a folder", async () => {
+    document.documentElement.dataset.style = "new";
+    const { user } = setup("/browse", rows);
+    await screen.findByText("a.pdf");
+    const head = screen.getByRole("group", { name: "Sort by" });
+    expect(within(head).getAllByRole("button").map((b) => b.textContent)).toEqual(["Name ↑", "Date", "Size"]);
+    expect(names()).toEqual(["Money", "Zeta", "a.pdf", "big.pdf"]);
+    await user.click(within(head).getByRole("button", { name: "Sort by size" }));
+    // largest first; the folders stay on top in A-Z
+    expect(names()).toEqual(["Money", "Zeta", "big.pdf", "a.pdf"]);
+    await user.click(within(head).getByRole("button", { name: "Sort by date" }));
+    expect(names()).toEqual(["Money", "Zeta", "a.pdf", "big.pdf"]);
+    const folder = screen.getByRole("button", { name: /^Money/ });
+    expect(folder.querySelector(".entry-size")).toHaveTextContent("");
+    expect(folder.querySelector(".entry-folder")).toBeNull();
+  });
+
+  it("Classic keeps its plain list", async () => {
+    setup("/browse", rows);
+    await screen.findByText("a.pdf");
+    expect(screen.queryByRole("group", { name: "Sort by" })).not.toBeInTheDocument();
   });
 });

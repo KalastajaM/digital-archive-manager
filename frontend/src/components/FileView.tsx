@@ -17,7 +17,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 export const FILE_VIEW_BLOCKS = ["header", "tags", "collections", "summary", "own", "relatives", "preview", "notes"] as const;
-/** The New look's one file panel skeleton (``FilePanelSkeleton``): the two icon rows right under
+/** The New look's one file panel skeleton (``FilePanelSkeleton``): the icon row right under
  * the header, the screen's own section (the Inbox's filing form) under them, a collection's
  * group under its collections. */
 export const SKELETON_BLOCKS = [

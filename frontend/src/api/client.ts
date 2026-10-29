@@ -755,10 +755,10 @@ export const useUndoPreview = (batchId: string) =>
 /** Direct children of the archive-relative folder ``path`` ("" is the root). */
 /** A folder's direct children; with ``collection``, only those on the way to one of
  * its members (everything inside a member folder). */
-export const useBrowse = (path: string, enabled = true, collection: number | null = null) =>
+export const useBrowse = (path: string, enabled = true) =>
   useQuery({
-    queryKey: collection === null ? [...keys.browse, path] : [...keys.browse, path, { collection }],
-    queryFn: ({ signal }) => apiGet("/api/browse", { query: { path, collection }, signal }),
+    queryKey: [...keys.browse, path],
+    queryFn: ({ signal }) => apiGet("/api/browse", { query: { path }, signal }),
     enabled,
   });
 
@@ -767,19 +767,18 @@ export type FlatFiles = Schemas["FlatFilesOut"];
 /** The Files view's page size (the API's ``limit`` maximum). */
 export const FLAT_LIMIT = 500;
 
-/** The Files view: every file below ``path`` (of ``collection``, if set), flat, at most
+/** The Files view: every file below ``path``, flat, at most
  * ``FLAT_LIMIT`` rows plus the total. */
 export const useBrowseFiles = (
   path: string,
-  collection: number | null,
   sort: FlatSort,
   dir: "asc" | "desc",
   enabled = true,
 ) =>
   useQuery({
-    queryKey: [...keys.browse, "files", path, { collection, sort, dir }],
+    queryKey: [...keys.browse, "files", path, { sort, dir }],
     queryFn: ({ signal }) => {
-      const query = { path, sort, dir, limit: FLAT_LIMIT, collection };
+      const query = { path, sort, dir, limit: FLAT_LIMIT };
       return apiGet("/api/browse/files", { query, signal });
     },
     enabled,
@@ -1448,8 +1447,8 @@ export const useCollections = (state: CollectionState = "open", enabled = true) 
     enabled,
   });
 
-/** Every collection, open and closed, with the built-in ★ Ongoing and ! Important (the
- * Browse collection filter lists those under "Marked"; no other picker does). */
+/** Every collection, open and closed, with the built-in ★ Ongoing and ! Important (Browse's
+ * panels name a file's collections from it; the pickers leave the built-ins out). */
 export const useCollectionsWithMarked = (enabled = true) =>
   useQuery({
     queryKey: [...keys.collections, "list", "all", "builtin"],

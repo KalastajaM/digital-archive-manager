@@ -62,6 +62,7 @@ import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, gro
 import { visible } from "../text";
 import { AddFile } from "../components/AddFile";
 import { FileMeta } from "../components/FileMeta";
+import { browseHref } from "../components/GroupTree";
 import { FileView } from "../components/FileView";
 import { FileCollections } from "./FileActions";
 import { FilePanel } from "./FilePanel";
@@ -733,6 +734,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           : null
       }
       onQuickLook={onQuickLook && hasFile ? onQuickLook : undefined}
+      showInFolder={hasFile && shown?.path ? () => navigate(browseHref(shown.path!, shown.drive_id)) : undefined}
     />
   );
 
@@ -859,8 +861,8 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   );
 
   if (isNew) {
-    // As drawn on the Tray board: the title row with Move to tray… and Close, the fields card with
-    // Mark done, then the files, checklist, note and history beside the summary and the document.
+    // The title row with Move to tray… and Close, the fields card with Mark done, then one column
+    // (as Browse): the files, the one file panel for the file shown, the checklist, note and history.
     const added = formatDate(dayOf(item.created));
     return (
       <div className={`item-detail item-${kind} item-new`} {...fileDrop.props}>
@@ -900,54 +902,48 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         {donePopover}
         {fileProblems}
         {missingNote}
-        <div className="item-cols">
-          <div className="item-col-main">
-            {billFacts}
-            {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
-            <section className="item-files-list" aria-label="Files on this item">
-              <h3>Files on this item</h3>
-              {files.isSuccess && (
-                <ul>
-                  {list.map((f, i) => (
-                    <li key={f.drive_id} data-shown={f === shown ? "true" : undefined}>
+        <div className="item-stack">
+          {billFacts}
+          {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
+          <section className="item-files-list" aria-label="Files on this item">
+            <h3>Files on this item</h3>
+            {files.isSuccess && (
+              <ul>
+                {list.map((f, i) => (
+                  <li key={f.drive_id} data-shown={f === shown ? "true" : undefined}>
+                    <button
+                      type="button"
+                      className="item-file-pick"
+                      aria-pressed={f === shown}
+                      title={nameOf(f)}
+                      onClick={() => setTab(i)}
+                    >
+                      <span className="item-file">{nameOf(f)}</span>
+                      <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
+                      {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
+                    </button>
+                    {f === shown && list.length > 1 && <span className="item-file-shown">shown</span>}
+                    {list.length > 1 && (
                       <button
                         type="button"
-                        className="item-file-pick"
-                        aria-pressed={f === shown}
-                        title={nameOf(f)}
-                        onClick={() => setTab(i)}
+                        className="tab-close"
+                        aria-label={`Remove ${nameOf(f)} from this item`}
+                        data-tip="Take this file off the item (the file stays where it is)"
+                        disabled={change.isPending}
+                        onClick={() => void takeOff(f)}
                       >
-                        <span className="item-file">{nameOf(f)}</span>
-                        <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
-                        {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
+                        <X size={12} aria-hidden="true" />
                       </button>
-                      {f === shown && list.length > 1 && <span className="item-file-shown">shown</span>}
-                      {list.length > 1 && (
-                        <button
-                          type="button"
-                          className="tab-close"
-                          aria-label={`Remove ${nameOf(f)} from this item`}
-                          data-tip="Take this file off the item (the file stays where it is)"
-                          disabled={change.isPending}
-                          onClick={() => void takeOff(f)}
-                        >
-                          <X size={12} aria-hidden="true" />
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                  <li className="item-file-add">{addButton}</li>
-                </ul>
-              )}
-              {addPanel}
-            </section>
-            {checklist}
-            <SavedNote kind="item" target={String(item.id)} />
-            <History item={item} tray={tray} today={today} />
-          </div>
-          <div className="item-col-side">
+                    )}
+                  </li>
+                ))}
+                <li className="item-file-add">{addButton}</li>
+              </ul>
+            )}
+            {addPanel}
+          </section>
+          <div className="item-file-panel">
             {!files.isPending && shown?.path && shown.state !== "missing" ? (
-              // the one file panel, for the file shown (the item's card is the column beside it)
               <FilePanel
                 key={shown.drive_id}
                 file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }}
@@ -963,6 +959,9 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
               <ItemSummary item={item} />
             )}
           </div>
+          {checklist}
+          <SavedNote kind="item" target={String(item.id)} />
+          <History item={item} tray={tray} today={today} />
         </div>
         {sheets}
       </div>

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, Network, PanelRight } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Columns2, Ellipsis, Eye, File, Folder, FolderPlus, HardDrive, Network, PanelRight, X } from "lucide-react";
 import {
   cloneElement,
   type CSSProperties,
@@ -36,7 +36,7 @@ import { FitText } from "../components/FitText";
 import { WindowedList } from "../components/WindowedList";
 import { notConnected } from "../components/FileLaunch";
 import type { PreviewFile } from "../components/FilePreview";
-import { BUILTIN_LABEL, MarkIcons } from "../components/MarkIcons";
+import { MarkIcons } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
 import { type RestoreTo, type RestoreWhere, restoreEntries, useRestoreFlow } from "../components/Restore";
 import {
@@ -133,19 +133,12 @@ const ALL_FILES_TIP = "All files below: every file in this folder and its subfol
 
 /** Folders: the folder tree as it is; Files: every file below the folder, flat. */
 export type PaneView = "folders" | "files";
-/** What one pane shows: its folder, its collection filter (an id) and its view. */
-type PaneState = { path: string; collection: number | null; view: PaneView };
-/** The URL parameters of a pane's filter and view: one pane uses ?collection=&view=,
- * two use ?lcol=&lview=&rcol=&rview= (beside ?left=&right=). */
-const PARAM = {
-  one: { collection: "collection", view: "view" },
-  left: { collection: "lcol", view: "lview" },
-  right: { collection: "rcol", view: "rview" },
-} as const;
-const idParam = (raw: string | null): number | null => {
-  const n = raw === null ? Number.NaN : Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : null;
-};
+/** What one pane shows: its folder and its view (a collection's files are a search:
+ * ``collection:"House sale"``). */
+type PaneState = { path: string; view: PaneView };
+/** The URL parameter of a pane's view: one pane uses ?view=, two use ?lview=&rview=
+ * (beside ?left=&right=). */
+const PARAM = { one: "view", left: "lview", right: "rview" } as const;
 const viewParam = (raw: string | null): PaneView => (raw === "files" ? "files" : "folders");
 
 type SortState = { sort: FlatSort; dir: "asc" | "desc" };
@@ -157,6 +150,19 @@ const SORT_COLUMNS: { sort: FlatSort; label: string }[] = [
 ];
 /** A newly chosen column starts newest/largest first for dates and sizes, A–Z otherwise. */
 const firstDir = (sort: FlatSort): "asc" | "desc" => (sort === "date" || sort === "size" ? "desc" : "asc");
+/** This folder (New look): its folders first, then its files, each part in the pane's
+ * column order (a folder has no size: folders keep A–Z then). */
+function sortListing(rows: DirEntry[], { sort, dir }: SortState): DirEntry[] {
+  const sign = dir === "asc" ? 1 : -1;
+  const byName = (a: DirEntry, b: DirEntry) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  const key = (a: DirEntry, b: DirEntry) => {
+    if (sort === "date") return ((a.mtime ?? 0) - (b.mtime ?? 0)) * sign || byName(a, b);
+    if (sort === "size" && !a.is_dir) return ((a.size ?? 0) - (b.size ?? 0)) * sign || byName(a, b);
+    if (sort === "size") return byName(a, b);
+    return byName(a, b) * sign;
+  };
+  return [...rows].sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || key(a, b));
+}
 
 /** Where the New look remembers whether two panes show the folder tree beside them (it starts
  * hidden: the second pane mostly says what the tree says). Per archive, this browser only. */
@@ -539,7 +545,7 @@ function EntryRow({
               <FitText mode="path" className="entry-col entry-folder" text={visible(parentOf(item.path)) || "Archive"} />
             )}
             <span className="entry-col entry-date">{item.mtime != null ? shortDate(item.mtime) : ""}</span>
-            <span className="entry-col entry-size">{item.size != null ? formatSize(item.size) : ""}</span>
+            <span className="entry-col entry-size">{!item.is_dir && item.size != null ? formatSize(item.size) : ""}</span>
           </>
         ) : (
           main
@@ -596,13 +602,12 @@ const isUnder = (path: string, area: string) => fold(path) === fold(area) || fol
 /** Why "New folder" is off for a pane (null: a folder can be made in what it shows). The
  * server refuses the same places; this only says so first. */
 function newFolderRefusal(
-  pane: { path: string; collection: number | null; view: PaneView },
+  pane: { path: string; view: PaneView },
   searching: boolean,
   special: { quarantine: string; ongoing: string; important: string } | undefined,
 ): string | null {
   if (searching) return "Search results are not a folder: open a folder first";
   if (pane.view === "files") return "Switch to Folders to make a folder here";
-  if (pane.collection !== null) return "Show all files to make a folder here (a filter hides it)";
   if (!special) return "The special folders are not known yet";
   for (const area of [special.quarantine, special.ongoing, special.important]) {
     if (isUnder(pane.path, area)) return `Folders can't be made in ${visible(area)}`;
@@ -712,19 +717,17 @@ export default function Browse() {
   const [menu, setMenu] = useState<{ x: number; y: number; path: string; name: string; driveId: string } | null>(null);
 
   // Paths: one pane uses ?path= (as before), two use ?left=&right=; each pane's
-  // collection filter and view sit beside them (PARAM).
+  // view sits beside them (PARAM).
   const leftState: PaneState = {
     path: params.get("left") ?? params.get("path") ?? "",
-    collection: idParam(params.get(PARAM.left.collection) ?? params.get(PARAM.one.collection)),
-    view: viewParam(params.get(PARAM.left.view) ?? params.get(PARAM.one.view)),
+    view: viewParam(params.get(PARAM.left) ?? params.get(PARAM.one)),
   };
   const panes: Record<PaneId, PaneState> = {
     left: leftState,
     right: params.has("right")
       ? {
           path: params.get("right") ?? "",
-          collection: idParam(params.get(PARAM.right.collection)),
-          view: viewParam(params.get(PARAM.right.view)),
+          view: viewParam(params.get(PARAM.right)),
         }
       : leftState,
   };
@@ -771,56 +774,18 @@ export default function Browse() {
     right: { sort: "name", dir: "asc" },
   });
   const listings: Record<PaneId, ReturnType<typeof useBrowse>> = {
-    left: useBrowse(paths.left, !flatOf("left"), panes.left.collection),
-    right: useBrowse(paths.right, split && !flatOf("right"), panes.right.collection),
+    left: useBrowse(paths.left, !flatOf("left")),
+    right: useBrowse(paths.right, split && !flatOf("right")),
   };
   const flats: Record<PaneId, ReturnType<typeof useBrowseFiles>> = {
-    left: useBrowseFiles(paths.left, panes.left.collection, sorts.left.sort, sorts.left.dir, flatOf("left")),
-    right: useBrowseFiles(
-      paths.right,
-      panes.right.collection,
-      sorts.right.sort,
-      sorts.right.dir,
-      split && flatOf("right"),
-    ),
+    left: useBrowseFiles(paths.left, sorts.left.sort, sorts.left.dir, flatOf("left")),
+    right: useBrowseFiles(paths.right, sorts.right.sort, sorts.right.dir, split && flatOf("right")),
   };
   /** The pane's current listing: the folder's entries, or the Files view's rows. */
   const listedOf = (pane: PaneId): DirEntry[] | undefined =>
     flatOf(pane) ? flats[pane].data?.rows : listings[pane].data;
-  // Every collection, open and closed, so a closed collection's link still names it.
-  const collections = useCollectionsWithMarked(); // the built-ins too, under "Marked"
-  // The collection filter's menu button: "Collection", or the chosen one's name.
-  const filterName = (id: number) => {
-    const c = collections.data?.find((x) => x.id === id);
-    if (c?.kind) return BUILTIN_LABEL[c.kind];
-    return c ? c.name : collections.isPending ? "…" : `Collection ${id}`;
-  };
-  /** "All files", the built-ins, then the open collections as a tree (a closed one only
-   * while it is the chosen filter, e.g. from a link). */
-  const filterEntries = (pane: PaneId): MenuEntry[] => {
-    const chosen = panes[pane].collection;
-    const all = collections.data ?? [];
-    const pick = (id: number | null) => () => setPane(pane, { collection: id });
-    const out: MenuEntry[] = [{ label: "All files", checked: chosen === null, onSelect: pick(null) }];
-    const builtins = all
-      .filter((c) => c.kind != null)
-      .sort((a, b) => (a.kind === "starred" ? 0 : 1) - (b.kind === "starred" ? 0 : 1));
-    if (builtins.length > 0) {
-      out.push("separator");
-      for (const c of builtins) out.push({ label: filterName(c.id), checked: chosen === c.id, onSelect: pick(c.id) });
-    }
-    const ordinary = all.filter((c) => c.kind == null && (c.state === "open" || c.id === chosen));
-    const kids = childrenOf(ordinary);
-    const walk = (parent: number | null, level: number) => {
-      for (const c of kids.get(parent) ?? []) {
-        out.push({ label: visible(c.name), checked: chosen === c.id, indent: level, onSelect: pick(c.id) });
-        walk(c.id, level + 1);
-      }
-    };
-    if ((kids.get(null) ?? []).length > 0) out.push("separator");
-    walk(null, 0);
-    return out;
-  };
+  // the open collections: Add to collection and the AI's suggestions
+  const collections = useCollectionsWithMarked();
 
   // The whole query is in ?q= (the words and the filters, as typed: `kela tag:medical
   // -in:"90. Other People"`), so a link or Back brings the same search. The box holds only
@@ -871,9 +836,9 @@ export default function Browse() {
 
   const viewOf = (pane: PaneId) => {
     if (searching && pane === sp) return `search\n${q}\n${filtersKey}\n${tagMode}\n${folder}\n${grouped ? "grouped" : "flat"}\n${searchSort ? `${searchSort.sort} ${searchSort.dir}` : ""}`;
-    const { path, collection, view } = panes[pane];
-    const sort = view === "files" ? `${sorts[pane].sort} ${sorts[pane].dir}` : "";
-    return `browse\n${path}\n${collection ?? ""}\n${view}\n${sort}`;
+    const { path, view } = panes[pane];
+    const sort = view === "files" || isNew ? `${sorts[pane].sort} ${sorts[pane].dir}` : "";
+    return `browse\n${path}\n${view}\n${sort}`;
   };
   const itemsOf = (pane: PaneId): Item[] =>
     searching && pane === sp && grouped
@@ -886,9 +851,11 @@ export default function Browse() {
         })()
       : flatOf(pane)
         ? (flats[pane].data?.rows ?? []).map((e: DirEntry) => ({ ...e })) // in the API's order
-        : [...(listings[pane].data ?? [])]
-            .sort((a, b) => Number(b.is_dir) - Number(a.is_dir))
-            .map((e: DirEntry) => ({ ...e }));
+        : isNew
+          ? sortListing(listings[pane].data ?? [], sorts[pane]).map((e: DirEntry) => ({ ...e }))
+          : [...(listings[pane].data ?? [])]
+              .sort((a, b) => Number(b.is_dir) - Number(a.is_dir))
+              .map((e: DirEntry) => ({ ...e }));
 
   const items: Record<PaneId, Item[]> = useMemo(
     () => ({ left: itemsOf("left"), right: split ? itemsOf("right") : [] }),
@@ -901,6 +868,8 @@ export default function Browse() {
       flats.right.data,
       panes.left.view,
       panes.right.view,
+      sorts,
+      isNew,
       search.hits,
       searchSort,
       searchGroups,
@@ -949,9 +918,8 @@ export default function Browse() {
   });
   const urlFor = (next: Record<PaneId, PaneState>, twoPanes: boolean) => {
     const p = new URLSearchParams();
-    const extra = (state: PaneState, keys: { collection: string; view: string }) => {
-      if (state.collection !== null) p.set(keys.collection, String(state.collection));
-      if (state.view === "files") p.set(keys.view, "files");
+    const extra = (state: PaneState, key: string) => {
+      if (state.view === "files") p.set(key, "files");
     };
     if (twoPanes) {
       p.set("left", next.left.path);
@@ -1028,7 +996,8 @@ export default function Browse() {
     setParams(urlFor({ left: panes.left, right: next ? panes.left : panes.right }, next));
   };
   /** Two panes: the left one goes right and the right one left, each with its folder,
-   * filter, view, sort, history, selection and search. */
+   * view, sort, history, selection and search. You stay on the side you were on, which now
+   * shows what the other pane showed. */
   const swapPanes = () => {
     if (!split) return;
     const flip = <T,>(all: Record<PaneId, T>): Record<PaneId, T> => ({ left: all.right, right: all.left });
@@ -1036,7 +1005,6 @@ export default function Browse() {
     setHistory(flip);
     setSorts(flip);
     setSelections(flip);
-    setActive((a) => (a === "left" ? "right" : "left"));
     setSearchPane((p) => (p === "left" ? "right" : "left"));
     setParams(urlFor(flip(panes), true));
   };
@@ -1135,12 +1103,12 @@ export default function Browse() {
   const [madeFolder, setMadeFolder] = useState<{ pane: PaneId; path: string } | null>(null);
   const newFolderWhy = (pane: PaneId) =>
     newFolderRefusal(panes[pane], searching && pane === sp, specialFolders);
-  const startNewFolder = () => {
+  const startNewFolder = (pane: PaneId = act) => {
     if (naming) return;
-    const why = newFolderWhy(act);
+    const why = newFolderWhy(pane);
     if (why) toast({ kind: "info", text: why });
     else if (running()) toast({ kind: "info", text: MOVE_BUSY });
-    else setNaming({ pane: act, parent: paths[act] });
+    else setNaming({ pane, parent: paths[pane] });
   };
   /** Make the folder; the reason it was refused, or null once it is made. */
   const makeFolder = async (target: { pane: PaneId; parent: string }, name: string): Promise<string | null> => {
@@ -1605,13 +1573,8 @@ export default function Browse() {
       );
     }
     if (rows.length === 0) {
-      const filtered = panes[pane].collection !== null;
-      if (flatOf(pane)) {
-        return (
-          <p className="placeholder">{filtered ? "No files of this collection here." : "No files here."}</p>
-        );
-      }
-      if (!filtered && panes[pane].path === "") {
+      if (flatOf(pane)) return <p className="placeholder">No files here.</p>;
+      if (panes[pane].path === "") {
         // a new archive: no folders at all yet
         return (
           <EmptyState
@@ -1632,7 +1595,7 @@ export default function Browse() {
         );
       }
       return (
-        <p className="placeholder">{filtered ? "Nothing of this collection here." : "This folder is empty."}</p>
+        <p className="placeholder">This folder is empty.</p>
       );
     }
     return null;
@@ -1643,10 +1606,12 @@ export default function Browse() {
     const s = selOf(pane);
     const isSearch = searching && pane === sp;
     const flat = flatOf(pane) && !isSearch;
-    // the Files view and search results have the folder, date and size columns
-    const columns = flat || isSearch;
+    // the Files view and search results have the folder, date and size columns; This folder
+    // (New look) has the date and size (its rows are all in the one folder)
+    const folderCols = isNew && !flat && !isSearch;
+    const columns = flat || isSearch || folderCols;
     const byFolders = isSearch && grouped;
-    const sortColumns = byFolders ? SORT_COLUMNS.filter((c) => c.sort !== "folder") : SORT_COLUMNS;
+    const sortColumns = byFolders || folderCols ? SORT_COLUMNS.filter((c) => c.sort !== "folder") : SORT_COLUMNS;
     const body = bodyOf(pane);
     const state = panes[pane];
     const nameRow = naming?.pane === pane && naming.parent === paths[pane] && !flat && !isSearch ? naming : null;
@@ -1697,14 +1662,20 @@ export default function Browse() {
           (byFolders ? " browse-pane-grouped" : "")
         }
         aria-label={split ? PANE_NAME[pane] : "Browse"}
-        onMouseDownCapture={() => setActive(pane)}
-        onFocusCapture={() => setActive(pane)}
+        // Swap and Close act on both panes: a click on them leaves the active one as it is
+        onMouseDownCapture={(e) => {
+          if (!(e.target as HTMLElement).closest(".pane-id")) setActive(pane);
+        }}
+        onFocusCapture={(e) => {
+          if (!(e.target as HTMLElement).closest(".pane-id")) setActive(pane);
+        }}
       >
         <div className="pane-bar">
-          {isNew && split && (
-            <span className="pane-id mono" aria-hidden="true">
-              {pane === "left" ? "L" : "R"}
-            </span>
+          {isNew && split && pane === "left" && (
+            <IconButton icon={<ArrowLeftRight />} label="Swap panes" tip="Swap the two panes" className="pane-id" onClick={swapPanes} />
+          )}
+          {isNew && split && pane === "right" && (
+            <IconButton icon={<X />} label="Close this pane" tip="Close this pane (back to one pane)" className="pane-id" onClick={toggleSplit} />
           )}
           <IconButton
             icon={<ChevronLeft />}
@@ -1732,14 +1703,17 @@ export default function Browse() {
           )}
           <div className="pane-tools">
             {marked && <MarkToggles key={marked.drive_id} driveId={marked.drive_id} name={marked.name} marks={marked.marks} path={marked.path} />}
-            <Menu
-              label={state.collection === null ? "Collection" : `Collection: ${filterName(state.collection)}`}
-              text={state.collection === null ? "Collection" : filterName(state.collection)}
-              icon={null}
-              align="end"
-              className={state.collection === null ? "pane-wide" : "pane-wide menu-active"}
-              entries={filterEntries(pane)}
-            />
+            {isNew && (
+              <IconButton
+                icon={<FolderPlus />}
+                label="New folder"
+                tip="New folder here"
+                shortcut="⇧⌘N"
+                disabled={newFolderWhy(pane) !== null || naming !== null || locked}
+                disabledReason={newFolderWhy(pane) ?? undefined}
+                onClick={() => startNewFolder(pane)}
+              />
+            )}
             <Segmented<PaneView>
               className="pane-wide"
               ariaLabel="View"
@@ -1755,18 +1729,16 @@ export default function Browse() {
               ]}
             />
             {isNew && (
-              // a pane narrower than ~480px folds its collection filter and view into this one menu
+              // a pane narrower than ~480px folds its view into this one menu
               <Menu
                 label="View"
                 text="View"
                 icon={null}
                 align="end"
-                className={state.collection === null ? "pane-narrow" : "pane-narrow menu-active"}
+                className="pane-narrow"
                 entries={[
                   { label: "This folder", tip: THIS_FOLDER_TIP, checked: state.view === "folders", onSelect: () => setPane(pane, { view: "folders" }) },
                   { label: "All files below", tip: ALL_FILES_TIP, checked: state.view === "files", onSelect: () => setPane(pane, { view: "files" }) },
-                  "separator",
-                  ...filterEntries(pane),
                 ]}
               />
             )}
@@ -1881,7 +1853,7 @@ export default function Browse() {
                   current: i === s.index && s.touched,
                   checked: checkedIds.has(item.drive_id),
                   columns,
-                  noFolder: byFolders,
+                  noFolder: byFolders || folderCols,
                   onToggle: () => toggle(pane, item.drive_id),
                   onClick: (e: MouseEvent) => clickRow(pane, e, i),
                   row: i,
@@ -2179,7 +2151,7 @@ export default function Browse() {
   };
   const several = acted.length > 1;
   const noFiles = moveTargets.length === 0;
-  // The New look's file panel: the two icon rows of the one skeleton (``FileActionIcons``), with
+  // The New look's file panel: the icon row of the one skeleton (``FileActionIcons``), with
   // the handlers the Classic header's buttons run. A selection has no look row; what is done
   // in place for one file (Move to…, Add to collection) is an icon for several.
   const previewedFile = previewed
@@ -2245,7 +2217,11 @@ export default function Browse() {
   };
 
   return (
-    <div className={split ? "browse browse-split" : "browse"}>
+    <div
+      className={split ? "browse browse-split" : "browse"}
+      // the header ends its search where the panes end (the details panel's width)
+      style={isNew ? ({ "--details-w": `${inspectorSplit.width}px` } as CSSProperties) : undefined}
+    >
       <Toolbar
         title="Browse"
         className="browse-toolbar"
@@ -2276,56 +2252,17 @@ export default function Browse() {
         actions={
           isNew ? (
             <>
-              <Segmented<"one" | "two">
-                ariaLabel="Layout"
-                className="hdr-wide"
-                value={split ? "two" : "one"}
-                onChange={(v) => {
-                  if ((v === "two") !== split) toggleSplit();
-                }}
-                options={[
-                  { value: "one", label: "One pane" },
-                  { value: "two", label: "Two panes" },
-                ]}
-              />
-              <IconButton
-                icon={<ArrowLeftRight />}
-                label="Swap panes"
-                text="Swap panes"
-                className="hdr-wide"
-                disabled={!split}
-                disabledReason="Needs two panes"
-                onClick={swapPanes}
-              />
-              <IconButton
-                icon={<FolderPlus />}
-                label="New folder"
-                text="New folder"
-                shortcut="⇧⌘N"
-                className="hdr-wide hdr-plain"
-                disabled={newFolderWhy(act) !== null || naming !== null || locked}
-                disabledReason={newFolderWhy(act) ?? undefined}
-                onClick={startNewFolder}
-              />
-              {
-                // under ~760px of Browse the three controls above fold into this menu
-              }
-              <Menu
-                label="More: panes and folders"
-                icon={<Ellipsis />}
-                align="end"
-                className="hdr-more"
-                entries={[
-                  { label: split ? "One pane" : "Two panes", onSelect: toggleSplit },
-                  { label: "Swap panes", onSelect: swapPanes, disabled: !split },
-                  {
-                    label: "New folder",
-                    onSelect: startNewFolder,
-                    disabled: newFolderWhy(act) !== null || naming !== null || locked,
-                    reason: newFolderWhy(act) ?? undefined,
-                  },
-                ]}
-              />
+              {!split && (
+                // the second pane closes from its own X; Swap is on the first pane's bar
+                <IconButton
+                  icon={<Columns2 />}
+                  label="Split"
+                  text="Split"
+                  tip="Split: two panes side by side"
+                  className="hdr-split"
+                  onClick={toggleSplit}
+                />
+              )}
               {
                 // under ~1120px of Browse the details leave the row and open over the panes from here
               }
@@ -2351,7 +2288,7 @@ export default function Browse() {
                 shortcut="⇧⌘N"
                 disabled={newFolderWhy(act) !== null || naming !== null || locked}
                 disabledReason={newFolderWhy(act) ?? undefined}
-                onClick={startNewFolder}
+                onClick={() => startNewFolder()}
               />
             </>
           )

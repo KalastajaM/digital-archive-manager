@@ -1,10 +1,11 @@
-/** The file panel's two rows of icon buttons (the New look; one component for Browse, the Inbox,
+/** The file panel's row of icon buttons (the New look; one component for Browse, the Inbox,
  * the trays and a collection, so the icons, their order, tooltips and disabled reasons are the
  * same everywhere). Every tooltip carries the key where there is one: "Quick Look (Space)".
+ * One row, right-aligned, in two parts that wrap as wholes when the panel is narrow:
  *
- *  Row 1, "look at it":  Open, Quick Look, Show in Finder, Relatives, Ask AI.
- *  Row 2, "file it":     Who sent it, Who it's for, Put in tray │ Star, Important │
- *                        Back to inbox, Remove from collection, Restore ... Move to To Delete (red, right end).
+ *  "look at it":  Open, Quick Look, Show in Finder, Show in folder, Relatives, Ask AI.
+ *  "file it":     Who sent it, Who it's for, Put in tray │ Star, Important │
+ *                 Back to inbox, Remove from collection, Restore │ Move to To Delete (red, last).
  *
  * What is done in place is not here: Rename (click the name), Move to… (click the folder),
  * Tag…, Add to collection… (the boxes). Only what applies in the screen's context is drawn: a
@@ -13,7 +14,7 @@
  * look row is left out and the row holds what applies to many (Move to… and Add to collection
  * have no in-place way for a selection, so they are here). The screens' handlers are the ones
  * ``FileActionBar`` (Classic) gets; this only draws them. */
-import { ArchiveRestore, Eye, FolderInput, FolderSearch, Library, Network, Sparkles, ExternalLink, CircleMinus, ArrowRightLeft, Building2, User, Inbox, Trash2 } from "lucide-react";
+import { ArchiveRestore, Eye, FolderInput, FolderOpen, FolderSearch, Library, Network, Sparkles, ExternalLink, CircleMinus, ArrowRightLeft, Building2, User, Inbox, Trash2 } from "lucide-react";
 import { Fragment, type ReactNode, useState } from "react";
 import { showInLabel } from "../fileManager";
 import { toDeleteReason } from "../toDelete";
@@ -41,6 +42,9 @@ export type IconsFile = {
 export type FileActionIconsProps = Omit<FileActionBarProps, "removeFromTray"> & {
   /** The file the look row acts on (none: several files are selected). */
   file?: IconsFile | null;
+  /** Show in folder: the file's own folder in Browse, with the file selected (a screen that is
+   * not Browse: a collection, a tray). Left out without it. */
+  showInFolder?: () => void;
   /** Quick Look (the screen's own): the button is left out without it. */
   onQuickLook?: () => void;
   /** Quick Look cannot open now. */
@@ -117,6 +121,17 @@ export function FileActionIcons(p: FileActionIconsProps) {
         disabled={launch.busy || away}
         disabledReason={launchReason}
         onClick={() => void launch.run("reveal")}
+      />,
+    );
+  }
+  if (file && file.path !== null && p.showInFolder) {
+    look.push(
+      <IconButton
+        key="folder"
+        icon={<FolderOpen {...ICON} />}
+        label="Show in folder"
+        tip="Show in folder: its folder in Browse"
+        onClick={p.showInFolder}
       />,
     );
   }
@@ -293,7 +308,7 @@ export function FileActionIcons(p: FileActionIconsProps) {
     />
   );
 
-  const fileIt = <Groups groups={[who, marks, move]} />;
+  const fileIt = <Groups groups={[who, marks, move, trash ? [trash] : []]} />;
   const hasFileIt = who.length + marks.length + move.length > 0 || !!trash;
   return (
     <div className={["file-actions-icons", p.className].filter(Boolean).join(" ")} ref={p.barRef}>
@@ -302,10 +317,10 @@ export function FileActionIcons(p: FileActionIconsProps) {
           {look}
         </div>
       )}
+      {look.length > 0 && hasFileIt && <Sep />}
       {hasFileIt && (
         <div className="file-actions-row" role="group" aria-label="File it">
           {fileIt}
-          {trash}
         </div>
       )}
       {relatives && canRelatives && file && file.path !== null && (

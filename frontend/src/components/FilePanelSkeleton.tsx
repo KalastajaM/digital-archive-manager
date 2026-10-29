@@ -2,7 +2,7 @@
  * collection. Top to bottom:
  *
  *  1. header       the name (fixed-width face), the folder, the lock
- *  2. actions      the two icon rows (``FileActionIcons``)
+ *  2. actions      the icon row (``FileActionIcons``)
  *  3. top          what a screen puts right under them (the Inbox's filing form)
  *  4. tags         the inline tag box
  *  5. collections  the inline collection box (chips and an input, as the tags)

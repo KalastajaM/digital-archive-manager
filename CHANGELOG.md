@@ -23,19 +23,22 @@ All notable changes are listed here. The format follows
 
 - **One file panel for Browse, the Inbox, the trays and a collection (New look).** The panel
   on the right shows a file the same way everywhere: its name (click to rename) and folder
-  (click to move) with the lock, then two rows of icon buttons, then tags, collections (a box
-  like the tags: chips and a field with suggestions), the summary, Relatives, the preview and
-  the note. Each tooltip names its key, for example "Quick Look (Space)". Row one is for
-  looking: Open, Quick Look, Show in Finder, Relatives, Ask AI. Row two is for filing: Who sent
-  it, Who it is for, Put in tray, then Star and Important, then Back to inbox, and Move to To
-  Delete at the right end in red. Only what applies is shown: no Back to inbox for a file in
+  (click to move) with the lock, then one row of boxed icon buttons on the right (like the
+  preview's toolbar), then tags, collections (a box like the tags: chips and a field with
+  suggestions), the summary, Relatives, the preview and the note. Each tooltip names its key,
+  for example "Quick Look (Space)". The row's first part is for looking: Open, Quick Look,
+  Show in Finder, Show in folder (a collection and a tray: the file's folder in Browse),
+  Relatives, Ask AI. The second part is for filing: Who sent it, Who it is for, Put in tray,
+  then Star and Important, then Back to inbox, and Move to To Delete last in red. A narrow
+  panel wraps the row in those two parts. Only what applies is shown: no Back to inbox for a file in
   the inbox, Restore for a file in To Delete, and a button that cannot run now stays with its
   reason in the tooltip. The long list of actions in Browse's panel is gone (Rename, Move to,
   Tag and Add to collection are done in place, and their keys still work). In the Inbox the
   filing form sits right under the icons, with File it, Skip and To Delete below; in a tray
-  the item's card (dates, Mark paid, files, checklist, note, history) sits beside the panel,
-  with Remove from tray in the item's header; in a collection the Group and a Remove from
-  collection button come under the collections. With several files selected, the summary comes
+  the item is one column as in Browse (dates, Mark paid, the files, then the file's panel at
+  full width, then checklist, note and history), with Remove from tray in the item's header;
+  in a collection the Group comes under the collections and Remove from collection is an icon
+  of the row. With several files selected, the summary comes
   with the icons that apply to many (Move to, Add to collection, From, For, Star, Important and
   the bin).
 - **A Relatives button on Browse file rows (New look).** Beside the Quick Look eye, a
@@ -152,11 +155,10 @@ All notable changes are listed here. The format follows
   **actions and their keys** (Open, Quick Look, Show in Finder, Move to…, Rename, Add to
   collection…, Put in tray…, Tag…, Say who sent it, Back to inbox, Ask AI, Star, Mark
   Important, Move to To Delete) that replaces the row of icon buttons in the header. The header
-  now reads Browse, search, **One pane / Two panes**, **Swap panes** and **New folder**. The
+  now reads Browse, search and **Split** (see Changed for the pane controls). The
   pane you are not in shows how many files it holds instead of its tools, and a list says
   "2 of 9 selected". When the window gets narrow the details fold behind a **Details** button
-  first, then the folder tree behind a **Folders** button, then the header buttons into "...",
-  then the two panes into an L / R pair of tabs. Both dividers are remembered and
+  first, then the folder tree behind a **Folders** button, then the two panes into an L / R pair of tabs. Both dividers are remembered and
   double-click resets them. The demo archive has deeper folders and long names to try it on.
   Classic is unchanged.
 - **Pay mode steps through your bills.** Pay mode now says "Bill 2 of 5 · 412,90 € open in
@@ -475,6 +477,17 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Browse's panes have their own controls (New look).** **Split** in the header opens the
+  second pane; in two panes the first pane's bar has a **Swap** button and the second's an
+  **X** that goes back to one pane (the One pane / Two panes switch and the Swap panes button
+  are gone). Swap trades what the two panes show and keeps you on the side you were on.
+  **New folder** is an icon in the pane it makes the folder in. The search box is wider and
+  ends where the panes end, so it no longer reaches over the details panel. **This folder**
+  has Date and Size columns and sorts by Name, Date or Size like All files below, with the
+  folders first.
+- **Browse has no Collection filter any more.** To see a collection's files, search for
+  `collection:"House sale"` (add `in:"50. Medical"` to stay in one folder). An old link with
+  a collection filter opens the folder unfiltered.
 - **People settings explain how names are found.** Settings → Filing rules → People now
   says that each line is looked for anywhere in the address area, so a short line such as a
   first name also finds longer names that contain it, and gives examples of lines to write

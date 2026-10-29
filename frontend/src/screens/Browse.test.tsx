@@ -1509,7 +1509,7 @@ describe("Task 11 review fixes", () => {
   });
 });
 
-describe("Collection filter and Files view", () => {
+describe("Files view (no collection filter)", () => {
   afterEach(() => {
     document.dispatchEvent(new Event("dragend"));
     try {
@@ -1519,11 +1519,6 @@ describe("Collection filter and Files view", () => {
     }
   });
 
-  const HOUSES: CollectionRow = { ...SAUNA, id: 3, name: "Houses", path: ["Houses"] };
-  const CHILD: CollectionRow = { ...SAUNA, parent_id: 3, path: ["Houses", "Sauna"] };
-  // the built-ins, as ?builtin=true lists them (the Browse filter's "Marked")
-  const STAR: CollectionRow = { ...SAUNA, id: 50, name: "Ongoing", path: ["Ongoing"], kind: "starred", members: [] };
-  const IMPORTANT: CollectionRow = { ...SAUNA, id: 51, name: "Important", path: ["Important"], kind: "important", members: [] };
   const FLAT_ROWS: DirEntry[] = [
     file("10. Financial/Banks/a.pdf", "f1"),
     file("10. Financial/Banks/b.pdf", "f2"),
@@ -1538,17 +1533,11 @@ describe("Collection filter and Files view", () => {
 
   function start(url: string, extra: Parameters<typeof mockFetch>[0] = {}) {
     const calls = api({
-      "GET /api/collections": { body: [HOUSES, CHILD, IMPORTANT, STAR] },
-      // the filtered folder: only the way to the members
-      "GET /api/browse": (call) => {
-        const p = queryOf(call);
-        const rows = LISTINGS[p.get("path") ?? ""] ?? [];
-        return { body: p.get("collection") ? rows.filter((r) => r.is_dir || r.drive_id === "f1") : rows };
-      },
+      "GET /api/collections": { body: [SAUNA] },
+      "GET /api/browse": (call) => ({ body: LISTINGS[queryOf(call).get("path") ?? ""] ?? [] }),
       "GET /api/browse/files": (call) => {
         const p = queryOf(call);
-        const rows = p.get("collection") ? FLAT_ROWS.slice(0, 1) : FLAT_ROWS;
-        return { body: { rows: p.get("dir") === "desc" ? [...rows].reverse() : rows, total: p.get("collection") ? 1 : 1203 } };
+        return { body: { rows: p.get("dir") === "desc" ? [...FLAT_ROWS].reverse() : FLAT_ROWS, total: 1203 } };
       },
       ...extra,
     });
@@ -1573,61 +1562,11 @@ describe("Collection filter and Files view", () => {
   const flatCalls = (calls: Call[]) => calls.filter((c) => c.url.startsWith("/api/browse/files"));
   const dirCalls = (calls: Call[]) => calls.filter((c) => c.url.startsWith("/api/browse?"));
 
-  const menuItems = () => within(screen.getByRole("menu", { name: "Collection" })).getAllByRole("menuitemcheckbox");
-
-  it("the Collection menu button filters the folder and shows the chosen name; All files clears it", async () => {
-    const { calls, user } = start("/browse?path=10.%20Financial%2FBanks");
+  it("has no collection filter (a search does it: collection:), and an old ?collection= link shows the whole folder", async () => {
+    const { calls } = start("/browse?path=10.%20Financial%2FBanks&collection=7");
     await screen.findByText("b.pdf");
-    expect(dirCalls(calls)[0].url).toBe("/api/browse?path=10.%20Financial%2FBanks"); // unfiltered as before
-    const button = screen.getByRole("button", { name: "Collection" });
-    expect(button).toHaveTextContent("Collection");
-    await user.click(button);
-    // All files, the built-ins, then the open collections as a tree (Sauna is inside Houses)
-    await waitFor(() => expect(menuItems().map((o) => o.textContent)).toEqual(["✓All files", "★ Starred", "! Important", "Houses", "Sauna"]));
-    expect(menuItems()[0]).toHaveAttribute("aria-checked", "true");
-    expect(menuItems()[4].style.paddingLeft).toBe("calc(18px)"); // indented under Houses
-    await user.click(screen.getByRole("menuitemcheckbox", { name: "Sauna" }));
-    expect(where().get("collection")).toBe("7");
-    await waitFor(() => expect(screen.queryByText("b.pdf")).not.toBeInTheDocument());
-    expect(dirCalls(calls).at(-1)!.url).toBe("/api/browse?path=10.%20Financial%2FBanks&collection=7");
-    expect(rowNames()).toEqual(["a.pdf"]);
-    // the button now carries the collection's name (no chip after the path)
-    const named = screen.getByRole("button", { name: "Collection: Sauna" });
-    expect(named).toHaveTextContent("Sauna");
-    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
-    expect(within(crumbs).queryByText("Sauna")).not.toBeInTheDocument();
-
-    // the filter stays while moving between folders
-    await user.click(within(crumbs).getByRole("link", { name: "10. Financial" }));
-    await screen.findByText("Banks");
-    expect(where().get("collection")).toBe("7");
-    expect(dirCalls(calls).at(-1)!.url).toBe("/api/browse?path=10.%20Financial&collection=7");
-
-    await user.click(screen.getByRole("button", { name: "Collection: Sauna" }));
-    expect(screen.getByRole("menuitemcheckbox", { name: "Sauna" })).toHaveAttribute("aria-checked", "true");
-    await user.click(screen.getByRole("menuitemcheckbox", { name: "All files" }));
-    expect(where().has("collection")).toBe(false);
-    expect(screen.getByRole("button", { name: "Collection" })).toHaveTextContent("Collection");
-  });
-
-  it("a built-in is a filter too, and Esc closes the menu", async () => {
-    const { user } = start("/browse?path=10.%20Financial%2FBanks&collection=7");
-    await screen.findByText("a.pdf");
-    expect(await screen.findByRole("button", { name: "Collection: Sauna" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Collection: Sauna" }));
-    await user.click(await screen.findByRole("menuitemcheckbox", { name: "★ Starred" }));
-    expect(where().get("collection")).toBe("50");
-    expect(await screen.findByRole("button", { name: "Collection: ★ Starred" })).toHaveTextContent("★ Starred");
-    await user.click(screen.getByRole("button", { name: "Collection: ★ Starred" }));
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  });
-
-  it("a filtered folder with nothing of the collection says so", async () => {
-    start("/browse?path=10.%20Financial%2FBanks&collection=7", {
-      "GET /api/browse": { body: [] },
-    });
-    expect(await screen.findByText("Nothing of this collection here.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Collection/ })).toBeNull();
+    expect(dirCalls(calls).every((c) => !queryOf(c).has("collection"))).toBe(true);
   });
 
   it("the Files view lists every file below with folder, date and size, sortable, capped with 'N more'", async () => {
@@ -1665,16 +1604,17 @@ describe("Collection filter and Files view", () => {
   });
 
   it("no 'more' line when every file is listed", async () => {
-    start("/browse?path=10.%20Financial%2FBanks&view=files&collection=7");
+    start("/browse?path=10.%20Financial%2FBanks&view=files", {
+      "GET /api/browse/files": { body: { rows: FLAT_ROWS.slice(0, 1), total: 1 } },
+    });
     const list = await screen.findByRole("list", { name: "Files" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(1);
     expect(screen.queryByText(/more — narrow/)).not.toBeInTheDocument();
   });
 
-  it("the Files view comes straight from the URL, with its filter", async () => {
-    const { calls } = start("/browse?path=10.%20Financial&view=files&collection=7");
+  it("the Files view comes straight from the URL", async () => {
+    const { calls } = start("/browse?path=10.%20Financial&view=files");
     await screen.findByRole("list", { name: "Files" });
-    expect(queryOf(flatCalls(calls)[0]).get("collection")).toBe("7");
     expect(queryOf(flatCalls(calls)[0]).get("path")).toBe("10. Financial");
     expect(dirCalls(calls)).toHaveLength(0); // the folder listing is not fetched in this view
   });
@@ -1697,22 +1637,14 @@ describe("Collection filter and Files view", () => {
     await user.keyboard("{Escape}");
   });
 
-  it("two panes: each has its own filter and view, kept in the URL", async () => {
-    const { calls, user } = start("/browse?left=10.%20Financial%2FBanks&right=10.%20Financial%2FBanks&rcol=7&rview=files");
+  it("two panes: each has its own view, kept in the URL", async () => {
+    const { calls, user } = start("/browse?left=10.%20Financial%2FBanks&right=10.%20Financial%2FBanks&rview=files");
     const right = pane("Right pane");
     const left = pane("Left pane");
     expect(await within(left).findByText("b.pdf")).toBeInTheDocument();
     expect(await within(right).findByRole("list", { name: "Files" })).toBeInTheDocument();
-    expect(within(right).getByRole("button", { name: "Collection: Sauna" })).toBeInTheDocument();
-    expect(within(left).getByRole("button", { name: "Collection" })).toBeInTheDocument();
-    expect(dirCalls(calls).every((c) => !queryOf(c).has("collection"))).toBe(true);
-    expect(flatCalls(calls).every((c) => queryOf(c).get("collection") === "7")).toBe(true);
 
-    // a filter on the left changes the left only
-    await user.click(within(left).getByRole("button", { name: "Collection" }));
-    await user.click(await screen.findByRole("menuitemcheckbox", { name: "Houses" }));
-    expect(where().get("lcol")).toBe("3");
-    expect(where().get("rcol")).toBe("7");
+    // a view on the left changes the left only
     await user.click(within(within(left).getByRole("group", { name: "View" })).getByRole("button", { name: "Files" }));
     expect(where().get("lview")).toBe("files");
     expect(where().get("rview")).toBe("files");
@@ -1723,11 +1655,10 @@ describe("Collection filter and Files view", () => {
     await within(left).findByRole("list", { name: "Files" });
     await user.click(within(left).getByRole("button", { name: "Sort by size" }));
     await waitFor(() =>
-      expect(flatCalls(calls).some((c) => queryOf(c).get("sort") === "size" && queryOf(c).get("collection") === "3")).toBe(true),
+      expect(flatCalls(calls).some((c) => queryOf(c).get("sort") === "size")).toBe(true),
     );
     // back to one pane: the left pane's state stays, in the one-pane parameters
     await user.click(screen.getByRole("button", { name: "Two panes" }));
-    expect(where().get("collection")).toBe("3");
     expect(where().get("view")).toBe("files");
     expect(where().get("path")).toBe("10. Financial/Banks");
   });
@@ -2173,7 +2104,7 @@ describe("New folder", () => {
     expect(await screen.findByText(reason, { selector: ".toast-text" })).toBeInTheDocument();
   });
 
-  it("is off in the Files view, with a collection filter and in search results", async () => {
+  it("is off in the Files view and in search results", async () => {
     const { user } = setup("10. Financial/Banks", {
       "GET /api/collections": { body: [SAUNA] },
       "GET /api/browse/files": { body: { rows: [], total: 0 } },
@@ -2185,13 +2116,6 @@ describe("New folder", () => {
     await waitFor(() => expect(newButton()).toBeDisabled());
     expect(newButton().closest(".icon-button-wrap")).toHaveAttribute("data-tip", "Switch to Folders to make a folder here");
     await user.click(screen.getByRole("button", { name: "Folders" }));
-    await waitFor(() => expect(newButton()).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: "Collection" }));
-    await user.click(await screen.findByRole("menuitemcheckbox", { name: "Sauna" }));
-    await waitFor(() => expect(newButton()).toBeDisabled());
-    expect(newButton().closest(".icon-button-wrap")?.getAttribute("data-tip")).toMatch(/^Show all files/);
-    await user.click(screen.getByRole("button", { name: "Collection: Sauna" }));
-    await user.click(await screen.findByRole("menuitemcheckbox", { name: "All files" }));
     await waitFor(() => expect(newButton()).toBeEnabled());
     await user.type(screen.getByRole("combobox", { name: "Search" }), "zzz");
     await waitFor(() => expect(newButton()).toBeDisabled());

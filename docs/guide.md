@@ -159,8 +159,8 @@ copies at most 100 files. Documents dragged inside dam are never taken by the In
 
 ### New folders
 
-**New folder** in Browse (toolbar or ⇧⌘N) adds a name row in the folder you are in, with
-"untitled folder" selected; right-click a folder for **New folder inside…**. The folder is
+**New folder** in Browse (the folder icon in the pane's bar in the New look, the toolbar in
+Classic, or ⇧⌘N) adds a name row in the folder you are in, with "untitled folder" selected; right-click a folder for **New folder inside…**. The folder is
 made at once and can be undone while it is empty. Names with `/`, `\`, `< > : " | ? *`,
 reserved Windows names (`CON`, `NUL`, ...), a leading or trailing dot, or a `##.` prefix
 are refused. Nothing is made inside the four special folders.
@@ -978,9 +978,10 @@ The New look draws the page as one header across the top (where the collection s
 name, an Open / Closed pill, the counts, and **Add files**, **Show folder**, **Export…**
 and **⋯**), then the summary, **Needs attention** as a list, **Files by group** as one tree
 with **New group** in its heading, and the note beside the checklist. **Add files** finds any
-file of the archive and puts it in the collection. The selected file's panel has **Open**,
-**Show in folder**, **Note on this file** and **Remove from collection** under its preview, with
-the other file actions (listed below) as a row of icons under them instead of in the header.
+file of the archive and puts it in the collection. The selected file's panel has the file
+actions (listed below) as one row of icons under its name instead of in the header, with
+**Show in folder** (the file's folder in Browse) and **Remove from collection** among them. To
+see a collection's files across folders in Browse, search for `collection:"House sale"`.
 
 The header has the same two parts as Browse and the trays. The left part is for the
 collection: its name and subtitle, **New group**, the folder button, **Export…** and **⋯**.
@@ -1125,8 +1126,11 @@ and the detail beside the list shows the file view: name and folder, tags, colle
 summary, actions, the preview and the note. Folders open on click. Drag the edge between list and detail to change the
 list's width.
 
-- **Two panes**: the split toggle in the toolbar shows two folders side by side, for
-  moving files between them. The active pane has an accent edge.
+- **Two panes**: **Split** in the header (Classic: the split toggle) shows two folders side by side, for moving files
+  between them. The active pane has an accent edge. The first pane's bar has **Swap** (the
+  two panes trade folders, and you stay on your side) and the second's an **X** that goes
+  back to one pane. **This folder** lists the folders first and has Name, Date and Size
+  columns to sort by.
 - **The file actions** are one group of icons at the right of the header, over the file
   pane, and the trays have the same group over the item. In this order: **Put in tray**
   (a menu of the trays), **Back to inbox**, **Move to…** (⇧⌘M), **From…**, **For…**,
@@ -1146,9 +1150,9 @@ list's width.
   from To Delete" and Undo puts them back in To Delete. The tags, collections, notes and
   tray items the files had are still there. A file that stood at the top of the archive,
   or in `##. Ongoing`, can only be restored to the inbox.
-- **Collection** filters a pane to one collection's files; **Folders / Files** switches
-  between the folder view and a flat list of every file below the current folder, with
-  sortable Name, Folder, Date and Size columns (up to 500 rows).
+- **Folders / Files** switches between the folder view and a flat list of every file below
+  the current folder, with sortable Name, Folder, Date and Size columns (up to 500 rows). A
+  collection's files are a search: `collection:"House sale"`.
 - **Search** looks at file names, paths and text (the Search card on Today opens Browse
   with the same search). Beside words it takes filters such as `tag:medical`, `type:pdf`
   or `-in:"90. Other People"`; each finished filter becomes a chip in a row under the

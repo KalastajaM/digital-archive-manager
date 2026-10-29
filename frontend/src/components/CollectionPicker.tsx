@@ -43,7 +43,7 @@ type Props = {
   /** Esc in the field when its list is closed (a picker opened from a button). */
   onEscape?: () => void;
   /** With ``single``: the built-in ★ Starred and ! Important as well, under a "Marked"
-   * heading (the Browse collection filter only; every other picker leaves them out). */
+   * heading (no picker uses it now: the Browse collection filter that did is gone). */
   marked?: boolean;
 };
 

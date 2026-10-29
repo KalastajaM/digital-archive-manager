@@ -1296,7 +1296,12 @@
 [data-style="new"] .browse-toolbar .toolbar-title h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 [data-style="new"] .browse-toolbar .toolbar-subtitle { font-family: var(--font-mono); font-size: var(--fs-xs); }
 [data-style="new"] .browse-toolbar .toolbar-actions { flex: none; flex-wrap: nowrap; margin-left: 0; gap: 10px; }
-[data-style="new"] .browse-toolbar .toolbar-search { flex: 0 1 340px; min-width: 140px; margin-left: auto; }
+[data-style="new"] .browse-toolbar .toolbar-search { flex: 0 1 560px; min-width: 140px; margin-left: auto; }
+/* with the details docked, the search, its ? and Split end where the panes end: the header
+   over the details panel stays empty */
+@container browse (min-width: 1121px) {
+  [data-style="new"] .browse-toolbar { padding-right: calc(var(--details-w) + 18px); }
+}
 [data-style="new"] .browse .search { min-width: 0; }
 [data-style="new"] .browse .search .search-scope { flex: none; }
 [data-style="new"] .browse-toolbar .segmented { flex: none; padding: 3px; gap: 2px; border-radius: 7px; background: var(--panel-2); }
@@ -1317,10 +1322,8 @@
 }
 [data-style="new"] .browse-toolbar .icon-button.has-text:hover:not(:disabled) { background: var(--hover); }
 [data-style="new"] .browse-toolbar .icon-button.has-text:disabled { opacity: 0.45; }
-[data-style="new"] .browse-toolbar .hdr-plain .icon-button-glyph { display: none; }
 [data-style="new"] .browse-toolbar .tree-button,
-[data-style="new"] .browse-toolbar .details-button,
-[data-style="new"] .browse-toolbar .hdr-more .icon-button {
+[data-style="new"] .browse-toolbar .details-button {
   flex: none;
   width: 32px;
   height: 32px;
@@ -1330,7 +1333,6 @@
 }
 [data-style="new"] .browse-toolbar .tree-button[aria-pressed="true"],
 [data-style="new"] .browse-toolbar .details-button[aria-pressed="true"] { background: var(--selected); }
-[data-style="new"] .browse-toolbar .hdr-more,
 [data-style="new"] .browse-toolbar .tree-button,
 [data-style="new"] .browse-toolbar .details-button { display: none; }
 /* two panes: the folder tree is the reader's choice, so its button is always there */
@@ -1345,9 +1347,9 @@
   [data-style="new"] .browse .search .search-scope { display: none; }
 }
 @container browse (max-width: 760px) {
-  [data-style="new"] .browse-toolbar .hdr-wide,
-  [data-style="new"] .browse-toolbar .icon-button-wrap:has(.hdr-wide) { display: none; }
-  [data-style="new"] .browse-toolbar .hdr-more { display: inline-flex; }
+  /* Split keeps its icon */
+  [data-style="new"] .browse-toolbar .hdr-split .icon-button-text { display: none; }
+  [data-style="new"] .browse-toolbar .icon-button.has-text.hdr-split { width: 32px; padding: 0; }
 }
 @container browse (max-width: 640px) {
   [data-style="new"] .browse-toolbar { padding-left: var(--sp-3); padding-right: var(--sp-3); gap: var(--sp-2); }
@@ -1507,17 +1509,17 @@
 }
 [data-style="new"] .browse-split .browse-pane:not(.browse-pane-active) .pane-bar { opacity: 1; }
 [data-style="new"] .browse-pane-active .pane-bar { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
-[data-style="new"] .pane-id {
-  flex: none;
-  padding: 0 5px;
+/* two panes: Swap on the first pane's bar, Close (X) on the second's, as small boxes */
+[data-style="new"] .pane-bar .icon-button.pane-id {
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 16px;
+  background: var(--panel);
   color: var(--muted-2);
 }
-[data-style="new"] .browse-pane-active .pane-id { border-color: color-mix(in srgb, var(--accent) 35%, var(--panel)); color: var(--accent-hover); }
+[data-style="new"] .pane-bar .icon-button.pane-id:hover { color: var(--text); }
+[data-style="new"] .browse-pane-active .icon-button.pane-id { border-color: color-mix(in srgb, var(--accent) 35%, var(--panel)); color: var(--accent-hover); }
 [data-style="new"] .pane-bar .icon-button { flex: none; }
 /* the path gives up its parents first (their ellipsis, then nothing); the folder you are in keeps its name longest */
 [data-style="new"] .breadcrumb { flex: 1 1 0; min-width: 0; margin-left: var(--sp-1); }
@@ -1977,12 +1979,10 @@
 [data-style="new"] .item-new .item-fields { flex-wrap: wrap; }
 [data-style="new"] .item-new .item-done-buttons { align-self: flex-end; }
 [data-style="new"] .item-new .item-done-buttons .primary kbd { margin-left: 8px; padding: 0 5px; border: 0; background: rgb(255 255 255 / 0.16); color: inherit; font-size: 11px; line-height: 18px; }
-/* the two columns */
-[data-style="new"] .item-cols { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
-[data-style="new"] .item-col-main { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-[data-style="new"] .item-col-side { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-[data-style="new"] .item-col-main > *,
-[data-style="new"] .item-col-side > * { margin-top: 0; margin-bottom: 0; min-width: 0; }
+/* one column, as Browse: the files, the file panel at the full width, then checklist, note, history */
+[data-style="new"] .item-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+[data-style="new"] .item-stack > * { margin-top: 0; margin-bottom: 0; min-width: 0; }
+[data-style="new"] .item-file-panel { display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 [data-style="new"] .item-files-list { display: flex; flex-direction: column; gap: 6px; }
 [data-style="new"] .item-files-list h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
 [data-style="new"] .item-files-list ul { margin: 0; padding: 0; list-style: none; border: 1px solid var(--hairline); border-radius: var(--r-lg); overflow: hidden; }
@@ -1998,7 +1998,7 @@
 [data-style="new"] .item-files-list .item-file-add .link-button { font-size: 12px; color: var(--accent); }
 [data-style="new"] .item-new .collapsible-head { gap: 8px; }
 [data-style="new"] .item-new .collapsible-toggle { font-size: var(--fs-md); font-weight: 600; color: var(--text); }
-[data-style="new"] .item-new .item-col-main .collapsible-toggle svg { display: none; }
+[data-style="new"] .item-new .item-stack > :not(.item-file-panel) .collapsible-toggle svg { display: none; }
 [data-style="new"] .item-new .item-note .field > label,
 [data-style="new"] .item-new .checklist .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 [data-style="new"] .item-new .history { font-size: var(--fs-sm); color: var(--muted); }
@@ -2656,21 +2656,20 @@
 [data-style="new"] .file-skeleton [data-block="top"] { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--hairline); }
 [data-style="new"] .file-skeleton [data-block="top"] > * { margin-top: 0; margin-bottom: 0; }
 [data-style="new"] .file-skeleton [data-block="group"] .inspector-collection { margin-top: 0; }
-[data-style="new"] .inspector-links { display: flex; flex-wrap: wrap; gap: 4px 14px; }
-[data-style="new"] .inspector-links .link-button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
-
-/* the two icon rows: look at it, file it. Every control 30px, one line, groups apart by a rule. */
-[data-style="new"] .file-actions-icons { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-[data-style="new"] .file-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
+/* the icon row: look at it │ file it, right-aligned like the preview's toolbar; each part wraps
+   as a whole when the panel is narrow. Every control a 28px box (the toolbar's), groups apart by a rule. */
+[data-style="new"] .file-actions-icons { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px 0; min-width: 0; }
+[data-style="new"] .file-actions-row { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
 [data-style="new"] .file-actions-row .icon-button,
-[data-style="new"] .file-actions-row .menu-wrap .icon-button { flex: none; width: 30px; height: 30px; }
+[data-style="new"] .file-actions-row .menu-wrap .icon-button { flex: none; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); }
+[data-style="new"] .file-actions-row .icon-button:hover:not(:disabled) { border-color: var(--border-strong, var(--border)); color: var(--text); }
 [data-style="new"] .file-actions-row .icon-button-wrap,
 [data-style="new"] .file-actions-row .menu-wrap { flex: none; display: inline-flex; align-items: center; }
 [data-style="new"] .file-actions-icons .icon-button-glyph svg { width: 16px; height: 16px; }
-[data-style="new"] .file-actions-sep { flex: none; align-self: center; width: 1px; height: 18px; margin: 0 4px; background: var(--border-strong, var(--border)); }
-/* Move to To Delete: red, at the right end of its row */
-[data-style="new"] .file-actions-row .trash-button,
-[data-style="new"] .file-actions-row .icon-button-wrap:has(> .trash-button) { margin-left: auto; }
+[data-style="new"] .file-actions-sep { flex: none; align-self: center; width: 1px; height: 18px; margin: 0 6px; background: var(--border-strong, var(--border)); }
+[data-style="new"] .file-actions-row .icon-button.mark-starred { color: var(--orange); background: var(--orange-bg); }
+[data-style="new"] .file-actions-row .icon-button.mark-important { color: var(--red-text); background: var(--red-bg); }
+/* Move to To Delete: red, last */
 [data-style="new"] .file-actions-row .trash-button { color: var(--red-text); }
 [data-style="new"] .file-actions-row .trash-button:hover:not(:disabled) { background: var(--red-bg); color: var(--red-text); }
 [data-style="new"] .file-actions-row .trash-button:disabled { color: var(--muted); }

@@ -121,12 +121,12 @@ describe("a collection in New", () => {
     expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
   });
 
-  it("shows the selected file in the one file panel: two icon rows, then Group with its two links", async () => {
+  it("shows the selected file in the one file panel: the icon row, then Group", async () => {
     document.documentElement.dataset.style = "new";
     setup();
     const panel = await screen.findByRole("complementary", { name: "Selected file" });
     const look = await within(panel).findByRole("group", { name: "Look at it" });
-    for (const name of ["Open", "Relatives", "Ask AI"]) {
+    for (const name of ["Open", "Show in folder", "Relatives", "Ask AI"]) {
       expect(within(look).getByRole("button", { name })).toBeInTheDocument();
     }
     const filing = within(panel).getByRole("group", { name: "File it" });
@@ -135,9 +135,9 @@ describe("a collection in New", () => {
     }
     // Remove from collection is an icon of the second row (a membership action, undone from its toast)
     expect(within(filing).getByRole("button", { name: /Remove quote.pdf from the collection/ })).toBeInTheDocument();
-    // Show in folder and Note on this file stay, as links under the collections
-    expect(within(panel).getByRole("button", { name: "Show in folder" })).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Note on this file" })).toBeInTheDocument();
+    // Show in folder is an icon of the row; no text links repeat it or the note
+    expect(within(panel).getAllByRole("button", { name: "Show in folder" })).toHaveLength(1);
+    expect(within(panel).queryByRole("button", { name: "Note on this file" })).toBeNull();
     // the blocks come in the skeleton's order
     const blocks = [...panel.querySelectorAll("[data-block]")].map((b) => (b as HTMLElement).dataset.block);
     const order = ["header", "actions", "tags", "collections", "group", "summary", "relatives", "preview", "notes"];
