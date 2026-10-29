@@ -75,3 +75,10 @@ def test_written_dates_need_the_language():
 def test_a_written_due_date_is_the_due_date():
     found = detect_fields("Eräpäivä 15. lokakuuta 2026 Yhteensä 47,90 €")
     assert found.due_date == date(2026, 10, 15) and found.total == Decimal("47.90")
+
+
+def test_an_iban_ends_where_its_country_says():
+    # more letters or digits right after the IBAN: not an IBAN (as before for FI)
+    assert detect_fields("FI2112345600000785123").iban is None
+    assert detect_fields("NL91 ABNA 0417 1643 00X").iban is None
+    assert detect_fields("NL91 ABNA 0417 1643 00, ref 12").iban == "NL91ABNA0417164300"

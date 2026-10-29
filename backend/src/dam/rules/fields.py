@@ -64,7 +64,8 @@ def _max_date() -> date:
     return date(today.year + 2, today.month, min(today.day, 28))
 
 
-def _dated(text: str) -> list[tuple[int, date]]:
+def _dated(text: str, folded: tuple[str, list[int]] | None = None) -> list[tuple[int, date]]:
+    """Dates in text order; ``folded``: ``_fold(text)`` when the caller has it already."""
     latest = _max_date()
     found: list[tuple[int, date]] = []
 
@@ -83,11 +84,11 @@ def _dated(text: str) -> list[tuple[int, date]]:
         add(m.start(), int(m[4]), int(m[3]), int(m[1]))
     months = packs.active().months
     if months:
-        folded, index = _fold(text)
-        for m in _DATE_DAY_MONTH.finditer(folded):
+        folded_text, index = folded if folded is not None else _fold(text)
+        for m in _DATE_DAY_MONTH.finditer(folded_text):
             if (mo := months.get(m[2])) is not None:
                 add(index[m.start()], int(m[3]), mo, int(m[1]))
-        for m in _DATE_MONTH_DAY.finditer(folded):
+        for m in _DATE_MONTH_DAY.finditer(folded_text):
             if (mo := months.get(m[1])) is not None:
                 add(index[m.start()], int(m[3]), mo, int(m[2]))
     return sorted(found, key=lambda t: t[0])
@@ -115,13 +116,29 @@ def _amounts(text: str) -> list[Decimal]:
     return _dedupe(_priced(text))
 
 
+def _iban_end(text: str, start: int, length: int) -> int:
+    """Where an IBAN of ``length`` characters (spaces between them) starting at ``start``
+    ends in ``text``."""
+    pos, seen = start, 0
+    while seen < length:
+        if text[pos] != " ":
+            seen += 1
+        pos += 1
+    return pos
+
+
 def _iban(text: str) -> str | None:
-    """The first valid IBAN of a SEPA country, cut to that country's length."""
+    """The first valid IBAN of a SEPA country: its country's length, and no letter or
+    digit right after it."""
     for m in _IBAN.finditer(text):
         compact = m[1].replace(" ", "")
         length = IBAN_LENGTHS.get(compact[:2])
-        if length is not None and len(compact) >= length and valid_iban(compact[:length]):
-            return compact[:length]
+        if length is None or len(compact) < length or not valid_iban(compact[:length]):
+            continue
+        end = _iban_end(text, m.start(), length)
+        if end < len(text) and text[end].isalnum():
+            continue
+        return compact[:length]
     return None
 
 
@@ -171,7 +188,7 @@ def _first_in_window[T](end: int, candidates: list[tuple[int, T]]) -> T | None:
 def detect_fields(text: str) -> DetectedFields:
     profile = packs.active()
     folded, index = _fold(text)
-    dated = _dated(text)
+    dated = _dated(text, (folded, index))
     priced = _priced(text)
     amounts = _dedupe(priced)
 
