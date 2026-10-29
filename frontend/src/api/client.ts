@@ -2353,6 +2353,13 @@ export const usePutFileSummary = () => {
 const fileFieldsKey = (driveId: string) => [...keys.fileFields, driveId];
 
 /** A file's scan fields: the saved list, else the detected one (``edited`` tells which). */
+/** Business IDs, IBANs and domains found in the file, with how many other files carry each. */
+export const useFileIdentifiers = (driveId: string) =>
+  useQuery({
+    queryKey: ["file-identifiers", driveId],
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/identifiers", { path: { drive_id: driveId }, signal }),
+  });
+
 export const useFileFields = (driveId: string) =>
   useQuery({
     queryKey: fileFieldsKey(driveId),

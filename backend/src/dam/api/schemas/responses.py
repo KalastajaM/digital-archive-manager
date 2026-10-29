@@ -430,6 +430,20 @@ class ScanFieldsOut(BaseModel):
     edited: bool  # a saved list (else the detected one)
 
 
+class IdentifierOut(BaseModel):
+    kind: str  # "fi.ytunnus", "core.iban", "core.domain"
+    label: str  # "Business ID (Y-tunnus)"
+    value: str
+    others: int  # other files there that carry it
+
+
+class IdentifiersOut(BaseModel):
+    """What the enabled packs found in the file's current content: business IDs first,
+    then IBANs, then domains."""
+
+    identifiers: list[IdentifierOut]
+
+
 class InboxEntryOut(BaseModel):
     record: FileRecordOut
     suggestion: SuggestionOut
