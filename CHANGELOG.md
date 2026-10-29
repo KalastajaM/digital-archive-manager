@@ -477,6 +477,12 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **The New look is the default.** dam opens in the New look. Classic is still there, in
+  Settings, Appearance (and Ctrl+Alt+L), for now; the Look switch at the bottom of the
+  sidebar is gone. If you chose Classic before, dam opens in the New look once: choose
+  Classic again in Settings and it stays.
+- **README screenshots in the New look**, with two of Relatives: the file panel's list and
+  the Show connections window.
 - **Browse's panes have their own controls (New look).** **Split** in the header opens the
   second pane; in two panes the first pane's bar has a **Swap** button and the second's an
   **X** that goes back to one pane (the One pane / Two panes switch and the Swap panes button

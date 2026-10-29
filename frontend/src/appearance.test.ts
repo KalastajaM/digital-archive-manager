@@ -86,28 +86,33 @@ describe("appearance", () => {
   });
 });
 
-describe("look (Classic or New)", () => {
-  it("is Classic until New is saved, and Classic is not stored", () => {
-    expect(readStyle()).toBe("classic");
-    saveStyle("new");
-    expect(localStorage.getItem(STYLE_KEY)).toBe("new");
-    expect(look()).toBe("new");
+describe("look (New or Classic)", () => {
+  it("is New until Classic is saved, and New is not stored", () => {
     expect(readStyle()).toBe("new");
     saveStyle("classic");
-    expect(localStorage.getItem(STYLE_KEY)).toBeNull();
+    expect(localStorage.getItem(STYLE_KEY)).toBe("classic");
     expect(look()).toBe("classic");
-    localStorage.setItem(STYLE_KEY, "purple");
     expect(readStyle()).toBe("classic");
+    saveStyle("new");
+    expect(localStorage.getItem(STYLE_KEY)).toBeNull();
+    expect(look()).toBe("new");
+    localStorage.setItem(STYLE_KEY, "purple");
+    expect(readStyle()).toBe("new");
+  });
+
+  it("someone who chose New when Classic was the default stays on New", () => {
+    localStorage.setItem(STYLE_KEY, "new");
+    expect(readStyle()).toBe("new");
   });
 
   it("is applied at start, and a change in another tab follows", () => {
     stubSystem(false);
-    localStorage.setItem(STYLE_KEY, "new");
+    localStorage.setItem(STYLE_KEY, "classic");
     installAppearance();
-    expect(look()).toBe("new");
+    expect(look()).toBe("classic");
     localStorage.removeItem(STYLE_KEY);
     window.dispatchEvent(new StorageEvent("storage", { key: STYLE_KEY }));
-    expect(look()).toBe("classic");
+    expect(look()).toBe("new");
   });
 
   it("the window colour follows look and theme", () => {
@@ -122,15 +127,15 @@ describe("look (Classic or New)", () => {
   });
 
   it("the early script sets the look from the same key", () => {
-    localStorage.setItem(STYLE_KEY, "new");
+    localStorage.setItem(STYLE_KEY, "classic");
     document.head.innerHTML = '<meta name="theme-color" content="#fbfbfd" />';
     stubSystem(false);
     new Function(earlyScript)();
-    expect(look()).toBe("new");
-    expect(themeColor()).toBe("#ffffff");
-    localStorage.removeItem(STYLE_KEY);
-    new Function(earlyScript)();
     expect(look()).toBe("classic");
     expect(themeColor()).toBe("#fbfbfd");
+    localStorage.removeItem(STYLE_KEY);
+    new Function(earlyScript)();
+    expect(look()).toBe("new");
+    expect(themeColor()).toBe("#ffffff");
   });
 });

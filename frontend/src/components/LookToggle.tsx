@@ -1,14 +1,8 @@
-/** The temporary ways to switch the look (Classic or New) outside Settings: a small toggle
- * in the sidebar footer and the Ctrl+Alt+L shortcut. Both go when the redesign is done. */
+/** The one way to switch the look (New or Classic) outside Settings, Appearance: the
+ * Ctrl+Alt+L shortcut. It goes with Classic. */
 import { type Look, useStyle } from "../appearance";
 import { isTyping, useKeydown } from "../keyboard";
 import { useToast } from "./Toasts";
-import { Segmented } from "./ui/Segmented";
-
-const OPTIONS: { value: Look; label: string }[] = [
-  { value: "classic", label: "Classic" },
-  { value: "new", label: "New" },
-];
 
 export const LOOK_NAME: Record<Look, string> = { classic: "Classic", new: "New" };
 
@@ -34,16 +28,4 @@ export function useLookShortcut() {
     e.preventDefault();
     choose(look === "new" ? "classic" : "new");
   });
-}
-
-export function LookToggle() {
-  const [look, choose] = useChooseLook();
-  return (
-    <div className="look-toggle">
-      <span className="look-toggle-label" id="look-toggle-label">
-        Look
-      </span>
-      <Segmented options={OPTIONS} value={look} onChange={choose} ariaLabel="Look" className="look-toggle-seg" />
-    </div>
-  );
 }

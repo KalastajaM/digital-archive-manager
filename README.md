@@ -103,8 +103,8 @@ without ever deleting a file.
   </tr>
 </table>
 
-The screenshots show the New look. dam still opens in the Classic look; switch with
-**Look** at the bottom of the sidebar. Relatives are in the New look only.
+The screenshots show the New look, which dam opens in. The earlier Classic look is still in
+Settings, Appearance, for now (Relatives are in the New look only).
 
 ## Quick start
 
