@@ -1211,16 +1211,16 @@ the box. A search with only filters lists the matching files by name.
 |---|---|---|
 | `name:` | Words in the file name only. `*` stands for any text and `?` for one character. Without a `*` or `?` the text can be anywhere in the name; with one, the pattern must fit the whole name. | `name:*kela*`, `name:2026*` |
 | `in:` | Files in a folder and the folders below it (the case of the name is ignored). | `in:"50. Medical"` |
-| `tag:` | Files with the tag. | `tag:insurance` |
-| `collection:` | Files in a collection, including the collections inside it and, for a folder that is a member, the files in that folder. | `collection:"House sale"` |
-| `from:` | Files whose sender (From, as you set it on the file) contains the text. | `from:Kela` |
-| `for:` | Files whose person (For) is that person. Only what you set, or what a confirmed filing recorded, is searched; the names found on page 1 are not. | `for:Tiina` |
+| `tag:` | Files with the tag. `tag:*` finds files with any tag, `-tag:*` the files that have none. | `tag:insurance`, `-tag:*` |
+| `collection:` | Files in a collection, including the collections inside it and, for a folder that is a member, the files in that folder. `collection:*` finds files in any of your collections (not Starred or Important), `-collection:*` those in none. | `collection:"House sale"` |
+| `from:` | Files whose sender (From, as you set it on the file) contains the text. `from:*` finds files with any sender, `-from:*` those without one yet (for example `id:* -from:*`: a business ID but no sender). | `from:Kela`, `-from:*` |
+| `for:` | Files whose person (For) is that person. Only what you set, or what a confirmed filing recorded, is searched; the names found on page 1 are not. `for:*` finds files with anyone set, `-for:*` those with no one. | `for:Tiina` |
 | `id:` | Files whose text carries this business ID, IBAN or web or mail domain, written with or without spaces and dashes (a Y-tunnus also in its VAT form). `id:*` finds every file that has a business ID (not an IBAN or domain), for example `from:Telia id:*`. Only the countries that are on in Settings, Reading documents. | `id:0112038-9`, `id:*` |
 | `type:` | The kind of file: an extension (`pdf`, `docx`) or a group: `image`, `doc`, `sheet`, `slides`, `text`, `mail`, `archive`, `audio`, `video`. | `type:pdf`, `type:image` |
 | `date:` | The document date: the date at the start of the file name (`20261003_...`), and for a file without one the date it was last modified, which is the Date column in Browse. Takes `YYYY`, `YYYY-MM` or `YYYY-MM-DD`. | `date:2026-10` |
 | `after:` | Dated on or after the first day of that year, month or day. | `after:2025` |
 | `before:` | Dated before the first day of that year, month or day. | `before:2026-06` |
-| `tray:` | Files with an open item in that tray, by its id or name. | `tray:to-pay` |
+| `tray:` | Files with an open item in that tray, by its id or name. `tray:*` finds files with an open item in any tray. | `tray:to-pay`, `tray:*` |
 | `is:` | `starred`, `important`, `locked` (the locks you set yourself; Important files are always locked but are found with `is:important`), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary` (the file has a summary), `disconnected` (the file is in an archive folder that is not connected now; see [Several archive folders](#several-archive-folders)). | `is:locked` |
 
 Tips:

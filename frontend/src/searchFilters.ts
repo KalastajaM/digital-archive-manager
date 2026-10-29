@@ -30,16 +30,16 @@ export const TYPE_VALUES = ["pdf", "image", "doc", "sheet", "slides", "text", "m
 export const FILTER_HELP: { name: FilterName; example: string; text: string }[] = [
   { name: "name", example: "name:*kela*", text: "Words in the file name only. * stands for any text, ? for one character." },
   { name: "in", example: 'in:"50. Medical"', text: "Files in a folder and the folders below it." },
-  { name: "tag", example: "tag:insurance", text: "Files with that tag." },
-  { name: "collection", example: 'collection:"House sale"', text: "Files in a collection, and in the collections inside it." },
-  { name: "from", example: "from:Kela", text: "Files whose sender (From) contains this." },
-  { name: "for", example: "for:Tiina", text: "Files assigned to this person (For)." },
+  { name: "tag", example: "tag:insurance", text: "Files with that tag. tag:* any tag; -tag:* no tag at all." },
+  { name: "collection", example: 'collection:"House sale"', text: "Files in a collection, and in the collections inside it. collection:* any of yours; -collection:* none." },
+  { name: "from", example: "from:Kela", text: "Files whose sender (From) contains this. from:* any sender; -from:* none set yet." },
+  { name: "for", example: "for:Tiina", text: "Files assigned to this person (For). for:* anyone; -for:* no one set yet." },
   { name: "id", example: "id:0112038-9", text: "Files that carry this business ID, IBAN or web or mail domain; id:* finds every file with a business ID." },
   { name: "type", example: "type:pdf", text: "Kind of file: an extension (pdf, docx) or a group (image, doc, sheet, text)." },
   { name: "date", example: "date:2026-10", text: "Document date: a year, a month or a day (YYYY, YYYY-MM, YYYY-MM-DD)." },
   { name: "after", example: "after:2025", text: "Dated on or after the first day of that year, month or day." },
   { name: "before", example: "before:2026-06", text: "Dated before the first day of that year, month or day." },
-  { name: "tray", example: "tray:to-pay", text: "Files with an open item in that tray (its id or name)." },
+  { name: "tray", example: "tray:to-pay", text: "Files with an open item in that tray (its id or name). tray:* in any tray." },
   { name: "is", example: "is:locked", text: "starred, important, locked (a lock you set; Important files are found with is:important), todo (open checklist items), note, summary or disconnected (files in an archive folder that is not connected now)." },
 ];
 
@@ -131,7 +131,8 @@ export function readQuery(q: string | null | undefined): { words: string; filter
 }
 
 /** Does this filter set have two or more tags that must all / any match (All/Any shows)? */
-export const positiveTags = (filters: SearchFilter[]) => filters.filter((f) => f.name === "tag" && !f.negated);
+export const positiveTags = (filters: SearchFilter[]) =>
+  filters.filter((f) => f.name === "tag" && !f.negated && f.value !== "*"); // tag:* is "any tag", not a tag
 
 /** The query that shows the files with this tag (the link from the tag lists). */
 export const tagFilter = (name: string) => filterToken({ name: "tag", value: name, negated: false });
