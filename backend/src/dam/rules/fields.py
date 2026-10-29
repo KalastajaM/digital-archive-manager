@@ -8,23 +8,34 @@ from datetime import date
 from decimal import Decimal
 
 from dam import packs
-from dam.checks import valid_iban
+from dam.checks import IBAN_LENGTHS, valid_iban
 from dam.countries import CountryPack
 
 _CENT = Decimal("0.01")
 
 _DATE_DMY = re.compile(r"(?<!\d)(?<!\d\.)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)", re.ASCII)
 _DATE_ISO = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)", re.ASCII)
+# day first with dashes or slashes ("15-10-2026", "15/10/2026"), never a run of digits
+_DATE_DMY_SEP = re.compile(
+    r"(?<!\d)(?<!\d[-/])(\d{1,2})([-/])(\d{1,2})\2(\d{4})(?![\d/-])", re.ASCII
+)
+# a month name, on folded text: "15 oktober 2026", "15. lokakuuta 2026", "October 15, 2026"
+_DATE_DAY_MONTH = re.compile(r"(?<!\d)(\d{1,2})\.?\s+([a-z]+)\.?\s+(\d{4})(?!\d)")
+_DATE_MONTH_DAY = re.compile(r"\b([a-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})(?!\d)")
 
 _SEP = r"[ .  ]"
 _AMOUNT_SUFFIX = re.compile(
     rf"(?<![\d,.])(\d{{1,3}}(?:{_SEP}\d{{3}})+|\d+),(\d{{2}})(?!\d)\s?(?:€|EUR\b)", re.ASCII
 )
 _AMOUNT_PREFIX = re.compile(
-    r"(?:€|EUR\b)\s?(\d{1,3}(?:,\d{3})+|\d+)[.,](\d{2})(?![\d]|[.,]\d)", re.ASCII
+    r"(?:€|EUR\b)\s?(?:(\d{1,3}(?:[.  ]\d{3})+),(\d{2})|(\d{1,3}(?:,\d{3})+|\d+)[.,](\d{2}))"
+    r"(?![\d]|[.,]\d)",
+    re.ASCII,
 )
 
-_IBAN = re.compile(r"(?<![A-Za-z0-9])FI\d{2}(?: ?\d{4}){3} ?\d{2}(?!\d)", re.ASCII)
+# a country code and check digits, then what may follow; a lookahead, so a run that is no
+# IBAN does not hide one that starts inside it
+_IBAN = re.compile(r"(?<![A-Za-z0-9])(?=([A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}))", re.ASCII)
 
 
 @dataclass
@@ -56,15 +67,29 @@ def _max_date() -> date:
 def _dated(text: str) -> list[tuple[int, date]]:
     latest = _max_date()
     found: list[tuple[int, date]] = []
+
+    def add(start: int, y: int, mo: int, d: int) -> None:
+        try:
+            parsed = date(y, mo, d)
+        except ValueError:
+            return
+        if _MIN_DATE <= parsed <= latest:
+            found.append((start, parsed))
+
     for pattern, order in ((_DATE_DMY, (3, 2, 1)), (_DATE_ISO, (1, 2, 3))):
         for m in pattern.finditer(text):
-            y, mo, d = (int(m[i]) for i in order)
-            try:
-                parsed = date(y, mo, d)
-            except ValueError:
-                continue
-            if _MIN_DATE <= parsed <= latest:
-                found.append((m.start(), parsed))
+            add(m.start(), *(int(m[i]) for i in order))
+    for m in _DATE_DMY_SEP.finditer(text):
+        add(m.start(), int(m[4]), int(m[3]), int(m[1]))
+    months = packs.active().months
+    if months:
+        folded, index = _fold(text)
+        for m in _DATE_DAY_MONTH.finditer(folded):
+            if (mo := months.get(m[2])) is not None:
+                add(index[m.start()], int(m[3]), mo, int(m[1]))
+        for m in _DATE_MONTH_DAY.finditer(folded):
+            if (mo := months.get(m[1])) is not None:
+                add(index[m.start()], int(m[3]), mo, int(m[2]))
     return sorted(found, key=lambda t: t[0])
 
 
@@ -78,8 +103,11 @@ def _priced(text: str) -> list[tuple[int, Decimal]]:
         whole = re.sub(_SEP, "", m[1])
         found.append((m.start(), Decimal(f"{whole}.{m[2]}").quantize(_CENT)))
     for m in _AMOUNT_PREFIX.finditer(text):
-        whole = m[1].replace(",", "")
-        found.append((m.start(), Decimal(f"{whole}.{m[2]}").quantize(_CENT)))
+        if m[1] is not None:  # dot or space thousands, decimal comma: "€ 1.234,56"
+            whole, cents = re.sub(_SEP, "", m[1]), m[2]
+        else:
+            whole, cents = m[3].replace(",", ""), m[4]
+        found.append((m.start(), Decimal(f"{whole}.{cents}").quantize(_CENT)))
     return sorted(found, key=lambda t: t[0])
 
 
@@ -88,10 +116,12 @@ def _amounts(text: str) -> list[Decimal]:
 
 
 def _iban(text: str) -> str | None:
+    """The first valid IBAN of a SEPA country, cut to that country's length."""
     for m in _IBAN.finditer(text):
-        compact = m[0].replace(" ", "")
-        if valid_iban(compact):
-            return compact
+        compact = m[1].replace(" ", "")
+        length = IBAN_LENGTHS.get(compact[:2])
+        if length is not None and len(compact) >= length and valid_iban(compact[:length]):
+            return compact[:length]
     return None
 
 
