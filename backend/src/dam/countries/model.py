@@ -17,6 +17,18 @@ class ReferenceSpec:
 
 
 @dataclass(frozen=True)
+class IdentifierSpec:
+    """Values in a document that name an organisation or an account: ``kind`` namespaced
+    by its pack ("fi.ytunnus"), ``label`` for people, ``find`` the normalised values in
+    text order, each once. ``names_sender``: a value belongs to one organisation."""
+
+    kind: str
+    label: str
+    find: Callable[[str], list[str]]
+    names_sender: bool
+
+
+@dataclass(frozen=True)
 class CountryPack:
     code: str  # "core", or ISO 3166-1 alpha-2 in lower case ("fi")
     name: str
@@ -27,3 +39,6 @@ class CountryPack:
     languages: tuple[str, ...] = ()  # the languages of its documents, most likely first
     # what the pack adds to reading documents, in plain words (Settings lists them)
     adds: tuple[str, ...] = ()
+    identifiers: tuple[IdentifierSpec, ...] = ()
+    # raise when what the pack finds changes: stored identifiers are read again
+    version: int = 1

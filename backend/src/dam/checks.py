@@ -37,3 +37,10 @@ def check_731(digits: str) -> int:
     """Finnish domestic reference check digit for ``digits`` (without the check digit)."""
     total = sum(int(d) * (7, 3, 1)[i % 3] for i, d in enumerate(reversed(digits)))
     return (10 - total % 10) % 10
+
+
+def ytunnus_check(seven: str) -> int | None:
+    """The check digit of a Finnish business ID (Y-tunnus) from its seven digits: weights
+    7, 9, 10, 5, 8, 4, 2, mod 11; None when the remainder is 1 (no such ID)."""
+    r = sum(int(d) * w for d, w in zip(seven, (7, 9, 10, 5, 8, 4, 2), strict=True)) % 11
+    return None if r == 1 else (0 if r == 0 else 11 - r)
