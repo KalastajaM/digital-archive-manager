@@ -11,6 +11,8 @@ import yaml
 from platformdirs import user_data_dir
 from pydantic import BaseModel, Field, field_validator
 
+from dam import countries
+
 DEFAULTS_DIR = Path(__file__).parents[3] / "defaults"
 
 
@@ -151,12 +153,16 @@ class Person(BaseModel):
         return [m.strip() for m in value]
 
 
-# Where the addressee sits on page 1 of a Finnish business letter (SFS 2487, window
-# envelope), as fractions of an A4 page (210 x 297 mm), origin top left: about 20 mm from
-# the left edge, 90 mm wide, from roughly 40 to 80 mm from the top. This is an
-# approximation from memory of the standard, to be checked against real letters; lines
-# are matched with a 3 % margin around the field, which absorbs most of the difference.
-DEFAULT_ADDRESS_ZONE = (0.095, 0.135, 0.524, 0.27)  # 20-110 mm across, 40-80 mm down
+def _finland_zone() -> tuple[float, float, float, float]:
+    zone = countries.get("fi").address_zone
+    if zone is None:
+        raise RuntimeError("the Finland country pack has no address zone")
+    return zone
+
+
+# Where the addressee sits on page 1 when the settings do not say: the Finland pack's area
+# (SFS 2487; see ``dam.countries``).
+DEFAULT_ADDRESS_ZONE = _finland_zone()
 
 
 class ExtraFolder(BaseModel):

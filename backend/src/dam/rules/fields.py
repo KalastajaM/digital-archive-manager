@@ -2,11 +2,14 @@
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from dam.checks import check_731, valid_iban, valid_rf
+from dam import countries
+from dam.checks import valid_iban
+from dam.countries import CountryPack
 
 _CENT = Decimal("0.01")
 
@@ -22,11 +25,6 @@ _AMOUNT_PREFIX = re.compile(
 )
 
 _IBAN = re.compile(r"(?<![A-Za-z0-9])FI\d{2}(?: ?\d{4}){3} ?\d{2}(?!\d)", re.ASCII)
-_RF = re.compile(r"(?<![A-Za-z0-9])RF\d{2}[0-9A-Z ]{1,21}", re.ASCII)
-_DOMESTIC = re.compile(
-    r"\b(?:viitenumero|viite|reference)\b\s*(?:nro\.?\s*)?:?\s*(\d+(?: \d{5})*)(?!\d|[-./]\d)",
-    re.ASCII | re.IGNORECASE,
-)
 
 
 @dataclass
@@ -45,12 +43,6 @@ def _dedupe[T](found: list[tuple[int, T]]) -> list[T]:
         if value not in out:
             out.append(value)
     return out
-
-
-def _valid_domestic(digits: str) -> bool:
-    if digits.strip("0") == "":
-        return False
-    return 4 <= len(digits) <= 20 and check_731(digits[:-1]) == int(digits[-1])
 
 
 _MIN_DATE = date(1950, 1, 1)
@@ -103,21 +95,9 @@ def _iban(text: str) -> str | None:
     return None
 
 
-def _references(text: str) -> str | None:
-    found: list[tuple[int, str]] = []
-    for m in _RF.finditer(text):
-        tokens = m[0].split()  # "RF18", "5000", "1", ...
-        for k in range(len(tokens), 0, -1):
-            compact = "".join(tokens[:k])
-            if valid_rf(compact):
-                found.append((m.start(), compact))
-                break
-    for m in _DOMESTIC.finditer(text):
-        groups = m[1].split(" ")
-        for candidate in ("".join(groups), groups[0]):
-            if _valid_domestic(candidate):
-                found.append((m.start(), candidate))
-                break
+def _references(text: str, packs: Sequence[CountryPack]) -> str | None:
+    """The first payment reference in the text, of any format the packs know."""
+    found = [hit for pack in packs for spec in pack.references for hit in spec.find(text)]
     return min(found, key=lambda t: t[0])[1] if found else None
 
 
@@ -192,7 +172,7 @@ def detect_fields(text: str) -> DetectedFields:
         dates=_dedupe(dated),
         amounts=amounts,
         iban=_iban(text),
-        reference=_references(text),
+        reference=_references(text, countries.enabled()),
         due_date=due,
         total=total,
     )
