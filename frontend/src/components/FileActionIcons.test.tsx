@@ -1,4 +1,4 @@
-/** The file panel's two icon rows (the New look): what each context shows, the tooltips with their
+/** The file panel's icon row (the New look): what each context shows, the tooltips with their
  * keys, the groups apart by a rule, and what a disabled button says. */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -56,16 +56,34 @@ describe("the two rows", () => {
     ]);
   });
 
-  it("puts a visible rule between the groups of the second row and the red bin at its end", () => {
+  it("puts both parts in one row with a rule between them", () => {
+    setup(FULL);
+    const look = screen.getByRole("group", { name: "Look at it" });
+    const fileIt = screen.getByRole("group", { name: "File it" });
+    expect(look.parentElement).toBe(fileIt.parentElement);
+    expect(look.nextElementSibling).toHaveAttribute("role", "separator");
+    expect(look.nextElementSibling?.nextElementSibling).toBe(fileIt);
+  });
+
+  it("has Show in folder only where the screen gives it, after Show in Finder", async () => {
+    const showInFolder = vi.fn();
+    const { user } = setup({ ...FULL, showInFolder });
+    const look = names(screen.getByRole("group", { name: "Look at it" }));
+    expect(look.indexOf("Show in folder")).toBe(look.findIndex((n) => /^Show in (Finder|Explorer|file manager)/.test(n ?? "")) + 1);
+    await user.click(screen.getByRole("button", { name: "Show in folder" }));
+    expect(showInFolder).toHaveBeenCalled();
+  });
+
+  it("puts a visible rule between the groups of the second part and the red bin last, apart", () => {
     setup(FULL);
     const row = screen.getByRole("group", { name: "File it" });
     const seps = within(row).getAllByRole("separator");
-    expect(seps).toHaveLength(2);
+    expect(seps).toHaveLength(3);
     expect(row.lastElementChild).toBe(screen.getByRole("button", { name: "Move to To Delete" }));
     expect(screen.getByRole("button", { name: "Move to To Delete" })).toHaveClass("trash-button");
-    // a rule only between groups that exist: no star and no inbox, no rules
+    // a rule only between groups that exist: no star and no inbox, one rule before the bin
     setup({ file: FILE, sender: act(), person: act(), trash: act() });
-    expect(within(screen.getAllByRole("group", { name: "File it" })[1]).queryAllByRole("separator")).toHaveLength(0);
+    expect(within(screen.getAllByRole("group", { name: "File it" })[1]).queryAllByRole("separator")).toHaveLength(1);
   });
 
   it("names the key in the tooltip where there is one", () => {

@@ -143,11 +143,11 @@ describe("styles-new.css: Collections and Trays", () => {
     expect(plain).toMatch(/\.trays-main > \.splitter \{ display: block; \}/);
   });
 
-  it("puts the document beside the item's details when the item's pane is wide", () => {
+  it("stacks the item's details and its file panel in one column, as Browse", () => {
     expect(plain).toMatch(/\.trays-detail \{ container: tdetail \/ inline-size;/);
     expect(plain).toMatch(/@container tdetail \(min-width: \d+px\)/);
-    expect(plain).toMatch(/\.item-cols \{ display: flex; flex-wrap: wrap;/);
-    expect(plain).toMatch(/\.item-col-side \{ flex: 1 1 260px;/);
+    expect(plain).toMatch(/\.item-stack \{ display: flex; flex-direction: column;/);
+    expect(plain).not.toMatch(/\.item-cols \{/);
   });
 });
 

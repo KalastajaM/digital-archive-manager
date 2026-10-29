@@ -59,7 +59,7 @@ export function FilePanel({
   headerActions?: { ai: FilingAI };
   /** A narrow panel (a collection): Relatives starts folded. */
   compactRelatives?: boolean;
-  /** The New look: the two icon rows (``FileActionIcons``), under the header. Its blocks in
+  /** The New look: the icon row (``FileActionIcons``), under the header. Its blocks in
    * the skeleton's order: ``extras`` (a collection's Group) sits under the collections, and
    * Restore, Put in tray and Back to inbox are in the icon rows. */
   actions?: ReactNode;

@@ -111,21 +111,24 @@ describe("a tray in New", () => {
     expect(document.querySelector(".trays-toolbar .toolbar-trailing")).toBeNull();
   });
 
-  it("lays the item out as the board does: the fields card, then files, checklist and note beside the summary", async () => {
+  it("lays the item out in one column: the fields card, the files, the file panel, then checklist and note", async () => {
     document.documentElement.dataset.style = "new";
     setup();
     const item = await screen.findByRole("region", { name: "Item" });
     await waitForHeader(item);
     const done = await within(item).findByRole("button", { name: /^Mark done/ });
     expect(done.querySelector("kbd")).toHaveTextContent("d");
-    const main = item.querySelector(".item-col-main") as HTMLElement;
-    const side = item.querySelector(".item-col-side") as HTMLElement;
+    const main = item.querySelector(".item-stack") as HTMLElement;
+    const side = item.querySelector(".item-file-panel") as HTMLElement;
     const files = await within(main).findByRole("region", { name: "Files on this item" });
     expect(files.querySelectorAll(".item-file-pick")).toHaveLength(2);
     expect(within(files).getByRole("button", { name: /Builder quote\.pdf/, pressed: true })).toBeInTheDocument();
     expect(within(main).getByText("Checklist")).toBeInTheDocument();
     expect(within(main).getByText("History")).toBeInTheDocument();
-    // the column beside it is the one file panel, for the file shown
+    // the one file panel, for the file shown, between the files and the checklist
+    const kidsOf = [...main.children];
+    expect(kidsOf.indexOf(files)).toBeLessThan(kidsOf.indexOf(side));
+    expect(side.compareDocumentPosition(within(main).getByText("Checklist")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const blocks = (await waitFor(() => {
       const found = [...side.querySelectorAll(".file-skeleton > [data-block]")].map((b) => (b as HTMLElement).dataset.block);
       if (found.length === 0) throw new Error("no file panel yet");
@@ -136,16 +139,18 @@ describe("a tray in New", () => {
     expect(blocks.slice(0, 2)).toEqual(["header", "actions"]);
     // the shown file's relatives, folded until opened
     expect(await within(side).findByRole("button", { name: /^Relatives/, expanded: false })).toBeInTheDocument();
-    // the file's two icon rows: the item's own actions (Remove from tray, Move to tray) stay in the item's header
+    // Show in folder takes the file to Browse
+    expect(within(within(side).getByRole("group", { name: "Look at it" })).getByRole("button", { name: "Show in folder" })).toBeInTheDocument();
+    // the file's icon row: the item's own actions (Remove from tray, Move to tray) stay in the item's header
     const filing = within(side).getByRole("group", { name: "File it" });
     expect(within(filing).queryByRole("button", { name: "Put in tray" })).toBeNull();
     expect(within(filing).queryByRole("button", { name: "Remove from tray" })).toBeNull();
     expect(within(filing).getByRole("button", { name: "Back to inbox" })).toBeInTheDocument();
     expect(within(filing).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
     expect(within(item.querySelector(".item-header") as HTMLElement).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument();
-    // the fields card comes before the two columns
+    // the fields card comes before the column
     const kids = [...(item.querySelector(".item-new") as HTMLElement).children].map((c) => c.className);
-    expect(kids.findIndex((c) => c.includes("item-fields"))).toBeLessThan(kids.findIndex((c) => c.includes("item-cols")));
+    expect(kids.findIndex((c) => c.includes("item-fields"))).toBeLessThan(kids.findIndex((c) => c.includes("item-stack")));
   });
 
   it("renders none of it in Classic", async () => {
