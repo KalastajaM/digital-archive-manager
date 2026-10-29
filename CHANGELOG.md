@@ -8,6 +8,8 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- In Settings, Senders, the number of documents is a link that opens Browse on the
+  documents carrying that business ID.
 - **Collections and tags in Browse.** The tree beside Browse's panes switches between
   Folders, Collections and Tags. A click on a collection or tag lists its files from the
   whole archive, as a search with its chip; the tag list has a box that narrows it.
@@ -58,6 +60,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- In Reading documents, **Reset to default** lines up with the address area fields and
+  **Save address area** sits on the left.
 - **Relatives no longer runs into the identifiers above it.** In the file panel a hairline
   and a little space now separate what the document mentions from its Relatives.
 - Saving the People list no longer pins the address area: it is sent only when it

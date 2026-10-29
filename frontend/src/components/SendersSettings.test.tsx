@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { mockFetch, renderWithProviders } from "../test-utils";
 import { SendersSettings } from "./SendersSettings";
 
@@ -25,10 +26,15 @@ describe("SendersSettings", () => {
         body: { names: [row(), row({ value: "0201256-6", files: 3, suggested: null, name: "Elisa Oyj", set_at: 1, filled: 2 })] },
       },
     });
-    renderWithProviders(<SendersSettings />);
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
     const first = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
     expect(within(first).getByRole("textbox", { name: "Name for 0112038-9" })).toHaveValue("Vesilaitos Oy");
-    expect(within(first).getByText("14 documents")).toBeInTheDocument();
+    // the count opens Browse on the documents that carry the ID
+    expect(within(first).getByRole("link", { name: "14 documents" })).toHaveAttribute("href", "/browse?q=id%3A0112038-9");
     expect(within(first).getByRole("button", { name: "Confirm" })).toBeEnabled();
     const second = screen.getByRole("listitem", { name: "Y-tunnus 0201256-6" });
     expect(within(second).getByRole("textbox", { name: "Name for 0201256-6" })).toHaveValue("Elisa Oyj");
@@ -43,7 +49,11 @@ describe("SendersSettings", () => {
       "GET /api/identifier-names": { body: { names: [row()] } },
       "PUT /api/identifier-names": { body: { changed: 12, name: "Vesilaitos Oy" } },
     });
-    renderWithProviders(<SendersSettings />);
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
     const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
     await user.click(within(item).getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
@@ -60,7 +70,11 @@ describe("SendersSettings", () => {
       "GET /api/identifier-names": { body: { names: [row({ name: "Vesilaitos Oy", set_at: 1, filled: 14 })] } },
       "PUT /api/identifier-names": { body: { changed: 14, name: "Helsingin Vesi" } },
     });
-    renderWithProviders(<SendersSettings />);
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
     const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
     const input = within(item).getByRole("textbox", { name: "Name for 0112038-9" });
     await user.clear(input);
@@ -74,7 +88,11 @@ describe("SendersSettings", () => {
 
   it("Confirm waits for a name when none was read", async () => {
     mockFetch({ "GET /api/identifier-names": { body: { names: [row({ suggested: null })] } } });
-    renderWithProviders(<SendersSettings />);
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
     const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
     expect(within(item).getByRole("textbox", { name: "Name for 0112038-9" })).toHaveValue("");
     expect(within(item).getByRole("button", { name: "Confirm" })).toBeDisabled();
@@ -85,7 +103,11 @@ describe("SendersSettings", () => {
     mockFetch({
       "GET /api/identifier-names": { body: { names: [row(), row({ value: "0201256-6", suggested: "Elisa Oyj" })] } },
     });
-    renderWithProviders(<SendersSettings />);
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
     await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
     await user.type(screen.getByRole("searchbox", { name: "Find a sender" }), "elisa");
     expect(screen.queryByRole("listitem", { name: "Y-tunnus 0112038-9" })).toBeNull();
@@ -94,7 +116,11 @@ describe("SendersSettings", () => {
 
   it("says when there is nothing to name yet", async () => {
     mockFetch({ "GET /api/identifier-names": { body: { names: [] } } });
-    renderWithProviders(<SendersSettings />);
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
     expect(await screen.findByText(/No business ID is on two or more documents yet/)).toBeInTheDocument();
   });
 
@@ -104,7 +130,11 @@ describe("SendersSettings", () => {
       "GET /api/identifier-names": { body: { names: [row()] } },
       "PUT /api/identifier-names": { status: 400, body: { error: "A sender name is at most 80 characters." } },
     });
-    renderWithProviders(<SendersSettings />);
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
     const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
     await user.click(within(item).getByRole("button", { name: "Confirm" }));
     expect(await within(item).findByRole("alert")).toHaveTextContent("at most 80 characters");

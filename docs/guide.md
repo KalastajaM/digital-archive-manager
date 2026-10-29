@@ -839,7 +839,8 @@ IDs. For Finland that is the Y-tunnus: most letters from a company print it, oft
 same line as the company's name. dam reads the name printed next to each Y-tunnus (it ends
 in a legal form such as Oy, Oyj, Ab, Abp, Ky, Ay, ry or osk, or starts with Tmi or Asunto
 Oy) and lists every Y-tunnus found on two or more documents, the most documents first, with
-the name read most often already in the name field.
+the name read most often already in the name field. The number of documents is a link:
+it opens Browse on them (an `id:` search, such as `id:0112038-9`).
 
 - **Confirm** keeps the name and makes it **From** on every document that carries the
   Y-tunnus. Documents read later get it too. A toast says how many documents changed, with
