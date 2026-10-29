@@ -2,9 +2,14 @@
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+
+from dam import countries, languages
+from dam.checks import valid_iban
+from dam.countries import CountryPack
 
 _CENT = Decimal("0.01")
 
@@ -20,11 +25,6 @@ _AMOUNT_PREFIX = re.compile(
 )
 
 _IBAN = re.compile(r"(?<![A-Za-z0-9])FI\d{2}(?: ?\d{4}){3} ?\d{2}(?!\d)", re.ASCII)
-_RF = re.compile(r"(?<![A-Za-z0-9])RF\d{2}[0-9A-Z ]{1,21}", re.ASCII)
-_DOMESTIC = re.compile(
-    r"\b(?:viitenumero|viite|reference)\b\s*(?:nro\.?\s*)?:?\s*(\d+(?: \d{5})*)(?!\d|[-./]\d)",
-    re.ASCII | re.IGNORECASE,
-)
 
 
 @dataclass
@@ -43,36 +43,6 @@ def _dedupe[T](found: list[tuple[int, T]]) -> list[T]:
         if value not in out:
             out.append(value)
     return out
-
-
-def _mod97(compact: str) -> int:
-    rearranged = compact[4:] + compact[:4]
-    digits = "".join(str(int(c, 36)) for c in rearranged)
-    return int(digits) % 97
-
-
-def valid_iban(compact: str) -> bool:
-    return _mod97(compact) == 1
-
-
-def _valid_rf(compact: str) -> bool:
-    return 5 <= len(compact) <= 25 and _mod97(compact) == 1
-
-
-def _check_731(digits: str) -> int:
-    """Finnish domestic reference check digit for ``digits`` (without the check digit)."""
-    total = sum(int(d) * w for d, w in zip(reversed(digits), _weights(len(digits)), strict=True))
-    return (10 - total % 10) % 10
-
-
-def _weights(n: int) -> list[int]:
-    return [(7, 3, 1)[i % 3] for i in range(n)]
-
-
-def _valid_domestic(digits: str) -> bool:
-    if digits.strip("0") == "":
-        return False
-    return 4 <= len(digits) <= 20 and _check_731(digits[:-1]) == int(digits[-1])
 
 
 _MIN_DATE = date(1950, 1, 1)
@@ -125,31 +95,22 @@ def _iban(text: str) -> str | None:
     return None
 
 
-def _references(text: str) -> str | None:
-    found: list[tuple[int, str]] = []
-    for m in _RF.finditer(text):
-        tokens = m[0].split()  # "RF18", "5000", "1", ...
-        for k in range(len(tokens), 0, -1):
-            compact = "".join(tokens[:k])
-            if _valid_rf(compact):
-                found.append((m.start(), compact))
-                break
-    for m in _DOMESTIC.finditer(text):
-        groups = m[1].split(" ")
-        for candidate in ("".join(groups), groups[0]):
-            if _valid_domestic(candidate):
-                found.append((m.start(), candidate))
-                break
+def _references(text: str, packs: Sequence[CountryPack]) -> str | None:
+    """The first payment reference in the text, of any format the packs know."""
+    found = [hit for pack in packs for spec in pack.references for hit in spec.find(text)]
     return min(found, key=lambda t: t[0])[1] if found else None
 
 
 _LABEL_WINDOW = 40
-_DUE_LABELS = re.compile(r"erapaiva|erapvm|due date|forfallodag|maksettava|\bdue\b")
+_LANGUAGES = languages.enabled()
+_DUE_LABELS = languages.label_pattern(w for p in _LANGUAGES for w in p.due_labels)
 # Whole words on folded text, so "subtotal" and "valisumma" are never labels.
-_TOTAL_STRONG = re.compile(
-    r"\b(?:yhteensa|total|totalt|maksettava|att betala|loppusumma|kokonaissumma)\b"
+_TOTAL_STRONG = languages.label_pattern(
+    (w for p in _LANGUAGES for w in p.total_strong), whole_words=True
 )
-_TOTAL_WEAK = re.compile(r"\bsumma\b")
+_TOTAL_WEAK = languages.label_pattern(
+    (w for p in _LANGUAGES for w in p.total_weak), whole_words=True
+)
 
 
 def _fold(text: str) -> tuple[str, list[int]]:
@@ -214,7 +175,7 @@ def detect_fields(text: str) -> DetectedFields:
         dates=_dedupe(dated),
         amounts=amounts,
         iban=_iban(text),
-        reference=_references(text),
+        reference=_references(text, countries.enabled()),
         due_date=due,
         total=total,
     )

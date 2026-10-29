@@ -1,0 +1,1012 @@
+{
+ "fields": [
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2025-05-05"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "1.1.1900 ja 1.1.2099 ja 5.5.2025",
+   "total": null
+  },
+  {
+   "amounts": [
+    "5.10",
+    "2.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "5,10 € ja 5,10 € sekä 2,00 €",
+   "total": "5.10"
+  },
+  {
+   "amounts": [
+    "1234.56"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Yhteensä 1.234,56 €",
+   "total": "1234.56"
+  },
+  {
+   "amounts": [
+    "1234.56",
+    "123.45",
+    "12.50",
+    "7.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "A 1 234,56 € B 123,45 EUR C €12.50 D 7,00 €",
+   "total": "1234.56"
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-04-03",
+    "2026-10-13",
+    "2026-11-05"
+   ],
+   "due_date": "2026-04-03",
+   "iban": null,
+   "reference": null,
+   "text": "Eräpäivä 3.4.2026, laskupäivä 13.10.2026 ja 2026-11-05; virhe 31.2.2026; 13.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": "FI2112345600000785",
+   "reference": null,
+   "text": "Tilinumero FI21 1234 5600 0007 85 Northbank",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Tilinumero FI21 1234 5600 0007 86",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": "FI2112345600000785",
+   "reference": null,
+   "text": "FI2112345600000785",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "RF2350001",
+   "text": "Viite RF23 5000 1",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "RF18123456789",
+   "text": "RF18 1234 5678 9",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "RF2350001",
+   "text": "RF23 5000 1 SUMMA 12,00",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "RF24 5000 1",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "1234561",
+   "text": "Viitenumero: 1234561",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "1234561",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Viite 1234562",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "1234561",
+   "text": "Reference nro 1234561",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-12"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "EUR 12.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-05"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "€ 5.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [
+    "12.50"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "€12.50",
+   "total": "12.50"
+  },
+  {
+   "amounts": [
+    "12.50"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "EUR 12,50 ja €3.10,5",
+   "total": "12.50"
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-12"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Viite 2026-10-12",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-12"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Viite 12.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Viite 2026/10",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Viite 0000",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Viite 000000",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Viite 123",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "RF18123456789",
+   "text": "RF18 1234 5678 9 12 345",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "1234561",
+   "text": "Viite 1234561",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "1232",
+   "text": "Viite 1232",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-15"
+   ],
+   "due_date": "2026-10-15",
+   "iban": null,
+   "reference": null,
+   "text": "Eräpäivä 15.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-11-02"
+   ],
+   "due_date": "2026-11-02",
+   "iban": null,
+   "reference": null,
+   "text": "Due date 2026-11-02",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-04-03"
+   ],
+   "due_date": "2026-04-03",
+   "iban": null,
+   "reference": null,
+   "text": "FÖRFALLODAG 3.4.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-15"
+   ],
+   "due_date": "2026-10-15",
+   "iban": null,
+   "reference": null,
+   "text": "ERAPAIVA: 15.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-01"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Päiväys 01.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Eräpäivä 15.10.1900",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-15"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "overdue 15.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-15"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "residue 15.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-15"
+   ],
+   "due_date": "2026-10-15",
+   "iban": null,
+   "reference": null,
+   "text": "Payment due 15.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-10-15"
+   ],
+   "due_date": "2026-10-15",
+   "iban": null,
+   "reference": null,
+   "text": "Maksettava 15.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [
+    "12.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Att betala: 12,00 EUR",
+   "total": "12.00"
+  },
+  {
+   "amounts": [
+    "9.90",
+    "50.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Maksettava 9,90 € ja 50,00 €",
+   "total": "9.90"
+  },
+  {
+   "amounts": [
+    "5.00",
+    "70.00",
+    "8.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "A 5,00 € B 70,00 € C 8,00 €",
+   "total": "70.00"
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "ei summia",
+   "total": null
+  },
+  {
+   "amounts": [
+    "10.00",
+    "50.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Subtotal 10,00 € Total 50,00 €",
+   "total": "50.00"
+  },
+  {
+   "amounts": [
+    "10.00",
+    "12.00",
+    "50.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Subtotal 10,00 € Alv 12,00 € Total 50,00 €",
+   "total": "50.00"
+  },
+  {
+   "amounts": [
+    "10.00",
+    "50.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Välisumma 10,00 € Total 50,00 €",
+   "total": "50.00"
+  },
+  {
+   "amounts": [
+    "5.00",
+    "100.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Summa 5,00 € Yhteensä 100,00 €",
+   "total": "100.00"
+  },
+  {
+   "amounts": [
+    "5.00",
+    "7.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Summa 5,00 € ja 7,00 €",
+   "total": "5.00"
+  },
+  {
+   "amounts": [
+    "120.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Loppusumma 120,00 €",
+   "total": "120.00"
+  },
+  {
+   "amounts": [
+    "80.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Kokonaissumma 80,00 €",
+   "total": "80.00"
+  },
+  {
+   "amounts": [
+    "30.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Totalt 30,00 EUR",
+   "total": "30.00"
+  },
+  {
+   "amounts": [
+    "12.00"
+   ],
+   "dates": [
+    "2026-10-31",
+    "2026-11-01"
+   ],
+   "due_date": "2026-10-31",
+   "iban": null,
+   "reference": null,
+   "text": "Due date 31.10.2026 due 1.11.2026 12,00 €",
+   "total": "12.00"
+  },
+  {
+   "amounts": [],
+   "dates": [
+    "2026-11-01",
+    "2026-10-31"
+   ],
+   "due_date": "2026-11-01",
+   "iban": null,
+   "reference": null,
+   "text": "due 1.11.2026 Due date 31.10.2026",
+   "total": null
+  },
+  {
+   "amounts": [
+    "12.00"
+   ],
+   "dates": [
+    "2026-11-01"
+   ],
+   "due_date": "2026-11-01",
+   "iban": null,
+   "reference": null,
+   "text": "Maksettava 12,00 € eräpäivä 1.11.2026",
+   "total": "12.00"
+  },
+  {
+   "amounts": [
+    "45.10"
+   ],
+   "dates": [
+    "2026-11-02"
+   ],
+   "due_date": "2026-11-02",
+   "iban": null,
+   "reference": null,
+   "text": "Att betala 45,10 kr 45,10 € Förfallodag 2.11.2026",
+   "total": "45.10"
+  },
+  {
+   "amounts": [
+    "9.90",
+    "3.00",
+    "12.00"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Totalt 9,90 € summa 3,00 € Total 12,00 €",
+   "total": "12.00"
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "1234561",
+   "text": "Viite 1234561 RF18 1234 5678 9",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "RF18123456789",
+   "text": "RF18 1234 5678 9 Viitenumero: 1234561",
+   "total": null
+  },
+  {
+   "amounts": [
+    "1234.56"
+   ],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "1234561",
+   "text": "Reference nro 1234561 Yhteensä 1.234,56 €",
+   "total": "1234.56"
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": "RF18539007547034",
+   "text": "Verohallinto veroilmoitus 2025 RF18 5390 0754 7034",
+   "total": null
+  },
+  {
+   "amounts": [
+    "23.40"
+   ],
+   "dates": [
+    "2026-09-15"
+   ],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Apteekki kuitti 23,40 EUR 15.09.2026",
+   "total": "23.40"
+  },
+  {
+   "amounts": [
+    "54.20"
+   ],
+   "dates": [
+    "2026-10-31"
+   ],
+   "due_date": "2026-10-31",
+   "iban": "FI2112345600000785",
+   "reference": null,
+   "text": "Lasku 54,20 EUR FI21 1234 5600 0007 85 erapaiva 31.10.2026",
+   "total": "54.20"
+  },
+  {
+   "amounts": [
+    "84.20"
+   ],
+   "dates": [
+    "2026-10-15"
+   ],
+   "due_date": "2026-10-15",
+   "iban": "FI2112345600000785",
+   "reference": "RF18539007547034",
+   "text": "Sahkoyhtio lasku. Eräpäivä 15.10.2026 Yhteensä 84,20 € IBAN FI21 1234 5600 0007 85 Viitenumero RF18 5390 0754 7034",
+   "total": "84.20"
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Northbank tiliote tammikuu 2026",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Verohallinto paatos 2024",
+   "total": null
+  },
+  {
+   "amounts": [],
+   "dates": [],
+   "due_date": null,
+   "iban": null,
+   "reference": null,
+   "text": "Passport copy",
+   "total": null
+  }
+ ],
+ "kind_words": [
+  "attachment",
+  "been",
+  "copy",
+  "document",
+  "documents",
+  "draft",
+  "final",
+  "from",
+  "have",
+  "image",
+  "images",
+  "invoice",
+  "kirje",
+  "kuitti",
+  "lasku",
+  "letter",
+  "liite",
+  "oikea",
+  "page",
+  "pages",
+  "print",
+  "receipt",
+  "scan",
+  "scanned",
+  "screenshot",
+  "sivu",
+  "that",
+  "this",
+  "will",
+  "with",
+  "your"
+ ],
+ "stopwords": [
+  "a",
+  "about",
+  "after",
+  "again",
+  "aikana",
+  "all",
+  "alle",
+  "also",
+  "am",
+  "an",
+  "and",
+  "any",
+  "are",
+  "as",
+  "at",
+  "be",
+  "been",
+  "before",
+  "being",
+  "between",
+  "both",
+  "but",
+  "by",
+  "can",
+  "could",
+  "did",
+  "do",
+  "does",
+  "done",
+  "down",
+  "during",
+  "each",
+  "ei",
+  "eivät",
+  "eli",
+  "emme",
+  "en",
+  "ennen",
+  "et",
+  "ette",
+  "että",
+  "every",
+  "few",
+  "find",
+  "for",
+  "from",
+  "get",
+  "give",
+  "got",
+  "had",
+  "has",
+  "have",
+  "having",
+  "he",
+  "heidän",
+  "heillä",
+  "heitä",
+  "her",
+  "here",
+  "hers",
+  "him",
+  "his",
+  "how",
+  "hän",
+  "hänellä",
+  "hänen",
+  "häntä",
+  "i",
+  "if",
+  "ilman",
+  "in",
+  "into",
+  "is",
+  "it",
+  "its",
+  "ja",
+  "jo",
+  "johon",
+  "joita",
+  "joka",
+  "jolla",
+  "jonka",
+  "jos",
+  "jossa",
+  "josta",
+  "jotka",
+  "jotta",
+  "just",
+  "jälkeen",
+  "kanssa",
+  "kenelle",
+  "kenen",
+  "ketkä",
+  "know",
+  "koska",
+  "kuin",
+  "kuinka",
+  "kuka",
+  "kun",
+  "lot",
+  "lots",
+  "many",
+  "may",
+  "me",
+  "meidän",
+  "meillä",
+  "meitä",
+  "might",
+  "mihin",
+  "miksi",
+  "mikä",
+  "mikäli",
+  "milloin",
+  "millä",
+  "mine",
+  "minkä",
+  "minua",
+  "minulla",
+  "minun",
+  "minä",
+  "missä",
+  "mistä",
+  "miten",
+  "mitkä",
+  "mitä",
+  "montako",
+  "more",
+  "most",
+  "much",
+  "must",
+  "mutta",
+  "my",
+  "myös",
+  "ne",
+  "niiden",
+  "niihin",
+  "niillä",
+  "niin",
+  "niistä",
+  "niitä",
+  "no",
+  "nor",
+  "not",
+  "nuo",
+  "nyt",
+  "nämä",
+  "of",
+  "off",
+  "ole",
+  "olemme",
+  "olen",
+  "olet",
+  "olette",
+  "oli",
+  "olimme",
+  "olin",
+  "olit",
+  "olitte",
+  "olivat",
+  "olla",
+  "olleet",
+  "ollut",
+  "on",
+  "once",
+  "one",
+  "ones",
+  "onko",
+  "onkos",
+  "only",
+  "onto",
+  "or",
+  "other",
+  "our",
+  "ours",
+  "out",
+  "ovat",
+  "over",
+  "own",
+  "paljonko",
+  "please",
+  "same",
+  "se",
+  "sekä",
+  "sen",
+  "shall",
+  "she",
+  "should",
+  "show",
+  "siellä",
+  "siihen",
+  "siis",
+  "siitä",
+  "sillä",
+  "sinua",
+  "sinulla",
+  "sinun",
+  "sinä",
+  "sitten",
+  "sitä",
+  "so",
+  "some",
+  "such",
+  "tai",
+  "te",
+  "teidän",
+  "teillä",
+  "teitä",
+  "tell",
+  "than",
+  "that",
+  "the",
+  "their",
+  "theirs",
+  "them",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "those",
+  "to",
+  "too",
+  "tuo",
+  "tuon",
+  "tuossa",
+  "tuota",
+  "tämä",
+  "tämän",
+  "tässä",
+  "tätä",
+  "täällä",
+  "under",
+  "up",
+  "us",
+  "vai",
+  "vaikka",
+  "vain",
+  "very",
+  "välillä",
+  "was",
+  "we",
+  "were",
+  "what",
+  "when",
+  "where",
+  "which",
+  "who",
+  "whom",
+  "whose",
+  "why",
+  "will",
+  "with",
+  "without",
+  "would",
+  "yes",
+  "yli",
+  "you",
+  "your",
+  "yours"
+ ]
+}
