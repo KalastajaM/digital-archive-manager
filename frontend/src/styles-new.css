@@ -2303,6 +2303,32 @@
   [data-style="new"] .settings-body { padding: 20px 20px 40px; }
 }
 
+/* -- Settings > Archive folders > Special folders: name, current folder name, Rename -- */
+[data-style="new"] .special-folders { margin-top: 28px; display: flex; flex-direction: column; gap: 8px; }
+[data-style="new"] .special-folders h4 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+[data-style="new"] .special-folders > .hint { margin: 0; }
+[data-style="new"] .special-folder-list { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+[data-style="new"] .special-folder-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 240px) auto; align-items: center; gap: 16px; padding: 10px 14px; }
+[data-style="new"] .special-folder-row + .special-folder-row { border-top: 1px solid var(--border); }
+[data-style="new"] .special-folder-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+[data-style="new"] .special-folder-text .hint { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+[data-style="new"] .special-folder-row code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--fs-sm); }
+[data-style="new"] .special-folder-row button { height: 32px; flex: none; }
+@container settings (max-width: 900px) {
+  [data-style="new"] .special-folder-row { grid-template-columns: minmax(0, 1fr) auto; }
+  [data-style="new"] .special-folder-row code { grid-column: 1; grid-row: 2; }
+  [data-style="new"] .special-folder-row button { grid-column: 2; grid-row: 1 / span 2; }
+}
+[data-style="new"] .rename-places { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+[data-style="new"] .rename-places li { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 12px; row-gap: 2px; padding: 8px 12px; align-items: baseline; }
+[data-style="new"] .rename-places li + li { border-top: 1px solid var(--border); }
+[data-style="new"] .rename-how { grid-row: 1 / span 2; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+[data-style="new"] .rename-places li[data-how="renamed"] .rename-how { color: var(--green-text); }
+[data-style="new"] .rename-places li[data-how="rebuilt"] .rename-how { color: var(--orange-text); }
+[data-style="new"] .rename-place { font-weight: 500; overflow-wrap: anywhere; }
+[data-style="new"] .rename-what { color: var(--muted-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+[data-style="new"] .rename-warning { color: var(--orange-text); }
+
 /* -- Settings > Appearance: the title with what it is kept in, then Look, Theme, Layout and
  * Archive colour as separate groups -- */
 [data-style="new"] .appearance-new { display: flex; flex-direction: column; gap: 28px; }

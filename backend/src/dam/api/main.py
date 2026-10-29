@@ -30,6 +30,7 @@ from dam.api.routers import (
     rules,
     settings,
     setup,
+    special_folders,
     system,
     tags,
     today,
@@ -211,6 +212,7 @@ ROUTERS = (
     folders,
     setup,
     settings,
+    special_folders,
     tags,
 )
 

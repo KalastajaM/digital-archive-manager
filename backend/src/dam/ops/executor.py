@@ -221,6 +221,7 @@ class Executor:
         should_stop: Callable[[], bool] | None = None,
         progress: Callable[[ResolvedOp, int, int], None] | None = None,
         copied: Callable[[ResolvedOp, int], None] | None = None,
+        batch_id: str | None = None,
     ) -> BatchResult:
         """Run ``plan``; stops at the first failure. Dry run: ``done`` lists what would run.
 
@@ -233,12 +234,14 @@ class Executor:
         there (``BatchResult.stopped``), except between a copy across disks and the move
         of its original to To Delete, which always run together. ``progress`` is called
         with each op that completed, its index and the number of ops; ``copied`` while a
-        copy across disks runs, with that op and the bytes copied so far.
+        copy across disks runs, with that op and the bytes copied so far. ``batch_id``: the
+        id the batch is journaled under, when a caller records it before the first op runs
+        (a fresh id otherwise).
         """
         resolved = self.preview(plan)
         if check is not None:
             check(resolved)
-        result = BatchResult(batch_id=uuid4().hex, dry_run=dry_run)
+        result = BatchResult(batch_id=batch_id or uuid4().hex, dry_run=dry_run)
         if dry_run:
             result.done = resolved
             return result
