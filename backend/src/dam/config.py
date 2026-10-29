@@ -9,9 +9,9 @@ from typing import Literal
 
 import yaml
 from platformdirs import user_data_dir
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from dam import countries
+from dam import countries, languages
 
 DEFAULTS_DIR = Path(__file__).parents[3] / "defaults"
 
@@ -160,9 +160,25 @@ def _finland_zone() -> tuple[float, float, float, float]:
     return zone
 
 
-# Where the addressee sits on page 1 when the settings do not say: the Finland pack's area
-# (SFS 2487; see ``dam.countries``).
+# Where the addressee sits on page 1 when neither the settings nor an enabled country say:
+# the Finland pack's area (SFS 2487; see ``dam.countries``), a left window like most.
 DEFAULT_ADDRESS_ZONE = _finland_zone()
+
+
+def _codes(kind: str, values: list[str] | None, known) -> list[str] | None:
+    """``values`` when every code is a known pack, listed once; else ``ValueError``."""
+    if values is None:
+        return None
+    seen: set[str] = set()
+    for code in values:
+        try:
+            known(code)
+        except ValueError:
+            raise ValueError(f"unknown {kind} {code!r}") from None
+        if code in seen:
+            raise ValueError(f"{code} is listed twice")
+        seen.add(code)
+    return values
 
 
 class ExtraFolder(BaseModel):
@@ -193,7 +209,12 @@ class Settings(BaseModel):
     ocr_languages: list[str] = Field(default_factory=lambda: ["en-US"])
     # the people documents are for, and where on page 1 their address is (``dam.rules.people``)
     people: list[Person] = Field(default_factory=list)
+    # where the addressee sits on page 1; unset: the first enabled country's standard
     address_zone: tuple[float, float, float, float] = DEFAULT_ADDRESS_ZONE
+    # the country packs and language packs documents are read with (``dam.packs``); unset:
+    # what dam did before there was a choice (Finland, and its languages)
+    countries: list[str] | None = None
+    languages: list[str] | None = None
     reminders: RemindersSettings = Field(default_factory=RemindersSettings)
     ai: AISettings = Field(default_factory=AISettings)
 
@@ -206,6 +227,44 @@ class Settings(BaseModel):
                 "address_zone must be x0, y0, x1, y1 between 0 and 1 with x0 < x1 and y0 < y1"
             )
         return box
+
+    @field_validator("countries")
+    @classmethod
+    def _known_countries(cls, values: list[str] | None) -> list[str] | None:
+        return _codes("country", values, countries.get)
+
+    @field_validator("languages")
+    @classmethod
+    def _known_languages(cls, values: list[str] | None) -> list[str] | None:
+        return _codes("language", values, languages.get)
+
+    @model_validator(mode="after")
+    def _zone_from_countries(self) -> "Settings":
+        if not self.zone_is_set():
+            # not a set field: the zone follows the countries until the file names one
+            object.__setattr__(self, "address_zone", self.countries_zone())
+        return self
+
+    def country_codes(self) -> list[str]:
+        return list(countries.DEFAULT_COUNTRIES) if self.countries is None else list(self.countries)
+
+    def language_codes(self) -> list[str]:
+        """The chosen languages, or the countries' languages; English always, once."""
+        if self.languages is None:
+            codes = [code for c in self.country_codes() for code in countries.get(c).languages]
+        else:
+            codes = list(self.languages)
+        out = list(dict.fromkeys(codes))
+        return out if "en" in out else [*out, "en"]
+
+    def countries_zone(self) -> tuple[float, float, float, float]:
+        """The address zone of the first enabled country that has one, else the default."""
+        zones = (countries.get(c).address_zone for c in self.country_codes())
+        return next((z for z in zones if z is not None), DEFAULT_ADDRESS_ZONE)
+
+    def zone_is_set(self) -> bool:
+        """Whether ``address_zone`` came from the file (or was saved), not the countries."""
+        return "address_zone" in self.model_fields_set
 
     @field_validator("people")
     @classmethod

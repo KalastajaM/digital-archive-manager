@@ -151,6 +151,18 @@ def _archive_write_guard(request: pytest.FixtureRequest):
 
 
 @pytest.fixture(autouse=True)
+def _default_packs():
+    """An App activates its settings' packs for the process: each test starts and ends
+    with the default ones."""
+    from dam import packs
+
+    default = packs.build(packs.DEFAULT_COUNTRIES, packs.DEFAULT_LANGUAGES)
+    packs.activate(default)
+    yield
+    packs.activate(default)
+
+
+@pytest.fixture(autouse=True)
 def _reset_dam_logging():
     """Handlers added by ``configure_logging`` (CLI tests) never outlive a test."""
     yield

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from sqlalchemy import Engine, func, select
 
-from dam import relabel
+from dam import packs, relabel
 from dam.ai.service import AIService
 from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
 from dam.codes.model import save_codes as write_codes
@@ -428,6 +428,7 @@ class App:
     last_reminders: RemindResult | None = field(init=False, default=None)
 
     def __post_init__(self, index_parts: IndexParts, ops_parts: OpsParts) -> None:
+        packs.activate(packs.build(self.settings.country_codes(), self.settings.language_codes()))
         _take(self, index_parts)
         _take(self, ops_parts)
         cols = build_collections(self.settings, self.paths, self.engine, self.repo, self.executor)
