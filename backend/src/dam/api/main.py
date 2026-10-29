@@ -58,7 +58,7 @@ from dam.errors import (
 from dam.ops.model import GuardError, OpFailed
 from dam.services.archives import ArchiveService
 from dam.services.snapshots import Reopener, SnapshotService
-from dam.snapshots import Folders
+from dam.snapshots import Folders, app_version
 
 # Known errors -> HTTP status; anything else is a 500 with a generic body.
 ERROR_STATUS: dict[type[Exception], int] = {
@@ -157,7 +157,7 @@ def create_api(
     # No /docs or /redoc: they load unpinned CDN scripts onto the app's origin.
     api = FastAPI(
         title="Digital Archive Manager",
-        version="0.1.0",
+        version=app_version(),
         responses=ERROR_RESPONSES,
         docs_url=None,
         redoc_url=None,
