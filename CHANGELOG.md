@@ -6,6 +6,36 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A Netherlands country pack: the betalingskenmerk, the btw-id, the KvK-nummer (near its
+  label) and the RSIN (right after its label), the address area of a Dutch letter, and
+  commented Netherlands example rules with a layout. A nine-digit number without the RSIN
+  label is never read, so a BSN is not stored. The label words and the address area are
+  estimates to be checked on real Dutch post.
+- A Dutch language pack: due-date and total labels, month names, stopwords and
+  document-kind words. Tesseract reads Dutch as `nld`.
+- First run offers the Netherlands next to Finland, guessed from a Dutch browser language
+  or the Amsterdam time zone.
+- One document can have its own address area, or none: in the New look, Draw a box
+  offers **Address area for this document only**, **No address area on this document**
+  and **Use the usual address area**, and moving the drawn address area asks whether it
+  is for this document only or for all letters.
+
+### Changed
+
+- The address area setting moved from Filing rules to Settings, Reading documents. It
+  says whether it follows the countries or was set by you, and **Reset to default** makes
+  it follow the countries again.
+- Turning a country on in Reading documents also turns on its languages.
+- Every document's business IDs are read once more from its stored text, since the
+  Netherlands pack is new.
+
+### Fixed
+
+- Saving the People list no longer pins the address area: it is sent only when it
+  changed, so it keeps following the countries.
+
 ## [0.9.0] - 2026-10-29
 
 First public release. In short:

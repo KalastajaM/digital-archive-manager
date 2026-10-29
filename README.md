@@ -161,17 +161,20 @@ country or one language:
 | | Today |
 |---|---|
 | Bank barcode on bills (pankkiviivakoodi) | Finland |
-| Payment reference numbers | RF (international) and the Finnish viitenumero |
+| Payment reference numbers | RF (international), the Finnish viitenumero and the Dutch betalingskenmerk |
+| Business IDs | the Finnish Y-tunnus; the Dutch KvK-nummer, btw-id and RSIN |
 | IBAN | any SEPA country |
 | Dates and amounts | day-first dates with dots, dashes, slashes or month names; `€ 1.234,56` and `1 234,56 €` |
-| Where the address sits on page 1 of a letter | the country's letter standard (Finland: SFS 2487); you can draw your own |
-| Due-date and total labels, month names | Finnish, Swedish and English |
+| Where the address sits on page 1 of a letter | the country's usual place (Finland: SFS 2487; the Netherlands: an estimate from PostNL's rules); you can draw your own, for all letters or for one |
+| Due-date and total labels, month names | Finnish, Swedish, Dutch and English |
 | OCR | the languages you set in `ocr_languages` |
 
 You choose the countries and languages in **Settings, Reading documents**, and the
 first-run screen asks where your post comes from. Each country and language is a **pack**:
 another country's reference numbers and address area, or another language's words, are
-added as a pack. Still to come: the bank barcode as a pack, and a Netherlands pack. If you would like
+added as a pack. The Netherlands pack is new: its label words and address area are
+estimates that still need checking on real Dutch post. Still to come: the bank barcode as
+a pack. If you would like
 your country supported, open an issue with a few example bills and letters (with personal
 details removed), or see [Contributing](CONTRIBUTING.md).
 

@@ -570,9 +570,11 @@ All in the data folder under `config/`:
   is read, 1 to 6000, default 300; scans, photos and slow reads keep
   `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings), `address_zone`
   (`[x0, y0, x1, y1]` as fractions of page 1, origin top left; unset, it follows the first
-  country that has a standard), `countries` (country packs, for example `[fi]`; unset reads
-  as `[fi]`, `[]` is none) and `languages` (language packs: `fi`, `sv`, `en`; unset, the
-  countries' languages; English is always added). The four
+  country that has a standard; `PUT /api/settings/people` with `address_zone: null` takes it
+  out of the file again, and the reply's `address_zone_set` says whether the file sets it),
+  `countries` (country packs: `fi`, `nl`; unset reads as `[fi]`, `[]` is none) and
+  `languages` (language packs: `fi`, `sv`, `nl`, `en`; unset, the countries' languages;
+  English is always added). The four
   `special_folders` names can be changed in Settings (see Renaming a special folder) or by
   hand.
 - `trays/*.yaml`: one tray per file (see Tray files).
@@ -1213,6 +1215,62 @@ are copied"; when it finishes, "Moved folder <name> (M files) to <place>". Activ
 the file in hand; unlike a file move, no `quarantine` follows each copy, so the source
 stays whole.
 
+## Countries and languages
+
+A country pack (`dam/countries`) holds a country's payment references, business IDs and
+address area; a language pack (`dam/languages`) the label words for due dates and totals,
+month names, stopwords and document-kind words. The core pack (RF references, IBANs of any
+SEPA country, web and mail domains) is always on.
+
+**Finland (`fi`).** The viitenumero after a label (`viite`, `viitenumero`, `reference`),
+check digits 7, 3, 1; the Y-tunnus (`fi.ytunnus`, weights 7, 9, 10, 5, 8, 4, 2, mod 11,
+also as `FI` + 8 digits); the address area of SFS 2487. Languages `fi` and `sv`.
+
+**Netherlands (`nl`).** Languages `nl` (Tesseract `nld`). The label words of the Dutch
+pack (`vervaldatum`, `uiterste betaaldatum`, `(te) betalen voor`; `totaal te betalen`,
+`totaalbedrag`, `totaal`, `te betalen`, weak `bedrag`) are not from a source and need
+checking on real bills.
+
+- `nl.kenmerk`, the betalingskenmerk, after `betalingskenmerk`, `betaalkenmerk` or
+  `kenmerk` (not after `ons`, `onze` or `uw`, which name a letter). 16 digits, or 9 to 14
+  whose second digit is the length code (0, 1, 2 for 10, 11, 12 digits after it; 7, 8, 9 as
+  they are). The first digit checks the rest: weights 2, 4, 8, 5, 10, 9, 7, 3, 6, 1 from
+  the rightmost digit, repeating, 11 minus the sum mod 11, with 11 giving 0 and 10 giving
+  1. The 7-digit form has no check digit and is not read. Examples `1223 4534 6225 67`
+  and `2036 0000 1630 1110`. Source: nl.wikipedia.org "Elfproef"; Belastingdienst,
+  "Specificatie Betalingskenmerk bepaling" 1.5.
+- `nl.btw`, the btw-identificatienummer: `NL` + 9 digits + `B` + 2 digits, stored as
+  `NL002455799B11`. Valid when the 9 digits pass the elfproef (weights 9 to 2, then -1;
+  the sum divisible by 11) and start as every RSIN does (`00`, or `80` to `89`), or when
+  the whole number passes ISO 7064 mod 97-10 with letters as A=10 to Z=35 (sole
+  proprietors since 2020). A sole proprietor's number from before 2020 held their BSN; the
+  start rule leaves most of those out. Sources: ondernemersplein.overheid.nl "Nummers voor
+  de btw"; python-stdnum `stdnum/nl/btw.py`.
+- `nl.kvk`, the KvK-nummer: 8 digits with no check digit, so only the first one that
+  starts within 40 characters after `KvK`, `K.v.K.`, `Kamer van Koophandel` or
+  `Handelsregister`. The 12-digit vestigingsnummer is not read. Source: kvk.nl.
+- `nl.rsin`: 9 digits right after the label `RSIN`, the elfproef and an RSIN's start. A
+  9-digit number without the label is never read: the BSN, a personal number, shares the
+  check.
+- Address area `[0.071, 0.135, 0.548, 0.320]` (15 to 115 mm across, 40 to 95 mm down an A4
+  page), used when the Netherlands is the first country with an area. An estimate: PostNL,
+  "Vormgevingsvoorwaarden 2026" (the address zone on the envelope at least 40 mm from the
+  top and 15 mm from the sides), left-window practice (NEN 1026 as the LaTeX letter class
+  applies it; EA5/6 envelopes with a 110 x 40 mm window) and Postbird, "Adrespositie (NL)".
+- No payment code of its own: the acceptgiro ended in 2023.
+- Example rules: `defaults/countries/nl/rules.yaml`, added commented out to a layout's
+  rules file when the Netherlands is on.
+
+**The address area of one document.** Table `file_address_zones(drive_id, x0, y0, x1, y1,
+set_at)` (migration 0047): a box, or all four sides null for none. It is used for that
+document instead of the archive's `address_zone` and a rule's `person_zone`; with none,
+nobody is looked for on it (an assignment still counts). A person found in it has the
+source `document area`, and its area in `areas` has `document: true`.
+`GET /api/files/{drive_id}/address-area` gives `{state, box}` with `state` `general`,
+`document` or `none`; `PUT` with `{box}` sets it (`box: null` for none; 400 for a box that
+is not one); `DELETE` gives the document the general area again. The row is kept by drive
+id, moves with the file and goes when the file's row is purged.
+
 ## Relatives
 
 The files a document belongs with (user guide: [Relatives](guide.md#relatives)). Computed
@@ -1246,9 +1304,10 @@ pass (`ContentIndexer.run_identifiers_once`, part of each indexer step) reads th
 of indexed files, never the files, with every country pack (`countries.ALL`), and stores
 what each pack's identifier finders return: `core.iban` (valid IBANs of SEPA countries),
 `core.domain` (web and mail domains, lower case, not free mail services or file names) and
-`fi.ytunnus` (business IDs with a valid check digit, the VAT form as `0112038-9`). A file is
+`fi.ytunnus` (business IDs with a valid check digit, the VAT form as `0112038-9`), and the
+Netherlands pack's `nl.btw`, `nl.kvk` and `nl.rsin` (see Countries and languages). A file is
 read again when its content or text changes, or when `countries.signature()` (every pack and
-its `version`, `"core:1 fi:2"`) changes. What is shown, searched (`id:`) and linked is limited
+its `version`, `"core:1 fi:2 nl:1"`) changes. What is shown, searched (`id:`) and linked is limited
 to the enabled countries. `GET /api/files/{drive_id}/identifiers` lists a file's identifiers
 with `others`, the number of other files carrying each; `/api/status` has `identifiers:
 {read, total}`.
