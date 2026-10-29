@@ -15,7 +15,7 @@ const OPTIONS: { value: Appearance; label: string }[] = [
 
 const LOOKS: { value: Look; label: string; hint: string }[] = [
   { value: "new", label: "New", hint: "Calmer, with figures and file names in a fixed-width font." },
-  { value: "classic", label: "Classic", hint: "The earlier look, kept for now. Relatives are in the New look only." },
+  { value: "classic", label: "Classic", hint: "The earlier look, kept for now. Relatives and Senders are in the New look only." },
 ];
 
 function LookChoice() {

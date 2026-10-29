@@ -1,13 +1,13 @@
 """Regex detection of dates, amounts, IBAN and reference numbers in extracted text."""
 
 import re
-import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
 from dam import packs
+from dam.core.text import fold_indexed
 from dam.countries import CountryPack, find_ibans
 
 _CENT = Decimal("0.01")
@@ -126,22 +126,7 @@ def _references(text: str, packs: Sequence[CountryPack]) -> str | None:
 _LABEL_WINDOW = 40
 
 
-def _fold(text: str) -> tuple[str, list[int]]:
-    """Fold for label matching (NFKD, no combining marks, casefold).
-
-    Returns the folded text and, for each folded character, the index of the
-    original character it came from.
-    """
-    chars: list[str] = []
-    index: list[int] = []
-    for i, ch in enumerate(text):
-        for out in unicodedata.normalize("NFKD", ch):
-            if unicodedata.combining(out):
-                continue
-            for c in out.casefold():
-                chars.append(c)
-                index.append(i)
-    return "".join(chars), index
+_fold = fold_indexed
 
 
 def _label_ends(folded: str, index: list[int], text: str, labels: re.Pattern[str]) -> list[int]:

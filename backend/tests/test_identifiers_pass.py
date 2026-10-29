@@ -71,8 +71,8 @@ def test_another_pack_version_reads_everything_again(fake_archive, engine):
     repo, indexer = _setup(fake_archive, engine)
     _file(repo, "f1", BILL)
     indexer.run_identifiers_once()
-    assert repo.identifier_progress("core:1 fi:2") == (0, 1)
-    assert len(repo.next_for_identifiers(10, "core:1 fi:2")) == 1
+    assert repo.identifier_progress("core:1 fi:3") == (0, 1)
+    assert len(repo.next_for_identifiers(10, "core:1 fi:3")) == 1
 
 
 def test_rekey_keeps_and_purge_removes_them(fake_archive, engine):

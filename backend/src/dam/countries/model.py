@@ -20,12 +20,14 @@ class ReferenceSpec:
 class IdentifierSpec:
     """Values in a document that name an organisation or an account: ``kind`` namespaced
     by its pack ("fi.ytunnus"), ``label`` for people, ``find`` the normalised values in
-    text order, each once. ``names_sender``: a value belongs to one organisation."""
+    text order, each once. ``names_sender``: a value belongs to one organisation. ``name``:
+    the organisation's name as printed next to a value in a text, or None."""
 
     kind: str
     label: str
     find: Callable[[str], list[str]]
     names_sender: bool
+    name: Callable[[str, str], str | None] | None = None
 
 
 @dataclass(frozen=True)

@@ -700,23 +700,28 @@ class ContentIndexer:
                 self._layout_why[drive_id] = why
 
     def run_identifiers_once(self, limit: int = 50) -> int:
-        """Read business IDs, IBANs and domains from the stored text of up to ``limit``
-        files not read with the current packs; never opens a file. Every pack is used, so
+        """Read business IDs, IBANs and domains (and the company name printed next to a
+        business ID) from the stored text of up to ``limit`` files not read with the
+        current packs; never opens a file. A file's From then follows the owner's names
+        for its IDs (Settings, Senders). Every pack is used, so
         turning a country on or off needs no reading again. Returns how many were read."""
         signature = countries.signature()
         rows = self.repo.next_for_identifiers(limit, signature)
         for drive_id, sha256, text in rows:
+            names: dict[tuple[str, str], str] = {}
             try:
-                found = [
-                    (spec.kind, value)
-                    for pack in countries.ALL
-                    for spec in pack.identifiers
-                    for value in spec.find(text)
-                ]
+                found = []
+                for pack in countries.ALL:
+                    for spec in pack.identifiers:
+                        for value in spec.find(text):
+                            found.append((spec.kind, value))
+                            name = spec.name(text, value) if spec.name else None
+                            if name:
+                                names[spec.kind, value] = name
             except Exception:
                 log.warning("identifiers could not be read for %s", drive_id, exc_info=True)
-                found = []  # recorded as read: the same text would fail the same way
-            self.repo.save_identifiers(drive_id, sha256, signature, found)
+                found, names = [], {}  # recorded as read: the same text would fail the same way
+            self.repo.save_identifiers(drive_id, sha256, signature, found, names)
         return len(rows)
 
     def step(self, now: float | None = None) -> int:

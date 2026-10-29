@@ -3,7 +3,7 @@ layouts. Part of ``FileRepo`` (``dam.index.repo``)."""
 
 import json
 import time
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import asdict
 
 from sqlalchemy import (
@@ -38,6 +38,7 @@ from dam.index.repo.model import (
     chunks,
     record,
 )
+from dam.index.repo.names import fill_senders
 
 
 class ReadsMixin:
@@ -150,10 +151,17 @@ class ReadsMixin:
             return [(r.drive_id, r.sha256, r.text or "") for r in conn.execute(stmt).all()]
 
     def save_identifiers(
-        self, drive_id: str, sha256: str, signature: str, found: Sequence[tuple[str, str]]
+        self,
+        drive_id: str,
+        sha256: str,
+        signature: str,
+        found: Sequence[tuple[str, str]],
+        names: Mapping[tuple[str, str], str] | None = None,
     ) -> bool:
         """Replace the file's identifiers with ``found`` (kind, value), read from content
-        ``sha256`` with ``signature``. Not saved (False) when the content changed since."""
+        ``sha256`` with ``signature``; ``names``: the company name printed next to a value.
+        The file's sender then follows the owner's names for them (``fill_senders``). Not
+        saved (False) when the content changed since."""
         with self._conn(write=True) as conn:
             current = conn.execute(
                 select(files.c.sha256).where(files.c.drive_id == drive_id)
@@ -161,8 +169,16 @@ class ReadsMixin:
             if current is None or current != sha256:
                 return False
             conn.execute(file_identifiers.delete().where(file_identifiers.c.drive_id == drive_id))
+            names = names or {}
             rows = [
-                {"drive_id": drive_id, "kind": k, "value": v, "sha256": sha256} for k, v in found
+                {
+                    "drive_id": drive_id,
+                    "kind": k,
+                    "value": v,
+                    "sha256": sha256,
+                    "name": names.get((k, v)),
+                }
+                for k, v in found
             ]
             if rows:
                 conn.execute(sqlite_insert(file_identifiers).on_conflict_do_nothing(), rows)
@@ -175,6 +191,7 @@ class ReadsMixin:
                     set_={c: stmt.excluded[c] for c in ("sha256", "signature", "read_at")},
                 )
             )
+            fill_senders(conn, [drive_id])
         return True
 
     def identifiers_for(self, drive_id: str) -> list[tuple[str, str]]:

@@ -1248,10 +1248,29 @@ what each pack's identifier finders return: `core.iban` (valid IBANs of SEPA cou
 `core.domain` (web and mail domains, lower case, not free mail services or file names) and
 `fi.ytunnus` (business IDs with a valid check digit, the VAT form as `0112038-9`). A file is
 read again when its content or text changes, or when `countries.signature()` (every pack and
-its `version`, `"core:1 fi:1"`) changes. What is shown, searched (`id:`) and linked is limited
+its `version`, `"core:1 fi:2"`) changes. What is shown, searched (`id:`) and linked is limited
 to the enabled countries. `GET /api/files/{drive_id}/identifiers` lists a file's identifiers
 with `others`, the number of other files carrying each; `/api/status` has `identifiers:
 {read, total}`.
+
+**Senders from business IDs.** `file_identifiers` has a `name` column and a table
+`identifier_names(kind, value, name, set_by, set_at)` keeps the owner's names (migration
+0044). An identifier whose pack gives it a name finder (`IdentifierSpec.name`; today
+`fi.ytunnus`, Finland pack version 2) stores the company name printed on the line of the
+value or within two lines of it, recognised by a legal form at its end (`Oy`, `Oyj`, `Ab`,
+`Abp`, `Oy Ab`, `Oyj Abp`, `Ky`, `Ay`, `ry`, `rf`, `osk`, `kb`) or start (`Tmi`, `Asunto Oy`,
+`As Oy`, `Kiinteistö Oy`), matched on folded text; the closest wins, a line above before
+one below. `GET /api/identifier-names` lists every such identifier on two or more live files
+(and every named one), most files first, with `suggested` (the name stored most often, case
+ignored), `name`, `set_at` and `filled` (files carrying it whose From is `name`). `PUT
+/api/identifier-names {kind, value, name}` sets a name (400 for a blank one, over 80
+characters, or a kind or value that cannot be named); `name: null` clears it. Both answer
+`{changed}`, the number of files whose From changed. A file's From
+(`file_assignments.sender`, `set_by` `"filing"`) is the name its named identifiers agree on
+(case ignored); it is set when a name is set or changed and when the identifiers pass reads
+the file, and taken back when they no longer name one sender (a cleared name, two different
+names, new content without the identifier) and it is one of the names. A row with
+`set_by` `"owner"` is never touched; a filing row keeps its person.
 
 **Marks.** Table `related_dismissed(drive_a, drive_b, created)` (migration 0041): a pair of
 drive ids, the smaller first, no foreign key. It is index data, so there is no journal and no

@@ -33,6 +33,7 @@ beforeEach(() => {
 
 describe("Settings", () => {
   it("opens Filing codes first, with the sections listed by what they apply to", async () => {
+    applyStyle(); // New, as at start
     setup("/settings");
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(await screen.findByRole("region", { name: "Filing codes" })).toBeInTheDocument();
@@ -47,6 +48,7 @@ describe("Settings", () => {
       "/settings/folders",
       "/settings/indexing",
       "/settings/countries",
+      "/settings/senders",
       "/settings/snapshots",
       "/settings/appearance",
     ]);
@@ -215,6 +217,15 @@ describe("Settings", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
   });
 
+  it("Classic leaves Senders out, and its address opens the first section", async () => {
+    localStorage.setItem(STYLE_KEY, "classic");
+    applyStyle();
+    setup("/settings/senders");
+    expect(await screen.findByRole("region", { name: "Filing codes" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(within(nav).queryByRole("link", { name: "Senders" })).toBeNull();
+  });
+
   it("Appearance offers the Look: New first, Classic applies at once and New returns", async () => {
     applyStyle(); // as at start: nothing stored, so New
     const user = setup("/settings/appearance");
@@ -222,7 +233,7 @@ describe("Settings", () => {
     const radios = within(appearance).getAllByRole("radio", { name: /^(New|Classic)/ });
     expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(["new", "classic"]);
     const [fresh, classic] = radios;
-    expect(within(appearance).getByText("The earlier look, kept for now. Relatives are in the New look only.")).toBeInTheDocument();
+    expect(within(appearance).getByText("The earlier look, kept for now. Relatives and Senders are in the New look only.")).toBeInTheDocument();
     await user.click(classic);
     expect(document.documentElement.dataset.style).toBe("classic");
     expect(localStorage.getItem(STYLE_KEY)).toBe("classic");

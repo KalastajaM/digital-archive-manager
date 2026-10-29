@@ -55,6 +55,7 @@ export type PictureScore = Schemas["PictureScoreOut"];
 export type People = Schemas["PeopleOut"];
 export type Person = Schemas["PersonIO"];
 export type Countries = Schemas["CountriesOut"];
+export type IdentifierName = Schemas["IdentifierNameOut"];
 /** Who a document is from (``sender``) and for (``person``), as the owner said or a filing recorded. */
 export type Assignment = Schemas["AssignmentOut"];
 export type Sender = Schemas["SenderOut"];
@@ -464,6 +465,7 @@ const keys = {
   people: ["people"],
   countries: ["countries"],
   senders: ["senders"],
+  identifierNames: ["identifier-names"],
   // under the inbox's key: whatever reloads the inbox reloads the marked batch too
   markedBatch: ["inbox", "marked"],
 } as const;
@@ -1100,6 +1102,27 @@ export const usePutAssignments = () => {
       void client.invalidateQueries({ queryKey: keys.inbox });
       void client.invalidateQueries({ queryKey: keys.file });
       void client.invalidateQueries({ queryKey: keys.senders });
+    },
+  });
+};
+
+/** Settings, Senders: the business IDs on two or more documents, most documents first,
+ * each with the name read next to it and the owner's name. */
+export const useIdentifierNames = () =>
+  useQuery({ queryKey: keys.identifierNames, queryFn: () => apiGet("/api/identifier-names") });
+
+/** Name a business ID (From on every document that carries it, never where the owner set
+ * From or For) or clear its name (``null``: those senders are taken back). Answers how many
+ * documents changed; a 400 says why not. */
+export const usePutIdentifierName = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { kind: string; value: string; name: string | null }) => apiPut("/api/identifier-names", { body }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.identifierNames });
+      void client.invalidateQueries({ queryKey: keys.senders });
+      void client.invalidateQueries({ queryKey: keys.inbox });
+      void client.invalidateQueries({ queryKey: keys.file });
     },
   });
 };
