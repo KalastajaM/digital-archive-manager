@@ -880,10 +880,12 @@ The Index sheet (click the status line at the foot of the sidebar) lists the **F
 the archive**: a **Total** and the four states that make it up (Searchable, Waiting, Not
 readable, Errors), and apart from them the **Missing** files, which are no longer in the
 archive folder. Under **Other indexes** come **Business IDs** (how many searchable files
-have had their business IDs, IBANs and domains read) and a **Page 1** row: how many
-documents are read, an estimate of the time left while reading goes
+have had their business IDs, IBANs and domains read, and in how many files each kind was
+found) and a **Page 1** row: how many documents are read, on how many of them page 1 has
+text, an estimate of the time left while reading goes
 on, and how many wait because page 1 cannot be read now and why (for example no OCR
-engine, or it took too long). The row links to Settings → Indexing. While reading is not
+engine, or it took too long). A turning circle beside a count means that index is still
+reading; a check means it is done. The row links to Settings → Indexing. While reading is not
 complete, the status line also says "page 1 read 1 240 of 10 875". Settings → Indexing
 has the switch "Read page 1 of older documents in the background" (it pauses the reading)
 and **Page 1 reading speed**. PDFs that have a text layer are read quickly (300 a

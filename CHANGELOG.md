@@ -16,6 +16,10 @@ All notable changes are listed here. The format follows
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that
   make it up, with the missing files apart; Other indexes shows Page 1 and Business IDs, each
   as how many of how many.
+- **The other indexes say what they found and whether they are still reading.** Business IDs
+  says in how many files business IDs, IBANs and domains were found, and Page 1 on how many
+  pages it found text; a turning circle shows an index that is still reading, a check one
+  that is done.
 
 ## [0.9.0] - 2026-10-29
 

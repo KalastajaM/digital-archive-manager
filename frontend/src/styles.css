@@ -1754,6 +1754,11 @@ dialog.sheet, dialog.quicklook { -webkit-user-select: text; user-select: text; }
 .index-summary-row dd { margin: 0; padding: var(--sp-1) 0; min-width: 0; overflow-wrap: anywhere; }
 .index-summary-row dd:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .index-summary-part dt { font-weight: 400; padding-left: var(--sp-3); }
+/* an index still reading turns its circle; one that is done shows a check */
+.index-reading, .index-reading-done { vertical-align: -2px; margin-left: var(--sp-1); }
+.index-reading { color: var(--accent); animation: spin 1.2s linear infinite; }
+.index-reading-done { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .index-reading { animation: none; } }
 
 dialog.sheet.index-errors { width: min(720px, calc(100vw - 32px)); }
 .index-errors-toggle { display: inline-flex; gap: var(--sp-1); align-items: center; margin-top: var(--sp-1); }

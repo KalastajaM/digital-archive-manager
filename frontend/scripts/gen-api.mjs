@@ -17,7 +17,8 @@ try {
   const r = spawnSync(
     "uv",
     ["--directory", "../backend", "run", "dam", "--data-dir", join(tmp, "data"), "openapi"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
+    // the schema passed 1 MB, spawnSync's default output limit (it then kills the child)
+    { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 64 * 1024 * 1024 },
   );
   if (r.status !== 0) {
     console.error(`dam openapi failed (exit ${r.status ?? r.signal})`);
