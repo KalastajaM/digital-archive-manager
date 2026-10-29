@@ -164,9 +164,10 @@ country or one language:
 | Due-date and total labels on bills | Finnish, Swedish and English |
 | OCR | the languages you set in `ocr_languages` |
 
-These parts are kept in **country packs** and **language packs**, so support for another
-country can be added as a pack without changing the rest of dam. Choosing the packs in
-Settings, a Netherlands pack and IBANs from any country are planned. If you would like
+The reference numbers, the address area and the label words are kept in **country
+packs** and **language packs**, the start of support for other countries. Still to come:
+choosing the packs in Settings, IBANs and bank barcodes in packs too, and a Netherlands
+pack. If you would like
 your country supported, open an issue with a few example bills and letters (with personal
 details removed), or see [Contributing](CONTRIBUTING.md).
 

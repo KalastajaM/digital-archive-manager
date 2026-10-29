@@ -38,8 +38,11 @@ def enabled(codes: Sequence[str] = DEFAULT_LANGUAGES) -> list[LanguagePack]:
 
 def label_pattern(fragments: Iterable[str], whole_words: bool = False) -> re.Pattern[str]:
     """The fragments as one alternation, tried in the order given; ``whole_words`` puts
-    word boundaries around all of them."""
+    word boundaries around all of them. No fragments: a pattern that never matches (an
+    empty alternation would match everywhere)."""
     body = "|".join(fragments)
+    if not body:
+        return re.compile(r"(?!)")
     return re.compile(rf"\b(?:{body})\b" if whole_words else body)
 
 

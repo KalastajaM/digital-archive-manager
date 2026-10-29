@@ -34,3 +34,9 @@ def test_every_word_is_nfc_and_lower_case():
     for pack in languages.PACKS.values():
         for w in pack.stopwords + pack.kind_words:
             assert w == unicodedata.normalize("NFC", w) == w.casefold()
+
+
+def test_no_fragments_never_match():
+    # a language set without, say, weak total labels must not match at every position
+    assert languages.label_pattern([]).search("Alv 12,00 € 50,00 €") is None
+    assert languages.label_pattern([], whole_words=True).search("Alv 12,00 € 50,00 €") is None
