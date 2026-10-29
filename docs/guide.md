@@ -1783,7 +1783,8 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   your rules and the folders of your filing codes follow the new label. The rule files are edited value by value, so your
   comments and layout stay; a value written over several lines is refused with its file
   and line, for you to change by hand. dam takes a snapshot first (Settings, Snapshots,
-  marked "before a label change") and reopens the archive.
+  marked "before a label change") and reopens the archive. If dam is stopped half way (a
+  crash or a power cut), it finishes the change the next time it opens the archive.
 - While a Maintenance check, a rule replay or a move to another disk runs, adding,
   detaching, attaching and changing a label are refused until it has finished.
 

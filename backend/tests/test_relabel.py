@@ -211,3 +211,103 @@ def test_filing_codes_follow_the_label(app_paths, engine, archive):
     relabel.apply(app_paths, engine, plan)
     text_after = codes.read_text(encoding="utf-8")
     assert "  folder: Archive disk/{doc_date:%Y}  # by year\n" in text_after
+
+
+# -- a crash between the database commit and the files ----------------------------------
+
+
+class Crash(BaseException):
+    """A process killed half way: no ``except Exception`` runs."""
+
+
+def _marker(app_paths) -> dict:
+    return json.loads((app_paths.data_dir / relabel.MARKER).read_text(encoding="utf-8"))
+
+
+def _crash_after(app_paths, engine, monkeypatch, files_written: int):
+    """Apply the relabel and crash after ``files_written`` files (the database is
+    committed by then)."""
+    real, done = relabel.write_config_file, []
+
+    def write_then_crash(*args, **kwargs):
+        if len(done) == files_written:
+            raise Crash
+        real(*args, **kwargs)
+        done.append(args[0])
+
+    monkeypatch.setattr(relabel, "write_config_file", write_then_crash)
+    plan = relabel.plan(app_paths, engine, "Old years", "Archive disk")
+    with pytest.raises(Crash):
+        relabel.apply(app_paths, engine, plan)
+    monkeypatch.setattr(relabel, "write_config_file", real)
+
+
+def test_a_finished_change_marks_the_marker_done(app_paths, engine, archive):
+    _apply(app_paths, engine)
+    assert _marker(app_paths) == {"old": "Old years", "new": "Archive disk", "state": "done"}
+
+
+def test_a_failed_change_marks_the_marker_rolled_back(app_paths, engine, archive, monkeypatch):
+    def broken(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(relabel, "write_config_file", broken)
+    plan = relabel.plan(app_paths, engine, "Old years", "Archive disk")
+    with pytest.raises(OSError):
+        relabel.apply(app_paths, engine, plan)
+    assert _marker(app_paths)["state"] == "rolled_back"
+    monkeypatch.undo()
+    assert relabel.finish_interrupted(app_paths) is None  # nothing is rolled forward
+    assert load_settings(app_paths).extra_folders[0].label == "Old years"
+
+
+@pytest.mark.parametrize("files_written", [0, 1])
+def test_opening_finishes_a_change_cut_off_after_the_commit(
+    app_paths, engine, archive, monkeypatch, files_written
+):
+    _crash_after(app_paths, engine, monkeypatch, files_written)
+    assert _marker(app_paths)["state"] == "pending"
+    if files_written == 0:  # the database says the new label, the settings the old one
+        assert load_settings(app_paths).extra_folders[0].label == "Old years"
+    engine.dispose()
+    app = App.create(app_paths.data_dir)
+    try:
+        assert [e.label for e in app.settings.extra_folders] == ["Archive disk"]
+        assert app.repo.get("x1").path == "Archive disk/2009/a.pdf"
+        assert app.tags.for_file("x1") == ["car"]
+        assert app.executor.undo(archive).failed is None  # the earlier move still undoes
+    finally:
+        app.close()
+    rules = (app_paths.config_dir / "rules" / "mine.yaml").read_text(encoding="utf-8")
+    assert rules == RULES.replace("Old years/{doc_date", "Archive disk/{doc_date")
+    assert _marker(app_paths)["state"] == "done"
+    assert relabel.finish_interrupted(app_paths) is None  # once only
+
+
+def test_a_crash_before_the_commit_is_finished_too(app_paths, engine, archive, monkeypatch):
+    """The marker is written first: a crash before the database commit leaves it pending
+    with nothing changed, and opening carries out the change that was asked for."""
+    real_db = relabel._db
+
+    def crash_on_write(conn, old, new, write):
+        if write:
+            raise Crash
+        return real_db(conn, old, new, write)
+
+    monkeypatch.setattr(relabel, "_db", crash_on_write)
+    plan = relabel.plan(app_paths, engine, "Old years", "Archive disk")
+    with pytest.raises(Crash):
+        relabel.apply(app_paths, engine, plan)
+    monkeypatch.undo()
+    assert "finished the change" in relabel.finish_interrupted(app_paths)
+    with engine.connect() as conn:
+        paths = set(conn.execute(text("SELECT path FROM files")).scalars())
+    assert "Archive disk/2009/a.pdf" in paths and not any(p.startswith("Old") for p in paths)
+    assert load_settings(app_paths).extra_folders[0].label == "Archive disk"
+
+
+def test_an_unreadable_marker_is_left_alone(app_paths, archive):
+    (app_paths.data_dir / relabel.MARKER).write_text("{not json", encoding="utf-8")
+    assert relabel.finish_interrupted(app_paths) is None
+    App.create(app_paths.data_dir).close()  # the archive still opens
+    assert (app_paths.data_dir / relabel.MARKER).read_text(encoding="utf-8") == "{not json"

@@ -9,11 +9,20 @@ entry, protected paths, folders kept from AI) and the rules' ``folder`` and
 so comments and layout stay. A snapshot of the database and the settings is taken
 first; if writing the files fails after the database changed, the database is put back.
 
+A crash (power loss, a killed process) between the database commit and the last file
+written would leave the two disagreeing. So ``apply`` writes a marker (``MARKER`` in the
+data folder, state ``pending``) before it changes anything and overwrites it with the
+outcome (``done``, ``rolled_back``) at the end; the next ``App.create`` finishes a
+``pending`` change first (``finish_interrupted``). The marker is overwritten, never
+removed.
+
 The archive must be closed while this runs (``Host.close_and_reopen``), or the scanner
 would write paths under the old label back.
 """
 
 import json
+import logging
+import os
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,12 +35,17 @@ from dam.codes.configfile import write_config_file
 from dam.config import AppPaths, load_settings
 from dam.core.text import fold_name
 from dam.core.yamledit import YamlEditError, replace_values
+from dam.db.engine import make_engine, migrate
 from dam.db.tables import files, made_folders, maintenance_ignored, operations, reconnects
 from dam.maintenance.ignored import GROUPS
 from dam.ops.model import ABS_TARGET, OpFailed, OpKind, followed_json, read_followed
 from dam.rules.model import load_rule_file, rule_files
 from dam.snapshots import BEFORE_RELABEL, create_snapshot
 
+log = logging.getLogger(__name__)
+
+MARKER = "relabel.json"  # in the data folder: the last label change and how it ended
+PENDING, DONE, ROLLED_BACK = "pending", "done", "rolled_back"
 INTERRUPTED = (
     "An operation was interrupted. Run recovery first (Run recovery in the app, or "
     "dam recover), then change the label."
@@ -232,6 +246,15 @@ def _db(conn: Connection, old: str, new: str, write: bool) -> dict[str, int]:
     return counts
 
 
+def _file_edits(app_paths: AppPaths, old: str, new: str) -> list[FileChange]:
+    """The settings, rule and filing-code files that still name ``old``, edited."""
+    edits = [_edit(app_paths.config_dir / "settings.yaml", _settings_change(old, new))]
+    edits += [_edit(p, _rule_change(old, new)) for p in rule_files(app_paths.config_dir / "rules")]
+    if app_paths.filing_codes_path.is_file():  # each code's ``folder``, as in the rules
+        edits.append(_edit(app_paths.filing_codes_path, _rule_change(old, new)))
+    return [e for e in edits if e is not None]
+
+
 def plan(app_paths: AppPaths, engine: Engine, old: str, new: str) -> RelabelPlan:
     """What changing the label ``old`` (as the settings spell it) to ``new`` (already
     checked by ``archive_folders``) would change. Nothing is written. ``YamlEditError``
@@ -244,11 +267,7 @@ def plan(app_paths: AppPaths, engine: Engine, old: str, new: str) -> RelabelPlan
         if planned is not None:
             raise OpFailed(INTERRUPTED)
         out = RelabelPlan(old, new, counts=_db(conn, old, new, write=False))
-    edits = [_edit(app_paths.config_dir / "settings.yaml", _settings_change(old, new))]
-    edits += [_edit(p, _rule_change(old, new)) for p in rule_files(app_paths.config_dir / "rules")]
-    if app_paths.filing_codes_path.is_file():  # each code's ``folder``, as in the rules
-        edits.append(_edit(app_paths.filing_codes_path, _rule_change(old, new)))
-    out.files = [e for e in edits if e is not None]
+    out.files = _file_edits(app_paths, old, new)
     root = load_settings(app_paths).archive_root
     try:
         hidden = any(fold_name(p.name) == fold_name(old) for p in Path(root).iterdir())
@@ -278,11 +297,21 @@ def _verify(change: FileChange, app_paths: AppPaths) -> Callable[[], bool]:
     return check
 
 
+def _mark(app_paths: AppPaths, old: str, new: str, state: str) -> None:
+    """Write the marker (replacing the last one), flushed to the disk before going on."""
+    with open(app_paths.data_dir / MARKER, "w", encoding="utf-8", newline="\n") as f:
+        json.dump({"old": old, "new": new, "state": state}, f)
+        f.flush()
+        os.fsync(f.fileno())
+
+
 def apply(app_paths: AppPaths, engine: Engine, plan: RelabelPlan) -> None:
-    """Carry out ``plan``: snapshot, database (one transaction), then the files. If a file
-    cannot be written, the files already written get their old content back, the
-    database is rewritten back, and the error is raised."""
+    """Carry out ``plan``: snapshot, marker, database (one transaction), then the files,
+    then the marker says ``done``. If a file cannot be written, the files already written
+    get their old content back, the database is rewritten back, the marker says
+    ``rolled_back``, and the error is raised."""
     create_snapshot(app_paths, kind=BEFORE_RELABEL)
+    _mark(app_paths, plan.old, plan.new, PENDING)
     with engine.begin() as conn:
         _db(conn, plan.old, plan.new, write=True)
     written: list[FileChange] = []
@@ -295,4 +324,38 @@ def apply(app_paths: AppPaths, engine: Engine, plan: RelabelPlan) -> None:
             change.path.write_text(change.before, encoding="utf-8", newline="\n")
         with engine.begin() as conn:
             _db(conn, plan.new, plan.old, write=True)
+        _mark(app_paths, plan.old, plan.new, ROLLED_BACK)
         raise
+    _mark(app_paths, plan.old, plan.new, DONE)
+
+
+def finish_interrupted(app_paths: AppPaths) -> str | None:
+    """Finish a label change that was cut off (the marker still says ``pending``): the
+    database rewrite and every file edit are run again. Both only touch what still names
+    the old label, so whatever was done already is left as it is. Called before the
+    archive is opened (the settings are read after). Answers what was done, for the log,
+    or None when nothing was pending. A marker that cannot be read is logged and left."""
+    marker = app_paths.data_dir / MARKER
+    if not marker.is_file():
+        return None
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        old, new, state = data["old"], data["new"], data["state"]
+    except (OSError, ValueError, KeyError, TypeError):
+        log.warning("cannot read %s; a label change may be unfinished", marker)
+        return None
+    if state != PENDING:
+        return None
+    engine = make_engine(app_paths.db_path)
+    try:
+        migrate(engine)
+        with engine.begin() as conn:
+            _db(conn, old, new, write=True)
+    finally:
+        engine.dispose()
+    for change in _file_edits(app_paths, old, new):
+        write_config_file(change.path, change.text, _verify(change, app_paths))
+    _mark(app_paths, old, new, DONE)
+    done = f"finished the change of the label '{old}' to '{new}' that was cut off"
+    log.warning(done)
+    return done
