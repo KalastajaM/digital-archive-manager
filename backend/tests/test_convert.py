@@ -18,7 +18,7 @@ from dam.db.tables import ongoing_entries, operations
 from dam.errors import InvalidRequest
 from dam.index.driveid import DRIVE_ID_XATTR
 from dam.ops import executor as executor_module
-from dam.ops import primitives
+from dam.ops import identity, primitives
 from dam.ops.model import BatchResult, GuardError, OpFailed, OpKind, ResolvedOp
 
 ONG = "##. Ongoing"
@@ -278,6 +278,38 @@ def test_undo_of_a_link_conversion_puts_the_users_link_back(app, demo):
     # the publisher's record went with it: not reported as "changed outside the app"
     assert [r for r in records(app) if r.rel == f"{ONG}/Tilly"] == []
     assert app.collections.get(result.collection_id).ongoing_status is None
+
+
+def _reuse_inode_numbers(monkeypatch):
+    """Make every entry look like the recorded object (equal dev and ino), as on ext4,
+    which hands the inode number of the entry the undo removed straight to the one it
+    puts back."""
+    monkeypatch.setattr(identity, "same_object", lambda recorded, current: recorded is not None)
+
+
+def test_undo_of_a_link_conversion_forgets_the_record_when_the_inode_is_reused(
+    app, demo, monkeypatch
+):
+    result = convert(app, f"{ONG}/Tilly", "Tilly", None)
+    _reuse_inode_numbers(monkeypatch)
+    outcome = app.activity.undo(result.batch.batch_id)
+    assert outcome.batch.failed is None and outcome.follow_up_error is None
+    assert [r for r in records(app) if r.rel == f"{ONG}/Tilly"] == []
+    app.ongoing.sync()  # the user's link is not mistaken for the app's and removed
+    assert points_at(ongoing(demo) / "Tilly", demo, f"{FAMILY}/Tilly")
+    _assert_clean_after_undo(app, demo, result.collection_id)
+
+
+@needs_dir_fd
+def test_undo_of_a_folder_conversion_forgets_the_record_when_the_inode_is_reused(
+    app, demo, monkeypatch
+):
+    result = convert(app, f"{ONG}/Legal", "Legal", f"{FAMILY}/Legal papers")
+    _reuse_inode_numbers(monkeypatch)
+    outcome = app.activity.undo(result.batch.batch_id)
+    assert outcome.batch.failed is None and outcome.follow_up_error is None
+    assert all(not r.rel.startswith(f"{ONG}/Legal") for r in records(app))
+    _assert_clean_after_undo(app, demo, result.collection_id)
 
 
 # --- real folder -------------------------------------------------------------------
