@@ -462,6 +462,11 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **People settings explain how names are found.** Settings → Filing rules → People now
+  says that each line is looked for anywhere in the address area, so a short line such as a
+  first name also finds longer names that contain it, and gives examples of lines to write
+  (full name, with a middle name, and surname first). An empty row shows example lines. The
+  save button is now "Save people and address area", since it saves both.
 - **The search palette no longer lists screens** (Today, Inbox, Settings and so on). It finds
   files, folders, collections, trays and tags. This applies to both looks.
 - **The New look has no Search card on Today** (the palette and Browse's search box do that
