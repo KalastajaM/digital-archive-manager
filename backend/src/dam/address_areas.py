@@ -3,6 +3,7 @@ of the archive's area and a rule's. ``NONE``: the document has no address area, 
 is looked for on it. No row: the general area applies."""
 
 import time
+from collections.abc import Collection
 from typing import Literal
 
 from sqlalchemy import Engine, delete, select
@@ -30,6 +31,17 @@ class AddressAreas:
         with self.engine.connect() as conn:
             row = conn.execute(select(t).where(t.c.drive_id == drive_id)).first()
         return None if row is None else _zone(row)
+
+    def of_many(self, drive_ids: Collection[str]) -> dict[str, DocumentZone]:
+        """The documents of ``drive_ids`` that have their own area or none."""
+        ids = list(drive_ids)
+        out: dict[str, DocumentZone] = {}
+        with self.engine.connect() as conn:
+            for start in range(0, len(ids), 500):
+                part = ids[start : start + 500]
+                for row in conn.execute(select(t).where(t.c.drive_id.in_(part))):
+                    out[row.drive_id] = _zone(row)
+        return out
 
     def all(self) -> dict[str, DocumentZone]:
         with self.engine.connect() as conn:

@@ -982,9 +982,10 @@ function SampleAreas({
       matched: true,
       reason: null,
       wins: true,
+      document: false,
     })),
     ...(personZone
-      ? [{ rule_id: ruleId, index: 0, box: personZone, kind: "address" as const, lines: [], score: null, matched: true, reason: null, wins: true }]
+      ? [{ rule_id: ruleId, index: 0, box: personZone, kind: "address" as const, lines: [], score: null, matched: true, reason: null, wins: true, document: false }]
       : []),
   ];
   return (

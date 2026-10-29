@@ -1172,6 +1172,7 @@ export const useSetAddressArea = () => {
       void client.invalidateQueries({ queryKey: keys.addressArea });
       void client.invalidateQueries({ queryKey: keys.inbox }); // who the letter is for follows it
       void client.invalidateQueries({ queryKey: keys.file });
+      void client.invalidateQueries({ queryKey: ["areas-for"] }); // a rule sheet's areas too
     },
   });
 };

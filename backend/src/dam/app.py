@@ -280,7 +280,7 @@ def build_services(
         people=lambda: live.settings.people,
         address_zone=lambda: live.settings.address_zone,
         assigned_person=assignments.person_of,
-        document_zone=address_areas.of,
+        document_zones=address_areas.of_many,
         assignments=assignments,
         pictures=pictures,
         area_pictures=area_pictures,

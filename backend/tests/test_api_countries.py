@@ -90,4 +90,4 @@ def test_default_removes_the_zone_so_it_follows_the_countries_again(app, app_pat
 
 
 def settings_file(app_paths) -> dict:
-    return yaml.safe_load((app_paths.config_dir / "settings.yaml").read_text())
+    return yaml.safe_load((app_paths.config_dir / "settings.yaml").read_text(encoding="utf-8"))

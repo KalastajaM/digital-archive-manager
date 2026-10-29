@@ -25,7 +25,8 @@ def test_the_netherlands_examples_come_only_with_the_netherlands():
 def test_the_netherlands_examples_are_valid_rules():
     from dam.rules.model import Rule
 
-    raw = yaml.safe_load((DEFAULTS_DIR / "countries" / "nl" / "rules.yaml").read_text())
+    path = DEFAULTS_DIR / "countries" / "nl" / "rules.yaml"
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert [Rule.model_validate(r).id for r in raw] == [
         "belastingdienst",
         "gemeente-belastingen",

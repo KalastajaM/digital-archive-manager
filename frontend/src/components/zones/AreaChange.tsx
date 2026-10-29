@@ -33,7 +33,7 @@ export function withChangedArea(rule: Rule, area: Area, box: PageBox, image?: st
 /** ``driveId``: the document the area was changed on (a picture area is cut again from it). */
 export function AreaChange({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
   if (area.kind === "address" && area.rule_id === "")
-    return <AddressAreaSheet driveId={driveId} document={area.document ?? false} box={box} onClose={onClose} />;
+    return <AddressAreaSheet driveId={driveId} document={area.document} box={box} onClose={onClose} />;
   return <RuleAreaSheet driveId={driveId} area={area} box={box} onClose={onClose} />;
 }
 

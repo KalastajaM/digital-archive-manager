@@ -25,9 +25,14 @@ def find_kenmerk(text: str) -> list[tuple[int, str]]:
     for m in _KENMERK.finditer(text):
         if _LETTER_REF.search(text, max(0, m.start() - 8), m.start()):
             continue
-        groups = m[1].split(" ")
-        for k in range(len(groups), 0, -1):
-            candidate = "".join(groups[:k])
+        # the grouped number from its start, at most 16 digits (no kenmerk is longer)
+        prefixes, compact = [], ""
+        for group in m[1].split(" "):
+            compact += group
+            if len(compact) > 16:
+                break
+            prefixes.append(compact)
+        for candidate in reversed(prefixes):
             if valid_kenmerk(candidate):
                 found.append((m.start(), candidate))
                 break
@@ -39,9 +44,11 @@ def _once(values) -> list[str]:
 
 
 def _rsin(nine: str) -> bool:
-    """Nine digits that can be an RSIN: the elfproef, and the start every RSIN has (00, or
-    80 to 89: Belastingdienst, "Specificatie Betalingskenmerk bepaling" 1.5). The BSN, a
-    personal number, passes the same elfproef; the start leaves most of them out."""
+    """Nine digits that can be an RSIN: the elfproef, and the start RSINs have (00, or 80
+    to 89). The start is a heuristic, not checked against an RSIN numbering source: the
+    Belastingdienst states it only in passing ("Specificatie Betalingskenmerk bepaling"
+    1.5). The BSN, a personal number, passes the same elfproef; the start leaves most BSNs
+    out, not all (a BSN may start with 0)."""
     return elfproef(nine) and nine.startswith(("00", "8"))
 
 
@@ -74,14 +81,17 @@ def find_kvk(text: str) -> list[str]:
     40 characters after a label."""
     out = []
     for label in _KVK_LABEL.finditer(text):
-        m = _EIGHT.search(text, label.end(), label.end() + _KVK_WINDOW + 8)
+        # no end position: the lookahead must see the digit after an 8-digit run
+        m = _EIGHT.search(text, label.end())
         if m is not None and m.start() - label.end() <= _KVK_WINDOW:
             out.append(m[0])
     return _once(out)
 
 
+# not after "BSN/" ("BSN/RSIN: ..." is a personal number or a company's, unknown which)
 _RSIN = re.compile(
-    r"\bRSIN(?:-?nummer|-?nr\.?)?\s*:?\s*((?:\d[ .]?){8}\d)(?!\d)", re.ASCII | re.IGNORECASE
+    r"(?<!BSN/)(?<!BSN /)\bRSIN(?:-?nummer|-?nr\.?)?\s*:?\s*((?:\d[ .]?){8}\d)(?!\d)",
+    re.ASCII | re.IGNORECASE,
 )
 
 

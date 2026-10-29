@@ -104,7 +104,7 @@ describe("the address area of one document", () => {
 });
 
 describe("moving the address area on a document", () => {
-  const area = { rule_id: "", index: 0, box: [0.06, 0.1, 0.52, 0.3], kind: "address" as const, lines: [] };
+  const area = { rule_id: "", index: 0, box: [0.06, 0.1, 0.52, 0.3], kind: "address" as const, lines: [], matched: true, wins: false };
 
   function renderChange(document = false) {
     window.document.documentElement.dataset.style = "new";

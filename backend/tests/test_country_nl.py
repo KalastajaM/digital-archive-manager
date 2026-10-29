@@ -45,6 +45,14 @@ def test_kenmerk_after_a_label():
     assert [v for _, v in find_kenmerk("Kenmerk: 2036 0000 1630 1110")] == ["2036000016301110"]
 
 
+def test_a_long_run_of_groups_is_read_in_linear_time():
+    import time
+
+    started = time.perf_counter()
+    assert find_kenmerk("kenmerk " + "1 " * 20000) == []
+    assert time.perf_counter() - started < 0.5
+
+
 def test_kenmerk_is_never_read_without_a_label_or_with_a_bad_check():
     assert find_kenmerk("2036 0000 1630 1110") == []
     assert find_kenmerk("Betalingskenmerk: 3036 0000 1630 1110") == []
@@ -77,6 +85,8 @@ def test_kvk_only_near_a_label():
     assert find_kvk("KvK " + "x" * 41 + " 12345678") == []  # beyond the 40-character window
     assert find_kvk("KvK 123456789") == []  # nine digits are not a KvK-nummer
     assert find_kvk("KvK 06-12345678") == []  # a phone number
+    # nine digits at the edge of the window are not cut to eight (they may be a BSN)
+    assert find_kvk("KvK" + " " * 40 + "111222333") == []
 
 
 def test_rsin_only_right_after_its_label():
@@ -87,6 +97,7 @@ def test_rsin_only_right_after_its_label():
     assert find_rsin("BSN 123456782") == []
     assert find_rsin("Klantnummer 800312351") == []
     assert find_rsin("RSIN 123456782") == []  # not 00 or 80 to 89: may be a BSN
+    assert find_rsin("BSN/RSIN: 800312351") == []  # which of the two, unknown
 
 
 def test_pack_registered_with_its_parts():

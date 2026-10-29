@@ -1241,7 +1241,9 @@ checking on real bills.
   "Specificatie Betalingskenmerk bepaling" 1.5.
 - `nl.btw`, the btw-identificatienummer: `NL` + 9 digits + `B` + 2 digits, stored as
   `NL002455799B11`. Valid when the 9 digits pass the elfproef (weights 9 to 2, then -1;
-  the sum divisible by 11) and start as every RSIN does (`00`, or `80` to `89`), or when
+  the sum divisible by 11) and start as RSINs do (`00`, or `80` to `89`; a heuristic, from
+  a Belastingdienst specification that states it in passing, not from an RSIN numbering
+  source), or when
   the whole number passes ISO 7064 mod 97-10 with letters as A=10 to Z=35 (sole
   proprietors since 2020). A sole proprietor's number from before 2020 held their BSN; the
   start rule leaves most of those out. Sources: ondernemersplein.overheid.nl "Nummers voor
@@ -1249,9 +1251,10 @@ checking on real bills.
 - `nl.kvk`, the KvK-nummer: 8 digits with no check digit, so only the first one that
   starts within 40 characters after `KvK`, `K.v.K.`, `Kamer van Koophandel` or
   `Handelsregister`. The 12-digit vestigingsnummer is not read. Source: kvk.nl.
-- `nl.rsin`: 9 digits right after the label `RSIN`, the elfproef and an RSIN's start. A
-  9-digit number without the label is never read: the BSN, a personal number, shares the
-  check.
+- `nl.rsin`: 9 digits right after the label `RSIN` (not `BSN/RSIN`), the elfproef and an
+  RSIN's start. A 9-digit number without the label is never read: the BSN, a personal
+  number, shares the check. The start rule leaves most BSNs out, not all (a BSN may start
+  with 0).
 - Address area `[0.071, 0.135, 0.548, 0.320]` (15 to 115 mm across, 40 to 95 mm down an A4
   page), used when the Netherlands is the first country with an area. An estimate: PostNL,
   "Vormgevingsvoorwaarden 2026" (the address zone on the envelope at least 40 mm from the

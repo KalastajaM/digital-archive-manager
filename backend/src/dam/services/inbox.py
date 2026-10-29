@@ -153,13 +153,15 @@ class InboxEntry:
 @dataclass
 class _Rows:
     """The index rows ``_suggest`` reads for some files, read for all of them at once
-    (``InboxService._rows``): page-1 layouts, QR sticker reads, assigned codes and the
-    person each is assigned to. A file missing from a dict has none."""
+    (``InboxService._rows``): page-1 layouts, QR sticker reads, assigned codes, the
+    person each is assigned to and the address area drawn for it. A file missing from a
+    dict has none."""
 
     layouts: dict[str, Page1Layout]
     qr: dict[str, list[QrRead]]
     codes: dict[str, str]
     persons: dict[str, str | None]
+    zones: dict[str, DocumentZone]  # the address areas drawn for single documents
 
 
 @dataclass
@@ -218,7 +220,7 @@ class InboxService:
         people: Callable[[], Sequence[Person]] = list,
         address_zone: Callable[[], Sequence[float]] = lambda: DEFAULT_ADDRESS_ZONE,
         assigned_person: Callable[[str], str | None] = lambda drive_id: None,
-        document_zone: Callable[[str], DocumentZone | None] = lambda drive_id: None,
+        document_zones: Callable[[Collection[str]], dict[str, DocumentZone]] = lambda ids: {},
         assignments: AssignmentService | None = None,
         pictures: Pictures | None = None,
         area_pictures: AreaPictures | None = None,
@@ -247,7 +249,7 @@ class InboxService:
         self._address_zone = address_zone
         self._assigned_person = assigned_person
         # the address area the owner drew for one document (``dam.address_areas``)
-        self._document_zone = document_zone
+        self._document_zones = document_zones
         self._assignments = assignments
         # the page-1 pictures, for rules with picture areas
         self.pictures = pictures
@@ -267,7 +269,10 @@ class InboxService:
     def people_context(self, drive_id: str, rows: _Rows | None = None) -> PeopleContext:
         person = self._assigned_person(drive_id) if rows is None else rows.persons.get(drive_id)
         return PeopleContext(
-            self._people(), tuple(self._address_zone()), person, self._document_zone(drive_id)
+            self._people(),
+            tuple(self._address_zone()),
+            person,
+            (self._document_zones([drive_id]) if rows is None else rows.zones).get(drive_id),
         )
 
     def list(self) -> list[InboxEntry]:
@@ -776,7 +781,13 @@ class InboxService:
         if persons is None:
             persons = {i: self._assigned_person(i) for i in ids}
         repo = self.repo
-        return _Rows(repo.layouts_for(ids), repo.qrs_for(ids), repo.assigned_codes(ids), persons)
+        return _Rows(
+            repo.layouts_for(ids),
+            repo.qrs_for(ids),
+            repo.assigned_codes(ids),
+            persons,
+            self._document_zones(ids),
+        )
 
     def _suggest(self, rec: FileRecord, text: str, rows: _Rows | None = None) -> Suggestion:
         """What the rules, similar files and codes suggest for ``rec``. ``rows``: its index
