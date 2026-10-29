@@ -1318,7 +1318,7 @@ what each pack's identifier finders return: `core.iban` (valid IBANs of SEPA cou
 `fi.ytunnus` (business IDs with a valid check digit, the VAT form as `0112038-9`), and the
 Netherlands pack's `nl.btw`, `nl.kvk` and `nl.rsin` (see Countries and languages). A file is
 read again when its content or text changes, or when `countries.signature()` (every pack and
-its `version`, `"core:1 fi:2 nl:1"`) changes. What is shown, searched (`id:`) and linked is limited
+its `version`, `"core:1 fi:2 nl:1"`) changes. What is shown, searched (`id:`, `iban:`, `domain:`) and linked is limited
 to the enabled countries. `GET /api/files/{drive_id}/identifiers` lists a file's identifiers
 with `others`, the number of other files carrying each; `/api/status` has `identifiers:
 {read, total}`.
@@ -1734,8 +1734,10 @@ Text is read from PDFs (OCR for scans), images, plain text, `.docx`, `.msg`,
 `.doc`/`.dot`/`.dotx`/`.docm`/`.odt`/`.html`/`.webarchive` (macOS only, with `textutil`),
 and Pages, Numbers and Keynote files (the preview inside the bundle, with OCR for
 pictures). `GET /api/index/summary` gives the Index sheet's counts per state, the not
-readable files per type and a page (`limit`, `offset`) of those files with their reasons, and
-`page1`, the progress of the page-1 pass: `{read, total, backfill, rate_per_min, blocked:
+readable files per type and a page (`limit`, `offset`) of those files with their reasons,
+`identifiers: {read, total, found: [{label, count, search}]}`, how many files carry a business
+ID, an IBAN and a domain (one grouped query, enabled countries, current content) with the
+search that lists them (`id:*`, `iban:*`, `domain:*`), and `page1`, the progress of the page-1 pass: `{read, total, backfill, rate_per_min, blocked:
 [{reason, count}], text_left, scans_left, text_per_min, scans_per_min}`. `text_left` counts the
 unread PDFs whose text came from their text layer (read quickly, no OCR) and `scans_left` the
 unread scans and photos (OCR); `text_per_min` is `page1_text_reads_per_minute` and
@@ -1799,7 +1801,10 @@ the command line: `dam errors [--all] [--retry]`.
     name only, `*` and `?` wildcards; without one the text may be anywhere in the name),
     `in` (a folder and below), `tag`, `collection` (the collection, the collections below
     it, and the files under a member folder), `from` / `for` (the sender or person assigned
-    in `file_assignments`, contains, case and accents ignored), `type` (an extension or a
+    in `file_assignments`, contains, case and accents ignored), `id` / `iban` / `domain`
+    (an identifier in `file_identifiers` of the current content, enabled countries only,
+    compared without spaces, dashes or case; `id` over every kind; `*` is any: `id:*` a
+    business ID, `iban:*` an IBAN, `domain:*` a web or mail domain), `type` (an extension or a
     group: image, doc, sheet, slides, text, mail, archive, audio, video), `date` /
     `after` / `before` (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`; the date is `doc_date`, the date
     prefix of the file name, else the modified time; `after` includes the first day of the

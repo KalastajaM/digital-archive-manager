@@ -240,23 +240,29 @@ class ReadsMixin:
             )
         return read, total
 
-    def files_with_kinds(self, kinds: Sequence[str]) -> int:
-        """How many files there (not missing, not parked) carry an identifier of one of
-        ``kinds`` in their current content."""
-        if not kinds:
-            return 0
+    def files_with_kinds(self, groups: Mapping[str, Sequence[str]]) -> dict[str, int]:
+        """For each group of identifier kinds, how many files there (not missing, not
+        parked) carry one of its kinds in their current content; one grouped query."""
+        out = {name: 0 for name in groups}
+        whens = [(file_identifiers.c.kind.in_(list(ks)), name) for name, ks in groups.items() if ks]
+        if not whens:
+            return out
+        group = case(*whens).label("grp")
         stmt = (
-            select(func.count(func.distinct(file_identifiers.c.drive_id)))
+            select(group, func.count(func.distinct(file_identifiers.c.drive_id)))
             .join(files, files.c.drive_id == file_identifiers.c.drive_id)
             .where(
-                file_identifiers.c.kind.in_(list(kinds)),
+                file_identifiers.c.kind.in_([k for ks in groups.values() for k in ks]),
                 files.c.sha256 == file_identifiers.c.sha256,
                 files.c.missing.is_not(True),
                 files.c.parked_at.is_(None),
             )
+            .group_by(group)
         )
         with self._conn() as conn:
-            return int(conn.execute(stmt).scalar() or 0)
+            for name, count in conn.execute(stmt):
+                out[name] = int(count)
+        return out
 
     def qr_for(self, drive_id: str) -> list[QrRead]:
         """The QR stickers read from the file's current content; ``[]`` if none were

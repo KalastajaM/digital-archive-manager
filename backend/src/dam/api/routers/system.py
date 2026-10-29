@@ -52,17 +52,16 @@ def _identifiers(app: App) -> dict:
     return {"read": read, "total": total}
 
 
+_FOUND = (("id", "business IDs"), ("iban", "IBANs"), ("domain", "web or mail domains"))
+
+
 def _found(app: App) -> list[dict]:
-    """How many files carry a business ID, an IBAN, a web or mail domain (enabled packs)."""
-    profile = packs.active()
-    business = packs.business_id_kinds(profile)
-    every = [s.kind for p in profile.countries for s in p.identifiers]
-    groups = [
-        ("business IDs", business),
-        ("IBANs", [k for k in every if k.endswith(".iban")]),
-        ("web or mail domains", [k for k in every if k.endswith(".domain")]),
+    """How many files carry a business ID, an IBAN, a web or mail domain (enabled packs),
+    with the search that lists them."""
+    counts = app.repo.files_with_kinds(packs.identifier_kinds(packs.active()))
+    return [
+        {"label": label, "count": counts[name], "search": f"{name}:*"} for name, label in _FOUND
     ]
-    return [{"label": label, "count": app.repo.files_with_kinds(kinds)} for label, kinds in groups]
 
 
 def _page1(app: App) -> dict:

@@ -14,9 +14,9 @@ describe("splitSearch", () => {
   });
 
   it("knows every filter name, in any case, and a leading dash", () => {
-    const text = "name:*a* in:x tag:t collection:c from:f for:p id:0112038-9 type:y date:2026 before:2027 after:2025 tray:to-pay is:locked -tag:paid TAG:Up ";
+    const text = "name:*a* in:x tag:t collection:c from:f for:p id:0112038-9 iban:* -Domain:* type:y date:2026 before:2027 after:2025 tray:to-pay is:locked -tag:paid TAG:Up ";
     const names = splitSearch(text).filters.map((x) => `${x.negated ? "-" : ""}${x.name}`);
-    expect(names).toEqual(["name", "in", "tag", "collection", "from", "for", "id", "type", "date", "before", "after", "tray", "is", "-tag", "tag"]);
+    expect(names).toEqual(["name", "in", "tag", "collection", "from", "for", "id", "iban", "-domain", "type", "date", "before", "after", "tray", "is", "-tag", "tag"]);
   });
 
   it("keeps a filter being typed apart as partial", () => {

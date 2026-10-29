@@ -367,6 +367,41 @@ def test_id_star_follows_the_countries_that_are_on(with_ids):
     assert ids(with_ids, "id:*") == []
 
 
+def test_iban_star_finds_files_with_any_iban(with_ids):
+    assert ids(with_ids, "iban:*") == ["tax"]
+    assert ids(with_ids, "IBAN:*") == ["tax"]
+    assert "tax" not in ids(with_ids, "-iban:*")
+    assert {"bill", "kela"} <= set(ids(with_ids, "-iban:*"))
+
+
+def test_iban_star_with_a_sender(with_ids):
+    with_ids.assignments.set(["tax", "kela"], sender="Telia")
+    assert ids(with_ids, "from:Telia iban:*") == ["tax"]
+    assert ids(with_ids, "from:Telia -iban:*") == ["kela"]
+
+
+def test_iban_value_matches_ibans_only(with_ids):
+    assert ids(with_ids, 'iban:"fi21 1234 5600 0007 85"') == ["tax"]
+    assert ids(with_ids, "iban:0112038-9") == []  # a business ID, not an IBAN
+
+
+def test_domain_star_and_value(with_ids):
+    assert ids(with_ids, "domain:*") == ["kela"]
+    assert "kela" not in ids(with_ids, "-domain:*")
+    assert ids(with_ids, "domain:KELA.fi") == ["kela"]
+    assert ids(with_ids, "domain:0112038-9") == []
+
+
+def test_iban_star_counts_the_current_content_only(with_ids):
+    from dam import countries
+
+    # read from content "doc" no longer has (its current content is sha-doc)
+    with_ids.repo.save_identifiers(
+        "doc", "sha-old", countries.signature(), [("core.iban", "FI2112345600000785")]
+    )
+    assert "doc" not in ids(with_ids, "iban:*")
+
+
 ALL_FILES = sorted(FILES)
 
 

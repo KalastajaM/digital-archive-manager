@@ -654,6 +654,7 @@ class Page1BlockedOut(BaseModel):
 class IdentifierFoundOut(BaseModel):
     label: str  # "business IDs", "IBANs", "web or mail domains"
     count: int  # files there whose current content carries one
+    search: str  # the search that lists them: "id:*", "iban:*", "domain:*"
 
 
 class IdentifiersProgressOut(BaseModel):

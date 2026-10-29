@@ -19,6 +19,10 @@ All notable changes are listed here. The format follows
   collection's page.
 - **`id:*`** finds every file that has a business ID, whatever it is: `from:Telia id:*`
   lists Telia's documents that carry one.
+- **`iban:` and `domain:`** find the files that carry an IBAN or a web or mail domain:
+  `iban:*` any IBAN, `from:Telia iban:*` Telia's documents with one, `-iban:*` the files
+  without; `iban:FI21...` and `domain:kela.fi` one value. The Index sheet gives each count
+  found with the search that lists those files.
 - **`*` for "any" in more filters.** `tag:*`, `collection:*`, `from:*`, `for:*` and `tray:*`
   find files with any tag, collection, sender, person or open tray item, and with a `-` the
   files without: `-tag:*` lists what still needs tagging, `id:* -from:*` what has a business

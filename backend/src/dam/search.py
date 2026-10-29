@@ -249,27 +249,25 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
             else "0",
             neg,
         )
-    elif f.name == "id" and v == ANY:
-        # any business ID of the enabled packs (not IBANs or domains); current content only
-        kinds = packs.business_id_kinds(packs.active())
+    elif f.name in ("id", "iban", "domain"):
+        # identifiers of the enabled packs, the current content's only. id:* is any business
+        # ID (not IBANs or domains), iban:* any IBAN, domain:* any web or mail domain; a
+        # value is compared without spaces, dashes or case, id: over every kind
+        groups = packs.identifier_kinds(packs.active())
+        if v == ANY:
+            kinds, match = groups[f.name], ""
+        else:
+            kinds = [k for ks in groups.values() for k in ks] if f.name == "id" else groups[f.name]
+            match = (
+                " AND REPLACE(REPLACE(UPPER(i.value), ' ', ''), '-', '') "
+                f"IN ({w.marks(_id_keys(v))})"
+            )
         w.add(
             "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
             "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "
-            f"WHERE i.kind IN ({w.marks(kinds)}))"
+            f"WHERE i.kind IN ({w.marks(kinds)}){match})"
             if kinds
             else "0",
-            neg,
-        )
-    elif f.name == "id":
-        # business IDs, IBANs and domains of the enabled packs, compared without spaces,
-        # dashes or case; the current content's only
-        kinds = [s.kind for p in packs.active().countries for s in p.identifiers]
-        w.add(
-            "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
-            "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "
-            f"WHERE i.kind IN ({w.marks(kinds)}) AND "
-            "REPLACE(REPLACE(UPPER(i.value), ' ', ''), '-', '') "
-            f"IN ({w.marks(_id_keys(v))}))",
             neg,
         )
     elif f.name == "type":

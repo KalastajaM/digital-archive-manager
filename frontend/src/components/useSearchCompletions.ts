@@ -70,7 +70,7 @@ export function useSearchCompletions(typed: SearchText, active: SearchFilter[], 
         out = [...IS_VALUES].filter((t) => t.startsWith(want)).map((t) => value("is", t, neg));
         break;
       default:
-        break; // name, date, before, after: typed in full
+        break; // name, id, iban, domain, date, before, after: typed in full
     }
     return out.filter((c) => c.kind === "value" && !taken(c.filter)).slice(0, MAX);
   }

@@ -5971,6 +5971,8 @@ export interface components {
             label: string;
             /** Count */
             count: number;
+            /** Search */
+            search: string;
         };
         /** IdentifierNameDoneOut */
         IdentifierNameDoneOut: {

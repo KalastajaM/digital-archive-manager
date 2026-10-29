@@ -23,6 +23,8 @@ FILTER_NAMES = (
     "from",
     "for",
     "id",
+    "iban",
+    "domain",
     "type",
     "date",
     "before",

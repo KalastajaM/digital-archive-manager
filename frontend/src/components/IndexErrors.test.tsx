@@ -66,9 +66,9 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
           read: 1200,
           total: 10220,
           found: [
-            { label: "business IDs", count: 3351 },
-            { label: "IBANs", count: 1663 },
-            { label: "web or mail domains", count: 4953 },
+            { label: "business IDs", count: 3351, search: "id:*" },
+            { label: "IBANs", count: 1663, search: "iban:*" },
+            { label: "web or mail domains", count: 4953, search: "domain:*" },
           ],
         },
         page1: {
@@ -183,8 +183,9 @@ describe("Index errors sheet", () => {
     expect(row("Page 1")).toHaveTextContent(/text on page 1 in 2\D900 of them/);
     expect(row("Business IDs")).toHaveTextContent(/1\D200 of 10\D220/);
     expect(row("Business IDs")).toHaveTextContent(
-      /Found: business IDs in 3\D351 files, IBANs in 1\D663, web or mail domains in 4\D953\./,
+      /Found: business IDs in 3\D351 files \(id:\*\), IBANs in 1\D663 \(iban:\*\), web or mail domains in 4\D953 \(domain:\*\)\./,
     );
+    expect(within(row("Business IDs")).getByText("iban:*", { selector: "code" })).toBeInTheDocument();
     // both still reading: a spinning icon says so; the rows are parts, not headings
     expect(within(row("Page 1")).getByRole("img", { name: "Still reading" })).toBeInTheDocument();
     expect(row("Business IDs")).toHaveClass("index-summary-part");
