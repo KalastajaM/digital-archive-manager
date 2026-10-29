@@ -24,8 +24,8 @@ from dam.index.repo.model import (
     READING_MARK,
     FileRecord,
     IndexProblem,
-    fts_delete,
     fts_insert,
+    fts_remove,
     record,
     unmarked,
 )
@@ -245,13 +245,13 @@ class IndexingMixin:
             if sha256 is not None:
                 values["sha256"] = sha256
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
+            fts_remove(conn, drive_id)  # while the view still shows the old text
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             # identifiers come from the text, which can change for the same bytes (OCR)
             conn.execute(file_identifiers.delete().where(file_identifiers.c.drive_id == drive_id))
             conn.execute(
                 file_identifier_reads.delete().where(file_identifier_reads.c.drive_id == drive_id)
             )
-            fts_delete(conn, drive_id)
             if extracted and extracted.page1 is not None:
                 sha = (
                     sha256
@@ -270,5 +270,5 @@ class IndexingMixin:
                         ocr_used=extracted.ocr_used,
                     )
                 )
-            fts_insert(conn, drive_id, nfc(row.name), nfc(row.path), body)
+            fts_insert(conn, drive_id, nfc(row.name), nfc(row.path))
         return True

@@ -263,7 +263,7 @@ def test_migration_0015_upgrades_a_db_at_0014(tmp_path: Path, new_engine):
         conn.execute(text("INSERT INTO collection_members VALUES (1, 'd1', 1.0, NULL, NULL)"))
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0043"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0045"
         assert conn.execute(
             text("SELECT name, parent_id FROM collections WHERE kind IS NULL")
         ).one() == (
@@ -299,7 +299,7 @@ def test_migration_0016_upgrades_a_db_at_0015(tmp_path: Path, new_engine):
         )
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0043"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0045"
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(ongoing_switched)"))]
         assert cols == ["id", "batch_id", "collection_id", "rel", "link_value", "created"]
         fks = [

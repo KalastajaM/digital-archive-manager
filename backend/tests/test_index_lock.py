@@ -2,8 +2,9 @@
 
 import threading
 
-from sqlalchemy import insert, select
+from sqlalchemy import select
 
+from conftest import put_fts_row
 from dam.config import Settings
 from dam.core.paths import ArchivePaths
 from dam.db.tables import file_tags, file_text
@@ -28,8 +29,8 @@ def test_scan_between_rename_and_index_update_does_not_orphan(fake_archive, engi
     paths, repo, executor = setup(fake_archive, engine)
     scan(paths, repo)
     old = repo.by_path("##. Organize/a.pdf").drive_id
-    with engine.begin() as conn:
-        conn.execute(insert(file_text), {"drive_id": old, "text": "hello"})
+    with engine.begin() as conn:  # its text, indexed as save_content does
+        put_fts_row(conn, old, "a.pdf", "##. Organize/a.pdf", "hello")
     TagRepo(engine).add(old, ["keep"])
 
     scans: list[threading.Thread] = []
