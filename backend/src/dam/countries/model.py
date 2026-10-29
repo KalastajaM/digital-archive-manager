@@ -25,3 +25,5 @@ class CountryPack:
     # the pack has no standard for it
     address_zone: tuple[float, float, float, float] | None = None
     languages: tuple[str, ...] = ()  # the languages of its documents, most likely first
+    # what the pack adds to reading documents, in plain words (Settings lists them)
+    adds: tuple[str, ...] = ()

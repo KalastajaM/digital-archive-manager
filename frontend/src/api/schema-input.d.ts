@@ -3716,6 +3716,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/countries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Countries
+         * @description The country and language packs documents can be read with, and which are on.
+         */
+        get: operations["get_countries_api_settings_countries_get"];
+        /**
+         * Put Countries
+         * @description Save the countries and languages to settings.yaml; used at once. 400 for an unknown
+         *     or repeated code; nothing is written then.
+         */
+        put: operations["put_countries_api_settings_countries_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/special-folders/{key}/rename": {
         parameters: {
             query?: never;
@@ -4982,6 +5007,42 @@ export interface components {
             error: string | null;
             result?: components["schemas"]["BatchResultOut"] | null;
         };
+        /**
+         * CountriesIn
+         * @description The countries and languages to read documents with; English is always added.
+         */
+        CountriesIn: {
+            /** Countries */
+            countries: string[];
+            /** Languages */
+            languages: string[];
+        };
+        /**
+         * CountriesOut
+         * @description The country and language packs, and which are on. ``chosen``: the settings name the
+         *     countries (else Finland is on, as before there was a choice).
+         */
+        CountriesOut: {
+            /** Chosen */
+            chosen: boolean;
+            /** Countries */
+            countries: components["schemas"]["CountryOut"][];
+            /** Languages */
+            languages: components["schemas"]["LanguageOut"][];
+        };
+        /** CountryOut */
+        CountryOut: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Adds */
+            adds: string[];
+            /** Languages */
+            languages: string[];
+        };
         /** DetectedFieldsOut */
         DetectedFieldsOut: {
             /** Dates */
@@ -6067,6 +6128,17 @@ export interface components {
             items: string[];
             /** Total */
             total: number;
+        };
+        /** LanguageOut */
+        LanguageOut: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Always */
+            always: boolean;
         };
         /** LayoutFolderOut */
         LayoutFolderOut: {
@@ -7627,6 +7699,8 @@ export interface components {
              */
             create?: boolean;
             layout?: components["schemas"]["LayoutIn"] | null;
+            /** Countries */
+            countries?: string[] | null;
         };
         /** SetupLayoutPreviewIn */
         SetupLayoutPreviewIn: {
@@ -27850,6 +27924,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeopleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_countries_api_settings_countries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountriesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_countries_api_settings_countries_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CountriesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountriesOut"];
                 };
             };
             /** @description Bad Request */

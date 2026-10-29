@@ -8,6 +8,16 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Countries and languages.** Settings has a new section, Countries and languages, under
+  This archive: the countries your post comes from and the languages it is written in, each
+  listed with what it adds, English always on. The first-run screen asks once where your post
+  comes from (Finland or another country). Without Finland, dam no longer looks for the
+  viitenumero, and a rules file it writes later has no Finland examples (yours stay as they
+  are); RF references, IBANs, dates and amounts are
+  still read. An archive that never chose reads as Finland, as before.
+- **More of a bill is read.** IBANs of any SEPA country (each checked against its country's
+  length), amounts written `€ 1.234,56`, and dates written `15-10-2026`, `15/10/2026`,
+  `15. lokakuuta 2026`, `15 oktober 2026` or `October 15, 2026`.
 - **Rename the special folders (New look).** Settings, Archive folders, Special folders lists
   the Inbox, Ongoing, Important and To Delete folders with a Rename for each. You type a new
   name (it may start with `##.` or not), and a preview lists every place that holds the old

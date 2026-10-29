@@ -3,8 +3,11 @@
 from fastapi import APIRouter
 from pydantic import ValidationError
 
+from dam import countries, languages
 from dam.api.deps import AppDep
 from dam.api.schemas import (
+    CountriesIn,
+    CountriesOut,
     Page1BackfillIn,
     Page1BackfillOut,
     Page1SpeedIn,
@@ -13,7 +16,7 @@ from dam.api.schemas import (
     PeopleOut,
 )
 from dam.codes.model import format_validation
-from dam.config import DEFAULT_ADDRESS_ZONE, Person, Settings
+from dam.config import Person, Settings
 from dam.errors import InvalidRequest
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -40,7 +43,7 @@ def _people_out(app) -> dict:
     return {
         "people": [p.model_dump() for p in app.settings.people],
         "address_zone": list(app.settings.address_zone),
-        "default_address_zone": list(DEFAULT_ADDRESS_ZONE),
+        "default_address_zone": list(app.settings.countries_zone()),
     }
 
 
@@ -70,3 +73,54 @@ def put_people(app: AppDep, body: PeopleIn) -> dict:
         checked.address_zone if body.address_zone else None,
     )
     return _people_out(app)
+
+
+def _countries_out(app) -> dict:
+    s = app.settings
+    on_countries, on_languages = set(s.country_codes()), s.language_codes()
+    return {
+        "chosen": s.countries is not None,
+        "countries": [
+            {
+                "code": p.code,
+                "name": p.name,
+                "enabled": p.code in on_countries,
+                "adds": list(p.adds),
+                "languages": list(p.languages),
+            }
+            for p in countries.PACKS.values()
+        ],
+        # the enabled ones in their order, then the others
+        "languages": [
+            {
+                "code": p.code,
+                "name": p.name,
+                "enabled": p.code in on_languages,
+                "always": p.code == "en",
+            }
+            for p in sorted(
+                languages.PACKS.values(),
+                key=lambda p: (
+                    on_languages.index(p.code) if p.code in on_languages else len(on_languages)
+                ),
+            )
+        ],
+    }
+
+
+@router.get("/countries", response_model=CountriesOut)
+def get_countries(app: AppDep) -> dict:
+    """The country and language packs documents can be read with, and which are on."""
+    return _countries_out(app)
+
+
+@router.put("/countries", response_model=CountriesOut)
+def put_countries(app: AppDep, body: CountriesIn) -> dict:
+    """Save the countries and languages to settings.yaml; used at once. 400 for an unknown
+    or repeated code; nothing is written then."""
+    try:
+        Settings.model_validate({"countries": body.countries, "languages": body.languages})
+    except ValidationError as e:
+        raise InvalidRequest(format_validation(e)) from e
+    app.set_countries(body.countries, body.languages)
+    return _countries_out(app)

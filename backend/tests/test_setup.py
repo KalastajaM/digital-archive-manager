@@ -574,3 +574,23 @@ def test_a_failed_write_puts_the_file_back(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         setup.write_archive_root(p, mk(tmp_path / "a"))
     assert (p.config_dir / "settings.yaml").read_text(encoding="utf-8") == before
+
+
+def test_setup_writes_the_chosen_countries(setup_client, bare, tmp_path):
+    folder = mk(tmp_path / "Chosen")
+    r = post(setup_client, "/api/setup", {"archive_root": str(folder), "countries": []})
+    assert r.status_code == 200, r.text
+    assert load_settings(bare).countries == []
+
+
+def test_setup_without_countries_leaves_them_unset(setup_client, bare, tmp_path):
+    folder = mk(tmp_path / "Chosen")
+    assert post(setup_client, "/api/setup", {"archive_root": str(folder)}).status_code == 200
+    assert load_settings(bare).countries is None
+
+
+def test_setup_refuses_an_unknown_country(setup_client, bare, tmp_path):
+    folder = mk(tmp_path / "Chosen")
+    r = post(setup_client, "/api/setup", {"archive_root": str(folder), "countries": ["zz"]})
+    assert r.status_code == 400 and "zz" in r.json()["error"]
+    assert not setup.is_configured(bare)

@@ -52,7 +52,8 @@ def test_every_part_is_an_app_field_and_every_service_comes_from_a_group():
         and f.default is dataclasses.MISSING
         and f.default_factory is dataclasses.MISSING
     }
-    assert later - _parts() == {"wake_indexer"}  # set by the App itself
+    # set by the App itself
+    assert later - _parts() == {"wake_indexer", "_packs", "_packs_before"}
     assert _parts() <= {f.name for f in dataclasses.fields(App)}
 
 

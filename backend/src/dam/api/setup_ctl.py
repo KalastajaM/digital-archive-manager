@@ -5,11 +5,15 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from dam import layouts, setup
-from dam.config import DEFAULTS_DIR, AppPaths, SpecialFolders
+from dam.codes.model import format_validation
+from dam.config import DEFAULTS_DIR, AppPaths, Settings, SpecialFolders
 from dam.errors import Conflict, InvalidRequest
 from dam.ops.model import GuardError, OpKind, ResolvedOp
 from dam.services.layout import LayoutOutcome, layout_label, spec_from_input
+from dam.settings_write import write_keys
 
 log = logging.getLogger(__name__)
 
@@ -121,10 +125,23 @@ class SetupMode:
             "rules_seedable": layouts.seedable(self.app_paths, self.defaults_dir),
         }
 
-    def apply(self, raw: str, create: bool, layout: dict | None = None) -> dict:
+    def apply(
+        self,
+        raw: str,
+        create: bool,
+        layout: dict | None = None,
+        countries: list[str] | None = None,
+    ) -> dict:
+        """``countries``: what documents are read for, written to the settings with the
+        folder (None: not asked, left unset)."""
         with self._lock:
             if self._done or setup.is_configured(self.app_paths):
                 raise Conflict("The archive folder is already set up.")
+            if countries is not None:
+                try:
+                    Settings.model_validate({"countries": countries})
+                except ValidationError as e:
+                    raise InvalidRequest(format_validation(e)) from e
             check = setup.check_archive_path(raw, self.app_paths, self.home, self.guard)
             if create and check.can_create:
                 setup.create_archive_folder(check)
@@ -141,6 +158,11 @@ class SetupMode:
                 # starts, so everything (guards, inbox, publishers) uses them
                 setup.write_layout_settings(
                     self.app_paths, spec.special, layouts.ai_exclude_folders(template, folders)
+                )
+            if countries is not None:
+                # before the archive root: the app that starts on it reads them at once
+                write_keys(
+                    self.app_paths, {"countries": countries}, lambda s: s.countries == countries
                 )
             setup.write_archive_root(self.app_paths, check.path)
             self._done = True

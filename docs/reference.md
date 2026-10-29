@@ -568,8 +568,11 @@ All in the data folder under `config/`:
   `ai` (see AI setup), `page1_backfill` (read page 1 of older documents in the background,
   default `true`), `page1_text_reads_per_minute` (how fast page 1 of PDFs with a text layer
   is read, 1 to 6000, default 300; scans, photos and slow reads keep
-  `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings) and `address_zone`
-  (`[x0, y0, x1, y1]` as fractions of page 1, origin top left). The four
+  `indexer_reads_per_minute`), `people` (a list of `name` and `match` strings), `address_zone`
+  (`[x0, y0, x1, y1]` as fractions of page 1, origin top left; unset, it follows the first
+  country that has a standard), `countries` (country packs, for example `[fi]`; unset reads
+  as `[fi]`, `[]` is none) and `languages` (language packs: `fi`, `sv`, `en`; unset, the
+  countries' languages; English is always added). The four
   `special_folders` names can be changed in Settings (see Renaming a special folder) or by
   hand.
 - `trays/*.yaml`: one tray per file (see Tray files).

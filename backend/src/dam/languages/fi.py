@@ -27,4 +27,19 @@ FINNISH = LanguagePack(
         lasku kuitti kirje oikea sivu liite
         """.split()
     ),
+    # nominative and partitive ("15. lokakuuta 2026"), folded
+    months=(
+        ("tammikuu", "tammikuuta"),
+        ("helmikuu", "helmikuuta"),
+        ("maaliskuu", "maaliskuuta"),
+        ("huhtikuu", "huhtikuuta"),
+        ("toukokuu", "toukokuuta"),
+        ("kesakuu", "kesakuuta"),
+        ("heinakuu", "heinakuuta"),
+        ("elokuu", "elokuuta"),
+        ("syyskuu", "syyskuuta"),
+        ("lokakuu", "lokakuuta"),
+        ("marraskuu", "marraskuuta"),
+        ("joulukuu", "joulukuuta"),
+    ),
 )

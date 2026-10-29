@@ -46,6 +46,7 @@ describe("Settings", () => {
       "/settings/filing-rules",
       "/settings/folders",
       "/settings/indexing",
+      "/settings/countries",
       "/settings/snapshots",
       "/settings/appearance",
     ]);

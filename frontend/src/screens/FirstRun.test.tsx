@@ -5,7 +5,7 @@ import { describe, expect, it, onTestFinished } from "vitest";
 import App from "../App";
 import type { SetupCheck, SetupResult } from "../api/client";
 import { mockFetch, renderWithProviders } from "../test-utils";
-import FirstRun from "./FirstRun";
+import FirstRun, { guessCountries } from "./FirstRun";
 
 const FOLDERS = [
   { role: "inbox", title: "Inbox", name: "##. Organize", purpose: "New files to sort wait here." },
@@ -99,7 +99,7 @@ describe("FirstRun", () => {
     await user.click(await useButton());
     expect(await screen.findByRole("heading", { name: "All set" })).toBeInTheDocument();
     const save = calls.find((c) => c.method === "POST" && c.url === "/api/setup");
-    expect(save?.body).toEqual({ archive_root: "/home/me/Dropbox/Papers", create: false });
+    expect(save?.body).toEqual({ archive_root: "/home/me/Dropbox/Papers", create: false, countries: expect.any(Array) });
     const folders = screen.getByRole("list", { name: "Folders dam looks for" });
     expect(within(folders).getByText("##. Organize")).toBeInTheDocument();
     expect(within(folders).getByText("found")).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("FirstRun", () => {
     expect(calls.some((c) => c.url === "/api/setup")).toBe(false);
     await user.click(button);
     await screen.findByRole("heading", { name: "All set" });
-    expect(calls.find((c) => c.url === "/api/setup")?.body).toEqual({ archive_root: "/home/me/New", create: true });
+    expect(calls.find((c) => c.url === "/api/setup")?.body).toEqual({ archive_root: "/home/me/New", create: true, countries: expect.any(Array) });
   });
 
   it("shows the server's refusal and stays on the screen", async () => {
@@ -315,7 +315,7 @@ describe("FirstRun: start a new archive", () => {
     });
     await user.click(await useButton("Make the folders and use this folder"));
     expect(await screen.findByRole("heading", { name: "All set" })).toBeInTheDocument();
-    expect(saveCall(calls)?.body).toEqual({ archive_root: "/home/me/Archive", create: false, layout: expected });
+    expect(saveCall(calls)?.body).toEqual({ archive_root: "/home/me/Archive", create: false, layout: expected, countries: expect.any(Array) });
     expect(screen.getByText(/dam made 6 folders/)).toBeInTheDocument();
     expect(screen.getByText(/Undo it from Activity/)).toBeInTheDocument();
     expect(screen.queryByText(/did not create any of these/)).not.toBeInTheDocument();
@@ -330,7 +330,7 @@ describe("FirstRun: start a new archive", () => {
     expect(screen.queryByRole("list", { name: "Special folders" })).not.toBeInTheDocument();
     await user.click(await useButton());
     await screen.findByRole("heading", { name: "All set" });
-    expect(saveCall(calls)?.body).toEqual({ archive_root: "/home/me/Archive", create: false });
+    expect(saveCall(calls)?.body).toEqual({ archive_root: "/home/me/Archive", create: false, countries: expect.any(Array) });
   });
 
   it("a folder with content defaults to use as is, and can still get a layout", async () => {
@@ -407,5 +407,30 @@ describe("FirstRun for an extra archive", () => {
     expect(await screen.findByRole("button", { name: "Archive: Scratch" })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Archive: Scratch" }));
     expect(screen.getByRole("menuitemcheckbox", { name: "Main" })).toBeInTheDocument();
+  });
+});
+
+describe("where the post comes from", () => {
+  it("guesses Finland from a Finnish language or the Helsinki time zone", () => {
+    expect(guessCountries(["en-US", "fi"], "Europe/Berlin")).toEqual(["fi"]);
+    expect(guessCountries(["sv-FI"], "UTC")).toEqual(["fi"]);
+    expect(guessCountries(["en-US"], "Europe/Helsinki")).toEqual(["fi"]);
+    expect(guessCountries(["en-GB", "nl"], "Europe/Amsterdam")).toEqual([]);
+  });
+
+  it("sends the choice with the folder", async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      "GET /api/setup/candidates": { body: CANDIDATES },
+      "POST /api/setup/validate": (call) => ({ body: ok((call.body as { path: string }).path) }),
+      "POST /api/setup": { body: SAVED },
+    });
+    renderScreen();
+    await user.click(await screen.findByRole("button", { name: /^Dropbox/ }));
+    await user.click(screen.getByRole("radio", { name: "Another country" }));
+    expect(await screen.findByText("This folder can be used.")).toBeInTheDocument();
+    await user.click(await useButton());
+    await screen.findByRole("heading", { name: "All set" });
+    expect(calls.find((c) => c.url === "/api/setup")?.body).toMatchObject({ countries: [] });
   });
 });

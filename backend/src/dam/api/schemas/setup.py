@@ -89,6 +89,8 @@ class SetupIn(StrictIn):
     # start a new archive: make these folders (and write the special names to the
     # settings) right after the folder is saved; previewed with /api/setup/layout-preview
     layout: LayoutIn | None = None
+    # the countries documents are read for (``countries`` in the settings); None: not asked
+    countries: list[str] | None = None
 
 
 class SetupFolderStatusOut(SetupFolderOut):

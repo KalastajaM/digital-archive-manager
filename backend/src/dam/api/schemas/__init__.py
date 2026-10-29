@@ -292,6 +292,10 @@ from dam.api.schemas.rules import (
 )
 from dam.api.schemas.settings import (
     AssignmentsIn,
+    CountriesIn,
+    CountriesOut,
+    CountryOut,
+    LanguageOut,
     Page1BackfillIn,
     Page1BackfillOut,
     Page1SpeedIn,
@@ -608,6 +612,10 @@ __all__ = [
     "ZoneDraftPictureOut",
     "ZoneDraftOut",
     "RuleExplainOut",
+    "CountriesIn",
+    "CountriesOut",
+    "CountryOut",
+    "LanguageOut",
     "Page1BackfillIn",
     "Page1BackfillOut",
     "Page1SpeedIn",

@@ -44,4 +44,6 @@ FINLAND = CountryPack(
     references=(ReferenceSpec("fi.reference", find_reference),),
     address_zone=ADDRESS_ZONE,
     languages=("fi", "sv"),
+    # only what turning Finland off changes: its address zone is also the default for now
+    adds=("Payment reference (viitenumero)", "Finland example rules"),
 )

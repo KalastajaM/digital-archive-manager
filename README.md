@@ -162,15 +162,16 @@ country or one language:
 |---|---|
 | Bank barcode on bills (pankkiviivakoodi) | Finland |
 | Payment reference numbers | RF (international) and the Finnish viitenumero |
-| IBAN | Finnish accounts |
-| Where the address sits on page 1 of a letter | the Finnish letter standard (SFS 2487); you can draw your own |
-| Due-date and total labels on bills | Finnish, Swedish and English |
+| IBAN | any SEPA country |
+| Dates and amounts | day-first dates with dots, dashes, slashes or month names; `€ 1.234,56` and `1 234,56 €` |
+| Where the address sits on page 1 of a letter | the country's letter standard (Finland: SFS 2487); you can draw your own |
+| Due-date and total labels, month names | Finnish, Swedish and English |
 | OCR | the languages you set in `ocr_languages` |
 
-The reference numbers, the address area and the label words are kept in **country
-packs** and **language packs**, the start of support for other countries. Still to come:
-choosing the packs in Settings, IBANs and bank barcodes in packs too, and a Netherlands
-pack. If you would like
+You choose the countries and languages in **Settings, Countries and languages**, and the
+first-run screen asks where your post comes from. Each country and language is a **pack**:
+another country's reference numbers and address area, or another language's words, are
+added as a pack. Still to come: the bank barcode as a pack, and a Netherlands pack. If you would like
 your country supported, open an issue with a few example bills and letters (with personal
 details removed), or see [Contributing](CONTRIBUTING.md).
 
