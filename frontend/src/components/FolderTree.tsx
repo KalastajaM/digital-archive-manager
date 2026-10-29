@@ -9,7 +9,7 @@
  * closes it (or steps out), Home and End go to the first and last, Enter opens the folder
  * in the pane. */
 import { ChevronRight, Folder, HardDrive } from "lucide-react";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { type DirEntry, useBrowse } from "../api/client";
 import { type BrowseDrag, readBrowseDrag, useDropTarget } from "../dnd";
 import { visible } from "../text";
@@ -143,10 +143,13 @@ export function FolderTree({
   marks,
   onOpen,
   dropFor,
+  head,
 }: {
   marks: TreeMark[];
   onOpen: (entry: DirEntry) => void;
   dropFor: (path: string) => TreeDrop;
+  /** Shown above the tree (Browse's Folders | Collections | Tags switch). */
+  head?: ReactNode;
 }) {
   const roots = useBrowse("");
   const [open, setOpen] = useState<Set<string>>(() => new Set(marks.flatMap((m) => ancestorsOf(m.path))));
@@ -188,6 +191,7 @@ export function FolderTree({
   const shared: Shared = { marks, open, toggle, focusPath, setFocusPath: setFocused, onOpen, dropFor };
   return (
     <nav className="tree" aria-label="Folders">
+      {head}
       {roots.isPending ? (
         <p className="tree-note">Loading…</p>
       ) : roots.isError ? (
