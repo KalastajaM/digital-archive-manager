@@ -14,7 +14,7 @@ def test_a_fresh_archive_reads_for_finland(app):
     assert got["chosen"] is False
     (fi,) = [x for x in got["countries"] if x["code"] == "fi"]
     assert fi["enabled"] and fi["name"] == "Finland"
-    assert fi["adds"] == ["Payment reference (viitenumero)", "Address area of letters (SFS 2487)"]
+    assert fi["adds"] == ["Payment reference (viitenumero)", "Finland example rules"]
     langs = {x["code"]: x for x in got["languages"]}
     assert [x["code"] for x in got["languages"] if x["enabled"]] == ["fi", "sv", "en"]
     assert langs["en"]["always"] and not langs["fi"]["always"]

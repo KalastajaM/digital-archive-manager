@@ -8,7 +8,7 @@ const finland = {
   code: "fi",
   name: "Finland",
   enabled: true,
-  adds: ["Payment reference (viitenumero)", "Address area of letters (SFS 2487)"],
+  adds: ["Payment reference (viitenumero)", "Finland example rules"],
   languages: ["fi", "sv"],
 };
 const langs = [
@@ -27,7 +27,7 @@ describe("CountriesSettings", () => {
     const finlandBox = await screen.findByRole("checkbox", { name: /Finland/ });
     expect(finlandBox).toBeChecked();
     expect(screen.getByText("Payment reference (viitenumero)")).toBeInTheDocument();
-    expect(screen.getByText("Address area of letters (SFS 2487)")).toBeInTheDocument();
+    expect(screen.getByText("Finland example rules")).toBeInTheDocument();
     const english = screen.getByRole("checkbox", { name: /English/ });
     expect(english).toBeChecked();
     expect(english).toBeDisabled();

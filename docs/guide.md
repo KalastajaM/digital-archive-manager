@@ -1557,7 +1557,7 @@ each area, grouped by what it applies to; one section shows at a time.
     [Reading page 1](#reading-page-1).
   - **Countries and languages**: the countries your post comes from and the languages it
     is written in. A country adds what is particular to it (for Finland: the viitenumero
-    and where the address sits on a Finnish letter); a language adds the words for due
+    and the Finland example rules); a language adds the words for due
     dates and totals, the month names and the stopwords of Ask. English is always on.
     Without a country dam still reads RF references, IBANs of any SEPA country, dates and
     amounts. **Save countries and languages** applies them at once. The first-run screen

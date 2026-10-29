@@ -32,9 +32,6 @@ const joinPath = (base: string, name: string) => `${base.replace(/[\\/]+$/, "")}
  * dam will make), use it as it is, or use it as it is and also add a layout to it. */
 type Choice = "new" | "asis" | "add";
 
-/** What the first screen shows while no archive folder is chosen yet: what dam does, the
- * safety promise, and the choice of the folder. Nothing is created or changed until the
- * user presses the button. */
 /** Where the post probably comes from: Finland when the browser lists Finnish or a Finnish
  * locale, or the clock is on Helsinki time (many in Finland use an English browser). */
 export function guessCountries(languages: readonly string[], timeZone: string): string[] {
@@ -43,8 +40,11 @@ export function guessCountries(languages: readonly string[], timeZone: string): 
 }
 
 const browserGuess = () =>
-  guessCountries(navigator.languages ?? [navigator.language], Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
+  guessCountries(navigator.languages?.length ? navigator.languages : [navigator.language], Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
 
+/** What the first screen shows while no archive folder is chosen yet: what dam does, the
+ * safety promise, and the choice of the folder. Nothing is created or changed until the
+ * user presses the button. */
 export default function FirstRun() {
   const client = useQueryClient();
   const archives = useArchives();
@@ -317,8 +317,8 @@ export default function FirstRun() {
             Another country
           </label>
           <p className="first-run-hint">
-            It decides which reference numbers and address area dam reads from bills and letters. You can change it later in
-            Settings, Countries and languages.
+            It decides which payment reference numbers dam reads from bills, and the example rules it offers. You can
+            change it later in Settings, Countries and languages.
           </p>
         </fieldset>
 

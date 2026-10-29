@@ -12,7 +12,8 @@ All notable changes are listed here. The format follows
   This archive: the countries your post comes from and the languages it is written in, each
   listed with what it adds, English always on. The first-run screen asks once where your post
   comes from (Finland or another country). Without Finland, dam no longer looks for the
-  viitenumero or offers the Finland example rules; RF references, IBANs, dates and amounts are
+  viitenumero, and a rules file it writes later has no Finland examples (yours stay as they
+  are); RF references, IBANs, dates and amounts are
   still read. An archive that never chose reads as Finland, as before.
 - **More of a bill is read.** IBANs of any SEPA country (each checked against its country's
   length), amounts written `€ 1.234,56`, and dates written `15-10-2026`, `15/10/2026`,
