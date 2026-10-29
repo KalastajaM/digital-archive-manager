@@ -138,8 +138,9 @@ def _member_cond(engine: Engine, w: _Where, collection_ids: list[int]) -> str:
 
 
 def _collection_ids(engine: Engine, value: str) -> list[int]:
-    """The ordinary collection called ``value`` (case ignored) and every collection below it."""
-    want = nfc(value).strip().casefold()
+    """The ordinary collection called ``value`` (case ignored) and every collection below it.
+    Quote marks are ignored on both sides: a filter value cannot carry one, and a name may."""
+    want = nfc(value).strip().casefold().replace('"', "")
     with engine.connect() as conn:
         rows = conn.execute(
             select(
@@ -153,7 +154,7 @@ def _collection_ids(engine: Engine, value: str) -> list[int]:
     for r in rows:
         if r.parent_id is not None:
             children.setdefault(r.parent_id, []).append(r.id)
-    todo = [r.id for r in rows if r.kind is None and r.name_fold == want]
+    todo = [r.id for r in rows if r.kind is None and r.name_fold.replace('"', "") == want]
     found: list[int] = []
     while todo:
         cid = todo.pop()

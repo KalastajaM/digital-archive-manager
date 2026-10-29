@@ -20,15 +20,13 @@ import {
   Sun,
   Tag as TagIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   archiveKey,
   type CollectionRow,
-  errorText,
   type TrayDef,
   useBuiltin,
-  useCollectionMembers,
   useAllTags,
   useCollections,
   useSidebarTags,
@@ -48,16 +46,14 @@ import {
   useDropTarget,
 } from "../../dnd";
 import { useStyle } from "../../appearance";
-import { plural } from "../../format";
 import { visible } from "../../text";
-import { changeToast } from "../collectionText";
 import { ArchiveSwitcher } from "../ArchiveSwitcher";
 import { ImportantGlyph, StarGlyph } from "../MarkIcons";
 import {
   childrenOf,
 } from "../collectionTree";
 import { anyMoveRunning, backToInbox, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../MoveTo";
-import { useBlockToastActions, useToast } from "../Toasts";
+import { useBlockToastActions } from "../Toasts";
 import {
   type CollectionOrder,
   orderKeys,
@@ -67,6 +63,7 @@ import {
   useReorderRow,
 } from "../useCollectionOrder";
 import { useUndoConfirm } from "../UndoConfirm";
+import { useAddToCollection } from "../useAddToCollection";
 import { useQuickPut } from "../useQuickPut";
 import { searchKeyLabel } from "../../searchKey";
 import { positiveTags, readQuery, tagFilter } from "../../searchFilters";
@@ -222,38 +219,6 @@ function DropRow({ accept, onDrop, ...row }: DropProps) {
 }
 
 /** What a drop names in its toast: the file for one (when the drag says), else a count. */
-const dropped = (ids: string[]) => {
-  const label = ids.length === 1 ? draggedLabel() : null;
-  return label !== null ? visible(label) : plural(ids.length, "file");
-};
-
-/** Dropping documents on a collection adds them as members, ungrouped. No confirm: a
- * member change moves no file (the Phase 2 ruling); the toast says what Ongoing did. */
-function useAddToCollection() {
-  const members = useCollectionMembers();
-  const toast = useToast();
-  const adding = useRef(new Set<number>()); // synchronous: a second drop sees it at once
-  const accept = (c: CollectionRow) => (ids: string[]) => {
-    const name = visible(c.name);
-    if (c.state === "closed") return `${name} is closed: reopen it to add files`;
-    const have = new Set(c.members.map((m) => m.drive_id));
-    if (ids.every((id) => have.has(id))) return `Already in ${name}`;
-    return true;
-  };
-  const add = (c: CollectionRow) => (ids: string[]) => {
-    if (adding.current.has(c.id)) return;
-    adding.current.add(c.id);
-    const what = dropped(ids);
-    const name = visible(c.name);
-    members
-      .mutateAsync({ id: c.id, add: ids })
-      .then((result) => toast(changeToast(`Added ${what} to ${name}`, result)))
-      .catch((err) => toast({ kind: "error", text: `Could not add ${what} to ${name}: ${visible(errorText(err))}` }))
-      .finally(() => adding.current.delete(c.id));
-  };
-  return { accept, add };
-}
-
 /** Dropping documents on the Inbox moves them back into the inbox folder: the move
  * flow previews, always confirms and offers Undo. Files already there (or in an area
  * that keeps its files) are refused before the drop when the drag says where they are. */
