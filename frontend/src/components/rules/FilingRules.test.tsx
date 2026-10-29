@@ -28,6 +28,7 @@ const PEOPLE = {
   people: [{ name: "Tiina", match: ["Tiina Visser", "T. Visser"] }],
   address_zone: [0.06, 0.1, 0.52, 0.3],
   default_address_zone: [0.05, 0.12, 0.5, 0.28],
+  address_zone_set: true,
 };
 const ENTRY = (id: string, name: string) => ({ record: { drive_id: id, path: `##. Organize/${name}`, name, ext: "pdf" } });
 
@@ -257,43 +258,38 @@ describe("FilingRules", () => {
       const people = await screen.findByRole("region", { name: "People" });
       expect(await within(people).findByLabelText("Name")).toHaveValue("Tiina");
       expect(within(people).getByLabelText(/Found in the address area as/)).toHaveValue("Tiina Visser\nT. Visser");
-      expect(within(people).getByLabelText("Left")).toHaveValue(6);
       await user.click(within(people).getByRole("button", { name: "Add a person" }));
       const names = within(people).getAllByLabelText("Name");
       await user.type(names[1], "Michiel");
       await user.type(within(people).getAllByLabelText(/Found in the address area as/)[1], "Michiel Visser");
-      await user.clear(within(people).getByLabelText("Right"));
-      await user.type(within(people).getByLabelText("Right"), "60");
-      await user.click(within(people).getByRole("button", { name: "Save people and address area" }));
+      await user.click(within(people).getByRole("button", { name: "Save people" }));
       await waitFor(() => expect(ofMethod(calls, "PUT", "/api/settings/people")).toHaveLength(1));
       expect(ofMethod(calls, "PUT", "/api/settings/people")[0].body).toEqual({
         people: [
           { name: "Tiina", match: ["Tiina Visser", "T. Visser"] },
           { name: "Michiel", match: ["Michiel Visser"] },
         ],
-        address_zone: [0.06, 0.1, 0.6, 0.3],
       });
       expect(await within(people).findByText("Saved.")).toBeInTheDocument();
     });
 
-    it("removes a person, resets the address area to the default, and says how to draw it", async () => {
+    it("removes a person and leaves the address area alone", async () => {
       const { calls, user } = setup(DATA(), { "PUT /api/settings/people": { body: PEOPLE } });
       const people = await screen.findByRole("region", { name: "People" });
       await within(people).findByLabelText("Name");
-      expect(within(people).getByText("Draw it on a letter with Draw a box → Address area for all letters.")).toBeInTheDocument();
-      await user.click(within(people).getByRole("button", { name: "Reset to default" }));
-      expect(within(people).getByLabelText("Left")).toHaveValue(5);
+      expect(within(people).getByText(/is in Settings, Reading documents/)).toBeInTheDocument();
+      expect(within(people).queryByLabelText("Left")).toBeNull();
       await user.click(within(people).getByRole("button", { name: "Remove Tiina" }));
-      await user.click(within(people).getByRole("button", { name: "Save people and address area" }));
+      await user.click(within(people).getByRole("button", { name: "Save people" }));
       await waitFor(() => expect(ofMethod(calls, "PUT", "/api/settings/people")).toHaveLength(1));
-      expect(ofMethod(calls, "PUT", "/api/settings/people")[0].body).toEqual({ people: [], address_zone: [0.05, 0.12, 0.5, 0.28] });
+      expect(ofMethod(calls, "PUT", "/api/settings/people")[0].body).toEqual({ people: [] });
     });
 
     it("shows the server's message when the list is refused", async () => {
       const { user } = setup(DATA(), { "PUT /api/settings/people": { status: 400, body: { error: "Two people are called Tiina." } } });
       const people = await screen.findByRole("region", { name: "People" });
       await within(people).findByLabelText("Name");
-      await user.click(within(people).getByRole("button", { name: "Save people and address area" }));
+      await user.click(within(people).getByRole("button", { name: "Save people" }));
       expect(await within(people).findByText("Two people are called Tiina.")).toBeInTheDocument();
       expect(within(people).queryByText("Saved.")).toBeNull();
     });

@@ -124,6 +124,15 @@ def test_collection_and_nested_collections(archive):
     assert "sale1" not in ids(archive, '-collection:"House sale" type:pdf')
 
 
+def test_collection_filter_matches_a_name_with_quotes(archive):
+    """A filter value cannot carry a quote mark, so the name is matched without them:
+    picking such a collection in Browse's tree still lists its files."""
+    move = archive.collections.create('The "big" move')
+    archive.collections.add_members(move.id, ["sale1"])
+    assert ids(archive, 'collection:"The big move"') == ["sale1"]
+    assert ids(archive, 'collection:"The big"') == []
+
+
 def test_collection_with_a_member_folder_includes_what_is_inside(archive):
     folder = archive.repo.by_path(f"{MEDICAL}/Hospital")
     col = archive.collections.create("Hospital stuff")

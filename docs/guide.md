@@ -634,6 +634,17 @@ all. The panel offers:
   somewhere unusual; shown when one box is drawn and a rule made the current suggestion.
 - **Address area for all letters**: where dam looks for who a letter is for; shown when
   one box is drawn.
+- **Address area for this document only** (New look): the box becomes this document's own
+  address area, used for it instead of the one for all letters and a rule's. Shown when
+  one box is drawn.
+
+In the New look, while Draw a box is on and you have people listed, a line under the hint
+says which address area this document uses: the usual one, its own, or none. **No address
+area on this document** stops dam looking for a person on it (useful for a letter whose
+page 1 is not addressed to anyone); **Use the usual address area** gives it back. When you
+move or resize the drawn address area on a document, dam asks whether the new place is
+for **This document only** or for **All letters**. All letters leaves the documents that
+have an area of their own as they are, except the one you moved it on.
 
 **How the words of an area match.** Each area with words has a choice, **Words match**:
 
@@ -783,7 +794,20 @@ never in the rest of the text, and allows one misread letter in a name of eight 
 letters. Use `{person}` in a rule's folder or name to file per person, such as
 `Insurance/Pohjola/{person}`. When nobody is found the rule gives no folder; a letter to
 two people asks **For whom?**. The address area starts at the usual place of the address
-on a Finnish business letter; change it there or with Draw a box.
+for the first country in Settings, Reading documents (for Finland the business letter
+standard, for the Netherlands an estimate); change it there, under **Address area**, or
+with Draw a box. **Reset to default** there makes it follow the countries again. One
+document can have an area of its own, or none (see Draw a box above).
+
+To set the area from a letter that is not in the archive (New look), click **Choose a
+sample letter…** under Address area and pick a PDF, JPG or PNG on your computer. Page 1
+shows with the area in use now as a dashed box. Drag a box around the address: the lines
+of the letter that fall in it are listed (when the letter has text, or a scan can be
+read), and **Use for all letters** saves the box as the address area, replacing the one
+you set before. Drawing again replaces the box, Esc drops it, and **Close** leaves the
+area as it was. The letter is only read to show page 1: it is never added to the archive
+or the index, and dam removes its temporary copy straight away. Documents with an address
+area of their own keep it.
 
 The rule sheet's **For** row says who the address area found on the document the rule was
 made from ("Tiina, found in the address area", "Nobody found", "Tiina and Michiel found",
@@ -815,7 +839,8 @@ IDs. For Finland that is the Y-tunnus: most letters from a company print it, oft
 same line as the company's name. dam reads the name printed next to each Y-tunnus (it ends
 in a legal form such as Oy, Oyj, Ab, Abp, Ky, Ay, ry or osk, or starts with Tmi or Asunto
 Oy) and lists every Y-tunnus found on two or more documents, the most documents first, with
-the name read most often already in the name field.
+the name read most often already in the name field. The number of documents is a link:
+it opens Browse on them (an `id:` search, such as `id:0112038-9`).
 
 - **Confirm** keeps the name and makes it **From** on every document that carries the
   Y-tunnus. Documents read later get it too. A toast says how many documents changed, with
@@ -1016,7 +1041,8 @@ with **New group** in its heading, and the note beside the checklist. **Add file
 file of the archive and puts it in the collection. The selected file's panel has the file
 actions (listed below) as one row of icons under its name instead of in the header, with
 **Show in folder** (the file's folder in Browse) and **Remove from collection** among them. To
-see a collection's files across folders in Browse, search for `collection:"House sale"`.
+see a collection's files across folders in Browse, choose **Collections** at the top of Browse's
+folder tree and click the collection (see Browse).
 
 The header has the same two parts as Browse and the trays. The left part is for the
 collection: its name and subtitle, **New group**, the folder button, **Export…** and **⋯**.
@@ -1189,6 +1215,16 @@ list's width.
   collection's page: the tray and the item's date (`To pay · 30.10.2026`), red when
   overdue, orange when due today or within 3 days, grey otherwise. Hover it for the item's
   title. The same tag shows in **Files** and in search results.
+- **Folders, Collections, Tags** at the top of the tree beside the panes (New look) choose
+  what the tree shows. **Folders** is the folder tree. **Collections** lists Important and
+  Starred, then the open collections as they nest. **Tags** lists the tags by group, as on
+  the Tags screen, each with its number of files, under a box that narrows the list as you
+  type. A click on a collection or tag lists its files from the whole archive: it is a
+  search, shown as its chip (`collection:Car`, `tag:medical`), and a collection includes the
+  collections inside it. A second click replaces the first; Cmd-click (Ctrl-click) on a tag
+  adds it, and the chips' **All** / **Any** choose between both tags and either. Files
+  dropped on a collection in the tree are added to it, as in the sidebar. The choice of tree
+  is kept in the address, so Back and a copied link keep it.
 - **Folders / Files** switches between the folder view and a flat list of every file below
   the current folder, with sortable Name, Folder, Date and Size columns (up to 500 rows). A
   collection's files are a search: `collection:"House sale"`.
@@ -1592,7 +1628,7 @@ each area, grouped by what it applies to; one section shows at a time.
     [QR stickers](#qr-stickers).
   - **Filing rules**: every rule in the order it applies, with its record; edit, test,
     delete or add rules, test a document from the inbox, and switch the offer to make a
-    rule on or off. The **People** list and the address area are here too. See
+    rule on or off. The **People** list is here too. See
     [Filing rules](#filing-rules).
   - **Archive folders**: the main folder and any extra folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
@@ -1607,12 +1643,18 @@ each area, grouped by what it applies to; one section shows at a time.
     background from the text it already has; no file is opened again).
   - **Reading documents**: where your post comes from and the languages your documents
     are written in (not the language of dam itself, which is English). A country adds what is particular to it (for Finland: the viitenumero
-    and the Finland example rules); a language adds the words for due
+    and the Finland example rules; for the Netherlands: the betalingskenmerk, the
+    KvK-nummer, btw-id and RSIN, the address area of a Dutch letter when Finland is off,
+    and the Netherlands example rules). Turning a country on also ticks its languages. A
+    language adds the words for due
     dates and totals, the month names and the stopwords of Ask. English is always on.
     Without a country dam still reads RF references, IBANs of any SEPA country, dates and
     amounts. **Save countries and languages** applies them at once. The first-run screen
-    asks the same question once (**Your post comes from**), guessed from your browser and
-    time zone.
+    asks the same question once (**Your post comes from**: Finland, the Netherlands or
+    another country), guessed from your browser and time zone. Below it, **Address area**
+    is where dam looks for the person a letter is for: four sides in percent of page 1,
+    **Reset to default** (follow the countries) and **Save address area**. It says whether
+    the area follows the countries or was set by you.
   - **Senders** (New look): a company name for each business ID found on two or more
     documents, which then becomes From on them. See [Senders](#senders).
   - **Snapshots**: take a snapshot of this archive's database and settings, export or
@@ -1980,7 +2022,10 @@ The full details are in [Safety model in detail](reference.md#safety-model-in-de
 
 - Apple Vision OCR (macOS) does not read Finnish, so scanned Finnish text is recognized
   poorly; PDFs with a text layer are unaffected. Tesseract, used on Windows and Linux,
-  does read Finnish.
+  does read Finnish. For Dutch scans add `nl-NL` to `ocr_languages`: Apple Vision on
+  recent macOS reads Dutch, and Tesseract reads it with its `nld` language data.
+- The Netherlands pack's label words (vervaldatum, totaal te betalen and so on) and its
+  address area are estimates, not yet checked on real Dutch letters and bills.
 - Previews show no page count.
 - No phone or tablet layout: narrow windows stack the columns, but the app is made for a
   desktop window. Pay mode covers paying from your phone.

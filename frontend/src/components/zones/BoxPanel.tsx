@@ -17,6 +17,7 @@ import {
   useDraftZone,
   usePeople,
   useSavePeople,
+  useSetAddressArea,
   useSaveRule,
   type ZoneDraft,
 } from "../../api/client";
@@ -77,6 +78,7 @@ export function BoxPanel({
   const isNew = look === "new";
   const people = usePeople();
   const savePeople = useSavePeople();
+  const setArea = useSetAddressArea();
   const saveRule = useSaveRule();
   const draftZone = useDraftZone();
   const [draft, setDraft] = useState<ZoneDraft | null>(null);
@@ -234,6 +236,17 @@ export function BoxPanel({
             }
           >
             Address area for this rule's letters
+          </button>
+        )}
+        {only && isNew && (
+          <button
+            type="button"
+            disabled={setArea.isPending}
+            onClick={() =>
+              void run(() => setArea.mutateAsync({ driveId, box: only.box }), "Address area saved for this document.")
+            }
+          >
+            Address area for this document only
           </button>
         )}
         {only && (

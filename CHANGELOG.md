@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- In Settings, Senders, the number of documents is a link that opens Browse on the
+  documents carrying that business ID.
+- **Collections and tags in Browse.** The tree beside Browse's panes switches between
+  Folders, Collections and Tags. A click on a collection or tag lists its files from the
+  whole archive, as a search with its chip; the tag list has a box that narrows it.
+- **`collection:`** finds a collection whose name has a quote mark in it.
 - **Due dates in Browse.** A file with an open tray item shows the tray and its date on
   its row, in the folder view, Files and search results, coloured by urgency as on a
   collection's page.
@@ -21,6 +27,24 @@ All notable changes are listed here. The format follows
   find files with any tag, collection, sender, person or open tray item, and with a `-` the
   files without: `-tag:*` lists what still needs tagging, `id:* -from:*` what has a business
   ID but no sender yet.
+- A Netherlands country pack: the betalingskenmerk, the btw-id, the KvK-nummer (near its
+  label) and the RSIN (right after its label), the address area of a Dutch letter, and
+  commented Netherlands example rules with a layout. A nine-digit number without the RSIN
+  label is never read, so a BSN is not stored. The label words and the address area are
+  estimates to be checked on real Dutch post.
+- A Dutch language pack: due-date and total labels, month names, stopwords and
+  document-kind words. Tesseract reads Dutch as `nld`.
+- First run offers the Netherlands next to Finland, guessed from a Dutch browser language
+  or the Amsterdam time zone.
+- One document can have its own address area, or none: in the New look, Draw a box
+  offers **Address area for this document only**, **No address area on this document**
+  and **Use the usual address area**, and moving the drawn address area asks whether it
+  is for this document only or for all letters.
+- **The address area from a sample letter.** In the New look, Settings, Reading documents
+  has **Choose a sample letter…** under Address area: pick a PDF, JPG or PNG on your
+  computer, drag a box around the address on page 1, see which lines of the letter fall in
+  it, and **Use for all letters**. The letter is read in a temporary file and removed; it is
+  never added to the archive or the index. Documents with their own address area keep it.
 
 ### Changed
 
@@ -31,11 +55,21 @@ All notable changes are listed here. The format follows
   says in how many files business IDs, IBANs and domains were found, and Page 1 on how many
   pages it found text; a turning circle shows an index that is still reading, a check one
   that is done.
+- The address area setting moved from Filing rules to Settings, Reading documents. It
+  says whether it follows the countries or was set by you, and **Reset to default** makes
+  it follow the countries again.
+- Turning a country on in Reading documents also turns on its languages.
+- Every document's business IDs are read once more from its stored text, since the
+  Netherlands pack is new.
 
 ### Fixed
 
+- In Reading documents, **Reset to default** lines up with the address area fields and
+  **Save address area** sits on the left.
 - **Relatives no longer runs into the identifiers above it.** In the file panel a hairline
   and a little space now separate what the document mentions from its Relatives.
+- Saving the People list no longer pins the address area: it is sent only when it
+  changed, so it keeps following the countries.
 
 ## [0.9.0] - 2026-10-29
 

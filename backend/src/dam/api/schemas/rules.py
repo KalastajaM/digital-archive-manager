@@ -17,7 +17,8 @@ class AreaOut(BaseModel):
     ``zones``. ``lines`` are the boxes of the lines that matched in it (for an address area,
     the line where the person was found). ``matched`` is whether the rule matched the
     document, ``reason`` why this area or the rule did not, ``wins`` whether the rule gave
-    the folder or name, and ``score`` how well a picture matched (0 to 1)."""
+    the folder or name, ``score`` how well a picture matched (0 to 1), and ``document``
+    whether the address area is one the owner drew for this document only."""
 
     rule_id: str
     index: int
@@ -28,6 +29,7 @@ class AreaOut(BaseModel):
     matched: bool = True
     reason: str | None = None
     wins: bool = False
+    document: bool = False
 
 
 class DraftWordOut(BaseModel):
@@ -376,6 +378,21 @@ class AreaPictureOut(BaseModel):
 
 class Page1BoxIn(StrictIn):
     box: list[float] = Field(min_length=4, max_length=4)
+
+
+class AddressAreaIn(StrictIn):
+    """The address area of one document: a box (x0, y0, x1, y1 of page 1), or null for
+    none (nobody is looked for on it)."""
+
+    box: list[float] | None = Field(min_length=4, max_length=4)
+
+
+class AddressAreaOut(BaseModel):
+    """``state``: "general" (the archive's area, or a rule's, applies), "document" (the
+    owner drew one for this document: ``box``) or "none" (nobody is looked for on it)."""
+
+    state: Literal["general", "document", "none"]
+    box: list[float] | None = None
 
 
 class ZoneDraftIn(StrictIn):

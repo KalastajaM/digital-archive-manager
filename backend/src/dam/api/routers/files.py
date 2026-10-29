@@ -11,10 +11,13 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 
 from dam import packs
+from dam.address_areas import NONE
 from dam.api import preview
 from dam.api.deps import AppDep, live_record, require_editable
 from dam.api.marks import with_record_marks
 from dam.api.schemas import (
+    AddressAreaIn,
+    AddressAreaOut,
     ErrorBody,
     FileDetailOut,
     FileSuggestionsOut,
@@ -107,6 +110,45 @@ def page1_lines(app: AppDep, drive_id: str, body: Page1BoxIn) -> dict:
     except ValueError as e:
         raise InvalidRequest(str(e)) from e
     return _page1(app, drive_id, body.box)
+
+
+def _address_area(app: App, drive_id: str) -> dict:
+    zone = app.address_areas.of(drive_id)
+    if zone is None:
+        return {"state": "general", "box": None}
+    if zone == NONE:
+        return {"state": "none", "box": None}
+    return {"state": "document", "box": list(zone)}
+
+
+@router.get("/{drive_id}/address-area", response_model=AddressAreaOut)
+def address_area(app: AppDep, drive_id: str) -> dict:
+    """Where people are looked for on this document: the general area, its own, or none."""
+    live_record(app, drive_id)
+    return _address_area(app, drive_id)
+
+
+@router.put("/{drive_id}/address-area", response_model=AddressAreaOut)
+def put_address_area(app: AppDep, drive_id: str, body: AddressAreaIn) -> dict:
+    """Give this document its own address area, used instead of the archive's and a
+    rule's; a null box: none, nobody is looked for on it. 400 for a box that is not one."""
+    live_record(app, drive_id)
+    if body.box is None:
+        app.address_areas.set(drive_id, NONE)
+    else:
+        try:
+            app.address_areas.set(drive_id, check_box(body.box))
+        except ValueError as e:
+            raise InvalidRequest(str(e)) from e
+    return _address_area(app, drive_id)
+
+
+@router.delete("/{drive_id}/address-area", response_model=AddressAreaOut)
+def delete_address_area(app: AppDep, drive_id: str) -> dict:
+    """The general address area applies to this document again."""
+    live_record(app, drive_id)
+    app.address_areas.clear(drive_id)
+    return _address_area(app, drive_id)
 
 
 @router.get("/{drive_id}", response_model=FileDetailOut)

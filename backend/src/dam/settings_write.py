@@ -11,6 +11,9 @@ import yaml
 from dam.codes.configfile import write_config_file
 from dam.config import AppPaths, Settings, load_settings
 
+# a value in ``with_keys`` updates that takes the key out of the file
+REMOVE = object()
+
 _TOP_LEVEL = re.compile(r"^(?P<key>[A-Za-z_][\w-]*)[ \t]*:")
 
 
@@ -34,11 +37,11 @@ def _lines_for(key: str, value: object) -> list[str]:
 def with_keys(text: str, updates: dict[str, object]) -> str:
     """``text`` (a settings file, ``\\n`` newlines) with each top-level key of ``updates``
     set to its value. A key that is there is replaced in place (its block of indented
-    lines, or unindented list items, goes); a new one is added at the end. Comments and the
-    other keys stay."""
+    lines, or unindented list items, goes); a new one is added at the end. ``REMOVE`` as
+    the value takes the key and its block out. Comments and the other keys stay."""
     lines = text.split("\n")
     for key, value in updates.items():
-        new = _lines_for(key, value)
+        new = [] if value is REMOVE else _lines_for(key, value)
         start = next(
             (
                 i
@@ -48,6 +51,8 @@ def with_keys(text: str, updates: dict[str, object]) -> str:
             None,
         )
         if start is None:
+            if value is REMOVE:
+                continue
             while lines and not lines[-1].strip():
                 lines.pop()
             lines.extend(new)

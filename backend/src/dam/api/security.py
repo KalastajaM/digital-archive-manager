@@ -11,8 +11,9 @@ the user's browser must not be able to read or change anything:
   of these, so a form POST from another site is refused; non-browser clients (curl)
   must send ``Origin`` themselves to mutate. GETs without these headers are allowed.
 * A POST must be ``Content-Type: application/json``, which a plain cross-site form can
-  never send. The exceptions are the file uploads (``POST /api/inbox/upload`` and
-  ``POST /api/snapshots/import``, body ``application/octet-stream``): a type a plain form
+  never send. The exceptions are the file uploads (``POST /api/inbox/upload``,
+  ``POST /api/snapshots/import`` and ``POST /api/settings/address-area/sample``, body
+  ``application/octet-stream``): a type a plain form
   cannot send either, and they pass the same host and origin checks as every other
   mutating request.
 
@@ -48,7 +49,9 @@ Send = Callable[[dict], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 SAFE_METHODS = frozenset({"GET", "HEAD"})
-UPLOAD_PATHS = frozenset({"/api/inbox/upload", "/api/snapshots/import"})
+UPLOAD_PATHS = frozenset(
+    {"/api/inbox/upload", "/api/snapshots/import", "/api/settings/address-area/sample"}
+)
 LOCAL_FETCH_SITES = frozenset({"same-origin", "none"})
 DEV_ORIGIN_ENV = "DAM_DEV_ORIGIN"
 _DEV_ORIGIN = re.compile(r"http://(localhost|127\.0\.0\.1):[0-9]{1,5}")

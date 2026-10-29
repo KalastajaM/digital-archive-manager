@@ -4,7 +4,7 @@ import type { Area } from "../../api/client";
 import { AreaLayer, changedBox } from "./AreaLayer";
 
 const area = (over: Partial<Area> = {}): Area => ({
-  rule_id: "pohjola", index: 0, box: [0.1, 0.1, 0.5, 0.3], kind: "text", lines: [], score: null, matched: true, reason: null, wins: true, ...over,
+  rule_id: "pohjola", index: 0, box: [0.1, 0.1, 0.5, 0.3], kind: "text", lines: [], score: null, matched: true, reason: null, wins: true, document: false, ...over,
 });
 
 /** A 200 x 400 page with the areas drawn on it. */

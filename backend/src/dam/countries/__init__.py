@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from dam.countries.core import CORE, find_ibans
 from dam.countries.fi import FINLAND
 from dam.countries.model import CountryPack, Finder, IdentifierSpec, ReferenceSpec
+from dam.countries.nl import NETHERLANDS
 
 __all__ = [
     "ALL",
@@ -22,7 +23,7 @@ __all__ = [
     "signature",
 ]
 
-PACKS: dict[str, CountryPack] = {FINLAND.code: FINLAND}
+PACKS: dict[str, CountryPack] = {p.code: p for p in (FINLAND, NETHERLANDS)}
 ALL: tuple[CountryPack, ...] = (CORE, *PACKS.values())  # every pack, the core first
 DEFAULT_COUNTRIES: tuple[str, ...] = ("fi",)
 

@@ -1,18 +1,13 @@
 /** Settings → Filing rules: the people a letter can be for (name and the texts that
- * identify them in the address area), the address area itself, and how far page 1 has
- * been read (with the switch for reading older documents in the background). */
+ * identify them in the address area), and how far page 1 has been read (with the switch
+ * for reading older documents in the background). The address area itself is in Reading
+ * documents (``AddressAreaSettings``). */
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
-import { errorText, type PageBox, type Person, usePage1Backfill, usePeople, useSavePeople, useStatus } from "../../api/client";
+import { errorText, type Person, usePage1Backfill, usePeople, useSavePeople, useStatus } from "../../api/client";
 import { groupDigits } from "../../format";
 import { visible } from "../../text";
 import { IconButton } from "../ui/IconButton";
-
-const SIDES = ["Left", "Top", "Right", "Bottom"] as const;
-
-/** A fraction of the page as the percent shown (one decimal at most), and back. */
-const toPercent = (f: number) => String(Math.round(f * 1000) / 10);
-const fromPercent = (text: string) => Number.parseFloat(text.replace(",", ".")) / 100;
 
 /** One person as edited: the match texts are one per line. */
 type Row = { name: string; match: string };
@@ -25,36 +20,25 @@ function People() {
   const people = usePeople();
   const save = useSavePeople();
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [zone, setZone] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   // what the form starts from: the saved list, once it has loaded
   useEffect(() => {
     if (!people.data || rows !== null) return;
     setRows(toRows(people.data.people));
-    setZone(people.data.address_zone.map(toPercent));
   }, [people.data, rows]);
 
   if (people.isError) return <p className="error" role="alert">{visible(errorText(people.error))}</p>;
-  if (!people.data || rows === null || zone === null) return <p className="hint">Loading…</p>;
+  if (!people.data || rows === null) return <p className="hint">Loading…</p>;
   const edit = (i: number, change: Partial<Row>) => {
     setSaved(false);
     setRows((all) => (all ?? []).map((r, at) => (at === i ? { ...r, ...change } : r)));
   };
-  const editZone = (i: number, value: string) => {
-    setSaved(false);
-    setZone((all) => (all ?? []).map((z, at) => (at === i ? value : z)));
-  };
   const submit = async () => {
     setError(null);
     setSaved(false);
-    const numbers = zone.map(fromPercent);
-    if (numbers.some((n) => !Number.isFinite(n))) {
-      setError("The address area needs four numbers.");
-      return;
-    }
     try {
-      await save.mutateAsync({ people: toPeople(rows), address_zone: numbers as PageBox });
+      await save.mutateAsync({ people: toPeople(rows) }); // the address area stays as it is
       setSaved(true);
     } catch (e) {
       setError(errorText(e));
@@ -111,38 +95,11 @@ function People() {
       >
         <Plus size={14} aria-hidden="true" /> Add a person
       </button>
-      <div className="field address-zone" role="group" aria-label="Address area">
-        <span className="field-label">Address area (percent of page 1)</span>
-        <div className="address-zone-row">
-          {SIDES.map((side, i) => (
-            <label key={side}>
-              {side}
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.5}
-                value={zone[i]}
-                onChange={(e) => editZone(i, e.target.value)}
-              />
-            </label>
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              setSaved(false);
-              setZone(people.data.default_address_zone.map(toPercent));
-            }}
-          >
-            Reset to default
-          </button>
-        </div>
-        <p className="hint">Draw it on a letter with Draw a box → Address area for all letters.</p>
-      </div>
+      <p className="hint">The address area, where the names are looked for, is in Settings, Reading documents.</p>
       {error && <p className="error" role="alert">{visible(error)}</p>}
       <div className="actions">
         <button type="button" className="primary" disabled={save.isPending} onClick={() => void submit()}>
-          Save people and address area
+          Save people
         </button>
         {saved && <span className="hint" role="status">Saved.</span>}
       </div>

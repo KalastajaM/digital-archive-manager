@@ -13,6 +13,7 @@ from dam.api import create_api
 from dam.db.tables import (
     checklist_items,
     collection_members,
+    file_address_zones,
     file_assigned_codes,
     file_assignments,
     file_fields,
@@ -177,6 +178,7 @@ def _give_everything(app, drive_id: str) -> None:
             )
         )
         conn.execute(insert(file_locks).values(drive_id=drive_id, locked_at=1.0))
+        conn.execute(insert(file_address_zones).values(drive_id=drive_id, set_at=1.0))
         conn.execute(
             insert(file_assignments).values(
                 drive_id=drive_id, sender="Pohjola", set_by="owner", set_at=1.0
@@ -211,6 +213,7 @@ _BY_FILE = {
     "codes": file_assigned_codes.c.drive_id,
     "notes": notes.c.target_id,
     "checklist": checklist_items.c.target_id,
+    "address area": file_address_zones.c.drive_id,
 }
 
 
@@ -269,6 +272,17 @@ def test_reconnect_refuses_what_does_not_hold(app, moved, fake_archive):
     with pytest.raises(InvalidRequest, match="of its own"):
         app.maintenance.reconnect([(old, new)])
     assert app.repo.get(old) is not None
+
+
+def test_reconnect_refuses_a_new_row_with_its_own_address_area(app, moved, fake_archive):
+    old, new, _ = moved
+    run(app)
+    app.address_areas.set(old, (0.1, 0.5, 0.5, 0.7))
+    app.address_areas.set(new, "none")
+    done = app.maintenance.reconnect([(old, new)])
+    assert [e for e in done.errors if "of its own" in str(e)], done.errors
+    assert app.address_areas.of(old) == (0.1, 0.5, 0.5, 0.7)
+    assert app.address_areas.of(new) == "none"
 
 
 def test_reconnect_refuses_a_file_changed_since_the_check(app, moved, fake_archive):

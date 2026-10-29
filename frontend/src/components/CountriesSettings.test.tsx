@@ -54,6 +54,22 @@ describe("CountriesSettings", () => {
     expect(await screen.findByText("Saved. dam reads your documents with these from now on.")).toBeInTheDocument();
   });
 
+  it("turns on a country's languages with it", async () => {
+    const user = userEvent.setup();
+    const netherlands = { code: "nl", name: "Netherlands", enabled: false, adds: ["Payment reference (betalingskenmerk)"], languages: ["nl"] };
+    const dutch = { code: "nl", name: "Dutch", enabled: false, always: false };
+    const calls = mockFetch({
+      "GET /api/settings/countries": { body: { ...state, countries: [finland, netherlands], languages: [...langs, dutch] } },
+      "PUT /api/settings/countries": { body: state },
+    });
+    renderWithProviders(<CountriesSettings />);
+    await user.click(await screen.findByRole("checkbox", { name: /Netherlands/ }));
+    expect(screen.getByRole("checkbox", { name: /Dutch/ })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Save countries and languages" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ countries: ["fi", "nl"], languages: ["fi", "sv", "nl", "en"] });
+  });
+
   it("shows why a save failed", async () => {
     const user = userEvent.setup();
     mockFetch({

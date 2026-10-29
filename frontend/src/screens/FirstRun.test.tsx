@@ -415,7 +415,18 @@ describe("where the post comes from", () => {
     expect(guessCountries(["en-US", "fi"], "Europe/Berlin")).toEqual(["fi"]);
     expect(guessCountries(["sv-FI"], "UTC")).toEqual(["fi"]);
     expect(guessCountries(["en-US"], "Europe/Helsinki")).toEqual(["fi"]);
-    expect(guessCountries(["en-GB", "nl"], "Europe/Amsterdam")).toEqual([]);
+    expect(guessCountries(["en-GB", "de"], "Europe/Berlin")).toEqual([]);
+  });
+
+  it("guesses the Netherlands from Dutch of the Netherlands or the Amsterdam time zone", () => {
+    expect(guessCountries(["en-GB", "nl"], "Europe/London")).toEqual(["nl"]);
+    expect(guessCountries(["nl-NL"], "UTC")).toEqual(["nl"]);
+    expect(guessCountries(["fy-NL"], "UTC")).toEqual(["nl"]);
+    expect(guessCountries(["en-US"], "Europe/Amsterdam")).toEqual(["nl"]);
+    // Dutch of Belgium is not the Netherlands
+    expect(guessCountries(["nl-BE"], "Europe/Brussels")).toEqual([]);
+    // the first language that names a country wins
+    expect(guessCountries(["nl", "fi"], "Europe/Helsinki")).toEqual(["nl"]);
   });
 
   it("sends the choice with the folder", async () => {
@@ -432,5 +443,21 @@ describe("where the post comes from", () => {
     await user.click(await useButton());
     await screen.findByRole("heading", { name: "All set" });
     expect(calls.find((c) => c.url === "/api/setup")?.body).toMatchObject({ countries: [] });
+  });
+
+  it("offers the Netherlands", async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      "GET /api/setup/candidates": { body: CANDIDATES },
+      "POST /api/setup/validate": (call) => ({ body: ok((call.body as { path: string }).path) }),
+      "POST /api/setup": { body: SAVED },
+    });
+    renderScreen();
+    await user.click(await screen.findByRole("button", { name: /^Dropbox/ }));
+    await user.click(screen.getByRole("radio", { name: "The Netherlands" }));
+    expect(await screen.findByText("This folder can be used.")).toBeInTheDocument();
+    await user.click(await useButton());
+    await screen.findByRole("heading", { name: "All set" });
+    expect(calls.find((c) => c.url === "/api/setup")?.body).toMatchObject({ countries: ["nl"] });
   });
 });

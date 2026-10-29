@@ -32,11 +32,17 @@ const joinPath = (base: string, name: string) => `${base.replace(/[\\/]+$/, "")}
  * dam will make), use it as it is, or use it as it is and also add a layout to it. */
 type Choice = "new" | "asis" | "add";
 
-/** Where the post probably comes from: Finland when the browser lists Finnish or a Finnish
- * locale, or the clock is on Helsinki time (many in Finland use an English browser). */
+/** Where the post probably comes from: the first browser language that names Finland
+ * (Finnish, or a Finnish locale) or the Netherlands (Dutch without a region, or a Dutch
+ * locale; not nl-BE), else the clock's time zone (many use an English browser). */
 export function guessCountries(languages: readonly string[], timeZone: string): string[] {
-  const finnish = languages.some((l) => /^fi\b/i.test(l) || /-FI$/i.test(l));
-  return finnish || timeZone === "Europe/Helsinki" ? ["fi"] : [];
+  for (const l of languages) {
+    if (/^fi\b/i.test(l) || /-FI$/i.test(l)) return ["fi"];
+    if (/^nl$/i.test(l) || /-NL$/i.test(l)) return ["nl"];
+  }
+  if (timeZone === "Europe/Helsinki") return ["fi"];
+  if (timeZone === "Europe/Amsterdam") return ["nl"];
+  return [];
 }
 
 const browserGuess = () =>
@@ -311,6 +317,10 @@ export default function FirstRun() {
           <label className="check">
             <input type="radio" name="country" checked={countries.includes("fi")} onChange={() => setCountries(["fi"])} />
             Finland
+          </label>
+          <label className="check">
+            <input type="radio" name="country" checked={countries.includes("nl")} onChange={() => setCountries(["nl"])} />
+            The Netherlands
           </label>
           <label className="check">
             <input type="radio" name="country" checked={countries.length === 0} onChange={() => setCountries([])} />

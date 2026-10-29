@@ -251,6 +251,8 @@ from dam.api.schemas.responses import (
     UnlockIn,
 )
 from dam.api.schemas.rules import (
+    AddressAreaIn,
+    AddressAreaOut,
     AreaOut,
     AreaPictureIn,
     AreaPictureOut,
@@ -313,6 +315,9 @@ from dam.api.schemas.settings import (
     PeopleIn,
     PeopleOut,
     PersonIO,
+    SampleLetterOut,
+    SampleLineOut,
+    SampleWordOut,
     SenderOut,
 )
 from dam.api.schemas.setup import (
@@ -585,6 +590,8 @@ __all__ = [
     "FilingCodeFoldersOut",
     "FileRequestOut",
     "BatchRowOut",
+    "AddressAreaIn",
+    "AddressAreaOut",
     "AreaOut",
     "DraftWordOut",
     "RuleDraftOut",
@@ -637,6 +644,9 @@ __all__ = [
     "Page1SpeedIn",
     "Page1SpeedOut",
     "PersonIO",
+    "SampleLetterOut",
+    "SampleLineOut",
+    "SampleWordOut",
     "PeopleIn",
     "PeopleOut",
     "AssignmentsIn",

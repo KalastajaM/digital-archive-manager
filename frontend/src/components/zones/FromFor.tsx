@@ -119,6 +119,7 @@ function personSource(entry: InboxEntry): string | null {
   if (!person) return null;
   if (source === "assigned") return entry.assignment?.set_by === "filing" ? "filed" : "you set this";
   if (source === "address area") return "address area";
+  if (source === "document area") return "this document's address area";
   if (source?.startsWith("rule:")) return `rule ${source.slice("rule:".length)}`;
   return source ?? null;
 }

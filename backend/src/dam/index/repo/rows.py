@@ -24,6 +24,7 @@ from dam.core.paths import nfc
 from dam.db.tables import (
     checklist_items,
     collection_members,
+    file_address_zones,
     file_assigned_codes,
     file_assignments,
     file_barcodes,
@@ -204,6 +205,7 @@ class RowsMixin:
                 item_files,
                 file_locks,
                 file_assignments,
+                file_address_zones,
                 file_summaries,
                 file_fields,
                 rule_outcomes,
@@ -284,7 +286,10 @@ class RowsMixin:
                 .where(member_link_names.c.drive_id == new_id)
                 .limit(1)
             ).first()
-            if self._given_in(conn, [new_id]) or names_kept:
+            own_area = conn.execute(
+                select(file_address_zones.c.drive_id).where(file_address_zones.c.drive_id == new_id)
+            ).first()
+            if self._given_in(conn, [new_id]) or names_kept or own_area:
                 raise ValueError("the new row has something of its own")
             moved = self._given_in(conn, [old_id]).get(old_id, {})
             row = conn.execute(select(files).where(files.c.drive_id == old_id)).mappings().one()
@@ -471,6 +476,7 @@ class RowsMixin:
                     file_summaries,
                     file_fields,
                     file_assignments,
+                    file_address_zones,
                     file_locks,
                 ):
                     conn.execute(table.delete().where(table.c.drive_id.in_(chunk)))

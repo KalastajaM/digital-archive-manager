@@ -32,7 +32,7 @@ class PersonIO(StrictIn):
 
 class PeopleIn(StrictIn):
     """The people list; ``address_zone`` (x0, y0, x1, y1 of page 1) is left as it is when
-    omitted."""
+    omitted, and taken out of the settings when null: it then follows the countries."""
 
     people: list[PersonIO]
     address_zone: list[float] | None = Field(default=None, min_length=4, max_length=4)
@@ -42,6 +42,29 @@ class PeopleOut(BaseModel):
     people: list[PersonIO]
     address_zone: list[float]
     default_address_zone: list[float]
+    # the owner set the zone; False: it is the countries' (``default_address_zone``)
+    address_zone_set: bool
+
+
+class SampleWordOut(BaseModel):
+    text: str
+    box: list[float]  # x0, y0, x1, y1 as fractions of page 1, origin top left
+
+
+class SampleLineOut(BaseModel):
+    text: str
+    box: list[float]
+    words: list[SampleWordOut]
+
+
+class SampleLetterOut(BaseModel):
+    """Page 1 of a sample letter: ``image`` a ``data:image/png;base64`` URL, and its lines
+    with their words (``read`` false: none could be read, ``unavailable`` says why)."""
+
+    image: str
+    read: bool
+    lines: list[SampleLineOut]
+    unavailable: str | None = None
 
 
 class AssignmentsIn(StrictIn):

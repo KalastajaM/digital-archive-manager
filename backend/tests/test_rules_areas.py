@@ -162,6 +162,7 @@ def test_inbox_files_and_explain_api_have_the_areas(app, fake_archive):
         "matched": True,
         "reason": None,
         "wins": True,
+        "document": False,
     }
     assert entry["areas"][0] == expected and file_s["areas"][0] == expected
     assert entry["person_line"] is None and file_s["person_line"] is None

@@ -53,6 +53,9 @@ export type ZoneIn = Schemas["ZoneIn"];
 /** One score of a picture rule's replay: a document, how well it matched, and whether the rule did. */
 export type PictureScore = Schemas["PictureScoreOut"];
 export type People = Schemas["PeopleOut"];
+/** Page 1 of a sample letter (Settings > Reading documents), never added to the archive. */
+export type SampleLetter = Schemas["SampleLetterOut"];
+export type SampleLine = Schemas["SampleLineOut"];
 export type Person = Schemas["PersonIO"];
 export type Countries = Schemas["CountriesOut"];
 export type IdentifierName = Schemas["IdentifierNameOut"];
@@ -466,6 +469,7 @@ const keys = {
   countries: ["countries"],
   senders: ["senders"],
   identifierNames: ["identifier-names"],
+  addressArea: ["address-area"],
   // under the inbox's key: whatever reloads the inbox reloads the marked batch too
   markedBatch: ["inbox", "marked"],
 } as const;
@@ -1133,16 +1137,59 @@ export const usePutIdentifierName = () => {
 export const usePeople = (enabled = true) =>
   useQuery({ queryKey: keys.people, queryFn: () => apiGet("/api/settings/people"), enabled });
 
+/** Page 1 of a sample letter to draw the address area on. The file is read in a temporary
+ * file and removed: nothing is added to the archive. A 400 says why not; over 50 MB is a 413.
+ * Not JSON: the file itself is the body. */
+export async function readSampleLetter(file: File): Promise<SampleLetter> {
+  const response = await fetch(`/api/settings/address-area/sample?name=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", Accept: "application/json" },
+    credentials: "same-origin",
+    body: file,
+  });
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as SampleLetter;
+}
+
 /** Save the people list (and the address area when given); a 400 says why not. */
 export const useSavePeople = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { people: Person[]; address_zone?: PageBox }) => apiPut("/api/settings/people", { body }),
+    mutationFn: (body: { people: Person[]; address_zone?: PageBox | null }) => apiPut("/api/settings/people", { body }),
     onSuccess: (saved) => client.setQueryData(keys.people, saved),
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.people });
       void client.invalidateQueries({ queryKey: keys.inbox }); // who a letter is for follows the list
       void client.invalidateQueries({ queryKey: keys.file });
+    },
+  });
+};
+
+export type AddressArea = Schemas["AddressAreaOut"];
+
+/** Where people are looked for on one document: the usual area, its own, or none. */
+export const useAddressArea = (driveId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...keys.addressArea, driveId],
+    queryFn: () => apiGet("/api/files/{drive_id}/address-area", { path: { drive_id: driveId } }),
+    enabled,
+  });
+
+/** Give one document its own address area (a box), none (null), or the usual one again
+ * ("general"). */
+export const useSetAddressArea = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveId, box }: { driveId: string; box: PageBox | null | "general" }) =>
+      box === "general"
+        ? apiDelete("/api/files/{drive_id}/address-area", { path: { drive_id: driveId } })
+        : apiPut("/api/files/{drive_id}/address-area", { path: { drive_id: driveId }, body: { box } }),
+    onSuccess: (saved, { driveId }) => client.setQueryData([...keys.addressArea, driveId], saved),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.addressArea });
+      void client.invalidateQueries({ queryKey: keys.inbox }); // who the letter is for follows it
+      void client.invalidateQueries({ queryKey: keys.file });
+      void client.invalidateQueries({ queryKey: ["areas-for"] }); // a rule sheet's areas too
     },
   });
 };

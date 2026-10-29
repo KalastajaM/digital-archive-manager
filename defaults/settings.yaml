@@ -13,7 +13,8 @@ protected_paths:
 indexer_reads_per_minute: 30
 ops_throttle_ms: 250
 server_port: 8765
-# OCR languages, most likely first (e.g. add fi-FI for Finnish: Tesseract reads it, Apple Vision does not)
+# OCR languages, most likely first (e.g. add fi-FI for Finnish: Tesseract reads it, Apple Vision does not;
+# nl-NL for Dutch: both read it)
 ocr_languages:
   - en-US
 # Reminders (macOS notification at this hour; e-mail to self is optional, off by default).
