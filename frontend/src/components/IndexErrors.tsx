@@ -4,7 +4,7 @@
  * queues every listed error again. Unsupported types (no text to read) are listed on
  * request only: nothing is wrong with them. Outcomes show on the sheet's own status
  * line (a toast would sit under the modal sheet). */
-import { RotateCw } from "lucide-react";
+import { Check, LoaderCircle, RotateCw } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -85,7 +85,16 @@ const PARTS: [key: "searchable" | "waiting" | "not_readable" | "errors", label: 
   ["errors", "Errors", "Reading these failed. Retrying may help."],
 ];
 
-function SummaryRow({ label, value, note, part }: { label: string; value: string; note: ReactNode; part?: boolean }) {
+/** Whether an index is still reading (a turning circle) or done (a check). */
+function ReadingIcon({ done }: { done: boolean }) {
+  return done ? (
+    <Check size={14} role="img" aria-label="Done" className="index-reading-done" />
+  ) : (
+    <LoaderCircle size={14} role="img" aria-label="Still reading" className="index-reading" />
+  );
+}
+
+function SummaryRow({ label, value, note, part }: { label: string; value: ReactNode; note: ReactNode; part?: boolean }) {
   return (
     <div className={part ? "index-summary-row index-summary-part" : "index-summary-row"}>
       <dt>{label}</dt>
@@ -108,7 +117,7 @@ export function timeLeft(remaining: number, perMinute: number | null | undefined
 /** The time left for the page-1 pass from what is left of each kind and how fast each is read:
  * "about 40 min left (5 735 PDFs with text at 300 a minute, 12 scans at 30 a minute)". Null
  * when nothing is left or the speeds are not known. */
-export function page1TimeLeft(page1: IndexSummary["page1"]): string | null {
+export function page1TimeLeft(page1: Omit<IndexSummary["page1"], "with_text">): string | null {
   const { text_left: text = 0, scans_left: scans = 0, text_per_min: fast = 0, scans_per_min: slow = 0 } = page1;
   if ((text > 0 && fast <= 0) || (scans > 0 && slow <= 0) || text + scans <= 0) return null;
   const minutes = Math.ceil(text / (fast || 1) + scans / (slow || 1));
@@ -126,13 +135,15 @@ function Page1Row({ page1, onSettings }: { page1: IndexSummary["page1"]; onSetti
   const left = done ? null : (page1TimeLeft(page1) ?? timeLeft(page1.total - page1.read, page1.rate_per_min));
   const blocked = page1.blocked ?? [];
   return (
-    <div className="index-summary-row">
+    <div className="index-summary-row index-summary-part">
       <dt>Page 1</dt>
       <dd>
-        {groupDigits(page1.read)} of {groupDigits(page1.total)}
+        {groupDigits(page1.read)} of {groupDigits(page1.total)} <ReadingIcon done={done} />
       </dd>
       <dd className="hint">
-        Where the text sits on page 1, for rules by area{left ? `; ${left}` : ""}.
+        Where the text sits on page 1, for rules by area
+        {page1.with_text != null ? `; text on page 1 in ${groupDigits(page1.with_text)} of them` : ""}
+        {left ? `; ${left}` : ""}.
         {blocked.map((b) => (
           <span key={b.reason} className="index-page1-blocked">
             {" "}
@@ -184,9 +195,22 @@ function SummaryBlock({ onSettings }: { onSettings?: () => void }) {
           {data.page1 && <Page1Row page1={data.page1} onSettings={onSettings} />}
           {ids && (
             <SummaryRow
+              part
               label="Business IDs"
-              value={`${groupDigits(ids.read)} of ${groupDigits(ids.total)}`}
-              note="Business IDs, IBANs and domains read from the searchable files' text, for id: search and Relatives."
+              value={
+                <>
+                  {groupDigits(ids.read)} of {groupDigits(ids.total)} <ReadingIcon done={ids.read >= ids.total} />
+                </>
+              }
+              note={
+                <>
+                  Business IDs, IBANs and domains read from the searchable files&apos; text, for id: search and Relatives.
+                  {ids.found.length > 0 &&
+                    ` Found: ${ids.found
+                      .map((f, i) => `${f.label} in ${groupDigits(f.count)}${i === 0 ? " files" : ""}`)
+                      .join(", ")}.`}
+                </>
+              }
             />
           )}
         </dl>
