@@ -83,6 +83,8 @@ EXPECTED_INDEXES = {
     "ix_operations_planned": ("operations", ["state"]),  # 0037: planned rows only
     "ix_reconnects_batch_id": ("reconnects", ["batch_id"]),  # 0039: undo of a reconnect
     "ix_readopted_batch_id": ("readopted", ["batch_id"]),  # 0040: undo of a take-over
+    # 0043: the files that carry an identifier
+    "ix_file_identifiers_kind_value": ("file_identifiers", ["kind", "value"]),
 }
 
 

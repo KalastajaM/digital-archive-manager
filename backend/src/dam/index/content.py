@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sqlalchemy import Engine
 
+from dam import countries
 from dam.core.paths import ArchivePaths
 from dam.extract import ocr
 from dam.extract.base import ExtractedText, ExtractorRegistry, UnsupportedContent
@@ -698,12 +699,37 @@ class ContentIndexer:
             if why is not None:
                 self._layout_why[drive_id] = why
 
+    def run_identifiers_once(self, limit: int = 50) -> int:
+        """Read business IDs, IBANs and domains from the stored text of up to ``limit``
+        files not read with the current packs; never opens a file. Every pack is used, so
+        turning a country on or off needs no reading again. Returns how many were read."""
+        signature = countries.signature()
+        rows = self.repo.next_for_identifiers(limit, signature)
+        for drive_id, sha256, text in rows:
+            try:
+                found = [
+                    (spec.kind, value)
+                    for pack in countries.ALL
+                    for spec in pack.identifiers
+                    for value in spec.find(text)
+                ]
+            except Exception:
+                log.warning("identifiers could not be read for %s", drive_id, exc_info=True)
+                found = []  # recorded as read: the same text would fail the same way
+            self.repo.save_identifiers(drive_id, sha256, signature, found)
+        return len(rows)
+
     def step(self, now: float | None = None) -> int:
         """One unit of background work: a pending file's content, else a barcode read,
-        else a page-1 layout read, else the thumbnails of page-1 pictures."""
+        else identifiers from stored text, else a page-1 layout read, else the thumbnails
+        of page-1 pictures."""
         done = self.run_once(limit=1, now=now) or self.run_barcodes_once(limit=1)
         if done:
             self._last_slow = True
+            return done
+        done = self.run_identifiers_once()
+        if done:
+            self._last_slow = False  # no file read: the quick pace
             return done
         done = self.run_layouts_once(limit=1)
         if done:
