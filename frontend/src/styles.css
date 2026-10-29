@@ -2522,3 +2522,8 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .countries-row { align-items: flex-start; margin-bottom: var(--sp-2); }
 .countries-text { display: flex; flex-direction: column; min-width: 0; }
 .countries-name, .countries-adds { overflow-wrap: anywhere; }
+
+/* First run: where the post comes from (screens/FirstRun.tsx). */
+.first-run-country { border: 0; padding: 0; margin: var(--sp-4) 0 0; min-width: 0; }
+.first-run-country legend { font-weight: 600; margin-bottom: var(--sp-2); }
+.first-run-country .check { margin-right: var(--sp-4); }

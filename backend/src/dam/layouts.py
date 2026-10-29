@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from dam.config import DEFAULTS_DIR, AppPaths, SpecialFolders
+from dam.config import DEFAULTS_DIR, AppPaths, SpecialFolders, load_settings
 from dam.core.foldernames import FolderNameError, check_folder_name
 from dam.core.paths import nfc
 from dam.rules.model import MAX_CONFIG_BYTES
@@ -283,11 +283,16 @@ def _finland_examples(defaults_dir: Path) -> str:
     )
 
 
-def rules_text(rules: list[dict], defaults_dir: Path = DEFAULTS_DIR) -> str:
+def rules_text(
+    rules: list[dict], defaults_dir: Path = DEFAULTS_DIR, countries: list[str] | None = None
+) -> str:
+    """The rules file for a layout; the commented Finland examples only when Finland is
+    on (``countries`` None: not chosen, which reads as Finland)."""
     body = (
         yaml.safe_dump(rules, sort_keys=False, allow_unicode=True, width=100) if rules else "[]\n"
     )
-    return _RULES_HEADER + body + _finland_examples(defaults_dir)
+    finland = countries is None or "fi" in countries
+    return _RULES_HEADER + body + (_finland_examples(defaults_dir) if finland else "")
 
 
 def seedable(app_paths: AppPaths, defaults_dir: Path = DEFAULTS_DIR) -> bool:
@@ -323,7 +328,7 @@ def write_layout_rules(
         return False
     target = app_paths.config_dir / "rules" / RULES_FILE
     target.parent.mkdir(parents=True, exist_ok=True)
-    text = rules_text(rules, defaults_dir)
+    text = rules_text(rules, defaults_dir, load_settings(app_paths).country_codes())
     with open(target, "w", encoding="utf-8", newline="\n") as f:  # in place: no rename
         f.write(text)
     return True

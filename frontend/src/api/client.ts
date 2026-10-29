@@ -631,9 +631,12 @@ export const checkSetupPath = (path: string) => apiPost("/api/setup/validate", {
 
 /** Save the archive folder; ``create`` makes that one missing folder first. With a
  * ``layout`` (start a new archive): also writes the special folder names to the settings
- * and makes the layout's folders, as one batch you can undo. */
-export const saveSetup = (archive_root: string, create: boolean, layout?: LayoutBody) =>
-  apiPost("/api/setup", { body: layout ? { archive_root, create, layout } : { archive_root, create } });
+ * and makes the layout's folders, as one batch you can undo. ``countries``: what the
+ * documents are read for, written to the settings with the folder. */
+export const saveSetup = (archive_root: string, create: boolean, layout?: LayoutBody, countries?: string[]) =>
+  apiPost("/api/setup", {
+    body: { archive_root, create, ...(layout ? { layout } : {}), ...(countries ? { countries } : {}) },
+  });
 
 /** The folders a new archive at ``path`` would get (nothing changes on disk). */
 export const previewSetupLayout = (path: string, layout: LayoutBody) =>
