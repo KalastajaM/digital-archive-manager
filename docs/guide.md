@@ -1555,6 +1555,14 @@ each area, grouped by what it applies to; one section shows at a time.
   - **Indexing**: whether page 1 of older documents is read in the background, and the
     **Page 1 reading speed** for PDFs that have a text layer. See
     [Reading page 1](#reading-page-1).
+  - **Countries and languages**: the countries your post comes from and the languages it
+    is written in. A country adds what is particular to it (for Finland: the viitenumero
+    and where the address sits on a Finnish letter); a language adds the words for due
+    dates and totals, the month names and the stopwords of Ask. English is always on.
+    Without a country dam still reads RF references, IBANs of any SEPA country, dates and
+    amounts. **Save countries and languages** applies them at once. The first-run screen
+    asks the same question once (**Your post comes from**), guessed from your browser and
+    time zone.
   - **Snapshots**: take a snapshot of this archive's database and settings, export or
     import one, and restore one. See [Snapshots](#snapshots).
 - **This browser** (every archive alike):
