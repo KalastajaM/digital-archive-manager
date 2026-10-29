@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from dam.checks import check_731, iban_mod97
+
 CODE_LENGTH = 54
 MAX_AMOUNT = Decimal("999999.99")
 _CENT = Decimal("0.01")
@@ -43,21 +45,11 @@ def _digits(s: str) -> bool:
     return bool(s) and set(s) <= _DIGITS  # ASCII only: str.isdigit() takes "٤" too
 
 
-def _mod97(compact: str) -> int:
-    rearranged = compact[4:] + compact[:4]
-    return int("".join(str(int(c, 36)) for c in rearranged)) % 97
-
-
-def _check_731(digits: str) -> int:
-    total = sum(int(d) * (7, 3, 1)[i % 3] for i, d in enumerate(reversed(digits)))
-    return (10 - total % 10) % 10
-
-
 def _iban_digits(iban: str) -> str:
     compact = "".join(iban.split()).upper()
     if not compact.startswith("FI"):
         raise BarcodeError("the IBAN is not a Finnish (FI) account")
-    if len(compact) != 18 or not _digits(compact[2:]) or _mod97(compact) != 1:
+    if len(compact) != 18 or not _digits(compact[2:]) or iban_mod97(compact) != 1:
         raise BarcodeError("the IBAN is not valid")
     return compact[2:]
 
@@ -89,7 +81,7 @@ def _national(digits: str) -> str:
         raise BarcodeError("the reference is not valid")
     if len(body) < 4:
         raise BarcodeError("the reference is too short (at least 4 digits)")
-    if _check_731(body[:-1]) != int(body[-1]):
+    if check_731(body[:-1]) != int(body[-1]):
         raise BarcodeError("the reference fails its check digit")
     return body
 
@@ -104,7 +96,7 @@ def _rf(compact: str) -> tuple[str, str]:
     if len(body.lstrip("0")) > 21:
         raise BarcodeError("the RF reference is too long (over 21 digits)")
     body = body.lstrip("0")
-    if not body or _mod97(f"RF{check}{body}") != 1:
+    if not body or iban_mod97(f"RF{check}{body}") != 1:
         raise BarcodeError("the RF reference fails its check (ISO 11649)")
     return check, body
 
@@ -146,7 +138,7 @@ def parse(code: str) -> BarcodeData:
     if version not in "45":
         raise BarcodeError(f"unknown barcode version {version}")
     iban = f"FI{code[1:17]}"
-    if _mod97(iban) != 1:
+    if iban_mod97(iban) != 1:
         raise BarcodeError("the IBAN is not valid")
     amount = Decimal(int(code[17:25])) / 100
     if version == "4":

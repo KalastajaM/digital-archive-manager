@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
+from dam.checks import check_731, valid_iban, valid_rf
+
 _CENT = Decimal("0.01")
 
 _DATE_DMY = re.compile(r"(?<!\d)(?<!\d\.)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)", re.ASCII)
@@ -45,34 +47,10 @@ def _dedupe[T](found: list[tuple[int, T]]) -> list[T]:
     return out
 
 
-def _mod97(compact: str) -> int:
-    rearranged = compact[4:] + compact[:4]
-    digits = "".join(str(int(c, 36)) for c in rearranged)
-    return int(digits) % 97
-
-
-def valid_iban(compact: str) -> bool:
-    return _mod97(compact) == 1
-
-
-def _valid_rf(compact: str) -> bool:
-    return 5 <= len(compact) <= 25 and _mod97(compact) == 1
-
-
-def _check_731(digits: str) -> int:
-    """Finnish domestic reference check digit for ``digits`` (without the check digit)."""
-    total = sum(int(d) * w for d, w in zip(reversed(digits), _weights(len(digits)), strict=True))
-    return (10 - total % 10) % 10
-
-
-def _weights(n: int) -> list[int]:
-    return [(7, 3, 1)[i % 3] for i in range(n)]
-
-
 def _valid_domestic(digits: str) -> bool:
     if digits.strip("0") == "":
         return False
-    return 4 <= len(digits) <= 20 and _check_731(digits[:-1]) == int(digits[-1])
+    return 4 <= len(digits) <= 20 and check_731(digits[:-1]) == int(digits[-1])
 
 
 _MIN_DATE = date(1950, 1, 1)
@@ -131,7 +109,7 @@ def _references(text: str) -> str | None:
         tokens = m[0].split()  # "RF18", "5000", "1", ...
         for k in range(len(tokens), 0, -1):
             compact = "".join(tokens[:k])
-            if _valid_rf(compact):
+            if valid_rf(compact):
                 found.append((m.start(), compact))
                 break
     for m in _DOMESTIC.finditer(text):
