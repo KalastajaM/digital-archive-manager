@@ -62,8 +62,17 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
         not_readable_by_type: [{ ext: "xlsx", count: 207 }],
         rows: [],
         offset: 0,
-        identifiers: { read: 1200, total: 10220 },
+        identifiers: {
+          read: 1200,
+          total: 10220,
+          found: [
+            { label: "business IDs", count: 3351 },
+            { label: "IBANs", count: 1663 },
+            { label: "web or mail domains", count: 4953 },
+          ],
+        },
         page1: {
+          with_text: 2900,
           read: 3176,
           total: 8911,
           backfill: true,
@@ -165,12 +174,20 @@ describe("Index errors sheet", () => {
     expect(row("Missing")).toHaveTextContent("not in the total");
   });
 
-  it("lists the other indexes as how many of how many", async () => {
+  it("lists the other indexes as how many of how many, what they found, and whether they still read", async () => {
     const { user } = setup();
     const dialog = await open(user);
     const other = await within(dialog).findByRole("group", { name: "Other indexes" });
-    expect(other).toHaveTextContent(/Page 1\s*3\D176 of 8\D911/);
-    expect(other).toHaveTextContent(/Business IDs\s*1\D200 of 10\D220/);
+    const row = (label: string) => within(other).getByText(label, { selector: "dt" }).parentElement!;
+    expect(row("Page 1")).toHaveTextContent(/3\D176 of 8\D911/);
+    expect(row("Page 1")).toHaveTextContent(/text on page 1 in 2\D900 of them/);
+    expect(row("Business IDs")).toHaveTextContent(/1\D200 of 10\D220/);
+    expect(row("Business IDs")).toHaveTextContent(
+      /Found: business IDs in 3\D351 files, IBANs in 1\D663, web or mail domains in 4\D953\./,
+    );
+    // both still reading: a spinning icon says so; the rows are parts, not headings
+    expect(within(row("Page 1")).getByRole("img", { name: "Still reading" })).toBeInTheDocument();
+    expect(row("Business IDs")).toHaveClass("index-summary-part");
   });
 
   it("the sheet is not inside the status line's paragraph", async () => {

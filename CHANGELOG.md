@@ -11,12 +11,18 @@ All notable changes are listed here. The format follows
 - **Due dates in Browse.** A file with an open tray item shows the tray and its date on
   its row, in the folder view, Files and search results, coloured by urgency as on a
   collection's page.
+- **`id:*`** finds every file that has a business ID, whatever it is: `from:Telia id:*`
+  lists Telia's documents that carry one.
 
 ### Changed
 
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that
   make it up, with the missing files apart; Other indexes shows Page 1 and Business IDs, each
   as how many of how many.
+- **The other indexes say what they found and whether they are still reading.** Business IDs
+  says in how many files business IDs, IBANs and domains were found, and Page 1 on how many
+  pages it found text; a turning circle shows an index that is still reading, a check one
+  that is done.
 
 ## [0.9.0] - 2026-10-29
 

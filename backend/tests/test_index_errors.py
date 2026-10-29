@@ -317,7 +317,7 @@ def test_index_summary_counts_types_and_pages(app, client, fake_archive):
         {"ext": "docx", "count": 1},
     ]
     # the identifiers pass will read the text of the searchable file (index() did not run it)
-    assert body["identifiers"] == {"read": 0, "total": 1}
+    assert (body["identifiers"]["read"], body["identifiers"]["total"]) == (0, 1)
     assert len(body["rows"]) == 2 and body["offset"] == 0
     assert all(r["state"] == "unsupported" for r in body["rows"])
     rest = client.get("/api/index/summary", params={"limit": 2, "offset": 2}).json()["rows"]

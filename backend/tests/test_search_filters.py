@@ -337,3 +337,22 @@ def test_id_skips_a_country_that_is_off(with_ids):
     packs.activate(packs.build([], ["en"]))
     assert ids(with_ids, "id:0112038-9") == []
     assert ids(with_ids, "id:kela.fi") == ["kela"]
+
+
+def test_id_star_finds_files_with_any_business_id(with_ids):
+    # bill and tax carry a Y-tunnus; kela only a domain, which is no business ID
+    assert ids(with_ids, "id:*") == ["bill", "tax"]
+    assert not {"bill", "tax"} & set(ids(with_ids, "-id:*"))
+    assert "kela" in ids(with_ids, "-id:*")
+
+
+def test_id_star_with_a_sender(with_ids):
+    with_ids.assignments.set(["bill", "kela"], sender="Telia")
+    assert ids(with_ids, "from:Telia id:*") == ["bill"]
+
+
+def test_id_star_follows_the_countries_that_are_on(with_ids):
+    from dam import packs
+
+    packs.activate(packs.build([], ["en"]))
+    assert ids(with_ids, "id:*") == []

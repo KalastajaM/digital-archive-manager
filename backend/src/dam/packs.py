@@ -52,6 +52,18 @@ def build(country_codes: Sequence[str], language_codes: Sequence[str]) -> Profil
     )
 
 
+def business_id_kinds(profile: Profile) -> list[str]:
+    """The identifier kinds that are business IDs (a Y-tunnus, later a btw-id): they name
+    one organisation; not IBANs (``names_sender`` false) or web and mail domains (shared
+    too widely)."""
+    return [
+        s.kind
+        for p in profile.countries
+        for s in p.identifiers
+        if s.names_sender and not s.kind.endswith(".domain")
+    ]
+
+
 _active: Profile | None = None
 
 

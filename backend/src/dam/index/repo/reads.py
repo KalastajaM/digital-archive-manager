@@ -9,8 +9,10 @@ from dataclasses import asdict
 
 from sqlalchemy import (
     Connection,
+    Text,
     and_,
     case,
+    cast,
     func,
     literal_column,
     not_,
@@ -237,6 +239,24 @@ class ReadsMixin:
                 conn.execute(base.where(self._readable(), self._read_with(signature))).scalar() or 0
             )
         return read, total
+
+    def files_with_kinds(self, kinds: Sequence[str]) -> int:
+        """How many files there (not missing, not parked) carry an identifier of one of
+        ``kinds`` in their current content."""
+        if not kinds:
+            return 0
+        stmt = (
+            select(func.count(func.distinct(file_identifiers.c.drive_id)))
+            .join(files, files.c.drive_id == file_identifiers.c.drive_id)
+            .where(
+                file_identifiers.c.kind.in_(list(kinds)),
+                files.c.sha256 == file_identifiers.c.sha256,
+                files.c.missing.is_not(True),
+                files.c.parked_at.is_(None),
+            )
+        )
+        with self._conn() as conn:
+            return int(conn.execute(stmt).scalar() or 0)
 
     def qr_for(self, drive_id: str) -> list[QrRead]:
         """The QR stickers read from the file's current content; ``[]`` if none were
@@ -533,6 +553,29 @@ class ReadsMixin:
                 )
             ).one()
         return int(row[1]), int(row[0])
+
+    def layout_with_text(self) -> int:
+        """Of the files the layout pass reads, how many have text on page 1 (a layout for
+        their current content with lines)."""
+        stmt = (
+            select(func.count())
+            .select_from(files)
+            .join(
+                file_layouts,
+                and_(
+                    file_layouts.c.drive_id == files.c.drive_id,
+                    file_layouts.c.sha256 == files.c.sha256,
+                ),
+            )
+            .where(
+                *self._layout_population(),
+                # no lines: compressed (0045) or, read before it, the text "[]"
+                file_layouts.c.lines != Page1Layout(lines=[]).stored(),
+                cast(file_layouts.c.lines, Text) != "[]",
+            )
+        )
+        with self._conn() as conn:
+            return int(conn.execute(stmt).scalar() or 0)
 
     def layout_unread(self) -> tuple[int, int]:
         """``(text, scans)``: of the files the layout pass has not read yet, how many are PDFs

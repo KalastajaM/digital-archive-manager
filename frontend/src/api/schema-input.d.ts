@@ -5882,6 +5882,13 @@ export interface components {
             /** Summary */
             summary?: string | null;
         };
+        /** IdentifierFoundOut */
+        IdentifierFoundOut: {
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
         /** IdentifierNameDoneOut */
         IdentifierNameDoneOut: {
             /** Changed */
@@ -5961,6 +5968,18 @@ export interface components {
             read: number;
             /** Total */
             total: number;
+        };
+        /**
+         * IdentifiersSummaryOut
+         * @description With how many files carry each kind (the enabled countries' only).
+         */
+        IdentifiersSummaryOut: {
+            /** Read */
+            read: number;
+            /** Total */
+            total: number;
+            /** Found */
+            found: components["schemas"]["IdentifierFoundOut"][];
         };
         /** ImportantConvertApplyBody */
         ImportantConvertApplyBody: {
@@ -6058,8 +6077,8 @@ export interface components {
             rows: components["schemas"]["IndexErrorOut"][];
             /** Offset */
             offset: number;
-            page1: components["schemas"]["Page1ProgressOut"];
-            identifiers: components["schemas"]["IdentifiersProgressOut"];
+            page1: components["schemas"]["Page1SummaryOut"];
+            identifiers: components["schemas"]["IdentifiersSummaryOut"];
         };
         /**
          * ItemBarcodeOut
@@ -6873,6 +6892,44 @@ export interface components {
         Page1SpeedOut: {
             /** Reads Per Minute */
             reads_per_minute: number;
+        };
+        /** Page1SummaryOut */
+        Page1SummaryOut: {
+            /** Read */
+            read: number;
+            /** Total */
+            total: number;
+            /** Backfill */
+            backfill: boolean;
+            /**
+             * Blocked
+             * @default []
+             */
+            blocked?: components["schemas"]["Page1BlockedOut"][];
+            /** Rate Per Min */
+            rate_per_min?: number | null;
+            /**
+             * Text Left
+             * @default 0
+             */
+            text_left?: number;
+            /**
+             * Scans Left
+             * @default 0
+             */
+            scans_left?: number;
+            /**
+             * Text Per Min
+             * @default 0
+             */
+            text_per_min?: number;
+            /**
+             * Scans Per Min
+             * @default 0
+             */
+            scans_per_min?: number;
+            /** With Text */
+            with_text: number;
         };
         /**
          * ParentBody
