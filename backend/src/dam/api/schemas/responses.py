@@ -528,9 +528,11 @@ class UndoResultOut(BatchResultOut):
 
 
 class RowItemOut(BaseModel):
-    """An open tray item on a listed file: enough for its tag (tray, date, title)."""
+    """An open tray item on a listed file: enough for its tag (tray, date, title) and its
+    link to the item in its tray."""
 
     id: int
+    tray_id: str
     tray_name: str
     title: str
     date: date | None

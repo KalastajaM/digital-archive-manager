@@ -98,7 +98,7 @@ def test_overview_counts_sums_and_waiting(app, fake_archive):
     old = app.trays.create("to-read", ["r1"], {}, title=None)
     app.trays.create("to-read", ["r2"], {}, title=None)
     with app.engine.begin() as conn:
-        # 40 days before TODAY, not before the real clock: TODAY is fixed
+        # 40 days before TODAY, not before the real clock (that drifts past the nudge cutoff)
         long_ago = datetime.combine(TODAY - timedelta(days=40), datetime.min.time()).timestamp()
         conn.execute(update(items).where(items.c.id == old.id).values(created=long_ago))
     c = app.collections.create("Sauna")

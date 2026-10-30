@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useStyle } from "../appearance";
 import { hiddenCrumbs } from "../crumbs";
 import {
@@ -501,6 +501,7 @@ function EntryRow({
   const open = { items: item.open_items ?? [] };
   const tags = attentionTags(open);
   const tips = attentionTags(open, { long: true });
+  const navigate = useNavigate();
   const main = (
     <>
       <Icon className="entry-icon" size={16} strokeWidth={1.5} aria-hidden="true" />
@@ -512,12 +513,25 @@ function EntryRow({
       <MarkIcons marks={item.marks} driveId={item.is_dir ? undefined : item.drive_id} path={item.path} />
       {tags.length > 0 && (
         <span className="entry-tags">
-          {tags.map((t, i) => (
-            // the full line (tray, item title, date) on hover
-            <Tag key={t.key} tone={t.tone} title={tips[i].text}>
-              {t.text}
-            </Tag>
-          ))}
+          {tags.map((t, i) => {
+            const { item: it } = open.items[i];
+            // the full line (tray, item title, date) on hover; a click opens the item in its
+            // tray (the file panel's chip is the keyboard's way there)
+            return (
+              <Tag
+                key={t.key}
+                tone={t.tone}
+                className="entry-tray-link"
+                title={`${tips[i].text} (click to open it in the tray)`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/trays/${encodeURIComponent(it.tray_id)}?item=${it.id}`);
+                }}
+              >
+                {t.text}
+              </Tag>
+            );
+          })}
         </span>
       )}
       {item.connected === false && <span className="entry-offline">Not connected</span>}
@@ -2255,13 +2269,8 @@ export default function Browse() {
         ] as const
       ).map(([value, name, Icon]) => ({
         value,
-        // in a narrow tree only the icon shows; the name stays the button's name and tip
-        label: (
-          <>
-            <Icon size={13} strokeWidth={1.75} aria-hidden="true" />
-            <span className="tree-switch-label">{name}</span>
-          </>
-        ),
+        // only the icon shows; the name is the button's name and tip
+        label: <Icon size={14} strokeWidth={1.75} aria-hidden="true" />,
         title: name,
         ariaLabel: name,
       }))}

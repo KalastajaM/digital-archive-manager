@@ -5,7 +5,7 @@
  * collection adds a link in ##. Ongoing through the Ongoing sync. That needs no
  * preview (app-owned links only, journaled, undone by removing the member again), but
  * the batch that ran is shown under the actions. */
-import { X } from "lucide-react";
+import { ArrowUpRight, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -96,8 +96,13 @@ export function LinkBadges({
     <ul className="badges link-badges" aria-label={withCollections ? "In trays and collections" : "In trays"}>
       {items.map((i) => (
         <li key={`i${i.id}`}>
-          <Link className="tag tag-grey" to={`/trays/${encodeURIComponent(i.tray_id)}?item=${i.id}`}>
+          <Link
+            className="tag tag-grey tray-link"
+            to={`/trays/${encodeURIComponent(i.tray_id)}?item=${i.id}`}
+            title={`Open it in ${visible(i.tray_name)}`}
+          >
             {visible(i.tray_name)}: {visible(i.title)}
+            <ArrowUpRight className="tray-link-arrow" size={12} strokeWidth={2} aria-hidden="true" />
           </Link>
         </li>
       ))}
