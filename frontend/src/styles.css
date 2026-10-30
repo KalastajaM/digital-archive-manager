@@ -2491,6 +2491,9 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .carry-list { margin: var(--sp-1) 0 var(--sp-2); padding-left: var(--sp-5); }
 .carry-list ul { margin: 0; padding-left: var(--sp-4); }
 .entry-offline { flex: none; margin-left: var(--sp-2); font-size: 0.85em; color: var(--muted); }
+/* search of one collection: the child collection a file comes from, before its name */
+.entry-via { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.collection-missing { margin: var(--sp-3) var(--sp-4); }
 /* a file's open tray items on its Browse row: the name gives way first; past half the row
  * the tags end in an ellipsis too */
 .entry-tags { flex: none; display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; max-width: 50%; margin-left: var(--sp-1); overflow: hidden; }

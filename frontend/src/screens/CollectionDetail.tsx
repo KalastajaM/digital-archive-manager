@@ -1725,7 +1725,7 @@ export default function CollectionDetail({
               <Attention members={c.members} attention={attention.data} onSelect={(driveId) => onSelectFile?.(driveId)} />
               {!builtin && <ChildCollections id={id} all={allCollections.data ?? []} />}
               <div className="collection-notes">
-                <SavedNote kind="collection" target={String(id)} label="Note" />
+                <SavedNote kind="collection" target={String(id)} label="Note on this collection" />
                 <Checklist kind="collection" target={String(id)} />
               </div>
             </div>

@@ -84,6 +84,8 @@ import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { FolderTree } from "../components/FolderTree";
+import { childOf, scopedCollection } from "../collectionScope";
+import CollectionDetail from "./CollectionDetail";
 import { CollectionTree } from "../components/BrowseCollectionTree";
 import { TagTree } from "../components/BrowseTagTree";
 import { applyPick, type ScopePick, scopeOf, type TreeKind, treeParam } from "../browseScope";
@@ -467,6 +469,8 @@ type RowProps = {
   onQuickLook?: () => void;
   /** A file row (New): the Relatives button beside Quick Look, shown on hover too. */
   onRelatives?: () => void;
+  /** Search of one collection: the child collection the file comes from ("Car ›"). */
+  via?: string | null;
   /** The row's place in the pane's items: focus finds the row by it. */
   row: number;
   /** An even line of the list: shaded (the list renders only the rows near the view, so
@@ -492,6 +496,7 @@ function EntryRow({
   onContextMenu,
   onQuickLook,
   onRelatives,
+  via,
   row,
   stripe,
 }: RowProps) {
@@ -505,6 +510,11 @@ function EntryRow({
   const main = (
     <>
       <Icon className="entry-icon" size={16} strokeWidth={1.5} aria-hidden="true" />
+      {via && (
+        <span className="entry-via" title={visible(via)}>
+          {visible(via)} ›
+        </span>
+      )}
       {columns ? (
         <FitText mode="name" className="entry-name" text={visible(item.name)} />
       ) : (
@@ -1635,6 +1645,16 @@ export default function Browse() {
     return null;
   };
 
+  // a search of one collection (the collection tree's pick): shown above its files
+  const scoped = searching ? scopedCollection(filters, collections.data ?? []) : null;
+  /** A Needs attention entry of that collection: its file is the current row. */
+  const selectInSearch = (driveId: string) => {
+    const i = items[sp].findIndex((it) => it.drive_id === driveId);
+    if (i < 0) return;
+    update(sp, { ids: [], index: i, anchor: driveId, touched: true });
+    setTimeout(() => listRef.current[sp]?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" }), 0);
+  };
+
   const renderPane = (pane: PaneId) => {
     const rows = items[pane];
     const s = selOf(pane);
@@ -1778,6 +1798,16 @@ export default function Browse() {
             )}
           </div>
         </div>
+        {isSearch && scoped && (
+          // one collection: the collection itself above its files (its header and details)
+          "c" in scoped ? (
+            <CollectionDetail key={scoped.c.id} id={scoped.c.id} variant="scope" onSelectFile={(driveId) => selectInSearch(driveId)} />
+          ) : (
+            <p className="notice collection-missing">
+              No collection named {visible(scoped.missing)}. <Link to="/collections">See the collections</Link>
+            </p>
+          )
+        )}
         {isSearch && filters.length > 0 && (
           <FilterBar
             filters={filters}
@@ -1926,6 +1956,7 @@ export default function Browse() {
                   <EntryRow
                     key={item.drive_id}
                     {...row}
+                    via={isSearch && scoped && "c" in scoped ? childOf(item.drive_id, scoped.c, collections.data ?? []) : null}
                     dragIds={dragIds}
                     dragPaths={dragPaths}
                     dragSpecial={dragSpecial}

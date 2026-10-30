@@ -66,9 +66,11 @@ afterEach(() => {
 describe("a collection above its files (scope)", () => {
   it("shows the header and the details open, without the member tree or a file panel", async () => {
     setup();
-    expect(await screen.findByText("Wills and deeds for the family")).toBeInTheDocument();
-    const heads = [...document.querySelectorAll(".collection-details h2")].map((h) => h.textContent);
-    expect(heads.slice(0, 2)).toEqual(["Summary", "Needs attention"]);
+    const summary = await screen.findByText("Wills and deeds for the family");
+    const attention = screen.getByRole("region", { name: "Needs attention" });
+    // layout C: the summary first, then Needs attention, both inside the details block
+    expect(summary.compareDocumentPosition(attention) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(summary.closest(".collection-details")).toBe(attention.closest(".collection-details"));
     expect(screen.getByRole("button", { name: "Add files" })).toBeInTheDocument();
     expect(document.querySelector(".collection-state")).toHaveTextContent("Open");
     expect(screen.queryByRole("tree", { name: "Members" })).toBeNull();
