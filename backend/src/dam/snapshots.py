@@ -75,6 +75,8 @@ MANUAL, BEFORE_RESTORE = "manual", "before-restore"
 BEFORE_RELABEL = "before-relabel"  # taken before an archive folder's label changes
 BEFORE_RENAME = "before-rename"  # taken before a special folder is renamed
 BEFORE_GROUPS = "before-groups"  # taken before collection groups become collections
+BEFORE_MERGE = "before-merge"  # taken before a collection is merged into another
+BEFORE_DELETE = "before-delete"  # taken before a collection is deleted
 IMPORTED_SUFFIX = "-imported"
 MAX_IMPORT_BYTES = 2 * 1024**3
 # what one snapshot may unpack to (a zip bomb stops here): members, bytes in all, and how
@@ -87,7 +89,7 @@ _COPY_CHUNK = 1024**2
 # Windows device names: a member called one of these (with any extension) is a device there
 _RESERVED = {"con", "prn", "aux", "nul", *(f"{p}{n}" for p in ("com", "lpt") for n in range(10))}
 _NAME = re.compile(
-    r"dam-snapshot-\d{8}-\d{6}(?:-\d+)?(?:-before-restore|-before-relabel|-before-rename|-before-groups)?(?:-imported)?\.zip"
+    r"dam-snapshot-\d{8}-\d{6}(?:-\d+)?(?:-before-restore|-before-relabel|-before-rename|-before-groups|-before-merge|-before-delete)?(?:-imported)?\.zip"
 )
 
 
@@ -237,7 +239,15 @@ def create_snapshot(
             zf.writestr(MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=2))
         suffix = (
             f"-{kind}"
-            if kind in (BEFORE_RESTORE, BEFORE_RELABEL, BEFORE_RENAME, BEFORE_GROUPS)
+            if kind
+            in (
+                BEFORE_RESTORE,
+                BEFORE_RELABEL,
+                BEFORE_RENAME,
+                BEFORE_GROUPS,
+                BEFORE_MERGE,
+                BEFORE_DELETE,
+            )
             else ""
         )
         name = _free_name(folder, now.strftime("%Y%m%d-%H%M%S"), suffix)

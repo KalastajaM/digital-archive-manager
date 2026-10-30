@@ -1683,6 +1683,20 @@ export const useSetCollectionParent = () => {
   });
 };
 
+/** Merge a collection into another (no Undo: a snapshot is taken first). ``check`` says
+ * why it cannot be (empty: it can); ``merge`` does it and answers with the target. */
+export const useMergeCollection = () => {
+  const refresh = useRefresh(); // moves links in ##. Ongoing: Activity and Browse too
+  const merge = useMutation({
+    mutationFn: ({ id, into }: { id: number; into: number }) =>
+      apiPost("/api/collections/{collection_id}/merge", { path: { collection_id: id }, body: { into } }),
+    onSettled: refresh,
+  });
+  const check = (id: number, into: number) =>
+    apiPost("/api/collections/{collection_id}/merge/preview", { path: { collection_id: id }, body: { into } }).then((r) => r.problems);
+  return { merge, check };
+};
+
 /** Put a collection before or after another. A sibling: only the order changes. A row of
  * another parent: the collection goes into that parent too (as the parent change does,
  * with the Ongoing sync: the batch comes back). Built-in collections and cycles are

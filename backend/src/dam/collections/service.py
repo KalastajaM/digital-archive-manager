@@ -49,11 +49,13 @@ from dam.core.paths import nfc
 from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import (
+    checklist_items,
     collection_groups,
     collection_members,
     collections,
     files,
     member_link_names,
+    notes,
 )
 from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.index.repo import FileRecord, FileRepo
@@ -1393,6 +1395,194 @@ class CollectionService:
             self._renumber(conn, order)
         if notify:
             self._changed()
+
+    # --- merging --------------------------------------------------------------------
+
+    @staticmethod
+    def _note(conn: Connection, collection_id: int) -> str:
+        return (
+            conn.execute(
+                select(notes.c.text).where(
+                    notes.c.target_kind == "collection", notes.c.target_id == str(collection_id)
+                )
+            ).scalar()
+            or ""
+        )
+
+    @staticmethod
+    def _joined(first: str, second: str, heading: str | None = None) -> str:
+        """``second`` after ``first`` (a blank line between; ``heading`` above it)."""
+        if not second.strip():
+            return first
+        added = f"{heading}\n{second}" if heading and first.strip() else second
+        return f"{first.rstrip()}\n\n{added}" if first.strip() else added
+
+    def merge_check(self, from_id: int, to_id: int) -> list[str]:
+        """Why ``from_id`` cannot be merged into ``to_id`` (empty: it can)."""
+        from dam.notes import NOTE_MAX
+
+        with self.engine.connect() as conn:
+            rows = {r.id: r for r in conn.execute(select(collections))}
+            a, b = rows.get(from_id), rows.get(to_id)
+            if a is None or b is None:
+                raise NotFound(f"No collection {from_id if a is None else to_id}")
+            if a.kind or b.kind:
+                return ["Important and Starred are built in: they cannot be merged"]
+            if a.id == b.id:
+                return ["A collection cannot be merged into itself"]
+            up = b.parent_id
+            while up is not None:
+                if up == a.id:
+                    return [f"{b.name} is inside {a.name}: merge them the other way round"]
+                up = rows[up].parent_id if up in rows else None
+            if b.state == "closed":
+                return [f"{b.name} is closed: reopen it first"]
+            problems = []
+            note = self._joined(self._note(conn, b.id), self._note(conn, a.id), f"From {a.name}:")
+            if len(note) > NOTE_MAX:
+                over = len(note) - NOTE_MAX
+                problems.append(f"The note would be {over} characters too long: shorten one first")
+            summary = self._joined(b.summary, a.summary)
+            if len(summary) > SUMMARY_MAX:
+                over = len(summary) - SUMMARY_MAX
+                problems.append(
+                    f"The summary would be {over} characters too long: shorten one first"
+                )
+            return problems
+
+    def merge(self, from_id: int, to_id: int) -> Collection:
+        """Move everything of ``from_id`` into ``to_id`` in one transaction: its files
+        (keeping when each was added and its link name; one already there just leaves),
+        its collections (after ``to_id``'s own), its note under "From <name>:", its
+        checklist items after ``to_id``'s and its summary as a paragraph. ``from_id`` is
+        left empty, for ``remove_merged`` once the Ongoing sync has taken its folder down.
+        ``merge_check``'s first refusal is an InvalidRequest."""
+        problems = self.merge_check(from_id, to_id)
+        if problems:
+            raise InvalidRequest(problems[0])
+        with self._add_lock(to_id), write_tx(self.engine) as conn:
+            a = conn.execute(select(collections).where(collections.c.id == from_id)).one()
+            b = conn.execute(select(collections).where(collections.c.id == to_id)).one()
+            ids = list(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == from_id
+                    )
+                ).scalars()
+            )
+            there = set(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == to_id,
+                        collection_members.c.drive_id.in_(ids),
+                    )
+                ).scalars()
+            )
+            if there:
+                conn.execute(
+                    delete(collection_members).where(
+                        collection_members.c.collection_id == from_id,
+                        collection_members.c.drive_id.in_(there),
+                    )
+                )
+            conn.execute(
+                update(collection_members)
+                .where(collection_members.c.collection_id == from_id)
+                .values(collection_id=to_id, group_id=None)
+            )
+            for r in conn.execute(
+                select(member_link_names).where(member_link_names.c.collection_id == from_id)
+            ).all():
+                conn.execute(
+                    sqlite_insert(member_link_names)
+                    .values(collection_id=to_id, drive_id=r.drive_id, link_name=r.link_name)
+                    .on_conflict_do_nothing()
+                )
+            conn.execute(
+                delete(member_link_names).where(member_link_names.c.collection_id == from_id)
+            )
+            for kid in (
+                conn.execute(
+                    select(collections.c.id)
+                    .where(collections.c.parent_id == from_id)
+                    .order_by(collections.c.position, collections.c.name)
+                )
+                .scalars()
+                .all()
+            ):
+                conn.execute(
+                    update(collections)
+                    .where(collections.c.id == kid)
+                    .values(parent_id=to_id, position=self._next_position(conn, to_id))
+                )
+            conn.execute(
+                update(collections)
+                .where(collections.c.id == to_id)
+                .values(summary=self._joined(b.summary, a.summary))
+            )
+            conn.execute(update(collections).where(collections.c.id == from_id).values(summary=""))
+            text = self._joined(
+                self._note(conn, to_id), self._note(conn, from_id), f"From {a.name}:"
+            )
+            mine = (notes.c.target_kind == "collection") & (notes.c.target_id == str(from_id))
+            if text:
+                conn.execute(
+                    sqlite_insert(notes)
+                    .values(
+                        target_kind="collection",
+                        target_id=str(to_id),
+                        text=text,
+                        updated=time.time(),
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["target_kind", "target_id"],
+                        set_={"text": text, "updated": time.time()},
+                    )
+                )
+            conn.execute(delete(notes).where(mine))
+            last = conn.execute(
+                select(func.max(checklist_items.c.position)).where(
+                    checklist_items.c.target_kind == "collection",
+                    checklist_items.c.target_id == str(to_id),
+                )
+            ).scalar()
+            start = 0 if last is None else last + 1
+            moving = (
+                conn.execute(
+                    select(checklist_items.c.id)
+                    .where(
+                        checklist_items.c.target_kind == "collection",
+                        checklist_items.c.target_id == str(from_id),
+                    )
+                    .order_by(checklist_items.c.position)
+                )
+                .scalars()
+                .all()
+            )
+            for i, check in enumerate(moving):
+                conn.execute(
+                    update(checklist_items)
+                    .where(checklist_items.c.id == check)
+                    .values(target_id=str(to_id), position=start + i)
+                )
+        return self.get(to_id)
+
+    def remove_merged(self, collection_id: int) -> None:
+        """Delete a collection that ``merge`` emptied (no files, no collections inside)."""
+        with write_tx(self.engine) as conn:
+            busy = (
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == collection_id
+                    )
+                ).first()
+                or conn.execute(
+                    select(collections.c.id).where(collections.c.parent_id == collection_id)
+                ).first()
+            )
+            if busy:
+                raise Conflict("The collection is not empty")
+            conn.execute(delete(collections).where(collections.c.id == collection_id))
 
     def ordinary_groups(self) -> list[int]:
         """The ordinary collections that still have groups (only Important keeps them)."""

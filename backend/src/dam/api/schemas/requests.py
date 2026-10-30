@@ -162,6 +162,10 @@ class GroupPatchBody(StrictIn):
     summary: str | None = None
 
 
+class MergeBody(StrictIn):
+    into: int
+
+
 class MoveMembersBody(StrictIn):
     to: int
     drive_ids: list[str]

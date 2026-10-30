@@ -14,6 +14,7 @@ import { readDragFiles, readDragSource, useDropTarget } from "../dnd";
 import { visible } from "../text";
 import { childrenOf } from "./collectionTree";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
+import { MergeCollectionSheet } from "./MergeCollectionSheet";
 import { NewCollectionSheet } from "./NewCollectionSheet";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
@@ -180,9 +181,11 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
   // New collection (at the top or inside one), then it opens: the tree's own pick
   const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(null);
   const order = useCollectionOrder(list.data ?? []);
+  const [merging, setMerging] = useState<CollectionRow | null>(null);
   const menu = useOrderMenu(order, (c) => [
     { label: "Open", onSelect: () => onPick({ kind: "collection", name: c.name }, false) },
     { label: "New collection inside…", onSelect: () => setCreating({ parent: c }) },
+    { label: "Merge into…", onSelect: () => setMerging(c) },
   ]);
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
   const [focused, setFocused] = useState<string | null>(null);
@@ -268,6 +271,18 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
         )}
       </ul>
       {menu.element}
+      {merging && (
+        <MergeCollectionSheet
+          c={merging}
+          all={list.data ?? []}
+          onCancel={() => setMerging(null)}
+          onDone={(into) => {
+            setMerging(null);
+            toast({ kind: "info", text: `Merged ${merging.name} into ${into.name}` });
+            onPick({ kind: "collection", name: into.name }, false);
+          }}
+        />
+      )}
       {creating && (
         <NewCollectionSheet
           parent={creating.parent}

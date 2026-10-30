@@ -36,6 +36,8 @@ from dam.api.schemas import (
     GroupPatchBody,
     MemberAttentionOut,
     MemberGroupBody,
+    MergeBody,
+    MergePreviewOut,
     MoveMembersBody,
     NameBody,
     ParentBody,
@@ -226,6 +228,32 @@ def move_members(app: AppDep, collection_id: int, body: MoveMembersBody) -> dict
     source = app.collections.get(collection_id)
     c = app.collections.move_members(collection_id, body.to, body.drive_ids, notify=False)
     return synced(app, c.id, f"Moved {what} from {source.name} to {c.name}")
+
+
+@router.post("/{collection_id}/merge/preview", response_model=MergePreviewOut)
+def merge_preview(app: AppDep, collection_id: int, body: MergeBody) -> dict:
+    """Whether the collection can be merged into ``into``: the reasons it cannot (empty:
+    it can). Reads only."""
+    return {"problems": app.collections.merge_check(collection_id, body.into)}
+
+
+@router.post("/{collection_id}/merge", response_model=CollectionChangeOut)
+def merge(app: AppDep, collection_id: int, body: MergeBody) -> dict:
+    """Merge the collection into ``into`` (snapshot first, no Undo); answers with ``into``
+    and what the Ongoing sync did. 400 with the reason when it cannot be merged."""
+    result = app.merge_collections(collection_id, body.into)
+    c = app.collections.get(body.into)
+    if result is None:
+        batch, problems = None, []
+    else:
+        batch = asdict(result.batch) if result.batch is not None else None
+        problems = list(result.problems)
+    return {
+        "collection": collection_out(app, c),
+        "batch": batch,
+        "problems": problems,
+        "ongoing_status": c.ongoing_status,
+    }
 
 
 @router.post("/{collection_id}/close/preview", response_model=list[ResolvedOpOut])

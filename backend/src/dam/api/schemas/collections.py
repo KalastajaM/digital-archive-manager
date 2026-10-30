@@ -183,3 +183,7 @@ class ExportOut(BaseModel):
     size: int
     needs_confirm: bool
     not_included: list[NotIncludedOut]
+
+
+class MergePreviewOut(BaseModel):
+    problems: list[str]  # why it cannot be merged; empty: it can

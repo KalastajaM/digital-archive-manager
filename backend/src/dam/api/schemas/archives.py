@@ -75,7 +75,15 @@ class SnapshotOut(BaseModel):
     name: str
     created_at: str  # ISO 8601 with the offset
     size: int  # bytes
-    kind: Literal["manual", "before-restore", "before-relabel", "before-rename", "before-groups"]
+    kind: Literal[
+        "manual",
+        "before-restore",
+        "before-relabel",
+        "before-rename",
+        "before-groups",
+        "before-merge",
+        "before-delete",
+    ]
     imported: bool  # added with Import
     revision: str | None  # the database's migration revision when it was taken
     app_version: str | None
