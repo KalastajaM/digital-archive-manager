@@ -6,6 +6,7 @@ import { useCollectionsWithMarked } from "../api/client";
 import { formatSize } from "../format";
 import { parentOf } from "../paths";
 import { visible } from "../text";
+import { collectionHref } from "../collectionHref";
 
 /** The one-line hint under the panel: what a drop does. */
 export function InspectorHint() {
@@ -50,7 +51,7 @@ export function SelectionSummary({ files }: { files: Picked[] }) {
             {shared.map(({ c, n }, i) => (
               <span key={c.id}>
                 {i > 0 && ", "}
-                <Link to={`/collections/${c.id}`}>{visible(c.name)}</Link> ({n} of {files.length})
+                <Link to={collectionHref(c)}>{visible(c.name)}</Link> ({n} of {files.length})
               </span>
             ))}
           </dd>

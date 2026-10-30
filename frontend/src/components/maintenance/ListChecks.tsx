@@ -34,6 +34,7 @@ import { browseTo, ShowInBrowse } from "./ShowInBrowse";
 import { type Check, useMaintenanceJob } from "./useMaintenanceJob";
 import { ranText } from "./lastRun";
 import { useFold } from "./view";
+import { collectionHref } from "../../collectionHref";
 
 export const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
 
@@ -459,9 +460,9 @@ function LinkReason({ reason }: { reason: "broken" | "folder_not_connected" | "f
 
 const ownerLink = (kind: string, id: string, name: string) => {
   if (kind === "tray") return `/trays/${encodeURIComponent(id)}`;
-  if (name === "Starred") return "/starred";
+  if (name === "Starred") return collectionHref({ id: 0, name, kind: "starred" });
   if (name === "Important") return "/important";
-  return `/collections/${encodeURIComponent(id)}`;
+  return `/open-collection/${encodeURIComponent(id)}`;
 };
 
 /** Why an entry is listed. */

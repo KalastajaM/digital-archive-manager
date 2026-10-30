@@ -26,6 +26,7 @@ const ConvertImportant = lazy(() => import("./screens/ConvertImportant"));
 const ConvertOngoing = lazy(() => import("./screens/ConvertOngoing"));
 const Important = lazy(() => import("./screens/Important"));
 const Starred = lazy(() => import("./screens/Starred"));
+const OpenCollection = lazy(() => import("./screens/OpenCollection"));
 const Inbox = lazy(() => import("./screens/Inbox"));
 const Maintenance = lazy(() => import("./screens/Maintenance"));
 const Today = lazy(() => import("./screens/Today"));
@@ -191,6 +192,7 @@ function Shell() {
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/trays/:trayId?" element={<Trays />} />
               <Route path="/collections/:id?" element={<Collections />} />
+              <Route path="/open-collection/:id" element={<OpenCollection />} />
               <Route path="/ongoing" element={<ConvertOngoing />} />
               <Route path="/starred" element={<Starred />} />
               <Route path="/important" element={<Important />} />

@@ -19,6 +19,7 @@ import { Card } from "../ui/Card";
 import { IconButton } from "../ui/IconButton";
 import type { CardFrame } from "./frame";
 import { baseName } from "../../paths";
+import { collectionHref } from "../../collectionHref";
 
 const ICON = { size: 16, strokeWidth: 1.75 } as const;
 // Differs from paths.ts: takes a bare name, so a "/" in the input is not stripped first.
@@ -178,7 +179,7 @@ export function StarredCard({ frame, Shell = Card }: { frame: CardFrame; Shell?:
       ) : n === 0 ? (
         <p className="today-empty">
           No starred files. Click ★ on a file to keep it here for quick access.{" "}
-          {starred.data && <Link to={`/collections/${starred.data.id}`}>★ Ongoing</Link>}
+          {starred.data && <Link to={collectionHref({ id: starred.data.id, name: starred.data.name, kind: "starred" })}>★ Ongoing</Link>}
         </p>
       ) : (
         <ul className="today-list starred-list" aria-label="Starred files">

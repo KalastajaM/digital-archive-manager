@@ -74,7 +74,7 @@ function Where() {
   return <p data-testid="where">{loc.pathname + loc.search}</p>;
 }
 
-function setup(extra: Parameters<typeof mockFetch>[0] = {}, collections: CollectionRow[] = [SAUNA]) {
+function setup(extra: Parameters<typeof mockFetch>[0] = {}, collections: CollectionRow[] = [SAUNA], url = "/browse") {
   const calls = mockFetch({
     "GET /api/status": { body: { inbox_count: 0 } },
     "GET /api/today": { body: { attention: [], overview: { inbox: 0, trays: [], collections: [] } } },
@@ -83,7 +83,7 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}, collections: Collect
     ...extra,
   });
   renderWithProviders(
-    <MemoryRouter initialEntries={["/browse"]}>
+    <MemoryRouter initialEntries={[url]}>
       <Sidebar />
       <Where />
     </MemoryRouter>,
@@ -254,6 +254,16 @@ describe("Sidebar drops", () => {
     await waitFor(() => expect(posts(calls, "/api/collections/4/members")).toHaveLength(1));
   });
 
+  it("a collection row opens it in Browse and is current only while Browse shows it", async () => {
+    setup({}, [SAUNA], "/browse?q=collection:Sauna");
+    const row = await within(nav()).findByRole("link", { name: /^Sauna/ });
+    expect(row).toHaveAttribute("href", "/browse?tree=collections&q=collection%3ASauna");
+    expect(row).toHaveAttribute("aria-current", "page");
+    cleanup();
+    setup({}, [SAUNA], "/browse?q=kela");
+    expect(await within(nav()).findByRole("link", { name: /^Sauna/ })).not.toHaveAttribute("aria-current");
+  });
+
   it("other rows are not drop targets", async () => {
     setup();
     const today = await within(nav()).findByRole("link", { name: "Today" });
@@ -369,7 +379,7 @@ describe("Sidebar collection tree", () => {
     expect(posts(calls, "/api/collections/3/members")).toHaveLength(0); // not taken as files
     // Open goes to the moved collection's page (its LastChange and Activity)
     await userEvent.setup().click(screen.getByRole("button", { name: "Open" }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/collections/7");
+    expect(screen.getByTestId("where")).toHaveTextContent("/open-collection/7");
   });
 
   it("a drag that recreated many links says how many in the toast", async () => {
@@ -385,7 +395,7 @@ describe("Sidebar collection tree", () => {
     expect(await screen.findByText("Moved Sauna into Car (recreated 60 links)")).toBeInTheDocument();
   });
 
-  it("has Starred under Important in Collections, with its count, opening /starred", async () => {
+  it("has Starred under Important in Collections, with its count, opening it in Browse", async () => {
     const members = [{ drive_id: "a" }, { drive_id: "b" }, { drive_id: "c" }];
     const { user } = setup({
       "GET /api/marks/collection/starred": { body: { id: 1, name: "Ongoing", kind: "starred", members, groups: [] } },
@@ -398,7 +408,7 @@ describe("Sidebar collection tree", () => {
     const important = rows.indexOf(within(nav()).getByRole("link", { name: "Important (1)" }));
     expect(rows.indexOf(starred)).toBe(important + 1);
     await user.click(starred);
-    expect(screen.getByTestId("where")).toHaveTextContent("/starred");
+    expect(screen.getByTestId("where")).toHaveTextContent("/browse?tree=collections&q=is%3Astarred");
   });
 
   it("dropping a collection on the Collections header moves it to the top level", async () => {

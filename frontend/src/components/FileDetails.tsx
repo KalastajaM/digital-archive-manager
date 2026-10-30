@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { errorText, type InboxEntry, useFileLinks } from "../api/client";
 import { scanFieldLabel, scanFieldValue } from "../format";
 import { visible } from "../text";
+import { collectionHref } from "../collectionHref";
 
 /** Label → value rows of what the scan found (``entry.fields``: the saved list or the
  * detected one) and, with ``sources``, which rules and date sources the suggestion
@@ -78,7 +79,7 @@ export function FileDetails({ file, scanned = [], links = true, identity = true 
                 {collections.map((c) => (
                   <li key={c.id}>
                     {links ? (
-                      <Link to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
+                      <Link to={collectionHref(c)}>
                         {visible(c.name)}
                       </Link>
                     ) : (

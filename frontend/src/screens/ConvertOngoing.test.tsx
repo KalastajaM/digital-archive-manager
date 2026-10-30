@@ -108,7 +108,7 @@ describe("ConvertOngoing", () => {
       expect.stringContaining("Legal"),
     ]);
     expect(within(items[1]).getByText(/points outside the archive/)).toBeInTheDocument();
-    expect(within(items[2]).getByRole("link", { name: "Legal stuff" })).toHaveAttribute("href", "/collections/5");
+    expect(within(items[2]).getByRole("link", { name: "Legal stuff" })).toHaveAttribute("href", "/browse?tree=collections&q=collection%3A%22Legal+stuff%22");
     expect(within(items[1]).queryByRole("button")).toBeNull();
     expect(within(items[2]).queryByRole("button")).toBeNull();
   });

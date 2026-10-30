@@ -28,6 +28,7 @@ import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { trayIcon } from "../components/ui/Sidebar";
 import { useQuickPut } from "../components/useQuickPut";
 import { visible } from "../text";
+import { collectionHref } from "../collectionHref";
 
 /** Takes a file out of a collection (as Remove from collection does: the file stays where
  * it is), with Undo in the toast (back in its group too). One at a time. */
@@ -110,7 +111,7 @@ export function LinkBadges({
         const member = removableMember(c, driveId);
         return (
           <li key={`c${c.id}`} className={member ? "badge-removable" : undefined}>
-            <Link className="tag tag-grey" to={`/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`}>
+            <Link className="tag tag-grey" to={collectionHref(c)}>
               {visible(c.name)}
               {c.state === "closed" && " (closed)"}
             </Link>
@@ -211,7 +212,7 @@ function CollectionsField({ driveId, refusal = null }: { driveId: string; refusa
   const chips: CollectionChip[] = all.map((c) => ({
     key: String(c.id),
     name: c.name,
-    to: `/collections/${c.id}${c.state === "closed" ? "?state=closed" : ""}`,
+    to: collectionHref(c),
     suffix: c.state === "closed" ? " (closed)" : undefined,
     removable: removableMember(c, driveId) !== null,
   }));

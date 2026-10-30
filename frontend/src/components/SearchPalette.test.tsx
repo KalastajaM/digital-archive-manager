@@ -191,7 +191,7 @@ describe("Search and jump", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/trays/to-pay");
     await user.click(screen.getByRole("button", { name: "Open" }));
     await user.click(await screen.findByRole("option", { name: /^2026 House sale/ }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/collections/3");
+    expect(screen.getByTestId("where")).toHaveTextContent("/browse?tree=collections&q=collection%3A%222026+House+sale%22");
     await user.click(screen.getByRole("button", { name: "Open" }));
     await user.type(box(), "insur");
     await user.click(await screen.findByRole("option", { name: /^insurance/ }));

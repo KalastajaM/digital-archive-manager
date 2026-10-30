@@ -440,7 +440,7 @@ describe("The other checks", () => {
       },
     );
     await user.click(within(card("Collections and trays")).getByRole("button", { name: "Check" }));
-    expect(await screen.findByRole("link", { name: "Trip" })).toHaveAttribute("href", "/collections/3");
+    expect(await screen.findByRole("link", { name: "Trip" })).toHaveAttribute("href", "/open-collection/3");
     expect(screen.getByRole("link", { name: "To pay: Water bill" })).toHaveAttribute("href", "/trays/to-pay");
     expect(screen.getByText("Missing")).toBeInTheDocument();
   });

@@ -1041,21 +1041,27 @@ A collection gathers related documents from anywhere in the archive, for example
 everything about a house sale. Files stay where they are; the collection follows them
 when they are moved or renamed. A file can be in several collections.
 
-A collection's page has a summary, a **Needs attention** strip (members in an open tray
-item or still in the inbox), its child collections, its files, a note and a checklist. The selected file shows on the right with its details.
+A collection opens in Browse, with the **Collections** tree beside it (from the sidebar,
+the Collections page, Today, a file's panel or the search palette). Above its files is the
+collection itself: one header (where the collection sits, its name, an Open / Closed pill,
+the counts, and **Add files**, **Show folder**, **Export…**, **⋯** and **Hide details**),
+then its details: the summary and **Needs attention** side by side, its child collections,
+and the note beside the checklist. A click on a Needs attention entry selects that file in
+the list. **Hide details** folds the details to one line ("Summary · Needs attention 2 ·
+Checklist 1 of 3 · Note"); a click on any part opens them again, and each collection
+remembers whether you folded it. Folders that are members of the collection are links
+under the header; the files inside them are in the list. The list holds the collection's
+files and those of the collections inside it, each file once, and a file that comes from
+an inner collection says which ("Paperwork ›"). **Add files** finds any file of the archive
+and puts it in the collection. Starred opens the same way, with its starred files.
 
-The New look draws the page as one header across the top (where the collection sits, its
-name, an Open / Closed pill, the counts, and **Add files**, **Show folder**, **Export…**
-and **⋯**), then the summary (the same box as a file's), **Needs attention** as a list, **Files** (for Important,
-**Files by group** with **New group** in its heading), and the note beside the checklist. **Add files** finds any
-file of the archive and puts it in the collection. The selected file's panel has the file
-actions (listed below) as one row of icons under its name instead of in the header, with
-**Show in folder** (the file's folder in Browse) and **Remove from collection** among them. To
-see a collection's files across folders in Browse, choose **Collections** at the top of Browse's
-folder tree and click the collection (see Browse).
+**Important** keeps a page of its own, because it arranges its files in groups: its summary,
+**Needs attention**, **Files by group** with **New group** in its heading, the note beside the
+checklist, and the selected file on the right with its details and the file actions (listed
+below) as one row of icons under its name.
 
-The header has the same two parts as Browse and the trays. The left part is for the
-collection: its name and subtitle, **New group** (Important only), the folder button,
+On Important's page the header has the same two parts as Browse and the trays. The left
+part is for the collection: its name and subtitle, **New group**, the folder button,
 **Export…** and **⋯**.
 Over the selected file, at the right, is one group of icons for the file actions, in this
 order: **Put in tray** (a menu of the trays), **Remove from collection** (not in Starred and
@@ -1251,7 +1257,8 @@ list's width.
   the Tags screen, each with its number of files, under a box that narrows the list as you
   type. A click on a collection or tag lists its files from the whole archive: it is a
   search, shown as its chip (`collection:Car`, `tag:medical`), and a collection includes the
-  collections inside it. A second click replaces the first; Cmd-click (Ctrl-click) on a tag
+  collections inside it, with the collection's header and details above the files (see
+  Collections). A second click replaces the first; Cmd-click (Ctrl-click) on a tag
   adds it, and the chips' **All** / **Any** choose between both tags and either. Files
   dropped on a collection in the tree are added to it, as in the sidebar. The choice of tree
   is kept in the address, so Back and a copied link keep it.
