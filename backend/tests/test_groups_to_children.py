@@ -37,6 +37,45 @@ def docs(engine):
     return ids
 
 
+def old_group(engine, collection_id, name, parent=None, summary=""):
+    """A group as this version found it (only Important may make new ones)."""
+    from sqlalchemy import func, select
+
+    from dam.core.text import fold_name
+    from dam.db.tables import collection_groups as g
+
+    with engine.begin() as conn:
+        position = conn.execute(
+            select(func.count()).where(
+                g.c.collection_id == collection_id,
+                g.c.parent_id.is_(parent) if parent is None else g.c.parent_id == parent,
+            )
+        ).scalar_one()
+        return conn.execute(
+            insert(g).values(
+                collection_id=collection_id,
+                parent_id=parent,
+                name=name,
+                name_fold=fold_name(name),
+                position=position,
+                summary=summary,
+            )
+        ).inserted_primary_key[0]
+
+
+def in_group(engine, collection_id, drive_ids, group_id):
+    from sqlalchemy import update
+
+    from dam.db.tables import collection_members as m
+
+    with engine.begin() as conn:
+        conn.execute(
+            update(m)
+            .where(m.c.collection_id == collection_id, m.c.drive_id.in_(drive_ids))
+            .values(group_id=group_id)
+        )
+
+
 def kids(svc, parent_id):
     return [c for c in svc.list(None) if c.parent_id == parent_id]
 
@@ -51,14 +90,13 @@ def by_name(svc, name):
 
 def test_groups_become_children_with_their_members_and_summary(svc, docs):
     legal = svc.create("Legal")
-    mine = svc.create_group(legal.id, "Michiel")
-    svc.set_group_summary(mine.id, "Mine")
-    wills = svc.create_group(legal.id, "Wills", parent_id=mine.id)
-    together = svc.create_group(legal.id, "Together")
+    mine = old_group(svc.engine, legal.id, "Michiel", summary="Mine")
+    wills = old_group(svc.engine, legal.id, "Wills", parent=mine)
+    together = old_group(svc.engine, legal.id, "Together")
     svc.add_members(legal.id, ["d1", "d2", "d3", "d4"])
-    svc.set_member_group(legal.id, ["d1"], mine.id)
-    svc.set_member_group(legal.id, ["d2"], wills.id)
-    svc.set_member_group(legal.id, ["d3"], together.id)
+    in_group(svc.engine, legal.id, ["d1"], mine)
+    in_group(svc.engine, legal.id, ["d2"], wills)
+    in_group(svc.engine, legal.id, ["d3"], together)
 
     done = svc.convert_groups()
 
@@ -80,21 +118,21 @@ def test_groups_become_children_with_their_members_and_summary(svc, docs):
 def test_a_taken_name_gets_the_parent_in_brackets(svc, docs):
     svc.create("Michiel")
     legal = svc.create("Legal")
-    svc.create_group(legal.id, "Michiel")
+    old_group(svc.engine, legal.id, "Michiel")
     [done] = svc.convert_groups()
     assert (done.name, done.renamed) == ("Michiel (Legal)", True)
     assert [c.name for c in kids(svc, legal.id)] == ["Michiel (Legal)"]
 
     house = svc.create("House")
     svc.create("Michiel (House)")
-    svc.create_group(house.id, "Michiel")
+    old_group(svc.engine, house.id, "Michiel")
     [again] = svc.convert_groups()
     assert again.name == "Michiel (House) 2"
 
 
 def test_children_of_a_closed_collection_are_closed(svc, docs):
     legal = svc.create("Legal")
-    svc.create_group(legal.id, "Michiel")
+    old_group(svc.engine, legal.id, "Michiel")
     svc.close(legal.id)
     svc.convert_groups()
     assert by_name(svc, "Michiel").state == "closed"
@@ -103,9 +141,8 @@ def test_children_of_a_closed_collection_are_closed(svc, docs):
 def test_order_follows_the_groups_after_existing_children(svc, docs):
     legal = svc.create("Legal")
     svc.create("Car", parent_id=legal.id)
-    b = svc.create_group(legal.id, "B")
-    svc.create_group(legal.id, "A")
-    assert b.position == 0
+    old_group(svc.engine, legal.id, "B")
+    old_group(svc.engine, legal.id, "A")
     svc.convert_groups()
     assert [c.name for c in kids(svc, legal.id)] == ["Car", "B", "A"]
 
@@ -116,7 +153,7 @@ def test_important_keeps_its_groups_and_a_second_run_does_nothing(svc, docs):
     svc.set_group_path(important.id, ["d5"], ["Houses", "Hillside"])
     before = [(g.parent_id is None, g.name) for g in svc.get(important.id).groups]
     legal = svc.create("Legal")
-    svc.create_group(legal.id, "Michiel")
+    old_group(svc.engine, legal.id, "Michiel")
     assert svc.ordinary_groups() == [legal.id]
 
     assert len(svc.convert_groups()) == 1
@@ -138,10 +175,10 @@ def grouped(app, fake_archive):
     app.scan()
     c = app.collections.create("Sauna")
     app.collections.add_members(c.id, ["id-a", "id-b", "id-c"])
-    y = app.collections.create_group(c.id, "2025")
-    q = app.collections.create_group(c.id, "Q1", parent_id=y.id)
-    app.collections.set_member_group(c.id, ["id-b"], y.id)
-    app.collections.set_member_group(c.id, ["id-c"], q.id)
+    y = old_group(app.engine, c.id, "2025")
+    q = old_group(app.engine, c.id, "Q1", parent=y)
+    in_group(app.engine, c.id, ["id-b"], y)
+    in_group(app.engine, c.id, ["id-c"], q)
     return app.collections.get(c.id)
 
 
@@ -232,3 +269,98 @@ def test_an_unpublished_collection_is_converted_and_nothing_is_published(app, fa
     assert len(app.convert_collection_groups()) == 2
     app.sync_publishers()
     assert ongoing_tree(fake_archive) == []
+
+
+def test_only_important_takes_groups(svc, docs):
+    from dam.errors import InvalidRequest
+
+    legal = svc.create("Legal")
+    with pytest.raises(InvalidRequest, match="Only Important has groups"):
+        svc.create_group(legal.id, "Michiel")
+    with pytest.raises(InvalidRequest):
+        svc.create_group(svc.builtin("starred").id, "x")
+    assert svc.create_group(svc.builtin("important").id, "Houses").name == "Houses"
+
+
+def test_the_group_route_refuses_an_ordinary_collection(app):
+    from fastapi.testclient import TestClient
+
+    from dam.api import create_api
+
+    base = "http://127.0.0.1:8765"
+    c = app.collections.create("Legal")
+    with TestClient(create_api(app), base_url=base) as client:
+        r = client.post(
+            f"/api/collections/{c.id}/groups",
+            json={"name": "Michiel", "parent_id": None},
+            headers={"Origin": base},
+        )
+    assert r.status_code == 400 and "Only Important has groups" in r.text
+
+
+# --- moving a file between collections ---------------------------------------------------
+
+
+def added_at(svc, collection_id, drive_id):
+    from sqlalchemy import select
+
+    from dam.db.tables import collection_members as m
+
+    with svc.engine.connect() as conn:
+        return conn.execute(
+            select(m.c.added).where(m.c.collection_id == collection_id, m.c.drive_id == drive_id)
+        ).scalar_one()
+
+
+def test_move_members_between_siblings(svc, docs):
+    legal = svc.create("Legal")
+    mine = svc.create("Michiel", parent_id=legal.id)
+    both = svc.create("Together", parent_id=legal.id)
+    svc.add_members(mine.id, ["d1", "d2"])
+    added = added_at(svc, mine.id, "d1")
+    target = svc.move_members(mine.id, both.id, ["d1", "d9"])  # d9 is not in Michiel: ignored
+    assert target.id == both.id and members(target) == ["d1"]
+    assert members(svc.get(mine.id)) == ["d2"]
+    assert added_at(svc, both.id, "d1") == added  # when it was first added stays
+
+
+def test_move_to_a_closed_collection_is_refused(svc, docs):
+    from dam.errors import InvalidRequest
+
+    a = svc.create("A")
+    b = svc.create("B")
+    svc.add_members(a.id, ["d1"])
+    svc.close(b.id)
+    with pytest.raises(InvalidRequest, match="closed"):
+        svc.move_members(a.id, b.id, ["d1"])
+    assert members(svc.get(a.id)) == ["d1"]
+
+
+def test_move_route_syncs_and_moves_the_link(app, fake_archive):
+    import os
+
+    from fastapi.testclient import TestClient
+
+    from dam.api import create_api
+
+    fake_archive.add(f"{BANKS}/a.pdf", drive_id="id-a")
+    fake_archive.add(f"{BANKS}/b.pdf", drive_id="id-b")
+    app.scan()
+    legal = app.collections.create("Legal")
+    mine = app.collections.create("Michiel", parent_id=legal.id)
+    both = app.collections.create("Together", parent_id=legal.id)
+    app.collections.add_members(mine.id, ["id-a", "id-b"])
+    app.collections.add_members(both.id, ["id-b"])
+    app.sync_publishers()
+    base = "http://127.0.0.1:8765"
+    with TestClient(create_api(app), base_url=base) as client:
+        r = client.post(
+            f"/api/collections/{mine.id}/members/move",
+            json={"to": both.id, "drive_ids": ["id-a"]},
+            headers={"Origin": base},
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["collection"]["id"] == both.id
+    root = fake_archive.root / ONG / "Legal"
+    assert os.path.islink(root / "Together" / "a.pdf")
+    assert not os.path.exists(root / "Michiel" / "a.pdf")

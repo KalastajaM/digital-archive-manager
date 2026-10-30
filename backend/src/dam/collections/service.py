@@ -865,6 +865,59 @@ class CollectionService:
                 )
             )
 
+    def move_members(
+        self, from_id: int, to_id: int, drive_ids: list[str], *, notify: bool = True
+    ) -> Collection:
+        """Move these members of ``from_id`` into ``to_id`` in one transaction, keeping
+        when each was added and its link name; an id that is not a member of ``from_id``
+        is left alone, one already in ``to_id`` just leaves ``from_id``. Returns
+        ``to_id``. Refused into a closed collection."""
+        ids = _drive_ids(drive_ids)
+        with self._add_lock(to_id), write_tx(self.engine) as conn:
+            self._require(conn, from_id)
+            target = conn.execute(
+                select(collections.c.name, collections.c.state).where(collections.c.id == to_id)
+            ).first()
+            if target is None:
+                raise NotFound(f"No collection {to_id}")
+            if target.state == "closed":
+                raise InvalidRequest(f"{target.name} is closed: reopen it to add files")
+            moving = set(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == from_id,
+                        collection_members.c.drive_id.in_(ids),
+                    )
+                ).scalars()
+            )
+            there = set(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == to_id,
+                        collection_members.c.drive_id.in_(moving),
+                    )
+                ).scalars()
+            )
+            if there:
+                gone = and_(
+                    collection_members.c.collection_id == from_id,
+                    collection_members.c.drive_id.in_(there),
+                )
+                self._remember_link_names(conn, gone)
+                conn.execute(delete(collection_members).where(gone))
+            if moving - there:
+                conn.execute(
+                    update(collection_members)
+                    .where(
+                        collection_members.c.collection_id == from_id,
+                        collection_members.c.drive_id.in_(moving - there),
+                    )
+                    .values(collection_id=to_id, group_id=None)
+                )
+        if notify:
+            self._changed()
+        return self.get(to_id)
+
     def remove_member(
         self, collection_id: int, drive_id: str, *, notify: bool = True
     ) -> Collection:
@@ -1130,9 +1183,13 @@ class CollectionService:
         return self.group(new_id)
 
     def _groups_allowed(self, conn: Connection, collection_id: int) -> None:
-        """NotFound for an unknown collection; ★ Ongoing has no groups."""
-        if self._kind(conn, collection_id) == "starred":
+        """NotFound for an unknown collection; only ! Important has groups (★ Ongoing
+        has none, and other collections nest instead)."""
+        kind = self._kind(conn, collection_id)
+        if kind == "starred":
             raise InvalidRequest(f"{BUILTINS['starred']!r} is built in: it has no groups")
+        if kind != "important":
+            raise InvalidRequest("Only Important has groups: use a collection inside this one")
 
     def _insert_group(
         self,

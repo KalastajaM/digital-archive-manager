@@ -10,12 +10,12 @@ import pytest
 import xattr
 from sqlalchemy import func, select, update
 
-from conftest import needs_dir_fd, posix_names
+from conftest import in_group, needs_dir_fd, old_group, posix_names
 from dam.collections.ongoing import _REPLACED, NOT_MANAGED, NOT_SHOWN, Desired, OngoingPublisher
 from dam.collections.service import check_name
 from dam.core.fs import readlink
 from dam.db.engine import write_tx
-from dam.db.tables import collection_members, ongoing_entries, operations
+from dam.db.tables import collection_groups, collection_members, ongoing_entries, operations
 from dam.db.tables import collections as collections_table
 from dam.errors import InvalidRequest
 from dam.index.driveid import DRIVE_ID_XATTR
@@ -1207,6 +1207,45 @@ def test_an_unchanged_failed_plan_is_retried_after_an_hour(app, fake_archive, mo
 # --- collection groups as nested folders (mac redesign, Task 8) ---------------------
 
 
+# Only Important makes groups now, but the publisher still shows the groups that old data
+# has on ordinary collections: these helpers build and change them straight in the db and
+# then sync (the service would have done that on its own).
+
+
+def regroup(app, collection_id, drive_ids, group_id):
+    in_group(app.engine, collection_id, drive_ids, group_id)
+    app.ongoing.sync()
+
+
+def rename_old_group(app, group_id, name):
+    from dam.core.text import fold_name
+
+    with app.engine.begin() as conn:
+        conn.execute(
+            update(collection_groups)
+            .where(collection_groups.c.id == group_id)
+            .values(name=name, name_fold=fold_name(name))
+        )
+    app.ongoing.sync()
+
+
+def remove_old_group(app, group_id):
+    """Like the service did: its children and members move up one level."""
+    g = collection_groups.c
+    with app.engine.begin() as conn:
+        parent = conn.execute(select(g.parent_id).where(g.id == group_id)).scalar_one()
+        conn.execute(
+            update(collection_groups).where(g.parent_id == group_id).values(parent_id=parent)
+        )
+        conn.execute(
+            update(collection_members)
+            .where(collection_members.c.group_id == group_id)
+            .values(group_id=parent)
+        )
+        conn.execute(collection_groups.delete().where(g.id == group_id))
+    app.ongoing.sync()
+
+
 def grouped(app, fake_archive):
     """Sauna: a.pdf ungrouped, b.pdf in "2025", c.pdf in "2025/Q1". Returns
     (collection, group 2025, group Q1)."""
@@ -1216,11 +1255,15 @@ def grouped(app, fake_archive):
     app.scan()
     c = app.collections.create("Sauna")
     app.collections.add_members(c.id, ["id-a"])
-    y = app.collections.create_group(c.id, "2025")
-    q = app.collections.create_group(c.id, "Q1", parent_id=y.id)
-    app.collections.set_member_group(c.id, ["id-b"], y.id)
-    app.collections.set_member_group(c.id, ["id-c"], q.id)
-    return app.collections.get(c.id), y, q
+    app.collections.add_members(c.id, ["id-b", "id-c"])
+    y = old_group(app.engine, c.id, "2025")
+    q = old_group(app.engine, c.id, "Q1", y)
+    in_group(app.engine, c.id, ["id-b"], y)
+    in_group(app.engine, c.id, ["id-c"], q)
+    app.ongoing.sync()
+    c = app.collections.get(c.id)
+    groups = {g.name: g for g in c.groups}
+    return c, groups["2025"], groups["Q1"]
 
 
 def kinds(app, batch_id):
@@ -1271,8 +1314,8 @@ def test_nested_groups_publish_nested_folders_and_links(app, fake_archive):
 
 def test_group_name_colliding_with_a_link_gets_a_suffix(app, fake_archive, two_files):
     c = sauna(app)
-    g = app.collections.create_group(c.id, "a.pdf")
-    app.collections.set_member_group(c.id, ["id-b"], g.id)
+    g = old_group(app.engine, c.id, "a.pdf")
+    regroup(app, c.id, ["id-b"], g)
     want = app.ongoing.desired_one(app.collections.get(c.id))
     assert want.folders == ("a_2.pdf",)
     assert want.links == {"a.pdf": f"{BANKS}/a.pdf", "a_2.pdf/b.pdf": f"{BANKS}/b.pdf"}
@@ -1285,7 +1328,7 @@ def test_group_name_colliding_with_a_link_gets_a_suffix(app, fake_archive, two_f
 def test_moving_a_member_between_groups_moves_its_link(app, fake_archive):
     c, y, q = grouped(app, fake_archive)
     n = len(batches(app))
-    app.collections.set_member_group(c.id, ["id-b"], q.id)
+    regroup(app, c.id, ["id-b"], q.id)
     assert len(batches(app)) == n + 1
     base = ongoing(fake_archive) / "Sauna"
     assert listing(base / "2025") == ["Q1"]
@@ -1294,7 +1337,7 @@ def test_moving_a_member_between_groups_moves_its_link(app, fake_archive):
         ("unlink_symlink", f"{ONG}/Sauna/2025/b.pdf"),
         ("symlink", f"{ONG}/Sauna/2025/Q1/b.pdf"),
     ]
-    app.collections.set_member_group(c.id, ["id-c"], None)
+    regroup(app, c.id, ["id-c"], None)
     assert listing(base) == ["2025", "a.pdf", "c.pdf"]
     assert listing(base / "2025" / "Q1") == ["b.pdf"]
     assert {r.rel for r in records(app)} == {
@@ -1310,7 +1353,7 @@ def test_moving_a_member_between_groups_moves_its_link(app, fake_archive):
 def test_group_rename_recreates_the_subtree_and_the_way_back_resyncs(app, fake_archive):
     c, y, q = grouped(app, fake_archive)
     n = len(batches(app))
-    app.collections.rename_group(y.id, "2026")
+    rename_old_group(app, y.id, "2026")
     assert len(batches(app)) == n + 1  # one journaled batch
     assert kinds(app, batches(app)[-1]) == [
         ("unlink_symlink", f"{ONG}/Sauna/2025/b.pdf"),
@@ -1332,7 +1375,7 @@ def test_group_rename_recreates_the_subtree_and_the_way_back_resyncs(app, fake_a
     assert listing(base / "2026" / "Q1") == ["c.pdf"]
     assert {r.rel for r in records(app) if "2025" in r.rel} == set()
     # the user's way back (rename it back) re-syncs to the original layout
-    app.collections.rename_group(y.id, "2025")
+    rename_old_group(app, y.id, "2025")
     assert listing(base) == ["2025", "a.pdf"]
     assert listing(base / "2025") == ["Q1", "b.pdf"]
     assert listing(base / "2025" / "Q1") == ["c.pdf"]
@@ -1345,7 +1388,7 @@ def test_group_rename_recreates_the_subtree_and_the_way_back_resyncs(app, fake_a
 
 def test_case_only_group_rename_recreates_under_new_spelling(app, fake_archive):
     c, y, q = grouped(app, fake_archive)
-    app.collections.rename_group(q.id, "q1")
+    rename_old_group(app, q.id, "q1")
     assert listing(ongoing(fake_archive) / "Sauna" / "2025") == ["b.pdf", "q1"]
     assert {r.rel for r in records(app) if "Q1" in r.rel or "q1" in r.rel} == {
         f"{ONG}/Sauna/2025/q1",
@@ -1357,7 +1400,7 @@ def test_group_folder_with_user_file_is_left(app, fake_archive):
     c, y, q = grouped(app, fake_archive)
     base = ongoing(fake_archive) / "Sauna"
     user = fake_archive.add(f"{ONG}/Sauna/2025/notes.txt", content=b"mine", drive_id="user-1")
-    app.collections.remove_group(y.id)  # Q1 moves up, b.pdf becomes ungrouped
+    remove_old_group(app, y.id)  # Q1 moves up, b.pdf becomes ungrouped
     assert listing(base) == ["2025", "Q1", "a.pdf", "b.pdf"]
     assert listing(base / "2025") == ["notes.txt"]  # its link went, the file survives
     assert user.read_bytes() == b"mine"
@@ -1487,13 +1530,14 @@ def test_removing_the_last_group_returns_to_the_single_link_form(app, fake_archi
     fake_archive.add("Home/2026 Sauna/plan.pdf", drive_id="id-plan")
     app.scan()
     c = app.collections.create("Sauna")
-    g = app.collections.create_group(c.id, "Plans")
-    app.collections.set_member_group(c.id, ["d-sauna"], g.id)
+    app.collections.add_members(c.id, ["d-sauna"])
+    g = old_group(app.engine, c.id, "Plans")
+    regroup(app, c.id, ["d-sauna"], g)
     base = ongoing(fake_archive) / "Sauna"
     assert base.is_dir() and not base.is_symlink()  # with a group: never a direct link
     assert listing(base / "Plans") == ["2026 Sauna"]
     assert points_at(base / "Plans" / "2026 Sauna", fake_archive, "Home/2026 Sauna")
-    app.collections.remove_group(g.id)
+    remove_old_group(app, g)
     assert points_at(base, fake_archive, "Home/2026 Sauna")
     assert kinds(app, batches(app)[-1]) == [
         ("unlink_symlink", f"{ONG}/Sauna/Plans/2026 Sauna"),
@@ -1507,7 +1551,8 @@ def test_removing_the_last_group_returns_to_the_single_link_form(app, fake_archi
 
 def test_an_empty_group_is_published_as_an_empty_folder(app, fake_archive, two_files):
     c = sauna(app)
-    app.collections.create_group(c.id, "Later")
+    old_group(app.engine, c.id, "Later")
+    app.ongoing.sync()
     base = ongoing(fake_archive) / "Sauna"
     assert listing(base) == ["Later", "a.pdf", "b.pdf"]
     assert listing(base / "Later") == []
@@ -1525,7 +1570,8 @@ def test_app_folder_swapped_for_a_users_folder_between_plan_and_act_is_left(
     app, fake_archive, two_files, monkeypatch
 ):
     c = sauna(app)
-    app.collections.create_group(c.id, "Later")
+    old_group(app.engine, c.id, "Later")
+    app.ongoing.sync()
     later = ongoing(fake_archive) / "Sauna" / "Later"
     assert listing(later) == []
     real = primitives.remove_empty_dir
@@ -1572,8 +1618,9 @@ def test_a_member_taking_a_group_folders_name_moves_the_group_to_a_suffix(app, f
     folder(fake_archive, "Home/Tax", "d-tax")
     app.scan()
     c = app.collections.create("Sauna")
-    g = app.collections.create_group(c.id, "Tax")
-    app.collections.set_member_group(c.id, ["id-b"], g.id)
+    app.collections.add_members(c.id, ["id-b"])
+    g = old_group(app.engine, c.id, "Tax")
+    regroup(app, c.id, ["id-b"], g)
     base = ongoing(fake_archive) / "Sauna"
     assert listing(base) == ["Tax"] and listing(base / "Tax") == ["b.pdf"]
     app.collections.add_members(c.id, ["d-tax"])  # an ungrouped member named Tax
@@ -1595,12 +1642,13 @@ def test_a_member_taking_a_group_folders_name_moves_the_group_to_a_suffix(app, f
     # two groups literally named Tax and Tax_2 each keep their own folder: a rename
     # of Tax never takes Tax_2's
     two = app.collections.create("Two")
-    tax = app.collections.create_group(two.id, "Tax")
-    tax2 = app.collections.create_group(two.id, "Tax_2")
-    app.collections.set_member_group(two.id, ["id-b"], tax2.id)
+    app.collections.add_members(two.id, ["id-b"])
+    tax = old_group(app.engine, two.id, "Tax")
+    tax2 = old_group(app.engine, two.id, "Tax_2")
+    regroup(app, two.id, ["id-b"], tax2)
     base = ongoing(fake_archive) / "Two"
     assert listing(base) == ["Tax", "Tax_2"] and listing(base / "Tax_2") == ["b.pdf"]
-    app.collections.rename_group(tax.id, "Other")
+    rename_old_group(app, tax, "Other")
     assert listing(base) == ["Other", "Tax_2"] and listing(base / "Tax_2") == ["b.pdf"]
     assert kinds(app, batches(app)[-1]) == [
         ("remove_empty_dir", f"{ONG}/Two/Tax"),
@@ -1825,12 +1873,13 @@ def test_child_and_member_name_clash_is_stable(app, fake_archive):
     assert kinds(app, batches(app)[-1]) == [("unlink_symlink", f"{ONG}/Houses/a.pdf")]
     assert app.ongoing.sync().batch is None
     # a group named like the child too: siblings of every kind get a suffix
-    g = app.collections.create_group(houses.id, "Sauna")
+    g = old_group(app.engine, houses.id, "Sauna")
+    app.ongoing.sync()
     assert listing(base) == ["Sauna", "Sauna_2", "Sauna_3"]
     assert listing(base / "Sauna_2") == ["b.pdf"]  # the child keeps its folder
     assert listing(base / "Sauna_3") == []
     assert app.ongoing.sync().batch is None
-    app.collections.remove_group(g.id)
+    remove_old_group(app, g)
     assert listing(base) == ["Sauna", "Sauna_2"]
 
 

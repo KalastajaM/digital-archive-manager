@@ -99,7 +99,8 @@ def test_overview_counts_sums_and_waiting(app, fake_archive):
     old = app.trays.create("to-read", ["r1"], {}, title=None)
     app.trays.create("to-read", ["r2"], {}, title=None)
     with app.engine.begin() as conn:
-        long_ago = time.time() - 40 * 86400
+        # 40 days before TODAY (the overview is asked for TODAY, not for the real date)
+        long_ago = time.mktime((TODAY - timedelta(days=40)).timetuple())
         conn.execute(update(items).where(items.c.id == old.id).values(created=long_ago))
     c = app.collections.create("Sauna")
     app.collections.add_members(c.id, ["b1", "b2"])

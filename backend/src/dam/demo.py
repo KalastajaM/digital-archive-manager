@@ -79,10 +79,11 @@ BARCODE_BILL_LINES = [
     "Yhteensä: 47,90 EUR",
 ]
 
-# A collection with nested groups: (group path, member paths); () is "Ungrouped".
+# A collection with collections inside it: (path of the inner collection, member paths);
+# () is the collection itself.
 DEMO_COLLECTION = "2026 House sale"
 DEMO_SUMMARY = "Selling the house in spring 2026: the bank's papers, taxes and photos."
-DEMO_GROUPS: list[tuple[tuple[str, ...], list[str]]] = [
+DEMO_CHILDREN: list[tuple[tuple[str, ...], list[str]]] = [
     (("Paperwork",), []),
     (("Paperwork", "Bank"), ["10. Financial/Banks/20260131_Northbank statement.pdf"]),
     (("Paperwork", "Taxes"), ["13. Taxes/20250930_Verohallinto.pdf"]),
@@ -280,9 +281,9 @@ def build(root: Path) -> tuple[Path, Path]:
 
 
 def _build_collection(data_dir: Path) -> None:
-    """Scan the index, then create the demo collection with its nested groups and
-    publish it: ``##. Ongoing/<collection>/<group>/<subgroup>`` links, made through
-    ``dam/ops`` like every other archive write."""
+    """Scan the index, then create the demo collection with its collections inside it
+    and publish it: ``##. Ongoing/<collection>/<child>/<grandchild>`` links, made
+    through ``dam/ops`` like every other archive write."""
     from dam.app import App
 
     app = App.create(data_dir)
@@ -291,18 +292,17 @@ def _build_collection(data_dir: Path) -> None:
         service = app.collections
         c = service.create(DEMO_COLLECTION)
         service.set_summary(c.id, DEMO_SUMMARY, notify=False)
-        groups: dict[tuple[str, ...], int | None] = {(): None}
-        for path, members in DEMO_GROUPS:
-            if path not in groups:
-                parent = groups[path[:-1]]
-                groups[path] = service.create_group(c.id, path[-1], parent, notify=False).id
+        inner: dict[tuple[str, ...], int] = {(): c.id}
+        for path, members in DEMO_CHILDREN:
+            if path not in inner:
+                inner[path] = service.create(path[-1], inner[path[:-1]], notify=False).id
             ids = []
             for rel in members:
                 rec = app.repo.by_path(rel)
                 assert rec is not None, rel
                 ids.append(rec.drive_id)
             if ids:
-                service.set_member_group(c.id, ids, groups[path], notify=False)
+                service.add_members(inner[path], ids, notify=False)
         service.set_summary(c.id, DEMO_SUMMARY)  # notifies: the Ongoing sync runs once
     finally:
         app.close()

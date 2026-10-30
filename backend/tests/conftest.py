@@ -339,3 +339,43 @@ def freeze_today(monkeypatch: pytest.MonkeyPatch):
         return day
 
     return freeze
+
+
+def old_group(engine, collection_id, name, parent=None, summary=""):
+    """A group as old data (only Important may make new ones): inserted straight into the db."""
+    from sqlalchemy import func, insert, select
+
+    from dam.core.text import fold_name
+    from dam.db.tables import collection_groups as g
+
+    with engine.begin() as conn:
+        position = conn.execute(
+            select(func.count()).where(
+                g.c.collection_id == collection_id,
+                g.c.parent_id.is_(parent) if parent is None else g.c.parent_id == parent,
+            )
+        ).scalar_one()
+        return conn.execute(
+            insert(g).values(
+                collection_id=collection_id,
+                parent_id=parent,
+                name=name,
+                name_fold=fold_name(name),
+                position=position,
+                summary=summary,
+            )
+        ).inserted_primary_key[0]
+
+
+def in_group(engine, collection_id, drive_ids, group_id):
+    """Put these members of the collection in an old group."""
+    from sqlalchemy import update
+
+    from dam.db.tables import collection_members as m
+
+    with engine.begin() as conn:
+        conn.execute(
+            update(m)
+            .where(m.c.collection_id == collection_id, m.c.drive_id.in_(drive_ids))
+            .values(group_id=group_id)
+        )
