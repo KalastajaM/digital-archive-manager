@@ -116,8 +116,10 @@ async function fromMenu(user: ReturnType<typeof userEvent.setup>, item: string |
 const QUOTES: Group = { id: 1, collection_id: 7, parent_id: null, name: "Quotes", position: 0, summary: "Two offers‮" };
 const OLD: Group = { id: 2, collection_id: 7, parent_id: 1, name: "Old", position: 0, summary: "" };
 const PLANS: Group = { id: 3, collection_id: 7, parent_id: null, name: "Plans", position: 1, summary: "" };
+// only Important has groups
 const GROUPED: Collection = {
   ...SAUNA,
+  kind: "important",
   summary: "The sauna build",
   groups: [QUOTES, PLANS, OLD],
   members: SAUNA.members.map((m) => (m.drive_id === "f1" ? { ...m, group_id: 1 } : m.drive_id === "d1" ? { ...m, group_id: 2 } : m)),
@@ -254,7 +256,7 @@ describe("Collection detail", () => {
     const toolbar = panel().querySelector("header.toolbar") as HTMLElement;
     const lead = toolbar.querySelector(".toolbar-lead") as HTMLElement;
     expect(within(lead).getByRole("heading", { level: 2 })).toBeInTheDocument();
-    expect(within(lead).getByRole("button", { name: "New group" })).toBeInTheDocument();
+    expect(within(lead).queryByRole("button", { name: "New group" })).toBeNull(); // only Important has groups
     expect(within(lead).getByRole("button", { name: "Export…" })).toBeInTheDocument();
     // the file actions are not in the lead, and not in the list actions
     expect(within(lead).queryByRole("button", { name: "Star" })).toBeNull();
@@ -313,11 +315,11 @@ describe("Collection detail", () => {
 
   it("a collection with files but no groups hints at New group, which does what the toolbar icon does", async () => {
     const created: Group = { id: 9, collection_id: 7, parent_id: null, name: "New group", position: 0, summary: "" };
-    let now = SAUNA;
+    let now: Collection = { ...SAUNA, kind: "important" }; // only Important has groups
     const { calls, user } = renderCollections("/collections/7", {
       "GET /api/collections/7": () => ({ body: now }),
       "POST /api/collections/7/groups": () => {
-        now = { ...SAUNA, groups: [created] };
+        now = { ...now, groups: [created] };
         return { body: changeOf(now) };
       },
     });
@@ -328,7 +330,7 @@ describe("Collection detail", () => {
   });
 
   it("the toolbar's New group icon says what groups are for", async () => {
-    renderCollections("/collections/7");
+    renderCollections("/collections/7", { "GET /api/collections/7": { body: { ...SAUNA, kind: "important" } } });
     await within(panel()).findByRole("tree", { name: "Members" });
     const icon = within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" });
     expect(icon).toHaveAttribute("data-tip", "New group: sort files into groups");
@@ -865,6 +867,8 @@ describe("Collection groups, summary and attention", () => {
     const dt = dataTransfer();
     fireEvent.dragStart(row, { dataTransfer: dt });
     expect(JSON.parse(dt.data["application/x-dam-files"])).toEqual({ ids: ["f1"] });
+    // it says where it comes from: dropped on another collection of the same tree it moves
+    expect(JSON.parse(dt.data["application/x-dam-from-collection"])).toEqual({ id: 7 });
 
     const ownHeader = within(quotes).getAllByRole("button", { name: "Quotes" })[0].closest(".group-header")!;
     fireEvent.dragEnter(ownHeader, { dataTransfer: dt });
@@ -933,7 +937,8 @@ describe("Collection groups, summary and attention", () => {
       },
       { drive_id: "f1", in_inbox: true, items: [] },
     ];
-    const { user } = grouped({ "GET /api/collections/7/attention": { body: attention } });
+    // an ordinary collection (Remove from the collection), drawn with GROUPED's tree
+    const { user } = grouped({ "GET /api/collections/7": { body: { ...GROUPED, kind: null } }, "GET /api/collections/7/attention": { body: attention } });
     const strip = await within(panel()).findByRole("region", { name: "Needs attention" });
     const bill = await within(strip).findByRole("button", { name: /To pay: Heat⟨U\+202E⟩ bill/ });
     expect(bill.querySelector(".tag")).toHaveClass("tag-red");

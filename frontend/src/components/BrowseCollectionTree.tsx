@@ -10,7 +10,7 @@ import { ChevronRight, Layers } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useState } from "react";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
-import { useDropTarget } from "../dnd";
+import { readDragFiles, readDragSource, useDropTarget } from "../dnd";
 import { visible } from "../text";
 import { childrenOf } from "./collectionTree";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
@@ -120,7 +120,17 @@ function Row({
 function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; level: number; parentKey?: string; shared: Shared }) {
   const kids = shared.kids.get(c.id) ?? [];
   const expanded = kids.length > 0 && !shared.folded.has(c.id);
-  const target = useDropTarget({ accept: shared.collect.accept(c), onDrop: shared.collect.add(c) });
+  const accept = shared.collect.accept(c);
+  const add = shared.collect.add(c);
+  // files, and the collection they come from (a drop within one tree moves them)
+  const target = useDropTarget<{ ids: string[]; from: number | null }>({
+    read: (e) => {
+      const ids = readDragFiles(e);
+      return ids === null ? null : { ids, from: readDragSource(e) };
+    },
+    accept: (d) => accept(d.ids),
+    onDrop: (d) => add(d.ids, d.from),
+  });
   const key = `c${c.id}`;
   return (
     <Row

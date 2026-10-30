@@ -1,12 +1,13 @@
 /** Browse's collection tree: Important and Starred first, then the open collections as
  * they nest; a click picks one, the picked one is current, and a long name stays in its row. */
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
 import type { ScopeState } from "../browseScope";
 import css from "../styles-new.css?raw";
-import { mockFetch, renderWithProviders } from "../test-utils";
+import { setDragFiles, setDragSource } from "../dnd";
+import { dataTransfer, mockFetch, renderWithProviders } from "../test-utils";
 import { CollectionTree } from "./BrowseCollectionTree";
 
 const coll = (id: number, name: string, parent_id: number | null = null): CollectionRow => ({
@@ -31,11 +32,11 @@ const coll = (id: number, name: string, parent_id: number | null = null): Collec
 
 const NONE: ScopeState = { collections: [], tags: [], starred: false, important: false };
 
-function setup(collections: CollectionRow[], active: ScopeState = NONE) {
-  mockFetch({ "GET /api/collections": { body: collections } });
+function setup(collections: CollectionRow[], active: ScopeState = NONE, routes: Parameters<typeof mockFetch>[0] = {}) {
+  const calls = mockFetch({ "GET /api/collections": { body: collections }, ...routes });
   const onPick = vi.fn();
   renderWithProviders(<CollectionTree active={active} onPick={onPick} />);
-  return { onPick, user: userEvent.setup() };
+  return { calls, onPick, user: userEvent.setup() };
 }
 
 const names = () => screen.getAllByRole("treeitem").map((li) => li.querySelector(".tree-name")?.textContent);
@@ -88,6 +89,20 @@ describe("CollectionTree", () => {
     fireEvent.click(legal.querySelector(".tree-chevron") as HTMLElement); // a click that leaves the focus where it was
     expect(screen.queryByText("Michiel")).not.toBeInTheDocument();
     expect(screen.getAllByRole("treeitem").filter((li) => li.tabIndex === 0)).toHaveLength(1);
+  });
+
+  it("a file dragged from a collection onto a sibling is moved there", async () => {
+    const together = coll(3, "Together", 1);
+    const { calls } = setup([coll(1, "Legal"), coll(2, "Michiel", 1), together], NONE, {
+      "POST /api/collections/2/members/move": { body: { collection: together, batch: null, problems: [], ongoing_status: null } },
+    });
+    const row = (await screen.findByText("Together")).closest(".tree-row") as HTMLElement;
+    const dt = dataTransfer();
+    setDragFiles({ dataTransfer: dt } as unknown as DragEvent, ["f1"], "a.pdf");
+    setDragSource({ dataTransfer: dt } as unknown as DragEvent, 2);
+    fireEvent.dragEnter(row, { dataTransfer: dt });
+    fireEvent.drop(row, { dataTransfer: dt });
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections/2/members/move")).toHaveLength(1));
   });
 });
 

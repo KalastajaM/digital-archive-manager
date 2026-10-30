@@ -31,10 +31,10 @@ const SAUNA: Collection = {
   position: 0,
 };
 
-function setup() {
+function setup(c: Collection = SAUNA) {
   mockFetch({
-    "GET /api/collections": { body: [{ ...SAUNA, files: 1, open_checks: 0 }] },
-    "GET /api/collections/7": { body: SAUNA },
+    "GET /api/collections": { body: [{ ...c, files: 1, open_checks: 0 }] },
+    "GET /api/collections/7": { body: c },
     "GET /api/notes/collection/7": { body: { text: "" } },
     "GET /api/checklist/collection/7": { body: [] },
     "GET /api/files/f1/links": { body: { items: [], collections: [], note: "" } },
@@ -97,16 +97,22 @@ describe("a collection in New", () => {
     expect(await screen.findByRole("dialog", { name: /Move Sauna to/ })).toBeInTheDocument();
   });
 
-  it("orders the page as the board does and keeps New group in the Files by group heading", async () => {
+  it("orders the page as the board does; an ordinary collection lists its Files, with no groups", async () => {
     document.documentElement.dataset.style = "new";
     setup();
-    const files = await screen.findByRole("heading", { name: "Files by group" });
+    await screen.findByRole("heading", { name: "Files" });
     const heads = [...document.querySelectorAll(".collection-body h2")].map((h) => h.textContent);
     expect(heads.indexOf("Summary")).toBeGreaterThanOrEqual(0);
-    expect(heads.indexOf("Summary")).toBeLessThan(heads.indexOf("Files by group"));
+    expect(heads.indexOf("Summary")).toBeLessThan(heads.indexOf("Files"));
+    // only Important has groups: other collections nest instead
+    expect(screen.queryByRole("button", { name: "New group" })).toBeNull();
+  });
+
+  it("keeps New group in Important's Files by group heading, once", async () => {
+    document.documentElement.dataset.style = "new";
+    setup({ ...SAUNA, name: "Important", kind: "important" });
+    const files = await screen.findByRole("heading", { name: "Files by group" });
     expect(within(files.parentElement as HTMLElement).getByRole("button", { name: "New group" })).toBeInTheDocument();
-    // not repeated in the header
-    expect(within(document.querySelector(".collection-head") as HTMLElement).queryByRole("button", { name: "New group" })).toBeNull();
     expect(screen.getAllByRole("button", { name: "New group" })).toHaveLength(1);
   });
 
