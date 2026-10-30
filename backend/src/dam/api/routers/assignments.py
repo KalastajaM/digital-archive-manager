@@ -12,6 +12,8 @@ from dam.api.schemas import (
     IdentifierNameDoneOut,
     IdentifierNameIn,
     IdentifierNamesOut,
+    OwnIdentifierDoneOut,
+    OwnIdentifierIn,
     SenderOut,
 )
 from dam.services.assignments import UNSET
@@ -72,3 +74,13 @@ def put_identifier_name(app: AppDep, body: IdentifierNameIn) -> dict:
     else:
         changed = app.sender_names.confirm(body.kind, body.value, body.name)
     return {"changed": changed, "name": app.sender_names.name_of(body.kind, body.value)}
+
+
+@router.put("/identifier-names/own", response_model=OwnIdentifierDoneOut)
+def put_own_identifier(app: AppDep, body: OwnIdentifierIn) -> dict:
+    """Mark a business ID as the owner's own ("This is mine"), or not: it then names no
+    sender, links no files in Relatives and does not count for ``id:*``. Saved to
+    settings.yaml. Answers how many documents' From changed. 400 for a kind that is not a
+    business ID, or a value no document carries."""
+    changed = app.set_own_business_id(body.kind, body.value, body.own)
+    return {"changed": changed, "own": body.value in app.settings.own_business_ids}

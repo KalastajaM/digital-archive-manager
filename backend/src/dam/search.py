@@ -273,6 +273,9 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
         groups = packs.identifier_kinds(packs.active())
         if v == ANY:
             kinds, match = groups[f.name], ""
+            own = sorted(packs.active().own_ids) if f.name == "id" else []
+            if own:  # the owner's own business ID is on everything they sent: not "any"
+                match = f" AND i.value NOT IN ({w.marks(own)})"
         else:
             kinds = [k for ks in groups.values() for k in ks] if f.name == "id" else groups[f.name]
             pairs = _id_pairs(v, kinds)

@@ -436,6 +436,8 @@ class IdentifierOut(BaseModel):
     label: str  # "Business ID (Y-tunnus)"
     value: str
     others: int  # other files there that carry it
+    business: bool  # a business ID: it can be marked as the owner's own
+    own: bool  # the owner's own business ID (it names no sender)
 
 
 class IdentifiersOut(BaseModel):

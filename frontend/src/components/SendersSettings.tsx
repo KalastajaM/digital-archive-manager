@@ -6,6 +6,7 @@ import { type FormEvent, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { errorText, type IdentifierName, useIdentifierNames, usePutIdentifierName } from "../api/client";
 import { visible } from "../text";
+import { useMarkOwn } from "./FoundIdentifiers";
 import { undoAction, useToast } from "./Toasts";
 
 type Put = { kind: string; value: string; name: string | null };
@@ -17,6 +18,7 @@ const shortLabel = (label: string) => /\(([^)]+)\)/.exec(label)?.[1] ?? label;
 
 function SenderRow({ row, undo }: { row: IdentifierName; undo: (body: Put) => void }) {
   const put = usePutIdentifierName();
+  const own = useMarkOwn();
   const toast = useToast();
   const [draft, setDraft] = useState<string | null>(null);
   const stateId = useId();
@@ -59,41 +61,52 @@ function SenderRow({ row, undo }: { row: IdentifierName; undo: (body: Put) => vo
           {documents(row.files)}
         </Link>
       </div>
-      <form className="senders-form" onSubmit={submit}>
-        <input
-          type="text"
-          aria-label={`Name for ${row.value}`}
-          aria-describedby={stateId}
-          readOnly={put.isPending}
-          value={shown}
-          maxLength={80}
-          placeholder="Company name"
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        {row.name === null ? (
-          <button type="submit" className="primary" disabled={!changed || put.isPending}>
-            Confirm
+      {row.own ? (
+        <div className="senders-form">
+          <p className="hint senders-state">Yours: it names no sender and links no files.</p>
+          <button type="button" disabled={own.pending} onClick={() => own.mark(row.kind, row.value, false)}>
+            Not mine
           </button>
-        ) : (
-          <>
-            {changed && (
-              <button type="submit" className="primary" disabled={put.isPending}>
-                Save
+        </div>
+      ) : (
+        <>
+          <form className="senders-form" onSubmit={submit}>
+            <input
+              type="text"
+              aria-label={`Name for ${row.value}`}
+              aria-describedby={stateId}
+              readOnly={put.isPending}
+              value={shown}
+              maxLength={80}
+              placeholder="Company name"
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            {row.name === null ? (
+              <button type="submit" className="primary" disabled={!changed || put.isPending}>
+                Confirm
               </button>
+            ) : (
+              <>
+                {changed && (
+                  <button type="submit" className="primary" disabled={put.isPending}>
+                    Save
+                  </button>
+                )}
+                <button type="button" disabled={put.isPending} onClick={() => send(null, row.name)}>
+                  Clear
+                </button>
+              </>
             )}
-            <button type="button" disabled={put.isPending} onClick={() => send(null, row.name)}>
-              Clear
-            </button>
-          </>
-        )}
-      </form>
-      <p className="hint senders-state" id={stateId}>
-        {row.name !== null
-          ? `Confirmed · From on ${row.filled} of ${row.files}`
-          : row.suggested
-            ? "Name read next to the ID in the documents"
-            : "No name found next to the ID"}
-      </p>
+          </form>
+          <p className="hint senders-state" id={stateId}>
+            {row.name !== null
+              ? `Confirmed · From on ${row.filled} of ${row.files}`
+              : row.suggested
+                ? "Name read next to the ID in the documents"
+                : "No name found next to the ID"}
+          </p>
+        </>
+      )}
       {put.isError && (
         <p className="error" role="alert">
           {visible(errorText(put.error))}

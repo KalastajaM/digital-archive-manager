@@ -854,6 +854,9 @@ it opens Browse on them (an `id:` search, such as `id:0112038-9`).
   names gets no From from them, since dam cannot tell which company sent it.
 - **Find a name or ID** narrows the list. The row says **Confirmed · From on N of M** once
   named: N documents have that name as From, of the M that carry the ID.
+- A Y-tunnus you marked as your own (with **Mine** in Found in this document) shows as
+  **Yours** without a name field: it names no sender. **Not mine** undoes that, and a name
+  it had fills From again.
 
 The list needs Finland on in Reading documents (with Finland off, its names fill
 nothing more), and fills as the background reading of business IDs goes (Settings,
@@ -1257,7 +1260,7 @@ the box. A search with only filters lists the matching files by name.
 | `collection:` | Files in a collection, including the collections inside it and, for a folder that is a member, the files in that folder. `collection:*` finds files in any of your collections (not Starred or Important), `-collection:*` those in none. | `collection:"House sale"` |
 | `from:` | Files whose sender (From, as you set it on the file) contains the text. `from:*` finds files with any sender, `-from:*` those without one yet (for example `id:* -from:*`: a business ID but no sender). | `from:Kela`, `-from:*` |
 | `for:` | Files whose person (For) is that person. Only what you set, or what a confirmed filing recorded, is searched; the names found on page 1 are not. `for:*` finds files with anyone set, `-for:*` those with no one. | `for:Tiina` |
-| `id:` | Files whose text carries this business ID, IBAN or web or mail domain, written with or without spaces and dashes (a Y-tunnus also in its VAT form). `id:*` finds every file that has a business ID (not an IBAN or domain), for example `from:Telia id:*`. Only the countries that are on in Settings, Reading documents. | `id:0112038-9`, `id:*` |
+| `id:` | Files whose text carries this business ID, IBAN or web or mail domain, written with or without spaces and dashes (a Y-tunnus also in its VAT form). `id:*` finds every file that has a business ID (not an IBAN or domain, and not one you marked as yours), for example `from:Telia id:*`. Only the countries that are on in Settings, Reading documents. | `id:0112038-9`, `id:*` |
 | `iban:` | Files whose text carries this IBAN, written with or without spaces. `iban:*` finds every file that has an IBAN, `-iban:*` those without one, for example `from:Telia iban:*`. | `iban:*`, `iban:"FI21 1234 5600 0007 85"` |
 | `domain:` | Files whose text carries this web or mail domain. `domain:*` finds every file that has one, `-domain:*` those without. | `domain:kela.fi`, `domain:*` |
 | `type:` | The kind of file: an extension (`pdf`, `docx`) or a group: `image`, `doc`, `sheet`, `slides`, `text`, `mail`, `archive`, `audio`, `video`. | `type:pdf`, `type:image` |
@@ -1326,6 +1329,12 @@ does not have them). You find them:
 In the New look's file panel, just above Relatives, **Found in this document** lists the
 business IDs, IBANs and web or mail domains dam read from the file's text, each with **on N
 other files**: a link to an `id:` search for the files that carry it too.
+
+If you run a business, your own business ID is on every letter you write and on many you
+receive. Press **Mine** next to it: it then says **yours**, names no sender (a name you gave
+it in Senders stops filling From), links no files in Relatives and does not count for
+`id:*`. `id:` with its value still finds the files. **Not mine** undoes it, and so does
+**Undo** in the toast. Your own IDs are kept as `own_business_ids` in settings.yaml.
 
 A file is a relative when it shares at least one **link** with this one. Each row names its
 links in short labels: **folder** (the same folder; sharing the inbox does not count, since

@@ -487,3 +487,11 @@ def test_a_kvk_number_that_looks_like_a_ytunnus_is_still_found(with_ids):
         "doc", "sha-doc", countries.signature(), [("nl.kvk", "12345671")]
     )
     assert "doc" in ids(with_ids, "id:12345671")
+
+
+def test_id_star_leaves_out_your_own_business_id(with_ids):
+    from dam import packs
+
+    packs.activate(packs.build(["fi"], ["en"], own_ids=["0112038-9"]))
+    assert ids(with_ids, "id:*") == []
+    assert ids(with_ids, "id:0112038-9") == ["bill", "tax"]  # asked for by its value: found

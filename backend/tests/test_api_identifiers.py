@@ -28,8 +28,17 @@ def test_found_in_this_document(app, fake_archive):
                 "label": "Business ID (Y-tunnus)",
                 "value": "0112038-9",
                 "others": 1,
+                "business": True,
+                "own": False,
             },
-            {"kind": "core.domain", "label": "Web or mail domain", "value": "a.fi", "others": 0},
+            {
+                "kind": "core.domain",
+                "label": "Web or mail domain",
+                "value": "a.fi",
+                "others": 0,
+                "business": False,
+                "own": False,
+            },
         ]
     }
 

@@ -215,6 +215,9 @@ class Settings(BaseModel):
     # what dam did before there was a choice (Finland, and its languages)
     countries: list[str] | None = None
     languages: list[str] | None = None
+    # business IDs that are the owner's own (a sole trader's Y-tunnus on every letter): they
+    # name no sender, link no files in Relatives and do not count for ``id:*``
+    own_business_ids: list[str] = Field(default_factory=list)
     reminders: RemindersSettings = Field(default_factory=RemindersSettings)
     ai: AISettings = Field(default_factory=AISettings)
 

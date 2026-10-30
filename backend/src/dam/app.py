@@ -2,6 +2,7 @@
 
 import logging
 import os
+import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import InitVar, dataclass, field, fields
@@ -81,6 +82,8 @@ JOBS_RUNNING = (
 # why the archive cannot be closed or its database replaced now: a batch of changes
 # (filing, undo, a sync) is still journaling
 BATCH_RUNNING = "A change is still being carried out. Try again when it has finished."
+# ``own_business_ids`` is read, changed and written back as a whole
+_OWN_IDS_LOCK = threading.Lock()
 
 
 # -- construction ------------------------------------------------------------------------
@@ -443,8 +446,7 @@ class App:
         # the packs this archive reads with; the ones before come back when it closes, in
         # case another App (a demo being built, a switch that failed) was opened meanwhile
         self._packs_before = packs.active()
-        self._packs = packs.build(self.settings.country_codes(), self.settings.language_codes())
-        packs.activate(self._packs)
+        self._activate_packs()
         _take(self, index_parts)
         _take(self, ops_parts)
         cols = build_collections(self.settings, self.paths, self.engine, self.repo, self.executor)
@@ -662,8 +664,41 @@ class App:
         if not self.settings.zone_is_set():
             # not a set field: the zone keeps following the countries
             object.__setattr__(self.settings, "address_zone", self.settings.countries_zone())
-        self._packs = packs.build(self.settings.country_codes(), self.settings.language_codes())
+        self._activate_packs()
+
+    def _activate_packs(self) -> None:
+        s = self.settings
+        self._packs = packs.build(s.country_codes(), s.language_codes(), s.own_business_ids)
         packs.activate(self._packs)
+
+    def set_own_business_id(self, kind: str, value: str, own: bool) -> int:
+        """Mark a business ID as the owner's own (``own_business_ids`` in settings.yaml), or
+        not: From follows at once on the files that carry it (a name for it gives no
+        sender while it is yours). Only an ID read from a document can be marked.
+        ``InvalidRequest`` for anything else, or when the file could not be written.
+        Returns how many files' From changed."""
+        if own and kind not in packs.business_id_kinds(self._packs):
+            raise InvalidRequest(f"{kind!r} is not a business ID.")
+        if own and not self.repo.identifier_counts([(kind, value)]):
+            raise InvalidRequest(f"{value!r} was not found in any document.")
+        with _OWN_IDS_LOCK:  # two quick clicks: neither change is lost
+            return self._save_own_business_id(kind, value, own)
+
+    def _save_own_business_id(self, kind: str, value: str, own: bool) -> int:
+        have = self.settings.own_business_ids
+        want = list(dict.fromkeys([*have, value])) if own else [v for v in have if v != value]
+        if want != have:
+            try:
+                write_keys(
+                    self.app_paths,
+                    {"own_business_ids": want},
+                    lambda s: s.own_business_ids == want,
+                )
+            except OSError as e:
+                raise InvalidRequest(f"the setting could not be saved: {e}") from e
+            self.settings.own_business_ids = want
+            self._activate_packs()
+        return self.sender_names.refill(kind, value)
 
     def set_people(
         self,

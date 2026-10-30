@@ -52,7 +52,7 @@ def given(conn: Connection, name: str) -> list[str]:
 
 def _named_senders(conn: Connection, drive_ids: list[str]) -> dict[str, list[str]]:
     """drive_id -> the names of the named identifiers its current content carries, of the
-    enabled countries."""
+    enabled countries; not the owner's own business IDs."""
     rows = conn.execute(
         select(file_identifiers.c.drive_id, identifier_names.c.name)
         .join(files, files.c.drive_id == file_identifiers.c.drive_id)
@@ -65,6 +65,7 @@ def _named_senders(conn: Connection, drive_ids: list[str]) -> dict[str, list[str
             file_identifiers.c.drive_id.in_(drive_ids),
             files.c.sha256 == file_identifiers.c.sha256,
             identifier_names.c.kind.in_(_active_kinds()),
+            identifier_names.c.value.not_in(packs.active().own_ids),
         )
         .order_by(identifier_names.c.kind, identifier_names.c.value)
     ).all()

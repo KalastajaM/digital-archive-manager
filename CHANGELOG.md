@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Your own business ID.** In Found in this document, **Mine** marks a business ID as
+  yours: it names no sender, links no files in Relatives and does not count for `id:*`.
+  Settings, Senders shows it as Yours, with **Not mine** to undo it.
+
 - In Settings, Senders, the number of documents is a link that opens Browse on the
   documents carrying that business ID.
 - **Collections and tags in Browse.** The tree beside Browse's panes switches between

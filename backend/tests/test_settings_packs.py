@@ -83,3 +83,9 @@ def test_a_second_app_gives_the_packs_back_when_it_closes(app_paths: AppPaths, t
         assert [c.code for c in packs.active().countries] == ["core"]
     finally:
         first.close()
+
+
+def test_own_business_ids_reach_the_profile():
+    assert packs.build(["fi"], ["en"]).own_ids == frozenset()
+    assert packs.build(["fi"], ["en"], own_ids=["0112038-9"]).own_ids == {"0112038-9"}
+    assert Settings().own_business_ids == []

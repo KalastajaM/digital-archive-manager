@@ -36,6 +36,7 @@ class NameRow:
     name: str | None  # the owner's name, else None
     set_at: float | None
     filled: int  # of ``files``, those whose From is ``name``
+    own: bool  # the owner's own business ID: it names no sender
 
 
 def _spelling(names: Counter[str]) -> str:
@@ -72,6 +73,7 @@ class SenderNames:
         specs = self.specs()
         if not specs:
             return []
+        own = packs.active().own_ids
         live = (
             files.c.sha256 == file_identifiers.c.sha256,
             files.c.missing.is_not(True),
@@ -97,7 +99,7 @@ class SenderNames:
                     select(identifier_names).where(identifier_names.c.kind.in_(specs))
                 )
             }
-            keys = [k for k, n in counts.items() if n >= MIN_FILES or k in named]
+            keys = [k for k, n in counts.items() if n >= MIN_FILES or k in named or k[1] in own]
             keys += [k for k in named if k not in counts]
             read: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
             for r in conn.execute(
@@ -135,6 +137,7 @@ class SenderNames:
                 name=named[kind, value].name if (kind, value) in named else None,
                 set_at=named[kind, value].set_at if (kind, value) in named else None,
                 filled=filled[kind, value],
+                own=value in own,
             )
             for kind, value in keys
         ]
@@ -147,6 +150,16 @@ class SenderNames:
             raise InvalidRequest(f"{kind!r} cannot be given a name.")
         if spec.find(value) != [value]:
             raise InvalidRequest(f"{value!r} is not a valid {spec.label}.")
+
+    def refill(self, kind: str, value: str) -> int:
+        """From again on the files that carry the ID, after it became the owner's own (a
+        sender its name gave is taken back) or stopped being so. Returns how many files
+        changed."""
+        with write_tx(self.engine) as conn:
+            name = self._name(conn, kind, value)
+            # as ``clear``: also the files its name gave that do not carry it now (parked)
+            touched = carriers(conn, kind, value) + (given(conn, name) if name else [])
+            return fill_senders(conn, touched)
 
     def _name(self, conn, kind: str, value: str) -> str | None:
         return conn.execute(
@@ -182,6 +195,8 @@ class SenderNames:
         it, where the owner has not set From or For, and follows a changed name on the
         files the old one gave. Returns how many files changed."""
         self._check(kind, value)
+        if value in packs.active().own_ids:
+            raise InvalidRequest(f"{value} is marked as yours, so it names no sender.")
         clean = check_sender(name)
         # all in one write: a file the identifiers pass saves meanwhile is either a carrier
         # here or reads the name when it saves

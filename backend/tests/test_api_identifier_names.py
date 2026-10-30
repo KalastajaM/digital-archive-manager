@@ -41,6 +41,7 @@ def test_the_list_and_a_confirmed_name(app, fake_archive):
                     "name": None,
                     "set_at": None,
                     "filled": 0,
+                    "own": False,
                 }
             ]
         }
