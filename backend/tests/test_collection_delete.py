@@ -51,7 +51,7 @@ def test_delete_takes_the_subtree_and_its_links_and_never_a_file(app, tree, fake
 
     root = fake_archive.root / ONG
     assert (root / "Legal" / "Michiel" / "Wills" / "c.pdf").is_symlink()
-    (root / "Legal" / "mine.txt").write_text("my own note")  # a file of the user's
+    (root / "Legal" / "mine.txt").write_text("my own note", encoding="utf-8")  # a file of the user's
     with make_client(app) as client:
         r = client.post(f"/api/collections/{tree['top'].id}/delete", json={}, headers=LOCAL_ORIGIN)
     assert r.status_code == 200, r.text
