@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import Connection, delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.core.fs import readlink, resolve
@@ -24,7 +24,7 @@ from dam.ops.guards import fold_parts, is_under, parent
 from dam.ops.model import BatchResult, GuardError, OpKind, Plan, ResolvedOp
 
 if TYPE_CHECKING:
-    from dam.collections.service import Collection, CollectionService
+    from dam.collections.service import Collection, CollectionService, GroupConverted
     from dam.index.repo import FileRepo
     from dam.ops.executor import Executor
 from dam.collections.ongoing.desired import DesiredMixin
@@ -36,6 +36,7 @@ from dam.collections.ongoing.model import (
     PUBLISHER_ID,
     REPLACED,
     RETRY_FAILED_S,
+    Desired,
     Share,
     SyncResult,
     depth_of,
@@ -418,3 +419,52 @@ class OngoingPublisher(DesiredMixin, RecordsMixin, PlanningMixin, LayoutsMixin, 
                             .where(collections_table.c.id == c.id)
                             .values(ongoing_rel=top, ongoing_status=status)
                         )
+
+    # --- groups turned into collections ---------------------------------------------------
+
+    def desired_roots(self) -> dict[int, Desired | None]:
+        """``desired_tree`` of every top-level ordinary collection, by id (reads only)."""
+        roots, children = forest(self.collections.list(None))
+        return {r.id: self.desired_tree(r, children) for r in roots}
+
+    def reown(
+        self, conn: Connection, before: dict[int, Desired | None], done: list[GroupConverted]
+    ) -> int:
+        """Inside the transaction that turned groups into collections (``done``): hand
+        each former group folder's records (the folder and what is in it, still its
+        collection's) to the group's new collection, deepest first, so the next sync
+        keeps every folder and link where it is. ``before``: ``desired_roots()`` taken
+        before the change. Returns how many records changed owner."""
+        folder_of: dict[int, tuple[int, str]] = {}  # group id -> (root id, folder path)
+        for root_id, was in before.items():
+            if was is not None and was.kind == "folder":
+                for gid, path in was.groups.items():
+                    folder_of[gid] = (root_id, path)
+        homes: dict[int, str | None] = {}
+        moves = []
+        for d in done:
+            if d.group_id not in folder_of:  # its collection is not published
+                continue
+            root_id, path = folder_of[d.group_id]
+            if root_id not in homes:
+                homes[root_id] = conn.execute(
+                    select(collections_table.c.ongoing_rel).where(collections_table.c.id == root_id)
+                ).scalar()
+            if homes[root_id]:  # recorded only once it was published
+                moves.append((f"{homes[root_id]}/{path}", d.collection_id, d.new_id))
+        changed = 0
+        for rel, old_owner, new_owner in sorted(moves, key=lambda m: -m[0].count("/")):
+            rows = conn.execute(
+                select(ongoing_entries.c.id, ongoing_entries.c.rel).where(
+                    ongoing_entries.c.collection_id == old_owner
+                )
+            ).all()
+            ids = [r.id for r in rows if r.rel == rel or r.rel.startswith(rel + "/")]
+            if ids:
+                conn.execute(
+                    update(ongoing_entries)
+                    .where(ongoing_entries.c.id.in_(ids))
+                    .values(collection_id=new_owner)
+                )
+                changed += len(ids)
+        return changed

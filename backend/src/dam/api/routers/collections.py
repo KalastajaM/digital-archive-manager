@@ -36,6 +36,7 @@ from dam.api.schemas import (
     GroupPatchBody,
     MemberAttentionOut,
     MemberGroupBody,
+    MoveMembersBody,
     NameBody,
     ParentBody,
     PublishBody,
@@ -205,6 +206,17 @@ def remove_member(app: AppDep, collection_id: int, body: DriveIdBody) -> dict:
     what = file_phrase(app, [body.drive_id])
     c = app.collections.remove_member(collection_id, body.drive_id, notify=False)
     return synced(app, collection_id, f"Removed {what} from {c.name}")
+
+
+@router.post("/{collection_id}/members/move", response_model=CollectionChangeOut)
+def move_members(app: AppDep, collection_id: int, body: MoveMembersBody) -> dict:
+    """Move files from this collection into ``to`` (a sibling, parent or child in the
+    same tree, as the drag decides). No preview: the sync moves only app-owned links
+    (journaled; moving them back reverses it). Answers with ``to``."""
+    what = file_phrase(app, body.drive_ids)
+    source = app.collections.get(collection_id)
+    c = app.collections.move_members(collection_id, body.to, body.drive_ids, notify=False)
+    return synced(app, c.id, f"Moved {what} from {source.name} to {c.name}")
 
 
 @router.post("/{collection_id}/close/preview", response_model=list[ResolvedOpOut])

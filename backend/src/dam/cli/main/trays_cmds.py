@@ -60,13 +60,12 @@ def collections_cmd(
                 depth[c.id] = depth[c.parent_id] + 1
                 shown.append("  " * depth[c.id] + c.name)
         table(
-            ["ID", "NAME", "MEMBERS", "GROUPS", "ONGOING", "STATUS"],
+            ["ID", "NAME", "MEMBERS", "ONGOING", "STATUS"],
             [
                 [
                     str(c.id),
                     name,
                     str(len(c.members)),
-                    str(len(c.groups)),
                     c.ongoing_rel or "-",
                     c.ongoing_status or "",
                 ]

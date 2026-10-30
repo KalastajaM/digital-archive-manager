@@ -32,6 +32,8 @@ export const SPECIAL_DRAG_TYPE = "application/x-dam-special";
  * or folder in the sidebar takes it as before), and this adds who it is, so another item
  * can take it in as a merge. */
 export const ITEM_DRAG_TYPE = "application/x-dam-item";
+/** The collection a file drag starts from (a member row on a collection's page). */
+export const SOURCE_DRAG_TYPE = "application/x-dam-from-collection";
 
 type AnyDragEvent = DragEvent | ReactDragEvent;
 
@@ -41,6 +43,7 @@ let draggingPaths: string[] | null = null;
 let draggingCollection: number | null = null;
 let draggingFolder: string | null = null;
 let draggingItem: number | null = null;
+let draggingFrom: number | null = null;
 let listening = false;
 
 function forgetOnEnd() {
@@ -53,6 +56,7 @@ function forgetOnEnd() {
     draggingCollection = null;
     draggingFolder = null;
     draggingItem = null;
+    draggingFrom = null;
   };
   document.addEventListener("dragend", clear, true);
   document.addEventListener("drop", () => setTimeout(clear, 0), true);
@@ -84,6 +88,7 @@ export function setDragFiles(e: AnyDragEvent, ids: string[], label: string, path
   draggingCollection = null;
   draggingFolder = null;
   draggingItem = null;
+  draggingFrom = null;
   draggingLabel = label;
   draggingPaths = paths && paths.length === ids.length ? [...paths] : null;
   forgetOnEnd();
@@ -100,6 +105,30 @@ export function setDragItem(e: AnyDragEvent, id: number, files: string[], label:
   if (!dt) return;
   dt.setData(ITEM_DRAG_TYPE, JSON.stringify({ id }));
   draggingItem = id;
+}
+
+/** Mark a file drag (``setDragFiles`` first) as coming from collection ``id``: a drop on
+ * another collection of the same tree moves the files instead of adding them. */
+export function setDragSource(e: AnyDragEvent, id: number) {
+  const dt = e.dataTransfer;
+  if (!dt) return;
+  dt.setData(SOURCE_DRAG_TYPE, JSON.stringify({ id }));
+  draggingFrom = id;
+}
+
+/** The collection a file drag comes from, or null. */
+export function readDragSource(e: AnyDragEvent): number | null {
+  const dt = e.dataTransfer;
+  if (!dt) return null;
+  if (!Array.from(dt.types ?? []).includes(SOURCE_DRAG_TYPE)) return null;
+  const raw = dt.getData(SOURCE_DRAG_TYPE);
+  if (!raw) return draggingFrom; // during the drag the data itself cannot be read
+  try {
+    const id = (JSON.parse(raw) as { id?: unknown }).id;
+    return typeof id === "number" ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The tray item a drag carries, or null when it is not an item drag. */

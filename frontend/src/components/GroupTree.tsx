@@ -16,7 +16,7 @@ import { type CSSProperties, type KeyboardEvent, type ReactNode, useEffect, useR
 import { useNavigate } from "react-router-dom";
 import { AIProposal } from "./ai/AIProposal";
 import { type Collection, type CollectionChange, type DirEntry, errorText, type Group, type GroupChange, type Member, type MemberAttention, useBrowse } from "../api/client";
-import { setDragFiles, useDropTarget, useFilesDragging } from "../dnd";
+import { setDragFiles, setDragSource, useDropTarget, useFilesDragging } from "../dnd";
 import { formatDate, plural } from "../format";
 import { showInLabel } from "../fileManager";
 import { visible } from "../text";
@@ -427,6 +427,7 @@ function EntryRow({ e, level, entry, onSelectEntry, base }: EntryProps & { e: Di
 
 function MemberRow({
   m,
+  from,
   attention,
   selected,
   onSelect,
@@ -435,6 +436,8 @@ function MemberRow({
   base,
 }: EntryProps & {
   m: Member;
+  /** The collection the row is in: its drag says so (see ``setDragSource``). */
+  from: number;
   attention: MemberAttention | undefined;
   selected: boolean;
   onSelect: () => void;
@@ -465,6 +468,7 @@ function MemberRow({
             ? (e) => {
                 onSelect();
                 setDragFiles(e, [m.drive_id], name, m.path === null ? undefined : [m.path]);
+                setDragSource(e, from);
               }
             : undefined
         }
@@ -607,6 +611,7 @@ export function GroupTree({
       <MemberRow
         key={m.drive_id}
         m={m}
+        from={c.id}
         attention={attention.get(m.drive_id)}
         selected={m.drive_id === selected}
         onSelect={() => onSelect(m.drive_id)}

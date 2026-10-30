@@ -622,18 +622,6 @@ def test_collections_command_shows_the_tree(run, app):
     assert "Houses › Sauna › Deck" in r.stdout  # its parents are not listed: the full path
 
 
-def test_cli_shows_the_group_count(run, app):
-    c = app.collections.create("Sauna")
-    app.collections.create_group(c.id, "A")
-    g = app.collections.create_group(c.id, "B")
-    app.collections.create_group(c.id, "C", parent_id=g.id)
-    r = run("collections")
-    assert r.exit_code == 0, r.output
-    assert "GROUPS" in r.stdout
-    line = next(x for x in r.stdout.splitlines() if "Sauna" in x)
-    assert line.split()[3] == "3"  # ID NAME MEMBERS GROUPS
-
-
 def test_ongoing_sync_and_entries(run, app, a_bill, fake_archive):
     c = app.collections.create("Sauna")
     app.collections.add_members(c.id, ["b-1"])  # synced right away

@@ -162,6 +162,11 @@ class GroupPatchBody(StrictIn):
     summary: str | None = None
 
 
+class MoveMembersBody(StrictIn):
+    to: int
+    drive_ids: list[str]
+
+
 class MemberGroupBody(StrictIn):
     drive_ids: list[str]
     group_id: int | None

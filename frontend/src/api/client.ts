@@ -1671,17 +1671,20 @@ export const useMoveCollectionOrder = () => {
   });
 };
 
-/** Add files/folders to a collection, or remove one (DB only: files stay put). The
- * Ongoing sync runs after it: the answer carries its batch and problems. */
+/** Add files/folders to a collection, remove one, or move some to another collection
+ * (DB only: files stay put). The Ongoing sync runs after it: the answer carries its
+ * batch and problems (for a move: with the collection they went to). */
 export const useCollectionMembers = () => {
-  const refresh = useRefresh(); // adds or removes links in ##. Ongoing
+  const refresh = useRefresh(); // adds, removes or moves links in ##. Ongoing
   return useMutation({
     mutationFn: (
-      change: { id: number; add: string[] } | { id: number; remove: string },
+      change: { id: number; add: string[] } | { id: number; remove: string } | { id: number; move: { to: number; ids: string[] } },
     ): Promise<CollectionChange> =>
       "add" in change
         ? apiPost("/api/collections/{collection_id}/members", { path: { collection_id: change.id }, body: { drive_ids: change.add } })
-        : apiPost("/api/collections/{collection_id}/members/remove", { path: { collection_id: change.id }, body: { drive_id: change.remove } }),
+        : "move" in change
+          ? apiPost("/api/collections/{collection_id}/members/move", { path: { collection_id: change.id }, body: { to: change.move.to, drive_ids: change.move.ids } })
+          : apiPost("/api/collections/{collection_id}/members/remove", { path: { collection_id: change.id }, body: { drive_id: change.remove } }),
     onSettled: refresh,
   });
 };

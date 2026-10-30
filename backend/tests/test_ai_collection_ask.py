@@ -5,14 +5,16 @@ import time
 
 import pytest
 import yaml
-from sqlalchemy import select
+from sqlalchemy import select, update
 
+from conftest import in_group, old_group
 from dam.ai import guard
 from dam.ai.anthropic import wire_schema
 from dam.ai.fake import FakeProvider
 from dam.ai.tasks import TASKS
 from dam.ai.tasks.ask_archive import ask_query, snippet, terms
 from dam.db.tables import ai_cache, ai_calls
+from dam.db.tables import collection_groups as groups_table
 from dam.errors import Conflict, InvalidRequest, NotFound
 
 BANKS = "10. Financial/Banks"
@@ -48,17 +50,36 @@ def tapp(app, fake_archive):
 
 
 def collection(app, *, medical: bool = True):
-    """A collection "House" with groups Bills (with a nested Paid) and Insurance."""
+    """A collection "House" with groups Bills (with a nested Paid) and Insurance (old data:
+    only Important makes new groups, but the summary still handles the ones that exist)."""
     c = app.collections.create("House")
-    bills = app.collections.create_group(c.id, "Bills")
-    paid = app.collections.create_group(c.id, "Paid", bills.id)
-    ins = app.collections.create_group(c.id, "Insurance")
-    app.collections.set_member_group(c.id, ["b1"], bills.id)
-    app.collections.set_member_group(c.id, ["b2"], paid.id)
-    app.collections.set_member_group(c.id, ["h1"], ins.id)
+    bills = old_group(app.engine, c.id, "Bills")
+    paid = old_group(app.engine, c.id, "Paid", bills)
+    ins = old_group(app.engine, c.id, "Insurance")
+    app.collections.add_members(c.id, ["b1", "b2", "h1"])
+    in_group(app.engine, c.id, ["b1"], bills)
+    in_group(app.engine, c.id, ["b2"], paid)
+    in_group(app.engine, c.id, ["h1"], ins)
     if medical:
         app.collections.add_members(c.id, ["m1", "w1"])
-    return app.collections.get(c.id), {"bills": bills, "paid": paid, "ins": ins}
+    groups = {g.id: g for g in app.collections.get(c.id).groups}
+    return app.collections.get(c.id), {
+        "bills": groups[bills],
+        "paid": groups[paid],
+        "ins": groups[ins],
+    }
+
+
+def set_summary(app, group_id, summary):
+    with app.engine.begin() as conn:
+        conn.execute(
+            update(groups_table).where(groups_table.c.id == group_id).values(summary=summary)
+        )
+
+
+def set_name(app, group_id, name):
+    with app.engine.begin() as conn:
+        conn.execute(update(groups_table).where(groups_table.c.id == group_id).values(name=name))
 
 
 def test_tasks_are_registered():
@@ -158,7 +179,7 @@ def test_all_members_excluded_is_blocked(tapp):
 def test_collection_payload(tapp):
     c, g = collection(tapp, medical=False)
     tapp.summaries.put("b1", "user", "Northpower's October electricity bill.")
-    tapp.collections.set_group_summary(g["ins"].id, "Our home insurance.")
+    set_summary(tapp, g["ins"].id, "Our home insurance.")
     p = tapp.ai.prepare("summarize-collection", {"collection_id": c.id})
     assert p.model == "claude-haiku-5-5"
     assert guard.DATA_PREAMBLE in p.system and "English" in p.system
@@ -243,9 +264,9 @@ def test_collection_cache_key(tapp, fake_archive):
     # a saved file summary, a group summary, the group structure, a member's content,
     # a member's name and the language each shape the prompt
     changed(lambda: tapp.summaries.put("b1", "user", "A bill."))
-    changed(lambda: tapp.collections.set_group_summary(g["bills"].id, "Bills."))
-    changed(lambda: tapp.collections.set_member_group(c.id, ["h1"], g["bills"].id))
-    changed(lambda: tapp.collections.rename_group(g["paid"].id, "Settled"))
+    changed(lambda: set_summary(tapp, g["bills"].id, "Bills."))
+    changed(lambda: in_group(tapp.engine, c.id, ["h1"], g["bills"].id))
+    changed(lambda: set_name(tapp, g["paid"].id, "Settled"))
 
     def edit():
         (fake_archive.root / BANKS / "northpower.txt").write_bytes(b"Northpower Oy lasku marraskuu")

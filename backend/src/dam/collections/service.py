@@ -109,6 +109,19 @@ class Group:
     collection_id: int = 0
 
 
+@dataclass(frozen=True)
+class GroupConverted:
+    """A group of an ordinary collection that ``convert_groups`` made a collection of:
+    ``name`` is the new collection's (``renamed`` when the group's own was taken)."""
+
+    collection_id: int
+    group_id: int
+    new_id: int
+    name: str
+    renamed: bool
+    group: str = ""  # the group's own name
+
+
 @dataclass
 class Collection:
     id: int
@@ -852,6 +865,61 @@ class CollectionService:
                 )
             )
 
+    def move_members(
+        self, from_id: int, to_id: int, drive_ids: list[str], *, notify: bool = True
+    ) -> Collection:
+        """Move these members of ``from_id`` into ``to_id`` in one transaction, keeping
+        when each was added and its link name; an id that is not a member of ``from_id``
+        is left alone, one already in ``to_id`` just leaves ``from_id``. Returns
+        ``to_id``. Refused into a closed collection."""
+        if from_id == to_id:
+            raise InvalidRequest("The files are in that collection already")
+        ids = _drive_ids(drive_ids)
+        with self._add_lock(to_id), write_tx(self.engine) as conn:
+            self._require(conn, from_id)
+            target = conn.execute(
+                select(collections.c.name, collections.c.state).where(collections.c.id == to_id)
+            ).first()
+            if target is None:
+                raise NotFound(f"No collection {to_id}")
+            if target.state == "closed":
+                raise InvalidRequest(f"{target.name} is closed: reopen it to add files")
+            moving = set(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == from_id,
+                        collection_members.c.drive_id.in_(ids),
+                    )
+                ).scalars()
+            )
+            there = set(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == to_id,
+                        collection_members.c.drive_id.in_(moving),
+                    )
+                ).scalars()
+            )
+            if there:
+                gone = and_(
+                    collection_members.c.collection_id == from_id,
+                    collection_members.c.drive_id.in_(there),
+                )
+                self._remember_link_names(conn, gone)
+                conn.execute(delete(collection_members).where(gone))
+            if moving - there:
+                conn.execute(
+                    update(collection_members)
+                    .where(
+                        collection_members.c.collection_id == from_id,
+                        collection_members.c.drive_id.in_(moving - there),
+                    )
+                    .values(collection_id=to_id, group_id=None)
+                )
+        if notify:
+            self._changed()
+        return self.get(to_id)
+
     def remove_member(
         self, collection_id: int, drive_id: str, *, notify: bool = True
     ) -> Collection:
@@ -1117,9 +1185,13 @@ class CollectionService:
         return self.group(new_id)
 
     def _groups_allowed(self, conn: Connection, collection_id: int) -> None:
-        """NotFound for an unknown collection; ★ Ongoing has no groups."""
-        if self._kind(conn, collection_id) == "starred":
+        """NotFound for an unknown collection; only ! Important has groups (★ Ongoing
+        has none, and other collections nest instead)."""
+        kind = self._kind(conn, collection_id)
+        if kind == "starred":
             raise InvalidRequest(f"{BUILTINS['starred']!r} is built in: it has no groups")
+        if kind != "important":
+            raise InvalidRequest("Only Important has groups: use a collection inside this one")
 
     def _insert_group(
         self,
@@ -1321,6 +1393,105 @@ class CollectionService:
             self._renumber(conn, order)
         if notify:
             self._changed()
+
+    def ordinary_groups(self) -> list[int]:
+        """The ordinary collections that still have groups (only Important keeps them)."""
+        with self.engine.connect() as conn:
+            return self._ordinary_group_owners(conn)
+
+    def convert_groups(
+        self,
+        *,
+        notify: bool = False,
+        then: Callable[[Connection, list[GroupConverted]], object] | None = None,
+    ) -> list[GroupConverted]:
+        """Make every group of an ordinary collection a collection inside it, nested as
+        the groups were, in one transaction: the group's name (else "<group> (<parent>)",
+        then with " 2", " 3"...), its summary and members; the parent's state and
+        publish setting; placed after the parent's own children, in group order. The
+        groups go. Important keeps its groups. ``then(conn, done)`` runs in the same
+        transaction (the Ongoing records follow), so a failure there undoes it all."""
+        done: list[GroupConverted] = []
+        with write_tx(self.engine) as conn:
+            for cid in self._ordinary_group_owners(conn):
+                done += self._convert_groups_of(conn, cid)
+            if done and then is not None:
+                then(conn, done)
+        if done and notify:
+            self._changed()
+        return done
+
+    def _convert_groups_of(self, conn: Connection, cid: int) -> list[GroupConverted]:
+        """``convert_groups`` for collection ``cid``."""
+        done: list[GroupConverted] = []
+        parent = conn.execute(select(collections).where(collections.c.id == cid)).one()
+        rows = conn.execute(
+            select(collection_groups)
+            .where(collection_groups.c.collection_id == cid)
+            .order_by(collection_groups.c.position, collection_groups.c.id)
+        ).all()
+        by_parent: dict[int | None, list] = {}
+        for g in rows:
+            by_parent.setdefault(g.parent_id, []).append(g)
+
+        def walk(group_parent: int | None, under_id: int, under_name: str) -> None:
+            for g in by_parent.get(group_parent, []):
+                name = g.name
+                if self._name_taken(conn, name):
+                    name = base = f"{g.name} ({under_name})"
+                    n = 2
+                    while self._name_taken(conn, name):
+                        name, n = f"{base} {n}", n + 1
+                new_id = conn.execute(
+                    insert(collections).values(
+                        name=name,
+                        name_fold=fold_name(name),
+                        state=parent.state,
+                        created=time.time(),
+                        closed_at=parent.closed_at,
+                        publish=parent.publish,
+                        summary=g.summary,
+                        parent_id=under_id,
+                        position=self._next_position(conn, under_id),
+                    )
+                ).inserted_primary_key[0]
+                moving = select(collection_members.c.drive_id).where(
+                    collection_members.c.collection_id == cid,
+                    collection_members.c.group_id == g.id,
+                )
+                conn.execute(
+                    update(member_link_names)
+                    .where(
+                        member_link_names.c.collection_id == cid,
+                        member_link_names.c.drive_id.in_(moving),
+                    )
+                    .values(collection_id=new_id)
+                )
+                conn.execute(
+                    update(collection_members)
+                    .where(
+                        collection_members.c.collection_id == cid,
+                        collection_members.c.group_id == g.id,
+                    )
+                    .values(collection_id=new_id, group_id=None)
+                )
+                done.append(GroupConverted(cid, g.id, new_id, name, name != g.name, g.name))
+                walk(g.id, new_id, name)
+
+        walk(None, cid, parent.name)
+        conn.execute(delete(collection_groups).where(collection_groups.c.collection_id == cid))
+        return done
+
+    @staticmethod
+    def _ordinary_group_owners(conn: Connection) -> list[int]:
+        rows = conn.execute(
+            select(collection_groups.c.collection_id)
+            .join(collections, collections.c.id == collection_groups.c.collection_id)
+            .where(collections.c.kind.is_(None))
+            .distinct()
+            .order_by(collection_groups.c.collection_id)
+        )
+        return [r[0] for r in rows]
 
     def set_member_group(
         self,

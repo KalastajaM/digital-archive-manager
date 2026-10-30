@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { CollectionRow, Item, Member, Status, TrayDef } from "../../api/client";
-import { setDragCollection, setDragFiles, setDragFolder } from "../../dnd";
+import { setDragCollection, setDragFiles, setDragFolder, setDragSource } from "../../dnd";
 import { type Call, dataTransfer, deferred, mockFetch, renderWithProviders } from "../../test-utils";
 import { FILES_MOVED_EVENT, type FilesMovedDetail } from "../MoveTo";
 import { Sidebar, trayIcon } from "./Sidebar";
@@ -220,6 +220,38 @@ describe("Sidebar drops", () => {
     fireEvent.drop(row, { dataTransfer: dt });
     await new Promise((r) => setTimeout(r, 10));
     expect(posts(calls, "/api/collections/7/members")).toHaveLength(0);
+  });
+
+  it("a file dragged from a collection onto another of the same tree moves; onto another tree it is added", async () => {
+    const legal = coll(1, "Legal", ["Legal"], null);
+    const mine = coll(2, "Michiel", ["Legal", "Michiel"], 1, { members: [member("f1")] });
+    const both = coll(3, "Together", ["Legal", "Together"], 1);
+    const car = coll(4, "Car", ["Car"], null);
+    const { calls } = setup(
+      {
+        "POST /api/collections/2/members/move": { body: { collection: both, batch: null, problems: [], ongoing_status: null } },
+        "POST /api/collections/4/members": { body: { collection: car, batch: null, problems: [], ongoing_status: null } },
+      },
+      [legal, mine, both, car],
+    );
+    const fromMichiel = () => {
+      const dt = drag(["f1"]);
+      setDragSource({ dataTransfer: dt } as unknown as DragEvent, 2);
+      return dt;
+    };
+    const together = await within(nav()).findByRole("link", { name: "Together" });
+    let dt = fromMichiel();
+    fireEvent.dragEnter(together, { dataTransfer: dt });
+    fireEvent.drop(together, { dataTransfer: dt });
+    await waitFor(() => expect(posts(calls, "/api/collections/2/members/move")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/2/members/move")[0].body).toEqual({ to: 3, drive_ids: ["f1"] });
+    expect(await screen.findByText(/Moved a\.pdf from Michiel to Together/)).toBeInTheDocument();
+
+    const carRow = within(nav()).getByRole("link", { name: "Car" });
+    dt = fromMichiel();
+    fireEvent.dragEnter(carRow, { dataTransfer: dt });
+    fireEvent.drop(carRow, { dataTransfer: dt });
+    await waitFor(() => expect(posts(calls, "/api/collections/4/members")).toHaveLength(1));
   });
 
   it("other rows are not drop targets", async () => {

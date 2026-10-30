@@ -69,6 +69,9 @@ class Desired:
     folders: tuple[str, ...] = ()
     refused: tuple[str, ...] = ()
     owners: dict[str, int] = field(default_factory=dict)
+    # group id -> the group's folder, a path relative to ``rel`` (compare=False: what a
+    # sync plans never depends on it; turning groups into collections does)
+    groups: dict[int, str] = field(default_factory=dict, compare=False, repr=False)
     # the same as a tree, with each link's base name and owner (built with the
     # Desired; ``Want.of`` reconstructs it when absent)
     want: Want | None = field(default=None, compare=False, repr=False)

@@ -10,7 +10,7 @@ import xattr
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from conftest import needs_dir_fd, posix_permissions
+from conftest import in_group, needs_dir_fd, old_group, posix_permissions
 from dam.api import create_api
 from dam.collections.convert import NOT_REMOVED, Entry, EntryItem
 from dam.core.fs import readlink, realpath
@@ -1010,8 +1010,10 @@ def test_conversion_into_a_grouped_collection_places_members_ungrouped_at_the_to
     demo.add(f"{FAMILY}/a.pdf", drive_id="id-a")
     app.scan()
     plans = app.collections.create("Plans")
-    g = app.collections.create_group(plans.id, "Later")
-    app.collections.set_member_group(plans.id, ["id-a"], g.id)
+    app.collections.add_members(plans.id, ["id-a"])
+    g = old_group(app.engine, plans.id, "Later")  # old data: new groups only in Important
+    in_group(app.engine, plans.id, ["id-a"], g)
+    app.ongoing.sync()
     assert listing(ongoing(demo) / "Plans") == ["Later"]
     plan = app.convert.preview(f"{ONG}/2026_Plan.xlsx", "Plans", FAMILY)
     assert [(r.kind, r.dst) for r in plan.ops] == [
@@ -1023,7 +1025,7 @@ def test_conversion_into_a_grouped_collection_places_members_ungrouped_at_the_to
     assert listing(ongoing(demo) / "Plans") == ["2026_Plan.xlsx", "Later"]
     assert listing(ongoing(demo) / "Plans" / "Later") == ["a.pdf"]
     c = app.collections.get(plans.id)
-    assert {m.drive_id: m.group_id for m in c.members} == {"id-a": g.id, "id-plan": None}
+    assert {m.drive_id: m.group_id for m in c.members} == {"id-a": g, "id-plan": None}
     app.activity.undo(result.batch.batch_id)
     assert listing(ongoing(demo) / "Plans") == ["Later"]
     assert listing(ongoing(demo) / "Plans" / "Later") == ["a.pdf"]
@@ -1032,7 +1034,8 @@ def test_conversion_into_a_grouped_collection_places_members_ungrouped_at_the_to
 
 def test_undo_of_a_conversion_into_a_grouped_collection_removes_its_group_folders(app, demo):
     legal = app.collections.create("Legal")
-    g = app.collections.create_group(legal.id, "Later")
+    g = old_group(app.engine, legal.id, "Later")  # old data: new groups only in Important
+    app.ongoing.sync()
     dest = f"{FAMILY}/Legal papers"
     result = convert(app, f"{ONG}/Legal", "Legal", dest)
     assert result.batch.failed is None and result.problems == []
@@ -1052,7 +1055,7 @@ def test_undo_of_a_conversion_into_a_grouped_collection_removes_its_group_folder
     assert member_ids(app, legal.id) == set()
     assert [x.name for x in app.collections.get(legal.id).groups] == ["Later"]  # groups stay
     assert all(not r.rel.startswith(f"{ONG}/Legal") for r in records(app))
-    assert g.id == app.collections.get(legal.id).groups[0].id
+    assert g == app.collections.get(legal.id).groups[0].id
 
 
 # --- conversion into a child collection (round 2, Task 4) ----------------------------

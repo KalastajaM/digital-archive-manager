@@ -102,7 +102,7 @@ def test_demo_has_a_bill_with_a_printed_bank_barcode_the_scan_reads(tmp_path):
     assert str(printed.due) == "2026-11-05"
 
 
-def test_demo_has_a_collection_with_nested_groups_published_in_ongoing(tmp_path):
+def test_demo_has_a_collection_with_nested_collections_published_in_ongoing(tmp_path):
     from dam.app import App
     from make_demo_archive import DEMO_COLLECTION
 
@@ -111,19 +111,24 @@ def test_demo_has_a_collection_with_nested_groups_published_in_ongoing(tmp_path)
     try:
         c = app.collections.by_name(DEMO_COLLECTION)
         assert c is not None and c.state == "open"
-        by_id = {g.id: g for g in c.groups}
-        nested = [g for g in c.groups if g.parent_id is not None]
-        assert nested, "a group inside a group"
-        assert all(g.parent_id in by_id for g in nested)
+        everything = app.collections.list(None)
+        by_id = {x.id: x for x in everything}
+        inside = [x for x in everything if x.parent_id == c.id]
+        nested = [x for x in everything if x.parent_id in {y.id for y in inside}]
+        assert inside and nested, "a collection inside a collection inside the collection"
+        assert all(x.parent_id in by_id for x in inside + nested)
+        assert c.groups == [] and all(x.groups == [] for x in inside + nested)
         assert c.summary
-        grouped = {m.drive_id for m in c.members if m.group_id is not None}
-        assert len(grouped) >= 2 and any(m.group_id is None for m in c.members)
+        inner = {m.drive_id for x in inside + nested for m in x.members}
+        assert len(inner) >= 2 and c.members
         # one member is still in the inbox: the attention strip has something to show
         assert any(m.path and m.path.startswith(SpecialFolders().inbox) for m in c.members)
     finally:
         app.close()
-    # the groups are subfolders of the collection's Ongoing folder, made of links
+    # the inner collections are subfolders of the collection's Ongoing folder, made of links
     folder = archive / SpecialFolders().ongoing / DEMO_COLLECTION
     assert folder.is_dir() and not folder.is_symlink()
     links = [p for p in folder.rglob("*") if p.is_symlink()]
-    assert any(len(p.relative_to(folder).parts) >= 3 for p in links), "a link in a nested group"
+    assert any(len(p.relative_to(folder).parts) >= 3 for p in links), (
+        "a link in a nested collection"
+    )

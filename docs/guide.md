@@ -124,7 +124,7 @@ checked as you type; when you press **Use this folder** the app starts in the sa
   `##. Organize` with files in it). You can still add a starter layout later.
 - **An empty folder** is offered **Start a new archive here**, with a starter layout.
 - **Create a demo archive** builds a small fictional archive (a few bills, a scanned
-  water bill with a bank barcode, a collection with groups) in a new or empty folder,
+  water bill with a bank barcode, a collection with collections inside it) in a new or empty folder,
   so you can try everything without touching real documents.
 
 ### Starter layouts
@@ -1031,13 +1031,12 @@ everything about a house sale. Files stay where they are; the collection follows
 when they are moved or renamed. A file can be in several collections.
 
 A collection's page has a summary, a **Needs attention** strip (members in an open tray
-item or still in the inbox), its child collections, its groups of files, a note and a
-checklist. The selected file shows on the right with its details.
+item or still in the inbox), its child collections, its files, a note and a checklist. The selected file shows on the right with its details.
 
 The New look draws the page as one header across the top (where the collection sits, its
 name, an Open / Closed pill, the counts, and **Add files**, **Show folder**, **Export…**
-and **⋯**), then the summary, **Needs attention** as a list, **Files by group** as one tree
-with **New group** in its heading, and the note beside the checklist. **Add files** finds any
+and **⋯**), then the summary, **Needs attention** as a list, **Files** (for Important,
+**Files by group** with **New group** in its heading), and the note beside the checklist. **Add files** finds any
 file of the archive and puts it in the collection. The selected file's panel has the file
 actions (listed below) as one row of icons under its name instead of in the header, with
 **Show in folder** (the file's folder in Browse) and **Remove from collection** among them. To
@@ -1045,7 +1044,8 @@ see a collection's files across folders in Browse, choose **Collections** at the
 folder tree and click the collection (see Browse).
 
 The header has the same two parts as Browse and the trays. The left part is for the
-collection: its name and subtitle, **New group**, the folder button, **Export…** and **⋯**.
+collection: its name and subtitle, **New group** (Important only), the folder button,
+**Export…** and **⋯**.
 Over the selected file, at the right, is one group of icons for the file actions, in this
 order: **Put in tray** (a menu of the trays), **Remove from collection** (not in Starred and
 Important, where the star and the exclamation mark do that), **Back to inbox**,
@@ -1077,6 +1077,13 @@ or use **Move to…** in its **⋯** menu; **New collection inside…** creates 
 `##. Ongoing` a child is a folder inside its parent's folder. A parent with open children
 cannot be closed, and a child under a closed parent cannot be reopened.
 
+Collections inside one collection are how you sort its files, such as one for each person
+in a legal collection. Drag a file from a collection's page onto another collection of the
+same tree (in the sidebar or in Browse's Collections tree) and it moves there: it leaves
+the collection it came from, and the toast has **Undo**. Dragged onto a collection of
+another tree, or from anywhere else, it is added and stays where it was too. For a file
+that belongs to two parts, use a tag.
+
 ### Order of collections
 
 Collections are listed in your own order: **Important** and **Starred** always come first
@@ -1102,11 +1109,23 @@ or link moves.
 
 ### Groups
 
-A collection's files can be arranged in groups, nested to any depth, plus **Ungrouped**.
-**New group** adds one; each group's **⋯** menu has Rename, a summary, New subgroup, Move
-up / Move down and **Remove group…**, which moves its files to the parent group (no file
-or membership is removed). Drag members between groups, or choose the group in the panel
-on the right. In `##. Ongoing` each group is a subfolder of the collection's folder.
+Only **Important** arranges its files in groups (such as `Houses › Hillside`), nested to
+any depth, plus **Ungrouped**. **New group** adds one; each group's **⋯** menu has Rename,
+a summary, New subgroup, Move up / Move down and **Remove group…**, which moves its files
+to the parent group (no file or membership is removed). Drag members between groups, or
+choose the group in the panel on the right. In `##. Important` each group is a subfolder.
+
+Other collections nest instead (see Parent collections). Collections made with an earlier
+version could have groups too: the first time this version opens, each such group becomes
+a collection inside its collection, with its name, summary and files, nested as before.
+In `##. Ongoing` the folders and links stay where they are, since a collection inside
+another is a folder there just as a group was. Three kinds of group change there: an empty
+group's folder goes (it comes back once its collection has a file), a group holding just
+one folder becomes a link to that folder, and a group whose name another collection already
+has gets the collection's name in brackets (`Michiel (Legal)`) and a folder of that name.
+Files of your own in such a folder are never touched: the old folder stays beside the new
+one. A snapshot is taken
+first (see [Snapshots](#snapshots)), so the step can be undone by restoring it.
 
 ### Export
 

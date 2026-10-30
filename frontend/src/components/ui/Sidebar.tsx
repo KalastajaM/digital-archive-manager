@@ -42,6 +42,7 @@ import {
   readDragCollection,
   readDragFolder,
   readDragFiles,
+  readDragSource,
   setDragCollection,
   useDropTarget,
 } from "../../dnd";
@@ -242,7 +243,7 @@ function useDropBackToInbox() {
 
 /** What a collection row takes: files (added as members) or another collection (moved
  * inside it). A drag is one or the other, never both (see ``dnd``). */
-type Dragged = { kind: "files"; ids: string[] } | { kind: "collection"; id: number };
+type Dragged = { kind: "files"; ids: string[]; from?: number | null } | { kind: "collection"; id: number };
 /** What a collection row takes: files, or a folder from Browse (as one member, so
  * everything in it belongs), or another collection. */
 const readFilesOrCollection = (e: Parameters<typeof readDragFiles>[0]): Dragged | null => {
@@ -251,7 +252,7 @@ const readFilesOrCollection = (e: Parameters<typeof readDragFiles>[0]): Dragged 
   const folder = readDragFolder(e);
   if (folder !== null) return { kind: "files", ids: [folder] };
   const ids = readDragFiles(e);
-  return ids === null ? null : { kind: "files", ids };
+  return ids === null ? null : { kind: "files", ids, from: readDragSource(e) };
 };
 
 const FOLD_KEY = "dam.sidebar.collections.folded.v1";
@@ -325,7 +326,7 @@ function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeP
   const target = useDropTarget<Dragged>({
     read: readFilesOrCollection,
     accept: (d) => (d.kind === "files" ? addFiles(d.ids) : takeCollection(d.id)),
-    onDrop: (d) => (d.kind === "files" ? add(d.ids) : moveHere(d.id)),
+    onDrop: (d) => (d.kind === "files" ? add(d.ids, d.from) : moveHere(d.id)),
   });
   // near a sibling's top or bottom edge a dragged collection is put before or after it
   // (a drop line); in the middle it goes inside, as before

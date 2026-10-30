@@ -1,6 +1,5 @@
-"""Collection groups (nested, per collection) and summaries: service, migration, API, CLI."""
+"""Collection groups (nested; only Important makes them now) and summaries: service, API."""
 
-import os
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -10,6 +9,7 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import insert, select, text
 
+from conftest import old_group
 from dam.api import create_api
 from dam.collections.publishers import PublisherRegistry
 from dam.collections.service import SUMMARY_MAX, CollectionService
@@ -64,7 +64,7 @@ def tree(c):
 
 
 def test_create_rename_and_nest(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     assert (c.summary, c.groups) == ("", [])
     plans = svc.create_group(c.id, "  Plans ")
     quotes = svc.create_group(c.id, "Quotes")
@@ -79,7 +79,7 @@ def test_create_rename_and_nest(svc):
 
 
 def test_every_group_change_notifies_after_commit(svc, docs):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     svc.calls.clear()
     g = svc.create_group(c.id, "A")
     h = svc.create_group(c.id, "B")
@@ -96,7 +96,7 @@ def test_every_group_change_notifies_after_commit(svc, docs):
 
 
 def test_group_names_are_checked(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     for bad in ("", "  ", "a/b", ".hidden", "x" * 121, None):
         with pytest.raises(InvalidRequest):
             svc.create_group(c.id, bad)
@@ -106,9 +106,9 @@ def test_group_names_are_checked(svc):
 
 
 def test_unknown_ids(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     other = svc.create("Other")
-    foreign = svc.create_group(other.id, "Theirs")
+    foreign = old_group(svc.engine, other.id, "Theirs")
     with pytest.raises(NotFound):
         svc.create_group(999, "A")
     with pytest.raises(NotFound):
@@ -118,22 +118,20 @@ def test_unknown_ids(svc):
     with pytest.raises(NotFound):
         svc.group(999)
     with pytest.raises(InvalidRequest):  # a parent from another collection
-        svc.create_group(c.id, "A", parent_id=foreign.id)
+        svc.create_group(c.id, "A", parent_id=foreign)
     with pytest.raises(InvalidRequest):
-        svc.set_member_group(c.id, [], foreign.id)
+        svc.set_member_group(c.id, [], foreign)
 
 
 # --- sibling names -----------------------------------------------------------------
 
 
 def test_sibling_names_are_unique_after_folding(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     plans = svc.create_group(c.id, "Plans")
     with pytest.raises(InvalidRequest, match="already"):
         svc.create_group(c.id, "PLANS")
     svc.create_group(c.id, "plans", parent_id=plans.id)  # another parent: fine
-    other = svc.create("Other")
-    svc.create_group(other.id, "Plans")  # another collection: fine
     quotes = svc.create_group(c.id, "Quotes")
     with pytest.raises(InvalidRequest, match="already"):
         svc.rename_group(quotes.id, "plans")
@@ -147,7 +145,7 @@ def test_sibling_names_are_unique_after_folding(svc):
 
 
 def test_move_reorders_and_reparents(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     a, b, d = (svc.create_group(c.id, n) for n in ("A", "B", "D"))
     svc.move_group(d.id, None, 0)
     assert tree(svc.get(c.id)) == [(None, 0, "D"), (None, 1, "A"), (None, 2, "B")]
@@ -161,7 +159,7 @@ def test_move_reorders_and_reparents(svc):
 
 
 def test_move_refuses_a_cycle(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     a = svc.create_group(c.id, "A")
     b = svc.create_group(c.id, "B", parent_id=a.id)
     d = svc.create_group(c.id, "D", parent_id=b.id)
@@ -170,7 +168,7 @@ def test_move_refuses_a_cycle(svc):
             svc.move_group(a.id, parent, 0)
     other = svc.create("Other")
     with pytest.raises(InvalidRequest):
-        svc.move_group(a.id, svc.create_group(other.id, "X").id, 0)
+        svc.move_group(a.id, old_group(svc.engine, other.id, "X"), 0)
     assert tree(svc.get(c.id)) == [(None, 0, "A"), (a.id, 0, "B"), (b.id, 0, "D")]
 
 
@@ -178,7 +176,7 @@ def test_move_refuses_a_cycle(svc):
 
 
 def test_remove_moves_children_and_members_up(svc, docs):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     top = svc.create_group(c.id, "Top")
     after = svc.create_group(c.id, "After")
     mid = svc.create_group(c.id, "Mid", parent_id=top.id)
@@ -203,7 +201,7 @@ def test_remove_moves_children_and_members_up(svc, docs):
 
 
 def test_remove_refuses_a_name_clash_with_the_new_siblings(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     a = svc.create_group(c.id, "A")
     svc.create_group(c.id, "B")
     svc.create_group(c.id, "b", parent_id=a.id)
@@ -213,7 +211,7 @@ def test_remove_refuses_a_name_clash_with_the_new_siblings(svc):
 
 
 def test_removing_groups_never_removes_a_membership(svc, docs):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     a = svc.create_group(c.id, "A")
     b = svc.create_group(c.id, "B", parent_id=a.id)
     svc.set_member_group(c.id, docs, b.id)
@@ -228,7 +226,7 @@ def test_removing_groups_never_removes_a_membership(svc, docs):
 
 
 def test_set_member_group_moves_and_adds(svc, docs):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     a = svc.create_group(c.id, "A")
     b = svc.create_group(c.id, "B")
     svc.add_members(c.id, ["f1"])
@@ -248,7 +246,7 @@ def test_set_member_group_moves_and_adds(svc, docs):
 
 
 def test_re_adding_a_member_keeps_its_group(svc, docs):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     a = svc.create_group(c.id, "A")
     svc.set_member_group(c.id, ["f1"], a.id)
     got = svc.add_members(c.id, ["f1"])
@@ -256,7 +254,7 @@ def test_re_adding_a_member_keeps_its_group(svc, docs):
 
 
 def test_undo_removes_members_and_their_group_but_never_groups(svc, docs):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     a = svc.create_group(c.id, "A")
     svc.add_members(c.id, ["f1"], batch_id="b1")
     svc.set_member_group(c.id, ["f1", "f2"], a.id)
@@ -269,9 +267,9 @@ def test_undo_removes_members_and_their_group_but_never_groups(svc, docs):
 
 
 def test_a_collection_going_takes_its_groups(svc, engine, docs):
-    c = svc.create("Sauna")
-    g = svc.create_group(c.id, "A")
-    svc.create_group(c.id, "B", parent_id=g.id)
+    c = svc.create("Sauna")  # old groups only exist on ordinary collections
+    g = old_group(engine, c.id, "A")
+    old_group(engine, c.id, "B", g)
     with write_tx(engine) as conn:
         conn.execute(text("DELETE FROM collections WHERE id = :i"), {"i": c.id})
     with engine.connect() as conn:
@@ -283,7 +281,7 @@ def test_a_collection_going_takes_its_groups(svc, engine, docs):
 
 
 def test_summaries_are_stripped_and_limited(svc):
-    c = svc.create("Sauna")
+    c = svc.builtin("important")
     g = svc.create_group(c.id, "A")
     assert svc.set_summary(c.id, "  The sauna build.\n").summary == "The sauna build."
     assert svc.set_group_summary(g.id, " Plans ").summary == "Plans"
@@ -336,8 +334,9 @@ def test_migration_0011_upgrades_a_db_at_0010(tmp_path: Path, new_engine):
     svc = CollectionService(
         engine, FileRepo(engine, "00. Inbox"), PublisherRegistry(), SpecialFolders()
     )
-    g = svc.create_group(1, "Plans")
-    assert svc.get(1).groups[0].id == g.id
+    important = svc.builtin("important")
+    g = svc.create_group(important.id, "Plans")
+    assert svc.get(important.id).groups[0].id == g.id
     engine.dispose()
 
 
@@ -366,7 +365,7 @@ def api_files(app, fake_archive):
 
 
 def test_group_routes(client, app, api_files, fake_archive):
-    cid = send(client, "POST", "/api/collections", {"name": "Sauna"}).json()["id"]
+    cid = app.collections.builtin("important").id
     r = send(client, "POST", f"/api/collections/{cid}/groups", {"name": "Plans", "parent_id": None})
     assert r.status_code == 200, r.text
     body = r.json()
@@ -397,11 +396,8 @@ def test_group_routes(client, app, api_files, fake_archive):
     assert r.status_code == 200, r.text
     members = r.json()["collection"]["members"]
     assert {m["drive_id"]: m["group_id"] for m in members} == {"f1": old["id"], "f2": old["id"]}
-    # groups are nested folders in Ongoing (Task 8): Sauna/Plans/Old/{a,b}.pdf
-    ongoing = fake_archive.root / "##. Ongoing" / "Sauna"
-    assert sorted(os.listdir(ongoing)) == ["Plans"]
-    assert sorted(os.listdir(ongoing / "Plans")) == ["Old"]
-    assert sorted(os.listdir(ongoing / "Plans" / "Old")) == ["a.pdf", "b.pdf"]
+    # Important is not published to Ongoing, so there are no group folders to see
+    assert not (fake_archive.root / "##. Ongoing" / "Important").exists()
 
     # PATCH: rename, summary, move to top level in one go; parent_id null is meaningful
     r = send(
@@ -440,7 +436,9 @@ def test_group_routes(client, app, api_files, fake_archive):
     assert r.status_code == 200, r.text
     assert r.json()["collection"]["summary"] == "Sauna build"
     assert client.get(f"/api/collections/{cid}").json()["summary"] == "Sauna build"
-    row = client.get("/api/collections").json()[0]
+    row = next(
+        r for r in client.get("/api/collections", params={"builtin": True}).json() if r["id"] == cid
+    )
     assert row["summary"] == "Sauna build" and [g["name"] for g in row["groups"]] == ["Plans"]
 
 

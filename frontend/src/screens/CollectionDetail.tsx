@@ -1612,7 +1612,7 @@ export default function CollectionDetail({
           onEditTitle={builtin ? undefined : () => !busy && setRenaming(true)}
           actions={
             <>
-              {builtin !== "starred" && !isNew && (
+              {builtin === "important" && !isNew && (
                 <IconButton icon={<FolderPlus {...ICON} />} label="New group" tip="New group: sort files into groups" disabled={addBusy} onClick={() => void newGroup()} />
               )}
               <span className="menu-wrap" ref={finderRef}>
@@ -1663,7 +1663,7 @@ export default function CollectionDetail({
           />
           <Attention members={c.members} attention={attention.data} onSelect={select} />
           {!builtin && <ChildCollections id={id} all={allCollections.data ?? []} />}
-          {!isNew && builtin !== "starred" && c.groups.length === 0 && c.members.length >= 2 && (
+          {!isNew && builtin === "important" && c.groups.length === 0 && c.members.length >= 2 && (
             <p className="hint group-hint">
               Group files:{" "}
               <button type="button" className="link-button" disabled={addBusy} onClick={() => void newGroup()}>
@@ -1673,8 +1673,9 @@ export default function CollectionDetail({
           )}
           {isNew && (
             <div className="section-head">
-              <h2>Files by group</h2>
-              {builtin !== "starred" && (
+              {/* only Important has groups: other collections nest instead */}
+              <h2>{builtin === "important" ? "Files by group" : "Files"}</h2>
+              {builtin === "important" && (
                 <button type="button" className="link-button" disabled={addBusy} title="Sort the files into groups" onClick={() => void newGroup()}>
                   New group
                 </button>

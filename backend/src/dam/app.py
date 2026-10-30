@@ -20,7 +20,7 @@ from dam.collections.marks import MarkService
 from dam.collections.ongoing import PUBLISHER_ID as ONGOING
 from dam.collections.ongoing import OngoingPublisher
 from dam.collections.publishers import PublisherRegistry
-from dam.collections.service import CollectionService
+from dam.collections.service import CollectionService, GroupConverted
 from dam.config import DEFAULTS_DIR, AppPaths, Person, Settings, load_settings
 from dam.core.jobs import Jobs
 from dam.core.paths import ArchivePaths
@@ -66,6 +66,7 @@ from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
 from dam.settings_write import REMOVE, write_keys
 from dam.setup import NOT_CONFIGURED
+from dam.snapshots import BEFORE_GROUPS, create_snapshot
 from dam.tags import TagAdmin
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
@@ -507,10 +508,38 @@ class App:
             index = build_index(settings, app_paths, paths, engine)
             jobs = Jobs()
             ops = build_ops(settings, app_paths, paths, engine, index.repo, jobs)
-            return cls(settings, app_paths, paths, engine, jobs, index, ops)
+            app = cls(settings, app_paths, paths, engine, jobs, index, ops)
         except BaseException:
             engine.dispose()
             raise
+        try:  # once, on the first open after the upgrade; the app opens anyway
+            app.convert_collection_groups()
+        except Exception:
+            log.exception("collections: turning groups into collections failed")
+        return app
+
+    def convert_collection_groups(self) -> list[GroupConverted]:
+        """Turn the groups of ordinary collections into collections inside them (only
+        Important keeps groups), after a snapshot, handing each group's folder in
+        ##. Ongoing to its new collection so nothing there moves. A group whose name
+        another collection has is renamed; the sync that renames its folder names it."""
+        if not self.collections.ordinary_groups():
+            return []
+        create_snapshot(self.app_paths, kind=BEFORE_GROUPS)
+        before = self.ongoing.desired_roots()
+        done = self.collections.convert_groups(
+            then=lambda conn, done: self.ongoing.reown(conn, before, done)
+        )
+        renamed = [d for d in done if d.renamed]
+        log.info("collections: %d groups are now collections", len(done))
+        for d in renamed:
+            log.info("collections: group renamed to %s (the name was taken)", d.name)
+        if self.archive_available:
+            label = f"Turned {len(done)} {'group' if len(done) == 1 else 'groups'} into collections"
+            if renamed:
+                label += ": " + ", ".join(f"{d.group} is now {d.name}" for d in renamed)
+            self.sync_publishers(label=label)
+        return done
 
     def sync_publishers(self, label: str | None = None) -> object:
         """Sync every registered publisher (failures logged); returns the Ongoing
