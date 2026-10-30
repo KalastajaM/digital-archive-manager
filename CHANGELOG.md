@@ -50,7 +50,8 @@ All notable changes are listed here. The format follows
 
 - **Collections nest instead of having groups.** Only Important keeps groups. The first
   time this version opens, the groups of other collections become collections inside
-  them, with nothing moved in `##. Ongoing` (a snapshot is taken first). Dragging a file
+  them; their folders in `##. Ongoing` stay where they are (a snapshot is taken first;
+  the guide lists the few that change). Dragging a file
   from a collection's page onto another collection of the same tree moves it there, with
   Undo.
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that

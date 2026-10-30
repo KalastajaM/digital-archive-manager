@@ -69,8 +69,18 @@ class DesiredMixin:
         folders: list[str] = []
         owners: dict[str, int] = {}
         refused: list[str] = []
+        group_paths: dict[int, str] = {}
         want = self._want(
-            c, children, "", links, folders, owners, refused, {c.id}, self.paths.ongoing
+            c,
+            children,
+            "",
+            links,
+            folders,
+            owners,
+            refused,
+            {c.id},
+            self.paths.ongoing,
+            group_paths,
         )
         return Desired(
             "folder",
@@ -79,6 +89,7 @@ class DesiredMixin:
             folders=tuple(folders),
             refused=tuple(refused),
             owners=owners,
+            groups=group_paths,
             want=want,
         )
 
@@ -93,6 +104,7 @@ class DesiredMixin:
         refused: list[str],
         seen: set[int],
         root: str,
+        group_paths: dict[int, str] | None = None,
     ) -> Want:
         """The folder of ``c`` at ``prefix``: its member links, its group folders, then
         its published children (A-Z), each named ``first_free`` among its siblings.
@@ -124,6 +136,8 @@ class DesiredMixin:
                 name = first_free(g.name, taken)
                 taken.add(fold_name(name))
                 folders.append(join(at, name))
+                if group_paths is not None:  # each group's folder, by id
+                    group_paths[g.id] = join(at, name)
                 node.folders[name] = walk(g.id, join(at, name), set(), g.name)
             return node
 
@@ -149,7 +163,7 @@ class DesiredMixin:
                 continue
             folders.append(path)
             node.folders[name] = self._want(
-                kid, children, path, links, folders, owners, refused, seen, root
+                kid, children, path, links, folders, owners, refused, seen, root, group_paths
             )
         return node
 

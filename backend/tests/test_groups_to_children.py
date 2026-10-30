@@ -364,3 +364,35 @@ def test_move_route_syncs_and_moves_the_link(app, fake_archive):
     root = fake_archive.root / ONG / "Legal"
     assert os.path.islink(root / "Together" / "a.pdf")
     assert not os.path.exists(root / "Michiel" / "a.pdf")
+
+
+def test_a_failed_hand_over_undoes_the_conversion_and_the_next_open_tries_again(
+    app, fake_archive, monkeypatch
+):
+    grouped(app, fake_archive)
+    app.sync_publishers()
+    before = ongoing_tree(fake_archive)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(app.ongoing, "reown", broken)
+    with pytest.raises(RuntimeError):
+        app.convert_collection_groups()
+    assert app.collections.ordinary_groups() != []  # nothing was converted
+    assert [c.name for c in app.collections.list(None)] == ["Sauna"]
+
+    monkeypatch.undo()
+    assert len(app.convert_collection_groups()) == 2
+    app.sync_publishers()
+    assert ongoing_tree(fake_archive) == before
+
+
+def test_moving_into_the_same_collection_is_refused(svc, docs):
+    from dam.errors import InvalidRequest
+
+    a = svc.create("A")
+    svc.add_members(a.id, ["d1", "d2"])
+    with pytest.raises(InvalidRequest):
+        svc.move_members(a.id, a.id, ["d1"])
+    assert members(svc.get(a.id)) == ["d1", "d2"]

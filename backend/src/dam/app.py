@@ -527,8 +527,9 @@ class App:
             return []
         create_snapshot(self.app_paths, kind=BEFORE_GROUPS)
         before = self.ongoing.desired_roots()
-        done = self.collections.convert_groups()
-        self.ongoing.reown(before, {d.new_id for d in done})
+        done = self.collections.convert_groups(
+            then=lambda conn, done: self.ongoing.reown(conn, before, done)
+        )
         renamed = [d for d in done if d.renamed]
         log.info("collections: %d groups are now collections", len(done))
         for d in renamed:

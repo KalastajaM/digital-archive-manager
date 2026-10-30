@@ -1118,9 +1118,13 @@ choose the group in the panel on the right. In `##. Important` each group is a s
 Other collections nest instead (see Parent collections). Collections made with an earlier
 version could have groups too: the first time this version opens, each such group becomes
 a collection inside its collection, with its name, summary and files, nested as before.
-Nothing moves in `##. Ongoing`, since a collection inside another is a folder there just as
-a group was. A group whose name another collection already has gets the collection's name
-in brackets (`Michiel (Legal)`), and its folder follows that name. A snapshot is taken
+In `##. Ongoing` the folders and links stay where they are, since a collection inside
+another is a folder there just as a group was. Three kinds of group change there: an empty
+group's folder goes (it comes back once its collection has a file), a group holding just
+one folder becomes a link to that folder, and a group whose name another collection already
+has gets the collection's name in brackets (`Michiel (Legal)`) and a folder of that name.
+Files of your own in such a folder are never touched: the old folder stays beside the new
+one. A snapshot is taken
 first (see [Snapshots](#snapshots)), so the step can be undone by restoring it.
 
 ### Export

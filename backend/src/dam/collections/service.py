@@ -872,6 +872,8 @@ class CollectionService:
         when each was added and its link name; an id that is not a member of ``from_id``
         is left alone, one already in ``to_id`` just leaves ``from_id``. Returns
         ``to_id``. Refused into a closed collection."""
+        if from_id == to_id:
+            raise InvalidRequest("The files are in that collection already")
         ids = _drive_ids(drive_ids)
         with self._add_lock(to_id), write_tx(self.engine) as conn:
             self._require(conn, from_id)
@@ -1397,16 +1399,24 @@ class CollectionService:
         with self.engine.connect() as conn:
             return self._ordinary_group_owners(conn)
 
-    def convert_groups(self, *, notify: bool = False) -> list[GroupConverted]:
+    def convert_groups(
+        self,
+        *,
+        notify: bool = False,
+        then: Callable[[Connection, list[GroupConverted]], object] | None = None,
+    ) -> list[GroupConverted]:
         """Make every group of an ordinary collection a collection inside it, nested as
         the groups were, in one transaction: the group's name (else "<group> (<parent>)",
         then with " 2", " 3"...), its summary and members; the parent's state and
         publish setting; placed after the parent's own children, in group order. The
-        groups go. Important keeps its groups."""
+        groups go. Important keeps its groups. ``then(conn, done)`` runs in the same
+        transaction (the Ongoing records follow), so a failure there undoes it all."""
         done: list[GroupConverted] = []
         with write_tx(self.engine) as conn:
             for cid in self._ordinary_group_owners(conn):
                 done += self._convert_groups_of(conn, cid)
+            if done and then is not None:
+                then(conn, done)
         if done and notify:
             self._changed()
         return done
