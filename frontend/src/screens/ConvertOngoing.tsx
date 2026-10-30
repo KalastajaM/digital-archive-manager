@@ -41,6 +41,7 @@ import { Tag } from "../components/ui/Tag";
 import { Toolbar } from "../components/ui/Toolbar";
 import { plural } from "../format";
 import { visible } from "../text";
+import { collectionHref } from "../collectionHref";
 
 const CONTENTS_SHOWN = 8;
 /** Why Preview is disabled (spec §1.3). */
@@ -427,7 +428,7 @@ export function GreyEntry({ entry, look }: { entry: OngoingEntry; look: Look }) 
       ) : entry.collection_id !== null ? (
         <p className="ongoing-entry-what">
           Managed by collection{" "}
-          <Link to={`/collections/${entry.collection_id}`}>{visible(entry.collection_name ?? "")}</Link>
+          <Link to={collectionHref({ id: entry.collection_id, name: entry.collection_name ?? "" })}>{visible(entry.collection_name ?? "")}</Link>
         </p>
       ) : (
         <p className="ongoing-entry-what">Managed by a collection.</p>

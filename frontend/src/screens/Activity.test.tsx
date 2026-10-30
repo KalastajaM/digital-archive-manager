@@ -468,7 +468,7 @@ describe("Activity", () => {
     renderWithProviders(<Activity />);
     const article = await screen.findByRole("article", { name: "Batch w1" });
     const link = await within(article).findByRole("link", { name: "2026 Sauna rebuild" });
-    expect(link).toHaveAttribute("href", "/collections/7");
+    expect(link).toHaveAttribute("href", "/open-collection/7");
     expect(article.querySelector(".batch-note")).toHaveTextContent(
       "Made automatically after a collection change — change 2026 Sauna rebuild to undo it",
     );

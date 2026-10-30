@@ -24,6 +24,7 @@ import { Segmented } from "../components/ui/Segmented";
 import { Toolbar } from "../components/ui/Toolbar";
 import { visible } from "../text";
 import CollectionDetail from "./CollectionDetail";
+import { collectionHref } from "../collectionHref";
 
 /** An inline name input: Enter (or Create) creates the collection and opens it. */
 function NewCollection({ onCreated }: { onCreated: (id: number) => void }) {
@@ -159,7 +160,6 @@ export default function Collections({ today }: { today?: string }) {
 function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState: (s: "open" | "closed") => void }) {
   const navigate = useNavigate();
   const list = useCollections(state);
-  const suffix = state === "closed" ? "?state=closed" : "";
   const order = useCollectionOrder(list.data ?? []);
   const menu = useOrderMenu(order);
   const mover = useMoveCollection(list.data ?? [], () => {});
@@ -192,7 +192,7 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
         const where = c.parent_id != null && !ids.has(c.parent_id) && parent.length > 0 ? parent.join(PATH_SEP) : undefined;
         return (
           <li key={c.id}>
-            <Row c={c} href={`/collections/${c.id}${suffix}`} collections={under.length} where={where} order={order} onMenu={menu.onContextMenu} mover={mover} />
+            <Row c={c} href={collectionHref(c)} collections={under.length} where={where} order={order} onMenu={menu.onContextMenu} mover={mover} />
             {under.length > 0 && <ul className="collection-list collection-children-list">{branch(under)}</ul>}
           </li>
         );
@@ -222,7 +222,7 @@ function CollectionIndex({ state, onState }: { state: "open" | "closed"; onState
         }
       />
       <div className="collections-index-body">
-        {state === "open" && <NewCollection onCreated={(id) => navigate(`/collections/${id}`)} />}
+        {state === "open" && <NewCollection onCreated={(id) => navigate(`/open-collection/${id}`)} />}
         {dragging && (
           <p className="collections-top-drop hint" {...top.props}>
             Drop here to move it to the top level, last

@@ -54,7 +54,7 @@ export function useMoveCollection(list: CollectionRow[], onMoved: (target: Colle
     const name = visible(dragged.name);
     const where = target === null ? null : visible(target.name);
     // The collection page shows the batch that ran (LastChange) and Activity has it.
-    const open = { label: "Open", run: () => navigate(`/collections/${id}`) };
+    const open = { label: "Open", run: () => navigate(`/open-collection/${id}`) };
     setParent
       .mutateAsync({ id, parent_id: target?.id ?? null })
       .then((result) => {

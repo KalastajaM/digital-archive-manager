@@ -218,10 +218,10 @@ export function syncCollection(
   return collections.find((c) => c.name.toLocaleLowerCase() === folder);
 }
 
-/** A link to a collection page (a plain anchor outside a router). */
+/** A link that opens a collection (in Browse; a plain anchor outside a router). */
 function CollectionLink({ id, children }: { id: number; children: ReactNode }) {
   const inRouter = useInRouterContext();
-  return inRouter ? <Link to={`/collections/${id}`}>{children}</Link> : <a href={`/collections/${id}`}>{children}</a>;
+  return inRouter ? <Link to={`/open-collection/${id}`}>{children}</Link> : <a href={`/open-collection/${id}`}>{children}</a>;
 }
 
 /** Where a batch came from, in words; the app is the default and says nothing. */

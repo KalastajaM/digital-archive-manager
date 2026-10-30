@@ -12,6 +12,7 @@ import { visible } from "../text";
 import { browseSearchUrl } from "./today/SearchCard";
 import { trayIcon } from "./ui/Sidebar";
 import { type Completion, useSearchCompletions } from "./useSearchCompletions";
+import { collectionHref } from "../collectionHref";
 
 /** The palette's open state, and the shortcut that toggles it. It works in both looks and
  * also while typing in a field; it stays out of the way of another open dialog. */
@@ -111,7 +112,7 @@ function useResults(query: string, typed: ReturnType<typeof splitSearch>, sugges
       }
       for (const c of best(collections.data ?? [], words, (c) => c.name, MAX.collections)) {
         const where = c.path.slice(0, -1).map(visible).join(" / ");
-        out.push({ key: `collection:${c.id}`, group: "Collections", label: visible(c.name), hint: where || undefined, icon: Layers, to: `/collections/${c.id}` });
+        out.push({ key: `collection:${c.id}`, group: "Collections", label: visible(c.name), hint: where || undefined, icon: Layers, to: collectionHref(c) });
       }
     }
     if (words.length > 0) {

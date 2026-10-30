@@ -133,6 +133,7 @@ import { publishSelection } from "../selection";
 import { inFileManager, showInLabel } from "../fileManager";
 import { visible } from "../text";
 import { baseName, extOf } from "../paths";
+import { collectionHref } from "../collectionHref";
 
 type Pending = { action: CollectionAction; ops: ResolvedOp[]; title: string; label: string; done: string };
 
@@ -426,7 +427,7 @@ function Where({ c, all }: { c: { id: number; path: string[]; name: string }; al
         return (
           <span key={i}>
             {i > 0 && PATH_SEP}
-            {at ? <Link to={`/collections/${at.id}`}>{visible(name)}</Link> : visible(name)}
+            {at ? <Link to={collectionHref(at)}>{visible(name)}</Link> : visible(name)}
           </span>
         );
       })}
@@ -462,7 +463,7 @@ function ChildCollections({ id, all }: { id: number; all: CollectionRow[] }) {
               <Layers className="collection-row-icon" size={16} strokeWidth={1.75} aria-hidden="true" />
               <div className="collection-row-main">
                 <p className="collection-row-title">
-                  <Link to={`/collections/${child.id}`}>{visible(child.name)}</Link>
+                  <Link to={collectionHref(child)}>{visible(child.name)}</Link>
                 </p>
                 <p className="collection-row-meta">{childCounts(child, (kids.get(child.id) ?? []).length)}</p>
               </div>
@@ -962,7 +963,7 @@ export default function CollectionDetail({
   const undoRename = (from: string, to: string) => {
     if (mounted.current) renameBack.current(from, to);
     else {
-      navigate(`/collections/${id}`);
+      navigate(`/open-collection/${id}`);
       toast({ kind: "info", text: `Use ⋯ › Rename to rename it back to ${to}` });
     }
   };
@@ -1577,7 +1578,7 @@ export default function CollectionDetail({
                           return (
                             <span key={i}>
                               {i > 0 && PATH_SEP}
-                              {at ? <Link to={`/collections/${at.id}`}>{visible(n)}</Link> : visible(n)}
+                              {at ? <Link to={collectionHref(at)}>{visible(n)}</Link> : visible(n)}
                             </span>
                           );
                         })}
@@ -1924,7 +1925,7 @@ export default function CollectionDetail({
           onCreated={(child) => {
             setNewChild(false);
             toast({ kind: "info", text: `Created ${child.name} inside ${c.name}` });
-            navigate(`/collections/${child.id}`);
+            navigate(collectionHref(child));
           }}
         />
       )}

@@ -129,7 +129,7 @@ describe("Collections list", () => {
   it("lists the open collections with file count, open checks and the Ongoing status", async () => {
     const { calls, user } = renderCollections();
     const r = await screen.findByRole("article", { name: "Sauna⟨U+202E⟩x" });
-    expect(within(r).getByRole("link", { name: "Sauna⟨U+202E⟩x" })).toHaveAttribute("href", "/collections/7");
+    expect(within(r).getByRole("link", { name: "Sauna⟨U+202E⟩x" })).toHaveAttribute("href", "/browse?tree=collections&q=collection%3ASauna%E2%80%AEx");
     expect(r).toHaveTextContent("3 files · 2 open checks");
     expect(within(r).getByText("Not managed: a user file")).toHaveClass("tag-orange");
     expect(calls.find((c) => c.url.startsWith("/api/collections?"))!.url).toBe("/api/collections?state=open");
@@ -138,7 +138,7 @@ describe("Collections list", () => {
     expect(where()).toBe("/collections?state=closed");
     const old = await screen.findByRole("article", { name: "Old car" });
     expect(old).toHaveTextContent("1 file");
-    expect(within(old).getByRole("link")).toHaveAttribute("href", "/collections/8?state=closed");
+    expect(within(old).getByRole("link")).toHaveAttribute("href", "/browse?tree=collections&q=collection%3A%22Old+car%22");
     expect(screen.getByRole("button", { name: "Closed" })).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -147,9 +147,8 @@ describe("Collections list", () => {
       "POST /api/collections": { body: { ...SAUNA, id: 7, members: [] } },
     });
     await user.type(await screen.findByRole("textbox", { name: "New collection" }), "  Sauna {Enter}");
-    await waitFor(() => expect(where()).toBe("/collections/7"));
+    await waitFor(() => expect(where()).toBe("/open-collection/7"));
     expect(posts(calls, "/api/collections").map((c) => c.body)).toEqual([{ name: "Sauna" }]);
-    expect(await within(panel()).findByRole("heading", { name: "Sauna" })).toBeInTheDocument();
   });
 
   it("the sidebar's + (/collections?new=1) puts the focus in the name field", async () => {
@@ -1260,14 +1259,14 @@ describe("Parent collections", () => {
     const children = await within(panel()).findByRole("region", { name: "Collections" });
     const rows = await within(children).findAllByRole("article");
     expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual(["Deck", "Old shed", "Oven⟨U+202E⟩"]);
-    expect(within(rows[0]).getByRole("link", { name: "Deck" })).toHaveAttribute("href", "/collections/9");
+    expect(within(rows[0]).getByRole("link", { name: "Deck" })).toHaveAttribute("href", "/browse?tree=collections&q=collection%3ADeck");
     // typed member counts, as each child's own page has them (coordinator ruling)
     expect(rows[0]).toHaveTextContent("1 folder · 2 files · 1 open check");
     expect(rows[1]).toHaveTextContent("Closed");
     expect(rows[2]).toHaveTextContent("5 files · 1 group"); // the list's count
     expect(children.compareDocumentPosition(tree()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // the breadcrumb of where it sits
-    expect(within(panel()).getByRole("link", { name: "Houses" })).toHaveAttribute("href", "/collections/1");
+    expect(within(panel()).getByRole("link", { name: "Houses" })).toHaveAttribute("href", "/browse?tree=collections&q=collection%3AHouses");
   });
 
   it("a child's count on its parent's page is the one on its own page", async () => {
@@ -1349,7 +1348,7 @@ describe("Parent collections", () => {
     expect(create).toBeDisabled();
     await user.type(within(dialog).getByRole("textbox", { name: "Name" }), "  Stove ");
     await user.dblClick(create);
-    await waitFor(() => expect(where()).toBe("/collections/12"));
+    await waitFor(() => expect(where()).toBe("/browse?tree=collections&q=collection%3AStove"));
     expect(posts(calls, "/api/collections").map((c) => c.body)).toEqual([{ name: "Stove", parent_id: 7 }]);
     expect(await screen.findByText("Created Stove inside Sauna")).toBeInTheDocument();
   });

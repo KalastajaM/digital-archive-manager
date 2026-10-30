@@ -12,6 +12,7 @@ import { Card } from "../ui/Card";
 import { Tag } from "../ui/Tag";
 import type { CardFrame } from "./frame";
 import type { TrayCardInfo } from "./TrayCard";
+import { collectionHref } from "../../collectionHref";
 
 /** The open collections with something to do: open checklist entries, or files still
  * in the inbox. The rest are in the sidebar; Today leaves them out. */
@@ -41,7 +42,7 @@ export function CollectionsCard({ data, frame, Shell = Card }: { data: TodayData
         <ul className="today-list">
           {collections.map((c) => (
             <li key={c.id}>
-              <Link to={`/collections/${c.id}`}>{visible(c.name)}</Link>
+              <Link to={collectionHref(c)}>{visible(c.name)}</Link>
               <span className="today-row-sub">
                 {plural(c.files, "file")}
                 {c.in_inbox > 0 && ` · ${plural(c.in_inbox, "file")} in the inbox`}

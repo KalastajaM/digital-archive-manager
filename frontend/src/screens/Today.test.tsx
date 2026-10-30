@@ -722,7 +722,7 @@ describe("Today", () => {
     renderToday();
     const collections = await screen.findByRole("region", { name: "Collections to do" });
     const collection = within(collections).getByRole("link", { name: "Sauna⟨U+202E⟩conversion" });
-    expect(collection).toHaveAttribute("href", "/collections/7");
+    expect(collection).toHaveAttribute("href", "/browse?tree=collections&q=collection%3ASauna%E2%80%AEconversion");
     expect(collections).toHaveTextContent("23 files · 2 checklist items open");
     expect(collections).toHaveTextContent("still⟨U+200B⟩needed");
   });

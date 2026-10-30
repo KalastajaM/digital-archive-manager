@@ -656,8 +656,8 @@ describe("Selected file", () => {
     const links = within(block).getAllByRole("link");
     expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["To pay: Northpower⟨U+202E⟩ bill", "/trays/to-pay?item=42"],
-      ["Sauna", "/collections/7"],
-      ["Old (closed)", "/collections/8?state=closed"],
+      ["Sauna", "/browse?tree=collections&q=collection%3ASauna"],
+      ["Old (closed)", "/browse?tree=collections&q=collection%3AOld"],
     ]);
     // the tray item's chip says where it goes
     expect(links[0]).toHaveAttribute("title", "Open it in To pay");

@@ -74,6 +74,7 @@ import { MarkIcons } from "../components/MarkIcons";
 import { useKeydown } from "../keyboard";
 import { readDragFiles, readDragItem, useDropTarget } from "../dnd";
 import { baseName } from "../paths";
+import { collectionHref } from "../collectionHref";
 
 
 /** One field, saved on blur or Enter (a checkbox as soon as it changes). */
@@ -256,7 +257,7 @@ function InCollection({ driveId }: { driveId: string }) {
       {found.map((c, i) => (
         <span key={c.id}>
           {i > 0 && ", "}
-          <Link to={`/collections/${c.id}`}>{visible(c.name)}</Link>
+          <Link to={collectionHref(c)}>{visible(c.name)}</Link>
         </span>
       ))}
     </>

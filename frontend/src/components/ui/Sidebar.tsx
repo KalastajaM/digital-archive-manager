@@ -66,6 +66,8 @@ import {
 import { useUndoConfirm } from "../UndoConfirm";
 import { useAddToCollection } from "../useAddToCollection";
 import { useQuickPut } from "../useQuickPut";
+import { collectionHref } from "../../collectionHref";
+import { scopedCollection } from "../../collectionScope";
 import { searchKeyLabel } from "../../searchKey";
 import { positiveTags, readQuery, tagFilter } from "../../searchFilters";
 
@@ -305,6 +307,8 @@ function useFolds<T extends number | string>(key: string, valid: (x: unknown) =>
 
 type TreeProps = {
   c: CollectionRow;
+  /** The collection Browse shows now (its search), if any: that row is current. */
+  current: number | null;
   kids: Map<number | null, CollectionRow[]>;
   folds: ReturnType<typeof useFolds<number>>;
   collect: ReturnType<typeof useAddToCollection>;
@@ -316,7 +320,7 @@ type TreeProps = {
 /** One collection in the sidebar tree, its children below it (unless folded). The row
  * takes dropped files (members) and dropped collections (moved inside), and drags as
  * a collection itself; "Move to…" on the collection page is the keyboard way. */
-function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeProps) {
+function CollectionNode({ c, current, kids, folds, collect, mover, order, onMenu }: TreeProps) {
   const children = kids.get(c.id) ?? [];
   const open = !folds.folded.has(c.id);
   const addFiles = collect.accept(c);
@@ -339,9 +343,12 @@ function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeP
   const label = files ? `${name} (${files})` : name;
   return (
     <li className="sidebar-tree-item">
-      <NavLink
-        to={`/collections/${c.id}`}
-        className={children.length > 0 ? "sidebar-row sidebar-row-parent" : "sidebar-row"}
+      {/* a plain Link: every collection opens in /browse, so a NavLink would mark them all
+          current there; the row is current while Browse shows this collection */}
+      <Link
+        to={collectionHref(c)}
+        className={[children.length > 0 ? "sidebar-row sidebar-row-parent" : "sidebar-row", current === c.id && "active"].filter(Boolean).join(" ")}
+        aria-current={current === c.id ? "page" : undefined}
         aria-label={label}
         title={title(label)}
         data-collection-id={c.id}
@@ -355,7 +362,7 @@ function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeP
         <Layers className="sidebar-icon" {...ICON} />
         <span className="sidebar-label">{name}</span>
         {files > 0 && <span className="sidebar-count">{files}</span>}
-      </NavLink>
+      </Link>
       {children.length > 0 && (
         <button
           type="button"
@@ -371,7 +378,7 @@ function CollectionNode({ c, kids, folds, collect, mover, order, onMenu }: TreeP
       {children.length > 0 && open && (
         <ul className="sidebar-list sidebar-children">
           {children.map((child) => (
-            <CollectionNode key={child.id} c={child} kids={kids} folds={folds} collect={collect} mover={mover} order={order} onMenu={onMenu} />
+            <CollectionNode key={child.id} c={child} current={current} kids={kids} folds={folds} collect={collect} mover={mover} order={order} onMenu={onMenu} />
           ))}
         </ul>
       )}
@@ -389,6 +396,10 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
   const collect = useAddToCollection();
   const mover = useMoveCollection(list, (target) => target && folds.unfold(target.id));
   const kids = childrenOf(list);
+  const location = useLocation();
+  // the collection Browse shows now (a search of just that collection)
+  const shown = location.pathname === "/browse" ? scopedCollection(readQuery(new URLSearchParams(location.search).get("q")).filters, list) : null;
+  const current = shown && "c" in shown ? shown.c.id : null;
   const order = useCollectionOrder(list);
   const menu = useOrderMenu(order);
   const top = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
@@ -405,7 +416,7 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
       <ImportantRow />
       <StarredRow />
       {(kids.get(null) ?? []).map((c) => (
-        <CollectionNode key={c.id} c={c} kids={kids} folds={folds} collect={collect} mover={mover} order={order} onMenu={menu.onContextMenu} />
+        <CollectionNode key={c.id} c={c} current={current} kids={kids} folds={folds} collect={collect} mover={mover} order={order} onMenu={menu.onContextMenu} />
       ))}
       {menu.element}
     </Section>
@@ -436,15 +447,26 @@ function StarredRow() {
   const starred = useBuiltin("starred");
   const n = starred.data?.members.length ?? 0;
   const title = useRowTitle();
+  const location = useLocation();
+  // it opens in Browse (a search of the starred files); current while Browse shows that
+  const shown = location.pathname === "/browse" ? readQuery(new URLSearchParams(location.search).get("q")).filters : [];
+  const current = shown.length === 1 && shown[0].name === "is" && shown[0].value === "starred" && !shown[0].negated;
   return (
     <li>
-      <NavLink to="/starred" className="sidebar-row" draggable={false} aria-label={n ? `Starred (${n})` : "Starred"} title={title(n ? `Starred (${n})` : "Starred")}>
+      <Link
+        to={collectionHref({ id: starred.data?.id ?? 0, name: "Starred", kind: "starred" })}
+        className={current ? "sidebar-row active" : "sidebar-row"}
+        aria-current={current ? "page" : undefined}
+        draggable={false}
+        aria-label={n ? `Starred (${n})` : "Starred"}
+        title={title(n ? `Starred (${n})` : "Starred")}
+      >
         <span className="sidebar-icon sidebar-starred" aria-hidden="true">
           <StarGlyph size={16} />
         </span>
         <span className="sidebar-label">Starred</span>
         {n > 0 && <span className="sidebar-count">{n}</span>}
-      </NavLink>
+      </Link>
     </li>
   );
 }

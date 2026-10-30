@@ -104,7 +104,7 @@ describe("App shell", () => {
       ["Trays", "/trays"],
       ["Collections", "/collections"],
       ["Important", "/important"],
-      ["Starred", "/starred"],
+      ["Starred", "/browse?tree=collections&q=is%3Astarred"],
       ["Tags", "/tags"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],

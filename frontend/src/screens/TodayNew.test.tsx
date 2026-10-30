@@ -366,7 +366,7 @@ describe("Today in the New look: the right column", () => {
 
   it("lists the collections to do, Starred and Reminders as sections of their own", async () => {
     renderToday();
-    expect(within(await screen.findByRole("region", { name: "Collections to do" })).getByRole("link", { name: "House sale" })).toHaveAttribute("href", "/collections/7");
+    expect(within(await screen.findByRole("region", { name: "Collections to do" })).getByRole("link", { name: "House sale" })).toHaveAttribute("href", "/browse?tree=collections&q=collection%3A%22House+sale%22");
     expect(section("Starred")).toBeInTheDocument();
     expect(within(section("Reminders")).getByText("Not checked yet.")).toBeInTheDocument();
   });

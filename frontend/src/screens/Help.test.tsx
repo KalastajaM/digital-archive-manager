@@ -100,6 +100,7 @@ const SCREEN_SECTIONS: Record<string, string> = {
   "/inbox": "filing-from-the-inbox",
   "/trays/:trayId?": "trays",
   "/collections/:id?": "collections",
+  "/open-collection/:id": "collections",
   "/ongoing": "converting-existing-folders",
   "/starred": "starred-and-important",
   "/important": "starred-and-important",
