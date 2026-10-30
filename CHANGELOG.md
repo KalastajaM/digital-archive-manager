@@ -70,6 +70,10 @@ All notable changes are listed here. The format follows
   and a little space now separate what the document mentions from its Relatives.
 - Saving the People list no longer pins the address area: it is sent only when it
   changed, so it keeps following the countries.
+- Browse's Folders, Collections and Tags switch shows only its icons, centred in their
+  boxes, at any width; the names are the tooltips.
+- A tag box with tags in it has the same space above the tags as between the tags and the
+  typing line.
 
 ## [0.9.0] - 2026-10-29
 

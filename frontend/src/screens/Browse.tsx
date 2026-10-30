@@ -2255,13 +2255,8 @@ export default function Browse() {
         ] as const
       ).map(([value, name, Icon]) => ({
         value,
-        // in a narrow tree only the icon shows; the name stays the button's name and tip
-        label: (
-          <>
-            <Icon size={13} strokeWidth={1.75} aria-hidden="true" />
-            <span className="tree-switch-label">{name}</span>
-          </>
-        ),
+        // only the icon shows; the name is the button's name and tip
+        label: <Icon size={14} strokeWidth={1.75} aria-hidden="true" />,
         title: name,
         ariaLabel: name,
       }))}
