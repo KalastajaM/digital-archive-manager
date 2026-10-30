@@ -10,7 +10,9 @@ All notable changes are listed here. The format follows
 
 - **Your own business ID.** In Found in this document, **Mine** marks a business ID as
   yours: it names no sender, links no files in Relatives and does not count for `id:*`.
-  Settings, Senders shows it as Yours, with **Not mine** to undo it.
+  Settings, Senders shows it as Yours, with **Not mine** to undo it. This closes the
+  follow-up named in the 0.9.0 release notes: your own business ID no longer links all
+  your documents in Relatives.
 
 - In Settings, Senders, the number of documents is a link that opens Browse on the
   documents carrying that business ID.
@@ -78,6 +80,10 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- An open search (such as `id:*` in Browse) looks again after you mark a business ID as
+  yours or name a sender, instead of showing the old results.
+- An image just over Pillow's size limit for a safe decode is left out of a PDF export, as
+  one far over it already was, instead of being decoded anyway.
 - **Fewer things taken for dates.** A lower-case "may" or "march" is a word, not a month
   (English month names count when written with a capital), and a version or a phone number
   written like a date ("version 1-2-2026", "puh. 09-12-2026") is no date.

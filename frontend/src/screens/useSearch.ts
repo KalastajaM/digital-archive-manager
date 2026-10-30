@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { errorText, isAbort, MARKS_CHANGED, type SearchHit, searchFiles } from "../api/client";
+import { errorText, isAbort, MARKS_CHANGED, SEARCH_STALE, type SearchHit, searchFiles } from "../api/client";
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
@@ -12,12 +12,17 @@ export function useSearch(query: string, folder = "", reload = 0, tagMode: "all"
   const [error, setError] = useState<{ key: string; text: string } | null>(null);
   const latest = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
-  // A mark changed: the hits are fetched again, so their ★ / ! icons follow.
+  // A mark changed: the hits are fetched again, so their ★ / ! icons follow; so are
+  // results that may be stale (SEARCH_STALE).
   const [marked, setMarked] = useState(0);
   useEffect(() => {
     const bump = () => setMarked((n) => n + 1);
     window.addEventListener(MARKS_CHANGED, bump);
-    return () => window.removeEventListener(MARKS_CHANGED, bump);
+    window.addEventListener(SEARCH_STALE, bump);
+    return () => {
+      window.removeEventListener(MARKS_CHANGED, bump);
+      window.removeEventListener(SEARCH_STALE, bump);
+    };
   }, []);
   useEffect(() => () => inFlight.current?.abort(), []); // leaving the screen
   const mode = tagMode;
