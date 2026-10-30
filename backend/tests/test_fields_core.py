@@ -82,3 +82,22 @@ def test_an_iban_ends_where_its_country_says():
     assert detect_fields("FI2112345600000785123").iban is None
     assert detect_fields("NL91 ABNA 0417 1643 00X").iban is None
     assert detect_fields("NL91 ABNA 0417 1643 00, ref 12").iban == "NL91ABNA0417164300"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "you may 15 2026 come",
+        "Section 5 march 2026",
+        "version 1-2-2026",
+        "Puh 09-12-2026",
+        "tel. 05/11/2026",
+    ],
+)
+def test_words_and_numbers_that_only_look_like_dates(text):
+    assert detect_fields(text).dates == []
+
+
+@pytest.mark.parametrize("text", ["Due May 15, 2026", "5 March 2026", "Laskun päiväys 15-05-2026"])
+def test_real_dates_like_them_still_count(text):
+    assert len(detect_fields(text).dates) == 1

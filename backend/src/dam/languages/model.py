@@ -18,3 +18,6 @@ class LanguagePack:
     kind_words: tuple[str, ...] = ()
     # the 12 months, each as the folded forms written in dates ("15 oktober 2026")
     months: tuple[tuple[str, ...], ...] = ()
+    # the language writes month names with a capital (English): a lower-case "may" or
+    # "march" is then a word, not a month
+    months_capitalized: bool = False
