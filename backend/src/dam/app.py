@@ -401,8 +401,8 @@ class App:
     ongoing: OngoingPublisher = field(init=False)
     convert: OngoingConverter = field(init=False)
     convert_important: ImportantConverter = field(init=False)
-    _packs: packs.Profile = field(init=False, repr=False)  # the packs this archive reads with
-    _packs_before: packs.Profile = field(init=False, repr=False)
+    _packs: packs.PackProfile = field(init=False, repr=False)  # the packs this archive reads with
+    _packs_before: packs.PackProfile = field(init=False, repr=False)
     trays: TrayService = field(init=False)
     scan_fields: ScanFieldService = field(init=False)
     rule_record: RuleRecord = field(init=False)

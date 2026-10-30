@@ -161,9 +161,12 @@ class SetupMode:
                 )
             if countries is not None:
                 # before the archive root: the app that starts on it reads them at once
-                write_keys(
-                    self.app_paths, {"countries": countries}, lambda s: s.countries == countries
-                )
+                try:
+                    write_keys(
+                        self.app_paths, {"countries": countries}, lambda s: s.countries == countries
+                    )
+                except OSError as e:
+                    raise InvalidRequest(f"the setting could not be saved: {e}") from e
             setup.write_archive_root(self.app_paths, check.path)
             self._done = True
             switched = False

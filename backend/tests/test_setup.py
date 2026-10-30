@@ -594,3 +594,18 @@ def test_setup_refuses_an_unknown_country(setup_client, bare, tmp_path):
     r = post(setup_client, "/api/setup", {"archive_root": str(folder), "countries": ["zz"]})
     assert r.status_code == 400 and "zz" in r.json()["error"]
     assert not setup.is_configured(bare)
+
+
+def test_setup_says_why_when_the_countries_cannot_be_written(
+    setup_client, bare, tmp_path, monkeypatch
+):
+    from dam.api import setup_ctl
+
+    def fail(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(setup_ctl, "write_keys", fail)
+    folder = mk(tmp_path / "Chosen")
+    r = post(setup_client, "/api/setup", {"archive_root": str(folder), "countries": ["fi"]})
+    assert r.status_code == 400 and "disk full" in r.json()["error"]
+    assert not setup.is_configured(bare)
