@@ -2,7 +2,8 @@
  * otherwise the AI one ("outdated (the file changed)" when the file changed since).
  * "Summarize with AI" opens the "What will be sent" sheet; the answer is only a
  * proposal until "Use this summary" saves it. A current summary the user wrote is never
- * replaced without the confirm sheet. Edit saves the user's own text. */
+ * replaced without the confirm sheet. Edit saves the user's own text; in the New look a
+ * click on the text edits it in place (``SummaryText``), with no Edit or Write button. */
 import { Sparkles } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import {
@@ -14,8 +15,10 @@ import {
   useFileSummary,
   usePutFileSummary,
 } from "../../api/client";
+import { useStyle } from "../../appearance";
 import { visible } from "../../text";
 import { Collapsible, firstLine } from "../Collapsible";
+import { SummaryText } from "../SummaryText";
 import { ConfirmPlan } from "../PlanPreview";
 import { Tag } from "../ui/Tag";
 import { euro } from "../../format";
@@ -71,6 +74,8 @@ export function SummaryBox({
   readOnly?: string | null;
 }) {
   const editId = useId();
+  const [look] = useStyle();
+  const isNew = look === "new";
   const query = useFileSummary(driveId);
   const save = usePutFileSummary();
   const ai = useAIState();
@@ -139,6 +144,15 @@ export function SummaryBox({
     });
 
   const askAI = () => send.ask({ drive_id: driveId });
+  // the New look's edit in place: an AI summary edited becomes the user's own
+  const saveInPlace = (text: string) =>
+    save.mutateAsync({
+      driveId,
+      source: "user",
+      summary: text,
+      key_facts: shown?.source === "user" ? shown.saved.key_facts : [],
+      replace: true,
+    });
 
   return (
     <>
@@ -154,7 +168,15 @@ export function SummaryBox({
           Could not load the summary. {visible(errorText(query.error))}
         </p>
       )}
-      {editing !== null ? (
+      {isNew ? (
+        query.data && (
+          <>
+            <SummaryText value={shown?.saved.summary ?? ""} onSave={saveInPlace} maxLength={2000} readOnly={readOnly} />
+            {shown && <Facts facts={shown.saved.key_facts} label="Key facts" />}
+            {shown?.saved.outdated && <p className="hint summary-outdated">{OUTDATED}</p>}
+          </>
+        )
+      ) : editing !== null ? (
         <form
           className="summary-edit"
           onSubmit={(e) => {
@@ -239,7 +261,7 @@ export function SummaryBox({
               </button>
             </Why>
           )}
-          {query.data && (
+          {query.data && !isNew && (
             <Why reason={readOnly}>
               <button
                 type="button"
