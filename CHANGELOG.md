@@ -48,12 +48,14 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **A tray item opens in its tray from Browse.** The tray tag on a Browse row opens the
+  item in its tray when clicked, and in the file panel the tray chip has an arrow and says
+  which tray it opens.
 - **Collections nest instead of having groups.** Only Important keeps groups. The first
   time this version opens, the groups of other collections become collections inside
   them; their folders in `##. Ongoing` stay where they are (a snapshot is taken first;
-  the guide lists the few that change). Dragging a file
-  from a collection's page onto another collection of the same tree moves it there, with
-  Undo.
+  the guide lists the few that change). Dragging a file from a collection's page onto
+  another collection of the same tree moves it there, with Undo.
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that
   make it up, with the missing files apart; Other indexes shows Page 1 and Business IDs, each
   as how many of how many.
@@ -76,6 +78,10 @@ All notable changes are listed here. The format follows
   and a little space now separate what the document mentions from its Relatives.
 - Saving the People list no longer pins the address area: it is sent only when it
   changed, so it keeps following the countries.
+- Browse's Folders, Collections and Tags switch shows only its icons, centred in their
+  boxes, at any width; the names are the tooltips.
+- A tag box with tags in it has the same space above the tags as between the tags and the
+  typing line.
 
 ## [0.9.0] - 2026-10-29
 

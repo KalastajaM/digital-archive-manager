@@ -7628,11 +7628,14 @@ export interface components {
         };
         /**
          * RowItemOut
-         * @description An open tray item on a listed file: enough for its tag (tray, date, title).
+         * @description An open tray item on a listed file: enough for its tag (tray, date, title) and its
+         *     link to the item in its tray.
          */
         RowItemOut: {
             /** Id */
             id: number;
+            /** Tray Id */
+            tray_id: string;
             /** Tray Name */
             tray_name: string;
             /** Title */
