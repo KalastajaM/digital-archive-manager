@@ -2499,7 +2499,6 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .entry-offline { flex: none; margin-left: var(--sp-2); font-size: 0.85em; color: var(--muted); }
 /* several files ticked in Browse: how many, and what can be done to them all */
 .selection-bar { flex: none; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: var(--sp-1) var(--sp-4); border-bottom: 0.5px solid var(--separator); font-size: var(--fs-sm); }
-.selection-count { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 /* the pickers of those actions: a box to type in, the names below (each on one line) */
 .pick-filter { width: 100%; margin-bottom: var(--sp-2); }
 .pick-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; }

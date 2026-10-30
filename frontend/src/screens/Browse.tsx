@@ -1828,10 +1828,8 @@ export default function Browse() {
         )}
         {checkedFiles > 0 && (
           // several files: what can be done to them all at once (tags, collections)
+          // (the toolbar already says how many are selected)
           <div className="selection-bar" role="group" aria-label="Selected files">
-            <span className="selection-count">
-              {checkedFiles} selected
-            </span>
             <SelectionActions
               files={fileRows.filter((it) => checkedIds.has(it.drive_id)).map((it) => ({ drive_id: it.drive_id, name: it.name }))}
               scope={isSearch && scoped && "c" in scoped ? scoped.c : null}
