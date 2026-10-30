@@ -56,6 +56,7 @@ from dam.db.tables import (
     files,
     member_link_names,
     notes,
+    ongoing_entries,
 )
 from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.index.repo import FileRecord, FileRepo
@@ -1422,6 +1423,23 @@ class CollectionService:
                     out.append(c)
                     todo.append(c.id)
         return out
+
+    def published(self, ids: Sequence[int]) -> bool:
+        """Whether the Ongoing publisher still records a link for any of these
+        collections: deleting their rows would forget it, and the link would be left in
+        ##. Ongoing as if it were the user's own. (A folder left because the user's own
+        file is in it is theirs from then on, as when a collection is closed.)"""
+        with self.engine.connect() as conn:
+            return (
+                conn.execute(
+                    select(ongoing_entries.c.id)
+                    .where(
+                        ongoing_entries.c.collection_id.in_(ids), ongoing_entries.c.kind == "link"
+                    )
+                    .limit(1)
+                ).first()
+                is not None
+            )
 
     def close_tree(self, collection_id: int) -> list[int]:
         """Mark the collection and everything inside it closed (DB only), so the Ongoing

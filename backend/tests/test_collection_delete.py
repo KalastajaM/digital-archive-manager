@@ -51,7 +51,9 @@ def test_delete_takes_the_subtree_and_its_links_and_never_a_file(app, tree, fake
 
     root = fake_archive.root / ONG
     assert (root / "Legal" / "Michiel" / "Wills" / "c.pdf").is_symlink()
-    (root / "Legal" / "mine.txt").write_text("my own note", encoding="utf-8")  # a file of the user's
+    (root / "Legal" / "mine.txt").write_text(
+        "my own note", encoding="utf-8"
+    )  # a file of the user's
     with make_client(app) as client:
         r = client.post(f"/api/collections/{tree['top'].id}/delete", json={}, headers=LOCAL_ORIGIN)
     assert r.status_code == 200, r.text
@@ -71,3 +73,21 @@ def test_delete_takes_the_subtree_and_its_links_and_never_a_file(app, tree, fake
 def test_built_in_collections_cannot_be_deleted(app, tree):
     with pytest.raises(InvalidRequest):
         app.delete_collection(app.collections.builtin("starred").id)
+
+
+def test_delete_stops_when_the_links_could_not_be_taken_down(app, tree, monkeypatch):
+    # the sync did not run: the publisher still owns the links, so the rows must stay
+    monkeypatch.setattr(app, "sync_publishers", lambda label=None: None)
+    with pytest.raises(InvalidRequest, match="closed, not deleted"):
+        app.delete_collection(tree["top"].id)
+    left = {c.name: c.state for c in app.collections.list(None)}
+    assert left["Legal"] == "closed" and left["Wills"] == "closed"
+
+
+def test_merge_leaves_the_emptied_collection_when_its_folder_stays(app, tree, monkeypatch):
+    monkeypatch.setattr(app, "sync_publishers", lambda label=None: None)
+    with pytest.raises(InvalidRequest, match="left, empty"):
+        app.merge_collections(tree["kid"].id, tree["other"].id)
+    names = [c.name for c in app.collections.list(None)]
+    assert "Michiel" in names  # its Ongoing record stays with it
+    assert "id-b" in [m.drive_id for m in app.collections.get(tree["other"].id).members]

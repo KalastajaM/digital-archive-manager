@@ -549,10 +549,22 @@ class App:
         then the rows. Files are never touched. No Undo: the snapshot is the way back.
         Returns (how many collections went, the sync's result or None)."""
         name = self.collections.get(collection_id).name
-        self.collections.subtree(collection_id)  # a built-in is refused before anything
+        # a built-in is refused before anything
+        ids = [c.id for c in self.collections.subtree(collection_id)]
+        if not self.archive_available and self.collections.published(ids):
+            raise InvalidRequest(
+                f"The archive is not connected, so the links of {name} in ##. Ongoing "
+                "cannot be taken down now: delete it once the archive is back"
+            )
         create_snapshot(self.app_paths, kind=BEFORE_DELETE)
         self.collections.close_tree(collection_id)
         result = self.sync_publishers(label=f"Deleted {name}") if self.archive_available else None
+        if self.collections.published(ids):
+            # the rows hold the record of those links: keep them, closed, for a later try
+            raise InvalidRequest(
+                f"{name} is closed, not deleted: some of its links in ##. Ongoing could not "
+                "be taken down. Delete it again once that is fixed"
+            )
         return self.collections.delete_tree(collection_id), result
 
     def merge_collections(self, from_id: int, to_id: int) -> object:
@@ -564,6 +576,11 @@ class App:
         if problems:
             raise InvalidRequest(problems[0])
         name, into = self.collections.get(from_id).name, self.collections.get(to_id).name
+        if not self.archive_available and self.collections.published([from_id]):
+            raise InvalidRequest(
+                f"The archive is not connected, so the links of {name} in ##. Ongoing "
+                "cannot be moved now: merge it once the archive is back"
+            )
         create_snapshot(self.app_paths, kind=BEFORE_MERGE)
         self.collections.merge(from_id, to_id)
         result = (
@@ -571,6 +588,11 @@ class App:
             if self.archive_available
             else None
         )
+        if self.collections.published([from_id]):
+            raise InvalidRequest(
+                f"{name} went into {into}, but its folder in ##. Ongoing could not be taken "
+                f"down, so {name} is left, empty: delete it once that is fixed"
+            )
         self.collections.remove_merged(from_id)
         return result
 
