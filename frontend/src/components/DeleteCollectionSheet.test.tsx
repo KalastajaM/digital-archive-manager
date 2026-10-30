@@ -31,6 +31,7 @@ describe("DeleteCollectionSheet", () => {
     expect(within(sheet).getByText(/A snapshot is taken first/)).toBeInTheDocument();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Delete 3 collections" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/api/collections/1/delete")).toBe(true));
-    expect(onDone).toHaveBeenCalledWith(3);
+    // every name that went, so Browse can leave a search on any of them
+    expect(onDone).toHaveBeenCalledWith(3, ["Legal", "Michiel", "Old"]);
   });
 });

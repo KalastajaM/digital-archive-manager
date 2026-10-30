@@ -15,8 +15,8 @@ export function DeleteCollectionSheet({
   onCancel,
 }: {
   c: { id: number; name: string };
-  /** After the delete: how many collections went. */
-  onDone: (deleted: number) => void;
+  /** After the delete: how many collections went, and their names. */
+  onDone: (deleted: number, names: string[]) => void;
   onCancel: () => void;
 }) {
   const { remove, preview } = useDeleteCollection();
@@ -30,7 +30,7 @@ export function DeleteCollectionSheet({
   const go = async () => {
     try {
       const r = await remove.mutateAsync(c.id);
-      onDone(r.deleted);
+      onDone(r.deleted, (rows ?? []).map((x) => x.name));
     } catch (e) {
       setError(errorText(e));
     }

@@ -2481,7 +2481,11 @@ export default function Browse() {
                   active={scopeOf(filters)}
                   onPick={pickScope}
                   head={treeSwitch}
-                  onDeleted={(name) => setFilters(filters.filter((f) => !(f.name === "collection" && f.value.toLowerCase() === name.toLowerCase())))}
+                  onDeleted={(names) => {
+                    // leave a search on any collection that went, the inner ones too
+                    const gone = new Set(names.map((n) => n.toLowerCase()));
+                    setFilters(filters.filter((f) => !(f.name === "collection" && gone.has(f.value.toLowerCase()))));
+                  }}
                   startNew={params.get("new") === "1"}
                   onStartedNew={() =>
                     setParams(

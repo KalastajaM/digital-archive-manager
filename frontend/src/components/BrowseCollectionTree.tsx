@@ -191,8 +191,8 @@ export function CollectionTree({
   active: ScopeState;
   onPick: Pick;
   head?: ReactNode;
-  /** After a delete from the tree: the collection's name (Browse leaves its search). */
-  onDeleted?: (name: string) => void;
+  /** After a delete from the tree: the names of every collection that went (Browse leaves a search on them). */
+  onDeleted?: (names: string[]) => void;
   /** Open with the New collection sheet (the sidebar's +), or with the closed ones shown. */
   startNew?: boolean;
   /** The New collection sheet opened for ``startNew``: drop the flag so the next ask opens it again. */
@@ -317,10 +317,10 @@ export function CollectionTree({
         <DeleteCollectionSheet
           c={deleting}
           onCancel={() => setDeleting(null)}
-          onDone={(n) => {
+          onDone={(n, names) => {
             setDeleting(null);
             toast({ kind: "info", text: n === 1 ? `Deleted ${deleting.name}` : `Deleted ${deleting.name} and the ${n - 1} inside it` });
-            onDeleted?.(deleting.name);
+            onDeleted?.(names);
           }}
         />
       )}
