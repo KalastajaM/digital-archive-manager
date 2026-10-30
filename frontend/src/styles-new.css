@@ -2693,6 +2693,12 @@
 [data-style="new"] .file-skeleton .link-badges { flex-wrap: wrap; min-width: 0; max-width: 100%; }
 [data-style="new"] .file-skeleton .link-badges li { min-width: 0; max-width: 100%; }
 [data-style="new"] .file-skeleton .link-badges .tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+/* a tray item opens in its tray: an arrow says the chip goes there, the line on hover too; a
+   Browse row's tray tag opens it the same way */
+[data-style="new"] .link-badges .tray-link-arrow { flex: none; margin-left: 3px; vertical-align: -1px; }
+[data-style="new"] .link-badges .tray-link:hover { text-decoration: underline; }
+[data-style="new"] .entry-tray-link { cursor: pointer; }
+[data-style="new"] .entry-tray-link:hover { text-decoration: underline; }
 
 /* Found in this document (components/FoundIdentifiers.tsx): label, value, where else. */
 [data-style="new"] .found-ids { margin: var(--sp-3) 0; }

@@ -4,7 +4,7 @@
  * remembered divider between two panes. Classic renders none of them. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DirEntry } from "../api/client";
 import { mockFetch, renderWithProviders } from "../test-utils";
@@ -36,10 +36,17 @@ function setup(url: string, listing: DirEntry[] = [entry("Money", "d1", true), e
     <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/browse" element={<Browse />} />
+        <Route path="/trays/:trayId" element={<Where />} />
       </Routes>
     </MemoryRouter>,
   );
   return { user };
+}
+
+/** Where a link led: the tray route shows its path and query. */
+function Where() {
+  const at = useLocation();
+  return <p data-testid="where">{at.pathname + at.search}</p>;
 }
 
 beforeEach(() => {
@@ -310,16 +317,27 @@ describe("Browse rows with open tray items", () => {
     document.documentElement.dataset.style = "new";
     const due: DirEntry = {
       ...entry("receipt.pdf", "f2"),
-      open_items: [{ item: { id: 7, tray_name: "To action", title: "Botox Receipt", date: "2026-10-30" }, level: "soon" }],
+      open_items: [{ item: { id: 7, tray_id: "to-action", tray_name: "To action", title: "Botox Receipt", date: "2026-10-30" }, level: "soon" }],
     };
     setup("/browse", [entry("Money", "d1", true), entry("a.pdf", "f1"), due]);
     const row = (await screen.findByText("receipt.pdf")).closest("li") as HTMLElement;
     const tag = within(row).getByText("To action · 30.10.2026");
     expect(tag).toHaveClass("tag-orange");
     // the item's title on hover
-    expect(tag).toHaveAttribute("title", "To action: Botox Receipt · 30.10.2026");
+    expect(tag).toHaveAttribute("title", "To action: Botox Receipt · 30.10.2026 (click to open it in the tray)");
     // a file without open items and a folder carry none
     const rows = [...row.parentElement!.querySelectorAll("li")];
     expect(rows.filter((li) => li.querySelector(".entry-tags")).map((li) => li.textContent)).toEqual([row.textContent]);
+  });
+
+  it("a click on the tag opens the item in its tray", async () => {
+    document.documentElement.dataset.style = "new";
+    const due: DirEntry = {
+      ...entry("receipt.pdf", "f2"),
+      open_items: [{ item: { id: 7, tray_id: "to-action", tray_name: "To action", title: "Botox Receipt", date: null }, level: "undated" }],
+    };
+    const { user } = setup("/browse", [due]);
+    await user.click(await screen.findByText("To action"));
+    expect(await screen.findByTestId("where")).toHaveTextContent("/trays/to-action?item=7");
   });
 });

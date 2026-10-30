@@ -48,6 +48,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **A tray item opens in its tray from Browse.** The tray tag on a Browse row opens the
+  item in its tray when clicked, and in the file panel the tray chip has an arrow and says
+  which tray it opens.
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that
   make it up, with the missing files apart; Other indexes shows Page 1 and Business IDs, each
   as how many of how many.

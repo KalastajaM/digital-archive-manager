@@ -659,6 +659,9 @@ describe("Selected file", () => {
       ["Sauna", "/collections/7"],
       ["Old (closed)", "/collections/8?state=closed"],
     ]);
+    // the tray item's chip says where it goes
+    expect(links[0]).toHaveAttribute("title", "Open it in To pay");
+    expect(links[0].querySelector(".tray-link-arrow")).not.toBeNull();
   });
 
   it("a folder on the cursor shows its own panel: its path, its collections and the collections field", async () => {
