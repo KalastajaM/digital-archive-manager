@@ -68,3 +68,27 @@ def test_only_a_valid_business_id_can_be_yours(app, fake_archive):
         assert _own(c, True, kind="core.domain", value="vesi.fi").status_code == 400
         assert _own(c, True, value="0112038-8").status_code == 400  # in no document
         assert _own(c, False, value="0112038-8").json() == {"changed": 0, "own": False}
+
+
+def test_marking_takes_back_a_sender_its_name_gave_a_parked_file(app, fake_archive):
+    from sqlalchemy import select
+
+    from dam.db.tables import file_assignments
+
+    _bills(app, fake_archive)
+    with make_client(app) as c:
+        _put(c, {"kind": "fi.ytunnus", "value": YT, "name": "Vesi Oy"})
+        app.repo.park("10. Bills/b2.pdf")
+        _own(c, True)
+    with app.engine.connect() as conn:
+        assert conn.execute(select(file_assignments.c.sender)).scalars().all() == []
+
+
+def test_not_mine_works_with_the_country_off(app, fake_archive):
+    _bills(app, fake_archive)
+    with make_client(app) as c:
+        _own(c, True)
+        packs.activate(packs.build([], ["en"], app.settings.own_business_ids))
+        app._packs = packs.active()
+        assert _own(c, False).json() == {"changed": 0, "own": False}
+        assert app.settings.own_business_ids == []

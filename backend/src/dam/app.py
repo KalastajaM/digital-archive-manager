@@ -2,6 +2,7 @@
 
 import logging
 import os
+import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import InitVar, dataclass, field, fields
@@ -81,6 +82,8 @@ JOBS_RUNNING = (
 # why the archive cannot be closed or its database replaced now: a batch of changes
 # (filing, undo, a sync) is still journaling
 BATCH_RUNNING = "A change is still being carried out. Try again when it has finished."
+# ``own_business_ids`` is read, changed and written back as a whole
+_OWN_IDS_LOCK = threading.Lock()
 
 
 # -- construction ------------------------------------------------------------------------
@@ -674,11 +677,15 @@ class App:
         sender while it is yours). Only an ID read from a document can be marked.
         ``InvalidRequest`` for anything else, or when the file could not be written.
         Returns how many files' From changed."""
-        if kind not in packs.business_id_kinds(self._packs):
+        if own and kind not in packs.business_id_kinds(self._packs):
             raise InvalidRequest(f"{kind!r} is not a business ID.")
-        have = self.settings.own_business_ids
         if own and not self.repo.identifier_counts([(kind, value)]):
             raise InvalidRequest(f"{value!r} was not found in any document.")
+        with _OWN_IDS_LOCK:  # two quick clicks: neither change is lost
+            return self._save_own_business_id(kind, value, own)
+
+    def _save_own_business_id(self, kind: str, value: str, own: bool) -> int:
+        have = self.settings.own_business_ids
         want = list(dict.fromkeys([*have, value])) if own else [v for v in have if v != value]
         if want != have:
             try:

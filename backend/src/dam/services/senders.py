@@ -156,7 +156,10 @@ class SenderNames:
         sender its name gave is taken back) or stopped being so. Returns how many files
         changed."""
         with write_tx(self.engine) as conn:
-            return fill_senders(conn, carriers(conn, kind, value))
+            name = self._name(conn, kind, value)
+            # as ``clear``: also the files its name gave that do not carry it now (parked)
+            touched = carriers(conn, kind, value) + (given(conn, name) if name else [])
+            return fill_senders(conn, touched)
 
     def _name(self, conn, kind: str, value: str) -> str | None:
         return conn.execute(
