@@ -13,7 +13,7 @@ const TAGS = [
   { name: "taxes", files: 3, pinned: false },
 ];
 
-function setup(onSearch?: () => void) {
+function setup(onSearch?: () => void, at = "/browse") {
   mockFetch({
     "GET /api/status": { body: { inbox_count: 7 } },
     "GET /api/today": { body: { attention: [], overview: { inbox: 0, trays: [], collections: [] } } },
@@ -23,7 +23,7 @@ function setup(onSearch?: () => void) {
     "GET /api/tags/all": { body: { tags: [...TAGS, { name: "a", files: 0, pinned: false }], groups: [] } },
   });
   renderWithProviders(
-    <MemoryRouter initialEntries={["/browse"]}>
+    <MemoryRouter initialEntries={[at]}>
       <Sidebar onSearch={onSearch} />
     </MemoryRouter>,
   );
@@ -87,6 +87,18 @@ describe("Sidebar layout in the New look", () => {
     const rows = within(nav()).getAllByRole("link").map((a) => a.getAttribute("aria-label"));
     const archive = rows.slice(rows.indexOf("Tags (3)"));
     expect(archive).toEqual(["Tags (3)", "Activity", "Maintenance", "Ask", "Settings", "Help"]);
+  });
+
+  it("marks Tags and Collections current only while Browse shows that tree, not on any Browse address", async () => {
+    document.documentElement.dataset.style = "new";
+    setup(() => {}, "/browse?tree=collections");
+    const tags = await within(nav()).findByRole("link", { name: "Tags (3)" });
+    expect(tags).not.toHaveAttribute("aria-current");
+    expect(within(nav()).getByRole("link", { name: "Collections" })).toHaveAttribute("aria-current", "page");
+    cleanup();
+    setup(() => {}, "/browse?tree=tags");
+    expect(await within(nav()).findByRole("link", { name: "Tags (3)" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav()).getByRole("link", { name: "Collections" })).not.toHaveAttribute("aria-current");
   });
 
   it("keeps the Classic arrangement: no grips, no +, one Tags section, Ask first in Archive", async () => {

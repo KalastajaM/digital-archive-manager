@@ -20,7 +20,7 @@ import {
   Sun,
   Tag as TagIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   archiveKey,
@@ -127,13 +127,22 @@ type RowProps = {
   dropProps?: DropTarget["props"];
 };
 
+/** A link into Browse with a query (``/browse?tree=tags``) is current only on that exact
+ * address: a NavLink compares the path alone and would mark it on every Browse address. */
+function SidebarLink({ to, end, className, ...rest }: ComponentProps<typeof Link> & { to: string; end?: boolean; className: string }) {
+  const { pathname, search } = useLocation();
+  if (!to.includes("?")) return <NavLink to={to} end={end} className={className} {...rest} />;
+  const current = pathname + search === to;
+  return <Link to={to} className={current ? `${className} active` : className} aria-current={current ? "page" : undefined} {...rest} />;
+}
+
 /** One sidebar row: a NavLink named "Label (n)" so the count is read along with it. */
 function Row({ to, end, icon: Icon, label, count, badge, dropProps }: RowProps) {
   const n = badge || count || 0;
   const title = useRowTitle();
   return (
     <li>
-      <NavLink
+      <SidebarLink
         to={to}
         end={end}
         className="sidebar-row"
@@ -148,7 +157,7 @@ function Row({ to, end, icon: Icon, label, count, badge, dropProps }: RowProps) 
         ) : count ? (
           <span className="sidebar-count">{count}</span>
         ) : null}
-      </NavLink>
+      </SidebarLink>
     </li>
   );
 }
@@ -182,9 +191,9 @@ function Section({
     <li className="sidebar-section">
       <div className="sidebar-section-head">
         {to ? (
-          <NavLink to={to} end className="sidebar-section-title" {...dropProps}>
+          <SidebarLink to={to} end className="sidebar-section-title" {...dropProps}>
             {title}
-          </NavLink>
+          </SidebarLink>
         ) : (
           <h3 className="sidebar-section-title">{title}</h3>
         )}
