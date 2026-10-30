@@ -1431,6 +1431,8 @@
 [data-style="new"] .tree-switch .segmented-label,
 [data-style="new"] .tree-switch svg { display: block; }
 /* Browse's tag tree: the box that narrows the tags (a tree row's height), each tag's number of files */
+[data-style="new"] .tree-row.tree-closed { color: var(--muted); }
+[data-style="new"] .tree-row.tree-closed .tree-icon { opacity: 0.6; }
 [data-style="new"] .tree-tools { flex: none; display: flex; justify-content: flex-end; margin: -4px 0 2px; }
 [data-style="new"] .tree-filter-row { flex: none; display: flex; align-items: center; gap: 4px; margin: 0 0 6px; }
 [data-style="new"] .tree-filter-row .tree-filter { flex: 1 1 auto; margin: 0; }

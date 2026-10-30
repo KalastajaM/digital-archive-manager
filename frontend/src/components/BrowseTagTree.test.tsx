@@ -96,5 +96,11 @@ describe("TagTree", () => {
     await user.click(screen.getByRole("button", { name: "New tag" }));
     expect(await screen.findByRole("dialog", { name: "New tag" })).toBeInTheDocument();
   });
+
+  it("New group opens its sheet", async () => {
+    const { user } = setup(() => HEALTH);
+    await user.click(await screen.findByRole("button", { name: "New group" }));
+    expect(await screen.findByRole("dialog", { name: "New group" })).toBeInTheDocument();
+  });
 });
 

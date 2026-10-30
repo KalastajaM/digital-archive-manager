@@ -124,5 +124,22 @@ describe("CollectionTree", () => {
     await user.click(await screen.findByRole("button", { name: "New collection" }));
     expect(await screen.findByRole("dialog", { name: "New collection" })).toBeInTheDocument();
   });
+
+  it("Show closed adds the closed collections, greyed", async () => {
+    mockFetch({
+      "GET /api/collections": (call) => ({
+        body: call.url.includes("state=all") ? [coll(1, "Legal"), { ...coll(5, "Old"), state: "closed" }] : [coll(1, "Legal")],
+      }),
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<CollectionTree active={NONE} onPick={vi.fn()} />);
+    await screen.findByText("Legal");
+    expect(screen.queryByText("Old")).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Show closed" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await user.click(toggle);
+    const old = (await screen.findByText("Old")).closest('[role="treeitem"]') as HTMLElement;
+    expect(old.querySelector(".tree-row")).toHaveClass("tree-closed");
+  });
 });
 

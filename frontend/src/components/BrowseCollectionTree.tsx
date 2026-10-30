@@ -6,7 +6,7 @@
  * Keyboard (the tree view pattern, as the folder tree): ↑ and ↓ move, → opens a collection
  * (or steps into it), ← closes it (or steps out), Home and End go to the first and last, Enter
  * picks. */
-import { ChevronRight, Layers, Plus } from "lucide-react";
+import { Archive, ChevronRight, Layers, Plus } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useState } from "react";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
@@ -55,6 +55,7 @@ function Row({
   shared,
   dropProps,
   onContextMenu,
+  closed,
   children,
 }: {
   rowKey: string;
@@ -70,6 +71,8 @@ function Row({
   shared: Shared;
   dropProps?: object;
   onContextMenu?: (e: ReactMouseEvent) => void;
+  /** A closed collection (shown with Show closed): greyed. */
+  closed?: boolean;
   children?: ReactNode;
 }) {
   const go = (e: KeyboardEvent<HTMLLIElement>, key: string) =>
@@ -106,7 +109,7 @@ function Row({
       onKeyDown={onKeyDown}
     >
       <div
-        className={current ? "tree-row tree-current" : "tree-row"}
+        className={["tree-row", current && "tree-current", closed && "tree-closed"].filter(Boolean).join(" ")}
         style={{ paddingLeft: 8 + (level - 1) * 16 }}
         onClick={onPick}
         onContextMenu={onContextMenu}
@@ -163,6 +166,7 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
       shared={shared}
       dropProps={target.props}
       onContextMenu={shared.onMenu(c)}
+      closed={c.state === "closed"}
     >
       {expanded && (
         <ul role="group" className="tree-group">
@@ -187,7 +191,9 @@ export function CollectionTree({
   /** After a delete from the tree: the collection's name (Browse leaves its search). */
   onDeleted?: (name: string) => void;
 }) {
-  const list = useCollections("open");
+  // the open collections; with Show closed, the closed ones too (greyed)
+  const [showClosed, setShowClosed] = useState(false);
+  const list = useCollections(showClosed ? "all" : "open");
   const collect = useAddToCollection();
   const toast = useToast();
   // New collection (at the top or inside one), then it opens: the tree's own pick
@@ -236,6 +242,13 @@ export function CollectionTree({
     <nav className="tree" aria-label="Collections">
       {head}
       <div className="tree-tools">
+        <IconButton
+          icon={<Archive />}
+          label="Show closed"
+          tip={showClosed ? "Hide the closed collections" : "Show the closed collections too"}
+          pressed={showClosed}
+          onClick={() => setShowClosed((on) => !on)}
+        />
         <IconButton icon={<Plus />} label="New collection" onClick={() => setCreating({ parent: null })} />
       </div>
       <ul role="tree" aria-label="Collection tree" className="tree-list" onKeyDown={onKeyDown}>
