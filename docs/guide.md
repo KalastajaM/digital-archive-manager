@@ -1046,7 +1046,7 @@ the Collections page, Today, a file's panel or the search palette). Above its fi
 collection itself. Its name and an Open / Closed pill take the place of the folder path in
 the pane's bar, with its actions as icons (each says what it does when you hover it):
 **Hide details**, **Add files**, **Show folder**, **Export…** and **⋯** (Rename, Move to…,
-New collection inside…, Close and the rest). Below are its details: the summary and **Needs attention** side by side, its child collections,
+New collection inside…, Close and the rest). Below are its details: the summary, then **Needs attention**, its child collections,
 and the note beside the checklist. A click on a Needs attention entry selects that file in
 the list. **Hide details** folds the details to one line ("Summary · Needs attention 2 ·
 Checklist 1 of 3 · Note"); a click on any part opens them again, and each collection
