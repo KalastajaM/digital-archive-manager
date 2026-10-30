@@ -130,12 +130,13 @@ describe("Browse's tree switch", () => {
     await waitFor(() => expect(within(tree).getByText("Car").closest('[role="treeitem"]')).toHaveAttribute("aria-current", "true"));
   });
 
-  it("the switch keeps its words in a narrow tree: icons with the name on hover", async () => {
+  it("the switch shows only icons, at any width: the names are the tooltips and button names", async () => {
     setup("/browse");
     const buttons = await waitFor(() => within(switcher()).getAllByRole("button"));
     expect(buttons.map((b) => b.getAttribute("data-tip"))).toEqual(["Folders", "Collections", "Tags"]);
-    expect(buttons.every((b) => b.querySelector("svg"))).toBe(true);
-    expect(css).toMatch(/\.tree\s*{[^}]*container:\s*tree\s*\/\s*inline-size/);
-    expect(css).toMatch(/@container tree \(max-width: \d+px\)\s*{[^}]*\.tree-switch-label\s*{\s*display:\s*none/);
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Folders", "Collections", "Tags"]);
+    expect(buttons.every((b) => b.querySelector("svg") && b.textContent === "")).toBe(true);
+    // each icon centred in its box
+    expect(css).toMatch(/\.tree-switch \.segmented-option\s*{[^}]*align-items:\s*center;[^}]*justify-content:\s*center/);
   });
 });

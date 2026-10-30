@@ -1424,14 +1424,12 @@
 [data-style="new"] .tree-pane { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--muted); }
 [data-style="new"] .tree-offline { flex: none; font-size: var(--fs-xs); color: var(--orange-text); }
 [data-style="new"] .tree-note { margin: 0; padding: 4px 8px; font-size: var(--fs-sm); color: var(--muted); list-style: none; }
-/* Browse's Folders | Collections | Tags switch: the tree's full width, three equal parts that keep their text in */
+/* Browse's Folders | Collections | Tags switch: the tree's full width, three equal parts, each an
+   icon centred in its box (the name is the tooltip) */
 [data-style="new"] .tree-switch { display: flex; flex: none; width: 100%; margin: 0 0 8px; }
-[data-style="new"] .tree-switch .segmented-option { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; overflow: hidden; white-space: nowrap; }
-[data-style="new"] .tree-switch-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-[data-style="new"] .tree { container: tree / inline-size; }
-@container tree (max-width: 260px) {
-  [data-style="new"] .tree-switch-label { display: none; }
-}
+[data-style="new"] .tree-switch .segmented-option { flex: 1 1 0; min-width: 0; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; }
+[data-style="new"] .tree-switch .segmented-label,
+[data-style="new"] .tree-switch svg { display: block; }
 /* Browse's tag tree: the box that narrows the tags (a tree row's height), each tag's number of files */
 [data-style="new"] .tree-filter { flex: none; height: 28px; margin: 0 0 6px; padding: 0 8px; min-width: 0; font-size: var(--fs-sm); }
 [data-style="new"] .tree-count { flex: none; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
@@ -2626,6 +2624,8 @@
  * button beside them (a field with chips wrapped inside still grows), and the "?" next to
  * a search box is as tall as the box. */
 [data-style="new"] .tag-field { min-height: 28px; padding-block: 1px; }
+/* with tags in it: the same space above the tags and below the box as between them (the gap) */
+[data-style="new"] .tag-field:has(.tag-token) { padding-block: 4px; }
 [data-style="new"] .tag-field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { min-height: 0; height: 24px; }
 /* Plex Mono has no bold: a bold code would be drawn wider than its box */
 [data-style="new"] .code-line-code { font-weight: 500; }
