@@ -1,5 +1,7 @@
 """Groups of ordinary collections become child collections (Important keeps its groups)."""
 
+from pathlib import Path
+
 import pytest
 from sqlalchemy import insert
 
@@ -191,8 +193,10 @@ def ongoing_tree(fake_archive) -> list[tuple[str, str]]:
     for here, dirs, names in os.walk(root):
         for n in dirs + names:
             p = os.path.join(here, n)
-            rel = os.path.relpath(p, root)
-            out.append((rel, os.readlink(p) if os.path.islink(p) else "dir"))
+            rel = Path(os.path.relpath(p, root)).as_posix()  # "/" on Windows too
+            # Windows reads a link back with its long-path prefix
+            target = os.readlink(p).removeprefix("\\\\?\\") if os.path.islink(p) else "dir"
+            out.append((rel, target))
     return sorted(out)
 
 
@@ -209,7 +213,8 @@ def test_converting_moves_nothing_in_ongoing(app, fake_archive):
     grouped(app, fake_archive)
     app.sync_publishers()
     before, batches = ongoing_tree(fake_archive), batch_count(app)
-    assert ("Sauna/2025/Q1/c.pdf", str(fake_archive.root.resolve() / BANKS / "c.pdf")) in before
+    c_pdf = (fake_archive.root / BANKS / "c.pdf").resolve()
+    assert Path(dict(before)["Sauna/2025/Q1/c.pdf"]) == c_pdf
 
     done = app.convert_collection_groups()
 
