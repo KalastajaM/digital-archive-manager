@@ -30,9 +30,13 @@ class PackProfile:
     capital_months: frozenset[str]
     # where the addressee sits on page 1: the first enabled country that has a standard
     address_zone: tuple[float, float, float, float] | None
+    # the owner's own business IDs (settings ``own_business_ids``): read, never a sender's
+    own_ids: frozenset[str] = frozenset()
 
 
-def build(country_codes: Sequence[str], language_codes: Sequence[str]) -> PackProfile:
+def build(
+    country_codes: Sequence[str], language_codes: Sequence[str], own_ids: Sequence[str] = ()
+) -> PackProfile:
     """``ValueError`` naming an unknown code."""
     cs = tuple(countries.enabled(country_codes))
     ls = tuple(languages.enabled(language_codes))
@@ -58,6 +62,7 @@ def build(country_codes: Sequence[str], language_codes: Sequence[str]) -> PackPr
             if not any(form in fs and form not in q.capital_only for q in ls for fs in q.months)
         ),
         address_zone=next((c.address_zone for c in cs if c.address_zone is not None), None),
+        own_ids=frozenset(own_ids),
     )
 
 

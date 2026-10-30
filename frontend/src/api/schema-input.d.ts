@@ -2785,6 +2785,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/identifier-names/own": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Own Identifier
+         * @description Mark a business ID as the owner's own ("This is mine"), or not: it then names no
+         *     sender, links no files in Relatives and does not count for ``id:*``. Saved to
+         *     settings.yaml. Answers how many documents' From changed. 400 for a kind that is not a
+         *     business ID, or a value no document carries.
+         */
+        put: operations["put_own_identifier_api_identifier_names_own_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/filing-codes": {
         parameters: {
             query?: never;
@@ -6017,6 +6040,8 @@ export interface components {
             set_at: number | null;
             /** Filled */
             filled: number;
+            /** Own */
+            own: boolean;
         };
         /** IdentifierNamesOut */
         IdentifierNamesOut: {
@@ -6033,6 +6058,10 @@ export interface components {
             value: string;
             /** Others */
             others: number;
+            /** Business */
+            business: boolean;
+            /** Own */
+            own: boolean;
         };
         /**
          * IdentifiersOut
@@ -6882,6 +6911,25 @@ export interface components {
             trays: components["schemas"]["TrayCountOut"][];
             /** Collections */
             collections: components["schemas"]["CollectionSummaryOut"][];
+        };
+        /** OwnIdentifierDoneOut */
+        OwnIdentifierDoneOut: {
+            /** Changed */
+            changed: number;
+            /** Own */
+            own: boolean;
+        };
+        /**
+         * OwnIdentifierIn
+         * @description Mark a business ID found in a document as the owner's own, or not.
+         */
+        OwnIdentifierIn: {
+            /** Kind */
+            kind: string;
+            /** Value */
+            value: string;
+            /** Own */
+            own: boolean;
         };
         /** Page1BackfillIn */
         Page1BackfillIn: {
@@ -23700,6 +23748,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdentifierNameDoneOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_own_identifier_api_identifier_names_own_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnIdentifierIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnIdentifierDoneOut"];
                 };
             };
             /** @description Bad Request */

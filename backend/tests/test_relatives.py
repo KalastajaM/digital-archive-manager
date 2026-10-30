@@ -540,3 +540,11 @@ def test_no_business_id_link_when_its_country_is_off(app, archive):
     _identifiers(app, {"me": [("fi.ytunnus", "0112038-9")], "far": [("fi.ytunnus", "0112038-9")]})
     packs.activate(packs.build([], ["en"]))
     assert "far" not in by_id(app.relatives.of("me"))
+
+
+def test_your_own_business_id_links_nothing(app, archive):
+    from dam import packs
+
+    _identifiers(app, {"me": [("fi.ytunnus", "0112038-9")], "far": [("fi.ytunnus", "0112038-9")]})
+    packs.activate(packs.build(["fi"], ["en"], own_ids=["0112038-9"]))
+    assert "far" not in by_id(app.relatives.of("me"))

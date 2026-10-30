@@ -1134,6 +1134,25 @@ export const usePutIdentifierName = () => {
   });
 };
 
+/** Mark a business ID as yours, or not: it then names no sender, links no files in
+ * Relatives and does not count for ``id:*``. Answers how many documents' From changed. */
+export const usePutOwnIdentifier = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { kind: string; value: string; own: boolean }) =>
+      apiPut("/api/identifier-names/own", { body }),
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.identifierNames }),
+        client.invalidateQueries({ queryKey: keys.fileIdentifiers }),
+        client.invalidateQueries({ queryKey: keys.senders }),
+        client.invalidateQueries({ queryKey: keys.inbox }),
+        client.invalidateQueries({ queryKey: keys.file }), // From and Relatives
+        client.invalidateQueries({ queryKey: keys.browse }),
+      ]),
+  });
+};
+
 /** The people list and the address area. */
 export const usePeople = (enabled = true) =>
   useQuery({ queryKey: keys.people, queryFn: () => apiGet("/api/settings/people"), enabled });
