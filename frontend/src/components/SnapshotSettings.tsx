@@ -29,6 +29,7 @@ function marks(s: Snapshot): string[] {
   if (s.kind === "before-restore") out.push("taken before a restore");
   if (s.kind === "before-relabel") out.push("taken before a label change");
   if (s.kind === "before-rename") out.push("taken before a special folder was renamed");
+  if (s.kind === "before-groups") out.push("taken before the groups in collections became collections");
   if (s.imported) out.push("imported");
   return out;
 }

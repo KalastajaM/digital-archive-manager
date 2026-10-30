@@ -119,6 +119,7 @@ class GroupConverted:
     new_id: int
     name: str
     renamed: bool
+    group: str = ""  # the group's own name
 
 
 @dataclass
@@ -1407,7 +1408,7 @@ class CollectionService:
                     )
                     .values(collection_id=new_id, group_id=None)
                 )
-                done.append(GroupConverted(cid, g.id, new_id, name, name != g.name))
+                done.append(GroupConverted(cid, g.id, new_id, name, name != g.name, g.name))
                 walk(g.id, new_id, name)
 
         walk(None, cid, parent.name)

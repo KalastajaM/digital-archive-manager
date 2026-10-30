@@ -123,3 +123,112 @@ def test_important_keeps_its_groups_and_a_second_run_does_nothing(svc, docs):
     assert [(g.parent_id is None, g.name) for g in svc.get(important.id).groups] == before
     assert svc.ordinary_groups() == []
     assert svc.convert_groups() == []
+
+
+# --- on open: nothing moves in ##. Ongoing ---------------------------------------------
+
+ONG = "##. Ongoing"
+BANKS = "10. Financial/Banks"
+
+
+def grouped(app, fake_archive):
+    """Sauna (published): a.pdf ungrouped, b.pdf in "2025", c.pdf in "2025/Q1"."""
+    for x in "abc":
+        fake_archive.add(f"{BANKS}/{x}.pdf", drive_id=f"id-{x}")
+    app.scan()
+    c = app.collections.create("Sauna")
+    app.collections.add_members(c.id, ["id-a", "id-b", "id-c"])
+    y = app.collections.create_group(c.id, "2025")
+    q = app.collections.create_group(c.id, "Q1", parent_id=y.id)
+    app.collections.set_member_group(c.id, ["id-b"], y.id)
+    app.collections.set_member_group(c.id, ["id-c"], q.id)
+    return app.collections.get(c.id)
+
+
+def ongoing_tree(fake_archive) -> list[tuple[str, str]]:
+    """(path under ##. Ongoing, "dir" or the link's target) for everything there."""
+    import os
+
+    root = fake_archive.root / ONG
+    out = []
+    for here, dirs, names in os.walk(root):
+        for n in dirs + names:
+            p = os.path.join(here, n)
+            rel = os.path.relpath(p, root)
+            out.append((rel, os.readlink(p) if os.path.islink(p) else "dir"))
+    return sorted(out)
+
+
+def batch_count(app) -> int:
+    from sqlalchemy import func, select
+
+    from dam.db.tables import operations
+
+    with app.engine.connect() as conn:
+        return conn.execute(select(func.count(func.distinct(operations.c.batch_id)))).scalar_one()
+
+
+def test_converting_moves_nothing_in_ongoing(app, fake_archive):
+    grouped(app, fake_archive)
+    app.sync_publishers()
+    before, batches = ongoing_tree(fake_archive), batch_count(app)
+    assert ("Sauna/2025/Q1/c.pdf", str(fake_archive.root.resolve() / BANKS / "c.pdf")) in before
+
+    done = app.convert_collection_groups()
+
+    assert [d.name for d in done] == ["2025", "Q1"]
+    app.sync_publishers()
+    assert ongoing_tree(fake_archive) == before
+    assert batch_count(app) == batches  # no sync batch: nothing to do
+
+
+def test_a_renamed_group_is_named_and_its_folder_follows(app, fake_archive):
+    from sqlalchemy import select
+
+    from dam.db.tables import operations
+
+    app.collections.create("2025")
+    grouped(app, fake_archive)
+    app.sync_publishers()
+    [first, _] = app.convert_collection_groups()
+    assert first.name == "2025 (Sauna)"
+    tree = dict(ongoing_tree(fake_archive))
+    assert "Sauna/2025 (Sauna)/b.pdf" in tree and "Sauna/2025 (Sauna)/Q1/c.pdf" in tree
+    assert "Sauna/2025" not in tree
+    with app.engine.connect() as conn:
+        labels = {r[0] for r in conn.execute(select(operations.c.label)) if r[0]}
+    assert any("2025 is now 2025 (Sauna)" in label for label in labels)
+
+
+def test_conversion_takes_a_snapshot_first(app, fake_archive):
+    from dam.snapshots import BEFORE_GROUPS, list_snapshots
+
+    assert app.convert_collection_groups() == []
+    assert list_snapshots(app.app_paths) == []
+    grouped(app, fake_archive)
+    app.convert_collection_groups()
+    assert [s.kind for s in list_snapshots(app.app_paths)] == [BEFORE_GROUPS]
+
+
+def test_conversion_without_the_archive_still_hands_over_the_records(app, fake_archive):
+    grouped(app, fake_archive)
+    app.sync_publishers()
+    before, batches = ongoing_tree(fake_archive), batch_count(app)
+    away = fake_archive.root.with_name(fake_archive.root.name + "-away")
+    fake_archive.root.rename(away)
+    try:
+        app.convert_collection_groups()
+    finally:
+        away.rename(fake_archive.root)
+    app.sync_publishers()
+    assert ongoing_tree(fake_archive) == before
+    assert batch_count(app) == batches
+
+
+def test_an_unpublished_collection_is_converted_and_nothing_is_published(app, fake_archive):
+    c = grouped(app, fake_archive)
+    app.collections.set_publish(c.id, "ongoing", False)
+    app.sync_publishers()
+    assert len(app.convert_collection_groups()) == 2
+    app.sync_publishers()
+    assert ongoing_tree(fake_archive) == []

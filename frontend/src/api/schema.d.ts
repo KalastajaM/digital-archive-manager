@@ -8162,7 +8162,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "manual" | "before-restore" | "before-relabel" | "before-rename";
+            kind: "manual" | "before-restore" | "before-relabel" | "before-rename" | "before-groups";
             /** Imported */
             imported: boolean;
             /** Revision */

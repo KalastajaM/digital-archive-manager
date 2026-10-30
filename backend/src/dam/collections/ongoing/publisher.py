@@ -36,6 +36,7 @@ from dam.collections.ongoing.model import (
     PUBLISHER_ID,
     REPLACED,
     RETRY_FAILED_S,
+    Desired,
     Share,
     SyncResult,
     depth_of,
@@ -418,3 +419,50 @@ class OngoingPublisher(DesiredMixin, RecordsMixin, PlanningMixin, LayoutsMixin, 
                             .where(collections_table.c.id == c.id)
                             .values(ongoing_rel=top, ongoing_status=status)
                         )
+
+    # --- groups turned into collections ---------------------------------------------------
+
+    def desired_roots(self) -> dict[int, Desired | None]:
+        """``desired_tree`` of every top-level ordinary collection, by id (reads only)."""
+        roots, children = forest(self.collections.list(None))
+        return {r.id: self.desired_tree(r, children) for r in roots}
+
+    def reown(self, before: dict[int, Desired | None], new_ids: set[int]) -> int:
+        """After groups became the collections ``new_ids``: hand each former group
+        folder's records (the folder and what is in it, still the old owner's) to the
+        collection that now wants that folder, deepest first, so the next sync keeps
+        every folder and link where it is. ``before``: ``desired_roots()`` taken before
+        the change. Returns how many records changed owner."""
+        after = self.desired_roots()
+        changed = 0
+        with write_tx(self.engine) as conn:
+            for root_id, was in before.items():
+                now = after.get(root_id)
+                if was is None or now is None or was.kind != "folder" or now.kind != "folder":
+                    continue
+                home = conn.execute(
+                    select(collections_table.c.ongoing_rel).where(collections_table.c.id == root_id)
+                ).scalar()
+                if not home:  # not published yet: nothing was recorded
+                    continue
+                group_folders = set(was.folders) - set(was.owners)
+                for path, new_owner in sorted(now.owners.items(), key=lambda p: -p[0].count("/")):
+                    if new_owner not in new_ids or path not in group_folders:
+                        continue
+                    above = [p for p in was.owners if path.startswith(p + "/")]
+                    old_owner = was.owners[max(above, key=len)] if above else root_id
+                    rel = f"{home}/{path}"
+                    rows = conn.execute(
+                        select(ongoing_entries.c.id, ongoing_entries.c.rel).where(
+                            ongoing_entries.c.collection_id == old_owner
+                        )
+                    ).all()
+                    ids = [r.id for r in rows if r.rel == rel or r.rel.startswith(rel + "/")]
+                    if ids:
+                        conn.execute(
+                            update(ongoing_entries)
+                            .where(ongoing_entries.c.id.in_(ids))
+                            .values(collection_id=new_owner)
+                        )
+                        changed += len(ids)
+        return changed
