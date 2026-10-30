@@ -1,8 +1,9 @@
 /** What happens when an area drawn on page 1 is moved or resized: a rule's area opens the
  * rule sheet with the changed area (and the replay, with how the rule did before, so the
- * owner sees the effect on past documents before saving); the archive-wide address area asks
- * once and is saved to the settings. */
-import { useEffect, useState } from "react";
+ * owner sees the effect on past documents before saving). The address area: the New look
+ * moves it on this document only, at once and with Undo (the area for all letters is set in
+ * Settings); Classic asks once and saves it for all letters. */
+import { useEffect, useRef, useState } from "react";
 import {
   type Area,
   errorText,
@@ -17,7 +18,7 @@ import {
 import { useStyle } from "../../appearance";
 import { visible } from "../../text";
 import { RuleSheet } from "../rules/RuleSheet";
-import { useToast } from "../Toasts";
+import { undoAction, useToast } from "../Toasts";
 import { Sheet } from "../ui/Sheet";
 
 /** ``rule`` with the box of the area changed. A picture area also gets ``image``, the crop
@@ -32,8 +33,13 @@ export function withChangedArea(rule: Rule, area: Area, box: PageBox, image?: st
 
 /** ``driveId``: the document the area was changed on (a picture area is cut again from it). */
 export function AreaChange({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
+  const [look] = useStyle();
   if (area.kind === "address" && area.rule_id === "")
-    return <AddressAreaSheet driveId={driveId} document={area.document} box={box} onClose={onClose} />;
+    return look === "new" ? (
+      <MoveDocumentArea driveId={driveId} area={area} box={box} onClose={onClose} />
+    ) : (
+      <AddressAreaSheet box={box} onClose={onClose} />
+    );
   return <RuleAreaSheet driveId={driveId} area={area} box={box} onClose={onClose} />;
 }
 
@@ -80,34 +86,50 @@ function RuleAreaSheet({ driveId, area, box, onClose }: { driveId: string; area:
   );
 }
 
-/** The address area was moved on ``driveId``. The New look asks whether the new place is
- * for this document only or for all letters (``document``: it was this document's own
- * area, which "All letters" then takes away so the document follows them again). */
-function AddressAreaSheet({ driveId, document, box, onClose }: { driveId: string; document: boolean; box: PageBox; onClose: () => void }) {
-  const [look] = useStyle();
-  const isNew = look === "new";
-  const people = usePeople();
-  const save = useSavePeople();
+/** The address area was moved on ``driveId`` (New look): the new place is this document's
+ * own area, saved at once. Undo gives back what it had: its own earlier box, or the usual
+ * area. */
+function MoveDocumentArea({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
   const setArea = useSetAddressArea();
   const toast = useToast();
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const before: PageBox | "general" = area.document ? area.box : "general";
+    setArea
+      .mutateAsync({ driveId, box })
+      .then(() =>
+        toast({
+          kind: "info",
+          text: "Address area moved on this document.",
+          action: undoAction(() => setArea.mutate({ driveId, box: before })),
+        }),
+      )
+      .catch((e) => toast({ kind: "error", text: errorText(e) }))
+      .finally(onClose);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
+/** The address area was moved (Classic): asks before saving the new place for
+ * every letter. */
+function AddressAreaSheet({ box, onClose }: { box: PageBox; onClose: () => void }) {
+  const people = usePeople();
+  const save = useSavePeople();
+  const toast = useToast();
   const [problem, setProblem] = useState<string | null>(null);
-  const busy = save.isPending || setArea.isPending;
-  const act = async (action: () => Promise<unknown>, done: string) => {
+  const saveAll = async () => {
     setProblem(null);
     try {
-      await action();
-      toast({ kind: "info", text: done });
+      await save.mutateAsync({ people: people.data?.people ?? [], address_zone: box });
+      toast({ kind: "info", text: "Address area saved for all letters." });
       onClose();
     } catch (e) {
       setProblem(errorText(e));
     }
   };
-  const saveAll = () =>
-    act(async () => {
-      await save.mutateAsync({ people: people.data?.people ?? [], address_zone: box });
-      if (document) await setArea.mutateAsync({ driveId, box: "general" });
-    }, "Address area saved for all letters.");
-  const saveThis = () => act(() => setArea.mutateAsync({ driveId, box }), "Address area saved for this document.");
   return (
     <Sheet
       open
@@ -116,36 +138,14 @@ function AddressAreaSheet({ driveId, document, box, onClose }: { driveId: string
       footer={
         <>
           <button type="button" onClick={onClose}>Cancel</button>
-          {isNew && (
-            <button type="button" className={document ? "primary" : undefined} disabled={busy} onClick={() => void saveThis()}>
-              This document only
-            </button>
-          )}
-          <button
-            type="button"
-            className={isNew && document ? undefined : "primary"}
-            disabled={!people.data || busy}
-            onClick={() => void saveAll()}
-          >
-            {isNew ? "All letters" : "Save"}
+          <button type="button" className="primary" disabled={!people.data || save.isPending} onClick={() => void saveAll()}>
+            Save
           </button>
         </>
       }
     >
-      {isNew ? (
-        <>
-          <p>Look for the person a letter is for in this area on this document only, or on all letters?</p>
-          <p className="hint">
-            All letters changes who is found on letters that are read from now on and on the ones in the Inbox. Documents
-            with an address area of their own keep it.
-          </p>
-        </>
-      ) : (
-        <>
-          <p>Look for the person a letter is for in this area on every letter?</p>
-          <p className="hint">It changes who is found on letters that are read from now on and on the ones in the Inbox.</p>
-        </>
-      )}
+      <p>Look for the person a letter is for in this area on every letter?</p>
+      <p className="hint">It changes who is found on letters that are read from now on and on the ones in the Inbox.</p>
       {problem && (
         <p className="error" role="alert">
           {visible(problem)}

@@ -42,8 +42,10 @@ All notable changes are listed here. The format follows
   or the Amsterdam time zone.
 - One document can have its own address area, or none: in the New look, Draw a box
   offers **Address area for this document only**, **No address area on this document**
-  and **Use the usual address area**, and moving the drawn address area asks whether it
-  is for this document only or for all letters.
+  and **Use the usual address area**. Moving the address area on a document changes that
+  document only, at once and with Undo; the area for all letters is set in Settings. The
+  line saying which area a document uses shows whenever the areas are shown, and always on
+  a document that has none.
 - **The address area from a sample letter.** In the New look, Settings, Reading documents
   has **Choose a sample letter…** under Address area: pick a PDF, JPG or PNG on your
   computer, drag a box around the address on page 1, see which lines of the letter fall in

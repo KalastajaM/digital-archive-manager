@@ -1,6 +1,8 @@
-/** The address area of the document on show (New look, while Draw a box is on): the usual
- * one, its own, or none, with the way to remove it or to go back to the usual one. A box
- * drawn with Draw a box gives the document its own (``BoxPanel``). */
+/** The address area of the document on show (New look): the usual one, its own, or none,
+ * with the way to remove it or to go back to the usual one. Shown while the areas are shown
+ * or Draw a box is on (``open``), and always when the document has none, so it can get one
+ * back. A box drawn with Draw a box gives the document its own (``BoxPanel``); moving the
+ * box on the page moves this document's own. */
 import { errorText, useAddressArea, usePeople, useSetAddressArea } from "../../api/client";
 import { visible } from "../../text";
 
@@ -10,13 +12,14 @@ const SAYS = {
   none: "This document has no address area: nobody is looked for on it.",
 } as const;
 
-export function DocumentAddressArea({ driveId }: { driveId: string }) {
+export function DocumentAddressArea({ driveId, open }: { driveId: string; open: boolean }) {
   const people = usePeople();
   const area = useAddressArea(driveId);
   const set = useSetAddressArea();
   // without people there is nobody to look for, so the area does not matter
   if (!people.data?.people.length || !area.data) return null;
   const state = area.data.state;
+  if (!open && state !== "none") return null;
   return (
     <div className="document-address-area" role="group" aria-label="Address area of this document">
       <span className="hint">{SAYS[state]}</span>

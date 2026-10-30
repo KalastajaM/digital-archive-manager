@@ -638,13 +638,14 @@ all. The panel offers:
   address area, used for it instead of the one for all letters and a rule's. Shown when
   one box is drawn.
 
-In the New look, while Draw a box is on and you have people listed, a line under the hint
-says which address area this document uses: the usual one, its own, or none. **No address
-area on this document** stops dam looking for a person on it (useful for a letter whose
-page 1 is not addressed to anyone); **Use the usual address area** gives it back. When you
-move or resize the drawn address area on a document, dam asks whether the new place is
-for **This document only** or for **All letters**. All letters leaves the documents that
-have an area of their own as they are, except the one you moved it on.
+In the New look, when you have people listed, a line under the preview says which address
+area this document uses: the usual one, its own, or none. It shows while the areas are
+shown or Draw a box is on, and always on a document that has none. **No address area on
+this document** stops dam looking for a person on it (useful for a letter whose page 1 is
+not addressed to anyone); **Use the usual address area** gives it back. Moving or resizing
+the address area on a document changes that document only: it gets an area of its own,
+saved at once, and **Undo** in the message gives back what it had. The area for all
+letters is set in Settings, Reading documents.
 
 **How the words of an area match.** Each area with words has a choice, **Words match**:
 
@@ -778,7 +779,8 @@ resize it. When you let go, the rule sheet opens with the changed area and the t
 again, with a line saying how the rule did before ("Before the change it matched 14
 documents"), so you see the effect on the documents you filed before you save. Cancel
 leaves the rule as it was. The address area works the same way: a rule's own address area
-changes that rule; the area for all letters asks once and is saved to the settings.
+changes that rule; the area for all letters, moved on a document, becomes that document's
+own (Classic asks once and saves it for all letters).
 Areas cannot be moved while **Draw a box** is on.
 
 In Settings → Filing rules, open a rule that has areas and the sheet shows them on a
