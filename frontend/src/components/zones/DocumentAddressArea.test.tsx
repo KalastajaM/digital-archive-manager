@@ -1,5 +1,5 @@
-/** The address area of one document in the New look: drawn with Draw a box, removed, and
- * given back to the usual one; Classic shows none of it. */
+/** The address area of one document in the New look: drawn with Draw a box, moved on the
+ * page, removed, and given back to the usual one; Classic shows none of it. */
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -82,6 +82,20 @@ describe("the address area of one document", () => {
     expect(await within(group).findByText("This document uses the usual address area.")).toBeInTheDocument();
   });
 
+  it("a document without one says so without Draw a box, and can get the usual one back", async () => {
+    setup("new", "none");
+    const group = await screen.findByRole("group", { name: "Address area of this document" });
+    expect(within(group).getByRole("button", { name: "Use the usual address area" })).toBeInTheDocument();
+  });
+
+  it("a document with the usual one keeps quiet until the areas are shown or Draw a box is on", async () => {
+    const { user } = setup("new");
+    await screen.findByRole("button", { name: "Draw a box" });
+    expect(screen.queryByRole("group", { name: "Address area of this document" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Draw a box" }));
+    expect(await screen.findByRole("group", { name: "Address area of this document" })).toBeInTheDocument();
+  });
+
   it("makes a drawn box this document's own area", async () => {
     const { user, calls } = setup("new");
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
@@ -118,22 +132,20 @@ describe("moving the address area on a document", () => {
     return { user: userEvent.setup(), calls };
   }
 
-  it("asks: this document only", async () => {
+  it("moves it on this document at once, without asking; Undo gives back the usual area", async () => {
     const { user, calls } = renderChange();
-    expect(await screen.findByText(/on this document only, or on all letters\?/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "This document only" }));
-    await waitFor(() => expect(calls.some((c) => c.method === "PUT" && c.url === AREA)).toBe(true));
+    expect(await screen.findByText("Address area moved on this document.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(calls.find((c) => c.method === "PUT" && c.url === AREA)?.body).toEqual({ box: [0.1, 0.4, 0.5, 0.6] });
     expect(calls.some((c) => c.url === "/api/settings/people" && c.method === "PUT")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === AREA)).toBe(true));
   });
 
-  it("asks: all letters, and a document's own area then follows them", async () => {
+  it("Undo on a document with its own area puts its earlier box back", async () => {
     const { user, calls } = renderChange(true);
-    await user.click(await screen.findByRole("button", { name: "All letters" }));
-    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === AREA)).toBe(true));
-    expect(calls.find((c) => c.method === "PUT" && c.url === "/api/settings/people")?.body).toEqual({
-      people: PEOPLE.people,
-      address_zone: [0.1, 0.4, 0.5, 0.6],
-    });
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT" && c.url === AREA)).toHaveLength(2));
+    expect(calls.filter((c) => c.method === "PUT" && c.url === AREA)[1].body).toEqual({ box: area.box });
   });
 });

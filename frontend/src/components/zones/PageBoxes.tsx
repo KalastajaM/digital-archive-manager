@@ -259,10 +259,10 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
           onClose={() => setChanged(null)}
         />
       )}
+      {isNew && <DocumentAddressArea driveId={driveId} open={on || showAreas} />}
       {on && (
     <>
       {!splitNote && note}
-      {isNew && <DocumentAddressArea driveId={driveId} />}
       {boxes.length > 0 && (
         <BoxPanel
           driveId={driveId}
