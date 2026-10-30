@@ -3,7 +3,7 @@
  * Checklist), the side panel with its buttons under the preview, the "File details" button
  * that opens the panel over the list when the page is narrow, and Show folder and Export in
  * the ... menu. Classic renders none of it. */
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -32,7 +32,8 @@ const SAUNA: Collection = {
 };
 
 function setup(c: Collection = SAUNA) {
-  mockFetch({
+  const calls = mockFetch({
+    "PATCH /api/collections/7/summary": { body: { collection: { ...c, summary: "Sauna build, phase 2" }, batch: null, problems: [], ongoing_status: null } },
     "GET /api/collections": { body: [{ ...c, files: 1, open_checks: 0 }] },
     "GET /api/collections/7": { body: c },
     "GET /api/notes/collection/7": { body: { text: "" } },
@@ -47,7 +48,7 @@ function setup(c: Collection = SAUNA) {
       </Routes>
     </MemoryRouter>,
   );
-  return { user };
+  return { user, calls };
 }
 
 beforeEach(() => localStorage.clear());
@@ -101,9 +102,11 @@ describe("a collection in New", () => {
     document.documentElement.dataset.style = "new";
     setup();
     await screen.findByRole("heading", { name: "Files" });
-    const heads = [...document.querySelectorAll(".collection-body h2")].map((h) => h.textContent);
-    expect(heads.indexOf("Summary")).toBeGreaterThanOrEqual(0);
-    expect(heads.indexOf("Summary")).toBeLessThan(heads.indexOf("Files"));
+    // the summary is the file panel's summary box, above the files
+    const body = document.querySelector(".collection-body") as HTMLElement;
+    const summary = within(body).getByRole("heading", { name: "Summary" });
+    expect(summary.closest(".summary-box")).not.toBeNull();
+    expect(summary.compareDocumentPosition(within(body).getByRole("heading", { name: "Files" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // only Important has groups: other collections nest instead
     expect(screen.queryByRole("button", { name: "New group" })).toBeNull();
   });
@@ -116,15 +119,24 @@ describe("a collection in New", () => {
     expect(screen.getAllByRole("button", { name: "New group" })).toHaveLength(1);
   });
 
-  it("shows the summary as text with Edit and Summarize, and Edit opens the field", async () => {
+  it("edits the summary in place: a click on it opens the field, leaving it saves, Esc puts it back", async () => {
     document.documentElement.dataset.style = "new";
-    const { user } = setup();
-    const edit = await screen.findByRole("button", { name: "Edit" });
-    expect(screen.getByText("No summary yet.")).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Summary" })).not.toBeInTheDocument();
-    await user.click(edit);
-    expect(await screen.findByRole("textbox", { name: "Summary" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+    const { user, calls } = setup();
+    const empty = await screen.findByRole("button", { name: "What is this collection about? Where does it stand?" });
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Summary" })).toBeNull();
+    await user.click(empty);
+    const field = await screen.findByRole("textbox", { name: "Summary" });
+    await user.type(field, "Sauna build, phase 2");
+    await user.tab();
+    await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ summary: "Sauna build, phase 2" });
+    const text = await screen.findByRole("button", { name: "Sauna build, phase 2" });
+    await user.click(text);
+    await user.type(await screen.findByRole("textbox", { name: "Summary" }), " more");
+    await user.keyboard("{Escape}");
+    expect(await screen.findByRole("button", { name: "Sauna build, phase 2" })).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
   });
 
   it("shows the selected file in the one file panel: the icon row, then Group", async () => {

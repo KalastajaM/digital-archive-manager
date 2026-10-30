@@ -35,6 +35,7 @@ export function Collapsible({
   title,
   hint,
   aside,
+  tip,
   className,
   headingId,
   foldedByDefault = false,
@@ -46,6 +47,8 @@ export function Collapsible({
   hint?: ReactNode;
   /** Beside the heading, e.g. a tag (kept visible when folded). */
   aside?: ReactNode;
+  /** The heading's tooltip, e.g. "Note on this file". */
+  tip?: string;
   className?: string;
   /** The heading's id when the caller needs it. */
   headingId?: string;
@@ -65,7 +68,7 @@ export function Collapsible({
     <section className={className ? `collapsible ${className}` : "collapsible"} aria-labelledby={hid}>
       <header className="collapsible-head">
         <h3 id={hid}>
-          <button type="button" className="collapsible-toggle" aria-expanded={!collapsed} aria-controls={bodyId} onClick={toggle}>
+          <button type="button" className="collapsible-toggle" aria-expanded={!collapsed} aria-controls={bodyId} data-tip={tip} onClick={toggle}>
             {collapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
             {title}
           </button>

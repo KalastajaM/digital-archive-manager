@@ -788,6 +788,8 @@ describe("Selected file", () => {
       expect(within(fileBar()).getByRole("button", { name: new RegExp(`^${name}`) })).toBeInTheDocument();
     }
     expect(within(inBlock("notes")).getByRole("textbox", { name: "Note on this file" })).toBeInTheDocument();
+    // the field's name is the Notes heading's tooltip
+    expect(within(inBlock("notes")).getByRole("button", { name: "Notes" })).toHaveAttribute("data-tip", "Note on this file");
   });
 
   it("Add to collection adds the file to an existing one", async () => {

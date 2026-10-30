@@ -1748,17 +1748,16 @@
 [data-style="new"] .section-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 [data-style="new"] .section-head h2,
 [data-style="new"] .attention-list h2 { flex: 1; margin: 0; font-size: var(--fs-md); font-weight: 600; }
-[data-style="new"] .section-head .link-button,
-[data-style="new"] .collection-summary-tools .ai-action { flex: none; min-height: 26px; padding: 0 8px; border-radius: 5px; font-size: 12px; color: var(--accent); white-space: nowrap; }
-[data-style="new"] .section-head .link-button:hover:not(:disabled),
-[data-style="new"] .collection-summary-tools .ai-action:hover:not(:disabled) { background: var(--hover); text-decoration: none; }
-[data-style="new"] .collection-summary-tools { display: flex; gap: 0; }
-[data-style="new"] .collection-summary-tools .ai-action { border-color: transparent; background: transparent; box-shadow: none; }
-[data-style="new"] .collection-summary-tools .ai-action svg { display: none; }
-[data-style="new"] .collection-summary-new { display: flex; flex-direction: column; gap: 6px; }
-[data-style="new"] .collection-summary-new .summary-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
-[data-style="new"] .collection-summary-new .summary-text.is-empty { color: var(--muted); }
-[data-style="new"] .collection-summary-new .collection-summary-text { border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 10px; background: var(--panel); color: var(--text); }
+[data-style="new"] .section-head .link-button { flex: none; min-height: 26px; padding: 0 8px; border-radius: 5px; font-size: 12px; color: var(--accent); white-space: nowrap; }
+[data-style="new"] .section-head .link-button:hover:not(:disabled) { background: var(--hover); text-decoration: none; }
+/* A summary edited in place (a file's and a collection's, SummaryText): the text is the
+   button, a soft hover says it can be clicked; the field that replaces it has the same
+   padding, so nothing jumps */
+[data-style="new"] .summary-box .summary-text { display: block; width: calc(100% + 12px); margin: 0 0 var(--sp-1) -6px; padding: 4px 6px; border-radius: 5px; text-align: left; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--text-2); line-height: 1.5; }
+[data-style="new"] .summary-box .summary-text.is-empty { color: var(--muted); }
+[data-style="new"] .summary-box .click-edit.summary-text:hover:not(:disabled) { background: var(--hover); text-decoration: none; }
+[data-style="new"] .summary-text-edit { margin: 0 0 var(--sp-1); }
+[data-style="new"] .summary-text-edit textarea { display: block; width: calc(100% + 12px); margin-left: -6px; padding: 3px 5px; min-height: 0; resize: none; overflow: hidden; line-height: 1.5; color: var(--text); }
 [data-style="new"] .attention-list { display: flex; flex-direction: column; gap: 6px; }
 [data-style="new"] .attention-list h2 { flex: none; }
 [data-style="new"] .attention-list ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -1813,10 +1812,15 @@
 /* -- notes and checklist: side by side while there is room -- */
 [data-style="new"] .collection-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; border-top: 0; padding-top: 0; }
 [data-style="new"] .collection-notes > * { min-width: 0; margin-top: 0; }
+/* the grid's gap is the only space between Notes and Checklist (no field margin, and the note
+   is a block, so no line-box gap under it) */
+[data-style="new"] .collection-notes .field { margin-bottom: 0; }
+[data-style="new"] .item-note .note-editor { display: block; }
 [data-style="new"] .collection-notes .collapsible-head { gap: 8px; }
 [data-style="new"] .collection-notes .collapsible-toggle { font-size: var(--fs-md); font-weight: 600; color: var(--text); }
 [data-style="new"] .collection-notes .collapsible-toggle svg { display: none; }
-[data-style="new"] .collection-notes .item-note .field > label,
+/* a note's label ("Note on this file") is the heading's tooltip; the field keeps it as its name */
+[data-style="new"] .item-note .field > label,
 [data-style="new"] .collection-notes .checklist .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 [data-style="new"] .check-count { font-size: var(--fs-sm); color: var(--muted); }
 
