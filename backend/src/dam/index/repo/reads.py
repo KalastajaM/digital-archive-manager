@@ -18,6 +18,7 @@ from sqlalchemy import (
     not_,
     or_,
     select,
+    tuple_,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
@@ -246,6 +247,26 @@ class ReadsMixin:
         )
         with self._conn() as conn:
             return [r.drive_id for r in conn.execute(stmt).all()]
+
+    def identifier_counts(self, pairs: Sequence[tuple[str, str]]) -> dict[tuple[str, str], int]:
+        """For each (kind, value), how many files there (not missing, not parked) carry it in
+        their current content; one query, pairs no file carries are left out."""
+        out: dict[tuple[str, str], int] = {}
+        with self._conn() as conn:
+            for chunk in chunks(list(dict.fromkeys(pairs))):
+                rows = conn.execute(
+                    select(file_identifiers.c.kind, file_identifiers.c.value, func.count())
+                    .join(files, files.c.drive_id == file_identifiers.c.drive_id)
+                    .where(
+                        tuple_(file_identifiers.c.kind, file_identifiers.c.value).in_(chunk),
+                        files.c.sha256 == file_identifiers.c.sha256,
+                        files.c.missing.is_not(True),
+                        files.c.parked_at.is_(None),
+                    )
+                    .group_by(file_identifiers.c.kind, file_identifiers.c.value)
+                ).all()
+                out.update(((r[0], r[1]), r[2]) for r in rows)
+        return out
 
     def identifier_progress(self, signature: str) -> tuple[int, int]:
         """(read, total): indexed files with text whose content was read with ``signature``.

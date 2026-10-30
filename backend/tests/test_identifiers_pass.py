@@ -134,3 +134,19 @@ def test_a_step_loads_a_limited_amount_of_text(fake_archive, engine):
     assert len(repo.next_for_identifiers(10, sig, max_chars=2_500_000)) == 2
     # one text larger than the cap is still read, alone
     assert len(repo.next_for_identifiers(10, sig, max_chars=10)) == 1
+
+
+def test_counts_for_many_identifiers_in_one_go(fake_archive, engine):
+    repo, indexer = _setup(fake_archive, engine)
+    _file(repo, "f1", BILL, sha="1" * 64)
+    _file(repo, "f2", "Y-tunnus 0112038-9", sha="2" * 64)
+    indexer.run_identifiers_once()
+    got = repo.identifier_counts(
+        [
+            ("fi.ytunnus", "0112038-9"),
+            ("core.domain", "vesilaitos.fi"),
+            ("core.domain", "nowhere.fi"),
+        ]
+    )
+    assert got == {("fi.ytunnus", "0112038-9"): 2, ("core.domain", "vesilaitos.fi"): 1}
+    assert repo.identifier_counts([]) == {}

@@ -1,11 +1,12 @@
 /** Found in this document: the business IDs, IBANs and web or mail domains dam read from
  * the file's text, each linking to the other files that carry it (an ``id:`` search). */
 import { Link } from "react-router-dom";
-import { useFileIdentifiers } from "../api/client";
+import { useFileIdentifiers, useStatus } from "../api/client";
 import { plural } from "../format";
 
 export function FoundIdentifiers({ driveId }: { driveId: string }) {
-  const query = useFileIdentifiers(driveId);
+  const ids = useStatus().data?.identifiers;
+  const query = useFileIdentifiers(driveId, ids !== undefined && ids !== null && ids.read < ids.total);
   const found = query.data?.identifiers ?? [];
   if (found.length === 0) return null;
   return (

@@ -467,6 +467,7 @@ const keys = {
   rules: ["rules"],
   people: ["people"],
   countries: ["countries"],
+  fileIdentifiers: ["file-identifiers"],
   senders: ["senders"],
   identifierNames: ["identifier-names"],
   addressArea: ["address-area"],
@@ -1207,6 +1208,7 @@ export const useSaveCountries = () => {
     onSettled: () => {
       void client.invalidateQueries({ queryKey: keys.countries });
       void client.invalidateQueries({ queryKey: keys.people }); // the default address area follows
+      void client.invalidateQueries({ queryKey: keys.fileIdentifiers }); // only the enabled packs' show
       void client.invalidateQueries({ queryKey: keys.inbox });
       void client.invalidateQueries({ queryKey: keys.file });
     },
@@ -2425,10 +2427,12 @@ export const usePutFileSummary = () => {
 const fileFieldsKey = (driveId: string) => [...keys.fileFields, driveId];
 
 /** Business IDs, IBANs and domains found in the file, with how many other files carry each. */
-export const useFileIdentifiers = (driveId: string) =>
+export const useFileIdentifiers = (driveId: string, reading = false) =>
   useQuery({
-    queryKey: ["file-identifiers", driveId],
+    queryKey: [...keys.fileIdentifiers, driveId],
     queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/identifiers", { path: { drive_id: driveId }, signal }),
+    // while the background pass is still reading, look again now and then
+    refetchInterval: reading ? 10_000 : false,
   });
 
 /** A file's scan fields: the saved list, else the detected one (``edited`` tells which). */
