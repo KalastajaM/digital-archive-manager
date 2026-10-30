@@ -208,6 +208,15 @@ def remove_member(app: AppDep, collection_id: int, body: DriveIdBody) -> dict:
     return synced(app, collection_id, f"Removed {what} from {c.name}")
 
 
+@router.post("/{collection_id}/members/remove-many", response_model=CollectionChangeOut)
+def remove_many(app: AppDep, collection_id: int, body: DriveIdsBody) -> dict:
+    """Several files out of the collection in one step (Browse's selection); a file that
+    is not a member is left alone. Adding them again reverses it."""
+    what = file_phrase(app, body.drive_ids)
+    c = app.collections.remove_members(collection_id, body.drive_ids, notify=False)
+    return synced(app, collection_id, f"Removed {what} from {c.name}")
+
+
 @router.post("/{collection_id}/members/move", response_model=CollectionChangeOut)
 def move_members(app: AppDep, collection_id: int, body: MoveMembersBody) -> dict:
     """Move files from this collection into ``to`` (a sibling, parent or child in the

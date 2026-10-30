@@ -1345,6 +1345,7 @@ export const useTagActions = () => {
     restoreGroup: (name: string, members: string[]) => run<TagGroup>("/api/tags/groups/restore", { name, members }),
     /** One tag on several files as one step; the answer's ``undo`` takes it off again. */
     apply: (tag: string, driveIds: string[]) => run<TagChange>("/api/tags/apply", { tag, drive_ids: driveIds }),
+    removeFrom: (tag: string, driveIds: string[]) => run<TagChange>("/api/tags/remove-from", { tag, drive_ids: driveIds }),
   };
 };
 
@@ -1702,9 +1703,15 @@ export const useCollectionMembers = () => {
   const refresh = useRefresh(); // adds, removes or moves links in ##. Ongoing
   return useMutation({
     mutationFn: (
-      change: { id: number; add: string[] } | { id: number; remove: string } | { id: number; move: { to: number; ids: string[] } },
+      change:
+        | { id: number; add: string[] }
+        | { id: number; remove: string }
+        | { id: number; removeMany: string[] }
+        | { id: number; move: { to: number; ids: string[] } },
     ): Promise<CollectionChange> =>
-      "add" in change
+      "removeMany" in change
+        ? apiPost("/api/collections/{collection_id}/members/remove-many", { path: { collection_id: change.id }, body: { drive_ids: change.removeMany } })
+        : "add" in change
         ? apiPost("/api/collections/{collection_id}/members", { path: { collection_id: change.id }, body: { drive_ids: change.add } })
         : "move" in change
           ? apiPost("/api/collections/{collection_id}/members/move", { path: { collection_id: change.id }, body: { to: change.move.to, drive_ids: change.move.ids } })
