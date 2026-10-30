@@ -414,7 +414,10 @@ def _image_page_pdf(data: bytes) -> bytes:
     """One A4 page holding the image, scaled to fit with its aspect ratio kept."""
     try:
         with Image.open(io.BytesIO(data)) as src:
-            if src.width * src.height > MAX_IMAGE_PIXELS:
+            # Pillow's own limit too: past it Pillow only warns (an error only at twice it),
+            # so the warning is not something to rely on outside ``pytest -W error``
+            limit = min(MAX_IMAGE_PIXELS, Image.MAX_IMAGE_PIXELS or MAX_IMAGE_PIXELS)
+            if src.width * src.height > limit:
                 raise _Skip("image too large")
             src.load()
             if src.mode in ("RGBA", "LA", "P"):

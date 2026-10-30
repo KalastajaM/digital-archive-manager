@@ -1,5 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SEARCH_STALE } from "../api/client";
 import { SEARCH_DEBOUNCE_MS, useSearch } from "./useSearch";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -39,5 +40,13 @@ describe("useSearch", () => {
     unmount();
     expect(signals[0].aborted).toBe(true);
     expect(result.current.error).toBeNull();
+  });
+
+  it("searches again when the results are stale (an ID marked as yours, a sender named)", async () => {
+    const signals = slowFetch();
+    renderHook(() => useSearch("id:*"));
+    await waitFor(() => expect(signals).toHaveLength(1), { timeout: SEARCH_DEBOUNCE_MS * 4 });
+    window.dispatchEvent(new Event(SEARCH_STALE));
+    await waitFor(() => expect(signals).toHaveLength(2), { timeout: SEARCH_DEBOUNCE_MS * 4 });
   });
 });

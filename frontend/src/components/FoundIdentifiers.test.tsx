@@ -111,3 +111,26 @@ describe("FoundIdentifiers, your own business ID", () => {
     expect(screen.getByRole("button", { name: "0112038-9 is not yours" })).toHaveTextContent("Not mine");
   });
 });
+
+describe("FoundIdentifiers, open searches", () => {
+  it("tells open searches to look again after Mine", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    const { SEARCH_STALE } = await import("../api/client");
+    mockFetch({
+      "GET /api/files/a/identifiers": {
+        body: {
+          identifiers: [
+            { kind: "fi.ytunnus", label: "Business ID (Y-tunnus)", value: "0112038-9", others: 3, business: true, own: false },
+          ],
+        },
+      },
+      "PUT /api/identifier-names/own": { body: { changed: 0, own: true } },
+    });
+    const stale = vi.fn();
+    window.addEventListener(SEARCH_STALE, stale);
+    render();
+    await user.click(await screen.findByRole("button", { name: "0112038-9 is yours" }));
+    await vi.waitFor(() => expect(stale).toHaveBeenCalled());
+    window.removeEventListener(SEARCH_STALE, stale);
+  });
+});

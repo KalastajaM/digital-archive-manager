@@ -1130,7 +1130,7 @@ export const usePutIdentifierName = () => {
         client.invalidateQueries({ queryKey: keys.senders }),
         client.invalidateQueries({ queryKey: keys.inbox }),
         client.invalidateQueries({ queryKey: keys.file }),
-      ]),
+      ]).then(() => window.dispatchEvent(new Event(SEARCH_STALE))),
   });
 };
 
@@ -1149,7 +1149,7 @@ export const usePutOwnIdentifier = () => {
         client.invalidateQueries({ queryKey: keys.inbox }),
         client.invalidateQueries({ queryKey: keys.file }), // From and Relatives
         client.invalidateQueries({ queryKey: keys.browse }),
-      ]),
+      ]).then(() => window.dispatchEvent(new Event(SEARCH_STALE))),
   });
 };
 
@@ -1583,6 +1583,9 @@ export const useBuiltin = (kind: Mark) =>
 
 /** Sent on ``window`` after a mark changes, for lists outside the query cache (search). */
 export const MARKS_CHANGED = "dam:marks-changed";
+/** Sent on ``window`` when what a search finds may have changed in another way (an ID
+ * marked as yours leaves ``id:*``, a named sender changes ``from:``). */
+export const SEARCH_STALE = "dam:search-stale";
 
 /** What a mark change reloads: everything that renders marks or the links the mark
  * publishes (``##. Ongoing`` / ``##. Important`` folders show in Browse, the folder
