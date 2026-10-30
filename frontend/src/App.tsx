@@ -1,6 +1,7 @@
 import { CircleAlert, FileQuestion, KeyRound } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import { collectionHref } from "./collectionHref";
 import { errorText, NOT_SIGNED_IN, type Status, useConfigured, useSignedOut, useStatus } from "./api/client";
 import { useStyle } from "./appearance";
 import { useIndexErrorsSheet } from "./components/IndexErrors";
@@ -21,17 +22,14 @@ const Ask = lazy(() => import("./screens/Ask"));
 const Browse = lazy(() => import("./screens/Browse"));
 const FirstRun = lazy(() => import("./screens/FirstRun"));
 const Help = lazy(() => import("./screens/Help"));
-const Collections = lazy(() => import("./screens/Collections"));
 const ConvertImportant = lazy(() => import("./screens/ConvertImportant"));
 const ConvertOngoing = lazy(() => import("./screens/ConvertOngoing"));
 const Important = lazy(() => import("./screens/Important"));
-const Starred = lazy(() => import("./screens/Starred"));
 const OpenCollection = lazy(() => import("./screens/OpenCollection"));
 const Inbox = lazy(() => import("./screens/Inbox"));
 const Maintenance = lazy(() => import("./screens/Maintenance"));
 const Today = lazy(() => import("./screens/Today"));
 const Viewer = lazy(() => import("./screens/Viewer"));
-const Tags = lazy(() => import("./screens/Tags"));
 const Trays = lazy(() => import("./screens/Trays"));
 
 /** The status line at the sidebar's foot; problems are listed in its tooltip. The whole
@@ -121,6 +119,16 @@ function NotSignedIn() {
   );
 }
 
+/** The old Collections page's address: Browse with the Collections tree (``new=1``: its
+ * New collection sheet; ``state=closed``: the closed ones shown). */
+function OldCollections() {
+  const [params] = useSearchParams();
+  const to = new URLSearchParams({ tree: "collections" });
+  if (params.get("new") === "1") to.set("new", "1");
+  if (params.get("state") === "closed") to.set("closed", "1");
+  return <Navigate to={`/browse?${to}`} replace />;
+}
+
 /** The viewer window has no sidebar or status polling: just the document. */
 export default function App() {
   const viewer = useLocation().pathname.startsWith("/viewer/");
@@ -191,14 +199,16 @@ function Shell() {
               <Route path="/" element={<Today />} />
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/trays/:trayId?" element={<Trays />} />
-              <Route path="/collections/:id?" element={<Collections />} />
+              {/* the Collections and Tags pages are now Browse's trees; their addresses forward */}
+              <Route path="/collections" element={<OldCollections />} />
+              <Route path="/collections/:id" element={<OpenCollection />} />
               <Route path="/open-collection/:id" element={<OpenCollection />} />
               <Route path="/ongoing" element={<ConvertOngoing />} />
-              <Route path="/starred" element={<Starred />} />
+              <Route path="/starred" element={<Navigate to={collectionHref({ id: 0, name: "Starred", kind: "starred" })} replace />} />
               <Route path="/important" element={<Important />} />
               <Route path="/important/convert" element={<ConvertImportant />} />
               <Route path="/browse" element={<Browse />} />
-              <Route path="/tags" element={<Tags />} />
+              <Route path="/tags" element={<Navigate to="/browse?tree=tags" replace />} />
               <Route path="/ask" element={<Ask />} />
               <Route path="/activity" element={<Activity />} />
               <Route path="/maintenance" element={<Maintenance />} />

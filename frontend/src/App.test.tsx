@@ -1,7 +1,7 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
 import { mockFetch, renderWithProviders } from "./test-utils";
 
@@ -102,10 +102,10 @@ describe("App shell", () => {
       ["Inbox (3)", "/inbox"],
       ["Browse", "/browse"],
       ["Trays", "/trays"],
-      ["Collections", "/collections"],
+      ["Collections", "/browse?tree=collections"],
       ["Important", "/important"],
       ["Starred", "/browse?tree=collections&q=is%3Astarred"],
-      ["Tags", "/tags"],
+      ["Tags", "/browse?tree=tags"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
       ["Maintenance", "/maintenance"],
@@ -137,9 +137,6 @@ describe("App shell", () => {
     const trays = renderApp("/trays");
     expect(await screen.findByText("No trays are set up.")).toBeInTheDocument();
     trays.unmount();
-    const collections = renderApp("/collections");
-    expect(await screen.findByText("No open collections.")).toBeInTheDocument();
-    collections.unmount();
     mockFetch({ "GET /api/status": { body: STATUS }, "GET /api/ongoing/entries": { body: [] }, ...BASE });
     renderApp("/ongoing");
     expect(await screen.findByRole("heading", { name: "Convert ##. Ongoing" })).toBeInTheDocument();
@@ -220,6 +217,66 @@ describe("App shell", () => {
     const post = calls.find((c) => c.url === "/api/recovery")!;
     expect(post.headers["Content-Type"]).toBe("application/json");
     expect(post.credentials).toBe("same-origin");
+  });
+});
+
+describe("the old Collections, Tags and Starred addresses", () => {
+  function Where() {
+    const loc = useLocation();
+    return <output data-testid="where">{loc.pathname + loc.search}</output>;
+  }
+  const open = (url: string) => {
+    mockFetch({
+      "GET /api/status": { body: STATUS },
+      ...BASE,
+      "GET /api/browse": { body: [] },
+      "GET /api/search": { body: [] },
+      "GET /api/tags/all": { body: { tags: [], groups: [] } },
+      "GET /api/marks/collection/starred": { body: { id: 90, kind: "starred", members: [], groups: [] } },
+    });
+    document.documentElement.dataset.style = "new";
+    renderWithProviders(
+      <MemoryRouter initialEntries={[url]}>
+        <App />
+        <Where />
+      </MemoryRouter>,
+    );
+  };
+  const where = () => screen.getByTestId("where").textContent;
+  afterEach(() => {
+    cleanup();
+    delete document.documentElement.dataset.style;
+  });
+
+  it("/collections forwards to Browse's Collections tree", async () => {
+    open("/collections");
+    expect(await screen.findByRole("navigation", { name: "Collections" })).toBeInTheDocument();
+    expect(where()).toBe("/browse?tree=collections");
+  });
+
+  it("/collections?new=1 opens the tree's New collection sheet", async () => {
+    open("/collections?new=1");
+    expect(await screen.findByRole("dialog", { name: "New collection" })).toBeInTheDocument();
+    expect(where()).toBe("/browse?tree=collections&new=1");
+  });
+
+  it("/collections?state=closed shows the closed collections", async () => {
+    open("/collections?state=closed");
+    expect(await screen.findByRole("button", { name: "Show closed" })).toHaveAttribute("aria-pressed", "true");
+    expect(where()).toBe("/browse?tree=collections&closed=1");
+  });
+
+  it("/tags lands on Browse's Tags tree", async () => {
+    open("/tags");
+    expect(await screen.findByRole("navigation", { name: "Tags" })).toBeInTheDocument();
+    expect(where()).toBe("/browse?tree=tags");
+  });
+
+  it("/starred lands on Browse scoped on Starred", async () => {
+    open("/starred");
+    expect(await screen.findByRole("navigation", { name: "Collections" })).toBeInTheDocument();
+    expect(where()).toBe("/browse?tree=collections&q=is%3Astarred");
+    expect(await screen.findByRole("treeitem", { name: "Starred" })).toHaveAttribute("aria-current", "true");
   });
 });
 

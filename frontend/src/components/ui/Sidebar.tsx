@@ -406,12 +406,12 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
   return (
     <Section
       title="Collections"
-      to="/collections"
+      to="/browse?tree=collections"
       dropProps={top.props}
       folded={sections.folded.has("collections")}
       onFold={() => sections.toggle("collections")}
       foldedCount={look === "new" ? (kids.get(null) ?? []).length + 2 : undefined}
-      add={{ to: "/collections?new=1", label: "New collection" }}
+      add={{ to: "/browse?tree=collections&new=1", label: "New collection" }}
     >
       <ImportantRow />
       <StarredRow />
@@ -526,7 +526,7 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
   return (
     <Section
       title="Tags"
-      to="/tags"
+      to="/browse?tree=tags"
       folded={sections.folded.has("tags")}
       onFold={() => sections.toggle("tags")}
     >
@@ -538,7 +538,7 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
 /** New look: the Tags screen's row in the Archive section, counting every tag. */
 function TagsRow() {
   const all = useAllTags();
-  return <Row to="/tags" icon={TagIcon} label="Tags" count={all.data?.tags.length} />;
+  return <Row to="/browse?tree=tags" icon={TagIcon} label="Tags" count={all.data?.tags.length} />;
 }
 
 /** The tags a Browse address filters by, when it filters by tags alone (no words or

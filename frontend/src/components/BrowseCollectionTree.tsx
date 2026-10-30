@@ -184,20 +184,25 @@ export function CollectionTree({
   onPick,
   head,
   onDeleted,
+  startNew = false,
+  startClosed = false,
 }: {
   active: ScopeState;
   onPick: Pick;
   head?: ReactNode;
   /** After a delete from the tree: the collection's name (Browse leaves its search). */
   onDeleted?: (name: string) => void;
+  /** Open with the New collection sheet (the sidebar's +), or with the closed ones shown. */
+  startNew?: boolean;
+  startClosed?: boolean;
 }) {
   // the open collections; with Show closed, the closed ones too (greyed)
-  const [showClosed, setShowClosed] = useState(false);
+  const [showClosed, setShowClosed] = useState(startClosed);
   const list = useCollections(showClosed ? "all" : "open");
   const collect = useAddToCollection();
   const toast = useToast();
   // New collection (at the top or inside one), then it opens: the tree's own pick
-  const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(null);
+  const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(startNew ? { parent: null } : null);
   const order = useCollectionOrder(list.data ?? []);
   const [merging, setMerging] = useState<CollectionRow | null>(null);
   const [deleting, setDeleting] = useState<CollectionRow | null>(null);

@@ -1,13 +1,13 @@
 /** Browse's collection tree: Important and Starred first, then the open collections as
  * they nest; a click picks one, the picked one is current, and a long name stays in its row. */
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
 import type { ScopeState } from "../browseScope";
 import css from "../styles-new.css?raw";
 import { setDragFiles, setDragSource } from "../dnd";
-import { dataTransfer, mockFetch, renderWithProviders } from "../test-utils";
+import { dataTransfer, deferred, mockFetch, renderWithProviders } from "../test-utils";
 import { CollectionTree } from "./BrowseCollectionTree";
 
 const coll = (id: number, name: string, parent_id: number | null = null): CollectionRow => ({
@@ -141,5 +141,73 @@ describe("CollectionTree", () => {
     const old = (await screen.findByText("Old")).closest('[role="treeitem"]') as HTMLElement;
     expect(old.querySelector(".tree-row")).toHaveClass("tree-closed");
   });
+
+  it("lists the collections by position, not by name", async () => {
+    setup([{ ...coll(1, "Zed"), position: 0 }, { ...coll(2, "Alpha"), position: 1 }]);
+    await screen.findByText("Alpha");
+    expect(names()).toEqual(["Important", "Starred", "Zed", "Alpha"]);
+  });
+
+  it("the right-click menu moves a collection down", async () => {
+    const { calls, user } = setup([coll(1, "Car"), coll(2, "Attic")], NONE, {
+      "POST /api/collections/1/move": { body: { collection: coll(1, "Car"), batch: null, problems: [], ongoing_status: null } },
+    });
+    const row = (await screen.findByText("Car")).closest(".tree-row") as HTMLElement;
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    await user.click(await screen.findByRole("menuitem", { name: "Move down" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections/1/move")).toHaveLength(1));
+    expect(calls.find((c) => c.url === "/api/collections/1/move")!.body).toEqual({ after_id: 2 });
+  });
+
+  it("startClosed opens with the closed collections shown", async () => {
+    mockFetch({
+      "GET /api/collections": (call) => ({ body: call.url.includes("state=all") ? [coll(1, "Legal"), { ...coll(5, "Old"), state: "closed" }] : [coll(1, "Legal")] }),
+    });
+    renderWithProviders(<CollectionTree active={NONE} onPick={vi.fn()} startClosed />);
+    expect(await screen.findByText("Old")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show closed" })).toHaveAttribute("aria-pressed", "true");
+  });
 });
 
+describe("CollectionTree's New collection", () => {
+  const created = { ...coll(7, "Sauna"), id: 7 };
+
+  it("startNew opens the New collection sheet at once (the sidebar's +)", async () => {
+    mockFetch({ "GET /api/collections": { body: [] } });
+    renderWithProviders(<CollectionTree active={NONE} onPick={vi.fn()} startNew />);
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("");
+  });
+
+  it("creates it from the sheet and picks it", async () => {
+    const { calls, onPick, user } = setup([], NONE, { "POST /api/collections": { body: created } });
+    await user.click(await screen.findByRole("button", { name: "New collection" }));
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Name" }), "  Sauna {Enter}");
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith({ kind: "collection", name: "Sauna" }, false));
+    expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections").map((c) => c.body)).toEqual([{ name: "Sauna" }]);
+  });
+
+  it("a double Create makes one collection", async () => {
+    const pending = deferred<{ body: unknown }>();
+    const { calls, user } = setup([], NONE, { "POST /api/collections": () => pending.promise });
+    await user.click(await screen.findByRole("button", { name: "New collection" }));
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Name" }), "Car");
+    const create = within(dialog).getByRole("button", { name: "Create" });
+    act(() => {
+      create.click();
+      create.click();
+    });
+    await act(async () => pending.resolve({ body: created }));
+    expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections")).toHaveLength(1);
+  });
+
+  it("shows a refused name in the sheet", async () => {
+    const { user } = setup([], NONE, { "POST /api/collections": { status: 400, body: { error: "a collection named ‮Sauna exists" } } });
+    await user.click(await screen.findByRole("button", { name: "New collection" }));
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Name" }), "sauna{Enter}");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("⟨U+202E⟩Sauna exists");
+  });
+});

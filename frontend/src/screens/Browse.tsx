@@ -1813,7 +1813,7 @@ export default function Browse() {
             <CollectionDetail key={scoped.c.id} id={scoped.c.id} variant="scope" headerSlot={scopeSlot} onSelectFile={(driveId) => selectInSearch(driveId)} />
           ) : (
             <p className="notice collection-missing">
-              No collection named {visible(scoped.missing)}. <Link to="/collections">See the collections</Link>
+              No collection named {visible(scoped.missing)}. <Link to="/browse?tree=collections">See the collections</Link>
             </p>
           )
         )}
@@ -2474,6 +2474,8 @@ export default function Browse() {
                   onPick={pickScope}
                   head={treeSwitch}
                   onDeleted={(name) => setFilters(filters.filter((f) => !(f.name === "collection" && f.value.toLowerCase() === name.toLowerCase())))}
+                  startNew={params.get("new") === "1"}
+                  startClosed={params.get("closed") === "1"}
                 />
               ) : treeKind === "tags" ? (
                 <TagTree active={scopeOf(filters)} onPick={pickScope} head={treeSwitch} />

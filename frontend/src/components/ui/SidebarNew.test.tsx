@@ -75,7 +75,7 @@ describe("Sidebar layout in the New look", () => {
     const row = await within(nav()).findByRole("link", { name: "Sauna (6)" });
     expect(row.querySelector(".sidebar-grip")).not.toBeNull();
     expect(row).toHaveAttribute("draggable", "true");
-    expect(within(nav()).getByRole("link", { name: "New collection" })).toHaveAttribute("href", "/collections?new=1");
+    expect(within(nav()).getByRole("link", { name: "New collection" })).toHaveAttribute("href", "/browse?tree=collections&new=1");
   });
 
   it("splits the tags into Pinned and Recent tags and puts the Tags screen in Archive", async () => {
@@ -95,7 +95,7 @@ describe("Sidebar layout in the New look", () => {
     expect(nav().querySelector(".sidebar-grip")).toBeNull();
     expect(within(nav()).queryByRole("link", { name: "New collection" })).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Sauna" })).toBeInTheDocument(); // no count in the name
-    expect(within(nav()).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/tags");
+    expect(within(nav()).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/browse?tree=tags");
     const rows = within(nav()).getAllByRole("link").map((a) => a.getAttribute("aria-label") ?? a.textContent);
     expect(rows.slice(-5)).toEqual(["Ask", "Activity", "Maintenance", "Settings", "Help"]);
   });
