@@ -25,8 +25,8 @@ class PackProfile:
     stopwords: frozenset[str]
     kind_words: frozenset[str]
     months: dict[str, int]  # folded month word -> 1..12
-    # month words that count only when written with a capital (no enabled language that
-    # writes them in lower case has them)
+    # month words that are also everyday words: they count only with a capital (unless
+    # another enabled language has them as plain month names)
     capital_months: frozenset[str]
     # where the addressee sits on page 1: the first enabled country that has a standard
     address_zone: tuple[float, float, float, float] | None
@@ -54,10 +54,8 @@ def build(country_codes: Sequence[str], language_codes: Sequence[str]) -> PackPr
         capital_months=frozenset(
             form
             for p in ls
-            if p.months_capitalized
-            for forms in p.months
-            for form in forms
-            if not any(form in fs for q in ls if not q.months_capitalized for fs in q.months)
+            for form in p.capital_only
+            if not any(form in fs and form not in q.capital_only for q in ls for fs in q.months)
         ),
         address_zone=next((c.address_zone for c in cs if c.address_zone is not None), None),
     )

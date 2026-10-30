@@ -276,20 +276,21 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
         else:
             kinds = [k for ks in groups.values() for k in ks] if f.name == "id" else groups[f.name]
             pairs = _id_pairs(v, kinds)
-            if pairs:  # recognised: an exact lookup by kind and value
-                kinds = list(dict.fromkeys(k for k, _ in pairs))
-                match = (
-                    " AND ("
-                    + " OR ".join(
-                        f"(i.kind = {w.bind(k)} AND i.value = {w.bind(x)})" for k, x in pairs
-                    )
-                    + ")"
+            # what a finder read: an exact lookup by kind and value; kinds found only next
+            # to their label (a KvK number) cannot read a bare value: compared without
+            # spaces, dashes or case
+            exact = [f"(i.kind = {w.bind(k)} AND i.value = {w.bind(x)})" for k, x in pairs]
+            labelled = {
+                s.kind for p in packs.active().countries for s in p.identifiers if s.needs_label
+            }
+            rest = [k for k in kinds if k in labelled]
+            if rest:
+                exact.append(
+                    f"(i.kind IN ({w.marks(rest)}) AND "
+                    "REPLACE(REPLACE(UPPER(i.value), ' ', ''), '-', '') "
+                    f"IN ({w.marks(_id_keys(v))}))"
                 )
-            else:  # something no finder reads (a KvK number without its label): compare
-                match = (
-                    " AND REPLACE(REPLACE(UPPER(i.value), ' ', ''), '-', '') "
-                    f"IN ({w.marks(_id_keys(v))})"
-                )
+            match = " AND (" + " OR ".join(exact) + ")" if exact else " AND 0"
         w.add(
             "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
             "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "

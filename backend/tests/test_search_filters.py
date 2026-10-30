@@ -476,3 +476,14 @@ def test_id_looks_values_up_by_kind_and_value(with_ids, monkeypatch):
     )
     assert ids(with_ids, "id:0112038-9") == ["bill", "tax"]
     assert not any("REPLACE(" in s for s in seen)
+
+
+def test_a_kvk_number_that_looks_like_a_ytunnus_is_still_found(with_ids):
+    from dam import countries, packs
+
+    packs.activate(packs.build(["fi", "nl"], ["fi", "nl", "en"]))
+    # 12345671: eight digits that also pass the Y-tunnus check, stored as a KvK number
+    with_ids.repo.save_identifiers(
+        "doc", "sha-doc", countries.signature(), [("nl.kvk", "12345671")]
+    )
+    assert "doc" in ids(with_ids, "id:12345671")

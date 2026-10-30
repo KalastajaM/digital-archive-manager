@@ -130,7 +130,9 @@ NETHERLANDS = CountryPack(
     ),
     identifiers=(
         IdentifierSpec("nl.btw", "VAT ID (btw-id)", find_btw, True),
-        IdentifierSpec("nl.kvk", "Chamber of Commerce number (KvK-nummer)", find_kvk, True),
-        IdentifierSpec("nl.rsin", "Legal entity number (RSIN)", find_rsin, True),
+        IdentifierSpec(
+            "nl.kvk", "Chamber of Commerce number (KvK-nummer)", find_kvk, True, needs_label=True
+        ),
+        IdentifierSpec("nl.rsin", "Legal entity number (RSIN)", find_rsin, True, needs_label=True),
     ),
 )

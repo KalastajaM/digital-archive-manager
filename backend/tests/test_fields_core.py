@@ -101,3 +101,17 @@ def test_words_and_numbers_that_only_look_like_dates(text):
 @pytest.mark.parametrize("text", ["Due May 15, 2026", "5 March 2026", "Laskun päiväys 15-05-2026"])
 def test_real_dates_like_them_still_count(text):
     assert len(detect_fields(text).dates) == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "förfallodag 30 dec. 2026",
+        "15 jan 2026",
+        "15 sept 2026",
+        "15 october 2026",
+        "voimassa v. 1-1-2026",
+    ],
+)
+def test_lower_case_months_and_plain_dates_still_count(text):
+    assert len(detect_fields(text).dates) == 1

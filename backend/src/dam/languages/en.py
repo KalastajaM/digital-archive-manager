@@ -27,7 +27,7 @@ ENGLISH = LanguagePack(
         attachment screenshot
         """.split()
     ),
-    months_capitalized=True,
+    capital_only=("may", "march", "mar"),
     months=(
         ("january", "jan"),
         ("february", "feb"),
