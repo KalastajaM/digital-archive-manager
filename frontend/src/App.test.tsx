@@ -257,7 +257,11 @@ describe("the old Collections, Tags and Starred addresses", () => {
   it("/collections?new=1 opens the tree's New collection sheet", async () => {
     open("/collections?new=1");
     expect(await screen.findByRole("dialog", { name: "New collection" })).toBeInTheDocument();
-    expect(where()).toBe("/browse?tree=collections&new=1");
+    // the tree takes the flag and drops it, so the sidebar's + works again after a Cancel
+    await waitFor(() => expect(where()).toBe("/browse?tree=collections"));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "New collection" })).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("link", { name: "New collection" }));
+    expect(await screen.findByRole("dialog", { name: "New collection" })).toBeInTheDocument();
   });
 
   it("/collections?state=closed shows the closed collections", async () => {

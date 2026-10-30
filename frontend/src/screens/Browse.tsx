@@ -810,6 +810,14 @@ export default function Browse() {
     watch.observe(el);
     return () => watch.disconnect();
   }, [isNew]);
+  // the sidebar's New collection (``new=1``) and the old closed list (``closed=1``) act in the
+  // tree: when it is folded away, open it over the panes so its sheet can show
+  // (read the width here: the tree drops ``new`` before ``narrow`` is first set)
+  const treeAsked = params.get("new") === "1" || params.get("closed") === "1";
+  useEffect(() => {
+    const width = bodyRef.current?.clientWidth ?? 0;
+    if (isNew && treeAsked && width > 0 && width <= TREE_FOLDS_AT) setTreeOpen(true);
+  }, [isNew, treeAsked]);
   const act: PaneId = split ? active : "left";
   const shown: PaneId[] = split ? PANES : ["left"];
   const flatOf = (pane: PaneId) => panes[pane].view === "files";
@@ -2475,6 +2483,15 @@ export default function Browse() {
                   head={treeSwitch}
                   onDeleted={(name) => setFilters(filters.filter((f) => !(f.name === "collection" && f.value.toLowerCase() === name.toLowerCase())))}
                   startNew={params.get("new") === "1"}
+                  onStartedNew={() =>
+                    setParams(
+                      (p) => {
+                        p.delete("new");
+                        return p;
+                      },
+                      { replace: true },
+                    )
+                  }
                   startClosed={params.get("closed") === "1"}
                 />
               ) : treeKind === "tags" ? (

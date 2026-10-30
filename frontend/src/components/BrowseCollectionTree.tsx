@@ -7,7 +7,7 @@
  * (or steps into it), ← closes it (or steps out), Home and End go to the first and last, Enter
  * picks. */
 import { Archive, ChevronRight, Layers, Plus } from "lucide-react";
-import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useState } from "react";
+import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
 import { readDragFiles, readDragSource, useDropTarget } from "../dnd";
@@ -185,6 +185,7 @@ export function CollectionTree({
   head,
   onDeleted,
   startNew = false,
+  onStartedNew,
   startClosed = false,
 }: {
   active: ScopeState;
@@ -194,6 +195,8 @@ export function CollectionTree({
   onDeleted?: (name: string) => void;
   /** Open with the New collection sheet (the sidebar's +), or with the closed ones shown. */
   startNew?: boolean;
+  /** The New collection sheet opened for ``startNew``: drop the flag so the next ask opens it again. */
+  onStartedNew?: () => void;
   startClosed?: boolean;
 }) {
   // the open collections; with Show closed, the closed ones too (greyed)
@@ -202,7 +205,14 @@ export function CollectionTree({
   const collect = useAddToCollection();
   const toast = useToast();
   // New collection (at the top or inside one), then it opens: the tree's own pick
-  const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(startNew ? { parent: null } : null);
+  const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(null);
+  useEffect(() => {
+    if (!startNew) return;
+    setCreating({ parent: null });
+    onStartedNew?.();
+    // only when asked; ``onStartedNew`` is a new function each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startNew]);
   const order = useCollectionOrder(list.data ?? []);
   const [merging, setMerging] = useState<CollectionRow | null>(null);
   const [deleting, setDeleting] = useState<CollectionRow | null>(null);
