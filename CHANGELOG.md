@@ -48,6 +48,11 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Collections nest instead of having groups.** Only Important keeps groups. The first
+  time this version opens, the groups of other collections become collections inside
+  them, with nothing moved in `##. Ongoing` (a snapshot is taken first). Dragging a file
+  from a collection's page onto another collection of the same tree moves it there, with
+  Undo.
 - **The Index sheet adds up.** Files in the archive shows a Total and the four states that
   make it up, with the missing files apart; Other indexes shows Page 1 and Business IDs, each
   as how many of how many.
