@@ -1646,7 +1646,8 @@ export default function Browse() {
   };
 
   // a search of one collection (the collection tree's pick): shown above its files
-  const scoped = searching ? scopedCollection(filters, collections.data ?? []) : null;
+  // (nothing until the collections are known: an empty list would call every one missing)
+  const scoped = searching && collections.data ? scopedCollection(filters, collections.data) : null;
   /** A Needs attention entry of that collection: its file is the current row. */
   const selectInSearch = (driveId: string) => {
     const i = items[sp].findIndex((it) => it.drive_id === driveId);

@@ -978,6 +978,9 @@ export default function CollectionDetail({
       setPending(null);
       const renamed = p.action.action === "rename" ? p.action.name : null;
       if (renamed !== null) setRenaming(false);
+      // in Browse the search names the collection: it follows the new name, so the
+      // collection stays on screen (the undo below renames it back the same way)
+      if (scope && renamed !== null && query.data) navigate(collectionHref({ ...query.data, name: renamed }), { replace: true });
       report(
         `${p.label}: what happened in ##. Ongoing`,
         p.done,
@@ -1148,9 +1151,10 @@ export default function CollectionDetail({
   const index = selected ? order.indexOf(selected) : -1;
 
   useEffect(() => {
+    if (scope) return; // in Browse, Browse's own selection is the one shown
     const shown = browsed ?? selected;
     if (shown) publishSelection(shown.drive_id);
-  }, [selected, browsed]);
+  }, [selected, browsed, scope]);
 
   // Quick Look: the shown file members that are in the index.
   const looks = useMemo(() => order.filter((m) => m.path && !m.is_dir && !m.missing), [order]);
@@ -1182,7 +1186,8 @@ export default function CollectionDetail({
       if (target && !browsed) setChosen(target.drive_id);
     },
     {
-      canOpen: () => !!browsed || (!!selected && looks.includes(selected)),
+      // in Browse (scope) there is no member list here: Browse's Quick Look is the one
+      canOpen: () => !scope && (!!browsed || (!!selected && looks.includes(selected))),
       trashRefusal: (file) => deletionRefusal(file.path, file.marks),
       trashBusy: trash.busy,
       onTrash: (file, ui) => {
@@ -1259,6 +1264,7 @@ export default function CollectionDetail({
     });
   };
   useKeydown((e) => {
+    if (scope) return; // in Browse the keys are Browse's: there is no member list here
     if (isTrashKey(e)) {
       // the focused member list (or nothing focused)
       const target = e.target instanceof Element ? e.target : null;
