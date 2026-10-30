@@ -29,13 +29,13 @@ const coll = (id: number, name: string, parent_id: number | null = null, state: 
 const OLD = coll(1, "Old house");
 const ALL = [OLD, coll(2, "Garden", 1), coll(3, "House"), coll(4, "Shut", null, "closed")];
 
-function setup(problems: string[] = []) {
+function setup(problems: string[] = [], all = ALL) {
   const calls = mockFetch({
     "POST /api/collections/1/merge/preview": { body: { problems } },
     "POST /api/collections/1/merge": { body: { collection: ALL[2], batch: null, problems: [], ongoing_status: null } },
   });
   const onDone = vi.fn();
-  renderWithProviders(<MergeCollectionSheet c={OLD} all={ALL} onDone={onDone} onCancel={() => {}} />);
+  renderWithProviders(<MergeCollectionSheet c={OLD} all={all} onDone={onDone} onCancel={() => {}} />);
   return { calls, onDone, user: userEvent.setup() };
 }
 
@@ -52,6 +52,20 @@ describe("MergeCollectionSheet", () => {
     await user.click(within(sheet).getByRole("button", { name: "Merge" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/api/collections/1/merge")).toBe(true));
     expect(onDone).toHaveBeenCalledWith(expect.objectContaining({ id: 3, name: "House" }));
+  });
+
+  it("says what happens in ##. Ongoing by whether the target is in it", async () => {
+    const { user } = setup();
+    let sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("option", { name: "House" }));
+    expect(await within(sheet).findByText(/its links move into House's folder/)).toBeInTheDocument();
+    cleanup();
+    const hidden = { ...coll(3, "House"), publish: { ongoing: false } };
+    const second = setup([], [OLD, coll(2, "Garden", 1), hidden]);
+    sheet = await screen.findByRole("dialog");
+    await second.user.click(within(sheet).getByRole("option", { name: "House" }));
+    expect(await within(sheet).findByText(/House is not in ##\. Ongoing, so the links of Old house there come down/)).toBeInTheDocument();
+    expect(within(sheet).queryByText(/move into House's folder/)).toBeNull();
   });
 
   it("says why it cannot merge, and offers no Merge button", async () => {

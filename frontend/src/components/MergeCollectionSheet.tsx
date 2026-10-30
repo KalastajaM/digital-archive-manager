@@ -29,6 +29,12 @@ export function MergeCollectionSheet({
   const walk = (id: number) => (kids.get(id) ?? []).forEach((k) => (inside.add(k.id), walk(k.id)));
   walk(c.id);
   const targets = all.filter((x) => !x.kind && x.state === "open" && x.id !== c.id && !inside.has(x.id));
+  // in ##. Ongoing: open with publishing on, and so is every collection above it
+  const byId = new Map(all.map((x) => [x.id, x]));
+  const published = (id: number): boolean => {
+    const x = byId.get(id);
+    return !!x && x.state === "open" && !!x.publish?.ongoing && (x.parent_id === null || published(x.parent_id));
+  };
 
   const choose = (x: CollectionRow) => {
     setInto(x);
@@ -84,8 +90,11 @@ export function MergeCollectionSheet({
         <div className="merge-explain">
           <p>
             {name} goes into <b>{visible(into.name)}</b>: its files and the collections inside it join {visible(into.name)}, its note,
-            checklist and summary are added to {visible(into.name)}&apos;s, and {name} is removed. Your files stay where they are; in
-            ##. Ongoing its links move into {visible(into.name)}&apos;s folder.
+            checklist and summary are added to {visible(into.name)}&apos;s, and {name} is removed. Your files stay where they are.
+            {published(c.id) &&
+              (published(into.id)
+                ? ` In ##. Ongoing its links move into ${visible(into.name)}'s folder.`
+                : ` ${visible(into.name)} is not in ##. Ongoing, so the links of ${name} there come down.`)}
           </p>
           <p>
             <b>This cannot be undone.</b> A snapshot is taken first (Settings, Snapshots), so restoring it is the way back.

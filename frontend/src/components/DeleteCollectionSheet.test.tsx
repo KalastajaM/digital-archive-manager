@@ -25,7 +25,7 @@ describe("DeleteCollectionSheet", () => {
     renderWithProviders(<DeleteCollectionSheet c={{ id: 1, name: "Legal" }} onDone={onDone} onCancel={() => {}} />);
     const sheet = await screen.findByRole("dialog", { name: "Delete Legal?" });
     const rows = await within(sheet).findAllByRole("listitem");
-    expect(rows.map((r) => r.textContent)).toEqual(["Legal: 2 files", "Michiel: 1 file", "Old (closed): no files"]);
+    expect(rows.map((r) => r.textContent)).toEqual(["Legal:\u00a02 files", "Michiel:\u00a01 file", "Old\u00a0(closed):\u00a0no files"]);
     expect(within(sheet).getByText(/This cannot be undone/)).toBeInTheDocument();
     expect(within(sheet).getByText(/Your files are not deleted/)).toBeInTheDocument();
     expect(within(sheet).getByText(/A snapshot is taken first/)).toBeInTheDocument();

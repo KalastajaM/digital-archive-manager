@@ -61,9 +61,13 @@ export function DeleteCollectionSheet({
           <p>{n === 1 ? "This collection goes:" : "These collections go, the one you chose and every one inside it:"}</p>
           <ul className="delete-list">
             {rows.map((r) => (
-              <li key={r.id} title={visible(r.name)}>
-                {visible(r.name)}
-                {r.state === "closed" && " (closed)"}: {r.files === 0 ? "no files" : plural(r.files, "file")}
+              <li key={r.id}>
+                <span className="delete-name" title={visible(r.name)}>
+                  {visible(r.name)}
+                </span>
+                <span className="delete-count">
+                  {r.state === "closed" && "\u00a0(closed)"}:&nbsp;{r.files === 0 ? "no files" : plural(r.files, "file")}
+                </span>
               </li>
             ))}
           </ul>
