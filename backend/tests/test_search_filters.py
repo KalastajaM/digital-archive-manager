@@ -443,3 +443,36 @@ def test_star_as_a_word_is_still_a_word(archive):
     # a literal value that merely contains * is not "any": from:*kela* looks for that text
     archive.assignments.set(["kela"], sender="Kela")
     assert ids(archive, "from:*kela*") == []
+
+
+@pytest.mark.parametrize(
+    "q", ["id:kela.fi", "id:www.kela.fi", "id:info@kela.fi", "domain:WWW.Kela.fi"]
+)
+def test_a_domain_in_its_written_forms(with_ids, q):
+    assert ids(with_ids, q) == ["kela"]
+
+
+def test_a_dash_in_a_domain_counts(with_ids):
+    from dam import countries
+
+    with_ids.repo.save_identifiers(
+        "doc", "sha-doc", countries.signature(), [("core.domain", "ke-la.fi")]
+    )
+    assert ids(with_ids, "id:ke-la.fi") == ["doc"]
+    assert ids(with_ids, "id:kela.fi") == ["kela"]
+
+
+def test_id_looks_values_up_by_kind_and_value(with_ids, monkeypatch):
+    """A recognised value is looked up as stored (the kind and value index), not by
+    rewriting every stored value."""
+    from dam import search
+
+    seen = []
+    real = search._Where.add
+    monkeypatch.setattr(
+        search._Where,
+        "add",
+        lambda self, sql, negated=False: seen.append(sql) or real(self, sql, negated),
+    )
+    assert ids(with_ids, "id:0112038-9") == ["bill", "tax"]
+    assert not any("REPLACE(" in s for s in seen)
