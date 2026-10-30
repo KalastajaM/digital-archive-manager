@@ -24,3 +24,22 @@ def test_remove_many_takes_several_files_out_of_a_collection(client, app):
     )
     assert r.status_code == 200, r.text
     assert [m["drive_id"] for m in r.json()["collection"]["members"]] == ["id-2"]
+
+
+def test_files_cannot_be_moved_out_of_or_into_starred_or_important(client, app):
+    house = app.collections.create("House")
+    starred = app.collections.builtin("starred")
+    app.collections.add_members(starred.id, ["id-1"])
+    app.collections.add_members(house.id, ["id-2"])
+    out = client.post(
+        f"/api/collections/{starred.id}/members/move",
+        json={"to": house.id, "drive_ids": ["id-1"]},
+        headers=LOCAL_ORIGIN,
+    )
+    into = client.post(
+        f"/api/collections/{house.id}/members/move",
+        json={"to": starred.id, "drive_ids": ["id-2"]},
+        headers=LOCAL_ORIGIN,
+    )
+    assert (out.status_code, into.status_code) == (400, 400), (out.text, into.text)
+    assert [m.drive_id for m in app.collections.get(starred.id).members] == ["id-1"]

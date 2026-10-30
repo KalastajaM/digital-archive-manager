@@ -52,6 +52,8 @@ function setup(scope: CollectionRow | null = null) {
     "POST /api/collections/2/members/remove-many": change(MICHIEL),
     "POST /api/collections/1/members/move": change(CAR),
     "POST /api/collections/2/members/move": change(CAR),
+    "POST /api/collections/3/members/move": change(LEGAL),
+    "POST /api/collections/2/members": change(MICHIEL),
   });
   const onDone = vi.fn();
   renderWithProviders(<SelectionActions files={FILES} scope={scope} all={ALL} onDone={onDone} />);
@@ -110,6 +112,49 @@ describe("SelectionActions", () => {
     await user.click(within(sheet).getByRole("option", { name: "Car" }));
     await waitFor(() => expect(posts(calls, "/api/collections/1/members/move")).toEqual([{ to: 3, drive_ids: ["a"] }]));
     expect(posts(calls, "/api/collections/2/members/move")).toEqual([{ to: 3, drive_ids: ["b"] }]);
+  });
+
+  it("without a collection shown, Remove and its Undo touch only the files that were in it", async () => {
+    const { calls, user } = setup();
+    const sheet = await open(user, "Remove from collection…");
+    await user.click(within(sheet).getByRole("option", { name: "Car" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/3/members/remove-many")).toEqual([{ drive_ids: ["b"] }]));
+    expect(await screen.findByText("Removed b.pdf from Car")).toBeInTheDocument();
+    await undo(user);
+    await waitFor(() => expect(posts(calls, "/api/collections/3/members")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/3/members")[0]).toMatchObject({ drive_ids: ["b"] });
+  });
+
+  it("Undo of a move leaves a file in the target that was there before", async () => {
+    // b is in Michiel and already in Car: the move only takes it out of Michiel
+    const { calls, user } = setup(LEGAL);
+    const sheet = await open(user, "Move to collection…");
+    await user.click(within(sheet).getByRole("option", { name: "Car" }));
+    await undo(user);
+    await waitFor(() => expect(posts(calls, "/api/collections/3/members/move")).toEqual([{ to: 1, drive_ids: ["a"] }]));
+    await waitFor(() => expect(posts(calls, "/api/collections/2/members")).toHaveLength(1));
+    expect(posts(calls, "/api/collections/2/members")[0]).toMatchObject({ drive_ids: ["b"] });
+  });
+
+  it("moving into a collection inside the shown one leaves the files already there", async () => {
+    const { calls, user } = setup(LEGAL);
+    const sheet = await open(user, "Move to collection…");
+    await user.click(within(sheet).getByRole("option", { name: "Michiel" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/1/members/move")).toEqual([{ to: 2, drive_ids: ["a"] }]));
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+    expect(posts(calls, "/api/collections/2/members/move")).toEqual([]);
+  });
+
+  it("with Starred shown, acts as with no collection shown: no Move, and Remove leaves the star alone", async () => {
+    const { calls, user } = setup({ ...coll(9, "Starred", null, ["a", "b"]), kind: "starred" });
+    await user.click(screen.getByRole("button", { name: "Actions for 2 selected files" }));
+    expect(screen.queryByRole("menuitem", { name: "Move to collection…" })).toBeNull();
+    await user.click(screen.getByRole("menuitem", { name: "Remove from collection…" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).queryByRole("option", { name: "Starred" })).toBeNull();
+    await user.click(within(sheet).getByRole("option", { name: "Car" }));
+    await waitFor(() => expect(posts(calls, "/api/collections/3/members/remove-many")).toEqual([{ drive_ids: ["b"] }]));
+    expect(calls.some((c) => c.url.startsWith("/api/collections/9/"))).toBe(false);
   });
 
   it("offers Move to collection only while a collection is shown", async () => {

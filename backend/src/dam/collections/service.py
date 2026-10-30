@@ -880,10 +880,18 @@ class CollectionService:
         with self._add_lock(to_id), write_tx(self.engine) as conn:
             self._require(conn, from_id)
             target = conn.execute(
-                select(collections.c.name, collections.c.state).where(collections.c.id == to_id)
+                select(collections.c.name, collections.c.state, collections.c.kind).where(
+                    collections.c.id == to_id
+                )
             ).first()
             if target is None:
                 raise NotFound(f"No collection {to_id}")
+            source_kind = conn.execute(
+                select(collections.c.kind).where(collections.c.id == from_id)
+            ).scalar()
+            # Starred and Important are marks on a file, set with the star and the !
+            if target.kind or source_kind:
+                raise InvalidRequest("Files are not moved into or out of Starred or Important")
             if target.state == "closed":
                 raise InvalidRequest(f"{target.name} is closed: reopen it to add files")
             moving = set(

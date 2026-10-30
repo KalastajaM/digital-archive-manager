@@ -85,7 +85,7 @@ function PickSheet({
 
 export function SelectionActions({
   files,
-  scope,
+  scope: shown,
   all,
   onDone,
 }: {
@@ -95,6 +95,8 @@ export function SelectionActions({
   all: CollectionRow[];
   onDone: () => void;
 }) {
+  // Starred and Important are marks, set with the star and the !: shown, they act as no collection
+  const scope = shown && !shown.kind ? shown : null;
   const ids = files.map((f) => f.drive_id);
   const what = files.length === 1 ? visible(files[0].name) : `${files.length} files`;
   const tags = useAllTags();
@@ -164,12 +166,13 @@ export function SelectionActions({
       fail(e);
     }
   };
-  /** Files by the collection they leave: within the shown tree each its own; else ``from``. */
+  /** Files by the collection they leave: within the shown tree each its own; else ``from``,
+   * for the files that are in it. */
   const bySource = (from: CollectionRow | null) => {
     const out = new Map<number, { c: CollectionRow; ids: string[] }>();
     for (const id of ids) {
       const c = homeOf ? homeOf(id) : from;
-      if (!c) continue;
+      if (!c || !c.members.some((m) => m.drive_id === id)) continue;
       const entry = out.get(c.id) ?? { c, ids: [] };
       entry.ids.push(id);
       out.set(c.id, entry);
@@ -182,9 +185,11 @@ export function SelectionActions({
       for (const g of groups) await members.mutateAsync({ id: g.c.id, removeMany: g.ids });
       done();
       const where = groups.length === 1 ? visible(groups[0].c.name) : `${groups.length} collections`;
+      const gone = groups.flatMap((g) => g.ids);
+      const which = gone.length === 1 ? visible(files.find((f) => f.drive_id === gone[0])!.name) : `${gone.length} files`;
       toast({
         kind: "info",
-        text: `Removed ${what} from ${where}`,
+        text: `Removed ${which} from ${where}`,
         action: undoAction(() => void Promise.all(groups.map((g) => members.mutateAsync({ id: g.c.id, add: g.ids }))).catch(fail)),
       });
     } catch (e) {
@@ -194,15 +199,23 @@ export function SelectionActions({
   const moveTo = async (name: string, isNew: boolean) => {
     try {
       const to = await target(name, isNew);
-      const groups = bySource(scope);
+      // files already in the target stay there: they only leave their own collection
+      const had = new Set(to && "members" in to ? to.members.map((m) => m.drive_id) : []);
+      const groups = bySource(scope).filter((g) => g.c.id !== to.id);
       for (const g of groups) await members.mutateAsync({ id: g.c.id, move: { to: to.id, ids: g.ids } });
       done();
+      const back = (g: { c: CollectionRow; ids: string[] }) => {
+        const moved = g.ids.filter((id) => !had.has(id));
+        const kept = g.ids.filter((id) => had.has(id));
+        return [
+          ...(moved.length ? [members.mutateAsync({ id: to.id, move: { to: g.c.id, ids: moved } })] : []),
+          ...(kept.length ? [members.mutateAsync({ id: g.c.id, add: kept })] : []),
+        ];
+      };
       toast({
         kind: "info",
         text: `Moved ${what} to ${visible(to.name)}`,
-        action: undoAction(
-          () => void Promise.all(groups.map((g) => members.mutateAsync({ id: to.id, move: { to: g.c.id, ids: g.ids } }))).catch(fail),
-        ),
+        action: groups.length ? undoAction(() => void Promise.all(groups.flatMap(back)).catch(fail)) : undefined,
       });
     } catch (e) {
       fail(e);
