@@ -322,6 +322,12 @@ preview with its toolbar (zoom, select box, print, open, show in Finder, open in
 checklist and history fold. A tray item with several files shows the collections of the
 file you chose.
 
+In the New look a summary is edited where it stands: click the text (or **Add a summary…**
+when there is none) and type; it is saved when you click elsewhere, and Esc puts the text
+back. A file's and a collection's summary work the same way, in the same grey box, with
+**Summarize with AI…** under the text. The Notes heading's tooltip says whose note it is
+("Note on this file", "Note on this collection").
+
 ## Filing codes
 
 When you scan a paper you usually know already what it is for: a bill to pay, something
@@ -1040,7 +1046,7 @@ item or still in the inbox), its child collections, its files, a note and a chec
 
 The New look draws the page as one header across the top (where the collection sits, its
 name, an Open / Closed pill, the counts, and **Add files**, **Show folder**, **Export…**
-and **⋯**), then the summary, **Needs attention** as a list, **Files** (for Important,
+and **⋯**), then the summary (the same box as a file's), **Needs attention** as a list, **Files** (for Important,
 **Files by group** with **New group** in its heading), and the note beside the checklist. **Add files** finds any
 file of the archive and puts it in the collection. The selected file's panel has the file
 actions (listed below) as one row of icons under its name instead of in the header, with

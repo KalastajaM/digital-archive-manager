@@ -44,7 +44,10 @@ async function summarize() {
   return screen.findByRole("region", { name: "AI summary" });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete document.documentElement.dataset.style;
+});
 
 describe("SummaryBox", () => {
   it("shows the user's current summary, through visible()", async () => {
@@ -194,5 +197,47 @@ describe("SummaryBox", () => {
     expect(await screen.findByText(/Turn on AI/)).toHaveTextContent("Activity → AI, or dam ai --on");
     expect(screen.queryByRole("button", { name: "Summarize with AI…" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Write a summary" })).toBeInTheDocument();
+  });
+
+  describe("New look: edited in place", () => {
+    it("a click on the text opens the field; leaving it saves the user's own text, with no Edit button", async () => {
+      document.documentElement.dataset.style = "new";
+      const calls = setup(USER);
+      const text = await screen.findByRole("button", { name: "My own words⟨U+202E⟩" });
+      expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+      await userEvent.click(text);
+      const field = screen.getByRole("textbox", { name: "Summary" });
+      await userEvent.clear(field);
+      await userEvent.type(field, "Paid in November");
+      await userEvent.tab();
+      await waitFor(() => expect(puts(calls)).toHaveLength(1));
+      expect(puts(calls)[0].body).toEqual({ source: "user", summary: "Paid in November", key_facts: [], replace: true });
+      expect(await screen.findByRole("button", { name: "Paid in November" })).toBeInTheDocument();
+    });
+
+    it("an empty summary is a placeholder to click into, not a Write a summary button; Esc and an empty field save nothing", async () => {
+      document.documentElement.dataset.style = "new";
+      const calls = setup(NONE);
+      await userEvent.click(await screen.findByRole("button", { name: "Add a summary…" }));
+      expect(screen.queryByRole("button", { name: "Write a summary" })).toBeNull();
+      await userEvent.type(screen.getByRole("textbox", { name: "Summary" }), "Draft");
+      await userEvent.keyboard("{Escape}");
+      await userEvent.click(await screen.findByRole("button", { name: "Add a summary…" }));
+      await userEvent.tab();
+      expect(await screen.findByRole("button", { name: "Add a summary…" })).toBeInTheDocument();
+      expect(puts(calls)).toHaveLength(0);
+    });
+
+    it("read-only: the text is plain and says why", async () => {
+      document.documentElement.dataset.style = "new";
+      mockFetch({
+        "GET /api/ai/status": { body: STATUS_ON },
+        "GET /api/files/d1/summary": { body: USER },
+      });
+      renderWithProviders(<SummaryBox driveId="d1" readOnly="It is in To Delete." />);
+      const text = await screen.findByText("My own words⟨U+202E⟩");
+      expect(text.tagName).toBe("P");
+      expect(text).toHaveAttribute("data-tip", "It is in To Delete.");
+    });
   });
 });

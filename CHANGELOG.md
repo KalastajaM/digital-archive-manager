@@ -56,6 +56,11 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Summaries are edited where they stand (New look).** A click on a file's or a
+  collection's summary makes it editable, and it saves when you click elsewhere; **Write a
+  summary** and **Edit** are gone. A collection's summary now has the file panel's summary
+  box. The note's label ("Note on this file") is the Notes heading's tooltip, and Notes and
+  Checklist on a collection are as far apart as other sections.
 - **A tray item opens in its tray from Browse.** The tray tag on a Browse row opens the
   item in its tray when clicked, and in the file panel the tray chip has an arrow and says
   which tray it opens.

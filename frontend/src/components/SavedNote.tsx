@@ -48,7 +48,7 @@ export function SavedNote({
     );
   }
   return (
-    <Collapsible name="notes" title="Notes" className="item-note" hint={firstLine(auto.shown) || "No note yet"}>
+    <Collapsible name="notes" title="Notes" className="item-note" tip={label} hint={firstLine(auto.shown) || "No note yet"}>
       <div onBlur={() => void auto.commit()} data-tip={readOnly ?? undefined}>
         <NoteEditor value={auto.shown} onChange={auto.change} label={label} disabled={readOnly !== null} />
         <SaveState status={auto.status} />

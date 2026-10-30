@@ -56,6 +56,7 @@ import { AddFile } from "../components/AddFile";
 import { Banner } from "../components/Banner";
 import { Checklist } from "../components/Checklist";
 import { Collapsible, firstLine } from "../components/Collapsible";
+import { SummaryText } from "../components/SummaryText";
 import { COLLECTION_NAME_MAX } from "../components/CollectionPicker";
 import { changeToast, CLOSE_CHILDREN_FIRST, NOT_SHOWN } from "../components/collectionText";
 import {
@@ -280,8 +281,9 @@ function RenameField({ name, busy, onSave, onCancel }: { name: string; busy: boo
   );
 }
 
-/** The collection's summary: a text field saved on blur. "Summarize with AI" (``ai``)
- * proposes one (``proposal``, with Use or Discard) and a line per group. */
+/** The collection's summary: a text field saved on blur (the New look: the file panel's
+ * summary box, edited in place). "Summarize with AI" (``ai``) proposes one (``proposal``,
+ * with Use or Discard) and a line per group. */
 function Summary({
   id,
   value,
@@ -300,44 +302,21 @@ function Summary({
   const auto = useAutoSave(value, async (summary: string) => (await save({ op: "summary", id, summary })).collection.summary);
   useAutoGrow(ref, auto.shown);
   const [look] = useStyle();
-  const [editing, setEditing] = useState(false);
   if (look === "new") {
-    // As drawn: a heading with Summarize with AI… and Edit, then the text as a paragraph; Edit opens the field.
-    const showField = editing || auto.status?.kind === "error";
+    // the file panel's summary box: the text edited in place, Summarize with AI… under it
     return (
-      <section className="collection-summary-new" aria-labelledby={`${fieldId}-h`}>
-        <div className="section-head">
-          <h2 id={`${fieldId}-h`}>Summary</h2>
-          {ai && <div className="collection-summary-tools">{ai}</div>}
-          <button type="button" className="link-button" aria-expanded={showField} onClick={() => setEditing((e) => !e)}>
-            {showField ? "Done" : "Edit"}
-          </button>
-        </div>
-        {showField ? (
-          <>
-            <label htmlFor={fieldId} className="visually-hidden">
-              Summary
-            </label>
-            <textarea
-              id={fieldId}
-              ref={ref}
-              className="collection-summary-text"
-              rows={3}
-              maxLength={4000}
-              autoFocus={editing}
-              placeholder="What is this collection about? Where does it stand?"
-              value={auto.shown}
-              onChange={(e) => auto.change(e.target.value)}
-              onBlur={() => void auto.commit()}
-            />
-          </>
-        ) : (
-          <p className={auto.shown.trim() ? "summary-text" : "summary-text is-empty"}>{auto.shown.trim() ? visible(auto.shown) : "No summary yet."}</p>
-        )}
-        <SaveState status={auto.status} />
+      <Collapsible name="summary" title="Summary" className="summary-box collection-summary-box" hint={firstLine(value) || "No summary yet."}>
+        <SummaryText
+          value={value}
+          allowEmpty
+          maxLength={4000}
+          placeholder="What is this collection about? Where does it stand?"
+          onSave={(summary) => save({ op: "summary", id, summary })}
+        />
         {proposal}
+        {ai && <div className="actions summary-actions">{ai}</div>}
         <AIHint what="to summarize" />
-      </section>
+      </Collapsible>
     );
   }
   return (
@@ -1830,7 +1809,7 @@ export default function CollectionDetail({
           </div>
           {result && <LastChange title={result.title} result={result.change} onDismiss={() => setResult(null)} />}
           <div className="collection-notes">
-            <SavedNote kind="collection" target={String(id)} label="Note" />
+            <SavedNote kind="collection" target={String(id)} label="Note on this collection" />
             <Checklist kind="collection" target={String(id)} />
           </div>
         </div>

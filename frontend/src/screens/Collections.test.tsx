@@ -629,7 +629,7 @@ describe("Collection detail", () => {
     const { calls, user } = renderCollections("/collections/7", {
       "PUT /api/notes/collection/7": { body: { text: "call Marco" } },
     });
-    const note = await within(panel()).findByRole("textbox", { name: "Note" });
+    const note = await within(panel()).findByRole("textbox", { name: "Note on this collection" });
     await user.type(note, "call Marco");
     await user.tab();
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
