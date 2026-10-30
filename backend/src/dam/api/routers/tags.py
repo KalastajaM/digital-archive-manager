@@ -105,6 +105,18 @@ def apply_tag(app: AppDep, body: FileTagApplyIn) -> dict:
     }
 
 
+@router.post("/remove-from", response_model=TagChangeOut)
+def remove_from(app: AppDep, body: FileTagApplyIn) -> dict:
+    """Take one tag off several files as one step; ``undo`` puts it back on exactly the
+    files that had it."""
+    undo = _guard(lambda: app.tag_admin.unapply(body.tag, body.drive_ids))
+    n = len(undo.restore[0].drive_ids)
+    return {
+        "message": f"Removed '{' '.join(body.tag.split())}' from {_files(n)}",
+        "undo": _undo_out(undo),
+    }
+
+
 @router.post("/rename", response_model=TagChangeOut)
 def rename_tag(app: AppDep, body: TagRenameIn) -> dict:
     """Rename a tag on every file. A name another tag has is refused (409): merge instead."""
