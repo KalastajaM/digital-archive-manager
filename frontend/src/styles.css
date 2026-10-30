@@ -1576,7 +1576,16 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 /* A collection above its files in Browse: as tall as its content, the details in two columns
  * (summary and Needs attention, then the note and checklist), one below 700px */
 .collection-scope { flex: none; border-bottom: 0.5px solid var(--separator); }
-.collection-scope > .collection-body { flex: none; overflow: visible; padding-bottom: var(--sp-4); }
+.collection-scope > .collection-body { flex: none; overflow: visible; padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
+.collection-scope > .collection-body:empty { display: none; }
+/* its header in the pane's bar, in place of the folder path: the name gives way first */
+.pane-scope { flex: 1 1 auto; min-width: 0; display: flex; }
+.scope-head { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--sp-2); }
+.scope-name { flex: 0 1 auto; min-width: 0; margin: 0; font-size: var(--fs-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-name .click-edit { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-head .collection-state { flex: none; }
+.scope-actions { flex: none; display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.scope-head .toolbar-rename { flex: 1 1 0; min-width: 0; }
 .collection-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-3) var(--sp-5); }
 .collection-details > .collection-notes, .collection-details > .collection-children { grid-column: 1 / -1; max-width: none; }
 @media (max-width: 700px) {

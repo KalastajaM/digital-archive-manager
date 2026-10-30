@@ -6,15 +6,19 @@
  * Keyboard (the tree view pattern, as the folder tree): ↑ and ↓ move, → opens a collection
  * (or steps into it), ← closes it (or steps out), Home and End go to the first and last, Enter
  * picks. */
-import { ChevronRight, Layers } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useState } from "react";
+import { ChevronRight, Layers, Plus } from "lucide-react";
+import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useState } from "react";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
 import { readDragFiles, readDragSource, useDropTarget } from "../dnd";
 import { visible } from "../text";
 import { childrenOf } from "./collectionTree";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
+import { NewCollectionSheet } from "./NewCollectionSheet";
+import { useToast } from "./Toasts";
+import { IconButton } from "./ui/IconButton";
 import { useAddToCollection } from "./useAddToCollection";
+import { useCollectionOrder, useOrderMenu } from "./useCollectionOrder";
 
 type Pick = (pick: ScopePick, add: boolean) => void;
 
@@ -27,6 +31,8 @@ type Shared = {
   active: ScopeState;
   onPick: Pick;
   collect: ReturnType<typeof useAddToCollection>;
+  /** A collection row's right-click menu (Open, New collection inside…, the order). */
+  onMenu: (c: CollectionRow) => (e: ReactMouseEvent) => void;
 };
 
 const ICON = { size: 14, strokeWidth: 1.75, "aria-hidden": true } as const;
@@ -46,6 +52,7 @@ function Row({
   onPick,
   shared,
   dropProps,
+  onContextMenu,
   children,
 }: {
   rowKey: string;
@@ -60,6 +67,7 @@ function Row({
   onPick: () => void;
   shared: Shared;
   dropProps?: object;
+  onContextMenu?: (e: ReactMouseEvent) => void;
   children?: ReactNode;
 }) {
   const go = (e: KeyboardEvent<HTMLLIElement>, key: string) =>
@@ -95,7 +103,13 @@ function Row({
       }}
       onKeyDown={onKeyDown}
     >
-      <div className={current ? "tree-row tree-current" : "tree-row"} style={{ paddingLeft: 8 + (level - 1) * 16 }} onClick={onPick} {...dropProps}>
+      <div
+        className={current ? "tree-row tree-current" : "tree-row"}
+        style={{ paddingLeft: 8 + (level - 1) * 16 }}
+        onClick={onPick}
+        onContextMenu={onContextMenu}
+        {...dropProps}
+      >
         <span
           className={onToggle ? (expanded ? "tree-chevron is-open" : "tree-chevron") : "tree-chevron is-none"}
           aria-hidden="true"
@@ -146,6 +160,7 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
       onPick={() => shared.onPick({ kind: "collection", name: c.name }, false)}
       shared={shared}
       dropProps={target.props}
+      onContextMenu={shared.onMenu(c)}
     >
       {expanded && (
         <ul role="group" className="tree-group">
@@ -161,6 +176,14 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
 export function CollectionTree({ active, onPick, head }: { active: ScopeState; onPick: Pick; head?: ReactNode }) {
   const list = useCollections("open");
   const collect = useAddToCollection();
+  const toast = useToast();
+  // New collection (at the top or inside one), then it opens: the tree's own pick
+  const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(null);
+  const order = useCollectionOrder(list.data ?? []);
+  const menu = useOrderMenu(order, (c) => [
+    { label: "Open", onSelect: () => onPick({ kind: "collection", name: c.name }, false) },
+    { label: "New collection inside…", onSelect: () => setCreating({ parent: c }) },
+  ]);
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
   const [focused, setFocused] = useState<string | null>(null);
   const toggle = (id: number, open?: boolean) =>
@@ -176,7 +199,7 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
   const shownKeys = (level: CollectionRow[]): string[] =>
     level.flatMap((c) => [`c${c.id}`, ...(folded.has(c.id) ? [] : shownKeys(kids.get(c.id) ?? []))]);
   const focusKey = focused !== null && ["important", "starred", ...shownKeys(top)].includes(focused) ? focused : "important";
-  const shared: Shared = { kids, folded, toggle, focusKey, setFocusKey: setFocused, active, onPick, collect };
+  const shared: Shared = { kids, folded, toggle, focusKey, setFocusKey: setFocused, active, onPick, collect, onMenu: menu.onContextMenu };
   const onKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]'));
@@ -195,6 +218,9 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
   return (
     <nav className="tree" aria-label="Collections">
       {head}
+      <div className="tree-tools">
+        <IconButton icon={<Plus />} label="New collection" onClick={() => setCreating({ parent: null })} />
+      </div>
       <ul role="tree" aria-label="Collection tree" className="tree-list" onKeyDown={onKeyDown}>
         <Row
           rowKey="important"
@@ -241,6 +267,18 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
           </li>
         )}
       </ul>
+      {menu.element}
+      {creating && (
+        <NewCollectionSheet
+          parent={creating.parent}
+          onCancel={() => setCreating(null)}
+          onCreated={(child) => {
+            setCreating(null);
+            toast({ kind: "info", text: creating.parent ? `Created ${child.name} inside ${creating.parent.name}` : `Created ${child.name}` });
+            onPick({ kind: "collection", name: child.name }, false);
+          }}
+        />
+      )}
     </nav>
   );
 }

@@ -104,5 +104,25 @@ describe("CollectionTree", () => {
     fireEvent.drop(row, { dataTransfer: dt });
     await waitFor(() => expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections/2/members/move")).toHaveLength(1));
   });
+
+  it("a collection's right-click menu opens it, makes one inside it, and moves it", async () => {
+    const { onPick, user } = setup([coll(1, "Legal"), coll(3, "Car")]);
+    const row = (await screen.findByText("Car")).closest(".tree-row") as HTMLElement;
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Open", "New collection inside…", "Move up", "Move down"]);
+    await user.click(within(menu).getByRole("menuitem", { name: "New collection inside…" }));
+    expect(await screen.findByRole("dialog", { name: /inside Car/ })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    await user.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "Open" }));
+    expect(onPick).toHaveBeenCalledWith({ kind: "collection", name: "Car" }, false);
+  });
+
+  it("New collection makes one at the top", async () => {
+    const { user } = setup([coll(1, "Legal")]);
+    await user.click(await screen.findByRole("button", { name: "New collection" }));
+    expect(await screen.findByRole("dialog", { name: "New collection" })).toBeInTheDocument();
+  });
 });
 

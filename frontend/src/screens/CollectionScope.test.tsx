@@ -121,4 +121,38 @@ describe("a collection above its files (scope)", () => {
     // the name is cut with an ellipsis; its hover text gives it in full
     expect(name.querySelector("[title]")?.getAttribute("title")).toContain(long);
   });
+
+  it("its actions are small icon buttons with a tooltip each", async () => {
+    setup();
+    await screen.findByText("Wills and deeds for the family");
+    for (const [label, tip] of [
+      ["Hide details", "Hide the details"],
+      ["Add files", "Put more files of the archive in this collection"],
+      ["Export…", "Export…"],
+    ]) {
+      const button = screen.getByRole("button", { name: label });
+      expect(button.querySelector("svg")).not.toBeNull();
+      expect(button.closest("[data-tip]")).toHaveAttribute("data-tip", expect.stringContaining(tip));
+    }
+  });
+
+  it("folded with nothing to show, it leaves no empty line", async () => {
+    const empty = { ...LEGAL, summary: "", members: [LEGAL.members[1]] };
+    mockFetch({
+      "GET /api/collections": { body: [{ ...empty, files: 0, open_checks: 0 }] },
+      "GET /api/collections/7": { body: empty },
+      "GET /api/collections/7/attention": { body: [] },
+      "GET /api/notes/collection/7": { body: { text: "" } },
+      "GET /api/checklist/collection/7": { body: [] },
+    });
+    localStorage.setItem("dam.collection.details.folded", "[7]");
+    renderWithProviders(
+      <MemoryRouter>
+        <CollectionDetail id={7} variant="scope" today="2026-10-30" />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("button", { name: "Show details" });
+    expect(document.querySelector(".collection-folded")).toBeNull();
+  });
 });
+

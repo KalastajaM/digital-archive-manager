@@ -212,8 +212,9 @@ export function useReorderRow(order: CollectionOrder, c: CollectionRow, inner: D
   return { zone, props: { ...(inner ?? {}), ...props, ...mark } };
 }
 
-/** A right-click menu with Move up / Move down for a collection row. */
-export function useOrderMenu(order: CollectionOrder) {
+/** A right-click menu with Move up / Move down for a collection row; ``first``: entries
+ * that come before them (Browse's tree: Open, New collection inside…). */
+export function useOrderMenu(order: CollectionOrder, first?: (c: CollectionRow) => { label: string; onSelect: () => void }[]) {
   const [menu, setMenu] = useState<{ x: number; y: number; c: CollectionRow } | null>(null);
   const element: ReactNode = menu && (
     <ContextMenu
@@ -221,6 +222,7 @@ export function useOrderMenu(order: CollectionOrder) {
       y={menu.y}
       label={`Order of ${visible(menu.c.name)}`}
       entries={[
+        ...(first?.(menu.c) ?? []),
         { label: "Move up", disabled: !order.canStep(menu.c, -1), onSelect: () => order.step(menu.c, -1) },
         { label: "Move down", disabled: !order.canStep(menu.c, 1), onSelect: () => order.step(menu.c, 1) },
         ...(order.canOut(menu.c) ? [{ label: "Move out one level", onSelect: () => order.out(menu.c) }] : []),

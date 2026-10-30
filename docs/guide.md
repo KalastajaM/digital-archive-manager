@@ -1043,9 +1043,10 @@ when they are moved or renamed. A file can be in several collections.
 
 A collection opens in Browse, with the **Collections** tree beside it (from the sidebar,
 the Collections page, Today, a file's panel or the search palette). Above its files is the
-collection itself: one header (where the collection sits, its name, an Open / Closed pill,
-the counts, and **Add files**, **Show folder**, **Export…**, **⋯** and **Hide details**),
-then its details: the summary and **Needs attention** side by side, its child collections,
+collection itself. Its name and an Open / Closed pill take the place of the folder path in
+the pane's bar, with its actions as icons (each says what it does when you hover it):
+**Hide details**, **Add files**, **Show folder**, **Export…** and **⋯** (Rename, Move to…,
+New collection inside…, Close and the rest). Below are its details: the summary and **Needs attention** side by side, its child collections,
 and the note beside the checklist. A click on a Needs attention entry selects that file in
 the list. **Hide details** folds the details to one line ("Summary · Needs attention 2 ·
 Checklist 1 of 3 · Note"); a click on any part opens them again, and each collection
@@ -1259,7 +1260,11 @@ list's width.
   search, shown as its chip (`collection:Car`, `tag:medical`), and a collection includes the
   collections inside it, with the collection's header and details above the files (see
   Collections). A second click replaces the first; Cmd-click (Ctrl-click) on a tag
-  adds it, and the chips' **All** / **Any** choose between both tags and either. Files
+  adds it, and the chips' **All** / **Any** choose between both tags and either. Right-click
+  a collection in the tree for Open, **New collection inside…** and Move up / Move down /
+  Move out one level; **+** above the tree makes a new collection. Right-click a tag for
+  Rename, Merge into, Pin to the sidebar, its group and Delete, as on the Tags screen (a
+  group: Rename group, Delete group); **+** beside the filter box makes a new tag. Files
   dropped on a collection in the tree are added to it, as in the sidebar. The choice of tree
   is kept in the address, so Back and a copied link keep it.
 - **Folders / Files** switches between the folder view and a flat list of every file below

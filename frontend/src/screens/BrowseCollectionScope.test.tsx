@@ -147,5 +147,15 @@ describe("a collection above its files in Browse", () => {
     list.resolve({ body: ALL });
     expect(await within(pane()).findByText("Wills and deeds")).toBeInTheDocument();
   });
+
+  it("puts the collection's name and its actions in the pane's bar, instead of the folder path", async () => {
+    setup("/browse?tree=collections&q=collection:Legal");
+    await within(pane()).findByText("Wills and deeds");
+    const bar = pane().querySelector(".pane-bar") as HTMLElement;
+    expect(await within(bar).findByRole("button", { name: "Rename Legal" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Hide details" })).toBeInTheDocument();
+    expect(within(bar).queryByRole("navigation", { name: /path|Breadcrumb|Folder/i })).toBeNull();
+    expect(within(bar).queryByText("Archive")).toBeNull();
+  });
 });
 
