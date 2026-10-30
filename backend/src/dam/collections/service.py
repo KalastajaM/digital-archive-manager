@@ -1396,6 +1396,59 @@ class CollectionService:
         if notify:
             self._changed()
 
+    # --- deleting -------------------------------------------------------------------
+
+    def subtree(self, collection_id: int) -> list[Collection]:
+        """The collection and every collection inside it (parents first); NotFound if
+        unknown, InvalidRequest for a built-in (they cannot be deleted)."""
+        with self.engine.connect() as conn:
+            if self._kind(conn, collection_id) is not None:
+                raise InvalidRequest("Important and Starred are built in: they cannot be deleted")
+        all_ = self.list(None)
+        out = [c for c in all_ if c.id == collection_id]
+        todo = [collection_id]
+        while todo:
+            pid = todo.pop(0)
+            for c in all_:
+                if c.parent_id == pid:
+                    out.append(c)
+                    todo.append(c.id)
+        return out
+
+    def close_tree(self, collection_id: int) -> list[int]:
+        """Mark the collection and everything inside it closed (DB only), so the Ongoing
+        sync takes their links down before ``delete_tree``. Returns their ids."""
+        ids = [c.id for c in self.subtree(collection_id)]
+        with write_tx(self.engine) as conn:
+            conn.execute(
+                update(collections)
+                .where(collections.c.id.in_(ids), collections.c.state == "open")
+                .values(state="closed", closed_at=time.time())
+            )
+        return ids
+
+    def delete_tree(self, collection_id: int) -> int:
+        """Delete the collection and everything inside it: memberships, notes, checklists
+        and the collections themselves (deepest first). Files are not touched. Returns how
+        many collections went."""
+        ids = [c.id for c in self.subtree(collection_id)]
+        targets = [str(i) for i in ids]
+        with write_tx(self.engine) as conn:
+            conn.execute(
+                delete(notes).where(
+                    notes.c.target_kind == "collection", notes.c.target_id.in_(targets)
+                )
+            )
+            conn.execute(
+                delete(checklist_items).where(
+                    checklist_items.c.target_kind == "collection",
+                    checklist_items.c.target_id.in_(targets),
+                )
+            )
+            for cid in reversed(ids):
+                conn.execute(delete(collections).where(collections.c.id == cid))
+        return len(ids)
+
     # --- merging --------------------------------------------------------------------
 
     @staticmethod

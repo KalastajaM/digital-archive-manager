@@ -67,7 +67,7 @@ from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
 from dam.settings_write import REMOVE, write_keys
 from dam.setup import NOT_CONFIGURED
-from dam.snapshots import BEFORE_GROUPS, BEFORE_MERGE, create_snapshot
+from dam.snapshots import BEFORE_DELETE, BEFORE_GROUPS, BEFORE_MERGE, create_snapshot
 from dam.tags import TagAdmin
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
@@ -542,6 +542,18 @@ class App:
                 label += ": " + ", ".join(f"{d.group} is now {d.name}" for d in renamed)
             self.sync_publishers(label=label)
         return done
+
+    def delete_collection(self, collection_id: int) -> tuple[int, object]:
+        """Delete the collection and everything inside it after a snapshot: first closed
+        and synced (its links in ##. Ongoing come down; a file of the user's there stays),
+        then the rows. Files are never touched. No Undo: the snapshot is the way back.
+        Returns (how many collections went, the sync's result or None)."""
+        name = self.collections.get(collection_id).name
+        self.collections.subtree(collection_id)  # a built-in is refused before anything
+        create_snapshot(self.app_paths, kind=BEFORE_DELETE)
+        self.collections.close_tree(collection_id)
+        result = self.sync_publishers(label=f"Deleted {name}") if self.archive_available else None
+        return self.collections.delete_tree(collection_id), result
 
     def merge_collections(self, from_id: int, to_id: int) -> object:
         """Merge ``from_id`` into ``to_id`` (``CollectionService.merge``) after a snapshot,

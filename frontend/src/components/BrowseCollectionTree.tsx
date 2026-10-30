@@ -14,6 +14,7 @@ import { readDragFiles, readDragSource, useDropTarget } from "../dnd";
 import { visible } from "../text";
 import { childrenOf } from "./collectionTree";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
+import { DeleteCollectionSheet } from "./DeleteCollectionSheet";
 import { MergeCollectionSheet } from "./MergeCollectionSheet";
 import { NewCollectionSheet } from "./NewCollectionSheet";
 import { useToast } from "./Toasts";
@@ -174,7 +175,18 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
   );
 }
 
-export function CollectionTree({ active, onPick, head }: { active: ScopeState; onPick: Pick; head?: ReactNode }) {
+export function CollectionTree({
+  active,
+  onPick,
+  head,
+  onDeleted,
+}: {
+  active: ScopeState;
+  onPick: Pick;
+  head?: ReactNode;
+  /** After a delete from the tree: the collection's name (Browse leaves its search). */
+  onDeleted?: (name: string) => void;
+}) {
   const list = useCollections("open");
   const collect = useAddToCollection();
   const toast = useToast();
@@ -182,10 +194,12 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
   const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(null);
   const order = useCollectionOrder(list.data ?? []);
   const [merging, setMerging] = useState<CollectionRow | null>(null);
+  const [deleting, setDeleting] = useState<CollectionRow | null>(null);
   const menu = useOrderMenu(order, (c) => [
     { label: "Open", onSelect: () => onPick({ kind: "collection", name: c.name }, false) },
     { label: "New collection inside…", onSelect: () => setCreating({ parent: c }) },
     { label: "Merge into…", onSelect: () => setMerging(c) },
+    { label: "Delete…", onSelect: () => setDeleting(c) },
   ]);
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
   const [focused, setFocused] = useState<string | null>(null);
@@ -271,6 +285,17 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
         )}
       </ul>
       {menu.element}
+      {deleting && (
+        <DeleteCollectionSheet
+          c={deleting}
+          onCancel={() => setDeleting(null)}
+          onDone={(n) => {
+            setDeleting(null);
+            toast({ kind: "info", text: n === 1 ? `Deleted ${deleting.name}` : `Deleted ${deleting.name} and the ${n - 1} inside it` });
+            onDeleted?.(deleting.name);
+          }}
+        />
+      )}
       {merging && (
         <MergeCollectionSheet
           c={merging}

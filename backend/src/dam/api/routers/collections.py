@@ -30,6 +30,8 @@ from dam.api.schemas import (
     CollectionMoveBody,
     CollectionOut,
     CollectionRowOut,
+    DeleteOut,
+    DeletePreviewOut,
     DriveIdBody,
     DriveIdsBody,
     GroupCreateBody,
@@ -228,6 +230,31 @@ def move_members(app: AppDep, collection_id: int, body: MoveMembersBody) -> dict
     source = app.collections.get(collection_id)
     c = app.collections.move_members(collection_id, body.to, body.drive_ids, notify=False)
     return synced(app, c.id, f"Moved {what} from {source.name} to {c.name}")
+
+
+@router.get("/{collection_id}/delete/preview", response_model=DeletePreviewOut)
+def delete_preview(app: AppDep, collection_id: int) -> dict:
+    """What a delete takes: the collection and every one inside it, each with its state
+    and how many files it holds. Reads only; 400 for a built-in."""
+    return {
+        "collections": [
+            {"id": c.id, "name": c.name, "state": c.state, "files": len(c.members)}
+            for c in app.collections.subtree(collection_id)
+        ]
+    }
+
+
+@router.post("/{collection_id}/delete", response_model=DeleteOut)
+def delete_collection(app: AppDep, collection_id: int) -> dict:
+    """Delete the collection and every one inside it (snapshot first, no Undo; files are
+    never touched)."""
+    deleted, result = app.delete_collection(collection_id)
+    batch = asdict(result.batch) if result is not None and result.batch is not None else None
+    return {
+        "deleted": deleted,
+        "batch": batch,
+        "problems": list(result.problems) if result is not None else [],
+    }
 
 
 @router.post("/{collection_id}/merge/preview", response_model=MergePreviewOut)

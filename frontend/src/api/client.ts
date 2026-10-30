@@ -1683,6 +1683,18 @@ export const useSetCollectionParent = () => {
   });
 };
 
+/** Delete a collection with everything inside it (no Undo: a snapshot is taken first;
+ * files are never touched). ``preview`` lists what goes. */
+export const useDeleteCollection = () => {
+  const refresh = useRefresh(); // takes links down in ##. Ongoing: Activity and Browse too
+  const remove = useMutation({
+    mutationFn: (id: number) => apiPost("/api/collections/{collection_id}/delete", { path: { collection_id: id } }),
+    onSettled: refresh,
+  });
+  const preview = (id: number) => apiGet("/api/collections/{collection_id}/delete/preview", { path: { collection_id: id } }).then((r) => r.collections);
+  return { remove, preview };
+};
+
 /** Merge a collection into another (no Undo: a snapshot is taken first). ``check`` says
  * why it cannot be (empty: it can); ``merge`` does it and answers with the target. */
 export const useMergeCollection = () => {

@@ -2469,7 +2469,12 @@ export default function Browse() {
           {(treeDocked || treeOverlay) && (
             <>
               {treeKind === "collections" ? (
-                <CollectionTree active={scopeOf(filters)} onPick={pickScope} head={treeSwitch} />
+                <CollectionTree
+                  active={scopeOf(filters)}
+                  onPick={pickScope}
+                  head={treeSwitch}
+                  onDeleted={(name) => setFilters(filters.filter((f) => !(f.name === "collection" && f.value.toLowerCase() === name.toLowerCase())))}
+                />
               ) : treeKind === "tags" ? (
                 <TagTree active={scopeOf(filters)} onPick={pickScope} head={treeSwitch} />
               ) : (
