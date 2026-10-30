@@ -23,7 +23,7 @@ def test_marking_your_own_id_saves_it_and_shows_it(app, fake_archive):
         assert done.status_code == 200 and done.json() == {"changed": 0, "own": True}
         assert app.settings.own_business_ids == [YT]
         assert packs.active().own_ids == {YT}
-        saved = yaml.safe_load((app.app_paths.config_dir / "settings.yaml").read_text())
+        saved = yaml.safe_load((app.app_paths.config_dir / "settings.yaml").read_text(encoding="utf-8"))
         assert saved["own_business_ids"] == [YT]
         found = c.get("/api/files/b0/identifiers").json()["identifiers"]
         assert [(i["value"], i["own"]) for i in found] == [(YT, True)]
