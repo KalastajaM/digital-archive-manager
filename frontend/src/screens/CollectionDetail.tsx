@@ -34,6 +34,7 @@ import {
   type GroupChange,
   type Member,
   type ResolvedOp,
+  useChecklist,
   useCollection,
   useCollectionAttention,
   useCollectionChange,
@@ -46,6 +47,7 @@ import {
   useSetCollectionParent,
   LOCKED_REASON,
   useIsBlocked,
+  useNote,
   useStatus,
 } from "../api/client";
 import { AIProposal } from "../components/ai/AIProposal";
@@ -835,11 +837,35 @@ function trashRefusal(m: Member): string | null {
   return deletionRefusal(m.path, m.marks);
 }
 
+/** Where Browse remembers which collections have their details folded (per archive). */
+export const DETAILS_FOLDED_KEY = "dam.collection.details.folded";
+function readDetailsFolded(id: number): boolean {
+  try {
+    const ids: unknown = JSON.parse(localStorage.getItem(archiveKey(DETAILS_FOLDED_KEY)) ?? "[]");
+    return Array.isArray(ids) && ids.includes(id);
+  } catch {
+    return false; // storage blocked: open
+  }
+}
+function writeDetailsFolded(id: number, folded: boolean) {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(archiveKey(DETAILS_FOLDED_KEY)) ?? "[]");
+    const ids = new Set(Array.isArray(raw) ? raw.filter((x): x is number => typeof x === "number") : []);
+    if (folded) ids.add(id);
+    else ids.delete(id);
+    localStorage.setItem(archiveKey(DETAILS_FOLDED_KEY), JSON.stringify([...ids]));
+  } catch {
+    // storage blocked: the choice lasts while the page is open
+  }
+}
+
 export default function CollectionDetail({
   id,
   today: fixed,
   banner,
   subtitleExtra,
+  variant = "page",
+  onSelectFile,
 }: {
   id: number;
   today?: string;
@@ -847,7 +873,21 @@ export default function CollectionDetail({
   banner?: ReactNode;
   /** More for the toolbar subtitle, after the count. */
   subtitleExtra?: string;
+  /** "scope": the collection above its files in Browse: the header and the details
+   * (foldable), without the member tree, the side panel and the file actions. */
+  variant?: "page" | "scope";
+  /** In "scope": a Needs attention entry selects that file in Browse's list. */
+  onSelectFile?: (driveId: string) => void;
 }) {
+  const scope = variant === "scope";
+  // In Browse the details fold to one line; each collection remembers it.
+  const [detailsHidden, setDetailsHidden] = useState(() => scope && readDetailsFolded(id));
+  const hideDetails = (hidden: boolean) => {
+    setDetailsHidden(hidden);
+    writeDetailsFolded(id, hidden);
+  };
+  const noteData = useNote("collection", String(id));
+  const checks = useChecklist("collection", String(id));
   const local = useLocalToday();
   const today = fixed ?? local;
   const split = useSplitWidth(archiveKey("dam.collection.inspectorwidth"), { min: 230, max: Infinity, initial: 380, unit: "px", edge: "end" });
@@ -1524,10 +1564,21 @@ export default function CollectionDetail({
     </>
   );
 
+  // the folded details: what each part holds, in one line (empty parts are left out)
+  const doneChecks = (checks.data ?? []).filter((x) => x.done).length;
+  const foldedParts = [
+    ...(c.summary.trim() ? ["Summary"] : []),
+    ...(attention.data && attention.data.length > 0 ? [`Needs attention ${attention.data.length}`] : []),
+    ...((checks.data ?? []).length > 0 ? [`Checklist ${doneChecks} of ${(checks.data ?? []).length}`] : []),
+    ...(noteData.data?.text.trim() ? ["Note"] : []),
+  ];
+  // folder members: their files show in Browse's list; the folders themselves open from here
+  const folders = c.members.filter((m) => m.is_dir && m.path && !m.missing && !m.quarantined);
+
   const parentName = (g: Group) => (g.parent_id === null ? null : c.groups.find((x) => x.id === g.parent_id)?.name ?? null);
 
   return (
-    <div className="collection">
+    <div className={scope ? "collection collection-scope" : "collection"}>
         {isNew ? (
           <header className="collection-head">
             <div className="collection-head-main">
@@ -1568,7 +1619,7 @@ export default function CollectionDetail({
                     {builtin ? (
                       name
                     ) : (
-                      <ClickToEdit label={`Rename ${name}`} tip="Click to rename" onClick={() => !busy && setRenaming(true)}>
+                      <ClickToEdit label={`Rename ${name}`} tip={name.length > 40 ? `${name}\nClick to rename` : "Click to rename"} onClick={() => !busy && setRenaming(true)}>
                         {name}
                       </ClickToEdit>
                     )}
@@ -1581,9 +1632,15 @@ export default function CollectionDetail({
               </div>
             </div>
             <div className="toolbar-actions" role="toolbar" aria-label={`${name} actions`}>
-              <button type="button" className="details-button" aria-expanded={detailsOpen} title="Show the selected file" onClick={() => setDetailsOpen((o) => !o)}>
-                File details
-              </button>
+              {scope ? (
+                <button type="button" aria-expanded={!detailsHidden} onClick={() => hideDetails(!detailsHidden)}>
+                  {detailsHidden ? "Show details" : "Hide details"}
+                </button>
+              ) : (
+                <button type="button" className="details-button" aria-expanded={detailsOpen} title="Show the selected file" onClick={() => setDetailsOpen((o) => !o)}>
+                  File details
+                </button>
+              )}
               {!builtin && (
                 <button type="button" disabled={busy || !isOpen} title={isOpen ? "Put more files of the archive in this collection" : "A closed collection takes no new files"} onClick={() => setAddingFiles(true)}>
                   Add files
@@ -1605,7 +1662,7 @@ export default function CollectionDetail({
         <Toolbar
           className="collection-toolbar"
           style={split.hostStyle}
-          trailing={fileBar}
+          trailing={scope ? undefined : fileBar}
           title={name}
           titleEditor={renaming ? <RenameField name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} /> : undefined}
           subtitle={subtitle}
@@ -1621,10 +1678,82 @@ export default function CollectionDetail({
               </span>
               <IconButton icon={<Share {...ICON} />} label="Export…" className={foldable} onClick={() => setExporting(true)} />
               {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={moreEntries} align="end" />}
+              {scope && (
+                <button type="button" aria-expanded={!detailsHidden} onClick={() => hideDetails(!detailsHidden)}>
+                  {detailsHidden ? "Show details" : "Hide details"}
+                </button>
+              )}
             </>
           }
         />
         )}
+      {scope ? (
+        <div className="collection-body">
+          {c.ongoing_status && <Banner message={visible(c.ongoing_status)} />}
+          {error && (
+            <p className="error" role="alert">
+              {visible(error)}
+            </p>
+          )}
+          {folders.length > 0 && (
+            <nav className="collection-folders" aria-label="Folders in this collection">
+              <span>Folders in this collection:</span>
+              {folders.map((m) => (
+                <Link key={m.drive_id} to={`/browse?${new URLSearchParams({ path: m.path! })}`} title={visible(m.path!)}>
+                  {memberName(m)}
+                </Link>
+              ))}
+            </nav>
+          )}
+          {detailsHidden ? (
+            <p className="collection-folded">
+              {foldedParts.map((part, i) => (
+                <span key={part}>
+                  {i > 0 && " · "}
+                  <button type="button" className="link-button" onClick={() => hideDetails(false)}>
+                    {part}
+                  </button>
+                </span>
+              ))}
+            </p>
+          ) : (
+            <div className="collection-details">
+              <Summary
+                key={id}
+                id={id}
+                value={c.summary}
+                save={save}
+                ai={
+                  ai.on && (
+                    <button type="button" className="ai-action" disabled={summarize.busy} onClick={() => summarize.ask({ collection_id: id })}>
+                      <Sparkles size={14} aria-hidden="true" />
+                      Summarize with AI…
+                    </button>
+                  )
+                }
+                proposal={
+                  shownProposal?.summary && (
+                    <AIProposal
+                      label="AI summary of the collection"
+                      text={shownProposal.summary}
+                      busy={usingBusy}
+                      onUse={() => void applyProposal("collection", shownProposal.summary!)}
+                      onDiscard={() => dropProposal("collection")}
+                    />
+                  )
+                }
+              />
+              <Attention members={c.members} attention={attention.data} onSelect={(driveId) => onSelectFile?.(driveId)} />
+              {!builtin && <ChildCollections id={id} all={allCollections.data ?? []} />}
+              <div className="collection-notes">
+                <SavedNote kind="collection" target={String(id)} label="Note" />
+                <Checklist kind="collection" target={String(id)} />
+              </div>
+            </div>
+          )}
+          {result && <LastChange title={result.title} result={result.change} onDismiss={() => setResult(null)} />}
+        </div>
+      ) : (
       <div className="collection-cols" ref={split.hostRef} style={split.hostStyle} data-details={isNew && detailsOpen ? "open" : undefined}>
       <div className="collection-main">
         <div className="collection-body">
@@ -1731,6 +1860,7 @@ export default function CollectionDetail({
       />
       )}
       </div>
+      )}
       {quickLook.view}
       {trash.view}
       {filingAI.sheet}

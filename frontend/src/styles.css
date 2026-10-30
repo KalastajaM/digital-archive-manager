@@ -1573,6 +1573,18 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 .drag-image { padding: 4px 10px; border-radius: var(--r-pill); background: var(--accent-fill); color: var(--on-accent); font: 500 var(--fs-sm) / 1.4 var(--font); box-shadow: var(--shadow-pop); white-space: nowrap; }
 
 .collection-notes { border-top: 0.5px solid var(--separator); padding-top: var(--sp-3); max-width: 760px; }
+/* A collection above its files in Browse: as tall as its content, the details in two columns
+ * (summary and Needs attention, then the note and checklist), one below 700px */
+.collection-scope { flex: none; border-bottom: 0.5px solid var(--separator); }
+.collection-scope > .collection-body { flex: none; overflow: visible; padding-bottom: var(--sp-4); }
+.collection-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-3) var(--sp-5); }
+.collection-details > .collection-notes, .collection-details > .collection-children { grid-column: 1 / -1; max-width: none; }
+@media (max-width: 700px) {
+  .collection-details { grid-template-columns: minmax(0, 1fr); }
+}
+.collection-folded { margin: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collection-folders { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); color: var(--muted); }
+.collection-folders a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .collection-notes .item-note { margin-top: 0; }
 .collection-body > .plan-preview { max-width: 760px; margin-bottom: var(--sp-4); }
 
