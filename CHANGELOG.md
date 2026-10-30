@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Your own business ID.** In Found in this document, **Mine** marks a business ID as
+  yours: it names no sender, links no files in Relatives and does not count for `id:*`.
+  Settings, Senders shows it as Yours, with **Not mine** to undo it.
+
 - In Settings, Senders, the number of documents is a link that opens Browse on the
   documents carrying that business ID.
 - **Collections and tags in Browse.** The tree beside Browse's panes switches between
@@ -72,6 +76,15 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- **Fewer things taken for dates.** A lower-case "may" or "march" is a word, not a month
+  (English month names count when written with a capital), and a version or a phone number
+  written like a date ("version 1-2-2026", "puh. 09-12-2026") is no date.
+- **`id:`, `iban:` and `domain:` take a value as you would write it.** `id:www.kela.fi` and
+  `id:info@kela.fi` find kela.fi, and `a-b.fi` is no longer taken for `ab.fi`. Searches by a
+  value are also quicker on a large archive.
+- **Found in this document stays current**: it updates after you change the countries in
+  Settings, and while the background reading of identifiers is still going.
+- **First-run setup says why** it could not save the countries, instead of failing.
 - In Reading documents, **Reset to default** lines up with the address area fields and
   **Save address area** sits on the left.
 - **Relatives no longer runs into the identifiers above it.** In the file panel a hairline

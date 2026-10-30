@@ -18,6 +18,7 @@ from sqlalchemy import (
     not_,
     or_,
     select,
+    tuple_,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
@@ -140,18 +141,37 @@ class ReadsMixin:
             .exists()
         )
 
-    def next_for_identifiers(self, limit: int, signature: str) -> list[tuple[str, str, str]]:
-        """(drive_id, sha256, text) of indexed files whose current content was not read
-        with the packs of ``signature``."""
-        stmt = (
-            select(files.c.drive_id, files.c.sha256, file_text.c.text)
+    def next_for_identifiers(
+        self, limit: int, signature: str, max_chars: int = 20_000_000
+    ) -> list[tuple[str, str, str]]:
+        """(drive_id, sha256, text) of up to ``limit`` indexed files whose current content
+        was not read with the packs of ``signature``, together at most ``max_chars`` of
+        text (a single larger text is still returned, alone)."""
+        pending = (
+            select(files.c.drive_id, func.length(file_text.c.text).label("size"))
             .join(file_text, file_text.c.drive_id == files.c.drive_id)
             .where(self._readable(), not_(self._read_with(signature)))
             .order_by(files.c.drive_id)
             .limit(limit)
         )
         with self._conn() as conn:
-            return [(r.drive_id, r.sha256, r.text or "") for r in conn.execute(stmt).all()]
+            chosen: list[str] = []
+            total = 0
+            for r in conn.execute(pending).all():
+                size = r.size or 0
+                if chosen and total + size > max_chars:
+                    break
+                chosen.append(r.drive_id)
+                total += size
+            if not chosen:
+                return []
+            rows = conn.execute(
+                select(files.c.drive_id, files.c.sha256, file_text.c.text)
+                .join(file_text, file_text.c.drive_id == files.c.drive_id)
+                .where(files.c.drive_id.in_(chosen))
+                .order_by(files.c.drive_id)
+            ).all()
+        return [(r.drive_id, r.sha256, r.text or "") for r in rows]
 
     def save_identifiers(
         self,
@@ -228,8 +248,34 @@ class ReadsMixin:
         with self._conn() as conn:
             return [r.drive_id for r in conn.execute(stmt).all()]
 
+    def identifier_counts(self, pairs: Sequence[tuple[str, str]]) -> dict[tuple[str, str], int]:
+        """For each (kind, value), how many files there (not missing, not parked) carry it in
+        their current content; one query, pairs no file carries are left out."""
+        out: dict[tuple[str, str], int] = {}
+        with self._conn() as conn:
+            for chunk in chunks(list(dict.fromkeys(pairs))):
+                rows = conn.execute(
+                    select(file_identifiers.c.kind, file_identifiers.c.value, func.count())
+                    .join(files, files.c.drive_id == file_identifiers.c.drive_id)
+                    .where(
+                        tuple_(file_identifiers.c.kind, file_identifiers.c.value).in_(chunk),
+                        files.c.sha256 == file_identifiers.c.sha256,
+                        files.c.missing.is_not(True),
+                        files.c.parked_at.is_(None),
+                    )
+                    .group_by(file_identifiers.c.kind, file_identifiers.c.value)
+                ).all()
+                out.update(((r[0], r[1]), r[2]) for r in rows)
+        return out
+
     def identifier_progress(self, signature: str) -> tuple[int, int]:
-        """(read, total): indexed files with text whose content was read with ``signature``."""
+        """(read, total): indexed files with text whose content was read with ``signature``.
+        Kept until the next write (the status bar asks every few seconds)."""
+        return self._kept_answer(
+            ("identifier_progress", signature), lambda: self._identifier_progress(signature)
+        )
+
+    def _identifier_progress(self, signature: str) -> tuple[int, int]:
         base = select(func.count()).select_from(
             files.join(file_text, file_text.c.drive_id == files.c.drive_id)
         )

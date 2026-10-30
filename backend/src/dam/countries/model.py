@@ -28,6 +28,9 @@ class IdentifierSpec:
     find: Callable[[str], list[str]]
     names_sender: bool
     name: Callable[[str, str], str | None] | None = None
+    # found only next to its label (no check digit, or one a personal number shares): a
+    # bare value typed into a search cannot be read by ``find``
+    needs_label: bool = False
 
 
 @dataclass(frozen=True)

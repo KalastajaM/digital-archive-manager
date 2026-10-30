@@ -94,6 +94,7 @@ class IdentifierNameOut(BaseModel):
     name: str | None
     set_at: float | None
     filled: int
+    own: bool  # the owner's own business ID: no name, no sender
 
 
 class IdentifierNamesOut(BaseModel):
@@ -112,6 +113,19 @@ class IdentifierNameIn(StrictIn):
 class IdentifierNameDoneOut(BaseModel):
     changed: int  # documents whose From changed
     name: str | None  # the name as kept, None once cleared
+
+
+class OwnIdentifierIn(StrictIn):
+    """Mark a business ID found in a document as the owner's own, or not."""
+
+    kind: str
+    value: str
+    own: bool
+
+
+class OwnIdentifierDoneOut(BaseModel):
+    changed: int  # documents whose From changed
+    own: bool
 
 
 class CountryOut(BaseModel):

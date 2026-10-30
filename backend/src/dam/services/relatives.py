@@ -315,8 +315,10 @@ class RelativesService:
 
     def _business_ids(self, conn: Connection, subject: str, hits: dict) -> None:
         """Files whose current content carries a business ID this one carries: the enabled
-        packs' identifiers that name a sender, not a web domain (shared too widely)."""
-        kinds = packs.business_id_kinds(packs.active())
+        packs' identifiers that name a sender, not a web domain (shared too widely), and not
+        the owner's own (on every letter they write)."""
+        profile = packs.active()
+        kinds = packs.business_id_kinds(profile)
         if not kinds:
             return
         current = and_(
@@ -326,7 +328,11 @@ class RelativesService:
         mine = conn.execute(
             select(file_identifiers.c.kind, file_identifiers.c.value)
             .join(files, current)
-            .where(file_identifiers.c.drive_id == subject, file_identifiers.c.kind.in_(kinds))
+            .where(
+                file_identifiers.c.drive_id == subject,
+                file_identifiers.c.kind.in_(kinds),
+                file_identifiers.c.value.not_in(profile.own_ids),
+            )
         ).all()
         for kind, value in mine:
             others = (

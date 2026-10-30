@@ -18,3 +18,6 @@ class LanguagePack:
     kind_words: tuple[str, ...] = ()
     # the 12 months, each as the folded forms written in dates ("15 oktober 2026")
     months: tuple[tuple[str, ...], ...] = ()
+    # month words that are also everyday words in this language ("may", "march"): they
+    # count as months only when written with a capital
+    capital_only: tuple[str, ...] = ()

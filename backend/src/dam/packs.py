@@ -1,4 +1,4 @@
-"""The packs detection uses now: a ``Profile`` of the enabled country and language packs,
+"""The packs detection uses now: a ``PackProfile`` of the enabled country and language packs,
 with their label patterns and word sets built once. The App activates the profile its
 settings ask for, at start and whenever they change; detection reads ``active()``. One
 archive is open per process, so one profile is active at a time."""
@@ -16,7 +16,7 @@ DEFAULT_LANGUAGES = languages.DEFAULT_LANGUAGES
 
 
 @dataclass(frozen=True)
-class Profile:
+class PackProfile:
     countries: tuple[CountryPack, ...]  # the core pack first
     languages: tuple[LanguagePack, ...]
     due_labels: re.Pattern[str]
@@ -25,11 +25,18 @@ class Profile:
     stopwords: frozenset[str]
     kind_words: frozenset[str]
     months: dict[str, int]  # folded month word -> 1..12
+    # month words that are also everyday words: they count only with a capital (unless
+    # another enabled language has them as plain month names)
+    capital_months: frozenset[str]
     # where the addressee sits on page 1: the first enabled country that has a standard
     address_zone: tuple[float, float, float, float] | None
+    # the owner's own business IDs (settings ``own_business_ids``): read, never a sender's
+    own_ids: frozenset[str] = frozenset()
 
 
-def build(country_codes: Sequence[str], language_codes: Sequence[str]) -> Profile:
+def build(
+    country_codes: Sequence[str], language_codes: Sequence[str], own_ids: Sequence[str] = ()
+) -> PackProfile:
     """``ValueError`` naming an unknown code."""
     cs = tuple(countries.enabled(country_codes))
     ls = tuple(languages.enabled(language_codes))
@@ -38,7 +45,7 @@ def build(country_codes: Sequence[str], language_codes: Sequence[str]) -> Profil
         for number, forms in enumerate(pack.months, start=1):
             for form in forms:
                 months.setdefault(form, number)
-    return Profile(
+    return PackProfile(
         countries=cs,
         languages=ls,
         due_labels=languages.label_pattern(w for p in ls for w in p.due_labels),
@@ -48,11 +55,18 @@ def build(country_codes: Sequence[str], language_codes: Sequence[str]) -> Profil
         stopwords=frozenset(w for p in ls for w in p.stopwords),
         kind_words=frozenset(w for p in ls for w in p.kind_words),
         months=months,
+        capital_months=frozenset(
+            form
+            for p in ls
+            for form in p.capital_only
+            if not any(form in fs and form not in q.capital_only for q in ls for fs in q.months)
+        ),
         address_zone=next((c.address_zone for c in cs if c.address_zone is not None), None),
+        own_ids=frozenset(own_ids),
     )
 
 
-def business_id_kinds(profile: Profile) -> list[str]:
+def business_id_kinds(profile: PackProfile) -> list[str]:
     """The identifier kinds that are business IDs (a Y-tunnus, later a btw-id): they name
     one organisation; not IBANs (``names_sender`` false) or web and mail domains (shared
     too widely)."""
@@ -64,7 +78,7 @@ def business_id_kinds(profile: Profile) -> list[str]:
     ]
 
 
-def identifier_kinds(profile: Profile) -> dict[str, list[str]]:
+def identifier_kinds(profile: PackProfile) -> dict[str, list[str]]:
     """The enabled identifier kinds by the search filter that finds them: ``id`` the
     business IDs, ``iban`` the IBANs, ``domain`` the web and mail domains."""
     every = [s.kind for p in profile.countries for s in p.identifiers]
@@ -75,15 +89,15 @@ def identifier_kinds(profile: Profile) -> dict[str, list[str]]:
     }
 
 
-_active: Profile | None = None
+_active: PackProfile | None = None
 
 
-def activate(profile: Profile) -> None:
+def activate(profile: PackProfile) -> None:
     global _active
     _active = profile
 
 
-def active() -> Profile:
+def active() -> PackProfile:
     """The activated profile; the default packs until one is activated."""
     global _active
     if _active is None:

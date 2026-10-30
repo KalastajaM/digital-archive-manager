@@ -192,6 +192,23 @@ def _local_epoch(day: date) -> float:
     return datetime(day.year, day.month, day.day).timestamp()  # the machine's time zone
 
 
+def _id_pairs(value: str, kinds: list[str]) -> list[tuple[str, str]]:
+    """(kind, value) as stored, for what was typed: each enabled pack's finder reads it as
+    written and in the bare forms people type (``kela.fi`` without www., ``01120389``
+    without the dash, lower case), so the lookup is exact and can use the index."""
+    specs = [s for p in packs.active().countries for s in p.identifiers if s.kind in kinds]
+    typed = value.strip()
+    compact = re.sub(r"[\s-]", "", typed)
+    variants = [typed, typed.upper(), f"www.{typed}"]
+    if re.fullmatch(r"\d{8}", compact):
+        variants.append(f"{compact[:7]}-{compact[7]}")  # a business ID without its dash
+    pairs: list[tuple[str, str]] = []
+    for spec in specs:
+        for variant in variants:
+            pairs += [(spec.kind, v) for v in spec.find(variant)]
+    return list(dict.fromkeys(pairs))
+
+
 def _id_keys(value: str) -> list[str]:
     """``value`` without spaces, dashes or case, as stored values are compared; the VAT
     form of a Finnish business ID (FI01120389) also as its eight digits."""
@@ -256,12 +273,27 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
         groups = packs.identifier_kinds(packs.active())
         if v == ANY:
             kinds, match = groups[f.name], ""
+            own = sorted(packs.active().own_ids) if f.name == "id" else []
+            if own:  # the owner's own business ID is on everything they sent: not "any"
+                match = f" AND i.value NOT IN ({w.marks(own)})"
         else:
             kinds = [k for ks in groups.values() for k in ks] if f.name == "id" else groups[f.name]
-            match = (
-                " AND REPLACE(REPLACE(UPPER(i.value), ' ', ''), '-', '') "
-                f"IN ({w.marks(_id_keys(v))})"
-            )
+            pairs = _id_pairs(v, kinds)
+            # what a finder read: an exact lookup by kind and value; kinds found only next
+            # to their label (a KvK number) cannot read a bare value: compared without
+            # spaces, dashes or case
+            exact = [f"(i.kind = {w.bind(k)} AND i.value = {w.bind(x)})" for k, x in pairs]
+            labelled = {
+                s.kind for p in packs.active().countries for s in p.identifiers if s.needs_label
+            }
+            rest = [k for k in kinds if k in labelled]
+            if rest:
+                exact.append(
+                    f"(i.kind IN ({w.marks(rest)}) AND "
+                    "REPLACE(REPLACE(UPPER(i.value), ' ', ''), '-', '') "
+                    f"IN ({w.marks(_id_keys(v))}))"
+                )
+            match = " AND (" + " OR ".join(exact) + ")" if exact else " AND 0"
         w.add(
             "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
             "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "

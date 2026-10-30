@@ -18,6 +18,10 @@ _DATE_ISO = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)", re.ASCII)
 _DATE_DMY_SEP = re.compile(
     r"(?<!\d)(?<!\d[-/])(\d{1,2})([-/])(\d{1,2})\2(\d{4})(?![\d/-])", re.ASCII
 )
+# a version or a phone number written like a date: "version 1-2-2026", "puh. 09-12-2026"
+_NOT_A_DATE_BEFORE = re.compile(
+    r"\b(?:version|ver|puh|puhelin|tel|phone|gsm|fax|mob|matkapuh)\.?\s*:?\s*$", re.IGNORECASE
+)
 # a month name, on folded text: "15 oktober 2026", "15. lokakuuta 2026", "October 15, 2026"
 _DATE_DAY_MONTH = re.compile(r"(?<!\d)(\d{1,2})\.?\s+([a-z]+)\.?\s+(\d{4})(?!\d)")
 _DATE_MONTH_DAY = re.compile(r"\b([a-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})(?!\d)")
@@ -76,15 +80,26 @@ def _dated(text: str, folded: tuple[str, list[int]] | None = None) -> list[tuple
         for m in pattern.finditer(text):
             add(m.start(), *(int(m[i]) for i in order))
     for m in _DATE_DMY_SEP.finditer(text):
-        add(m.start(), int(m[4]), int(m[3]), int(m[1]))
-    months = packs.active().months
+        if not _NOT_A_DATE_BEFORE.search(text[max(0, m.start() - 16) : m.start()]):
+            add(m.start(), int(m[4]), int(m[3]), int(m[1]))
+    profile = packs.active()
+    months, capital = profile.months, profile.capital_months
+
     if months:
         folded_text, index = folded if folded is not None else _fold(text)
+
+        def month(form: str, start: int) -> int | None:
+            """The month of the word at folded ``start``, if it is one here."""
+            mo = months.get(form)
+            if mo is None or (form in capital and not text[index[start]].isupper()):
+                return None
+            return mo
+
         for m in _DATE_DAY_MONTH.finditer(folded_text):
-            if (mo := months.get(m[2])) is not None:
+            if (mo := month(m[2], m.start(2))) is not None:
                 add(index[m.start()], int(m[3]), mo, int(m[1]))
         for m in _DATE_MONTH_DAY.finditer(folded_text):
-            if (mo := months.get(m[1])) is not None:
+            if (mo := month(m[1], m.start(1))) is not None:
                 add(index[m.start()], int(m[3]), mo, int(m[2]))
     return sorted(found, key=lambda t: t[0])
 

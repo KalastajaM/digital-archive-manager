@@ -443,3 +443,55 @@ def test_star_as_a_word_is_still_a_word(archive):
     # a literal value that merely contains * is not "any": from:*kela* looks for that text
     archive.assignments.set(["kela"], sender="Kela")
     assert ids(archive, "from:*kela*") == []
+
+
+@pytest.mark.parametrize(
+    "q", ["id:kela.fi", "id:www.kela.fi", "id:info@kela.fi", "domain:WWW.Kela.fi"]
+)
+def test_a_domain_in_its_written_forms(with_ids, q):
+    assert ids(with_ids, q) == ["kela"]
+
+
+def test_a_dash_in_a_domain_counts(with_ids):
+    from dam import countries
+
+    with_ids.repo.save_identifiers(
+        "doc", "sha-doc", countries.signature(), [("core.domain", "ke-la.fi")]
+    )
+    assert ids(with_ids, "id:ke-la.fi") == ["doc"]
+    assert ids(with_ids, "id:kela.fi") == ["kela"]
+
+
+def test_id_looks_values_up_by_kind_and_value(with_ids, monkeypatch):
+    """A recognised value is looked up as stored (the kind and value index), not by
+    rewriting every stored value."""
+    from dam import search
+
+    seen = []
+    real = search._Where.add
+    monkeypatch.setattr(
+        search._Where,
+        "add",
+        lambda self, sql, negated=False: seen.append(sql) or real(self, sql, negated),
+    )
+    assert ids(with_ids, "id:0112038-9") == ["bill", "tax"]
+    assert not any("REPLACE(" in s for s in seen)
+
+
+def test_a_kvk_number_that_looks_like_a_ytunnus_is_still_found(with_ids):
+    from dam import countries, packs
+
+    packs.activate(packs.build(["fi", "nl"], ["fi", "nl", "en"]))
+    # 12345671: eight digits that also pass the Y-tunnus check, stored as a KvK number
+    with_ids.repo.save_identifiers(
+        "doc", "sha-doc", countries.signature(), [("nl.kvk", "12345671")]
+    )
+    assert "doc" in ids(with_ids, "id:12345671")
+
+
+def test_id_star_leaves_out_your_own_business_id(with_ids):
+    from dam import packs
+
+    packs.activate(packs.build(["fi"], ["en"], own_ids=["0112038-9"]))
+    assert ids(with_ids, "id:*") == []
+    assert ids(with_ids, "id:0112038-9") == ["bill", "tax"]  # asked for by its value: found

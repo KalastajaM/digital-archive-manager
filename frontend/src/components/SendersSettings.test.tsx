@@ -14,6 +14,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   name: null,
   set_at: null,
   filled: 0,
+  own: false,
   ...over,
 });
 
@@ -138,5 +139,28 @@ describe("SendersSettings", () => {
     const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
     await user.click(within(item).getByRole("button", { name: "Confirm" }));
     expect(await within(item).findByRole("alert")).toHaveTextContent("at most 80 characters");
+  });
+});
+
+describe("SendersSettings, your own business ID", () => {
+  it("shows it as yours, without a name, and Not mine unmarks it", async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      "GET /api/identifier-names": { body: { names: [row({ own: true })] } },
+      "PUT /api/identifier-names/own": { body: { changed: 0, own: false } },
+    });
+    renderWithProviders(
+      <MemoryRouter>
+        <SendersSettings />
+      </MemoryRouter>,
+    );
+    const item = await screen.findByRole("listitem", { name: "Y-tunnus 0112038-9" });
+    expect(within(item).getByText(/Yours: it names no sender/)).toBeInTheDocument();
+    expect(within(item).queryByRole("textbox")).toBeNull();
+    await user.click(within(item).getByRole("button", { name: "Not mine" }));
+    await waitFor(() => {
+      const put = calls.find((c) => c.url.includes("/identifier-names/own"));
+      expect(put?.body).toEqual({ kind: "fi.ytunnus", value: "0112038-9", own: false });
+    });
   });
 });

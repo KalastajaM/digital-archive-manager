@@ -269,15 +269,18 @@ def file_identifiers(app: AppDep, drive_id: str) -> dict:
     label = {s.kind: s.label for s in order}
     found = [(k, v) for k, v in app.repo.identifiers_for(drive_id) if k in rank]
     found.sort(key=lambda kv: rank[kv[0]])  # stable: in text order within a kind
+    counts = app.repo.identifier_counts(found)  # this file is one of them
+    profile = packs.active()
+    business = set(packs.business_id_kinds(profile))
     return {
         "identifiers": [
             {
                 "kind": kind,
                 "label": label[kind],
                 "value": value,
-                "others": sum(
-                    1 for d in app.repo.files_with_identifier(kind, value) if d != drive_id
-                ),
+                "others": max(0, counts.get((kind, value), 1) - 1),
+                "business": kind in business,
+                "own": kind in business and value in profile.own_ids,
             }
             for kind, value in found
         ]

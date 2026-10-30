@@ -74,7 +74,7 @@ RECONNECTED = (
 )
 
 # the tables the kept status answers read (``FileRepo._kept_answer``)
-STATUS_TABLES = ("files", "file_layouts", "file_text")
+STATUS_TABLES = ("files", "file_layouts", "file_text", "file_identifier_reads")
 
 T = TypeVar("T")
 
