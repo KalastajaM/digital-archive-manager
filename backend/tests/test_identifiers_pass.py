@@ -110,3 +110,27 @@ def test_new_text_for_the_same_content_is_read_again(fake_archive, engine):
     _file(repo, "f1", "Now from www.other.fi")  # same sha256, other text
     assert indexer.run_identifiers_once() == 1
     assert repo.identifiers_for("f1") == [("core.domain", "other.fi")]
+
+
+def test_the_progress_count_is_kept_until_the_next_write(fake_archive, engine, monkeypatch):
+    repo, indexer = _setup(fake_archive, engine)
+    _file(repo, "f1", BILL)
+    calls = []
+    real = repo._identifier_progress
+    monkeypatch.setattr(repo, "_identifier_progress", lambda sig: calls.append(sig) or real(sig))
+    sig = countries.signature()
+    assert repo.identifier_progress(sig) == (0, 1)
+    assert repo.identifier_progress(sig) == (0, 1) and len(calls) == 1  # kept
+    indexer.run_identifiers_once()
+    assert repo.identifier_progress(sig) == (1, 1) and len(calls) == 2  # a write: counted again
+
+
+def test_a_step_loads_a_limited_amount_of_text(fake_archive, engine):
+    repo, _ = _setup(fake_archive, engine)
+    for n in range(3):
+        _file(repo, f"f{n}", "x" * 1_000_000, sha=str(n) * 64)
+    sig = countries.signature()
+    assert len(repo.next_for_identifiers(10, sig, max_chars=1_500_000)) == 1
+    assert len(repo.next_for_identifiers(10, sig, max_chars=2_500_000)) == 2
+    # one text larger than the cap is still read, alone
+    assert len(repo.next_for_identifiers(10, sig, max_chars=10)) == 1
