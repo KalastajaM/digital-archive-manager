@@ -2497,6 +2497,15 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .carry-list { margin: var(--sp-1) 0 var(--sp-2); padding-left: var(--sp-5); }
 .carry-list ul { margin: 0; padding-left: var(--sp-4); }
 .entry-offline { flex: none; margin-left: var(--sp-2); font-size: 0.85em; color: var(--muted); }
+/* several files ticked in Browse: how many, and what can be done to them all */
+.selection-bar { flex: none; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: var(--sp-1) var(--sp-4); border-bottom: 0.5px solid var(--separator); font-size: var(--fs-sm); }
+.selection-count { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+/* the pickers of those actions: a box to type in, the names below (each on one line) */
+.pick-filter { width: 100%; margin-bottom: var(--sp-2); }
+.pick-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+.pick-list button { display: block; width: 100%; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: transparent; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-sm, 4px); }
+.pick-list button:hover, .pick-list button:focus-visible { background: var(--hover); }
+.sheet-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-3); }
 /* search of one collection: the child collection a file comes from, before its name */
 .entry-via { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .collection-missing { margin: var(--sp-3) var(--sp-4); }

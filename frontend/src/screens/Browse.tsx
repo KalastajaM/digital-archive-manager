@@ -84,6 +84,7 @@ import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { FolderTree } from "../components/FolderTree";
+import { SelectionActions } from "../components/SelectionActions";
 import { childOf, scopedCollection } from "../collectionScope";
 import CollectionDetail from "./CollectionDetail";
 import { CollectionTree } from "../components/BrowseCollectionTree";
@@ -1824,6 +1825,20 @@ export default function Browse() {
             onRemove={(f) => setFilters(filters.filter((x) => !sameFilter(x, f)))}
             onAdd={(name) => addTags([name])}
           />
+        )}
+        {checkedFiles > 0 && (
+          // several files: what can be done to them all at once (tags, collections)
+          <div className="selection-bar" role="group" aria-label="Selected files">
+            <span className="selection-count">
+              {checkedFiles} selected
+            </span>
+            <SelectionActions
+              files={fileRows.filter((it) => checkedIds.has(it.drive_id)).map((it) => ({ drive_id: it.drive_id, name: it.name }))}
+              scope={isSearch && scoped && "c" in scoped ? scoped.c : null}
+              all={collections.data ?? []}
+              onDone={() => update(pane, { ids: [] })}
+            />
+          </div>
         )}
         <DropZone drop={paneDrop(pane)}>
           {body === null && !columns && (
