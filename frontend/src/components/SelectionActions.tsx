@@ -7,7 +7,7 @@ import { apiPost, type CollectionRow, errorText, useAllTags, useCollectionMember
 import { childrenOf } from "./collectionTree";
 import { visible } from "../text";
 import { undoAction, useToast } from "./Toasts";
-import { Menu } from "./ui/Menu";
+import { Menu, type MenuEntry } from "./ui/Menu";
 import { Sheet } from "./ui/Sheet";
 
 type File = { drive_id: string; name: string };
@@ -88,18 +88,34 @@ function PickSheet({
   );
 }
 
-export function SelectionActions({
-  files,
-  scope: shown,
-  all,
-  onDone,
-}: {
+type Props = {
   files: File[];
   /** The collection Browse shows (its search), if any: Remove and Move act within its tree. */
   scope: CollectionRow | null;
   all: CollectionRow[];
   onDone: () => void;
-}) {
+};
+
+/** The selection bar's pull-down: the actions and their sheets. */
+export function SelectionActions(props: Props) {
+  const { files } = props;
+  const actions = useSelectionActions(props);
+  return (
+    <>
+      <Menu
+        label={`Actions for ${files.length === 1 ? visible(files[0].name) : `${files.length} selected files`}`}
+        icon={<EllipsisVertical />}
+        text="Selected"
+        entries={actions.entries}
+      />
+      {actions.view}
+    </>
+  );
+}
+
+/** The actions on ``files`` (``entries``) and their sheets (render ``view``); ``open``
+ * starts one from elsewhere (Browse's right-click menu: Add tag…, Add to collection…). */
+export function useSelectionActions({ files, scope: shown, all, onDone }: Props) {
   // Starred and Important are marks, set with the star and the !: shown, they act as no collection
   const scope = shown && !shown.kind ? shown : null;
   const ids = files.map((f) => f.drive_id);
@@ -268,23 +284,20 @@ export function SelectionActions({
   };
   /** Whether every selected file is in ``c`` already (moving them there would do nothing). */
   const homeOfAll = (c: CollectionRow) => homeOf !== null && ids.every((id) => homeOf(id)?.id === c.id);
-  const inThem = ordinary.filter((c) => c.members.some((m) => ids.includes(m.drive_id)));
+  /** The collections a selected file is in (the Remove sheet's choices). */
+  const inThem = () => ordinary.filter((c) => c.members.some((m) => ids.includes(m.drive_id)));
 
-  return (
+  const start = (which: Sheetful) => (which === "remove-tag" ? openRemoveTag() : setSheet(which));
+  const entries: MenuEntry[] = [
+    { label: "Add tag…", onSelect: () => setSheet("add-tag") },
+    { label: "Remove tag…", onSelect: openRemoveTag },
+    "separator",
+    { label: "Add to collection…", onSelect: () => setSheet("add") },
+    { label: "Remove from collection…", onSelect: () => setSheet("remove") },
+    ...(scope ? [{ label: "Move to collection…", onSelect: () => setSheet("move") }] : []),
+  ];
+  const view = (
     <>
-      <Menu
-        label={`Actions for ${files.length === 1 ? visible(files[0].name) : `${files.length} selected files`}`}
-        icon={<EllipsisVertical />}
-        text="Selected"
-        entries={[
-          { label: "Add tag…", onSelect: () => setSheet("add-tag") },
-          { label: "Remove tag…", onSelect: openRemoveTag },
-          "separator",
-          { label: "Add to collection…", onSelect: () => setSheet("add") },
-          { label: "Remove from collection…", onSelect: () => setSheet("remove") },
-          ...(scope ? [{ label: "Move to collection…", onSelect: () => setSheet("move") }] : []),
-        ]}
-      />
       {sheet === "add-tag" && (
         <PickSheet title={`Add a tag to ${what}`} options={(tags.data?.tags ?? []).map((t) => t.name)} allowNew onPick={(n) => void addTag(n)} onClose={close} />
       )}
@@ -315,7 +328,7 @@ export function SelectionActions({
         ) : (
           <PickSheet
             title={`Remove ${what} from a collection`}
-            options={inThem.map((c) => c.name)}
+            options={inThem().map((c) => c.name)}
             hint="The files stay where they are; only the membership goes."
             onPick={(n) => void removeFrom(byName(n) ?? null)}
             onClose={close}
@@ -334,4 +347,5 @@ export function SelectionActions({
       )}
     </>
   );
+  return { entries, open: start, view };
 }
