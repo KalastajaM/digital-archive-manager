@@ -313,15 +313,20 @@ function TrayPage({ today: fixed }: { today?: string }) {
   const listRef = useRef<HTMLUListElement>(null);
   const focusRow = useRef(false);
   // ?do=renew (Renewed… on Today or in a menu): the item opens with its Renewed… form, and
-  // the address drops the request so a reload or Back does not open it again
+  // the address drops the request so a reload or Back does not open it again. A request
+  // with no usable item, or for one the loaded list does not have, is dropped unopened.
   const renewAsked = search.get("do") === "renew";
+  const loaded = items.isSuccess;
   useEffect(() => {
-    if (!renewAsked || opened === null) return;
-    setDoneAt({ id: opened, mode: "done" });
+    if (!renewAsked) return;
+    if (opened !== null) {
+      if (!loaded) return;
+      if (list.some((i) => i.id === opened)) setDoneAt({ id: opened, mode: "done" });
+    }
     const next = new URLSearchParams(search);
     next.delete("do");
     setSearch(next, { replace: true });
-  }, [renewAsked, opened, search, setSearch]);
+  }, [renewAsked, opened, loaded, list, search, setSearch]);
   // A done form belongs to the item it was opened on: another item closes it, so coming
   // back never finds it still open. (``d`` sets both at once, so its form stays.)
   useEffect(() => {

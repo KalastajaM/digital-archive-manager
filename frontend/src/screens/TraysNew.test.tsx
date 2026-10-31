@@ -4,7 +4,7 @@
  * then the files, checklist, note and history beside the summary and the document. */
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ItemFile, TrayDef, TrayItem } from "../api/client";
 import { STATUS_ON } from "../components/ai/testData";
@@ -210,6 +210,11 @@ const PASSPORT: TrayItem = {
   checklist_total: 0,
 };
 
+function Where() {
+  const l = useLocation();
+  return <output aria-label="location">{l.pathname + l.search}</output>;
+}
+
 function setupRenew(item: TrayItem = PASSPORT, at = "/trays/renew?item=9") {
   mockFetch({
     "GET /api/trays": { body: { trays: [RENEW], errors: [] } },
@@ -261,6 +266,7 @@ function setupRenew(item: TrayItem = PASSPORT, at = "/trays/renew?item=9") {
   });
   renderWithProviders(
     <MemoryRouter initialEntries={[at]}>
+      <Where />
       <Routes>
         <Route path="/trays/:trayId?" element={<Trays today="2026-10-31" />} />
       </Routes>
@@ -293,6 +299,21 @@ describe("a Renew tray item", () => {
     setupRenew(PASSPORT, "/trays/renew?item=9&do=renew");
     const form = await screen.findByRole("dialog", { name: "Renewed" });
     expect(within(form).getByLabelText("New expiry date")).toBeInTheDocument();
+  });
+
+  it("drops do=renew from the address when the item is not in the list", async () => {
+    setupRenew(PASSPORT, "/trays/renew?item=999&do=renew");
+    await screen.findByRole("article", { name: "Passport Michiel" });
+    await waitFor(() => expect(screen.getByLabelText("location")).not.toHaveTextContent("do="));
+    expect(screen.getByLabelText("location")).toHaveTextContent("item=999");
+    expect(screen.queryByRole("dialog", { name: "Renewed" })).toBeNull();
+  });
+
+  it("drops do=renew from the address when there is no usable item id", async () => {
+    setupRenew(PASSPORT, "/trays/renew?item=abc&do=renew");
+    await screen.findByRole("article", { name: "Passport Michiel" });
+    await waitFor(() => expect(screen.getByLabelText("location")).not.toHaveTextContent("do="));
+    expect(screen.queryByRole("dialog", { name: "Renewed" })).toBeNull();
   });
 
   it("its right-click menu lists Renewed… first and No longer needed after", async () => {
