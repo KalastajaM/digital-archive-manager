@@ -57,7 +57,7 @@ function setup() {
   return { calls, user: userEvent.setup() };
 }
 
-const items = (menu: HTMLElement) => Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.textContent);
+const items = (menu: HTMLElement) => Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
 
 afterEach(() => {
   cleanup();

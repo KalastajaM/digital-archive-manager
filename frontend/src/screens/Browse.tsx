@@ -71,7 +71,16 @@ import { Toolbar } from "../components/ui/Toolbar";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { type BrowseDrag, type DropTarget, dragSelection, readBrowseDrag, setDragFiles, setDragFolder, useDropTarget } from "../dnd";
-import { type DropVerdict, folderSourceRefusal, judgeDrop, judgeFolderDrop, placeOf, SEARCH_DROP_REASON } from "../dropModes";
+import {
+  APP_FOLDER_REASON,
+  type DropVerdict,
+  EXTRA_ROOT_REASON,
+  folderSourceRefusal,
+  judgeDrop,
+  judgeFolderDrop,
+  placeOf,
+  SEARCH_DROP_REASON,
+} from "../dropModes";
 import { useDropToCollection } from "../components/useDropToCollection";
 import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
@@ -2218,13 +2227,16 @@ export default function Browse() {
     const away = it.connected === false ? "Not connected" : null;
     const newWhy = newFolderRefusal({ path: it.path, view: "folders" }, false, specialFolders) ?? away;
     const moveWhy = folderMoveWhy(it) ?? (locked ? MOVE_BUSY : null);
-    const trashOff = trashWhy([it]) ?? (locked ? MOVE_BUSY : null);
+    // the app's own folders and an archive folder's top stay where they are: none goes to
+    // To Delete, and To Delete itself has nothing to restore
+    const kept = moveWhy === APP_FOLDER_REASON || moveWhy === EXTRA_ROOT_REASON ? moveWhy : null;
+    const trashOff = kept ?? trashWhy([it]) ?? (locked ? MOVE_BUSY : null);
     const revealWhy = away ?? (launch.busy ? LAUNCH_BUSY : null);
     return [
       { label: `New folder inside ${visible(it.name)}…`, onSelect: () => newFolder.open(it.path), disabled: !!newWhy, reason: newWhy ?? undefined },
       "separator",
       { label: "Move to…", onSelect: () => openFolderMoveTo(it), disabled: !!moveWhy, reason: moveWhy ?? undefined },
-      ...(inToDelete(it.path)
+      ...(inToDelete(it.path) && !kept
         ? restoreEntries((to) => startRestore([it.drive_id], to), null)
         : [{ label: TRASH_LABEL, onSelect: () => trash([it]), disabled: !!trashOff, reason: trashOff ?? undefined }]),
       "separator",

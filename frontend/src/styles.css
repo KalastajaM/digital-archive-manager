@@ -2107,7 +2107,10 @@ dialog.sheet.folder-browser { --tree-indent: var(--sp-4); width: min(520px, calc
 .inbox-empty-actions button { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .new-folder-preview { min-height: 3em; margin-top: var(--sp-2); }
 dialog.sheet.setup-folders { max-width: 640px; }
-.menu-context { min-width: 220px; }
+.menu-context { min-width: 220px; max-width: min(360px, calc(100vw - 16px)); }
+/* a long name (New folder inside …, a tray) wraps inside the menu instead of widening it past the window */
+.menu-context .menu-item { white-space: normal; }
+.menu-context .menu-item-text { min-width: 0; overflow-wrap: anywhere; }
 /* Red is for the last step of a removal only (a confirm sheet's button), never a menu. */
 button.primary.danger { background: var(--red); color: var(--on-accent); }
 button.primary.danger:hover:not(:disabled), button.primary.danger:active:not(:disabled) { background: var(--red); filter: brightness(0.92); }

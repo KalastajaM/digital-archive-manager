@@ -176,5 +176,10 @@ describe("A folder's right-click menu", () => {
       expect(entry).toBeDisabled();
       expect(entry).toHaveAccessibleDescription(/.+/);
     }
+    // To Delete itself is no folder marked for deletion: nothing to restore, and it stays
+    expect(names(menu)).not.toContain("Restore to where it was");
+    const bin = within(menu).getByRole("menuitem", { name: /Move to To Delete/ });
+    expect(bin).toBeDisabled();
+    expect(bin).toHaveAccessibleDescription("The app keeps this folder in place");
   });
 });
