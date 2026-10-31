@@ -2,6 +2,7 @@
  * they nest; a click picks one, the picked one is current, and a long name stays in its row. */
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
 import type { ScopeState } from "../browseScope";
@@ -35,7 +36,11 @@ const NONE: ScopeState = { collections: [], tags: [], starred: false, important:
 function setup(collections: CollectionRow[], active: ScopeState = NONE, routes: Parameters<typeof mockFetch>[0] = {}) {
   const calls = mockFetch({ "GET /api/collections": { body: collections }, ...routes });
   const onPick = vi.fn();
-  renderWithProviders(<CollectionTree active={active} onPick={onPick} />);
+  renderWithProviders(
+    <MemoryRouter>
+      <CollectionTree active={active} onPick={onPick} />
+    </MemoryRouter>,
+  );
   return { calls, onPick, user: userEvent.setup() };
 }
 
@@ -132,7 +137,11 @@ describe("CollectionTree", () => {
       }),
     });
     const user = userEvent.setup();
-    renderWithProviders(<CollectionTree active={NONE} onPick={vi.fn()} />);
+    renderWithProviders(
+    <MemoryRouter>
+      <CollectionTree active={NONE} onPick={vi.fn()} />
+    </MemoryRouter>,
+  );
     await screen.findByText("Legal");
     expect(screen.queryByText("Old")).toBeNull();
     const toggle = screen.getByRole("button", { name: "Show closed" });
@@ -163,7 +172,11 @@ describe("CollectionTree", () => {
     mockFetch({
       "GET /api/collections": (call) => ({ body: call.url.includes("state=all") ? [coll(1, "Legal"), { ...coll(5, "Old"), state: "closed" }] : [coll(1, "Legal")] }),
     });
-    renderWithProviders(<CollectionTree active={NONE} onPick={vi.fn()} startClosed />);
+    renderWithProviders(
+    <MemoryRouter>
+      <CollectionTree active={NONE} onPick={vi.fn()} startClosed />
+    </MemoryRouter>,
+  );
     expect(await screen.findByText("Old")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show closed" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -174,7 +187,11 @@ describe("CollectionTree's New collection", () => {
 
   it("startNew opens the New collection sheet at once (the sidebar's +)", async () => {
     mockFetch({ "GET /api/collections": { body: [] } });
-    renderWithProviders(<CollectionTree active={NONE} onPick={vi.fn()} startNew />);
+    renderWithProviders(
+    <MemoryRouter>
+      <CollectionTree active={NONE} onPick={vi.fn()} startNew />
+    </MemoryRouter>,
+  );
     const dialog = await screen.findByRole("dialog", { name: "New collection" });
     expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("");
   });

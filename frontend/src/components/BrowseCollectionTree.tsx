@@ -5,12 +5,14 @@
  *
  * Keyboard (the tree view pattern, as the folder tree): ↑ and ↓ move, → opens a collection
  * (or steps into it), ← closes it (or steps out), Home and End go to the first and last, Enter
- * picks. */
+ * picks. A collection is ordered as in the sidebar: dragged onto a row's top or bottom third
+ * (a line) it goes before or after it, onto the middle third inside it; a strip shown while
+ * dragging takes it to the top level; Alt+↑ / Alt+↓ (Alt+← out one level) on a focused row. */
 import { Archive, ChevronRight, Layers, Plus } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
-import { readDragFiles, readDragSource, useDropTarget } from "../dnd";
+import { type Dragged, readDragCollection, readFilesOrCollection, setDragCollection, useDropTarget } from "../dnd";
 import { visible } from "../text";
 import { childrenOf } from "./collectionTree";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
@@ -20,7 +22,7 @@ import { NewCollectionSheet } from "./NewCollectionSheet";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { useAddToCollection } from "./useAddToCollection";
-import { useCollectionOrder, useOrderMenu } from "./useCollectionOrder";
+import { type CollectionOrder, orderKeys, useCollectionDragging, useCollectionOrder, useMoveCollection, useOrderMenu, useReorderRow } from "./useCollectionOrder";
 
 type Pick = (pick: ScopePick, add: boolean) => void;
 
@@ -33,6 +35,8 @@ type Shared = {
   active: ScopeState;
   onPick: Pick;
   collect: ReturnType<typeof useAddToCollection>;
+  mover: ReturnType<typeof useMoveCollection>;
+  order: CollectionOrder;
   /** A collection row's right-click menu (Open, New collection inside…, the order). */
   onMenu: (c: CollectionRow) => (e: ReactMouseEvent) => void;
 };
@@ -56,6 +60,8 @@ function Row({
   dropProps,
   onContextMenu,
   closed,
+  collectionId,
+  onAltKey,
   children,
 }: {
   rowKey: string;
@@ -73,6 +79,10 @@ function Row({
   onContextMenu?: (e: ReactMouseEvent) => void;
   /** A closed collection (shown with Show closed): greyed. */
   closed?: boolean;
+  /** A collection's row: it drags as that collection. */
+  collectionId?: { id: number; name: string };
+  /** Alt+arrows on the focused row: its order. */
+  onAltKey?: (e: KeyboardEvent<HTMLLIElement>) => void;
   children?: ReactNode;
 }) {
   const go = (e: KeyboardEvent<HTMLLIElement>, key: string) =>
@@ -80,6 +90,11 @@ function Row({
       .find((n) => n.dataset.key === key)
       ?.focus();
   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.target === e.currentTarget && e.altKey && onAltKey) {
+      onAltKey(e);
+      if (e.defaultPrevented) e.stopPropagation();
+      return;
+    }
     if (e.target !== e.currentTarget || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === "ArrowRight") {
       if (onToggle && !expanded) onToggle(true);
@@ -101,6 +116,7 @@ function Row({
       aria-expanded={onToggle ? expanded : undefined}
       aria-current={current ? "true" : undefined}
       data-key={rowKey}
+      data-collection-id={collectionId?.id}
       className="tree-node"
       tabIndex={shared.focusKey === rowKey ? 0 : -1}
       onFocus={(e) => {
@@ -113,6 +129,8 @@ function Row({
         style={{ paddingLeft: 8 + (level - 1) * 16 }}
         onClick={onPick}
         onContextMenu={onContextMenu}
+        draggable={collectionId ? true : undefined}
+        onDragStart={collectionId ? (e) => setDragCollection(e, collectionId.id, collectionId.name) : undefined}
         {...dropProps}
       >
         <span
@@ -141,15 +159,16 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
   const expanded = kids.length > 0 && !shared.folded.has(c.id);
   const accept = shared.collect.accept(c);
   const add = shared.collect.add(c);
-  // files, and the collection they come from (a drop within one tree moves them)
-  const target = useDropTarget<{ ids: string[]; from: number | null }>({
-    read: (e) => {
-      const ids = readDragFiles(e);
-      return ids === null ? null : { ids, from: readDragSource(e) };
-    },
-    accept: (d) => accept(d.ids),
-    onDrop: (d) => add(d.ids, d.from),
+  const takeCollection = shared.mover.accept(c);
+  const moveHere = shared.mover.move(c);
+  // files (with the collection they come from: a drop within one tree moves them), or a
+  // collection moved inside; near a sibling's top or bottom edge a collection is reordered
+  const target = useDropTarget<Dragged>({
+    read: readFilesOrCollection,
+    accept: (d) => (d.kind === "files" ? accept(d.ids) : takeCollection(d.id)),
+    onDrop: (d) => (d.kind === "files" ? add(d.ids, d.from ?? null) : moveHere(d.id)),
   });
+  const reorder = useReorderRow(shared.order, c, target.props);
   const key = `c${c.id}`;
   return (
     <Row
@@ -164,9 +183,11 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
       onToggle={kids.length > 0 ? (open) => shared.toggle(c.id, open) : undefined}
       onPick={() => shared.onPick({ kind: "collection", name: c.name }, false)}
       shared={shared}
-      dropProps={target.props}
+      dropProps={reorder.props}
       onContextMenu={shared.onMenu(c)}
       closed={c.state === "closed"}
+      collectionId={{ id: c.id, name: c.name }}
+      onAltKey={orderKeys(shared.order, c) as (e: KeyboardEvent<HTMLLIElement>) => void}
     >
       {expanded && (
         <ul role="group" className="tree-group">
@@ -237,7 +258,10 @@ export function CollectionTree({
   const shownKeys = (level: CollectionRow[]): string[] =>
     level.flatMap((c) => [`c${c.id}`, ...(folded.has(c.id) ? [] : shownKeys(kids.get(c.id) ?? []))]);
   const focusKey = focused !== null && ["important", "starred", ...shownKeys(top)].includes(focused) ? focused : "important";
-  const shared: Shared = { kids, folded, toggle, focusKey, setFocusKey: setFocused, active, onPick, collect, onMenu: menu.onContextMenu };
+  const mover = useMoveCollection(list.data ?? [], (target) => target && toggle(target.id, true));
+  const dragging = useCollectionDragging();
+  const topDrop = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
+  const shared: Shared = { kids, folded, toggle, focusKey, setFocusKey: setFocused, active, onPick, collect, mover, order, onMenu: menu.onContextMenu };
   const onKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]'));
@@ -266,6 +290,11 @@ export function CollectionTree({
         />
         <IconButton icon={<Plus />} label="New collection" onClick={() => setCreating({ parent: null })} />
       </div>
+      {dragging && (
+        <p className="tree-top-drop hint" {...topDrop.props}>
+          Drop here to move it to the top level, last
+        </p>
+      )}
       <ul role="tree" aria-label="Collection tree" className="tree-list" onKeyDown={onKeyDown}>
         <Row
           rowKey="important"

@@ -2383,7 +2383,7 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 [data-reorder="before"]::before { top: -2px; }
 [data-reorder="after"]::before { bottom: -2px; }
 
-.collections-top-drop { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--separator); border-radius: var(--r-lg); text-align: center; }
+.tree-top-drop { margin: 0 var(--sp-2) var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--separator); border-radius: var(--r-lg); text-align: center; }
 
 .today-search { display: flex; align-items: center; gap: var(--sp-2); }
 .today-search input { flex: 1; width: auto; min-width: 0; }
