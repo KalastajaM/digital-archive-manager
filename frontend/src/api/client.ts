@@ -1502,6 +1502,16 @@ export const useExpiredFolder = (enabled = true) =>
     enabled,
   });
 
+/** Rename the Expired folder; the server refuses a name that cannot be a folder name. */
+export const useSetExpiredFolder = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => apiPut("/api/settings/expired-folder", { body: { name } }),
+    onSuccess: (data) => client.setQueryData(["expired-folder"], data),
+    onSettled: () => client.invalidateQueries({ queryKey: ["expired-folder"] }),
+  });
+};
+
 export const useItemReopen = () => {
   const refresh = useRefreshTrays();
   return useMutation({
