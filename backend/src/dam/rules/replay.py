@@ -185,6 +185,9 @@ class RuleExplain:
     # the rule's areas for drawing on page 1: the matched lines of each, and for an area
     # (or rule) that did not match, the reason
     areas: list[Area] = field(default_factory=list)
+    # every other condition held and only a picture area fell short: a near miss, whose
+    # areas the Inbox draws for diagnosis
+    picture_miss: bool = False
 
 
 def without_folder(rule: Rule) -> Rule:
@@ -1060,7 +1063,7 @@ def _why(
         return "file name check took too long"
     if c.waiting:
         if has_picture_zones(rule) and (layout is not None or not has_text_zones(rule)):
-            return "the picture of page 1 is not made yet"
+            return PICTURE_NOT_MADE
         return "page 1 has not been read yet"
     if c.person_unknown:
         return "the document has no single person (address area)"
@@ -1096,12 +1099,18 @@ def _why(
                 if found is None or found.score < zone.threshold:
                     got = f"{found.score:.2f}" if found is not None else "not made"
                     return (
-                        f"the picture in {_area(i, len(when.zones))} scores {got}, "
+                        f"{PICTURE_WHY}{_area(i, len(when.zones))} scores {got}, "
                         f"needs {zone.threshold:.2f}"
                     )
     if when.person is not None:
         return f"the document is not for {when.person}"
     return "file name does not match"
+
+
+# how ``_why`` starts when a picture area fell short, and what it says while the picture
+# is still to be made (``RuleExplain.picture_miss``)
+PICTURE_WHY = "the picture in "
+PICTURE_NOT_MADE = "the picture of page 1 is not made yet"
 
 
 def explain(
@@ -1161,6 +1170,10 @@ def explain(
                     rec=rec,
                     pictures=pictures,
                 ),
+                # the picture is checked after every other condition but the person, so a
+                # reason from it (or the wait for it) means all those held
+                picture_miss=not matched
+                and (why.startswith(PICTURE_WHY) or why == PICTURE_NOT_MADE),
             )
         )
     return out

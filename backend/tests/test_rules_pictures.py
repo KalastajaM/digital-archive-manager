@@ -380,7 +380,25 @@ def test_explain_gives_the_picture_area_its_score_and_reason(app, setup):
         record("c", "sha-c"), "", [setup.rule()], special, None, None, None, setup.pictures
     )
     assert waiting.why == "the picture of page 1 is not made yet"
+    assert waiting.picture_miss  # the words held; the picture is still to come
     assert waiting.areas[0].reason and waiting.areas[0].score is None
+
+
+def test_explain_says_when_only_the_picture_held_a_rule_back(app, setup):
+    # the Inbox draws a near miss's areas for diagnosis; a rule whose words do not fit the
+    # document is no near miss, and its areas would only clutter every other document
+    special = app.settings.special_folders
+    setup.keep("b", "sha-b", synth.letter(kind=1))  # the picture scores 0.7, needs 0.85
+    doc = record("b", "sha-b")
+    (near,) = explain(doc, "", [setup.rule()], special, None, None, None, setup.pictures)
+    assert not near.matched and near.picture_miss
+    (words,) = explain(
+        doc, "", [setup.rule(text_contains=["ohlson"])], special, None, None, None, setup.pictures
+    )
+    assert not words.matched and words.why == "no word found" and not words.picture_miss
+    setup.keep("a", "sha-a", synth.letter())
+    (hit,) = explain(record(), "", [setup.rule()], special, None, None, None, setup.pictures)
+    assert hit.matched and not hit.picture_miss
 
 
 # --- the replay ---------------------------------------------------------------------------------
