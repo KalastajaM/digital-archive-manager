@@ -21,10 +21,12 @@ import {
   Tag as TagIcon,
 } from "lucide-react";
 import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   archiveKey,
   type CollectionRow,
+  type SidebarTag,
+  type TagInfo,
   type TrayDef,
   useBuiltin,
   useAllTags,
@@ -59,16 +61,19 @@ import {
   orderKeys,
   useCollectionOrder,
   useMoveCollection,
-  useOrderMenu,
   useReorderRow,
 } from "../useCollectionOrder";
+import { useCollectionMenu } from "../useCollectionMenu";
+import { useTagManager } from "../useTagManager";
+import { ContextMenu } from "./ContextMenu";
+import type { MenuEntry } from "./Menu";
 import { useUndoConfirm } from "../UndoConfirm";
 import { useAddToCollection } from "../useAddToCollection";
 import { useQuickPut } from "../useQuickPut";
 import { collectionHref } from "../../collectionHref";
 import { scopedCollection } from "../../collectionScope";
 import { searchKeyLabel } from "../../searchKey";
-import { positiveTags, readQuery, tagFilter } from "../../searchFilters";
+import { positiveTags, readQuery, serializeQuery, tagFilter } from "../../searchFilters";
 
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
@@ -173,6 +178,7 @@ function Section({
   onFold,
   foldedCount,
   add,
+  onMenu,
   children,
 }: {
   title: string;
@@ -183,6 +189,8 @@ function Section({
   foldedCount?: number;
   /** New look: a "+" after the caption that goes to where something is made. */
   add?: { to: string; label: string };
+  /** The caption's right-click menu (New collection, New tag). */
+  onMenu?: (e: React.MouseEvent) => void;
   children: ReactNode;
 }) {
   const [look] = useStyle();
@@ -190,11 +198,13 @@ function Section({
     <li className="sidebar-section">
       <div className="sidebar-section-head">
         {to ? (
-          <SidebarLink to={to} end className="sidebar-section-title" {...dropProps}>
+          <SidebarLink to={to} end className="sidebar-section-title" onContextMenu={onMenu} {...dropProps}>
             {title}
           </SidebarLink>
         ) : (
-          <h3 className="sidebar-section-title">{title}</h3>
+          <h3 className="sidebar-section-title" onContextMenu={onMenu}>
+            {title}
+          </h3>
         )}
         {folded && foldedCount ? <span className="sidebar-count sidebar-section-count">{foldedCount}</span> : null}
         <button
@@ -384,6 +394,18 @@ function CollectionNode({ c, current, kids, folds, collect, mover, order, onMenu
 
 type SectionFolds = ReturnType<typeof useFolds<string>>;
 
+/** A right-click menu at the pointer: ``open(label, entries)`` makes the handler. */
+function useMenuAt() {
+  const [menu, setMenu] = useState<{ x: number; y: number; label: string; entries: MenuEntry[] } | null>(null);
+  return {
+    open: (label: string, entries: () => MenuEntry[]) => (e: React.MouseEvent) => {
+      e.preventDefault();
+      setMenu({ x: e.clientX, y: e.clientY, label, entries: entries() });
+    },
+    element: menu && <ContextMenu x={menu.x} y={menu.y} label={menu.label} entries={menu.entries} onClose={() => setMenu(null)} />,
+  };
+}
+
 /** The Collections section: the open collections as a tree; its caption takes a
  * dropped collection to the top level. */
 function CollectionsSection({ list, sections }: { list: CollectionRow[]; sections: SectionFolds }) {
@@ -397,9 +419,28 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
   const shown = location.pathname === "/browse" ? scopedCollection(readQuery(new URLSearchParams(location.search).get("q")).filters, list) : null;
   const current = shown && "c" in shown ? shown.c.id : null;
   const order = useCollectionOrder(list);
-  const menu = useOrderMenu(order);
+  const navigate = useNavigate();
+  // as in Browse's collection tree: Open, New collection inside…, Merge into…, Delete…, the order
+  const menu = useCollectionMenu(list, order, {
+    open: (c) => navigate(collectionHref(c)),
+    onDeleted: (names) => {
+      // Browse leaves a search on any collection that went, the inner ones too
+      if (location.pathname !== "/browse") return;
+      const params = new URLSearchParams(location.search);
+      const { words, filters } = readQuery(params.get("q"));
+      const gone = new Set(names.map((n) => n.toLowerCase()));
+      const kept = filters.filter((f) => !(f.name === "collection" && gone.has(f.value.toLowerCase())));
+      if (kept.length === filters.length) return;
+      const q = serializeQuery(words, kept);
+      if (q) params.set("q", q);
+      else params.delete("q");
+      navigate(`/browse?${params}`, { replace: true });
+    },
+  });
+  const caption = useMenuAt();
   const top = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
   return (
+    <>
     <Section
       title="Collections"
       to="/browse?tree=collections"
@@ -408,14 +449,17 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
       onFold={() => sections.toggle("collections")}
       foldedCount={look === "new" ? (kids.get(null) ?? []).length + 2 : undefined}
       add={{ to: "/browse?tree=collections&new=1", label: "New collection" }}
+      onMenu={caption.open("Collections", () => [{ label: "New collection", onSelect: () => menu.startNew(null) }])}
     >
       <ImportantRow />
       <StarredRow />
       {(kids.get(null) ?? []).map((c) => (
         <CollectionNode key={c.id} c={c} current={current} kids={kids} folds={folds} collect={collect} mover={mover} order={order} onMenu={menu.onContextMenu} />
       ))}
-      {menu.element}
     </Section>
+    {menu.view}
+    {caption.element}
+    </>
   );
 }
 
@@ -476,6 +520,18 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
   const location = useLocation();
   const [look] = useStyle();
   const shown = tags.data ?? [];
+  // rename, merge, pin and delete, as in Browse's tag tree (right-click a tag); New tag on the caption
+  const all = useAllTags();
+  const manager = useTagManager(all.data?.tags ?? []);
+  const menu = useMenuAt();
+  const info = (t: SidebarTag): TagInfo => all.data?.tags.find((x) => x.name === t.name) ?? { ...t, group_id: null };
+  const onCaption = menu.open("Tags", () => [{ label: "New tag", onSelect: () => manager.open({ kind: "create" }) }]);
+  const extras = (
+    <>
+      {menu.element}
+      {manager.view}
+    </>
+  );
   // the tags Browse filters by now: `tag:` filters in the search, or an older `?tag=` link
   const current = location.pathname === "/browse" ? browseTags(location.search) : [];
   const rows = (list: typeof shown) =>
@@ -493,6 +549,7 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
             aria-label={`${name} (${t.files})`}
             aria-current={isCurrent ? "page" : undefined}
             title={t.pinned ? `${name} (pinned)` : name}
+            onContextMenu={menu.open(`Actions for ${name}`, () => manager.shortMenu(info(t)))}
           >
             <Icon className="sidebar-icon" {...ICON} />
             <span className="sidebar-label">{name}</span>
@@ -507,27 +564,26 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
     return (
       <>
         {pinned.length > 0 && (
-          <Section title="Pinned tags" folded={sections.folded.has("pinned-tags")} onFold={() => sections.toggle("pinned-tags")} foldedCount={pinned.length}>
+          <Section title="Pinned tags" folded={sections.folded.has("pinned-tags")} onFold={() => sections.toggle("pinned-tags")} foldedCount={pinned.length} onMenu={onCaption}>
             {rows(pinned)}
           </Section>
         )}
         {recent.length > 0 && (
-          <Section title="Recent tags" folded={sections.folded.has("recent-tags")} onFold={() => sections.toggle("recent-tags")} foldedCount={recent.length}>
+          <Section title="Recent tags" folded={sections.folded.has("recent-tags")} onFold={() => sections.toggle("recent-tags")} foldedCount={recent.length} onMenu={onCaption}>
             {rows(recent)}
           </Section>
         )}
+        {extras}
       </>
     );
   }
   return (
-    <Section
-      title="Tags"
-      to="/browse?tree=tags"
-      folded={sections.folded.has("tags")}
-      onFold={() => sections.toggle("tags")}
-    >
-      {rows(shown)}
-    </Section>
+    <>
+      <Section title="Tags" to="/browse?tree=tags" folded={sections.folded.has("tags")} onFold={() => sections.toggle("tags")} onMenu={onCaption}>
+        {rows(shown)}
+      </Section>
+      {extras}
+    </>
   );
 }
 

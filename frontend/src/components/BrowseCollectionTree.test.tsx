@@ -131,7 +131,7 @@ describe("CollectionTree", () => {
     const row = (await screen.findByText("Car")).closest(".tree-row") as HTMLElement;
     await user.pointer({ keys: "[MouseRight]", target: row });
     const menu = await screen.findByRole("menu");
-    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Open", "New collection inside…", "Merge into…", "Delete…", "Move up", "Move down"]);
+    expect(within(menu).getAllByRole("menuitem").map((m) => m.querySelector(".menu-item-text")?.firstChild?.textContent)).toEqual(["Open", "New collection inside…", "Merge into…", "Delete…", "Move up", "Move down"]);
     await user.click(within(menu).getByRole("menuitem", { name: "New collection inside…" }));
     expect(await screen.findByRole("dialog", { name: /inside Car/ })).toBeInTheDocument();
     await user.keyboard("{Escape}");

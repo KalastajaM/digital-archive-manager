@@ -17,13 +17,10 @@ import { visible } from "../text";
 import { childrenOf, countsOf } from "./collectionTree";
 import { plural } from "../format";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
-import { DeleteCollectionSheet } from "./DeleteCollectionSheet";
-import { MergeCollectionSheet } from "./MergeCollectionSheet";
-import { NewCollectionSheet } from "./NewCollectionSheet";
-import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { useAddToCollection } from "./useAddToCollection";
-import { type CollectionOrder, orderKeys, useCollectionDragging, useCollectionOrder, useMoveCollection, useOrderMenu, useReorderRow } from "./useCollectionOrder";
+import { useCollectionMenu } from "./useCollectionMenu";
+import { type CollectionOrder, orderKeys, useCollectionDragging, useCollectionOrder, useMoveCollection, useReorderRow } from "./useCollectionOrder";
 
 type Pick = (pick: ScopePick, add: boolean) => void;
 
@@ -128,12 +125,12 @@ function Row({
         if (e.target === e.currentTarget) shared.setFocusKey(rowKey);
       }}
       onKeyDown={onKeyDown}
+      onContextMenu={onContextMenu}
     >
       <div
         className={["tree-row", current && "tree-current", closed && "tree-closed"].filter(Boolean).join(" ")}
         style={{ paddingLeft: 8 + (level - 1) * 16 }}
         onClick={onPick}
-        onContextMenu={onContextMenu}
         draggable={collectionId ? true : undefined}
         onDragStart={collectionId ? (e) => setDragCollection(e, collectionId.id, collectionId.name) : undefined}
         {...dropProps}
@@ -254,25 +251,19 @@ export function CollectionTree({
   const [showClosed, setShowClosed] = useState(startClosed);
   const list = useCollections(showClosed ? "all" : "open");
   const collect = useAddToCollection();
-  const toast = useToast();
-  // New collection (at the top or inside one), then it opens: the tree's own pick
-  const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(null);
+  const order = useCollectionOrder(list.data ?? []);
+  // Open, New collection inside…, Merge into…, Delete…, then the order (as in the sidebar)
+  const menu = useCollectionMenu(list.data ?? [], order, {
+    open: (c) => onPick({ kind: "collection", name: c.name }, false),
+    onDeleted,
+  });
   useEffect(() => {
     if (!startNew) return;
-    setCreating({ parent: null });
+    menu.startNew(null);
     onStartedNew?.();
     // only when asked; ``onStartedNew`` is a new function each render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startNew]);
-  const order = useCollectionOrder(list.data ?? []);
-  const [merging, setMerging] = useState<CollectionRow | null>(null);
-  const [deleting, setDeleting] = useState<CollectionRow | null>(null);
-  const menu = useOrderMenu(order, (c) => [
-    { label: "Open", onSelect: () => onPick({ kind: "collection", name: c.name }, false) },
-    { label: "New collection inside…", onSelect: () => setCreating({ parent: c }) },
-    { label: "Merge into…", onSelect: () => setMerging(c) },
-    { label: "Delete…", onSelect: () => setDeleting(c) },
-  ]);
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
   const [focused, setFocused] = useState<string | null>(null);
   const toggle = (id: number, open?: boolean) =>
@@ -318,7 +309,7 @@ export function CollectionTree({
           pressed={showClosed}
           onClick={() => setShowClosed((on) => !on)}
         />
-        <IconButton icon={<Plus />} label="New collection" onClick={() => setCreating({ parent: null })} />
+        <IconButton icon={<Plus />} label="New collection" onClick={() => menu.startNew(null)} />
       </div>
       {dragging && (
         <p className="tree-top-drop hint" {...topDrop.props}>
@@ -371,39 +362,7 @@ export function CollectionTree({
           </li>
         )}
       </ul>
-      {menu.element}
-      {deleting && (
-        <DeleteCollectionSheet
-          c={deleting}
-          onCancel={() => setDeleting(null)}
-          onDone={(_, names) => {
-            setDeleting(null);
-            onDeleted?.(names);
-          }}
-        />
-      )}
-      {merging && (
-        <MergeCollectionSheet
-          c={merging}
-          all={list.data ?? []}
-          onCancel={() => setMerging(null)}
-          onDone={(into) => {
-            setMerging(null);
-            onPick({ kind: "collection", name: into.name }, false);
-          }}
-        />
-      )}
-      {creating && (
-        <NewCollectionSheet
-          parent={creating.parent}
-          onCancel={() => setCreating(null)}
-          onCreated={(child) => {
-            setCreating(null);
-            toast({ kind: "info", text: creating.parent ? `Created ${child.name} inside ${creating.parent.name}` : `Created ${child.name}` });
-            onPick({ kind: "collection", name: child.name }, false);
-          }}
-        />
-      )}
+      {menu.view}
     </nav>
   );
 }

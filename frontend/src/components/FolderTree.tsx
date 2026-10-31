@@ -7,9 +7,9 @@
  *
  * Keyboard (the tree view pattern): ↑ and ↓ move, → opens a folder (or steps into it), ←
  * closes it (or steps out), Home and End go to the first and last, Enter opens the folder
- * in the pane. */
+ * in the pane. A right-click (or Shift+F10) on a folder opens the screen's menu for it. */
 import { ChevronRight, Folder, HardDrive } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { type DirEntry, useBrowse } from "../api/client";
 import { type BrowseDrag, readBrowseDrag, useDropTarget } from "../dnd";
 import { visible } from "../text";
@@ -32,6 +32,7 @@ type Shared = {
   setFocusPath: (path: string) => void;
   onOpen: (entry: DirEntry) => void;
   dropFor: (path: string) => TreeDrop;
+  onMenu?: (entry: DirEntry, e: ReactMouseEvent) => void;
 };
 
 /** The folders above ``path``: "a/b/c" is under "a" and "a/b". */
@@ -41,7 +42,7 @@ export const ancestorsOf = (path: string): string[] => {
 };
 
 function TreeNode({ entry, level, parent, shared }: { entry: DirEntry; level: number; parent: string; shared: Shared }) {
-  const { marks, open, toggle, focusPath, setFocusPath, onOpen, dropFor } = shared;
+  const { marks, open, toggle, focusPath, setFocusPath, onOpen, dropFor, onMenu } = shared;
   const offline = entry.connected === false;
   const expanded = open.has(entry.path) && !offline;
   const kids = useBrowse(entry.path, expanded);
@@ -87,6 +88,14 @@ function TreeNode({ entry, level, parent, shared }: { entry: DirEntry; level: nu
         if (e.target === e.currentTarget) setFocusPath(entry.path);
       }}
       onKeyDown={onKeyDown}
+      onContextMenu={
+        onMenu &&
+        ((e) => {
+          e.preventDefault();
+          e.stopPropagation(); // this folder's menu, not its parent's
+          onMenu(entry, e);
+        })
+      }
     >
       <div
         className={here.length > 0 ? "tree-row tree-current" : "tree-row"}
@@ -143,11 +152,14 @@ export function FolderTree({
   marks,
   onOpen,
   dropFor,
+  onMenu,
   head,
 }: {
   marks: TreeMark[];
   onOpen: (entry: DirEntry) => void;
   dropFor: (path: string) => TreeDrop;
+  /** A folder's right-click menu (also Shift+F10 on the focused folder): the screen's. */
+  onMenu?: (entry: DirEntry, e: ReactMouseEvent) => void;
   /** Shown above the tree (Browse's Folders | Collections | Tags switch). */
   head?: ReactNode;
 }) {
@@ -188,7 +200,7 @@ export function FolderTree({
     e.stopPropagation();
     next?.focus();
   };
-  const shared: Shared = { marks, open, toggle, focusPath, setFocusPath: setFocused, onOpen, dropFor };
+  const shared: Shared = { marks, open, toggle, focusPath, setFocusPath: setFocused, onOpen, dropFor, onMenu };
   return (
     <nav className="tree" aria-label="Folders">
       {head}

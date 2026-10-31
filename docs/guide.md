@@ -198,15 +198,28 @@ setting. The sidebar, from the top:
 - **Trays**: one row per tray, each with its open count;
 - **Collections**: **Important** and **Starred** first, then the open collections as a
   tree (a parent's children nest under it; the chevron folds it). The caption opens the
-  list of all collections, with New collection and the closed ones;
+  list of all collections, with New collection and the closed ones. Right-click the
+  caption for **New collection**, and a collection for the same menu as in Browse's
+  Collections tree: **Open**, **New collection inside…**, **Merge into…**, **Delete…**,
+  then Move up / Move down / Move out one level;
 - **Tags**: the caption opens the [Tags](#tags) screen; below it your pinned tags, then
-  the tags you used most lately, eight at most, each opening its files in Browse;
+  the tags you used most lately, eight at most, each opening its files in Browse.
+  Right-click the caption (in the New look, Pinned tags or Recent tags) for **New tag**,
+  and a tag for **Rename…**, **Merge into…**, **Pin to the sidebar** (or Unpin) and
+  **Delete…**, as in Browse's Tags tree;
 - **Archive**: **Ask** (AI questions about the archive), **Activity**, **Maintenance**
   (checks you start yourself), **Settings** and **Help** (this guide).
 
 Trays, Collections, Tags and Archive fold: hold the pointer on the caption and click the chevron
 at its right. A folded Trays shows its open total next to the caption. dam remembers in
 this browser which sections you folded.
+
+**Right-click menus.** Rows in the sidebar and in Browse (the list and the trees) have a
+right-click menu with their actions. An entry that cannot run now is greyed, with the
+reason under it. With the keyboard, **⇧F10** (or the menu key) opens the menu of the row
+that has the focus. The browser's own right-click menu is off everywhere else, except in
+text fields, where copy, paste and spelling still work. The PDF preview keeps its
+viewer's own menu.
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray
@@ -1299,6 +1312,16 @@ list's width.
   new group (see Tags). Files
   dropped on a collection in the tree are added to it, as in the sidebar. The choice of tree
   is kept in the address, so Back and a copied link keep it.
+- **Right-click a file** in the list for the header's file actions (Put in a tray by name,
+  Move to…, Back to inbox, From…, For…, Ask AI, Star, Important, Restore or Move to To
+  Delete), plus **Add tag…** and **Add to collection…**. As in Finder, right-clicking a
+  selected file acts on the whole selection; right-clicking another file selects just
+  that one first. A greyed entry says why, as a greyed icon does.
+- **Right-click a folder**, in the list or in the folder tree, for **New folder inside…**,
+  **Move to…**, **Move to To Delete** and **Show in Finder** (a folder in To Delete has
+  Restore instead of Move to To Delete). Deleting is always Move to To Delete: nothing is
+  deleted, the move shows its preview first and Activity can undo it. Folders cannot be
+  renamed in dam yet.
 - **Actions on several files.** With files ticked, the bar above the list has
   **Selected**, a menu of **Add tag…**, **Remove tag…**, **Add to collection…** and
   **Remove from collection…**, and, while Browse shows a collection, **Move to
@@ -2056,6 +2079,7 @@ Windows and Linux, read Ctrl for ⌘ and Alt for ⌥.
 | Confirm sheets | ⌘`Enter` | Confirm (only half a second after it opened) |
 | Confirm sheets | Esc | Cancel |
 | Menus | `↑` / `↓`, Home / End, Esc | Move, first / last, close |
+| A row with a right-click menu (sidebar, Browse's list and trees) | ⇧F10, the menu key | Open its menu |
 
 ## Drag and drop
 

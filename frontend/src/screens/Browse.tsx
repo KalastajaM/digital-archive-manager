@@ -35,7 +35,7 @@ import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
 import { attentionTags } from "../components/GroupTree";
 import { WindowedList } from "../components/WindowedList";
-import { notConnected } from "../components/FileLaunch";
+import { LAUNCH_BUSY, notConnected, useFileLaunch } from "../components/FileLaunch";
 import type { PreviewFile } from "../components/FilePreview";
 import { MarkIcons } from "../components/MarkIcons";
 import { MarkToggles } from "../components/MarkToggles";
@@ -55,7 +55,7 @@ import {
   useInboxFolder,
   useMoveFlow,
 } from "../components/MoveTo";
-import { isTrashKey, TRASH_BUSY, useTrash } from "../components/Trash";
+import { isTrashKey, TRASH_BUSY, TRASH_LABEL, useTrash } from "../components/Trash";
 import { undoAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { useNewFolder } from "../components/NewFolder";
@@ -71,7 +71,16 @@ import { Toolbar } from "../components/ui/Toolbar";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
 import { type BrowseDrag, type DropTarget, dragSelection, readBrowseDrag, setDragFiles, setDragFolder, useDropTarget } from "../dnd";
-import { type DropVerdict, folderSourceRefusal, judgeDrop, judgeFolderDrop, placeOf, SEARCH_DROP_REASON } from "../dropModes";
+import {
+  APP_FOLDER_REASON,
+  type DropVerdict,
+  EXTRA_ROOT_REASON,
+  folderSourceRefusal,
+  judgeDrop,
+  judgeFolderDrop,
+  placeOf,
+  SEARCH_DROP_REASON,
+} from "../dropModes";
 import { useDropToCollection } from "../components/useDropToCollection";
 import { dialogOpen, isShortcut, isTyping, OWN_ENTER, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
@@ -84,14 +93,15 @@ import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { FolderTree } from "../components/FolderTree";
-import { SelectionActions } from "../components/SelectionActions";
+import { SelectionActions, useSelectionActions } from "../components/SelectionActions";
 import { childOf, scopedCollection } from "../collectionScope";
 import CollectionDetail from "./CollectionDetail";
 import { CollectionTree } from "../components/BrowseCollectionTree";
 import { TagTree } from "../components/BrowseTagTree";
 import { applyPick, type ScopePick, scopeOf, type TreeKind, treeParam } from "../browseScope";
 import { InspectorHint, SelectionSummary } from "../components/BrowseInspector";
-import { FileActionBar, type FileActionBarProps, useAskAction } from "../components/FileActionBar";
+import { FileActionBar, type FileActionBarProps, fileMenuEntries, useAskAction } from "../components/FileActionBar";
+import { showInLabel } from "../fileManager";
 import { FileActionIcons } from "../components/FileActionIcons";
 import { useFilingAI } from "../components/ai/useFilingAI";
 import { usePutInTrayEntries } from "./FileActions";
@@ -759,7 +769,8 @@ export default function Browse() {
   const ids = useId();
   const newFolder = useNewFolder();
   const setupFolders = useSetupFolders();
-  const [menu, setMenu] = useState<{ x: number; y: number; path: string; name: string; driveId: string } | null>(null);
+  // a right-click menu: the active pane's files (the selection), or one folder (the list's or the tree's)
+  const [menu, setMenu] = useState<{ x: number; y: number; folder: Item | null } | null>(null);
 
   // Paths: one pane uses ?path= (as before), two use ?left=&right=; each pane's
   // view sits beside them (PARAM).
@@ -1226,9 +1237,10 @@ export default function Browse() {
   const markTargets: Item[] =
     checked.length > 0 ? list.filter((it) => checked.includes(it.drive_id)) : moveTargets;
   const markIds = markTargets.map((it) => it.drive_id);
-  const markBlocked =
-    markTargets.map((it) => deletionRefusal(it.path, it.marks)).find((r) => r !== null) ??
-    (lockedIn(markTargets) ? LOCKED_REASON : null);
+  /** Why these cannot go to To Delete (null: they can). */
+  const trashWhy = (rows: Item[]) =>
+    rows.map((it) => deletionRefusal(it.path, it.marks)).find((r) => r !== null) ?? (lockedIn(rows) ? LOCKED_REASON : null);
+  const markBlocked = trashWhy(markTargets);
   selection.current = markIds; // stale dry runs are dropped against this
   // Files under ##. To Delete are read-only: every action on them is off until they are
   // restored. Restore takes the same rows as Mark for deletion (checked folders too).
@@ -1243,14 +1255,18 @@ export default function Browse() {
     else if (running()) toast({ kind: "info", text: MOVE_BUSY });
     else restoring.start(ids, to);
   };
-  // The bin is disabled for these; ⌘⌫ says why instead of doing nothing.
-  const trashSelection = () => {
-    if (markIds.length === 0) return;
-    if (markBlocked) toast({ kind: "info", text: markBlocked });
+  /** Move ``rows`` to To Delete (``current``: what the screen targets now; a dry run for
+   * anything else is dropped). The bin is disabled when it cannot; ⌘⌫ says why instead of
+   * doing nothing. */
+  const trash = (rows: Item[], current?: () => string[]) => {
+    if (rows.length === 0) return;
+    const why = trashWhy(rows);
+    if (why) toast({ kind: "info", text: why });
     else if (marking.running()) toast({ kind: "info", text: TRASH_BUSY });
     else if (running()) toast({ kind: "info", text: MOVE_BUSY });
-    else marking.start(markIds, { current: () => selection.current, links: markTargets.some((it) => it.is_link) });
+    else marking.start(rows.map((it) => it.drive_id), { current, links: rows.some((it) => it.is_link) });
   };
+  const trashSelection = () => trash(markTargets, () => selection.current);
 
   // ★ and ! for the same rows as Move to…: all marked already → unmark; else mark all.
   // (Files that cannot be moved can still be marked.)
@@ -1953,9 +1969,13 @@ export default function Browse() {
                   stripe: stripeOf(pos),
                 };
                 if (item.is_dir) {
+                  // as in Finder: the folder becomes the one selected row, then its menu
                   const onContextMenu = (e: MouseEvent) => {
                     e.preventDefault();
-                    setMenu({ x: e.clientX, y: e.clientY, path: item.path, name: item.name, driveId: item.drive_id });
+                    setActive(pane);
+                    setGone(NONE);
+                    update(pane, { ids: [], index: i, anchor: item.drive_id, touched: true });
+                    setMenu({ x: e.clientX, y: e.clientY, folder: item });
                   };
                   return (
                     <FolderRow
@@ -1981,10 +2001,21 @@ export default function Browse() {
                   const pathOf = new Map(items[pane].map((it) => [it.drive_id, it.path]));
                   return ids.map((d) => pathOf.get(d)).filter((p): p is string => p !== undefined);
                 };
+                // as in Finder: on a selected row the menu acts on the whole selection; on
+                // another row it selects only that row first
+                const onContextMenu = (e: MouseEvent) => {
+                  e.preventDefault();
+                  const picked = s.ids.length > 0 ? s.ids.includes(item.drive_id) : s.touched && s.index === i;
+                  setActive(pane);
+                  setGone(NONE);
+                  if (!picked) update(pane, { ids: [], index: i, anchor: item.drive_id, touched: true });
+                  setMenu({ x: e.clientX, y: e.clientY, folder: null });
+                };
                 return (
                   <EntryRow
                     key={item.drive_id}
                     {...row}
+                    onContextMenu={onContextMenu}
                     via={isSearch && scoped && "c" in scoped ? childOf(item.drive_id, scoped.c, collections.data ?? []) : null}
                     dragIds={dragIds}
                     dragPaths={dragPaths}
@@ -2180,6 +2211,37 @@ export default function Browse() {
     };
     walk(null, 0);
     return out.length > 0 ? out : [{ label: "No open collections", disabled: true, onSelect: () => {} }];
+  };
+  const launch = useFileLaunch("");
+  // Add tag… and Add to collection… (the selection bar's sheets) for a right-click menu
+  const rowTools = useSelectionActions({
+    files: moveTargets.map((it) => ({ drive_id: it.drive_id, name: it.name })),
+    scope: null,
+    all: collections.data ?? [],
+    onDone: () => update(act, { ids: [] }),
+  });
+  /** A folder's right-click menu (the list's and the tree's): New folder inside, Move to…,
+   * Move to To Delete (in To Delete: Restore) and Show in Finder; an off entry says why.
+   * "Delete" is always Move to To Delete: nothing is deleted, and it has Undo. */
+  const folderEntries = (it: Item): MenuEntry[] => {
+    const away = it.connected === false ? "Not connected" : null;
+    const newWhy = newFolderRefusal({ path: it.path, view: "folders" }, false, specialFolders) ?? away;
+    const moveWhy = folderMoveWhy(it) ?? (locked ? MOVE_BUSY : null);
+    // the app's own folders and an archive folder's top stay where they are: none goes to
+    // To Delete, and To Delete itself has nothing to restore
+    const kept = moveWhy === APP_FOLDER_REASON || moveWhy === EXTRA_ROOT_REASON ? moveWhy : null;
+    const trashOff = kept ?? trashWhy([it]) ?? (locked ? MOVE_BUSY : null);
+    const revealWhy = away ?? (launch.busy ? LAUNCH_BUSY : null);
+    return [
+      { label: `New folder inside ${visible(it.name)}…`, onSelect: () => newFolder.open(it.path), disabled: !!newWhy, reason: newWhy ?? undefined },
+      "separator",
+      { label: "Move to…", onSelect: () => openFolderMoveTo(it), disabled: !!moveWhy, reason: moveWhy ?? undefined },
+      ...(inToDelete(it.path) && !kept
+        ? restoreEntries((to) => startRestore([it.drive_id], to), null)
+        : [{ label: TRASH_LABEL, onSelect: () => trash([it]), disabled: !!trashOff, reason: trashOff ?? undefined }]),
+      "separator",
+      { label: showInLabel(), onSelect: () => void launch.run("reveal", it.drive_id), disabled: !!revealWhy, reason: revealWhy ?? undefined },
+    ];
   };
   const barProps: FileActionBarProps = {
     tray: {
@@ -2508,6 +2570,7 @@ export default function Browse() {
                     setTreeOpen(false);
                   }}
                   dropFor={dropTo}
+                  onMenu={(entry, e) => setMenu({ x: e.clientX, y: e.clientY, folder: entry })}
                   head={treeSwitch}
                 />
               )}
@@ -2570,20 +2633,26 @@ export default function Browse() {
       {restoring.view}
       {newFolder.view}
       {setupFolders.view}
-      {menu && (
+      {menu && (menu.folder || moveTargets.length > 0) && (
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={`${visible(menu.name)} actions`}
-          entries={[
-            { label: `New folder inside ${visible(menu.name)}…`, onSelect: () => newFolder.open(menu.path) },
-            ...(inToDelete(menu.path)
-              ? restoreEntries((to) => startRestore([menu.driveId], to), null)
-              : []),
-          ]}
+          label={`Actions for ${
+            menu.folder ? visible(menu.folder.name) : moveTargets.length === 1 ? visible(moveTargets[0].name) : `${moveTargets.length} selected files`
+          }`}
+          entries={
+            menu.folder
+              ? folderEntries(menu.folder)
+              : fileMenuEntries(barProps, {
+                  addTag: () => rowTools.open("add-tag"),
+                  addTo: () => rowTools.open("add"),
+                  reason: readOnlyWhy,
+                })
+          }
           onClose={() => setMenu(null)}
         />
       )}
+      {rowTools.view}
     </div>
   );
 }

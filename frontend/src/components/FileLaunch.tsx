@@ -51,7 +51,7 @@ export function DialogStatus({ status }: { status: ReturnType<typeof useDialogSt
   );
 }
 
-/** ``run("open" | "reveal")``, one request at a time (a synchronous guard: a double
+/** ``run("open" | "reveal")`` (``id``: another file than ``driveId``, a menu's), one request at a time (a synchronous guard: a double
  * click sends one). Outcomes go to ``onResult``, else to the dialog's
  * ``InlineResults``, else a refusal is a toast (success needs no toast there). */
 export function useFileLaunch(driveId: string, onResult?: Report) {
@@ -60,12 +60,12 @@ export function useFileLaunch(driveId: string, onResult?: Report) {
   const report = onResult ?? inline;
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false);
-  const run = async (how: How) => {
+  const run = async (how: How, id = driveId) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     try {
-      await launchFile(driveId, how);
+      await launchFile(id, how);
       report?.({ kind: "info", text: DONE[how]() });
     } catch (e) {
       // A 409 is a full sentence already ("Won't open apps or scripts …").

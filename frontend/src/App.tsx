@@ -1,6 +1,7 @@
 import { CircleAlert, FileQuestion, KeyRound } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import { useContextMenuKeys } from "./contextMenus";
 import { collectionHref } from "./collectionHref";
 import { errorText, NOT_SIGNED_IN, type Status, useConfigured, useSignedOut, useStatus } from "./api/client";
 import { useStyle } from "./appearance";
@@ -131,6 +132,7 @@ function OldCollections() {
 
 /** The viewer window has no sidebar or status polling: just the document. */
 export default function App() {
+  useContextMenuKeys();
   const viewer = useLocation().pathname.startsWith("/viewer/");
   const signedOut = useSignedOut();
   if (signedOut) return <NotSignedIn />;
