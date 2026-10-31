@@ -167,13 +167,13 @@ const posts = (calls: Call[], url: string) =>
 async function setup(extra: Parameters<typeof api>[0] = {}) {
   const calls = api(extra);
   const user = userEvent.setup();
-  renderWithProviders(
+  const { client } = renderWithProviders(
     <MemoryRouter>
       <Inbox />
     </MemoryRouter>,
   );
   const name = await screen.findByLabelText("Name");
-  return { calls, user, name: name as HTMLInputElement };
+  return { calls, user, client, name: name as HTMLInputElement };
 }
 
 async function setFolder(user: ReturnType<typeof userEvent.setup>, value: string) {
@@ -2416,6 +2416,39 @@ describe("Renews …?", () => {
     await setFolder(user, "10. Financial/Banks");
     await waitFor(() => expect(screen.queryByLabelText("New expiry date")).not.toBeInTheDocument());
     expect(screen.queryByText(/Renews "Passport Tiina"/)).not.toBeInTheDocument();
+  });
+
+  it("a chip renewal with its date typed is still dropped when the folder no longer matches", async () => {
+    const { user } = await setup({ "GET /api/renewals/open": { body: [PASSPORT, ELSEWHERE] } });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await setFolder(user, "10. Financial/Banks");
+    await waitFor(() => expect(screen.queryByLabelText("New expiry date")).not.toBeInTheDocument());
+  });
+
+  it("the old file is locked again by its own id when the candidates change under a held unlock", async () => {
+    let open = [{ ...PASSPORT, locked: true }];
+    const { calls, user, client } = await setup({
+      "GET /api/renewals/open": () => ({ body: open }),
+      "POST /api/inbox/preview": (call) =>
+        call.headers["X-Dam-Unlock"] === "tok-1"
+          ? { body: RENEW_PLAN }
+          : { status: 400, body: { error: "This file is locked: 20. Health/Kotihoito/passport.pdf" } },
+      "POST /api/files/old7/unlock": { body: { token: "tok-1" } },
+      "DELETE /api/files/old7/unlock": { status: 204 },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: "Unlock and move" }));
+    const dialog = await screen.findByRole("dialog");
+    // the candidates change while the confirm is open: the old item is gone
+    open = [];
+    await client.invalidateQueries();
+    await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url === "/api/renewals/open").length).toBeGreaterThan(1));
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "DELETE" && c.url === "/api/files/old7/unlock")).toHaveLength(1));
   });
 
   it("a renewal picked by hand stays when the folder changes", async () => {

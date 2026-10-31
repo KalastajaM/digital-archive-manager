@@ -558,7 +558,10 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   const person = filingPerson(entry, folder);
   const renewMatchList = renewMatches(candidates, folder, person);
   // a renewal taken from the chip goes when another folder or person no longer matches it
-  const chipGone = chipRenewal !== null && !renewMatchList.some((c) => c.item_id === chipRenewal);
+  // (not while an unlock is held or the confirm is open: the file to lock again must stay known)
+  const [holding, setHolding] = useState(false);
+  const heldId = useRef(""); // the drive id Unlock and move unlocked, whatever the card shows later
+  const chipGone = chipRenewal !== null && !holding && filing.confirm === null && !renewMatchList.some((c) => c.item_id === chipRenewal);
   useEffect(() => {
     if (!chipGone) return;
     setRenewing((r) => (r?.item_id === chipRenewal ? null : r));
@@ -616,9 +619,8 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   // which unlocks it for this filing and locks it again once the filing is done or its
   // confirm cancelled (or the card goes away), as Renewed… does. Only a lock taken here
   // is given back.
-  const oldId = renewed?.drive_id ?? "";
+  const oldId = holding ? heldId.current : (renewed?.drive_id ?? "");
   const oldLock = useFileLock(oldId, [], null);
-  const [holding, setHolding] = useState(false);
   const relockOnLeave = useRef<(() => void) | null>(null);
   relockOnLeave.current = holding ? oldLock.relock : null;
   useEffect(() => () => relockOnLeave.current?.(), []);
@@ -633,6 +635,7 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     if (!isUnlockedNow(oldId)) {
       await oldLock.unlock("now");
       if (!isUnlockedNow(oldId)) return; // the lock's error says why
+      heldId.current = oldId;
       setHolding(true);
     }
     void filing.fileIt(r);
@@ -725,7 +728,8 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
         value={renewing}
         onChange={(next, viaChip) => {
           setRenewing(next);
-          setChipRenewal(next && viaChip ? next.item_id : null);
+          // a date edit (viaChip unset) keeps how the renewal was taken
+          setChipRenewal((c) => (next === null ? null : viaChip === undefined ? (c === next.item_id ? c : null) : viaChip ? next.item_id : null));
         }}
         disabled={filing.busy}
         locked={oldLocked}
