@@ -17,8 +17,17 @@ import {
   useInbox,
   useStatus,
   useToday,
+  useCollections,
   useTrays,
 } from "../api/client";
+import { fileMenuEntries } from "../components/FileActionBar";
+import { LAUNCH_BUSY, useFileLaunch } from "../components/FileLaunch";
+import { useSelectionActions } from "../components/SelectionActions";
+import { allMarked, useBatchMark } from "../components/useBatchMark";
+import type { MenuEntry } from "../components/ui/Menu";
+import { useContextMenu } from "../components/ui/useContextMenu";
+import { showInLabel } from "../fileManager";
+import { usePutInTrayEntries } from "./FileActions";
 import { useAddFiles } from "../components/AddFiles";
 import { scannedFields } from "../components/FileDetails";
 import { InboxEmpty } from "../components/InboxEmpty";
@@ -534,6 +543,49 @@ export default function Inbox() {
     });
   };
 
+  // A row's right-click menu, as in Finder: on a row of the selection it acts on all of it,
+  // on another row it selects just that one first. Quick Look, Open and Skip need one file.
+  const rowMenu = useContextMenu<string>();
+  const rowLaunch = useFileLaunch("");
+  const batchMarks = useBatchMark();
+  const collections = useCollections("all");
+  const markable = targetEntries.map((e) => ({ drive_id: e.record.drive_id, name: e.record.name ?? baseName(e.record.path), marks: e.record.marks }));
+  const trayEntries = usePutInTrayEntries(targets, markable.length === 1 ? markable[0].name : null);
+  const rowTools = useSelectionActions({ files: markable, scope: null, all: collections.data ?? [], onDone: () => setChecked(new Set()) });
+  const rowEntries = (): MenuEntry[] => {
+    const one = batch.length === 0 && current ? current : null;
+    const busy = locked ? "Another change is under way" : null;
+    const launchOff = { disabled: !!busy || rowLaunch.busy, reason: busy ?? (rowLaunch.busy ? LAUNCH_BUSY : undefined) };
+    const look: MenuEntry[] = one
+      ? [
+          { label: "Quick Look", onSelect: quickLook.open, disabled: !!busy, reason: busy ?? undefined },
+          { label: "Open", onSelect: () => void rowLaunch.run("open", one.record.drive_id), ...launchOff },
+          { label: showInLabel(), onSelect: () => void rowLaunch.run("reveal", one.record.drive_id), ...launchOff },
+          "separator",
+          { label: "Skip", onSelect: skip },
+        ]
+      : [];
+    const codeWhy = filingCodes.length === 0 ? "No filing codes are set up" : busy;
+    return fileMenuEntries(
+      {
+        tray: { label: "Put in tray", entries: trayEntries, disabled: !!busy, reason: busy },
+        star: { on: allMarked(markable, "star"), run: () => void batchMarks.run("star", markable), disabled: batchMarks.busy },
+        important: { on: allMarked(markable, "important"), run: () => void batchMarks.run("important", markable), disabled: batchMarks.busy },
+        trash: { run: trashTargets, count: targets.length, disabled: !!busy, reason: busy },
+      },
+      { addTag: () => rowTools.open("add-tag"), addTo: () => rowTools.open("add"), reason: busy },
+      [...look, { label: "Assign a filing code…", onSelect: () => setPicking(true), disabled: !!codeWhy, reason: codeWhy ?? undefined }],
+    );
+  };
+  const onRowMenu = (id: string) => (e: MouseEvent) => {
+    if (!(batch.length > 0 && checked.has(id))) {
+      if (markedOpen) setSearch({}); // the file is shown in the form
+      setChecked(new Set());
+      setSelectedId(id);
+    }
+    rowMenu.open(id, e);
+  };
+
   if (inbox.isPending) return <p className="placeholder">Loading inbox…</p>;
   if (inbox.isError) {
     return (
@@ -675,6 +727,7 @@ export default function Inbox() {
                 <li
                   key={id}
                   className={cls || undefined}
+                  onContextMenu={onRowMenu(id)}
                   draggable
                   onDragStart={(ev) => {
                     const ids = dragSelection([...checked], id);
@@ -828,6 +881,11 @@ export default function Inbox() {
         />
       )}
       {quickLook.view}
+      {rowMenu.view(() => ({
+        label: `Actions for ${markable.length === 1 ? visible(markable[0].name) : `${markable.length} selected files`}`,
+        entries: rowEntries(),
+      }))}
+      {rowTools.view}
       {trash.view}
       {ruleOffer && (
         <OfferRuleSheet

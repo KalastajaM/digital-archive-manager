@@ -1,19 +1,23 @@
 /** Today's Starred card: the ★ Ongoing files, A–Z; a click on a name shows the file in
  * Browse (its folder, selected and previewed), and each has one-click Open and Quick
  * Look (Space on a focused row too). Its Quick Look has Trash like every Quick Look
- * (spec §8). It folds and moves like every Today card. */
+ * (spec §8). A right-click on a row: Show in Browse, Quick Look, Open, Show in Finder,
+ * Remove the star and Move to To Delete. It folds and moves like every Today card. */
 import { Eye, Star } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { errorText, type Member, useBuiltin, useMark } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
-import { LaunchButtons, useFileLaunch } from "../FileLaunch";
+import { LAUNCH_BUSY, LaunchButtons, useFileLaunch } from "../FileLaunch";
+import { showInLabel } from "../../fileManager";
+import type { MenuEntry } from "../ui/Menu";
+import { useContextMenu } from "../ui/useContextMenu";
 import { browseHref } from "../GroupTree";
 import { MarkIcons, StarGlyph } from "../MarkIcons";
 import { deletionRefusal } from "../MoveTo";
 import { useToast } from "../Toasts";
-import { useTrash } from "../Trash";
+import { TRASH_LABEL, useTrash } from "../Trash";
 import { type QLFile, useQuickLook } from "../useQuickLook";
 import { Card } from "../ui/Card";
 import { IconButton } from "../ui/IconButton";
@@ -28,13 +32,13 @@ const nameOf = (m: Member) => (m.path ? baseName(m.path) : m.drive_id);
 /** A member Quick Look and Open can act on: an indexed file that is there. */
 const usable = (m: Member) => !!m.path && !m.is_dir && !m.missing && !m.quarantined;
 
-/** Unstar from the card in one click (☆); the toast offers Undo. One request at
- * a time per row. */
-function useUnstar(m: Member) {
+/** Unstar from the card in one click (☆) or the row's menu; the toast offers Undo. One
+ * request at a time. */
+function useUnstar() {
   const mark = useMark();
   const toast = useToast();
   const inFlight = useRef(false);
-  const run = async (action: "unstar" | "star") => {
+  const run = async (m: Member, action: "unstar" | "star") => {
     if (inFlight.current) return;
     inFlight.current = true;
     const name = nameOf(m);
@@ -42,7 +46,7 @@ function useUnstar(m: Member) {
       await mark.mutateAsync({ action, ids: [m.drive_id] });
       toast(
         action === "unstar"
-          ? { kind: "info", text: `Unstarred ${name}`, action: { label: "Undo", run: () => void run("star") } }
+          ? { kind: "info", text: `Unstarred ${name}`, action: { label: "Undo", run: () => void run(m, "star") } }
           : { kind: "info", text: `Starred ${name}` },
       );
     } catch (e) {
@@ -51,15 +55,15 @@ function useUnstar(m: Member) {
       inFlight.current = false;
     }
   };
-  return { busy: mark.isPending, unstar: () => void run("unstar") };
+  return { busy: mark.isPending, unstar: (m: Member) => void run(m, "unstar") };
 }
 
-function StarredRow({ m, onLook }: { m: Member; onLook?: () => void }) {
+function StarredRow({ m, onLook, onMenu }: { m: Member; onLook?: () => void; onMenu: (e: React.MouseEvent) => void }) {
   const launch = useFileLaunch(m.drive_id);
-  const unstar = useUnstar(m);
+  const unstar = useUnstar();
   const name = visible(nameOf(m));
   return (
-    <li>
+    <li onContextMenu={onMenu}>
       {/* a click opens Browse at the file's folder with the file selected and previewed;
           Space on it is Quick Look, as before */}
       {m.path && !m.is_dir && !m.missing ? (
@@ -94,7 +98,7 @@ function StarredRow({ m, onLook }: { m: Member; onLook?: () => void }) {
           icon={<StarGlyph size={16} filled={false} />}
           label="Remove the star"
           disabled={unstar.busy}
-          onClick={unstar.unstar}
+          onClick={() => unstar.unstar(m)}
         />
       </span>
     </li>
@@ -163,6 +167,36 @@ export function StarredCard({ frame, Shell = Card }: { frame: CardFrame; Shell?:
       }
     };
   };
+  // a row's right-click menu: the row's buttons and link, plus Move to To Delete
+  const menu = useContextMenu<Member>();
+  const navigate = useNavigate();
+  const launch = useFileLaunch("");
+  const unstar = useUnstar();
+  const entriesFor = (m: Member): MenuEntry[] => {
+    const look = lookAt(m);
+    const there = !m.missing && (usable(m) || m.is_dir);
+    const launchWhy = m.connected === false ? "Not connected" : launch.busy ? LAUNCH_BUSY : null;
+    const launchOff = { disabled: !!launchWhy, reason: launchWhy ?? undefined };
+    const trashWhy = m.path ? deletionRefusal(m.path, m.marks) : "The file is not in the index";
+    return [
+      ...(m.path && !m.is_dir && !m.missing ? [{ label: "Show in Browse", onSelect: () => navigate(browseHref(m.path!, m.drive_id)) }] : []),
+      ...(look ? [{ label: "Quick Look", onSelect: look }] : []),
+      ...(usable(m) ? [{ label: "Open", onSelect: () => void launch.run("open", m.drive_id), ...launchOff }] : []),
+      ...(there ? [{ label: showInLabel(), onSelect: () => void launch.run("reveal", m.drive_id), ...launchOff }] : []),
+      "separator",
+      { label: "Remove the star", onSelect: () => unstar.unstar(m), disabled: unstar.busy },
+      ...(!m.missing && !m.quarantined
+        ? [
+            {
+              label: TRASH_LABEL,
+              onSelect: () => trash.start([m.drive_id], { links: m.is_link }),
+              disabled: !!trashWhy || trash.busy,
+              reason: trashWhy ?? undefined,
+            },
+          ]
+        : []),
+    ];
+  };
   const n = members.length;
   return (
     <Shell
@@ -184,12 +218,13 @@ export function StarredCard({ frame, Shell = Card }: { frame: CardFrame; Shell?:
       ) : (
         <ul className="today-list starred-list" aria-label="Starred files">
           {members.map((m) => (
-            <StarredRow key={m.drive_id} m={m} onLook={lookAt(m)} />
+            <StarredRow key={m.drive_id} m={m} onLook={lookAt(m)} onMenu={(e) => menu.open(m, e)} />
           ))}
         </ul>
       )}
       {quickLook.view}
       {trash.view}
+      {menu.view((m) => ({ label: `Actions for ${visible(nameOf(m))}`, entries: entriesFor(m) }))}
     </Shell>
   );
 }

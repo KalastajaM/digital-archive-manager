@@ -439,3 +439,17 @@ describe("walking the family tree", () => {
     expect(await screen.findByRole("checkbox", { name: "Select receipt.pdf" })).not.toBeChecked();
   });
 });
+
+describe("a relative's right-click menu in the dialog", () => {
+  it("ticks it alone and offers the card's buttons, then the actions with this file", async () => {
+    const { user } = setup();
+    const first = RELATIVES[0];
+    const row = await waitFor(() => rowOf(first.name));
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    const menu = await screen.findByRole("menu", { name: `Actions for ${first.name}` });
+    expect(screen.getByRole("checkbox", { name: `Select ${first.name}` })).toBeChecked();
+    const names = Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+    expect(names.slice(0, 4)).toEqual(["Quick Look", "Its relatives", "Show in folder", "Not related"]);
+    expect(names).toContain("Tag it and this file…");
+  });
+});

@@ -84,6 +84,7 @@ export function TrayRow({
   traysUnknown,
   formOpen,
   setFormOpen,
+  onMenu,
 }: {
   entry: Row;
   /** It needs attention: fields and copy buttons are shown (later items stay compact). */
@@ -96,6 +97,8 @@ export function TrayRow({
   traysUnknown: boolean;
   formOpen: boolean;
   setFormOpen: (open: boolean) => void;
+  /** The item's right-click menu (Mark done, Move to tray, Remove, its file). */
+  onMenu?: (e: React.MouseEvent) => void;
 }) {
   const { item, level } = entry;
   const defs = tray?.fields ?? {};
@@ -129,6 +132,7 @@ export function TrayRow({
     <article
       className={`today-row attention attention-${level ?? "later"}${full ? "" : " today-row-compact"}`}
       aria-label={visible(item.title)}
+      onContextMenu={onMenu}
     >
       <input
         type="checkbox"

@@ -8,6 +8,14 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **More right-click menus.** Inbox files (Quick Look, Open, Show in Finder, Skip, Assign a
+  filing code, a tray by name, Add tag, Add to collection, the marks and Move to To
+  Delete; on a selection, all of it), tray items in the Trays list and on Today (Mark done
+  or Reopen, Move to another tray, Remove from tray, Open item, Open file, Show in folder,
+  Show in Finder), Today's starred files, a collection's files and group headings, and
+  relatives in the details panel and the connections window (Quick Look, Show in Browse,
+  Not related and the ticked files' actions with this file). A menu over a window now opens
+  inside it.
 - **Rename a folder.** A folder's panel in Browse and its right-click menu (in the list
   and the folder tree) have **Rename…**: the preview lists every
   place that holds its path (index, rules, filing codes, protected and AI-excluded folders,

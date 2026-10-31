@@ -215,7 +215,8 @@ Trays, Collections, Tags and Archive fold: hold the pointer on the caption and c
 at its right. A folded Trays shows its open total next to the caption. dam remembers in
 this browser which sections you folded.
 
-**Right-click menus.** Rows in the sidebar and in Browse (the list and the trees) have a
+**Right-click menus.** Rows in the sidebar, Browse (the list and the trees), the Inbox, the
+trays, Today's tray lists and Starred, a collection's files and groups, and Relatives have a
 right-click menu with their actions. An entry that cannot run now is greyed, with the
 reason under it. With the keyboard, **⇧F10** (or the menu key) opens the menu of the row
 that has the focus. The browser's own right-click menu is off everywhere else, except in
@@ -249,7 +250,10 @@ nothing overdue", or "All clear") and the date, then cards.
 Trays with nothing open are folded into one **Clear** card, so the cards with content get
 the room. Each tray row has a round checkbox that marks the item done at once (a bill is
 marked paid today), with a toast to undo it; only a done field that needs a value you must
-give opens a small form. Drag a card by its header to reorder, or press ⌥↑ / ⌥↓ with the
+give opens a small form. Right-click a tray row, or a bill in the New look's **To pay**
+table, for the tray item's menu (see [Working on an item](#working-on-an-item)); right-click a **Starred** file for
+**Show in Browse**, **Quick Look**, **Open**, **Show in Finder**, **Remove the star** and
+**Move to To Delete**. Drag a card by its header to reorder, or press ⌥↑ / ⌥↓ with the
 focus on it; **Reset layout** under the date restores the default order.
 
 **The New look** (Settings, Appearance) lays Today out differently, with the same content:
@@ -286,7 +290,11 @@ with a form beside it for name, folder, tags, tray, tray fields, collections and
    applies exactly what was previewed; the toast has **Undo**.
 
 **Skip** (or `s`) leaves the file where it is and goes on to the next one; nothing in the
-archive changes. In the New look the Inbox is arranged as: the list (with an **All / Bills /
+archive changes. Right-click a file in the list for **Quick Look**, **Open**, **Show in
+Finder**, **Skip**, **Assign a filing code…**, a tray by name (**Put in To pay**), **Add
+tag…**, **Add to collection…**, **Star**, **Mark Important** and **Move to To Delete**. As in
+Finder, right-clicking a selected file acts on the whole selection (then Quick Look, Open and
+Skip are left out); right-clicking another file selects just that one first. In the New look the Inbox is arranged as: the list (with an **All / Bills /
 New** filter: Bills are files where the scan found a due date or an amount, New are files no
 rule suggests anything for), one bar over the document (name, zoom, **Draw a box**, **Open**
 and a **...** menu), and the filing panel, whose header names the rule behind the suggestion
@@ -999,6 +1007,12 @@ written, otherwise any AI summary.
 - **Remove from tray** (the icon in the header, or ⌫) asks first, then deletes the item with
   its note, checklist and history. The files are never touched, so there is no undo for
   this.
+- **Right-click an item** in the list (it opens, as on a click) for **Mark done** (the
+  tray's own label, such as **Mark paid**; **Reopen** for a done item), **Move to** each
+  other tray, **Remove from tray…**, and its file: **Open file**, **Show in folder** and
+  **Show in Finder**. Today's tray rows and **To pay** table have the same menu, with **Open
+  item** as well. Marking done and moving say so in a toast with **Undo**; a done field you
+  must fill in first takes you to the item.
 - **Back to inbox** (in the header's icons) moves the file the item shows into the inbox, with the usual preview and Undo; the item stays in its tray.
 - **Move to To Delete** (the bin, last in the header's icons) acts on the file the item
   shows, with its usual confirm and Undo; the item keeps the file, now shown as in To
@@ -1174,6 +1188,9 @@ any depth, plus **Ungrouped**. **New group** adds one; each group's **⋯** menu
 a summary, New subgroup, Move up / Move down and **Remove group…**, which moves its files
 to the parent group (no file or membership is removed). Drag members between groups, or
 choose the group in the panel on the right. In `##. Important` each group is a subfolder.
+Right-click a group's heading for the same menu as its **⋯**. Right-click a file to select it
+and get **Quick Look**, **Open**, **Show in folder** and **Show in Finder**, then the
+file actions of the header (**Remove from collection** among them).
 
 Other collections nest instead (see Parent collections). Collections made with an earlier
 version could have groups too: the first time this version opens, each such group becomes
@@ -1493,6 +1510,13 @@ cut down to the folders that hold a relative (and this file's own), nested by pa
 per relative with its checkbox, its link labels and **+ same month**. This file's row is
 highlighted in its folder; files still in the inbox sit under **Inbox** on an orange tint. A
 folder with more than eight relatives is folded to its name and a count; click it to open it.
+
+Right-click a relative for **Quick Look**, **Its relatives**, **Show in folder** and **Not
+related** (in the block's list: Quick Look, Show in Browse and Not related), then what the ticked
+files can do together with this file: **Tag it and this file…**, **Add it and this file to a
+collection…**, **Move it and this file to a folder…**, **Link it here** and **Link this file
+there** (greyed with the reason when no link is needed). A relative that is not ticked is
+ticked alone first; on a ticked one the entries say "them" and act on all ticked.
 
 An arc runs from this file's row to each relative's row. A thicker arc means more in common,
 and an orange dashed one means the file is not filed yet. When another folder holds two or

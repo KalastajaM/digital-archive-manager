@@ -35,6 +35,15 @@ describe("ContextMenu", () => {
     expect(menu).toHaveTextContent("Files in To Delete stay put");
   });
 
+  it("over a modal dialog, it is drawn inside the dialog (the page behind is inert)", () => {
+    const dialog = document.createElement("dialog");
+    dialog.setAttribute("open", "");
+    document.body.append(dialog);
+    render(<ContextMenu x={10} y={10} label="In the dialog" entries={[{ label: "Open", onSelect: () => {} }]} onClose={() => {}} />);
+    expect(dialog).toContainElement(screen.getByRole("menu", { name: "In the dialog" }));
+    dialog.remove();
+  });
+
   it("a leading, trailing or doubled rule is dropped", () => {
     render(
       <ContextMenu
