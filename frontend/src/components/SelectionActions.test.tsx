@@ -30,7 +30,8 @@ const coll = (id: number, name: string, parent_id: number | null, members: strin
 const LEGAL = coll(1, "Legal", null, ["a"]);
 const MICHIEL = coll(2, "Michiel", 1, ["b"]);
 const CAR = coll(3, "Car", null, ["b"]);
-const ALL = [LEGAL, MICHIEL, CAR];
+const SHUT = { ...coll(5, "Old house", null, []), state: "closed" as const };
+const ALL = [LEGAL, MICHIEL, CAR, SHUT];
 const FILES = [
   { drive_id: "a", name: "a.pdf" },
   { drive_id: "b", name: "b.pdf" },
@@ -165,6 +166,32 @@ describe("SelectionActions", () => {
     expect(await screen.findByText("Moved a.pdf to Car, but not b.pdf: Michiel is busy")).toBeInTheDocument();
     await undo(user);
     await waitFor(() => expect(posts(calls, "/api/collections/3/members/move")).toEqual([{ to: 1, drive_ids: ["a"] }]));
+  });
+
+  it("Move does not offer the collection every selected file is already in", async () => {
+    const { user } = setup(LEGAL);
+    // a.pdf is in Legal itself, b.pdf in Michiel: both offered when the two are selected
+    let sheet = await open(user, "Move to collection…");
+    expect(within(sheet).getByRole("option", { name: "Michiel" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    cleanup();
+    mockFetch({});
+    renderWithProviders(<SelectionActions files={[FILES[1]]} scope={LEGAL} all={ALL} onDone={vi.fn()} />);
+    const one = userEvent.setup();
+    await one.click(screen.getByRole("button", { name: "Actions for b.pdf" }));
+    await one.click(await screen.findByRole("menuitem", { name: "Move to collection…" }));
+    sheet = await screen.findByRole("dialog");
+    expect(within(sheet).queryByRole("option", { name: "Michiel" })).toBeNull();
+  });
+
+  it("a closed collection's name is not offered as a new one", async () => {
+    const { calls, user } = setup();
+    const sheet = await open(user, "Add to collection…");
+    expect(within(sheet).queryByRole("option", { name: "Old house" })).toBeNull(); // only open ones to pick
+    await user.type(within(sheet).getByRole("combobox"), "old house{Enter}");
+    expect(within(sheet).getByText("Old house is closed: reopen it first")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("option", { name: /New:/ })).toBeNull();
+    expect(calls.some((c) => c.method === "POST" && c.url === "/api/collections")).toBe(false);
   });
 
   it("offers Move to collection only while a collection is shown", async () => {

@@ -1,10 +1,10 @@
 /** Merge into…: pick the collection to merge into, read what happens (and that it cannot be
  * undone), then merge. */
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
-import { mockFetch, renderWithProviders } from "../test-utils";
+import { deferred, mockFetch, renderWithProviders } from "../test-utils";
 import { MergeCollectionSheet } from "./MergeCollectionSheet";
 
 const coll = (id: number, name: string, parent_id: number | null = null, state: "open" | "closed" = "open"): CollectionRow => ({
@@ -67,6 +67,22 @@ describe("MergeCollectionSheet", () => {
     await second.user.click(within(sheet).getByRole("option", { name: "House" }));
     expect(await within(sheet).findByText(/House is not in ##\. Ongoing, so the links of Old house there come down/)).toBeInTheDocument();
     expect(within(sheet).queryByText(/move into House's folder/)).toBeNull();
+  });
+
+  it("a late check for an earlier pick never shows under the newer one", async () => {
+    const slow = deferred<{ body: unknown }>();
+    mockFetch({
+      "POST /api/collections/1/merge/preview": (call) => ((call.body as { into: number }).into === 3 ? slow.promise : { body: { problems: [] } }),
+    });
+    renderWithProviders(<MergeCollectionSheet c={OLD} all={[...ALL, coll(5, "Barn")]} onDone={vi.fn()} onCancel={() => {}} />);
+    const user = userEvent.setup();
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("option", { name: "House" }));
+    await user.click(within(sheet).getByRole("option", { name: "Barn" }));
+    expect(await within(sheet).findByRole("button", { name: "Merge" })).toBeInTheDocument();
+    await act(async () => slow.resolve({ body: { problems: ["House is closed: reopen it first"] } }));
+    expect(within(sheet).queryByRole("alert")).toBeNull();
+    expect(within(sheet).getByRole("button", { name: "Merge" })).toBeInTheDocument();
   });
 
   it("says why it cannot merge, and offers no Merge button", async () => {

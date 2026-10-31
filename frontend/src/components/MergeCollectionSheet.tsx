@@ -1,7 +1,7 @@
 /** Merge into…: a collection goes into another. Its files and the collections inside it join
  * that one, its note, checklist and summary are added to that one's, and it goes. There is
  * no Undo: a snapshot is taken first, and the sheet says so before anything happens. */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { type CollectionRow, errorText, useMergeCollection } from "../api/client";
 import { visible } from "../text";
 import { changeToast } from "./collectionText";
@@ -39,11 +39,17 @@ export function MergeCollectionSheet({
     return !!x && x.state === "open" && !!x.publish?.ongoing && (x.parent_id === null || published(x.parent_id));
   };
 
+  // the pick whose check is awaited: a late answer for an earlier pick is dropped
+  const asked = useRef<number | null>(null);
   const choose = (x: CollectionRow) => {
     setInto(x);
     setProblems(null);
     setError(null);
-    check(c.id, x.id).then(setProblems, (e) => setError(errorText(e)));
+    asked.current = x.id;
+    check(c.id, x.id).then(
+      (p) => asked.current === x.id && setProblems(p),
+      (e) => asked.current === x.id && setError(errorText(e)),
+    );
   };
   const go = async () => {
     if (!into) return;

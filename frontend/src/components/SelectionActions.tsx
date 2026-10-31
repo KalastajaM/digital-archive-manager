@@ -21,6 +21,7 @@ function PickSheet({
   title,
   options,
   allowNew,
+  refuse,
   hint,
   onPick,
   onClose,
@@ -28,6 +29,8 @@ function PickSheet({
   title: string;
   options: string[] | null;
   allowNew?: boolean;
+  /** Why a typed name cannot be made new (a closed collection's), or null. */
+  refuse?: (typed: string) => string | null;
   hint?: string;
   onPick: (name: string, isNew: boolean) => void;
   onClose: () => void;
@@ -36,11 +39,12 @@ function PickSheet({
   const [typed, setTyped] = useState("");
   const shown = (options ?? []).filter((o) => fold(o).includes(fold(typed)));
   const exact = (options ?? []).find((o) => fold(o) === fold(typed));
+  const refused = allowNew && typed.trim() && !exact ? (refuse?.(typed.trim()) ?? null) : null;
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter" || !typed.trim()) return;
     e.preventDefault();
     if (exact) onPick(exact, false);
-    else if (allowNew) onPick(typed.trim(), true);
+    else if (allowNew && !refused) onPick(typed.trim(), true);
   };
   return (
     <Sheet open title={title} onClose={onClose} onKeyDown={(e) => e.stopPropagation()}>
@@ -69,7 +73,8 @@ function PickSheet({
               </button>
             </li>
           ))}
-          {allowNew && typed.trim() && !exact && (
+          {refused && <li className="hint">{visible(refused)}</li>}
+          {allowNew && typed.trim() && !exact && !refused && (
             <li>
               <button type="button" role="option" aria-selected="false" onClick={() => onPick(typed.trim(), true)}>
                 New: {visible(typed.trim())}
@@ -110,6 +115,11 @@ export function SelectionActions({
   const ordinary = useMemo(() => all.filter((c) => !c.kind), [all]);
   const open = ordinary.filter((c) => c.state === "open");
   const byName = (name: string) => ordinary.find((c) => fold(c.name) === fold(name));
+  /** A typed name that is a closed collection's: it cannot be made again, nor used. */
+  const closedName = (name: string) => {
+    const c = byName(name);
+    return c && c.state === "closed" ? `${c.name} is closed: reopen it first` : null;
+  };
   /** Within the shown tree: each file's own collection (the scope, or the child it is in). */
   const homeOf = useMemo(() => {
     if (!scope) return null;
@@ -260,6 +270,8 @@ export function SelectionActions({
         fail(e);
       });
   };
+  /** Whether every selected file is in ``c`` already (moving them there would do nothing). */
+  const homeOfAll = (c: CollectionRow) => homeOf !== null && ids.every((id) => homeOf(id)?.id === c.id);
   const inThem = ordinary.filter((c) => c.members.some((m) => ids.includes(m.drive_id)));
 
   return (
@@ -282,7 +294,14 @@ export function SelectionActions({
       )}
       {sheet === "remove-tag" && <PickSheet title={`Remove a tag from ${what}`} options={carried} onPick={(n) => void removeTag(n)} onClose={close} />}
       {sheet === "add" && (
-        <PickSheet title={`Add ${what} to a collection`} options={open.map((c) => c.name)} allowNew onPick={(n, isNew) => void addTo(n, isNew)} onClose={close} />
+        <PickSheet
+          title={`Add ${what} to a collection`}
+          options={open.map((c) => c.name)}
+          allowNew
+          refuse={closedName}
+          onPick={(n, isNew) => void addTo(n, isNew)}
+          onClose={close}
+        />
       )}
       {sheet === "remove" &&
         (scope ? (
@@ -309,8 +328,9 @@ export function SelectionActions({
       {sheet === "move" && scope && (
         <PickSheet
           title={`Move ${what} to another collection`}
-          options={open.filter((c) => c.id !== scope.id).map((c) => c.name)}
+          options={open.filter((c) => c.id !== scope.id && !homeOfAll(c)).map((c) => c.name)}
           allowNew
+          refuse={closedName}
           hint={`The files leave ${visible(scope.name)} (or the collection inside it they are in) and join the one you pick.`}
           onPick={(n, isNew) => void moveTo(n, isNew)}
           onClose={close}
