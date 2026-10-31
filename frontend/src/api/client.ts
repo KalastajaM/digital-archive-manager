@@ -702,6 +702,7 @@ function useRefresh() {
     void client.invalidateQueries({ queryKey: keys.collections });
     void client.invalidateQueries({ queryKey: keys.fileLinks });
     void client.invalidateQueries({ queryKey: keys.notes });
+    void client.invalidateQueries({ queryKey: keys.checklist }); // a merge adds to the target's
     void client.invalidateQueries({ queryKey: keys.ongoing }); // undo of a conversion
     void client.invalidateQueries({ queryKey: keys.important });
     void client.invalidateQueries({ queryKey: keys.locks });
