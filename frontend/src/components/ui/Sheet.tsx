@@ -1,4 +1,5 @@
 import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   open: boolean;
@@ -23,7 +24,9 @@ type Props = {
 
 /** A Mac-style sheet over the native modal <dialog>: ``dialog[open]`` while ``open``.
  * Focus is trapped by the browser. Mounted only while open, so closing resets it.
- * The title and the footer are fixed; only the body between them scrolls. */
+ * The title and the footer are fixed; only the body between them scrolls. Rendered into the
+ * page's body, so a sheet opened from inside another (a folder picker in the rule sheet)
+ * never takes the outer one's styles; its events still reach its React parents. */
 export function Sheet({ open, title, onClose, children, footer, ref, onKeyDown, className, subtitle, closeButton }: Props) {
   const inner = useRef<HTMLDialogElement | null>(null);
   const headingId = useId();
@@ -46,7 +49,7 @@ export function Sheet({ open, title, onClose, children, footer, ref, onKeyDown, 
     };
   }, [open]);
   if (!open) return null;
-  return (
+  return createPortal(
     <dialog
       ref={setRef}
       className={className ? `sheet ${className}` : "sheet"}
@@ -86,6 +89,7 @@ export function Sheet({ open, title, onClose, children, footer, ref, onKeyDown, 
       )}
       <div className="sheet-body">{children}</div>
       {footer && <div className="sheet-footer">{footer}</div>}
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }

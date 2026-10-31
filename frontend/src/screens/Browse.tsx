@@ -85,6 +85,7 @@ import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { FilePanel, FolderPanel } from "./FilePanel";
 import { FolderTree } from "../components/FolderTree";
+import { SelectionActions } from "../components/SelectionActions";
 import { childOf, scopedCollection } from "../collectionScope";
 import CollectionDetail from "./CollectionDetail";
 import { CollectionTree } from "../components/BrowseCollectionTree";
@@ -814,6 +815,14 @@ export default function Browse() {
     watch.observe(el);
     return () => watch.disconnect();
   }, [isNew]);
+  // the sidebar's New collection (``new=1``) and the old closed list (``closed=1``) act in the
+  // tree: when it is folded away, open it over the panes so its sheet can show
+  // (read the width here: the tree drops ``new`` before ``narrow`` is first set)
+  const treeAsked = params.get("new") === "1" || params.get("closed") === "1";
+  useEffect(() => {
+    const width = bodyRef.current?.clientWidth ?? 0;
+    if (isNew && treeAsked && width > 0 && width <= TREE_FOLDS_AT) setTreeOpen(true);
+  }, [isNew, treeAsked]);
   const act: PaneId = split ? active : "left";
   const shown: PaneId[] = split ? PANES : ["left"];
   const flatOf = (pane: PaneId) => panes[pane].view === "files";
@@ -1817,7 +1826,7 @@ export default function Browse() {
             <CollectionDetail key={scoped.c.id} id={scoped.c.id} variant="scope" headerSlot={scopeSlot} onSelectFile={(driveId) => selectInSearch(driveId)} />
           ) : (
             <p className="notice collection-missing">
-              No collection named {visible(scoped.missing)}. <Link to="/collections">See the collections</Link>
+              No collection named {visible(scoped.missing)}. <Link to="/browse?tree=collections">See the collections</Link>
             </p>
           )
         )}
@@ -1829,6 +1838,18 @@ export default function Browse() {
             onRemove={(f) => setFilters(filters.filter((x) => !sameFilter(x, f)))}
             onAdd={(name) => addTags([name])}
           />
+        )}
+        {checkedFiles > 0 && (
+          // several files: what can be done to them all at once (tags, collections)
+          // (the toolbar already says how many are selected)
+          <div className="selection-bar" role="group" aria-label="Selected files">
+            <SelectionActions
+              files={fileRows.filter((it) => checkedIds.has(it.drive_id)).map((it) => ({ drive_id: it.drive_id, name: it.name }))}
+              scope={isSearch && scoped && "c" in scoped ? scoped.c : null}
+              all={collections.data ?? []}
+              onDone={() => update(pane, { ids: [] })}
+            />
+          </div>
         )}
         <DropZone drop={paneDrop(pane)}>
           {body === null && !columns && (
@@ -2462,7 +2483,27 @@ export default function Browse() {
           {(treeDocked || treeOverlay) && (
             <>
               {treeKind === "collections" ? (
-                <CollectionTree active={scopeOf(filters)} onPick={pickScope} head={treeSwitch} />
+                <CollectionTree
+                  active={scopeOf(filters)}
+                  onPick={pickScope}
+                  head={treeSwitch}
+                  onDeleted={(names) => {
+                    // leave a search on any collection that went, the inner ones too
+                    const gone = new Set(names.map((n) => n.toLowerCase()));
+                    setFilters(filters.filter((f) => !(f.name === "collection" && gone.has(f.value.toLowerCase()))));
+                  }}
+                  startNew={params.get("new") === "1"}
+                  onStartedNew={() =>
+                    setParams(
+                      (p) => {
+                        p.delete("new");
+                        return p;
+                      },
+                      { replace: true },
+                    )
+                  }
+                  startClosed={params.get("closed") === "1"}
+                />
               ) : treeKind === "tags" ? (
                 <TagTree active={scopeOf(filters)} onPick={pickScope} head={treeSwitch} />
               ) : (

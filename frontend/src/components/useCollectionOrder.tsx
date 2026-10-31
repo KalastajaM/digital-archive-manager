@@ -148,9 +148,11 @@ export function orderKeys(order: CollectionOrder, c: CollectionRow) {
     if (!order.canStep(c, dir)) return;
     const row = e.currentTarget as HTMLElement;
     order.step(c, dir);
-    // a moved row can lose the focus when the browser re-inserts it
+    // a moved row can lose the focus when the browser re-inserts it; found again in its
+    // own list (the sidebar and Browse's tree both have a row for it)
+    const list = row.closest("nav") ?? document;
     setTimeout(() => {
-      const again = document.querySelector<HTMLElement>(`[data-collection-id="${c.id}"]`) ?? row;
+      const again = list.querySelector<HTMLElement>(`[data-collection-id="${c.id}"]`) ?? row;
       if (document.activeElement !== again) again.focus();
     }, 50);
   };

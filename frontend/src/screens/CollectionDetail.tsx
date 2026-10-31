@@ -53,6 +53,8 @@ import {
 import { AIProposal } from "../components/ai/AIProposal";
 import { AIHint, useAISend, useAIState } from "../components/ai/useAI";
 import { AddFile } from "../components/AddFile";
+import { DeleteCollectionSheet } from "../components/DeleteCollectionSheet";
+import { MergeCollectionSheet } from "../components/MergeCollectionSheet";
 import { NewCollectionSheet } from "../components/NewCollectionSheet";
 import { Banner } from "../components/Banner";
 import { Checklist } from "../components/Checklist";
@@ -825,6 +827,8 @@ export default function CollectionDetail({
   const status = useStatus();
   const [movingTo, setMovingTo] = useState(false);
   const [newChild, setNewChild] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // Summaries auto-save on their own (one in flight each): a separate mutation, so a
   // summary save never makes the page look busy or blocks a move.
   const summaryChange = useGroupChange();
@@ -1318,6 +1322,8 @@ export default function CollectionDetail({
           disabled: busy,
           onSelect: () => void start({ action: { id, action: "reopen" }, title: `Reopen ${c.name}?`, label: "Reopen", done: `Reopened ${c.name}` }),
         },
+    { label: "Merge into…", disabled: busy, onSelect: () => setMerging(true) },
+    { label: "Delete…", disabled: busy, onSelect: () => setDeleting(true) },
   ];
 
   // What the file actions that move or edit a file need: a file in the index, not locked.
@@ -1902,6 +1908,27 @@ export default function CollectionDetail({
             setNewChild(false);
             toast({ kind: "info", text: `Created ${child.name} inside ${c.name}` });
             navigate(collectionHref(child));
+          }}
+        />
+      )}
+      {deleting && (
+        <DeleteCollectionSheet
+          c={c}
+          onCancel={() => setDeleting(false)}
+          onDone={() => {
+            setDeleting(false);
+            navigate("/browse?tree=collections", { replace: true });
+          }}
+        />
+      )}
+      {merging && (
+        <MergeCollectionSheet
+          c={c}
+          all={allCollections.data ?? []}
+          onCancel={() => setMerging(false)}
+          onDone={(into) => {
+            setMerging(false);
+            navigate(collectionHref(into), { replace: true });
           }}
         />
       )}

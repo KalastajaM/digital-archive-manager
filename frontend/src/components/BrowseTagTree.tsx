@@ -5,7 +5,7 @@
  *
  * Keyboard (the tree view pattern): ↑ and ↓ move, → opens a group, ← closes it (or steps
  * out to it), Home and End go to the first and last, Enter picks (with Cmd: adds). */
-import { ChevronRight, Plus, Tag as TagIcon } from "lucide-react";
+import { ChevronRight, FolderPlus, Plus, Tag as TagIcon } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useState } from "react";
 import { type TagInfo as Tag, useAllTags } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
@@ -138,6 +138,7 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
           onChange={(e) => setTyped(e.target.value)}
         />
         <IconButton icon={<Plus />} label="New tag" onClick={() => manager.open({ kind: "create" })} />
+        <IconButton icon={<FolderPlus />} label="New group" tip="New group of tags" onClick={() => manager.open({ kind: "group" })} />
       </div>
       <ul role="tree" aria-label="Tag tree" className="tree-list" onKeyDown={onTreeKeys}>
         {flat

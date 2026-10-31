@@ -1043,7 +1043,8 @@ everything about a house sale. Files stay where they are; the collection follows
 when they are moved or renamed. A file can be in several collections.
 
 A collection opens in Browse, with the **Collections** tree beside it (from the sidebar,
-the Collections page, Today, a file's panel or the search palette). Above its files is the
+Today, a file's panel or the search palette). The sidebar's **Collections** caption opens
+Browse with that tree, and its **+** makes a new collection there. Above its files is the
 collection itself. Its name and an Open / Closed pill take the place of the folder path in
 the pane's bar, with its actions as icons (each says what it does when you hover it):
 **Hide details**, **Add files**, **Show folder**, **Export…** and **⋯** (Rename, Move to…,
@@ -1090,7 +1091,7 @@ preview first.
 ### Parent collections
 
 A collection can live inside another, to any depth: `Houses › Sauna › Deck`. Drag it onto
-the middle of another collection in the sidebar or on the Collections page (or onto the
+the middle of another collection in the sidebar (or onto the
 **Collections** caption for the top level; see Order of collections),
 or use **Move to…** in its **⋯** menu; **New collection inside…** creates a child. In
 `##. Ongoing` a child is a folder inside its parent's folder. A parent with open children
@@ -1110,21 +1111,46 @@ and cannot be moved; the others follow in the order you give them, among the col
 with the same parent. A new collection goes at the end of its siblings, and so does one
 you move into another.
 
-Drag a collection (in the sidebar or on the **Collections** page) onto another row. The row
+Drag a collection in the sidebar or in Browse's Collections tree onto another row. The row
 has three zones. The **top third** puts the dragged collection just before the row and the
 **bottom third** just after it, shown by a line. The **middle third** puts it inside that
 collection, shown by a highlighted row. When the row belongs to another parent, the line
 moves the collection to that parent as well, at that place: that is how you take a nested
-collection back out. Dropping on the **Collections** heading in the sidebar (or on the
-strip that appears above the list on the Collections page while you drag) moves it to the
-top level, as the last one. A collection cannot go inside itself or one of its own
+collection back out. Dropping on the **Collections** heading in the sidebar (or, in Browse's tree, on the strip
+that shows above the tree while you drag) moves it to the top level, as the last one. A collection cannot go inside itself or one of its own
 collections.
 
 From the keyboard, press **Alt+↑** or **Alt+↓** on a collection, or use **Move up** and
-**Move down** in its right-click menu (sidebar and page) or in the **⋯** menu on its page.
+**Move down** in its right-click menu (sidebar and Browse's Collections tree) or in the **⋯** menu on its page.
 For a nested collection **Move out one level** (or **Alt+←**) puts it right after its
 parent. Each move is announced. A move within one parent changes only the order: no file
 or link moves.
+
+### Merging collections
+
+**Merge into…** (in a collection's **⋯** menu, or its right-click menu in Browse's
+Collections tree) puts one collection into another you pick. Its files and the collections
+inside it join that one, its summary and checklist are added after that one's, and its note
+is added under "From <name>:". Then it is removed. In `##. Ongoing` its links move into the
+other collection's folder. The sheet says what happens first, and refuses where a merge
+cannot be done: into a closed collection (reopen it first), into one of its own
+collections, Starred or Important, or when the joined note or summary would be too long.
+
+### Deleting a collection
+
+**Delete…** (in the same two menus) removes a collection and every collection inside it,
+with their memberships, notes, checklists, summaries and links in `##. Ongoing`. **Your
+files are never deleted or moved.** The sheet lists each collection that goes, closed ones
+too, with its number of files. Starred and Important cannot be deleted.
+
+Merging and deleting cannot be undone: dam takes a snapshot first (Settings, Snapshots),
+and the sheet says so. Restoring that snapshot is the way back.
+
+Neither leaves links in `##. Ongoing` that dam no longer knows about. While the archive is
+not connected, a collection with links there is not merged or deleted. If the links cannot
+all be taken down, a delete stops with the collections closed, not deleted, and a merge
+leaves the emptied collection; try again once the problem in the toast is fixed. A delete
+is also refused if a collection was made inside since the sheet listed them.
 
 ### Groups
 
@@ -1255,19 +1281,31 @@ list's width.
   title. The same tag shows in **Files** and in search results.
 - **Folders, Collections, Tags** at the top of the tree beside the panes (New look) choose
   what the tree shows. **Folders** is the folder tree. **Collections** lists Important and
-  Starred, then the open collections as they nest. **Tags** lists the tags by group, as on
-  the Tags screen, each with its number of files, under a box that narrows the list as you
+  Starred, then the open collections as they nest. After a collection's name come an orange
+  mark when `##. Ongoing` has a problem with it (hover it for what), its open checks and its
+  number of files; hover the name for its counts in words. **Tags** lists the tags by group, each
+  with its number of files, under a box that narrows the list as you
   type. A click on a collection or tag lists its files from the whole archive: it is a
   search, shown as its chip (`collection:Car`, `tag:medical`), and a collection includes the
   collections inside it, with the collection's header and details above the files (see
   Collections). A second click replaces the first; Cmd-click (Ctrl-click) on a tag
   adds it, and the chips' **All** / **Any** choose between both tags and either. Right-click
-  a collection in the tree for Open, **New collection inside…** and Move up / Move down /
-  Move out one level; **+** above the tree makes a new collection. Right-click a tag for
-  Rename, Merge into, Pin to the sidebar, its group and Delete, as on the Tags screen (a
-  group: Rename group, Delete group); **+** beside the filter box makes a new tag. Files
+  a collection in the tree for Open, **New collection inside…**, **Merge into…**,
+  **Delete…** and Move up / Move down / Move out one level; above the tree, **Show closed**
+  lists the closed collections too (greyed) and **+** makes a new collection. Right-click a
+  tag for Rename, Merge into, Pin to the sidebar, its group and Delete (a group: Rename
+  group, Delete group); beside the filter box, **+** makes a new tag and the folder icon a
+  new group (see Tags). Files
   dropped on a collection in the tree are added to it, as in the sidebar. The choice of tree
   is kept in the address, so Back and a copied link keep it.
+- **Actions on several files.** With files ticked, the bar above the list has
+  **Selected**, a menu of **Add tag…**, **Remove tag…**, **Add to collection…** and
+  **Remove from collection…**, and, while Browse shows a collection, **Move to
+  collection…**. Each opens a short list to pick from, with a box that narrows it; a name
+  that is not there yet makes a new tag or collection. Every change has **Undo** in its
+  toast. This is also how you split a tag or a collection: open it in the tree, tick the
+  files that belong elsewhere, and add them to another tag (then remove the old one) or
+  move them to another collection.
 - **Folders / Files** switches between the folder view and a flat list of every file below
   the current folder, with sortable Name, Folder, Date and Size columns (up to 500 rows). A
   collection's files are a search: `collection:"House sale"`.
@@ -1329,25 +1367,26 @@ Tips:
 
 ## Tags
 
-The **Tags** screen (sidebar, under Collections) lists every tag with the number of files
-that have it, with a filter box. Click a tag to see its files in Browse. Each tag has a
-menu, and every change shows a toast with **Undo**:
+Tags are managed in Browse's **Tags** tree (the sidebar's **Tags** caption opens it). It
+lists every tag by group with the number of files that have it, under a filter box. Click a
+tag to see its files. Each tag has a right-click menu, and every change shows a toast with
+**Undo**:
 
 - **New tag** makes a tag with no files; it stays until you use or delete it.
 - **Rename** changes it on every file. If the new name is another tag's, dam offers to
   merge instead.
-- **Merge into** (or tick tags and use **Merge selected**) puts the tag you keep on all
-  their files and removes the others. The sheet first says what happens, such as "3 files
+- **Merge into** puts the tag you keep on all
+  its files and removes the other. The sheet first says what happens, such as "3 files
   get 'medical'; 'health' is removed".
 - **Delete** removes the tag from all its files after a confirm that names how many.
 - **Pin to the sidebar** puts a tag first in the sidebar's Tags section; the rest of its
   eight places go to the tags you put on files most lately.
 - **Groups**, one level: **New group** makes a heading such as Health; move a tag into
-  it from its menu or by dragging it onto the group. A tag is in at most one group.
-  Groups only arrange this screen. A group has its own menu to rename or delete it;
+  it from its menu. A tag is in at most one group.
+  Groups only arrange the tree. A group has its own menu to rename or delete it;
   deleting a group keeps its tags, ungrouped.
 
-**Searching by tag.** Type `tag:medical` in a search, or click a tag here or in the sidebar,
+**Searching by tag.** Type `tag:medical` in a search, or click a tag in the tree or in the sidebar,
 and Browse shows the files with that tag (see [Searching](#searching)). With several tags,
 **All / Any** in the filter row picks files with every tag or with at least one.
 

@@ -25,6 +25,14 @@ All notable changes are listed here. The format follows
 - **Collections and tags in Browse.** The tree beside Browse's panes switches between
   Folders, Collections and Tags. A click on a collection or tag lists its files from the
   whole archive, as a search with its chip; the tag list has a box that narrows it.
+- **Actions on several files in Browse.** With files ticked, **Selected** adds or removes a
+  tag, adds to or removes from a collection, and, in a collection, moves them to another
+  one, each with Undo. That is how a tag or a collection is split.
+- **Merge into…** for a collection: its files, inner collections, note, checklist and
+  summary go into the one you pick, and it is removed.
+- **Delete…** for a collection removes it and the collections inside it, never a file. The
+  sheet lists what goes. Merge and delete have no Undo; a snapshot is taken first.
+- Browse's Collections tree has **Show closed**, and the Tags tree **New group**.
 - **`collection:`** finds a collection whose name has a quote mark in it.
 - **Due dates in Browse.** A file with an open tray item shows the tray and its date on
   its row, in the folder view, Files and search results, coloured by urgency as on a
@@ -61,6 +69,10 @@ All notable changes are listed here. The format follows
   never added to the archive or the index. Documents with their own address area keep it.
 
 ### Changed
+
+- **The Collections and Tags pages are now Browse's trees.** The sidebar's Collections and
+  Tags captions open Browse with that tree, and old links (`/collections`, `/collections/7`,
+  `/tags`, `/starred`) forward there. Important keeps its page.
 
 - **A collection in Browse puts its name and actions in the pane's bar**, as icons with
   tooltips, instead of a header of its own; folded details take one line. The collection

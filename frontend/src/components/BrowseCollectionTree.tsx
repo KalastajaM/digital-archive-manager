@@ -5,20 +5,25 @@
  *
  * Keyboard (the tree view pattern, as the folder tree): ↑ and ↓ move, → opens a collection
  * (or steps into it), ← closes it (or steps out), Home and End go to the first and last, Enter
- * picks. */
-import { ChevronRight, Layers, Plus } from "lucide-react";
-import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useState } from "react";
+ * picks. A collection is ordered as in the sidebar: dragged onto a row's top or bottom third
+ * (a line) it goes before or after it, onto the middle third inside it; a strip shown while
+ * dragging takes it to the top level; Alt+↑ / Alt+↓ (Alt+← out one level) on a focused row. */
+import { Archive, ChevronRight, CircleAlert, Layers, ListChecks, Plus } from "lucide-react";
+import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
-import { readDragFiles, readDragSource, useDropTarget } from "../dnd";
+import { type Dragged, readDragCollection, readFilesOrCollection, setDragCollection, useDropTarget } from "../dnd";
 import { visible } from "../text";
-import { childrenOf } from "./collectionTree";
+import { childrenOf, countsOf } from "./collectionTree";
+import { plural } from "../format";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
+import { DeleteCollectionSheet } from "./DeleteCollectionSheet";
+import { MergeCollectionSheet } from "./MergeCollectionSheet";
 import { NewCollectionSheet } from "./NewCollectionSheet";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { useAddToCollection } from "./useAddToCollection";
-import { useCollectionOrder, useOrderMenu } from "./useCollectionOrder";
+import { type CollectionOrder, orderKeys, useCollectionDragging, useCollectionOrder, useMoveCollection, useOrderMenu, useReorderRow } from "./useCollectionOrder";
 
 type Pick = (pick: ScopePick, add: boolean) => void;
 
@@ -31,6 +36,8 @@ type Shared = {
   active: ScopeState;
   onPick: Pick;
   collect: ReturnType<typeof useAddToCollection>;
+  mover: ReturnType<typeof useMoveCollection>;
+  order: CollectionOrder;
   /** A collection row's right-click menu (Open, New collection inside…, the order). */
   onMenu: (c: CollectionRow) => (e: ReactMouseEvent) => void;
 };
@@ -53,6 +60,10 @@ function Row({
   shared,
   dropProps,
   onContextMenu,
+  closed,
+  collectionId,
+  onAltKey,
+  details,
   children,
 }: {
   rowKey: string;
@@ -68,6 +79,14 @@ function Row({
   shared: Shared;
   dropProps?: object;
   onContextMenu?: (e: ReactMouseEvent) => void;
+  /** A closed collection (shown with Show closed): greyed. */
+  closed?: boolean;
+  /** A collection's row: it drags as that collection. */
+  collectionId?: { id: number; name: string };
+  /** Alt+arrows on the focused row: its order. */
+  onAltKey?: (e: KeyboardEvent<HTMLLIElement>) => void;
+  /** A collection's counts and status: in its tooltip and description, and as marks after the name. */
+  details?: { counts: string; status: string | null; marks: ReactNode };
   children?: ReactNode;
 }) {
   const go = (e: KeyboardEvent<HTMLLIElement>, key: string) =>
@@ -75,6 +94,11 @@ function Row({
       .find((n) => n.dataset.key === key)
       ?.focus();
   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.target === e.currentTarget && e.altKey && onAltKey) {
+      onAltKey(e);
+      if (e.defaultPrevented) e.stopPropagation();
+      return;
+    }
     if (e.target !== e.currentTarget || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === "ArrowRight") {
       if (onToggle && !expanded) onToggle(true);
@@ -95,7 +119,9 @@ function Row({
       aria-label={name}
       aria-expanded={onToggle ? expanded : undefined}
       aria-current={current ? "true" : undefined}
+      aria-description={details ? [details.counts, details.status].filter(Boolean).join(". ") : undefined}
       data-key={rowKey}
+      data-collection-id={collectionId?.id}
       className="tree-node"
       tabIndex={shared.focusKey === rowKey ? 0 : -1}
       onFocus={(e) => {
@@ -104,10 +130,12 @@ function Row({
       onKeyDown={onKeyDown}
     >
       <div
-        className={current ? "tree-row tree-current" : "tree-row"}
+        className={["tree-row", current && "tree-current", closed && "tree-closed"].filter(Boolean).join(" ")}
         style={{ paddingLeft: 8 + (level - 1) * 16 }}
         onClick={onPick}
         onContextMenu={onContextMenu}
+        draggable={collectionId ? true : undefined}
+        onDragStart={collectionId ? (e) => setDragCollection(e, collectionId.id, collectionId.name) : undefined}
         {...dropProps}
       >
         <span
@@ -122,9 +150,10 @@ function Row({
           <ChevronRight size={12} strokeWidth={2} />
         </span>
         {icon}
-        <span className="tree-name" title={name}>
+        <span className="tree-name" title={details ? `${name}\n${details.counts}` : name}>
           {name}
         </span>
+        {details?.marks}
       </div>
       {children}
     </li>
@@ -136,15 +165,16 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
   const expanded = kids.length > 0 && !shared.folded.has(c.id);
   const accept = shared.collect.accept(c);
   const add = shared.collect.add(c);
-  // files, and the collection they come from (a drop within one tree moves them)
-  const target = useDropTarget<{ ids: string[]; from: number | null }>({
-    read: (e) => {
-      const ids = readDragFiles(e);
-      return ids === null ? null : { ids, from: readDragSource(e) };
-    },
-    accept: (d) => accept(d.ids),
-    onDrop: (d) => add(d.ids, d.from),
+  const takeCollection = shared.mover.accept(c);
+  const moveHere = shared.mover.move(c);
+  // files (with the collection they come from: a drop within one tree moves them), or a
+  // collection moved inside; near a sibling's top or bottom edge a collection is reordered
+  const target = useDropTarget<Dragged>({
+    read: readFilesOrCollection,
+    accept: (d) => (d.kind === "files" ? accept(d.ids) : takeCollection(d.id)),
+    onDrop: (d) => (d.kind === "files" ? add(d.ids, d.from ?? null) : moveHere(d.id)),
   });
+  const reorder = useReorderRow(shared.order, c, target.props);
   const key = `c${c.id}`;
   return (
     <Row
@@ -159,8 +189,35 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
       onToggle={kids.length > 0 ? (open) => shared.toggle(c.id, open) : undefined}
       onPick={() => shared.onPick({ kind: "collection", name: c.name }, false)}
       shared={shared}
-      dropProps={target.props}
+      dropProps={reorder.props}
       onContextMenu={shared.onMenu(c)}
+      closed={c.state === "closed"}
+      collectionId={{ id: c.id, name: c.name }}
+      details={{
+        counts: countsOf(c, kids.length),
+        status: c.ongoing_status ? visible(c.ongoing_status) : null,
+        marks: (
+          <>
+            {c.ongoing_status && (
+              <span className="tree-mark tree-warn" title={visible(c.ongoing_status)} aria-hidden="true">
+                <CircleAlert size={12} strokeWidth={2} />
+              </span>
+            )}
+            {c.open_checks > 0 && (
+              <span className="tree-mark" title={plural(c.open_checks, "open check")} aria-hidden="true">
+                <ListChecks size={12} strokeWidth={2} />
+                {c.open_checks}
+              </span>
+            )}
+            {c.files > 0 && (
+              <span className="tree-count" aria-hidden="true">
+                {c.files}
+              </span>
+            )}
+          </>
+        ),
+      }}
+      onAltKey={orderKeys(shared.order, c) as (e: KeyboardEvent<HTMLLIElement>) => void}
     >
       {expanded && (
         <ul role="group" className="tree-group">
@@ -173,16 +230,48 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
   );
 }
 
-export function CollectionTree({ active, onPick, head }: { active: ScopeState; onPick: Pick; head?: ReactNode }) {
-  const list = useCollections("open");
+export function CollectionTree({
+  active,
+  onPick,
+  head,
+  onDeleted,
+  startNew = false,
+  onStartedNew,
+  startClosed = false,
+}: {
+  active: ScopeState;
+  onPick: Pick;
+  head?: ReactNode;
+  /** After a delete from the tree: the names of every collection that went (Browse leaves a search on them). */
+  onDeleted?: (names: string[]) => void;
+  /** Open with the New collection sheet (the sidebar's +), or with the closed ones shown. */
+  startNew?: boolean;
+  /** The New collection sheet opened for ``startNew``: drop the flag so the next ask opens it again. */
+  onStartedNew?: () => void;
+  startClosed?: boolean;
+}) {
+  // the open collections; with Show closed, the closed ones too (greyed)
+  const [showClosed, setShowClosed] = useState(startClosed);
+  const list = useCollections(showClosed ? "all" : "open");
   const collect = useAddToCollection();
   const toast = useToast();
   // New collection (at the top or inside one), then it opens: the tree's own pick
   const [creating, setCreating] = useState<{ parent: CollectionRow | null } | null>(null);
+  useEffect(() => {
+    if (!startNew) return;
+    setCreating({ parent: null });
+    onStartedNew?.();
+    // only when asked; ``onStartedNew`` is a new function each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startNew]);
   const order = useCollectionOrder(list.data ?? []);
+  const [merging, setMerging] = useState<CollectionRow | null>(null);
+  const [deleting, setDeleting] = useState<CollectionRow | null>(null);
   const menu = useOrderMenu(order, (c) => [
     { label: "Open", onSelect: () => onPick({ kind: "collection", name: c.name }, false) },
     { label: "New collection inside…", onSelect: () => setCreating({ parent: c }) },
+    { label: "Merge into…", onSelect: () => setMerging(c) },
+    { label: "Delete…", onSelect: () => setDeleting(c) },
   ]);
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
   const [focused, setFocused] = useState<string | null>(null);
@@ -199,7 +288,10 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
   const shownKeys = (level: CollectionRow[]): string[] =>
     level.flatMap((c) => [`c${c.id}`, ...(folded.has(c.id) ? [] : shownKeys(kids.get(c.id) ?? []))]);
   const focusKey = focused !== null && ["important", "starred", ...shownKeys(top)].includes(focused) ? focused : "important";
-  const shared: Shared = { kids, folded, toggle, focusKey, setFocusKey: setFocused, active, onPick, collect, onMenu: menu.onContextMenu };
+  const mover = useMoveCollection(list.data ?? [], (target) => target && toggle(target.id, true));
+  const dragging = useCollectionDragging();
+  const topDrop = useDropTarget<number>({ read: readDragCollection, accept: mover.accept(null), onDrop: mover.move(null) });
+  const shared: Shared = { kids, folded, toggle, focusKey, setFocusKey: setFocused, active, onPick, collect, mover, order, onMenu: menu.onContextMenu };
   const onKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]'));
@@ -219,8 +311,20 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
     <nav className="tree" aria-label="Collections">
       {head}
       <div className="tree-tools">
+        <IconButton
+          icon={<Archive />}
+          label="Show closed"
+          tip={showClosed ? "Hide the closed collections" : "Show the closed collections too"}
+          pressed={showClosed}
+          onClick={() => setShowClosed((on) => !on)}
+        />
         <IconButton icon={<Plus />} label="New collection" onClick={() => setCreating({ parent: null })} />
       </div>
+      {dragging && (
+        <p className="tree-top-drop hint" {...topDrop.props}>
+          Drop here to move it to the top level, last
+        </p>
+      )}
       <ul role="tree" aria-label="Collection tree" className="tree-list" onKeyDown={onKeyDown}>
         <Row
           rowKey="important"
@@ -268,6 +372,27 @@ export function CollectionTree({ active, onPick, head }: { active: ScopeState; o
         )}
       </ul>
       {menu.element}
+      {deleting && (
+        <DeleteCollectionSheet
+          c={deleting}
+          onCancel={() => setDeleting(null)}
+          onDone={(_, names) => {
+            setDeleting(null);
+            onDeleted?.(names);
+          }}
+        />
+      )}
+      {merging && (
+        <MergeCollectionSheet
+          c={merging}
+          all={list.data ?? []}
+          onCancel={() => setMerging(null)}
+          onDone={(into) => {
+            setMerging(null);
+            onPick({ kind: "collection", name: into.name }, false);
+          }}
+        />
+      )}
       {creating && (
         <NewCollectionSheet
           parent={creating.parent}

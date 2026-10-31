@@ -411,3 +411,15 @@ export function useFilesDragging(): boolean {
   }, []);
   return dragging;
 }
+
+/** What a collection row takes (sidebar and Browse's tree): files, or a folder from Browse
+ * (as one member, so everything in it belongs), or another collection. */
+export type Dragged = { kind: "files"; ids: string[]; from?: number | null } | { kind: "collection"; id: number };
+export const readFilesOrCollection = (e: AnyDragEvent): Dragged | null => {
+  const id = readDragCollection(e);
+  if (id !== null) return { kind: "collection", id };
+  const folder = readDragFolder(e);
+  if (folder !== null) return { kind: "files", ids: [folder] };
+  const ids = readDragFiles(e);
+  return ids === null ? null : { kind: "files", ids, from: readDragSource(e) };
+};

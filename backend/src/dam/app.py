@@ -67,7 +67,7 @@ from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
 from dam.settings_write import REMOVE, write_keys
 from dam.setup import NOT_CONFIGURED
-from dam.snapshots import BEFORE_GROUPS, create_snapshot
+from dam.snapshots import BEFORE_DELETE, BEFORE_GROUPS, BEFORE_MERGE, create_snapshot
 from dam.tags import TagAdmin
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
@@ -542,6 +542,66 @@ class App:
                 label += ": " + ", ".join(f"{d.group} is now {d.name}" for d in renamed)
             self.sync_publishers(label=label)
         return done
+
+    def delete_collection(
+        self, collection_id: int, expect: list[int] | None = None
+    ) -> tuple[int, object]:
+        """Delete the collection and everything inside it after a snapshot: first closed
+        and synced (its links in ##. Ongoing come down; a file of the user's there stays),
+        then the rows. Files are never touched. No Undo: the snapshot is the way back.
+        ``expect``: the collections the preview listed; refused if the tree differs now.
+        Returns (how many collections went, the sync's result or None)."""
+        name = self.collections.get(collection_id).name
+        # a built-in is refused before anything
+        ids = [c.id for c in self.collections.subtree(collection_id)]
+        if expect is not None and sorted(expect) != sorted(ids):
+            raise InvalidRequest(
+                f"The collections inside {name} changed since the list was shown: look again"
+            )
+        if not self.archive_available and self.collections.published(ids):
+            raise InvalidRequest(
+                f"The archive is not connected, so the links of {name} in ##. Ongoing "
+                "cannot be taken down now: delete it once the archive is back"
+            )
+        create_snapshot(self.app_paths, kind=BEFORE_DELETE)
+        self.collections.close_tree(collection_id)
+        result = self.sync_publishers(label=f"Deleted {name}") if self.archive_available else None
+        if self.collections.published(ids):
+            # the rows hold the record of those links: keep them, closed, for a later try
+            raise InvalidRequest(
+                f"{name} is closed, not deleted: some of its links in ##. Ongoing could not "
+                "be taken down. Delete it again once that is fixed"
+            )
+        return self.collections.delete_tree(collection_id), result
+
+    def merge_collections(self, from_id: int, to_id: int) -> object:
+        """Merge ``from_id`` into ``to_id`` (``CollectionService.merge``) after a snapshot,
+        let the Ongoing sync move the links (the emptied collection's folder comes down),
+        then delete the emptied collection. Returns the sync's result (None without the
+        archive). No Undo: the snapshot is the way back."""
+        problems = self.collections.merge_check(from_id, to_id)
+        if problems:
+            raise InvalidRequest(problems[0])
+        name, into = self.collections.get(from_id).name, self.collections.get(to_id).name
+        if not self.archive_available and self.collections.published([from_id]):
+            raise InvalidRequest(
+                f"The archive is not connected, so the links of {name} in ##. Ongoing "
+                "cannot be moved now: merge it once the archive is back"
+            )
+        create_snapshot(self.app_paths, kind=BEFORE_MERGE)
+        self.collections.merge(from_id, to_id)
+        result = (
+            self.sync_publishers(label=f"Merged {name} into {into}")
+            if self.archive_available
+            else None
+        )
+        if self.collections.published([from_id]):
+            raise InvalidRequest(
+                f"{name} went into {into}, but its folder in ##. Ongoing could not be taken "
+                f"down, so {name} is left, empty: delete it once that is fixed"
+            )
+        self.collections.remove_merged(from_id)
+        return result
 
     def sync_publishers(self, label: str | None = None) -> object:
         """Sync every registered publisher (failures logged); returns the Ongoing

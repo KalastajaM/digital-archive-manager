@@ -720,6 +720,7 @@ function useRefresh() {
     void client.invalidateQueries({ queryKey: keys.collections });
     void client.invalidateQueries({ queryKey: keys.fileLinks });
     void client.invalidateQueries({ queryKey: keys.notes });
+    void client.invalidateQueries({ queryKey: keys.checklist }); // a merge adds to the target's
     void client.invalidateQueries({ queryKey: keys.ongoing }); // undo of a conversion
     void client.invalidateQueries({ queryKey: keys.important });
     void client.invalidateQueries({ queryKey: keys.locks });
@@ -1363,6 +1364,7 @@ export const useTagActions = () => {
     restoreGroup: (name: string, members: string[]) => run<TagGroup>("/api/tags/groups/restore", { name, members }),
     /** One tag on several files as one step; the answer's ``undo`` takes it off again. */
     apply: (tag: string, driveIds: string[]) => run<TagChange>("/api/tags/apply", { tag, drive_ids: driveIds }),
+    removeFrom: (tag: string, driveIds: string[]) => run<TagChange>("/api/tags/remove-from", { tag, drive_ids: driveIds }),
   };
 };
 
@@ -1700,6 +1702,34 @@ export const useSetCollectionParent = () => {
   });
 };
 
+/** Delete a collection with everything inside it (no Undo: a snapshot is taken first;
+ * files are never touched). ``preview`` lists what goes; ``ids``, the ones it listed, make
+ * the server refuse if the tree changed since. */
+export const useDeleteCollection = () => {
+  const refresh = useRefresh(); // takes links down in ##. Ongoing: Activity and Browse too
+  const remove = useMutation({
+    mutationFn: ({ id, ids }: { id: number; ids: number[] }) =>
+      apiPost("/api/collections/{collection_id}/delete", { path: { collection_id: id }, body: { ids } }),
+    onSettled: refresh,
+  });
+  const preview = (id: number) => apiGet("/api/collections/{collection_id}/delete/preview", { path: { collection_id: id } }).then((r) => r.collections);
+  return { remove, preview };
+};
+
+/** Merge a collection into another (no Undo: a snapshot is taken first). ``check`` says
+ * why it cannot be (empty: it can); ``merge`` does it and answers with the target. */
+export const useMergeCollection = () => {
+  const refresh = useRefresh(); // moves links in ##. Ongoing: Activity and Browse too
+  const merge = useMutation({
+    mutationFn: ({ id, into }: { id: number; into: number }) =>
+      apiPost("/api/collections/{collection_id}/merge", { path: { collection_id: id }, body: { into } }),
+    onSettled: refresh,
+  });
+  const check = (id: number, into: number) =>
+    apiPost("/api/collections/{collection_id}/merge/preview", { path: { collection_id: id }, body: { into } }).then((r) => r.problems);
+  return { merge, check };
+};
+
 /** Put a collection before or after another. A sibling: only the order changes. A row of
  * another parent: the collection goes into that parent too (as the parent change does,
  * with the Ongoing sync: the batch comes back). Built-in collections and cycles are
@@ -1720,9 +1750,15 @@ export const useCollectionMembers = () => {
   const refresh = useRefresh(); // adds, removes or moves links in ##. Ongoing
   return useMutation({
     mutationFn: (
-      change: { id: number; add: string[] } | { id: number; remove: string } | { id: number; move: { to: number; ids: string[] } },
+      change:
+        | { id: number; add: string[] }
+        | { id: number; remove: string }
+        | { id: number; removeMany: string[] }
+        | { id: number; move: { to: number; ids: string[] } },
     ): Promise<CollectionChange> =>
-      "add" in change
+      "removeMany" in change
+        ? apiPost("/api/collections/{collection_id}/members/remove-many", { path: { collection_id: change.id }, body: { drive_ids: change.removeMany } })
+        : "add" in change
         ? apiPost("/api/collections/{collection_id}/members", { path: { collection_id: change.id }, body: { drive_ids: change.add } })
         : "move" in change
           ? apiPost("/api/collections/{collection_id}/members/move", { path: { collection_id: change.id }, body: { to: change.move.to, drive_ids: change.move.ids } })
