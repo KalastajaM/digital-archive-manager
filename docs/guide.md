@@ -250,7 +250,7 @@ Trays with nothing open are folded into one **Clear** card, so the cards with co
 the room. Each tray row has a round checkbox that marks the item done at once (a bill is
 marked paid today), with a toast to undo it; only a done field that needs a value you must
 give opens a small form. Right-click a tray row, or a bill in the New look's **To pay**
-table, for the tray item's menu (see [Trays](#trays)); right-click a **Starred** file for
+table, for the tray item's menu (see [Working on an item](#working-on-an-item)); right-click a **Starred** file for
 **Show in Browse**, **Quick Look**, **Open**, **Show in Finder**, **Remove the star** and
 **Move to To Delete**. Drag a card by its header to reorder, or press ⌥↑ / ⌥↓ with the
 focus on it; **Reset layout** under the date restores the default order.
