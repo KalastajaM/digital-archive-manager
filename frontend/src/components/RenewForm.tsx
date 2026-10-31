@@ -54,6 +54,7 @@ export function RenewForm({
   const [plan, setPlan] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const requests = useRef(0); // a preview answers only if no newer start or change came since
   const sending = useRef(false); // synchronous: a second Enter never posts twice
   // the old file was unlocked by this form (Unlock and move): only that lock is given back
   const took = useRef(false);
@@ -77,6 +78,7 @@ export function RenewForm({
   };
   // a changed date or file needs a new preview, and a new Unlock and move
   const resetPlan = () => {
+    requests.current += 1;
     setPlan(null);
     release();
   };
@@ -106,7 +108,7 @@ export function RenewForm({
         .catch((e: unknown) => toast({ kind: "error", text: `Could not undo the renewal of ${visible(title)}: ${visible(errorText(e))}` }));
     };
     const skipped = result.skipped ? ` ${result.skipped}, so it was not moved.` : "";
-    toast({ kind: skipped ? "warning" : "info", text: `Renewed: ${title}${skipped}`, action: undoAction(runUndo) });
+    toast({ kind: skipped ? "warning" : "info", text: `Renewed: ${visible(title)}${skipped}`, action: undoAction(runUndo) });
   };
 
   const apply = async () => {
@@ -130,10 +132,11 @@ export function RenewForm({
       took.current = isUnlockedNow(old.drive_id);
       if (!took.current) throw notUnlocked;
     }
+    const mine = ++requests.current;
     try {
       const next = await preview.mutateAsync({ id, body: body() });
       if (next.locked.length > 0) throw notUnlocked;
-      setPlan(next);
+      if (requests.current === mine) setPlan(next);
     } catch (err) {
       release();
       throw err;
@@ -148,7 +151,11 @@ export function RenewForm({
     setError(null);
     try {
       if (unlock) await unlockAndPreview();
-      else if (needsPreview) setPlan(await preview.mutateAsync({ id, body: body() }));
+      else if (needsPreview) {
+        const mine = ++requests.current;
+        const next = await preview.mutateAsync({ id, body: body() });
+        if (requests.current === mine) setPlan(next);
+      }
       else await apply();
     } catch (err) {
       setError(errorText(err));

@@ -4,7 +4,7 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ItemFile } from "../api/client";
-import { mockFetch, renderWithProviders } from "../test-utils";
+import { deferred, mockFetch, renderWithProviders } from "../test-utils";
 import { RenewForm } from "./RenewForm";
 
 const OLD: ItemFile = {
@@ -24,7 +24,7 @@ const MOVE_OPS = [
 ];
 const RENEWED = { item: { id: 7 }, batch_id: "b1", undo: "renewal", skipped: null };
 
-function setup(routes: Parameters<typeof mockFetch>[0] = {}, old: ItemFile = OLD) {
+function setup(routes: Parameters<typeof mockFetch>[0] = {}, old: ItemFile = OLD, item = ITEM) {
   const calls = mockFetch({
     "GET /api/locks": { body: { files: [], folders: [] } },
     "GET /api/search": { body: [HIT] },
@@ -34,7 +34,7 @@ function setup(routes: Parameters<typeof mockFetch>[0] = {}, old: ItemFile = OLD
     ...routes,
   });
   const onClose = vi.fn();
-  renderWithProviders(<RenewForm item={ITEM} files={[old]} label="Renewed" onClose={onClose} />);
+  renderWithProviders(<RenewForm item={item} files={[old]} label="Renewed" onClose={onClose} />);
   return { calls, onClose, user: userEvent.setup() };
 }
 
@@ -189,6 +189,27 @@ describe("RenewForm", () => {
     await user.type(screen.getByLabelText("New expiry date"), "2036-11-30");
     expect(screen.queryByRole("region", { name: "Planned changes" })).toBeNull();
     expect(screen.getByRole("button", { name: "Preview…" })).toBeInTheDocument();
+  });
+
+  it("a preview that returns after the date changed is dropped", async () => {
+    const slow = deferred<{ body: unknown }>();
+    const { user } = setup({ "POST /api/items/7/renew/preview": () => slow.promise });
+    await user.type(screen.getByLabelText("New expiry date"), "2036-10-31");
+    await pickNewFile(user);
+    await user.click(screen.getByRole("button", { name: "Preview…" }));
+    await user.clear(screen.getByLabelText("New expiry date"));
+    await user.type(screen.getByLabelText("New expiry date"), "2036-11-30");
+    slow.resolve({ body: { ops: MOVE_OPS, skipped: null, locked: [] } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Preview…" })).toBeEnabled());
+    expect(screen.queryByRole("region", { name: "Planned changes" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Preview…" })).toBeInTheDocument();
+  });
+
+  it("the success toast shows hidden characters in the title", async () => {
+    const { user } = setup({}, OLD, { id: 7, title: "Passport\u202Efdp" });
+    await user.type(screen.getByLabelText("New expiry date"), "2036-10-31");
+    await user.click(screen.getByRole("button", { name: "Renewed" }));
+    expect(await screen.findByText("Renewed: Passport⟨U+202E⟩fdp")).toBeInTheDocument();
   });
 
   it("shows the server's refusal and stays open", async () => {
