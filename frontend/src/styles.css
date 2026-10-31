@@ -195,7 +195,8 @@ a.sidebar-section-title[aria-current="page"] { color: var(--text); }
  * chevron at the row's right end (a sibling of the link: a button never sits in a link). */
 .sidebar-tree-item { position: relative; }
 .sidebar-children { padding-left: 14px; }
-.sidebar-row-parent { padding-right: calc(var(--icon-button-sm) + var(--sp-1)); }
+/* "a" outweighs the redesign's own .sidebar-row padding: a parent keeps room for its chevron */
+a.sidebar-row.sidebar-row-parent { padding-right: calc(var(--icon-button-sm) + var(--sp-1)); }
 .sidebar-disclosure {
   position: absolute;
   /* centred on the item's own row, not on the row plus its children */

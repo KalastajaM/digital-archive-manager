@@ -1,5 +1,5 @@
-"""The README screenshots, light and dark, in the New look, from the staged demo server
-(see stage.py): 1600x1000 PNGs written to the folder given; more arguments take only those
+"""The README screenshots, in light mode, from the staged demo server (see stage.py):
+1600x1000 PNGs written to the folder given; more arguments take only those
 shots (``sticker-sheet`` is taken only when named). ``DAM_TOKEN`` is the demo's api-token.
 
     uv run --no-project --with playwright python scripts/screenshots/shoot.py docs/images [inbox ...]
@@ -11,7 +11,6 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 BASE = "http://localhost:8766"
@@ -81,16 +80,6 @@ def areas_off(page):
     page.get_by_role("button", name="Show areas").click()
 
 
-def areas_off_if_shown(page):
-    page.get_by_role("button", name="Draw a box").wait_for()  # the preview is up
-    shown = page.get_by_role("button", name="Show areas")
-    try:
-        shown.wait_for(timeout=5000)  # the file's rule areas come a moment later
-    except PlaywrightTimeoutError:
-        return
-    shown.click()
-
-
 def boxes(page):
     areas_off(page)
     # the letterhead and the line with the due date and total
@@ -138,9 +127,12 @@ SHOTS = {
     "paymode": ("/trays/to-pay?item=1", paymode),
     "browse": ("/browse?path=30.%20Home&select=demo-21", None),
     "activity": ("/activity", expand),
-    "collection": ("/collections/3", areas_off_if_shown),
+    "collection": (
+        "/browse?tree=collections&q=collection%3A%222026%20House%20sale%22",
+        None,
+    ),
     "ai-settings": ("/activity", ai),
-    "tags": ("/tags", None),
+    "tags": ("/browse?tree=tags&q=tag%3Ahome", None),
     "relatives": ("/browse?path=30.%20Home%2FElectricity&select=demo-11", None),
     "connections": ("/browse?path=30.%20Home%2FElectricity&select=demo-11", connections),
     "boxes": ("/inbox?file=demo-18", boxes),
@@ -149,32 +141,31 @@ SHOTS = {
 
 with sync_playwright() as p:
     browser = p.chromium.launch(channel="chrome")
-    for scheme in ("light", "dark"):
-        for name, (url, then) in SHOTS.items():
-            if ONLY and name not in ONLY:
-                continue
-            # the rule sheet is tall: a taller window at a smaller scale, same 1600x1000 image
-            width, height = TALL if name in TALL_SHOTS else (1440, 900)
-            ctx = browser.new_context(
-                viewport={"width": width, "height": height},
-                device_scale_factor=1600 / width,
-                color_scheme=scheme,
-                timezone_id=TZ,
-            )
-            page = ctx.new_page()
-            page.goto(f"{BASE}/auth?t={TOKEN}")  # signs this context in (a cookie)
-            page.goto(BASE + url)
+    for name, (url, then) in SHOTS.items():
+        if ONLY and name not in ONLY:
+            continue
+        # the rule sheet is tall: a taller window at a smaller scale, same 1600x1000 image
+        width, height = TALL if name in TALL_SHOTS else (1440, 900)
+        ctx = browser.new_context(
+            viewport={"width": width, "height": height},
+            device_scale_factor=1600 / width,
+            color_scheme="light",
+            timezone_id=TZ,
+        )
+        page = ctx.new_page()
+        page.goto(f"{BASE}/auth?t={TOKEN}")  # signs this context in (a cookie)
+        page.goto(BASE + url)
+        page.wait_for_load_state("networkidle")
+        if then:
+            then(page)
             page.wait_for_load_state("networkidle")
-            if then:
-                then(page)
-                page.wait_for_load_state("networkidle")
-            unmark_tags(page)
-            page.mouse.move(width - 1, height - 1)  # no hover highlight
-            page.wait_for_timeout(800)  # previews and fonts settle
-            path = OUT / f"{name}-{scheme}.png"
-            page.screenshot(path=str(path))
-            print(path.name)
-            ctx.close()
+        unmark_tags(page)
+        page.mouse.move(width - 1, height - 1)  # no hover highlight
+        page.wait_for_timeout(800)  # previews and fonts settle
+        path = OUT / f"{name}.png"
+        page.screenshot(path=str(path))
+        print(path.name)
+        ctx.close()
     if "sticker-sheet" in ONLY:  # only when named: its QR codes differ on every print
         # the printable sticker sheet (plain paper), the top of the page at 800 px wide, doubled
         ctx = browser.new_context(viewport={"width": 800, "height": 500}, device_scale_factor=2)
