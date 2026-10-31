@@ -1444,6 +1444,53 @@ export const useItemDone = () => {
   });
 };
 
+export type RenewBody = Schemas["RenewBody"];
+
+/** What Renewed… would do (changes nothing): the old file's move into Expired, why it is
+ * skipped, or the old file when it is locked and this page holds no unlock for it. */
+export const useRenewPreview = () =>
+  useMutation({
+    mutationFn: ({ id, body }: { id: number; body: RenewBody }) =>
+      apiPost("/api/items/{item_id}/renew/preview", { path: { item_id: id }, body }),
+  });
+
+/** Renewed…: the new date and, with ``drive_id``, the new first file (the old one moves
+ * into Expired in the same batch). ``undo`` says how to undo it. */
+export const useRenew = () => {
+  const refresh = useRefresh();
+  const refreshTrays = useRefreshTrays();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: RenewBody }) =>
+      apiPost("/api/items/{item_id}/renew", { path: { item_id: id }, body }),
+    onSettled: () => {
+      refresh();
+      refreshTrays();
+    },
+  });
+};
+
+/** The Undo of a renewal that moved no file (``undo: "renewal"``); one that moved a file
+ * is undone from Activity. */
+export const useRenewalUndo = () => {
+  const refresh = useRefresh();
+  const refreshTrays = useRefreshTrays();
+  return useMutation({
+    mutationFn: (batchId: string) => apiPost("/api/renewals/undo", { body: { batch_id: batchId } }),
+    onSettled: () => {
+      refresh();
+      refreshTrays();
+    },
+  });
+};
+
+/** The name of the Expired folder a renewal moves the old file into. */
+export const useExpiredFolder = (enabled = true) =>
+  useQuery({
+    queryKey: ["expired-folder"],
+    queryFn: ({ signal }) => apiGet("/api/settings/expired-folder", { signal }),
+    enabled,
+  });
+
 export const useItemReopen = () => {
   const refresh = useRefreshTrays();
   return useMutation({

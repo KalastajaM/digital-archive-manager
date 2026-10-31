@@ -108,7 +108,15 @@ class ItemEventOut(BaseModel):
     id: int
     at: float
     kind: Literal[
-        "created", "edited", "done", "reopened", "file_added", "file_removed", "moved", "merged_in"
+        "created",
+        "edited",
+        "done",
+        "reopened",
+        "file_added",
+        "file_removed",
+        "moved",
+        "merged_in",
+        "renewed",
     ]
     data: dict[str, Any]
 

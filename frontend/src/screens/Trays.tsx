@@ -65,6 +65,12 @@ const KEYS: KeyHint[] = [
 /** A bill's tray also opens the barcode in Pay mode with one key. */
 const BILL_KEYS: KeyHint[] = [[["b"], "large barcode"]];
 
+/** The list's keys; in a Renew tray ``d`` opens Renewed…. */
+function keyHints(tray: TrayDef | undefined): KeyHint[] {
+  const keys = tray?.renew ? KEYS.map((k): KeyHint => (k[0][0] === "d" ? [["d"], "renewed"] : k)) : KEYS;
+  return tray && itemKind(tray) === "bill" ? [...keys, ...BILL_KEYS] : keys;
+}
+
 /** A list row, as Mail lists messages: title and payee, the urgency tag and amount (or
  * how long it has waited) on the right, then any badges. Copying and Done are in the
  * item panel. */
@@ -611,7 +617,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
         ))}
         {tray && <TrayDefaultsBanner key={tray.id} tray={tray} />}
         {body}
-        <KeyHints hints={tray && itemKind(tray) === "bill" ? [...KEYS, ...BILL_KEYS] : KEYS} />
+        <KeyHints hints={keyHints(tray)} />
       </section>
       <Splitter split={split} label="Resize the list" />
       <section className="trays-detail" aria-label="Item">

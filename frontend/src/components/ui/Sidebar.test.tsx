@@ -762,4 +762,10 @@ describe("trayIcon", () => {
       expect(trayIcon(tray(id, name))).not.toBe(follow);
     }
   });
+
+  it("Renew gets the calendar clock, as an Expiry tray would", () => {
+    const tray = (id: string, name: string) => ({ ...TO_PAY, id, name });
+    expect(trayIcon(tray("renew", "Renew")).displayName).toBe("CalendarClock");
+    expect(trayIcon(tray("expiry", "Expiring documents")).displayName).toBe("CalendarClock");
+  });
 });

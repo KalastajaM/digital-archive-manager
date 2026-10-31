@@ -283,3 +283,14 @@ def test_renew_refuses_an_item_of_another_tray(client, app, item):
     other = app.trays.create("to-pay", ["new"], {}, None)
     r = send(client, f"/api/items/{other.id}/renew/preview", body(None))
     assert r.status_code == 400 and "Renewed" in r.text
+
+
+def test_history_shows_the_renewal_and_its_undo(client, app, item):
+    batch_id = renew(client, item, drive_id=None).json()["batch_id"]
+    assert send(client, "/api/renewals/undo", {"batch_id": batch_id}).status_code == 200
+    r = client.get(f"/api/items/{item.id}/history")
+    assert r.status_code == 200, r.text
+    renewed = [e for e in r.json() if e["kind"] == "renewed"]
+    assert renewed[0]["data"]["new_date"] == NEW_DATE.isoformat()
+    assert renewed[0]["data"]["batch_id"] == batch_id
+    assert renewed[1]["data"] == {"undo": True, "batch_id": batch_id}

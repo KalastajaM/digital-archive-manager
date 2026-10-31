@@ -1,9 +1,11 @@
-/** One tray field as an input, by its type: a checkbox, a date input or a text input
- * (money with the decimal keypad). Shared by the filing form, the done form and the
- * item detail, so a field looks and behaves the same everywhere. */
-import type { InputHTMLAttributes } from "react";
+/** One tray field as an input, by its type: a checkbox, a date input, a choice from the
+ * field's options or a text input (money with the decimal keypad, days with the numeric
+ * one). Shared by the filing form, the done form and the item detail, so a field looks
+ * and behaves the same everywhere. */
+import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import type { FieldDef } from "../api/client";
 import { copyText, groupIban } from "../format";
+import { visible } from "../text";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -39,12 +41,34 @@ export function FieldInput({ id, def, value, onChange, ...rest }: Props) {
       />
     );
   }
+  if (def.type === "choice") {
+    const text = typeof value === "string" ? value : "";
+    const options = def.options ?? [];
+    // a stored value the options no longer list stays shown until another is chosen
+    const shown = text !== "" && !options.includes(text) ? [...options, text] : options;
+    return (
+      <select
+        {...(rest as SelectHTMLAttributes<HTMLSelectElement>)}
+        id={id}
+        title={text || undefined}
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="" />
+        {shown.map((o) => (
+          <option key={o} value={o}>
+            {visible(o)}
+          </option>
+        ))}
+      </select>
+    );
+  }
   return (
     <input
       {...rest}
       id={id}
       type={def.type === "date" ? "date" : "text"}
-      inputMode={def.type === "money" ? "decimal" : undefined}
+      inputMode={def.type === "money" ? "decimal" : def.type === "days" ? "numeric" : undefined}
       spellCheck={false}
       value={typeof value === "string" ? value : ""}
       onChange={(e) => onChange(e.target.value)}

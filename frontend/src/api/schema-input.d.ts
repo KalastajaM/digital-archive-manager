@@ -6662,7 +6662,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "created" | "edited" | "done" | "reopened" | "file_added" | "file_removed" | "moved" | "merged_in";
+            kind: "created" | "edited" | "done" | "reopened" | "file_added" | "file_removed" | "moved" | "merged_in" | "renewed";
             /** Data */
             data: {
                 [key: string]: unknown;

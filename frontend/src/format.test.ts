@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyText, dayWord, euro, formatSize, longDate, plural, shortCalendarDate } from "./format";
+import { copyText, dayWord, euro, formatField, formatSize, longDate, plural, shortCalendarDate } from "./format";
 
 describe("formatSize", () => {
   it("uses bytes, then one decimal below 10, whole numbers above", () => {
@@ -51,5 +51,13 @@ describe("money and dates", () => {
     expect(shortCalendarDate("2026-11-12", "2026-10-23")).toBe("12 Nov");
     expect(shortCalendarDate("2027-01-05", "2026-10-23")).toBe("5 Jan 2027");
     expect(longDate("soon")).toBe("soon");
+  });
+});
+
+describe("formatField", () => {
+  it("shows a days field as a number of days and a choice as it is", () => {
+    expect(formatField("days", 180)).toBe("180 days");
+    expect(formatField("days", "1")).toBe("1 day");
+    expect(formatField("choice", "Passport")).toBe("Passport");
   });
 });
