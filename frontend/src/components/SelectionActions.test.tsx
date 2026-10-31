@@ -38,7 +38,7 @@ const FILES = [
 const change = (c: CollectionRow) => ({ body: { collection: c, batch: null, problems: [], ongoing_status: null } });
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url).map((c) => c.body);
 
-function setup(scope: CollectionRow | null = null) {
+function setup(scope: CollectionRow | null = null, extra: Parameters<typeof mockFetch>[0] = {}) {
   const calls = mockFetch({
     "GET /api/tags/all": { body: { tags: [{ name: "house", files: 2, pinned: false, group_id: null }], groups: [] } },
     "GET /api/files/a": { body: { record: { drive_id: "a" }, tags: ["house"] } },
@@ -54,6 +54,7 @@ function setup(scope: CollectionRow | null = null) {
     "POST /api/collections/2/members/move": change(CAR),
     "POST /api/collections/3/members/move": change(LEGAL),
     "POST /api/collections/2/members": change(MICHIEL),
+    ...extra,
   });
   const onDone = vi.fn();
   renderWithProviders(<SelectionActions files={FILES} scope={scope} all={ALL} onDone={onDone} />);
@@ -155,6 +156,15 @@ describe("SelectionActions", () => {
     await user.click(within(sheet).getByRole("option", { name: "Car" }));
     await waitFor(() => expect(posts(calls, "/api/collections/3/members/remove-many")).toEqual([{ drive_ids: ["b"] }]));
     expect(calls.some((c) => c.url.startsWith("/api/collections/9/"))).toBe(false);
+  });
+
+  it("a move that fails halfway says so, and Undo takes back the part that was done", async () => {
+    const { calls, user } = setup(LEGAL, { "POST /api/collections/2/members/move": { status: 409, body: { error: "Michiel is busy" } } });
+    const sheet = await open(user, "Move to collection…");
+    await user.click(within(sheet).getByRole("option", { name: "Car" }));
+    expect(await screen.findByText("Moved a.pdf to Car, but not b.pdf: Michiel is busy")).toBeInTheDocument();
+    await undo(user);
+    await waitFor(() => expect(posts(calls, "/api/collections/3/members/move")).toEqual([{ to: 1, drive_ids: ["a"] }]));
   });
 
   it("offers Move to collection only while a collection is shown", async () => {

@@ -196,30 +196,53 @@ export function SelectionActions({
       fail(e);
     }
   };
+  /** "a.pdf" for one of the selected files, "3 files" for more. */
+  const named = (some: string[]) => (some.length === 1 ? visible(files.find((f) => f.drive_id === some[0])!.name) : `${some.length} files`);
   const moveTo = async (name: string, isNew: boolean) => {
+    let to: { id: number; name: string; members: { drive_id: string }[] };
     try {
-      const to = await target(name, isNew);
-      // files already in the target stay there: they only leave their own collection
-      const had = new Set(to && "members" in to ? to.members.map((m) => m.drive_id) : []);
-      const groups = bySource(scope).filter((g) => g.c.id !== to.id);
-      for (const g of groups) await members.mutateAsync({ id: g.c.id, move: { to: to.id, ids: g.ids } });
-      done();
-      const back = (g: { c: CollectionRow; ids: string[] }) => {
-        const moved = g.ids.filter((id) => !had.has(id));
-        const kept = g.ids.filter((id) => had.has(id));
-        return [
-          ...(moved.length ? [members.mutateAsync({ id: to.id, move: { to: g.c.id, ids: moved } })] : []),
-          ...(kept.length ? [members.mutateAsync({ id: g.c.id, add: kept })] : []),
-        ];
-      };
-      toast({
-        kind: "info",
-        text: `Moved ${what} to ${visible(to.name)}`,
-        action: groups.length ? undoAction(() => void Promise.all(groups.flatMap(back)).catch(fail)) : undefined,
-      });
+      to = await target(name, isNew);
     } catch (e) {
       fail(e);
+      return;
     }
+    // files already in the target stay there: they only leave their own collection
+    const had = new Set(to.members.map((m) => m.drive_id));
+    const groups = bySource(scope).filter((g) => g.c.id !== to.id);
+    // one request per collection the files leave: if one fails, the ones done keep their Undo
+    const moved: typeof groups = [];
+    let error: unknown = null;
+    for (const g of groups) {
+      try {
+        await members.mutateAsync({ id: g.c.id, move: { to: to.id, ids: g.ids } });
+        moved.push(g);
+      } catch (e) {
+        error = e;
+        break;
+      }
+    }
+    if (error !== null && moved.length === 0) {
+      fail(error);
+      return;
+    }
+    done();
+    const back = (g: { c: CollectionRow; ids: string[] }) => {
+      const out = g.ids.filter((id) => !had.has(id));
+      const kept = g.ids.filter((id) => had.has(id));
+      return [
+        ...(out.length ? [members.mutateAsync({ id: to.id, move: { to: g.c.id, ids: out } })] : []),
+        ...(kept.length ? [members.mutateAsync({ id: g.c.id, add: kept })] : []),
+      ];
+    };
+    const left = groups.filter((g) => !moved.includes(g)).flatMap((g) => g.ids);
+    toast({
+      kind: error === null ? "info" : "warning",
+      text:
+        error === null
+          ? `Moved ${what} to ${visible(to.name)}`
+          : `Moved ${named(moved.flatMap((g) => g.ids))} to ${visible(to.name)}, but not ${named(left)}: ${visible(errorText(error))}`,
+      action: moved.length ? undoAction(() => void Promise.all(moved.flatMap(back)).catch(fail)) : undefined,
+    });
   };
 
   const openRemoveTag = () => {
