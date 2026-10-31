@@ -150,10 +150,12 @@ export function orderKeys(order: CollectionOrder, c: CollectionRow) {
     order.step(c, dir);
     // a moved row can lose the focus when the browser re-inserts it; found again in its
     // own list (the sidebar and Browse's tree both have a row for it)
-    const list = row.closest("nav") ?? document;
+    // (the row's own document, kept here: the global may be gone when this runs late)
+    const doc = row.ownerDocument;
+    const list = row.closest("nav") ?? doc;
     setTimeout(() => {
       const again = list.querySelector<HTMLElement>(`[data-collection-id="${c.id}"]`) ?? row;
-      if (document.activeElement !== again) again.focus();
+      if (doc.activeElement !== again) again.focus();
     }, 50);
   };
 }

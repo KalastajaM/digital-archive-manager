@@ -1507,12 +1507,12 @@ down; there is no zoom or panning.
   (or another one) to change or clear it.
 - **What a row shares.** Point at a row, or move to it with the keyboard, and the card at
   the top of the panel on the right lists the exact values (Folder, Sender, Tag and so on)
-  with **Quick look**, **Its relatives**, **Show in folder** and, set apart at the end,
-  **Not related**. **Show in folder** closes the window and opens the relative's folder in
-  Browse with it selected; the browser's Back returns to the page you were on (the window
-  itself does not reopen). The row and its arc are outlined. The card sits beside the
-  outline, never over it, and stays on the last row you pointed at, so you can move over to
-  its buttons.
+  with four buttons, two by two: **Quick look** and **Show in folder** above, **Relatives**
+  (the row's own relatives) and **Not related** below. **Show in folder** closes the window
+  and opens the relative's folder in Browse with it selected; the browser's Back returns to
+  the page you were on (the window itself does not reopen). The row and its arc are
+  outlined. The card sits beside the outline, never over it, and stays on the last row you
+  pointed at, so you can move over to its buttons.
 - **Act on several at once.** The panel on the right has the same buttons as the block
   (**Tag…**, **Add to collection…**, **Move to folder…**, **Link them here**, **Link this
   file there**), with the same previews, Undo and reasons when a button is off. **2+
