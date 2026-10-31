@@ -68,21 +68,20 @@ type Entry = Exclude<MenuEntry, "separator">;
 const entry = (label: string, a: BarAction): Entry => ({ label, onSelect: a.run, disabled: off(a), reason: why(a) });
 
 /** The bar's actions as a right-click menu (a file or selection in a list), in groups:
- * the screen's ``look`` entries (Quick Look, Open, Show in Finder…), the trays (each
+ * the screen's ``lead`` entries (Quick Look, Open, Show in Finder…), the trays (each
  * named: "Put in To pay"), Move to…, Back to inbox and Remove from tray or collection,
  * From…, For… and Ask AI, ``more``'s Add tag… and Add to collection… (``reason``: why they
  * are off), the marks, then Restore and the bin. Same labels and reasons as the icons. */
 export function fileMenuEntries(
   p: FileActionBarProps,
   more?: { addTag: () => void; addTo: () => void; reason: string | null },
-  look: Entry[] = [],
+  lead: MenuEntry[] = [],
 ): MenuEntry[] {
-  const out: MenuEntry[] = [];
+  const out: MenuEntry[] = [...lead];
   const group = (...entries: (Entry | Entry[] | false | undefined)[]) => {
     const some = entries.flat().filter((e): e is Entry => !!e);
     if (some.length > 0) out.push(...(out.length > 0 ? ["separator" as const] : []), ...some);
   };
-  group(look);
   if (p.tray) {
     const verb = p.tray.label === "Put in tray" ? "Put in" : "Move to";
     group(

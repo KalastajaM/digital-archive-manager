@@ -34,6 +34,8 @@ export function ContextMenu({ x, y, label, entries, onClose }: Props) {
   const close = useRef(onClose);
   close.current = onClose; // a new function each render must not re-run the effect below
   const [place, setPlace] = useState({ left: x, top: y });
+  // over a modal dialog the page behind is inert and below it: the menu goes in the dialog
+  const [host] = useState<HTMLElement>(() => Array.from(document.querySelectorAll<HTMLElement>("dialog[open]")).at(-1) ?? document.body);
 
   useLayoutEffect(() => {
     const el = menu.current;
@@ -122,6 +124,6 @@ export function ContextMenu({ x, y, label, entries, onClose }: Props) {
         ),
       )}
     </div>,
-    document.body,
+    host,
   );
 }

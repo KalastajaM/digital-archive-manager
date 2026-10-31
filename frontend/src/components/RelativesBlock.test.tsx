@@ -365,3 +365,44 @@ describe("Not related", () => {
     expect(screen.getByRole("button", { name: "2 marked not related" })).toBeInTheDocument();
   });
 });
+
+describe("A relative's right-click menu", () => {
+  const names = (menu: HTMLElement) =>
+    Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+
+  it("ticks only that relative, then offers a look, Not related and the actions with this file", async () => {
+    const { user } = setup();
+    await screen.findByText("20240928_Verohallinto.pdf");
+    await tick(user, "20250415_Veroilmoitus 2024.pdf");
+    await user.pointer({ keys: "[MouseRight]", target: row("20250210_Kotitalousvähennys.pdf") });
+    const menu = await screen.findByRole("menu", { name: "Actions for 20250210_Kotitalousvähennys.pdf" });
+    expect(screen.getByRole("checkbox", { name: "Select 20250210_Kotitalousvähennys.pdf" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select 20250415_Veroilmoitus 2024.pdf" })).not.toBeChecked();
+    expect(names(menu)).toEqual([
+      "Quick Look",
+      "Show in Browse",
+      "Not related",
+      "Tag it and this file…",
+      "Add it and this file to a collection…",
+      "Move it and this file to a folder…",
+      "Link it here",
+      "Link this file there",
+    ]);
+    // both are in 13. Taxes already: no link is needed, and the menu says so
+    const link = within(menu).getByRole("menuitem", { name: /Link it here/ });
+    expect(link).toBeDisabled();
+    expect(link).toHaveAccessibleDescription("Already in 13. Taxes");
+    await user.click(within(menu).getByRole("menuitem", { name: "Tag it and this file…" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("on a ticked relative acts on everything ticked", async () => {
+    const { user } = setup();
+    await screen.findByText("20240928_Verohallinto.pdf");
+    await tick(user, "20240928_Verohallinto.pdf", "20250415_Veroilmoitus 2024.pdf");
+    await user.pointer({ keys: "[MouseRight]", target: row("20240928_Verohallinto.pdf") });
+    const menu = await screen.findByRole("menu", { name: "Actions for 2 related files" });
+    expect(names(menu)).toContain("Tag them and this file…");
+    expect(screen.getByRole("checkbox", { name: "Select 20250415_Veroilmoitus 2024.pdf" })).toBeChecked();
+  });
+});
