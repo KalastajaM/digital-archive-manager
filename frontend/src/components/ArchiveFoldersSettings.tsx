@@ -14,7 +14,6 @@ import {
   type FolderChange,
   useArchiveFolders,
 } from "../api/client";
-import { useStyle } from "../appearance";
 import { visible } from "../text";
 import { FolderPathInput } from "./FolderPathInput";
 import { RelabelSheet } from "./RelabelSheet";
@@ -184,7 +183,6 @@ function AddSheet({ onClose, onDone }: { onClose: () => void; onDone: (c: Folder
 
 export function ArchiveFoldersSettings() {
   const client = useQueryClient();
-  const [look] = useStyle();
   const folders = useArchiveFolders();
   const [detaching, setDetaching] = useState<ArchiveFolder | null>(null);
   const [relabelling, setRelabelling] = useState<ArchiveFolder | null>(null);
@@ -264,7 +262,7 @@ export function ArchiveFoldersSettings() {
       </div>
       {detaching && <DetachSheet folder={detaching} onClose={() => setDetaching(null)} onDone={changed} />}
       {adding && <AddSheet onClose={() => setAdding(false)} onDone={changed} />}
-      {look === "new" && <SpecialFoldersSettings />}
+      <SpecialFoldersSettings />
       {relabelling && (
         <RelabelSheet
           folder={relabelling}

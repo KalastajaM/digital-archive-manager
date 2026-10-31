@@ -344,7 +344,7 @@ describe("Browse in a new archive", () => {
   it("the context menu of a folder makes a folder inside it", async () => {
     const user = userEvent.setup();
     renderBrowse([dir("13. Taxes")], { "POST /api/folders/new/preview": { body: [mkdir("13. Taxes/x")] } });
-    const row = (await screen.findByText("13. Taxes")).closest("li")!;
+    const row = (await screen.findAllByText("13. Taxes")).find((el) => el.classList.contains("entry-name"))!.closest("li")!; // the list row (the tree has the name too)
     fireEvent.contextMenu(row, { clientX: 40, clientY: 40 });
     const menu = await screen.findByRole("menu", { name: "Actions for 13. Taxes" });
     await user.click(within(menu).getByRole("menuitem", { name: "New folder inside 13. Taxes…" }));

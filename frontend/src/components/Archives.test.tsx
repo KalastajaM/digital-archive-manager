@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi, onTestFinished } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { type Archive, getActiveArchive, navigation, setActiveArchive } from "../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
@@ -77,7 +77,7 @@ describe("the archive menu", () => {
     const { user } = renderSwitcher();
     const button = await screen.findByRole("button", { name: "Archive: Main" });
     expect(button).toHaveTextContent("Main");
-    expect(getComputedStyle(button.querySelector(".archive-dot")!).backgroundColor).toBe("rgb(59, 111, 212)");
+    expect(getComputedStyle(button.querySelector(".archive-tile")!).backgroundColor).toBe("rgb(59, 111, 212)");
     await user.click(button);
     const menu = screen.getByRole("menu", { name: "Archive: Main" });
     expect(within(menu).getByRole("menuitemcheckbox", { name: "Main" })).toHaveAttribute("aria-checked", "true");
@@ -86,21 +86,15 @@ describe("the archive menu", () => {
     expect(within(menu).getByRole("menuitem", { name: "Manage archives…" })).toBeInTheDocument();
   });
 
-  it("in the New look shows the archive's initial and, under its name, where the folder is and how many files", async () => {
-    document.documentElement.dataset.style = "new";
-    try {
-      mockFetch({
-        "GET /api/status": { body: { ...STATUS, files: 2418 } },
-        "GET /api/archives": listing([{ ...MAIN, archive_root: "/Users/a/Library/CloudStorage/GoogleDrive-a@b.fi/My Drive/Archive" }, TEST]),
-      });
-      renderWithProviders(<ArchiveSwitcher />);
-      const button = await screen.findByRole("button", { name: "Archive: Main" });
-      await waitFor(() => expect(button).toHaveTextContent("Google Drive · 2 418 files"));
-      expect(button.querySelector(".archive-tile")).toHaveTextContent("M");
-      expect(button.querySelector(".archive-dot")).toBeNull();
-    } finally {
-      delete document.documentElement.dataset.style;
-    }
+  it("shows the archive's initial and, under its name, where the folder is and how many files", async () => {
+    mockFetch({
+      "GET /api/status": { body: { ...STATUS, files: 2418 } },
+      "GET /api/archives": listing([{ ...MAIN, archive_root: "/Users/a/Library/CloudStorage/GoogleDrive-a@b.fi/My Drive/Archive" }, TEST]),
+    });
+    renderWithProviders(<ArchiveSwitcher />);
+    const button = await screen.findByRole("button", { name: "Archive: Main" });
+    await waitFor(() => expect(button).toHaveTextContent("Google Drive · 2 418 files"));
+    expect(button.querySelector(".archive-tile")).toHaveTextContent("M");
   });
 
   it("is reachable and usable with the keyboard", async () => {
@@ -217,10 +211,6 @@ describe("Add archive", () => {
   });
 
   it("fills the demo folder from the system folder dialog", async () => {
-    document.documentElement.dataset.style = "new";
-    onTestFinished(() => {
-      delete document.documentElement.dataset.style;
-    });
     const { user } = renderSwitcher({
       "POST /api/system/choose-folder": { body: { path: "/Users/me/Demo", cancelled: false, unavailable: null } },
     });

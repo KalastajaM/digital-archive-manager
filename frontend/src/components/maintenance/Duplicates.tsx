@@ -18,7 +18,6 @@ import {
   useDuplicateEstimate,
   useResolveDuplicates,
 } from "../../api/client";
-import { useStyle } from "../../appearance";
 import { formatSize, groupDigits, plural, shortDate } from "../../format";
 import { dialogOpen } from "../../keyboard";
 import { inFileManager } from "../../fileManager";
@@ -33,7 +32,7 @@ import { Tag } from "../ui/Tag";
 import { Compare } from "./Compare";
 import { IgnoreButton, IgnoredList, useIgnore } from "./Ignore";
 import { JobProgress } from "./JobProgress";
-import { CheckHead, foldedLine, ResetButton } from "./ListChecks";
+import { CheckHead, ResetButton } from "./ListChecks";
 import { QuickLookButton, ShowInBrowse } from "./ShowInBrowse";
 import { useMaintenanceJob } from "./useMaintenanceJob";
 import { useFold } from "./view";
@@ -459,8 +458,6 @@ export function Duplicates() {
     check.start();
   };
   const fold = useFold("duplicates");
-  const [lookStyle] = useStyle();
-  const isNew = lookStyle === "new";
   const reset = (
     <ResetButton
       title="Duplicates"
@@ -517,7 +514,7 @@ export function Duplicates() {
     );
   })();
 
-  // New: the header carries the status line and the one button
+  // the header carries the status line and the one button
   const summary = result
     ? [
         result.groups_total > 0 && `${plural(result.groups_total, "group")} of identical files`,
@@ -526,19 +523,15 @@ export function Duplicates() {
         .filter(Boolean)
         .join(", ")
     : "";
-  const head = isNew ? <CheckHead check={check} found={summary !== ""} summary={summary} label="Check" onStart={start} busy={busy} reset={reset} /> : reset;
+  const head = <CheckHead check={check} found={summary !== ""} summary={summary} label="Check" onStart={start} busy={busy} reset={reset} />;
   if (fold?.folded)
     return (
-      <Card title="Duplicates" icon={<Copy />} className={isNew ? "check-card check-duplicates" : undefined} fold={fold} actions={head}>
-        {isNew ? null : (
-          <p className="hint">
-            {foldedLine(check, result && (result.groups_total > 0 ? plural(result.groups_total, "group") + " of identical files" : "No duplicates."))}
-          </p>
-        )}
+      <Card title="Duplicates" icon={<Copy />} className="check-card check-duplicates" fold={fold} actions={head}>
+        {null}
       </Card>
     );
   return (
-    <Card title="Duplicates" icon={<Copy />} className={isNew ? "check-card check-duplicates" : undefined} fold={fold} actions={head}>
+    <Card title="Duplicates" icon={<Copy />} className="check-card check-duplicates" fold={fold} actions={head}>
       <p>
         Finds files with exactly the same content. Only files that share a size with another file are read, and a
         file read before is not read again.
@@ -562,19 +555,6 @@ export function Duplicates() {
               Reading a file that is kept online-only in Google Drive for desktop downloads it first. You can stop at
               any time; what was read is kept.
             </p>
-          )}
-        </div>
-      )}
-      {!isNew && (
-        <div className="check-actions">
-          {check.running ? (
-            <button type="button" onClick={check.stop}>
-              Stop
-            </button>
-          ) : (
-            <button type="button" className="primary" onClick={start} disabled={check.starting || busy}>
-              {result ? "Find duplicates again" : "Find duplicates"}
-            </button>
           )}
         </div>
       )}

@@ -1,4 +1,4 @@
-/** The New look's Today, in numbers: the headline sentence and the four stat tiles, worked
+/** Today, in numbers: the headline sentence and the four stat tiles, worked
  * out from what Today and the bill list already load (no new data). */
 import type { Today as TodayData } from "../../api/client";
 import { formatMoney, plural, shortCalendarDate } from "../../format";

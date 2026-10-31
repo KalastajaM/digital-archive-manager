@@ -1,4 +1,4 @@
-/** What Browse's details panel (the New look) holds besides a file's own panel: the hint under
+/** What Browse's details panel holds besides a file's own panel: the hint under
  * it and, for several selected files, the summary (the icon rows under it are
  * ``FileActionIcons``). */
 import { Link } from "react-router-dom";

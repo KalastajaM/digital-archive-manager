@@ -107,11 +107,12 @@ describe("Activity", () => {
     const articles = screen.getAllByRole("article");
     expect(articles.map((a) => a.getAttribute("aria-label"))).toEqual(["Batch b1", "Batch b2", "Batch b3"]);
     expect(within(batchArticle("b1")).getByText("10. Financial/Banks/2026-10-01 lasku.pdf")).toBeInTheDocument();
-    expect(within(batchArticle("b2")).getByText("command line")).toBeInTheDocument();
+    expect(within(batchArticle("b2")).getByText("CLI")).toBeInTheDocument();
     expect(within(batchArticle("b2")).getByText("Undone")).toBeInTheDocument();
 
-    expect(within(batchArticle("b2")).getByRole("button", { name: "Undo" })).toBeDisabled();
-    expect(within(batchArticle("b3")).getByRole("button", { name: "Undo" })).toBeDisabled();
+    expect(within(batchArticle("b2")).queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(within(batchArticle("b3")).queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(within(batchArticle("b2")).getByRole("button", { name: /^Details of/ })).toBeInTheDocument();
     // an undo batch names what it reverted; "Undone" is the one state word for the reverted batch
     expect(within(batchArticle("b3")).getByText("Undo of Filed Offer of Näkymä into 80. Misc")).toBeInTheDocument();
     expect(within(batchArticle("b3")).queryByText("Reverted")).not.toBeInTheDocument();
@@ -391,9 +392,9 @@ describe("Activity", () => {
     renderWithProviders(<Activity />);
     const article = await screen.findByRole("article", { name: "Batch b7" });
     expect(within(article).getByText("Interrupted")).toBeInTheDocument();
-    const button = within(article).getByRole("button", { name: "Undo" });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription("Run recovery first");
+    expect(within(article).queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(within(article).getByRole("button", { name: /^Review/ })).toBeInTheDocument();
+    expect(within(article).getByText("Run recovery first")).toBeInTheDocument();
   });
 
   it("shows hidden characters in activity and recovery errors", async () => {
@@ -598,7 +599,7 @@ describe("Activity → AI", () => {
     const calls = aiApi();
     const user = userEvent.setup();
     renderWithProviders(<Activity />);
-    await user.click(screen.getByRole("button", { name: "AI" }));
+    await user.click(screen.getByRole("button", { name: "AI calls" }));
     const table = await screen.findByRole("table", { name: "AI calls" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
@@ -622,7 +623,7 @@ describe("Activity → AI", () => {
     const calls = aiApi();
     const user = userEvent.setup();
     renderWithProviders(<Activity />);
-    await user.click(screen.getByRole("button", { name: "AI" }));
+    await user.click(screen.getByRole("button", { name: "AI calls" }));
     const toggle = await screen.findByRole("switch", { name: "Use AI" });
     expect(toggle).toBeChecked();
     await user.click(toggle);
@@ -645,7 +646,7 @@ describe("Activity → AI", () => {
     });
     const user = userEvent.setup();
     renderWithProviders(<Activity />);
-    await user.click(screen.getByRole("button", { name: "AI" }));
+    await user.click(screen.getByRole("button", { name: "AI calls" }));
     expect(await screen.findByRole("switch", { name: "Use AI" })).not.toBeChecked();
     expect(screen.getByText(/ai-state.json is not valid JSON/)).toBeInTheDocument();
   });
@@ -654,7 +655,7 @@ describe("Activity → AI", () => {
     aiApi({ ...STATUS_ON, has_key: false, enabled: false });
     const user = userEvent.setup();
     renderWithProviders(<Activity />);
-    await user.click(screen.getByRole("button", { name: "AI" }));
+    await user.click(screen.getByRole("button", { name: "AI calls" }));
     expect(await screen.findByText(/No key yet/)).toHaveTextContent("dam ai --set-key");
   });
 });

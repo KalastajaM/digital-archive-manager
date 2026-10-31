@@ -1,10 +1,9 @@
 /** Space opens Quick Look on the list's current document (a plain Space outside text
  * fields and controls, with no dialog open). Inside, Space or Esc closes it and ←/→ (or
- * j/k, ↑/↓) move through the list, moving the list's own selection along. In the New
- * look its Relatives button closes it and opens the Relatives window of that document,
- * so every list with Quick Look reaches Relatives. */
+ * j/k, ↑/↓) move through the list, moving the list's own selection along. Its
+ * Relatives button closes it and opens the Relatives window of that document, so every
+ * list with Quick Look reaches Relatives. */
 import { createElement, type ReactNode, useEffect, useRef, useState } from "react";
-import { useStyle } from "../appearance";
 import { inToDelete } from "../toDelete";
 import { dialogOpen, isShortcut, isTyping, useKeydown } from "../keyboard";
 import { useDialogStatus } from "./FileLaunch";
@@ -91,7 +90,6 @@ export function useQuickLook(
   };
   const close = () => setWanted(false);
   // the Relatives window opened from Quick Look (which closes for it)
-  const [look] = useStyle();
   const [relativesOf, setRelativesOf] = useState<QLFile | null>(null);
   const toRelatives = (file: QLFile) => {
     forDialog.current = true; // the focus goes back where it was once that window closes
@@ -105,7 +103,7 @@ export function useQuickLook(
     back.current = null;
     if (el?.isConnected) el.focus();
   };
-  const hasRelatives = (f: QLFile) => look === "new" && !f.is_link && !inToDelete(f.path);
+  const hasRelatives = (f: QLFile) => !f.is_link && !inToDelete(f.path);
   const { onTrash, trashRefusal } = options;
   const shown = files[at] as QLFile | undefined;
   const refusal = shown && trashRefusal ? trashRefusal(shown) : null;

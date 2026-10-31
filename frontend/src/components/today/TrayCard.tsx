@@ -1,34 +1,21 @@
-/** A tray's card on Today and its rows: what needs attention in full (fields, copy
- * buttons), later items compact, each with a round checkbox that marks it done, with urgency tags and amounts. */
-import { BookOpen, CircleCheck, Euro, Hourglass, ListTodo, type LucideIcon } from "lucide-react";
+/** A tray's rows on Today: what needs attention in full (fields, copy buttons), later
+ * items compact, each with a round checkbox that marks it done, with urgency tags and amounts. */
 import { Link } from "react-router-dom";
 import type { AttentionItem, Item, Today as TodayData, TrayCount, TrayDef } from "../../api/client";
-import { dayOf, fieldLabel, fieldWord, formatField, formatMoney, plural } from "../../format";
+import { dayOf, fieldLabel, fieldWord, formatField } from "../../format";
 import { visible } from "../../text";
 import { CopyButton } from "../CopyButton";
 import { DoneForm } from "../DoneForm";
 import { ItemBadges } from "../ItemBadges";
 import { useMarkDone } from "../useMarkDone";
-import { Card } from "../ui/Card";
 import { urgency, UrgencyTag } from "../UrgencyTag";
-import type { CardFrame } from "./frame";
 import { daysBetween, waited } from "./time";
 
 const enc = encodeURIComponent;
 
-/** A tray card's shape: bills (a money summary), dated items, or items that wait. */
+/** A tray's shape: bills (a money summary), dated items, or items that wait. */
 export type Kind = "money" | "dated" | "waiting";
 export type TrayCardInfo = { id: string; name: string; def?: TrayDef; count?: TrayCount; kind: Kind };
-
-const KIND_ICON: Record<Kind, LucideIcon> = { money: Euro, dated: CircleCheck, waiting: BookOpen };
-
-function trayIcon(info: TrayCardInfo): LucideIcon {
-  const key = `${info.id} ${info.name}`.toLowerCase();
-  if (/follow|waiting|odota|seuranta/.test(key)) return Hourglass;
-  if (/read|lue|luettava/.test(key)) return BookOpen;
-  if (info.kind !== "dated" || /action|task|todo|tee|hoida/.test(key)) return KIND_ICON[info.kind];
-  return ListTodo;
-}
 
 /** Every tray Today knows of, in tray order: the definitions, then trays only the
  * counts or the attention list name (their definition failed to load). */
@@ -214,110 +201,4 @@ export function trayRows(info: TrayCardInfo, attention: AttentionItem[], items: 
     ...attention.filter((a) => !listed.has(a.item.id)),
   ];
   return rows.sort((a, b) => (info.kind === "waiting" ? byCreated : byDate)(a.item, b.item));
-}
-
-export function TrayCard({
-  info,
-  attention,
-  items,
-  today,
-  traysUnknown,
-  formFor,
-  setFormFor,
-  frame,
-}: {
-  info: TrayCardInfo;
-  /** The tray's attention entries (shown in full). */
-  attention: AttentionItem[];
-  /** The tray's first open items, as Today sends them. */
-  items: Item[];
-  today: string;
-  traysUnknown: boolean;
-  formFor: number | null;
-  setFormFor: (id: number | null) => void;
-  /** Today's layout: folding, dragging (none when shown on its own). */
-  frame?: CardFrame;
-}) {
-  const folded = frame?.fold.folded ?? false;
-  const rows = trayRows(info, attention, items);
-  const full = new Set(attention.map((a) => a.item.id));
-  const name = visible(info.name);
-  const Icon = trayIcon(info);
-  const { count } = info;
-  const open = count?.open ?? rows.length;
-  const hidden = Math.max(0, open - rows.length);
-  const oldest = rows.length > 0 ? Math.min(...rows.map((r) => r.item.created)) : null;
-  /** The headline of a folded dated card: its next dated item (rows go by date). */
-  const next = rows.find((r) => r.item.date);
-
-  // Every card leads with one big figure: a money tray's total, otherwise the open
-  // count (then just "open" beside it). An empty tray has no figure: "Nothing open."
-  const total = info.kind === "money" && count?.sum != null ? formatMoney(count.sum) : null;
-  const big = open === 0 ? null : (total ?? String(open));
-  const parts: string[] = [];
-  if (open > 0) parts.push(total ? `${open} open` : "open");
-  if (count && count.overdue > 0) parts.push(`${count.overdue} overdue`);
-  if (info.kind === "waiting" && oldest !== null) parts.push(`oldest ${waited(daysBetween(dayOf(oldest), today))}`);
-  if (count && count.waiting_long > 0) parts.push(`${count.waiting_long} waiting long`);
-
-  return (
-    <Card
-      title={name}
-      icon={<Icon />}
-      className="today-card"
-      fold={frame?.fold}
-      headerProps={frame?.headerProps}
-      actions={
-        <Link className="card-link" to={`/trays/${enc(info.id)}`} aria-label={`Show all in ${name}`}>
-          Show all
-        </Link>
-      }
-    >
-      {(big || parts.length > 0) && (
-        <p className="today-figure">
-          {big && <span className="today-big">{big}</span>}
-          {big && parts.length > 0 && " "}
-          {parts.map((p, i) => (
-            <span key={p} className="today-sub">
-              {i > 0 && " · "}
-              <span>{p}</span>
-            </span>
-          ))}
-        </p>
-      )}
-      {open === 0 && rows.length === 0 ? (
-        <p className="today-empty">Nothing open.</p>
-      ) : folded ? (
-        info.kind === "dated" && next?.item.date && (
-          <p className="today-next">
-            Next: <Link to={`/trays/${enc(info.id)}?item=${next.item.id}`}>{visible(next.item.title)}</Link>{" "}
-            <UrgencyTag date={next.item.date} today={today} />
-          </p>
-        )
-      ) : rows.length === 0 ? (
-        <p className="today-empty">Nothing open.</p>
-      ) : (
-        <div className="today-rows">
-          {rows.map((entry) => (
-            <TrayRow
-              key={entry.item.id}
-              entry={entry}
-              full={full.has(entry.item.id)}
-              kind={info.kind}
-              tray={info.def}
-              today={today}
-              traysUnknown={traysUnknown}
-              formOpen={formFor === entry.item.id}
-              setFormOpen={(isOpen) => setFormFor(isOpen ? entry.item.id : null)}
-            />
-          ))}
-        </div>
-      )}
-      {!folded && hidden > 0 && (
-        <p className="today-more">
-          <Link to={`/trays/${enc(info.id)}`}>{plural(hidden, "more item", "more items")}</Link>
-        </p>
-      )}
-    </Card>
-  );
 }

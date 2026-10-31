@@ -1,9 +1,8 @@
-/** Today's Inbox card: the count, the oldest age and the age bar, and "Found in the
- * inbox" with a one-click Put in <tray> (toast with Open and Undo). Folded, only
- * the count, age and bar show; open, the first ``FOUND_SHOWN`` found files and "Show N
+/** The lists of Today's Inbox section: "Found in the inbox" with a one-click Put in
+ * <tray> (toast with Open and Undo), the first ``FOUND_SHOWN`` found files and "Show N
  * more". With AI on, "Not recognised: N files — Ask AI" lists the inbox files without a
  * rule guess, each with its own Ask AI (the "What will be sent" sheet first). */
-import { Inbox as InboxIcon, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -11,7 +10,6 @@ import {
   type FilingSuggestion,
   type Found,
   type InboxEntry,
-  type Today as TodayData,
   type TrayDef,
   useInbox,
   useTrays,
@@ -19,16 +17,12 @@ import {
 import { fieldWord, formatDate, formatField, formatMoney, plural } from "../../format";
 import { visible } from "../../text";
 import { AIBadge } from "../ai/AIBadge";
-import { AIHint, useAISend, useAIState } from "../ai/useAI";
-import { AgeBar } from "../AgeBar";
+import { useAISend } from "../ai/useAI";
 import { type QuickPut, useQuickPut } from "../useQuickPut";
-import { Card } from "../ui/Card";
 import { Tag } from "../ui/Tag";
-import type { CardFrame } from "./frame";
-import { waited } from "./time";
 import { MarkIcons } from "../MarkIcons";
 
-/** Found files listed before "Show N more"; more than this and the card starts folded. */
+/** Found files listed before "Show N more"; the rest wait behind "Show N more". */
 export const FOUND_SHOWN = 5;
 
 export function FoundRow({ found, onPut, busy }: { found: Found; onPut: () => void; busy: boolean }) {
@@ -205,70 +199,5 @@ export function FoundList({ found, quick }: { found: Found[]; quick: ReturnType<
       )}
       <p className="hint">Found by the scan rules (a due date and an amount, with an IBAN or a reference).</p>
     </>
-  );
-}
-
-export function InboxCard({ data, frame }: { data: TodayData; frame?: CardFrame }) {
-  const { inbox_stats: stats, found } = data;
-  const folded = frame?.fold.folded ?? false;
-  const quick = useQuickPut();
-  const aiState = useAIState();
-
-  return (
-    <Card
-      title="Inbox"
-      icon={<InboxIcon />}
-      className="today-card"
-      fold={frame?.fold}
-      headerProps={frame?.headerProps}
-      actions={
-        stats.count > 0 && (
-          <>
-            {data.marked > 0 && (
-              <Link className="card-link" to="/inbox?marked=1" title="File every inbox file with a filing code, in one batch">
-                File {data.marked} marked
-              </Link>
-            )}
-            {data.reading_codes > 0 && (
-              <span className="reading-codes" role="status">
-                Reading filing codes…
-              </span>
-            )}
-            <Link className="card-link" to="/inbox">
-              Start filing
-            </Link>
-          </>
-        )
-      }
-    >
-      {stats.count === 0 ? (
-        <p className="today-empty">The inbox is empty.</p>
-      ) : (
-        <>
-          <p className="today-figure">
-            <span className="today-big">{stats.count}</span>{" "}
-            <span className="today-sub">
-              {stats.count === 1 ? "file" : "files"}
-              {stats.oldest_days !== null && ` · oldest ${waited(stats.oldest_days)}`}
-            </span>
-            {stats.overdue > 0 && (
-              <>
-                {" "}
-                <Tag tone="red">{`${stats.overdue} overdue`}</Tag>
-              </>
-            )}
-          </p>
-          <AgeBar thisWeek={stats.this_week} lastWeek={stats.last_week} older={stats.older} />
-        </>
-      )}
-      {folded && found.length > 0 && (
-        <p className="today-sub today-found-count">{plural(found.length, "file")} found by the scan rules</p>
-      )}
-      {!folded && found.length > 0 && <FoundList found={found} quick={quick} />}
-      {!folded && stats.count > 0 && aiState.on && (
-        <NotRecognised put={(p) => void quick.put(p)} pendingId={quick.pendingIds?.[0] ?? null} />
-      )}
-      {!folded && stats.count > 0 && <AIHint what="to ask about files the rules don’t recognise" />}
-    </Card>
   );
 }

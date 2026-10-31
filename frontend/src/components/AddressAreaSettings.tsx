@@ -4,7 +4,6 @@
  * can have its own (Draw a box on that document). */
 import { useState } from "react";
 import { errorText, type PageBox, usePeople, useSavePeople } from "../api/client";
-import { useStyle } from "../appearance";
 import { visible } from "../text";
 import { SampleLetterArea } from "./zones/SampleLetterArea";
 
@@ -23,8 +22,6 @@ export function AddressAreaSettings() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [look] = useStyle();
-  const isNew = look === "new";
 
   if (people.isError)
     return (
@@ -128,15 +125,13 @@ export function AddressAreaSettings() {
           </span>
         )}
       </div>
-      {isNew && (
-        <SampleLetterArea
-          onSaved={() => {
-            // the fields show what was saved from the letter
-            setDraft(null);
-            setSaved(false);
-          }}
-        />
-      )}
+      <SampleLetterArea
+        onSaved={() => {
+          // the fields show what was saved from the letter
+          setDraft(null);
+          setSaved(false);
+        }}
+      />
     </section>
   );
 }

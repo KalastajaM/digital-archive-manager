@@ -59,10 +59,7 @@ function setup() {
 
 const items = (menu: HTMLElement) => Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
 
-afterEach(() => {
-  cleanup();
-  delete document.documentElement.dataset.style;
-});
+afterEach(cleanup);
 
 describe("Sidebar right-click menus", () => {
   it("a collection row has Browse's entries: Open, New collection inside…, Merge into…, Delete…, then its order", async () => {
@@ -116,14 +113,7 @@ describe("Sidebar right-click menus", () => {
     expect(await screen.findByRole("dialog", { name: "Rename taxes" })).toBeInTheDocument();
   });
 
-  it("the Tags caption offers New tag (Classic), as do the Pinned and Recent tags captions (New)", async () => {
-    const { user } = setup();
-    await within(nav()).findByRole("link", { name: "insurance (14)" });
-    await user.pointer({ keys: "[MouseRight]", target: within(nav()).getByRole("link", { name: "Tags" }) });
-    await user.click(await screen.findByRole("menuitem", { name: "New tag" }));
-    expect(await screen.findByRole("dialog", { name: "New tag" })).toBeInTheDocument();
-    cleanup();
-    document.documentElement.dataset.style = "new";
+  it("the Pinned and Recent tags captions offer New tag", async () => {
     const again = setup();
     await within(nav()).findByRole("link", { name: "insurance (14)" });
     await again.user.pointer({ keys: "[MouseRight]", target: within(nav()).getByRole("heading", { name: "Recent tags" }) });

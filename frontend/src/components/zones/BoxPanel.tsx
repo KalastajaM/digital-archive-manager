@@ -7,7 +7,6 @@
  * looked for (a person is found from text only, so they never take a picture). */
 import { X } from "lucide-react";
 import { useState } from "react";
-import { useStyle } from "../../appearance";
 import {
   errorText,
   pngSrc,
@@ -74,8 +73,6 @@ export function BoxPanel({
   onClose: () => void;
 }) {
   const toast = useToast();
-  const [look] = useStyle();
-  const isNew = look === "new";
   const people = usePeople();
   const savePeople = useSavePeople();
   const setArea = useSetAddressArea();
@@ -120,14 +117,10 @@ export function BoxPanel({
   return (
     <section className="box-panel" aria-label="The boxes">
       <header className="box-panel-head">
-        {isNew ? (
-          <span className="box-panel-title">
-            <strong>Boxes on page 1</strong>
-            <span className="box-panel-sub">A box is a place on page 1. In a rule it becomes an area.</span>
-          </span>
-        ) : (
+        <span className="box-panel-title">
           <strong>Boxes on page 1</strong>
-        )}
+          <span className="box-panel-sub">A box is a place on page 1. In a rule it becomes an area.</span>
+        </span>
         <button
           type="button"
           className="icon-button"
@@ -142,11 +135,9 @@ export function BoxPanel({
         {boxes.map((k, i) => (
           <li key={k.id} data-tone={i % 5}>
             <span className="box-kept-text">
-              {isNew && (
-                <span className="box-chip" aria-hidden="true">
-                  {i + 1}
-                </span>
-              )}
+              <span className="box-chip" aria-hidden="true">
+                {i + 1}
+              </span>
               <strong>Box {i + 1}</strong>{" "}
               <span className="segmented box-mode" role="group" aria-label={`What box ${i + 1} matches`}>
                 {(["words", "picture"] as const).map((m) => (
@@ -165,13 +156,11 @@ export function BoxPanel({
                 k.picture ? (
                   <span className="box-kept-pic">
                     <img className="box-kept-picture" src={pngSrc(k.picture)} alt={`Picture of box ${i + 1}`} />
-                    {isNew && (
-                      <span className="box-kept-why">
-                        {boxWords(k).length === 0 && k.lines !== null
-                          ? "No words here, so it is kept as a picture: it is compared with the same place on other letters."
-                          : "Kept as a picture: it is compared with the same place on other letters."}
-                      </span>
-                    )}
+                    <span className="box-kept-why">
+                      {boxWords(k).length === 0 && k.lines !== null
+                        ? "No words here, so it is kept as a picture: it is compared with the same place on other letters."
+                        : "Kept as a picture: it is compared with the same place on other letters."}
+                    </span>
                   </span>
                 ) : (
                   <span className="busy" role="status">Cutting the picture…</span>
@@ -180,7 +169,7 @@ export function BoxPanel({
                 <span className="busy" role="status">Reading the box…</span>
               ) : boxWords(k).length === 0 ? (
                 <span className="hint">No text found</span>
-              ) : isNew ? (
+              ) : (
                 <span className="box-found">
                   <span className="box-found-label">Words found in it</span>
                   <span className="box-found-words">
@@ -191,8 +180,6 @@ export function BoxPanel({
                     ))}
                   </span>
                 </span>
-              ) : (
-                visible(boxWords(k).join(" / "))
               )}
             </span>
             <button type="button" className="icon-button" aria-label={`Remove box ${i + 1}`} onClick={() => onRemove(i)}>
@@ -205,17 +192,13 @@ export function BoxPanel({
       {needsText && (
         <p className="hint">Add a text box to make this faster and surer: a picture alone takes longer to test and is less sure.</p>
       )}
-      {isNew && (
-        <p className="hint box-explain">
-          A rule from these boxes needs a word or the picture in every area. With a single box you can also set the address area, where dam looks for who a letter is for.
-        </p>
-      )}
+      <p className="hint box-explain">
+        A rule from these boxes needs a word or the picture in every area. With a single box you can also set the address area, where dam looks for who a letter is for.
+      </p>
       <div className="box-actions">
-        {isNew && (
-          <button type="button" className="box-back" onClick={onClose}>
-            Back to filing
-          </button>
-        )}
+        <button type="button" className="box-back" onClick={onClose}>
+          Back to filing
+        </button>
         <button
           type="button"
           className="primary box-make"
@@ -238,7 +221,7 @@ export function BoxPanel({
             Address area for this rule's letters
           </button>
         )}
-        {only && isNew && (
+        {only && (
           <button
             type="button"
             disabled={setArea.isPending}

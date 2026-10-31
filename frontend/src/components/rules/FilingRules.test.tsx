@@ -98,7 +98,7 @@ describe("FilingRules", () => {
     await user.type(within(sheet).getByLabelText("Add a word"), "sauna{Enter}");
     await waitFor(() => expect(ofMethod(calls, "POST", "/api/rules/replay/jobs").length).toBeGreaterThan(0));
     expect((ofMethod(calls, "POST", "/api/rules/replay/jobs")[0].body as { rule: { id: string }; replaces: unknown }).replaces).toBeNull();
-    await user.click(await within(sheet).findByRole("button", { name: "Save" }));
+    await user.click(await within(sheet).findByRole("button", { name: "Save rule" }));
     await waitFor(() => expect(ofMethod(calls, "PUT", "/api/rules/new-rule")).toHaveLength(1));
     expect(calls.find((c) => c.method === "PUT" && c.url === "/api/rules/new-rule")?.body).toMatchObject({ id: "new-rule" });
   });

@@ -4,10 +4,10 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SearchHit } from "../api/client";
 import { TagTree } from "../components/BrowseTagTree";
+import { browseSearchUrl } from "../components/today/SearchCard";
 import { Sidebar } from "../components/ui/Sidebar";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import Browse from "./Browse";
-import Today from "./Today";
 
 afterEach(() => {
   cleanup();
@@ -43,58 +43,23 @@ const TAGS = {
   groups: [{ id: 1, name: "Care" }],
 };
 
-describe("Today's Search card", () => {
-  async function openCard() {
-    mockFetch({
-      "GET /api/today": {
-        body: {
-          attention: [],
-          inbox_stats: { count: 0, overdue: 0, oldest_days: null, buckets: [] },
-          found: [],
-          open_items: [],
-          overview: { inbox: 0, trays: [], collections: [] },
-          reminders: { last_run: null, errors: {}, skipped: null },
-          tray_errors: [],
-          ongoing_sync_failure: null,
-          unmanaged_ongoing: 0,
-          unmanaged_important: 0,
-        },
-      },
-      "GET /api/trays": { body: { trays: [], errors: [] } },
-    });
-    const user = userEvent.setup();
-    renderWithProviders(
-      <MemoryRouter>
-        <Routes>
-          <Route path="/" element={<Today today="2026-10-19" />} />
-          <Route path="*" element={null} />
-        </Routes>
-        <Where />
-      </MemoryRouter>,
+describe("The Browse address for a search typed outside Browse (the search palette's search row)", () => {
+  it("the words and the finished tag:name go into ?q= as a filter", () => {
+    expect(browseSearchUrl("Kela tag:medical")).toBe("/browse?q=Kela+tag%3Amedical");
+  });
+
+  it("any filter goes into ?q= whole, quoted and negated as typed", () => {
+    expect(browseSearchUrl('type:pdf -in:"90. Other People" after:2025')).toBe(
+      "/browse?q=type%3Apdf+-in%3A%2290.+Other+People%22+after%3A2025",
     );
-    return { user, card: await screen.findByRole("region", { name: "Search" }) };
-  }
-
-  it("Enter opens Browse with the words and the finished tag:name as a filter", async () => {
-    const { user, card } = await openCard();
-    await user.type(within(card).getByRole("searchbox", { name: "Search the archive" }), "Kela tag:medical{Enter}");
-    expect(where()).toBe("/browse?q=Kela+tag%3Amedical");
   });
 
-  it("any filter goes into ?q= whole, quoted and negated as typed", async () => {
-    const { user, card } = await openCard();
-    await user.type(within(card).getByRole("searchbox", { name: "Search the archive" }), 'type:pdf -in:"90. Other People" after:2025{Enter}');
-    expect(where()).toBe("/browse?q=type%3Apdf+-in%3A%2290.+Other+People%22+after%3A2025");
+  it("a filter still being typed at the end counts as finished", () => {
+    expect(browseSearchUrl("type:pdf")).toBe("/browse?q=type%3Apdf");
   });
 
-  it("the ? lists the filters; an example goes into the box", async () => {
-    const { user, card } = await openCard();
-    await user.click(within(card).getByRole("button", { name: "Search help" }));
-    const pop = screen.getByRole("dialog", { name: "Search filters" });
-    await user.click(within(pop).getByRole("button", { name: "type:pdf" }));
-    expect(within(card).getByRole("searchbox", { name: "Search the archive" })).toHaveValue("type:pdf");
-    await user.keyboard("{Enter}");
-    expect(where()).toBe("/browse?q=type%3Apdf");
+  it("nothing typed gives plain Browse", () => {
+    expect(browseSearchUrl("  ")).toBe("/browse?");
   });
 });
 
@@ -391,13 +356,18 @@ describe("Sidebar Tags section", () => {
     const { user, view } = setup(SIDEBAR);
     const nav = screen.getByRole("navigation", { name: "Main" });
     await within(nav).findByRole("link", { name: "Kela (2)" });
-    await user.click(within(nav).getByRole("button", { name: "Tags section" }));
+    await user.click(within(nav).getByRole("button", { name: "Pinned tags section" }));
+    expect(within(nav).queryByRole("link", { name: "health (1)" })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Kela (2)" })).toBeInTheDocument(); // Recent tags is its own section
+    await user.click(within(nav).getByRole("button", { name: "Recent tags section" }));
     expect(within(nav).queryByRole("link", { name: "Kela (2)" })).toBeNull();
     view.unmount();
     setup(SIDEBAR);
     const again = screen.getByRole("navigation", { name: "Main" });
     await within(again).findByRole("link", { name: "Tags" });
+    expect(within(again).queryByRole("link", { name: "health (1)" })).toBeNull();
     expect(within(again).queryByRole("link", { name: "Kela (2)" })).toBeNull();
-    expect(within(again).getByRole("button", { name: "Tags section" })).toHaveAttribute("aria-expanded", "false");
+    expect(await within(again).findByRole("button", { name: "Pinned tags section" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(again).getByRole("button", { name: "Recent tags section" })).toHaveAttribute("aria-expanded", "false");
   });
 });

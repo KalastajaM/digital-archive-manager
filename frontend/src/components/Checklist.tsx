@@ -12,7 +12,6 @@ import {
   useChecklist,
   useChecklistChange,
 } from "../api/client";
-import { useStyle } from "../appearance";
 import { visible } from "../text";
 import { Collapsible } from "./Collapsible";
 import { IconButton } from "./ui/IconButton";
@@ -177,7 +176,6 @@ export function Checklist({ kind, target }: { kind: NoteKind; target: string }) 
   const [dragged, setDragged] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const addId = useId();
-  const [look] = useStyle();
 
   /** Send one change; true if it was stored (else the error is shown). */
   const run = async (c: ChecklistChange) => {
@@ -203,7 +201,7 @@ export function Checklist({ kind, target }: { kind: NoteKind; target: string }) 
       name="checklist"
       title="Checklist"
       className="checklist"
-      aside={look === "new" && entries.length > 0 ? <span className="check-count">{`${entries.filter((e) => e.done).length} of ${entries.length}`}</span> : undefined}
+      aside={entries.length > 0 ? <span className="check-count">{`${entries.filter((e) => e.done).length} of ${entries.length}`}</span> : undefined}
       hint={entries.length === 0 ? "Nothing yet" : `${entries.filter((e) => e.done).length} of ${entries.length} done`}
     >
       {list.isError && (

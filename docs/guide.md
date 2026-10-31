@@ -114,7 +114,7 @@ confirm, and every change can be undone from Activity.
 ## Getting started
 
 The first time you open dam, a welcome screen asks for the archive folder. It lists the
-cloud-drive folders it finds on your computer, or you can type any path. In the New look a
+cloud-drive folders it finds on your computer, or you can type any path. A
 **Choose...** button next to the path opens your system's folder window instead (the same
 button is in Add archive and in Settings, Archive folders, Add folder). Where no such
 window can be shown, dam says so and you type the path. The folder is
@@ -161,8 +161,8 @@ copies at most 100 files. Documents dragged inside dam are never taken by the In
 
 ### New folders
 
-**New folder** in Browse (the folder icon in the pane's bar in the New look, the toolbar in
-Classic, or ⇧⌘N) adds a name row in the folder you are in, with "untitled folder" selected; right-click a folder for **New folder inside…**. The folder is
+**New folder** in Browse (the folder icon in the pane's bar, or ⇧⌘N) adds a name row in the folder you are in,
+with "untitled folder" selected; right-click a folder for **New folder inside…**. The folder is
 made at once and can be undone while it is empty. Names with `/`, `\`, `< > : " | ? *`,
 reserved Windows names (`CON`, `NUL`, ...), a leading or trailing dot, or a `##.` prefix
 are refused. Nothing is made inside the four special folders.
@@ -205,7 +205,7 @@ setting. The sidebar, from the top:
   then Move up / Move down / Move out one level;
 - **Tags**: the caption opens the [Tags](#tags) screen; below it your pinned tags, then
   the tags you used most lately, eight at most, each opening its files in Browse.
-  Right-click the caption (in the New look, Pinned tags or Recent tags) for **New tag**,
+  Right-click the caption (Pinned tags or Recent tags) for **New tag**,
   and a tag for **Rename…**, **Merge into…**, **Pin to the sidebar** (or Unpin) and
   **Delete…**, as in Browse's Tags tree;
 - **Archive**: **Ask** (AI questions about the archive), **Activity**, **Maintenance**
@@ -231,42 +231,32 @@ could not be read and why, with **Retry**.
 
 ## Today
 
-The front page: a greeting, one line saying what waits ("6 to file · 1 bill due soon ·
-nothing overdue", or "All clear") and the date, then cards.
+The front page: the date and a headline built from your counts ("One bill is overdue,
+seven documents to file", or "All clear") with **Start filing** and **Customize**; four
+tiles (**To file**, **Overdue**, **Due in 14 days**, **Waiting on others**), each a link
+to what it counts; then two columns.
 
-- **To pay** has the open total and each bill with its payee, amount and an urgency tag
-  (red overdue, orange within 3 days, grey later).
-- **Inbox** has the count, the age of the oldest document, a bar for this week, last week
-  and older, and **Found in the inbox**: documents whose scan says they belong in a tray,
-  each with **Put in <tray>**. When inbox files have a filing code, **File N marked**
-  opens them as one batch (see [Filing codes](#filing-codes)).
-- **To action**, **To read** and your other trays, the open collections that still have
-  to-dos (open checklist entries, or files still in the inbox), **Starred** files, and
-  the result of the last reminder check.
-- **Search** is a box on top of the second column: type and press Enter, and Browse opens
-  with that search (filters such as `tag:name` work too, see [Searching](#searching); the
-  **?** next to the box lists them).
+- On the left, a **To pay** table: each bill with its payee, amount and due tag (red
+  overdue, orange within 3 days, grey later), **Pay** to open Pay mode on it and **Paid**
+  to mark it paid; the overdue bill opens up with its copy buttons and note. Below it
+  your other trays (**To action**, **To read** and the rest) as short lists with **Show
+  all**.
+- On the right, the **Inbox** summary: how many files, the age of the oldest document, how
+  many the rules recognised, a bar for this week, last week and older, and **Found in the
+  inbox**: documents whose scan says they belong in a tray, each with **Put in <tray>**.
+  When inbox files have a filing code, **File N marked** opens them as one batch (see
+  [Filing codes](#filing-codes)). Under it come **Collections to do** (the open
+  collections that still have to-dos: open checklist entries, or files still in the
+  inbox), **Starred** and **Reminders** (the result of the last reminder check).
 
-Trays with nothing open are folded into one **Clear** card, so the cards with content get
-the room. Each tray row has a round checkbox that marks the item done at once (a bill is
-marked paid today), with a toast to undo it; only a done field that needs a value you must
-give opens a small form. Right-click a tray row, or a bill in the New look's **To pay**
-table, for the tray item's menu (see [Working on an item](#working-on-an-item)); right-click a **Starred** file for
-**Show in Browse**, **Quick Look**, **Open**, **Show in Finder**, **Remove the star** and
-**Move to To Delete**. Drag a card by its header to reorder, or press ⌥↑ / ⌥↓ with the
-focus on it; **Reset layout** under the date restores the default order.
-
-**The New look** (Settings, Appearance) lays Today out differently, with the same content:
-the date and a headline built from your counts ("One bill is overdue, seven documents to
-file") with **Start filing** and **Customize**; four tiles (**To file**, **Overdue**, **Due
-in 14 days**, **Waiting on others**), each a link to what it counts; on the left a **To pay**
-table (each bill with its due tag and amount, **Pay** to open Pay mode on it and **Paid** to
-mark it paid; the overdue bill opens up with its copy buttons and note) and your other
-trays as short lists with **Show all**; on the right the **Inbox** summary (how many files
-the rules recognised), **Collections to do**, **Starred**, **Reminders** and **Search**.
-**Customize** is where the sections are arranged: each shows a fold chevron and **Move up** /
-**Move down** and can be dragged by its heading, and **Reset layout** puts them back. In a
-narrow window the right column moves under the left one.
+Each tray row has a round checkbox that marks the item done at once (a bill is marked
+paid today), with a toast to undo it; only a done field that needs a value you must give
+opens a small form. Right-click a tray row, or a bill in the **To pay** table, for the tray
+item's menu (see [Working on an item](#working-on-an-item)); right-click a **Starred** file
+for **Show in Browse**, **Quick Look**, **Open**, **Show in Finder**, **Remove the star**
+and **Move to To Delete**. **Customize** is where the sections are arranged: each shows a
+fold chevron and **Move up** / **Move down** and can be dragged by its heading, and **Reset
+layout** puts them back. In a narrow window the right column moves under the left one.
 
 Today also shows a banner while `##. Ongoing` or `##. Important` holds things dam does not
 manage yet, with a **Convert** button (see [Converting existing folders](#converting-existing-folders)).
@@ -294,7 +284,7 @@ archive changes. Right-click a file in the list for **Quick Look**, **Open**, **
 Finder**, **Skip**, **Assign a filing code…**, a tray by name (**Put in To pay**), **Add
 tag…**, **Add to collection…**, **Star**, **Mark Important** and **Move to To Delete**. As in
 Finder, right-clicking a selected file acts on the whole selection (then Quick Look, Open and
-Skip are left out); right-clicking another file selects just that one first. In the New look the Inbox is arranged as: the list (with an **All / Bills /
+Skip are left out); right-clicking another file selects just that one first. The Inbox is arranged as: the list (with an **All / Bills /
 New** filter: Bills are files where the scan found a due date or an amount, New are files no
 rule suggests anything for), one bar over the document (name, zoom, **Draw a box**, **Open**
 and a **...** menu), and the filing panel, whose header names the rule behind the suggestion
@@ -344,7 +334,7 @@ preview with its toolbar (zoom, select box, print, open, show in Finder, open in
 checklist and history fold. A tray item with several files shows the collections of the
 file you chose.
 
-In the New look a summary is edited where it stands: click the text (or **Add a summary…**
+A summary is edited where it stands: click the text (or **Add a summary…**
 when there is none) and type; it is saved when you click elsewhere, and Esc puts the text
 back. A file's and a collection's summary work the same way, in the same grey box, with
 **Summarize with AI…** under the text. The Notes heading's tooltip says whose note it is
@@ -505,7 +495,7 @@ same code found twice (folder and sticker) counts once.
 
 ### File N marked
 
-When at least one inbox file has a code, the Inbox toolbar and the Inbox card on Today
+When at least one inbox file has a code, the Inbox toolbar and the Inbox section on Today
 show **File N marked**. It opens **Marked files**, one row per coded file: the codes
 found and how ("P (folder)", "A (sticker)"), and exactly what filing will do: the new
 name, the folder, the tray with the fields that will be stored (for To pay the due
@@ -662,11 +652,11 @@ all. The panel offers:
   somewhere unusual; shown when one box is drawn and a rule made the current suggestion.
 - **Address area for all letters**: where dam looks for who a letter is for; shown when
   one box is drawn.
-- **Address area for this document only** (New look): the box becomes this document's own
+- **Address area for this document only**: the box becomes this document's own
   address area, used for it instead of the one for all letters and a rule's. Shown when
   one box is drawn.
 
-In the New look, when you have people listed, a line under the preview says which address
+When you have people listed, a line under the preview says which address
 area this document uses: the usual one, its own, or none. It shows while the areas are
 shown or Draw a box is on, and always on a document that has none. **No address area on
 this document** stops dam looking for a person on it (useful for a letter whose page 1 is
@@ -810,7 +800,7 @@ again, with a line saying how the rule did before ("Before the change it matched
 documents"), so you see the effect on the documents you filed before you save. Cancel
 leaves the rule as it was. The address area works the same way: a rule's own address area
 changes that rule; the area for all letters, moved on a document, becomes that document's
-own (Classic asks once and saves it for all letters).
+own.
 Areas cannot be moved while **Draw a box** is on.
 
 In Settings → Filing rules, open a rule that has areas and the sheet shows them on a
@@ -831,7 +821,7 @@ standard, for the Netherlands an estimate); change it there, under **Address are
 with Draw a box. **Reset to default** there makes it follow the countries again. One
 document can have an area of its own, or none (see Draw a box above).
 
-To set the area from a letter that is not in the archive (New look), click **Choose a
+To set the area from a letter that is not in the archive, click **Choose a
 sample letter…** under Address area and pick a PDF, JPG or PNG on your computer. Page 1
 shows with the area in use now as a dashed box. Drag a box around the address: the lines
 of the letter that fall in it are listed (when the letter has text, or a scan can be
@@ -860,13 +850,13 @@ The Inbox card shows **From** (who sent a document) and **For** (who it is for) 
 each came from (address area, a rule, you). Click one to change it. To set them for many documents at once, use
 **From…** and **For…** in an Inbox batch or on a selection in Browse. What you set always
 wins over what dam detects. Filing a document into a folder made with `{person}` also
-records the person. A company name you confirm in Settings, **Senders** (New look) fills
+records the person. A company name you confirm in Settings, **Senders** fills
 From on every document that carries its business ID; see [Senders](#senders). These are
 kept in dam's index, not in the files.
 
 ### Senders
 
-Settings, **Senders** (under This archive, New look only) names senders from their business
+Settings, **Senders** (under This archive) names senders from their business
 IDs. For Finland that is the Y-tunnus: most letters from a company print it, often on the
 same line as the company's name. dam reads the name printed next to each Y-tunnus (it ends
 in a legal form such as Oy, Oyj, Ab, Abp, Ky, Ay, ry or osk, or starts with Tmi or Asunto
@@ -971,7 +961,7 @@ A tray's screen has the list (Open / Done) and the selected item beside it; ↑/
 highlight and open the item. An item has a title, one or more files, the tray's fields, a
 note, a checklist and a history.
 
-In the New look the list has its own header (the tray's name and count, **Add file**, and
+The list has its own header (the tray's name and count, **Add file**, and
 **Open** / **Done** with their counts) and each row has a second line (who the item waits
 for, how many files, the checklist). The item has its own header with **Move to tray…**, the
 file's icons and **Close**; the date and "Waiting for" fields sit in a card with **Mark
@@ -1239,7 +1229,7 @@ Two marks for files you need often, without making a collection:
   They show in the sidebar's **Important** row and as links in `##. Important`, where
   they can be arranged in groups (such as `Houses › Hillside`).
 
-Clicking a file name in the **Starred** card on Today opens Browse in the folder the file
+Clicking a file name in the **Starred** section on Today opens Browse in the folder the file
 sits in, with the file selected and previewed; Back returns to Today. On a collection's
 own page, Starred and Important included, a click selects the file there, and **Show in
 folder** in the file's panel opens it in Browse.
@@ -1283,7 +1273,7 @@ and the detail beside the list shows the file view: name and folder, tags, colle
 summary, actions, the preview and the note. Folders open on click. Drag the edge between list and detail to change the
 list's width.
 
-- **Two panes**: **Split** in the header (Classic: the split toggle) shows two folders side by side, for moving files
+- **Two panes**: **Split** in the header shows two folders side by side, for moving files
   between them. The active pane has an accent edge. The first pane's bar has **Swap** (the
   two panes trade folders, and you stay on your side) and the second's an **X** that goes
   back to one pane. **This folder** lists the folders first and has Name, Date and Size
@@ -1311,7 +1301,7 @@ list's width.
   collection's page: the tray and the item's date (`To pay · 30.10.2026`), red when
   overdue, orange when due today or within 3 days, grey otherwise. Hover it for the item's
   title. The same tag shows in **Files** and in search results.
-- **Folders, Collections, Tags** at the top of the tree beside the panes (New look) choose
+- **Folders, Collections, Tags** at the top of the tree beside the panes choose
   what the tree shows. **Folders** is the folder tree. **Collections** lists Important and
   Starred, then the open collections as they nest. After a collection's name come an orange
   mark when `##. Ongoing` has a problem with it (hover it for what), its open checks and its
@@ -1351,9 +1341,8 @@ list's width.
 - **Folders / Files** switches between the folder view and a flat list of every file below
   the current folder, with sortable Name, Folder, Date and Size columns (up to 500 rows). A
   collection's files are a search: `collection:"House sale"`.
-- **Search** looks at file names, paths and text (the Search card on Today opens Browse
-  with the same search). Beside words it takes filters such as `tag:medical`, `type:pdf`
-  or `-in:"90. Other People"`; each finished filter becomes a chip in a row under the
+- **Search** looks at file names, paths and text. Beside words it takes filters such as
+  `tag:medical`, `type:pdf` or `-in:"90. Other People"`; each finished filter becomes a chip in a row under the
   pane's toolbar and the search box keeps only the words. See [Searching](#searching).
 - **Search results by folder.** With **Folders** selected, results are grouped under the
   folders that hold them: one header per folder with its path and the number of matches,
@@ -1367,7 +1356,7 @@ list's width.
 
 ## Searching
 
-The search box in Browse (and the Search card on Today, which opens Browse) takes plain
+The search box in Browse takes plain
 words, which search file names, paths and the text of the files, and **filters** of the
 form `name:value`. The **?** next to the box lists them; a click on an example puts it in
 the box. A search with only filters lists the matching files by name.
@@ -1437,8 +1426,7 @@ Tags are kept in dam's own database, not in the archive, so changing them moves 
 ## Relatives
 
 Relatives are the other files a document belongs with, and why: a family tree for a
-document, built from what you stored about it. They are in the **New look** only (Classic
-does not have them). You find them:
+document, built from what you stored about it. You find them:
 
 - in the file's panel in **Browse** and in a **collection**, under **Relatives**, which
   lists up to four of them, best first, with a count of the rest ("2 more with one link in
@@ -1447,7 +1435,7 @@ does not have them). You find them:
   show where files like this one were filed (both folded until you open them);
 - in **Quick Look** from any list, with the **Relatives** button in its toolbar.
 
-In the New look's file panel, just above Relatives, **Found in this document** lists the
+In the file panel, just above Relatives, **Found in this document** lists the
 business IDs, IBANs and web or mail domains dam read from the file's text, each with **on N
 other files**: a link to an `id:` search for the files that carry it too.
 
@@ -1774,7 +1762,7 @@ each area, grouped by what it applies to; one section shows at a time.
     [Filing rules](#filing-rules).
   - **Archive folders**: the main folder and any extra folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
-    **Forget**. In the New look, **Special folders** lists the Inbox, Ongoing, Important and
+    **Forget**. **Special folders** lists the Inbox, Ongoing, Important and
     To Delete folders, each with **Rename**.
     See [Several archive folders](#several-archive-folders) and
     [Rename a special folder](#rename-a-special-folder).
@@ -1797,16 +1785,15 @@ each area, grouped by what it applies to; one section shows at a time.
     is where dam looks for the person a letter is for: four sides in percent of page 1,
     **Reset to default** (follow the countries) and **Save address area**. It says whether
     the area follows the countries or was set by you.
-  - **Senders** (New look): a company name for each business ID found on two or more
+  - **Senders**: a company name for each business ID found on two or more
     documents, which then becomes From on them. See [Senders](#senders).
   - **Snapshots**: take a snapshot of this archive's database and settings, export or
     import one, and restore one. See [Snapshots](#snapshots).
 - **This browser** (every archive alike):
   - **Appearance**: Light, Dark, or Auto to follow your system setting. It applies at
-    once, and is remembered by this browser (another browser starts on Auto). **Look**
-    is New (the default) or Classic, the earlier look, kept for now; Ctrl+Alt+L switches
-    between them anywhere. **Layout, Reset layout** forgets the pane widths
-    you dragged and the order of the cards on Today (both are remembered in this browser,
+    once, and is remembered by this browser (another browser starts on Auto).
+    **Layout, Reset layout** forgets the pane widths
+    you dragged and the order of the sections on Today (both are remembered in this browser,
     per screen), with an Undo.
 
 ### Snapshots
@@ -2076,7 +2063,7 @@ takes back the rename when it starts again.
 
 dam keeps four folders of its own in your archive: the Inbox, Ongoing, Important and To
 Delete. They start as `##. Organize`, `##. Ongoing`, `##. Important` and `##. To Delete`.
-In the New look you can give them other names, for example `00. Inbox`:
+You can give them other names, for example `00. Inbox`:
 
 1. Settings, **Archive folders**, **Special folders**, **Rename** beside the folder.
 2. Type the new name and click **Preview**. The list shows every place that holds the old
@@ -2118,14 +2105,14 @@ Windows and Linux, read Ctrl for ⌘ and Alt for ⌥.
 | Inbox | ⌘`Enter` | File it (after the preview) |
 | Inbox | `n` / `f` | Edit the name / the folder |
 | Inbox | `s` | Skip: go on to the next file without filing this one (round to the first from the last) |
-| Inbox (New look) | `?` | Open the shortcut list |
+| Inbox | `?` | Open the shortcut list |
 | Inbox | `1`–`9` / `0` | Choose a tray / no tray |
 | Inbox | `u` | Undo the last filing |
 | Trays | `Enter` | Open the item |
 | Trays | `d` | Done (Mark paid in To pay) |
 | Trays | `⌫` | Remove the item from the tray (asks first) |
 | Trays (To pay) | `b` | Show the large barcode (Pay mode) |
-| Today | ⌥↑ / ⌥↓ on a card | Move the card |
+| Today | ⌥↑ / ⌥↓ on a section | Move the section |
 | Browse | `Enter` | Open the folder or file |
 | Browse | `⌫` | Up one folder |
 | Browse | ⌘-click, ⇧-click | Select several files |

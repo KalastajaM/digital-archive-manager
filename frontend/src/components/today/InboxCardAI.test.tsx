@@ -1,4 +1,4 @@
-/** Today's Inbox card: "Not recognised: N files — Ask AI" for inbox files without a rule
+/** Today's Inbox lists: "Not recognised: N files — Ask AI" for inbox files without a rule
  * guess; the answer offers "Put in <tray>" with the suggested fields. */
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -6,8 +6,23 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AIStatus, InboxEntry, Item, Today as TodayData } from "../../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../../test-utils";
+import { AIHint, useAIState } from "../ai/useAI";
 import { prepared, STATUS_ON } from "../ai/testData";
-import { InboxCard } from "./InboxCard";
+import { useQuickPut } from "../useQuickPut";
+import { FoundList, NotRecognised } from "./InboxCard";
+
+/** The Inbox section's lists, as Today's page puts them together. */
+function InboxLists({ data }: { data: TodayData }) {
+  const quick = useQuickPut();
+  const ai = useAIState();
+  return (
+    <>
+      {data.found.length > 0 && <FoundList found={data.found} quick={quick} />}
+      {ai.on && <NotRecognised put={(p) => void quick.put(p)} pendingId={quick.pendingIds?.[0] ?? null} />}
+      <AIHint what="to ask about files the rules don’t recognise" />
+    </>
+  );
+}
 
 function entry(id: string, name: string, trayGuess: string | null): InboxEntry {
   return {
@@ -117,7 +132,7 @@ function setup(
   const user = userEvent.setup();
   const { client } = renderWithProviders(
     <MemoryRouter>
-      <InboxCard data={DATA} />
+      <InboxLists data={DATA} />
     </MemoryRouter>,
   );
   return { calls, user, client };
@@ -129,7 +144,7 @@ afterEach(() => {
 
 const toasts = () => document.querySelector<HTMLElement>(".toasts")!;
 
-describe("InboxCard: Ask AI", () => {
+describe("Inbox: Ask AI", () => {
   it("switching AI off hides an answer and its Put in", async () => {
     const { user, client } = setup();
     await user.click(await screen.findByRole("button", { name: "Ask AI" }));

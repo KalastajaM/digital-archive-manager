@@ -283,7 +283,7 @@ describe("moving a folder in Browse", () => {
       const { user } = open("/browse?path=", {
         [`GET /api/files/${encodeURIComponent("id-##. Organize")}/links`]: { body: { items: [], collections: [], note: "" } },
       });
-      await screen.findByText("##. Organize");
+      expect((await screen.findAllByText("##. Organize")).length).toBeGreaterThan(0); // in the tree and the list
       await user.keyboard("{ArrowDown}");
       const panel = screen.getByRole("region", { name: "Preview" });
       const button = await within(panel).findByRole("button", { name: "Move to…" });
@@ -333,7 +333,7 @@ describe("moving a folder in Browse", () => {
       const { user } = open("/browse?path=", {
         [`GET /api/files/${encodeURIComponent("id-##. Organize")}/links`]: { body: { items: [], collections: [], note: "" } },
       });
-      await screen.findByText("##. Organize");
+      expect((await screen.findAllByText("##. Organize")).length).toBeGreaterThan(0); // in the tree and the list
       await user.keyboard("{ArrowDown}");
       const panel = screen.getByRole("region", { name: "Preview" });
       const button = await within(panel).findByRole("button", { name: "Rename…" });

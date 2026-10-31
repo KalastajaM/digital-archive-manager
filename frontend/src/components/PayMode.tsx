@@ -11,7 +11,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useState } from "react";
 import { errorText, useItemBarcode } from "../api/client";
-import { useStyle } from "../appearance";
 import { formatMoney } from "../format";
 import { isTyping } from "../keyboard";
 import { visible } from "../text";
@@ -36,8 +35,6 @@ export function PayModeProvider({ children }: { children: ReactNode }) {
 }
 
 function PayMode({ startId, onClose }: { startId: number; onClose: () => void }) {
-  const [look] = useStyle();
-  const isNew = look === "new";
   const { today } = useLocalClock();
   const { bills } = useOpenBills();
   const [currentId, setCurrentId] = useState(startId);
@@ -128,7 +125,7 @@ function PayMode({ startId, onClose }: { startId: number; onClose: () => void })
           </button>
         </div>
       )}
-      {isNew && bill && (
+      {bill && (
         <div className="pay-head">
           <h3 className="pay-title">{visible(bill.item.title)}</h3>
           {amount && <span className="pay-total">{visible(amount.value)}</span>}
@@ -140,7 +137,7 @@ function PayMode({ startId, onClose }: { startId: number; onClose: () => void })
             <div key={f.label} className="pay-fact" data-kind={f.copy?.type}>
               <dt>{visible(f.label)}</dt>
               <dd>{visible(f.value)}</dd>
-              {isNew && f.copy && <CopyButton value={f.copy.raw} type={f.copy.type} label={f.copy.label} compact />}
+              {f.copy && <CopyButton value={f.copy.raw} type={f.copy.type} label={f.copy.label} compact />}
             </div>
           ))}
         </dl>
@@ -171,13 +168,11 @@ function PayMode({ startId, onClose }: { startId: number; onClose: () => void })
       ) : (
         <p className="hint barcode-reason">No barcode: {visible(barcode?.reason ?? "it cannot be built")}</p>
       )}
-      {isNew && (
-        <ol className="pay-steps" aria-label="How to pay with the barcode">
-          <li>In your banking app choose to pay with a barcode (in most Finnish banks: Pay, then Scan barcode).</li>
-          <li>Hold the phone about 15 to 25 cm from the screen.</li>
-          <li>Check the payee, amount and reference before you confirm.</li>
-        </ol>
-      )}
+      <ol className="pay-steps" aria-label="How to pay with the barcode">
+        <li>In your banking app choose to pay with a barcode (in most Finnish banks: Pay, then Scan barcode).</li>
+        <li>Hold the phone about 15 to 25 cm from the screen.</li>
+        <li>Check the payee, amount and reference before you confirm.</li>
+      </ol>
       <p className="hint">Scan it from the screen with your banking app.</p>
       <p className="hint barcode-full-status" role="status">
         {updating ? "Updating…" : ""}

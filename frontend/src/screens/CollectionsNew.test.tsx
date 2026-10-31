@@ -1,8 +1,8 @@
-/** A collection in the New look, laid out as drawn: the header (parent line, name, state pill,
+/** A collection, laid out as drawn: the header (parent line, name, state pill,
  * counts, buttons), the sections in order (Summary, Needs attention, Files by group, Notes and
  * Checklist), the side panel with its buttons under the preview, the "File details" button
  * that opens the panel over the list when the page is narrow, and Show folder and Export in
- * the ... menu. Classic renders none of it. */
+ * the ... menu. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -54,12 +54,10 @@ function setup(c: Collection = SAUNA) {
 beforeEach(() => localStorage.clear());
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
-describe("a collection in New", () => {
+describe("a collection", () => {
   it("opens the file details over the list from a button and closes them again", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup();
     const details = await screen.findByRole("button", { name: "File details" });
     expect(details).toHaveAttribute("aria-expanded", "false");
@@ -73,7 +71,6 @@ describe("a collection in New", () => {
   });
 
   it("puts Show folder and Export as buttons in the header, and in the ... menu too", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup();
     await screen.findByRole("button", { name: "File details" });
     expect(document.querySelectorAll(".collection-head .hdr-wide")).toHaveLength(2);
@@ -86,7 +83,6 @@ describe("a collection in New", () => {
   });
 
   it("draws the header as the board does: the parent line, the name, a state pill and the counts", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup();
     await screen.findByRole("button", { name: "File details" });
     const head = document.querySelector(".collection-head") as HTMLElement;
@@ -99,7 +95,6 @@ describe("a collection in New", () => {
   });
 
   it("orders the page as the board does; an ordinary collection lists its Files, with no groups", async () => {
-    document.documentElement.dataset.style = "new";
     setup();
     await screen.findByRole("heading", { name: "Files" });
     // the summary is the file panel's summary box, above the files
@@ -112,7 +107,6 @@ describe("a collection in New", () => {
   });
 
   it("keeps New group in Important's Files by group heading, once", async () => {
-    document.documentElement.dataset.style = "new";
     setup({ ...SAUNA, name: "Important", kind: "important" });
     const files = await screen.findByRole("heading", { name: "Files by group" });
     expect(within(files.parentElement as HTMLElement).getByRole("button", { name: "New group" })).toBeInTheDocument();
@@ -120,7 +114,6 @@ describe("a collection in New", () => {
   });
 
   it("edits the summary in place: a click on it opens the field, leaving it saves, Esc puts it back", async () => {
-    document.documentElement.dataset.style = "new";
     const { user, calls } = setup();
     const empty = await screen.findByRole("button", { name: "What is this collection about? Where does it stand?" });
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
@@ -140,7 +133,6 @@ describe("a collection in New", () => {
   });
 
   it("shows the selected file in the one file panel: the icon row, then Group", async () => {
-    document.documentElement.dataset.style = "new";
     setup();
     const panel = await screen.findByRole("complementary", { name: "Selected file" });
     const look = await within(panel).findByRole("group", { name: "Look at it" });
@@ -166,22 +158,11 @@ describe("a collection in New", () => {
   });
 
   it("Add files opens a finder that puts the chosen file in the collection", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup();
     await user.click(await screen.findByRole("button", { name: "Add files" }));
     const sheet = await screen.findByRole("dialog", { name: "Add files to Sauna" });
     expect(within(sheet).getByLabelText("Find a file")).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("dialog", { name: "Add files to Sauna" })).not.toBeInTheDocument();
-  });
-
-  it("renders none of it in Classic", async () => {
-    setup();
-    await screen.findByRole("button", { name: "More actions" });
-    expect(screen.queryByRole("button", { name: "File details" })).not.toBeInTheDocument();
-    expect(document.querySelector(".hdr-wide")).toBeNull();
-    expect(document.querySelector(".collection-head")).toBeNull();
-    expect(document.querySelector(".inspector-foot")).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Files by group" })).not.toBeInTheDocument();
   });
 });

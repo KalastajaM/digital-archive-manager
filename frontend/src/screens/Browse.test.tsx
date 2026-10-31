@@ -63,6 +63,7 @@ function api(extra: Parameters<typeof mockFetch>[0] = {}) {
     },
     "GET /api/files/f1/links": { body: NO_LINKS },
     "GET /api/notes/file/f1": { body: { text: "" } },
+    ...Object.fromEntries(["f0", "f1", "f2", "f3", "fx", "p1"].map((id) => [`GET /api/files/${id}/summary`, { body: { ai: null, user: null } }])),
     ...extra,
   });
 }
@@ -82,6 +83,8 @@ function setup(path: string | null, extra: Parameters<typeof mockFetch>[0] = {})
 }
 
 const listing = () => screen.getByRole("list", { name: "Folder contents" });
+/** A name in the folder list (the folder tree beside it lists folders too). */
+const findInList = async (text: string) => within(await screen.findByRole("list", { name: "Folder contents" })).findByText(text);
 const rowNames = () =>
   within(listing())
     .getAllByRole("listitem")
@@ -96,9 +99,9 @@ describe("Browse extra archive folders", () => {
         body: (queryOf(call).get("path") ?? "") === "" ? [root("Scans", true), root("Vault", false), dir("10. Financial")] : [],
       }),
     });
-    await screen.findByText("Scans");
-    const items = within(listing()).getAllByRole("listitem");
-    const [scans, vault, plain] = items;
+    await findInList("Scans");
+    const rowOfName = (name: string) => within(listing()).getByText(name).closest("li") as HTMLElement;
+    const [scans, vault, plain] = [rowOfName("Scans"), rowOfName("Vault"), rowOfName("10. Financial")];
     expect(scans.querySelector(".lucide-hard-drive")).not.toBeNull();
     expect(vault.querySelector(".lucide-hard-drive")).not.toBeNull();
     expect(plain.querySelector(".lucide-hard-drive")).toBeNull();
@@ -156,15 +159,15 @@ describe("Browse", () => {
   it("lists folders first, marks symlinks and navigates with the breadcrumb", async () => {
     const { calls, user } = setup("10. Financial/Banks");
     expect(await screen.findByText("a.pdf")).toBeInTheDocument();
-    expect(browseCalls(calls)[0].url).toBe("/api/browse?path=10.%20Financial%2FBanks");
-    expect(rowNames()).toEqual(["b.pdf", "a.pdf", "link.pdf"]);
+    expect(browseCalls(calls).map((c) => c.url)).toContain("/api/browse?path=10.%20Financial%2FBanks");
+    expect(rowNames()).toEqual(["a.pdf", "b.pdf", "link.pdf"]);
     const linkRow = screen.getByText("link.pdf").closest("li")!;
     expect(within(linkRow).getByRole("img", { name: "Symbolic link" })).toBeInTheDocument();
 
     const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
     await user.click(within(crumbs).getByRole("link", { name: "10. Financial" }));
-    expect(await screen.findByText("Banks")).toBeInTheDocument();
-    expect(browseCalls(calls).at(-1)!.url).toBe("/api/browse?path=10.%20Financial");
+    expect(await findInList("Banks")).toBeInTheDocument();
+    expect(browseCalls(calls).map((c) => c.url)).toContain("/api/browse?path=10.%20Financial");
 
     await user.click(within(crumbs).getByRole("link", { name: "Archive" }));
     expect(await screen.findByText("readme.txt")).toBeInTheDocument();
@@ -173,51 +176,51 @@ describe("Browse", () => {
 
   it("Backspace goes up, j/k move, Enter opens a folder or previews a file", async () => {
     const { calls, user } = setup("10. Financial/Banks");
-    await screen.findByText("a.pdf");
+    await findInList("a.pdf");
     await user.keyboard("{Backspace}");
-    expect(await screen.findByText("Banks")).toBeInTheDocument();
-    expect(browseCalls(calls).at(-1)!.url).toBe("/api/browse?path=10.%20Financial");
+    expect(await findInList("Banks")).toBeInTheDocument();
+    expect(browseCalls(calls).map((c) => c.url)).toContain("/api/browse?path=10.%20Financial");
     await user.keyboard("{Enter}");
-    expect(await screen.findByText("a.pdf")).toBeInTheDocument();
+    expect(await findInList("a.pdf")).toBeInTheDocument();
     await user.keyboard("jj"); // the first j lands on the first row
-    expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: /^b\.pdf/ }).closest("li")).toHaveAttribute("aria-current", "true");
     await user.keyboard("{ArrowUp}{ArrowDown}{Enter}");
     const preview = await screen.findByRole("region", { name: "Preview" });
     expect(within(preview).getByRole("img", { name: "Page 1" })).toHaveAttribute(
       "src",
-      "/api/files/f1/page/1.png?w=900",
+      "/api/files/f2/page/1.png?w=900",
     );
   });
 
   it("shortcuts are ignored while typing in the search box", async () => {
-    const { calls, user } = setup("10. Financial/Banks", { "GET /api/search": { body: [] } });
-    await screen.findByText("a.pdf");
+    const { user } = setup("10. Financial/Banks", { "GET /api/search": { body: [] } });
+    await findInList("a.pdf");
     const box = screen.getByRole("combobox", { name: "Search" });
     await user.type(box, "jk{Backspace}");
     expect(box).toHaveValue("j");
-    expect(browseCalls(calls)).toHaveLength(1); // Backspace did not go up
+expect(screen.getByRole("navigation", { name: "Breadcrumb" }).querySelector("[aria-current=page]")).toHaveTextContent("Banks"); // Backspace did not go up
     // Out of the box (Esc blurs it) the same keys are shortcuts again.
     await user.clear(box);
     await user.keyboard("{Escape}");
     expect(box).not.toHaveFocus();
     await user.keyboard("j");
-    expect((await screen.findByRole("button", { name: "b.pdf" })).closest("li")).toHaveAttribute("aria-current", "true");
+    expect((await screen.findByRole("button", { name: /^a\.pdf/ })).closest("li")).toHaveAttribute("aria-current", "true");
     // the highlighted row is the selected file: its detail shows
-    expect(within(screen.getByRole("region", { name: "Preview" })).getByRole("heading", { name: "b.pdf" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Preview" })).getByRole("heading", { name: "a.pdf" })).toBeInTheDocument();
   });
 
   it("Enter on a focused checkbox toggles it only; Backspace there does nothing", async () => {
-    const { calls, user } = setup("10. Financial/Banks");
+    const { user } = setup("10. Financial/Banks");
     const box = await screen.findByRole("checkbox", { name: "Select a.pdf" });
     box.focus();
     await user.keyboard("{Enter}");
     expect(box).toBeChecked();
-    expect(screen.queryByRole("img", { name: "Page 1" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.keyboard(" ");
     expect(box).not.toBeChecked();
     await user.keyboard("{Backspace}");
-    expect(browseCalls(calls)).toHaveLength(1);
-    expect(screen.getByText("a.pdf")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).querySelector("[aria-current=page]")).toHaveTextContent("Banks");
+    expect(within(listing()).getByText("a.pdf")).toBeInTheDocument();
   });
 
   it("shows hidden characters in listing and search errors", async () => {
@@ -232,7 +235,7 @@ describe("Browse", () => {
 
   it("clicking a file opens the side preview", async () => {
     const { user } = setup("", { "GET /api/files/f0/text": { body: { text: "Read me", truncated: false } } });
-    await user.click(await screen.findByRole("button", { name: "readme.txt" }));
+    await user.click(await screen.findByRole("button", { name: /^readme\.txt/ }));
     const preview = screen.getByRole("region", { name: "Preview" });
     expect(await within(preview).findByText("Read me")).toBeInTheDocument();
   });
@@ -248,7 +251,7 @@ describe("Browse", () => {
     );
     const preview = screen.getByRole("region", { name: "Preview" });
     expect(await within(preview).findByText("10. Financial/Banks/a.pdf")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: /^a\.pdf/ }).closest("li")).toHaveAttribute("aria-current", "true");
     expect(browseCalls(calls).length).toBeGreaterThan(0);
   });
 });
@@ -367,10 +370,10 @@ describe("Search results' columns", () => {
     await screen.findByText("readme.txt");
     await user.type(screen.getByRole("combobox", { name: "Search" }), "pdf");
     await screen.findByRole("list", { name: "Search results" });
-    await user.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Files" }));
+    await user.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "All files below" }));
     expect(order()).toEqual(["b.pdf", "a.pdf", "c.pdf"]); // best match first
     const head = screen.getByRole("group", { name: "Sort by" });
-    expect(screen.getByText("10. Financial")).toBeInTheDocument(); // the folder column
+    expect(within(screen.getByRole("list", { name: "Search results" })).getAllByText("10. Financial").length).toBeGreaterThan(0); // the folder column
     const size = within(head).getByRole("button", { name: "Sort by size" });
     await user.click(size);
     expect(order()).toEqual(["a.pdf", "b.pdf", "c.pdf"]); // largest first, no size last
@@ -480,8 +483,8 @@ describe("Mark for deletion", () => {
     const { calls, user } = setup("10. Financial/Banks", {
       "POST /api/quarantine": { body: batchResult({ batch_id: "dry", dry_run: true }) },
     });
-    const row = await screen.findByRole("button", { name: "a.pdf" });
-    expect(screen.getByRole("button", { name: "Move to To Delete" })).toBeDisabled();
+    const row = await screen.findByRole("button", { name: /^a\.pdf/ });
+    expect(screen.queryByRole("button", { name: "Move to To Delete" })).not.toBeInTheDocument(); // nothing picked: no file actions
     await user.click(row);
     await user.click(screen.getByRole("button", { name: "Move to To Delete" }));
     await screen.findByRole("dialog");
@@ -595,8 +598,8 @@ const added = (overrides: Partial<CollectionChange> = {}): CollectionChange => (
   ...overrides,
 });
 
-/** The header's file actions (Browse and the trays share them: ``FileActionBar``). */
-const fileBar = () => screen.getByRole("toolbar", { name: "Browse file actions" });
+/** The file panel's icon rows (``FileActionIcons``). */
+const fileBar = () => document.querySelector(".file-actions-icons") as HTMLElement;
 
 describe("Selected file", () => {
   const openFile = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -669,7 +672,7 @@ describe("Selected file", () => {
       "GET /api/files/id-10.%20Financial%2FBanks/links": { body: { items: [], collections: [SAUNA], note: "" } },
       "POST /api/collections/7/members": { body: { collection: SAUNA, batch: null, problems: [] } },
     });
-    await user.click(await screen.findByRole("button", { name: "Banks" })); // opens the folder
+    await user.click(await screen.findByRole("button", { name: /^Banks/ })); // opens the folder
     await screen.findByText("a.pdf");
     await user.keyboard("{Backspace}"); // back: the cursor is on Banks
     const preview = await screen.findByRole("region", { name: "Preview" });
@@ -771,16 +774,16 @@ describe("Selected file", () => {
     const preview = await openFile(user);
     await within(preview).findByRole("region", { name: "Tags" });
     const blocks = Array.from(preview.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
-    expect(blocks).toEqual(["header", "tags", "collections", "summary", "preview", "notes"]);
+    expect(blocks).toEqual(["header", "actions", "tags", "collections", "summary", "relatives", "preview", "notes"]);
     const inBlock = (name: string) => preview.querySelector(`[data-block="${name}"]`) as HTMLElement;
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "a.pdf" })).toBeInTheDocument();
     expect(within(inBlock("header")).getByRole("button", { name: "Move file to…" })).toBeInTheDocument();
     expect(within(inBlock("tags")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
     expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("summary")).getByRole("region", { name: "Summary" })).toBeInTheDocument();
-    // Put in tray, Back to inbox, ★ / ! and Ask AI are in the header's file actions
+    // Put in tray, Back to inbox, ★ / ! and Ask AI are in the actions block
     expect(preview.querySelector('[data-block="own"]')).toBeNull();
-    expect(within(preview).queryByRole("button", { name: "Put in tray" })).toBeNull();
+    expect(within(inBlock("actions")).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
     expect(within(fileBar()).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
     expect(within(inBlock("preview")).getByRole("img", { name: "Page 1" })).toBeInTheDocument();
     for (const name of ["Star", "Mark Important", "Ask AI"]) {
@@ -884,7 +887,7 @@ describe("Selected file", () => {
     });
     const preview = await openFile(user);
     expect(within(fileBar()).getByRole("button", { name: "Put in tray" })).toBeInTheDocument();
-    await user.keyboard("k{Enter}");
+    await user.keyboard("j{Enter}");
     expect(await within(preview).findByText("10. Financial/Banks/b.pdf")).toBeInTheDocument();
   });
 });
@@ -1041,7 +1044,7 @@ describe("Drag and drop in Browse", () => {
       },
       "POST /api/activity/m1/undo": { body: UNDONE },
     });
-    await screen.findByRole("button", { name: "readme.txt" });
+    await screen.findByRole("button", { name: /^readme\.txt/ });
     const dt = dragFrom(rowOf(listing(), "readme.txt"));
     const taxes = rowOf(listing(), "13. Taxes");
     fireEvent.dragEnter(taxes, { dataTransfer: dt });
@@ -1150,31 +1153,31 @@ describe("Drag and drop in Browse", () => {
   it("⌘-click and ⇧-click select several files, and a drag carries all of them", async () => {
     const { user } = setup("10. Financial/Banks");
     await screen.findByText("a.pdf");
-    await user.click(screen.getByRole("button", { name: "b.pdf" }));
+    await user.click(screen.getByRole("button", { name: /^a\.pdf/ }));
     await user.keyboard("{Shift>}");
     await user.click(screen.getByRole("button", { name: /^link\.pdf/ }));
     await user.keyboard("{/Shift}");
-    expect(screen.getByRole("checkbox", { name: "Select b.pdf" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Select a.pdf" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select b.pdf" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Select link.pdf" })).toBeChecked();
     await user.keyboard("{Meta>}");
-    await user.click(screen.getByRole("button", { name: "a.pdf" }));
+    await user.click(screen.getByRole("button", { name: /^b\.pdf/ }));
     await user.keyboard("{/Meta}");
-    expect(screen.getByRole("checkbox", { name: "Select a.pdf" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select b.pdf" })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Move 2 to To Delete" })).toBeEnabled();
-    const dt = dragFrom(rowOf(listing(), "b.pdf"));
-    expect(JSON.parse(dt.data["application/x-dam-files"])).toEqual({ ids: ["f2", "f3"] });
+    const dt = dragFrom(rowOf(listing(), "a.pdf"));
+    expect(JSON.parse(dt.data["application/x-dam-files"])).toEqual({ ids: ["f1", "f3"] });
     // a row outside the selection drags alone
-    expect(JSON.parse(dragFrom(rowOf(listing(), "a.pdf")).data["application/x-dam-files"])).toEqual({ ids: ["f1"] });
+    expect(JSON.parse(dragFrom(rowOf(listing(), "b.pdf")).data["application/x-dam-files"])).toEqual({ ids: ["f2"] });
   });
 
   it("Space opens Quick Look on the current file", async () => {
     const { user } = setup("10. Financial/Banks");
-    await user.click(await screen.findByRole("button", { name: "a.pdf" }));
+    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     await user.keyboard(" ");
     expect(screen.getByRole("dialog", { name: "Quick Look: a.pdf" })).toBeInTheDocument();
     await user.keyboard("j");
-    expect(screen.getByRole("dialog", { name: "Quick Look: link.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Quick Look: b.pdf" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -1219,17 +1222,12 @@ describe("Two panes", () => {
   it("the toolbar toggle splits Browse; each pane keeps its own path, back and forward", async () => {
     const { user } = setupSplit("/browse?path=10.%20Financial");
     await screen.findByText("Banks");
-    const toggle = screen.getByRole("button", { name: "Two panes" });
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Split" }));
     expect(localStorage.getItem("dam.browse.split")).toBe("1");
     expect(within(pane("Left pane")).getByText("Banks")).toBeInTheDocument();
     expect(await within(pane("Right pane")).findByText("Banks")).toBeInTheDocument();
-    // the single pane's preview is not shown beside two panes
-    expect(screen.queryByRole("region", { name: "Preview" })).not.toBeInTheDocument();
 
-    await user.click(within(pane("Right pane")).getByRole("button", { name: "Banks" }));
+    await user.click(within(pane("Right pane")).getByRole("button", { name: /^Banks/ }));
     expect(await within(pane("Right pane")).findByText("a.pdf")).toBeInTheDocument();
     expect(within(pane("Left pane")).getByText("Banks")).toBeInTheDocument();
     const where = new URLSearchParams(screen.getByTestId("where").textContent!);
@@ -1251,7 +1249,7 @@ describe("Two panes", () => {
     expect(within(pane("Right pane")).getByRole("button", { name: "Forward" })).toBeDisabled();
 
     // back to one pane: the left pane's folder stays
-    await user.click(toggle);
+    await user.click(within(pane("Right pane")).getByRole("button", { name: "Close this pane" }));
     expect(localStorage.getItem("dam.browse.split")).toBe("0");
     expect(screen.queryByRole("region", { name: "Right pane" })).not.toBeInTheDocument();
     expect(new URLSearchParams(screen.getByTestId("where").textContent!).get("path")).toBe("10. Financial");
@@ -1260,7 +1258,7 @@ describe("Two panes", () => {
   it("Swap panes puts each pane's folder and history on the other side", async () => {
     const { user } = setupSplit("/browse?left=10.%20Financial&right=");
     expect(await within(pane("Left pane")).findByText("Banks")).toBeInTheDocument();
-    await user.click(within(pane("Left pane")).getByRole("button", { name: "Banks" }));
+    await user.click(within(pane("Left pane")).getByRole("button", { name: /^Banks/ }));
     expect(await within(pane("Left pane")).findByText("a.pdf")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Swap panes" }));
@@ -1284,10 +1282,10 @@ describe("Two panes", () => {
     const { user } = setupSplit("/browse?left=&right=10.%20Financial%2FBanks");
     await within(pane("Right pane")).findByText("a.pdf");
     // the left pane is active; the button makes the right pane's row current
-    await user.click(within(pane("Right pane")).getByRole("button", { name: "Quick Look a.pdf" }));
+    await user.click(within(pane("Right pane")).getByRole("button", { name: /^Quick\ Look\ a\.pdf/ }));
     expect(await screen.findByRole("dialog", { name: "Quick Look: a.pdf" })).toBeInTheDocument();
     await user.keyboard("j");
-    expect(screen.getByRole("dialog", { name: "Quick Look: link.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Quick Look: b.pdf" })).toBeInTheDocument();
     // folders have no Quick Look button
     expect(within(pane("Left pane")).queryByRole("button", { name: /^Quick Look 10/ })).not.toBeInTheDocument();
   });
@@ -1306,7 +1304,7 @@ describe("Two panes", () => {
     const { user } = setupSplit("/browse");
     expect(await screen.findByText("readme.txt")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Right pane" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Two panes" }));
+    await user.click(screen.getByRole("button", { name: "Split" }));
     expect(await within(pane("Right pane")).findByText("readme.txt")).toBeInTheDocument();
     spy.mockRestore();
   });
@@ -1421,12 +1419,12 @@ describe("Move to…", () => {
     expect(posts(calls, "/api/browse/move/preview")).toHaveLength(0);
   });
 
-  it("the toolbar button moves the previewed file when nothing is checked; Esc closes the picker", async () => {
+  it("the panel's button moves the previewed file when nothing is checked; Esc closes the picker", async () => {
     const { calls, user } = setup("10. Financial/Banks", { "GET /api/folders": { body: [] } });
-    const move = await screen.findByRole("button", { name: "Move to…" });
-    await screen.findByRole("button", { name: "a.pdf" });
-    expect(move).toBeDisabled(); // nothing selected yet
-    await user.click(screen.getByRole("button", { name: "a.pdf" }));
+    await screen.findByRole("button", { name: /^a\.pdf/ });
+    expect(screen.queryByRole("button", { name: "Move file to…" })).not.toBeInTheDocument(); // nothing selected yet
+    await user.click(screen.getByRole("button", { name: /^a\.pdf/ }));
+    const move = await screen.findByRole("button", { name: "Move file to…" });
     expect(move).toBeEnabled();
     await user.click(move);
     const sheet = await screen.findByRole("dialog", { name: "Move 1 file to…" });
@@ -1438,7 +1436,7 @@ describe("Move to…", () => {
 
   it("takes the folder on the cursor when no file is picked: the folder alone, never with files", async () => {
     const { user } = setup("10. Financial", { "GET /api/folders": { body: [] } });
-    await user.click(await screen.findByRole("button", { name: "Banks" })); // opens the folder
+    await user.click(await screen.findByRole("button", { name: /^Banks/ })); // opens the folder
     await screen.findByText("a.pdf");
     await user.keyboard("{Backspace}");
     await within(listing()).findByText("Banks");
@@ -1479,9 +1477,9 @@ describe("Task 11 review fixes", () => {
       "GET /api/files/fx/links": { body: NO_LINKS },
       "GET /api/notes/file/fx": { body: { text: "" } },
     });
-    await user.click(await screen.findByRole("button", { name: "x.pdf" }));
+    await user.click(await screen.findByRole("button", { name: /^x\.pdf/ }));
     expect(rowOf(listing(), "x.pdf")).toHaveAttribute("draggable", "true"); // drops decide (see BrowseDropModes)
-    const moveTo = screen.getByRole("button", { name: "Move to…" });
+    const moveTo = await screen.findByRole("button", { name: "Move file to…" });
     expect(moveTo).toBeDisabled();
     expect(moveTo.closest(".icon-button-wrap")).toHaveAttribute("data-tip", reason);
     await user.keyboard("{Meta>}{Shift>}m{/Shift}{/Meta}");
@@ -1501,7 +1499,8 @@ describe("Task 11 review fixes", () => {
     await screen.findByText("readme.txt");
     await user.type(screen.getByRole("combobox", { name: "Search" }), "a");
     await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
-    await user.click(screen.getByRole("button", { name: "Move to…" }));
+    await screen.findByRole("button", { name: "Move file to…" });
+    await user.keyboard("{Meta>}{Shift>}m{/Shift}{/Meta}");
     const sheet = await screen.findByRole("dialog", { name: "Move 1 file to…" });
     await user.type(within(sheet).getByRole("combobox", { name: "Folder" }), "13. Taxes{Enter}");
     await user.click(within(await screen.findByRole("dialog", { name: /^Move 1 file to 13/ })).getByRole("button", { name: "Move" }));
@@ -1570,7 +1569,7 @@ describe("Files view (no collection filter)", () => {
   it("has no collection filter (a search does it: collection:), and an old ?collection= link shows the whole folder", async () => {
     const { calls } = start("/browse?path=10.%20Financial%2FBanks&collection=7");
     await screen.findByText("b.pdf");
-    expect(screen.queryByRole("button", { name: /^Collection/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Collection(?!s)/ })).toBeNull();
     expect(dirCalls(calls).every((c) => !queryOf(c).has("collection"))).toBe(true);
   });
 
@@ -1578,8 +1577,8 @@ describe("Files view (no collection filter)", () => {
     const { calls, user } = start("/browse?path=10.%20Financial%2FBanks");
     await screen.findByText("b.pdf");
     const view = screen.getByRole("group", { name: "View" });
-    expect(within(view).getByRole("button", { name: "Folders" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(within(view).getByRole("button", { name: "Files" }));
+    expect(within(view).getByRole("button", { name: "This folder" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(view).getByRole("button", { name: "All files below" }));
     expect(where().get("view")).toBe("files");
     const list = await screen.findByRole("list", { name: "Files" });
     expect(queryOf(flatCalls(calls)[0])).toEqual(
@@ -1603,7 +1602,7 @@ describe("Files view (no collection filter)", () => {
     await waitFor(() => expect(queryOf(flatCalls(calls).at(-1)!).get("sort")).toBe("size"));
 
     // back to the folders, without the folder listing being asked again for nothing
-    await user.click(within(view).getByRole("button", { name: "Folders" }));
+    await user.click(within(view).getByRole("button", { name: "This folder" }));
     expect(where().has("view")).toBe(false);
     expect(await screen.findByRole("list", { name: "Folder contents" })).toBeInTheDocument();
   });
@@ -1621,7 +1620,7 @@ describe("Files view (no collection filter)", () => {
     const { calls } = start("/browse?path=10.%20Financial&view=files");
     await screen.findByRole("list", { name: "Files" });
     expect(queryOf(flatCalls(calls)[0]).get("path")).toBe("10. Financial");
-    expect(dirCalls(calls)).toHaveLength(0); // the folder listing is not fetched in this view
+    expect(screen.queryByRole("list", { name: "Folder contents" })).not.toBeInTheDocument(); // the folder listing is not shown in this view
   });
 
   it("rows in the Files view select, drag, preview and Quick Look as in Folders", async () => {
@@ -1650,10 +1649,10 @@ describe("Files view (no collection filter)", () => {
     expect(await within(right).findByRole("list", { name: "Files" })).toBeInTheDocument();
 
     // a view on the left changes the left only
-    await user.click(within(within(left).getByRole("group", { name: "View" })).getByRole("button", { name: "Files" }));
+    await user.click(within(within(left).getByRole("group", { name: "View" })).getByRole("button", { name: "All files below" }));
     expect(where().get("lview")).toBe("files");
     expect(where().get("rview")).toBe("files");
-    await user.click(within(within(right).getByRole("group", { name: "View" })).getByRole("button", { name: "Folders" }));
+    await user.click(within(within(right).getByRole("group", { name: "View" })).getByRole("button", { name: "This folder" }));
     expect(where().has("rview")).toBe(false);
     expect(where().get("lview")).toBe("files");
     // sorting one pane leaves the other's order alone
@@ -1663,7 +1662,7 @@ describe("Files view (no collection filter)", () => {
       expect(flatCalls(calls).some((c) => queryOf(c).get("sort") === "size")).toBe(true),
     );
     // back to one pane: the left pane's state stays, in the one-pane parameters
-    await user.click(screen.getByRole("button", { name: "Two panes" }));
+    await user.click(within(pane("Right pane")).getByRole("button", { name: "Close this pane" }));
     expect(where().get("view")).toBe("files");
     expect(where().get("path")).toBe("10. Financial/Banks");
   });
@@ -1687,7 +1686,7 @@ describe("marks in Browse (stars)", () => {
     expect(within(b).getByRole("img", { name: "Important" })).toBeInTheDocument();
     const a = screen.getByText("a.pdf").closest("li")!;
     expect(within(a).queryByRole("img", { name: "Starred" })).toBeNull();
-    await user.click(within(a).getByRole("button", { name: "a.pdf" }));
+    await user.click(within(a).getByRole("button", { name: /^a\.pdf/ }));
     await user.click(within(fileBar()).getByRole("button", { name: "Star" }));
     await waitFor(() => expect(posts(calls, "/api/marks/star")).toHaveLength(1));
     expect(posts(calls, "/api/marks/star")[0].body).toEqual({ drive_ids: ["f1"] });
@@ -1695,22 +1694,26 @@ describe("marks in Browse (stars)", () => {
     expect(within(fileBar()).getByRole("button", { name: "Remove the star" })).toBeInTheDocument();
   });
 
-  it("with two panes the active pane's toolbar has the toggles of the file it is on", async () => {
+  it("with two panes the details beside them have the toggles of the file the active pane is on", async () => {
+    let important = false;
     const { calls, user } = setup(null, {
-      "POST /api/marks/important": { body: { collection: { id: 2, members: [], groups: [] }, batch: null, problems: [], ongoing_status: null } },
+      "GET /api/browse": (call) => ({
+        body: (LISTINGS[queryOf(call).get("path") ?? ""] ?? []).map((r) => (r.drive_id === "f0" && important ? { ...r, marks: ["important"] } : r)),
+      }),
+      "POST /api/marks/important": () => {
+        important = true;
+        return { body: { collection: { id: 2, members: [], groups: [] }, batch: null, problems: [], ongoing_status: null } };
+      },
     });
     await screen.findByText("readme.txt");
-    await user.click(screen.getByRole("button", { name: "Two panes" }));
+    await user.click(screen.getByRole("button", { name: "Split" }));
     const left = await screen.findByRole("region", { name: "Left pane" });
-    const right = screen.getByRole("region", { name: "Right pane" });
-    expect(within(left).queryByRole("button", { name: "Star" })).toBeNull(); // no file chosen yet
-    await user.click(within(left).getAllByRole("button", { name: "readme.txt" })[0]);
-    const bar = left.querySelector<HTMLElement>(".pane-bar")!;
-    await user.click(within(bar).getByRole("button", { name: "Mark Important" }));
+    expect(screen.queryByRole("button", { name: "Star" })).toBeNull(); // no file chosen yet
+    await user.click(within(left).getAllByRole("button", { name: /^readme\.txt/ })[0]);
+    await user.click(await within(await screen.findByRole("region", { name: "Preview" })).findByRole("button", { name: "Mark Important" }));
     await waitFor(() => expect(posts(calls, "/api/marks/important")).toHaveLength(1));
     expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["f0"] });
-    expect(within(bar).getByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
-    expect(within(right.querySelector<HTMLElement>(".pane-bar")!).queryByRole("button", { name: /Important/ })).toBeNull();
+    expect(await within(fileBar()).findByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     localStorage.clear();
   });
 
@@ -1750,11 +1753,11 @@ describe("Trash in Browse (stars spec §8)", () => {
   const quarantines = (calls: Call[]) => posts(calls, "/api/quarantine").map((c) => c.body);
   const trash = { "POST /api/quarantine": quarantineRoute(PATHS) };
 
-  it("the toolbar bin is named and tipped for ##. To Delete with ⌘⌫", async () => {
-    setup("10. Financial/Banks");
-    await screen.findByText("a.pdf");
-    const bin = screen.getByRole("button", { name: "Move to To Delete" });
-    expect(bin).toHaveAttribute("data-tip", "Move to To Delete ⌘⌫");
+  it("the panel's bin is named and tipped for ##. To Delete with ⌘⌫", async () => {
+    const { user } = setup("10. Financial/Banks");
+    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
+    const bin = await screen.findByRole("button", { name: "Move to To Delete" });
+    expect(bin).toHaveAttribute("data-tip", "Move to To Delete (⌘⌫)");
   });
 
   it("⌘⌫ on the list trashes the ticked files in one batch; plain ⌫ still goes up; ⌘⌫ in the search box edits it", async () => {
@@ -1768,26 +1771,27 @@ describe("Trash in Browse (stars spec §8)", () => {
     await user.keyboard("{Meta>}{Backspace}{/Meta}");
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     await user.click(within(dialog).getByRole("button", { name: "Move to To Delete" }));
-    await screen.findByText("Moved to To Delete: b.pdf, a.pdf");
+    await screen.findByText("Moved to To Delete: a.pdf, b.pdf");
     expect(quarantines(calls)).toEqual([
-      { drive_ids: ["f2", "f1"], dry_run: true },
-      { drive_ids: ["f2", "f1"], dry_run: false },
+      { drive_ids: ["f1", "f2"], dry_run: true },
+      { drive_ids: ["f1", "f2"], dry_run: false },
     ]);
     // the moved files leave the selection
-    expect(screen.getByRole("button", { name: "Move to To Delete" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Select a.pdf" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select b.pdf" })).not.toBeChecked();
     // a plain ⌫ on the list still goes up a folder, and trashes nothing
-    screen.getByRole("button", { name: "a.pdf" }).focus();
+    screen.getByRole("button", { name: /^a\.pdf/ }).focus();
     await user.keyboard("{Backspace}");
-    expect(await screen.findByText("Banks")).toBeInTheDocument();
+    expect(await findInList("Banks")).toBeInTheDocument();
     expect(quarantines(calls)).toHaveLength(2);
   });
 
   it("the right pane's bin takes the right pane's file", async () => {
     const { calls, user } = setup("10. Financial", trash);
     await screen.findByText("Banks");
-    await user.click(screen.getByRole("button", { name: "Two panes" }));
-    await user.click(await within(pane("Right pane")).findByRole("button", { name: "Banks" }));
-    await user.click(await within(pane("Right pane")).findByRole("button", { name: "b.pdf" }));
+    await user.click(screen.getByRole("button", { name: "Split" }));
+    await user.click(await within(pane("Right pane")).findByRole("button", { name: /^Banks/ }));
+    await user.click(await within(pane("Right pane")).findByRole("button", { name: /^b\.pdf/ }));
     await user.click(screen.getByRole("button", { name: "Move to To Delete" }));
     await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(quarantines(calls)).toEqual([{ drive_ids: ["f2"], dry_run: true }]);
@@ -1799,9 +1803,9 @@ describe("Trash in Browse (stars spec §8)", () => {
       "GET /api/browse/files": { body: { rows: [file(PATHS.f1, "f1"), file(PATHS.f2, "f2")], total: 2 } },
     });
     await screen.findByText("Banks");
-    await user.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Files" }));
+    await user.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "All files below" }));
     const list = await screen.findByRole("list", { name: "Files" });
-    await user.click(within(list).getByRole("button", { name: /b\.pdf/ }));
+    await user.click(within(list).getByRole("button", { name: /^b\.pdf/ }));
     await user.click(screen.getByRole("button", { name: "Move to To Delete" }));
     await screen.findByRole("dialog", { name: "Move to To Delete?" });
     expect(quarantines(calls)).toEqual([{ drive_ids: ["f2"], dry_run: true }]);
@@ -1819,7 +1823,7 @@ describe("Trash in Browse (stars spec §8)", () => {
 
   it("Quick Look on a protected file: the bin is disabled saying why, and ⌘⌫ says it on the status line", async () => {
     const { calls, user } = setup("##. Important", trash);
-    await user.click(await screen.findByRole("button", { name: "passport.pdf" }));
+    await user.click(await screen.findByRole("button", { name: /^passport\.pdf/ }));
     await user.keyboard(" ");
     const ql = await screen.findByRole("dialog", { name: /^Quick Look/ });
     const bin = within(ql).getByRole("button", { name: "Move to To Delete" });
@@ -1832,7 +1836,7 @@ describe("Trash in Browse (stars spec §8)", () => {
 
   it("Quick Look's bin trashes the file it shows", async () => {
     const { calls, user } = setup("10. Financial/Banks", trash);
-    await user.click(await screen.findByRole("button", { name: "a.pdf" }));
+    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     await user.keyboard(" ");
     const ql = await screen.findByRole("dialog", { name: /^Quick Look/ });
     await user.click(within(ql).getByRole("button", { name: "Move to To Delete" }));
@@ -1866,14 +1870,14 @@ describe("Trash in Browse (stars spec §8)", () => {
     expect(quarantines(calls)).toHaveLength(0);
     // the other file is not affected
     await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "b.pdf" }));
+    await user.click(screen.getByRole("button", { name: /^b\.pdf/ }));
     expect(screen.getByRole("button", { name: "Move to To Delete" })).toBeEnabled();
   });
 
   it("a second ⌘⌫ while the dry run runs says so instead of nothing", async () => {
     const held = deferred<{ body: unknown }>();
     const { calls, user } = setup("10. Financial/Banks", { "POST /api/quarantine": () => held.promise });
-    await user.click(await screen.findByRole("button", { name: "a.pdf" }));
+    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     await user.keyboard("{Meta>}{Backspace}{/Meta}");
     await waitFor(() => expect(quarantines(calls)).toHaveLength(1));
     await user.keyboard("{Meta>}{Backspace}{/Meta}");
@@ -1886,7 +1890,7 @@ describe("Trash in Browse (stars spec §8)", () => {
   it("Quick Look closed during the dry run: the refusal is still said, as a toast", async () => {
     const held = deferred<{ status: number; body: unknown }>();
     const { calls, user } = setup("10. Financial/Banks", { "POST /api/quarantine": () => held.promise });
-    await user.click(await screen.findByRole("button", { name: "a.pdf" }));
+    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     await user.keyboard(" ");
     const ql = await screen.findByRole("dialog", { name: "Quick Look: a.pdf" });
     await user.keyboard("{Meta>}{Backspace}{/Meta}");
@@ -1899,7 +1903,7 @@ describe("Trash in Browse (stars spec §8)", () => {
 
   it("Cancel from Quick Look's confirm brings Quick Look back, and closing that returns the focus to the row", async () => {
     const { calls, user } = setup("10. Financial/Banks", trash);
-    const rowButton = await screen.findByRole("button", { name: "a.pdf" });
+    const rowButton = await screen.findByRole("button", { name: /^a\.pdf/ });
     await user.click(rowButton);
     await user.keyboard(" ");
     const ql = await screen.findByRole("dialog", { name: "Quick Look: a.pdf" });
@@ -1920,16 +1924,16 @@ describe("Trash in Browse (stars spec §8)", () => {
 describe("Selection, folders and layout (UI review)", () => {
   it("a highlighted row is the selected file: j shows its detail", async () => {
     const { user } = setup("10. Financial/Banks");
-    await screen.findByRole("button", { name: "b.pdf" });
+    await screen.findByRole("button", { name: /^a\.pdf/ });
     const preview = screen.getByRole("region", { name: "Preview" });
     // nothing is highlighted yet, and the centred empty state says so
     expect(within(preview).getByText("No file selected")).toBeInTheDocument();
     expect(within(preview).getByText("Select a file to see its preview and details.")).toBeInTheDocument();
     expect(listing().querySelector("[aria-current]")).toBeNull();
     await user.keyboard("j");
-    const row = screen.getByRole("button", { name: "b.pdf" }).closest("li")!;
+    const row = screen.getByRole("button", { name: /^a\.pdf/ }).closest("li")!;
     expect(row).toHaveAttribute("aria-current", "true");
-    expect(within(preview).getByRole("heading", { name: "b.pdf" })).toBeInTheDocument();
+    expect(within(preview).getByRole("heading", { name: "a.pdf" })).toBeInTheDocument();
     // the file view's one order: the actions (own block) come before the preview
     const html = preview.innerHTML;
     expect(html.indexOf("Page 1")).toBeGreaterThan(-1);
@@ -1938,22 +1942,22 @@ describe("Selection, folders and layout (UI review)", () => {
 
   it("after a move the detail of the moved file is gone, and the next step is highlighted and shown", async () => {
     const { user } = setup("10. Financial/Banks");
-    await user.click(await screen.findByRole("button", { name: "b.pdf" }));
+    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
     act(() => {
-      window.dispatchEvent(new CustomEvent(FILES_MOVED_EVENT, { detail: { ids: ["f2"] } }));
+      window.dispatchEvent(new CustomEvent(FILES_MOVED_EVENT, { detail: { ids: ["f1"] } }));
     });
-    // (the mock listing keeps b.pdf; a real one drops it, and its next row is selected)
+    // (the mock listing keeps a.pdf; a real one drops it, and its next row is selected)
     expect(await screen.findByText("No file selected")).toBeInTheDocument();
     await user.keyboard("j");
-    const row = screen.getByRole("button", { name: "a.pdf" }).closest("li")!;
+    const row = screen.getByRole("button", { name: /^b\.pdf/ }).closest("li")!;
     expect(row).toHaveAttribute("aria-current", "true");
-    expect(within(screen.getByRole("region", { name: "Preview" })).getByRole("heading", { name: "a.pdf" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Preview" })).getByRole("heading", { name: "b.pdf" })).toBeInTheDocument();
   });
 
   it("folder rows have no selection checkbox but keep the alignment; file rows have one", async () => {
     setup(null);
     await screen.findByText("readme.txt");
-    const folder = screen.getByText("10. Financial").closest("li")!;
+    const folder = within(listing()).getByText("10. Financial").closest("li")!;
     expect(within(folder).queryByRole("checkbox")).toBeNull();
     expect(folder.querySelector(".entry-check-spacer")).not.toBeNull();
     expect(within(screen.getByText("readme.txt").closest("li")!).getByRole("checkbox")).toBeInTheDocument();
@@ -1968,42 +1972,18 @@ describe("Selection, folders and layout (UI review)", () => {
     expect(hint.querySelectorAll(".key-group").length).toBeGreaterThan(5);
   });
 
-  it("the list can be resized with the splitter's arrow keys, and the width is remembered", async () => {
-    localStorage.removeItem("dam.browse.listwidth");
-    const { user } = setup(null);
-    await screen.findByText("readme.txt");
-    const bar = screen.getByRole("separator", { name: "Resize the list" });
-    expect(bar).toHaveAttribute("aria-valuenow", "45");
-    bar.focus();
-    await user.keyboard("{ArrowRight}{ArrowRight}");
-    expect(bar).toHaveAttribute("aria-valuenow", "49");
-    expect(localStorage.getItem("dam.browse.listwidth")).toBe("49");
-    localStorage.removeItem("dam.browse.listwidth");
-  });
-
-  it("double-clicking the splitter restores the default list width", async () => {
-    localStorage.setItem("dam.browse.listwidth", "60");
-    const { user } = setup(null);
-    await screen.findByText("readme.txt");
-    const bar = screen.getByRole("separator", { name: "Resize the list" });
-    expect(bar).toHaveAttribute("aria-valuenow", "60");
-    await user.dblClick(bar);
-    expect(bar).toHaveAttribute("aria-valuenow", "45");
-    expect(localStorage.getItem("dam.browse.listwidth")).toBeNull();
-  });
-
   it("the breadcrumb names each folder with a title (long paths are shortened by CSS, never wrapped)", async () => {
     setup("10. Financial/Banks");
     await screen.findByText("a.pdf");
     const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(within(crumbs).getByRole("link", { name: "10. Financial" })).toHaveAttribute("title", "10. Financial");
-    expect(within(crumbs).getByText("Banks")).toHaveAttribute("title", "Banks");
+    expect(crumbs.querySelector("[aria-current=page]")).toHaveAttribute("title", "Banks");
   });
 
   it("with two panes only the active one is marked as active", async () => {
     const { user } = setup(null);
     await screen.findByText("readme.txt");
-    await user.click(screen.getByRole("button", { name: "Two panes" }));
+    await user.click(screen.getByRole("button", { name: "Split" }));
     const left = await screen.findByRole("region", { name: "Left pane" });
     const right = screen.getByRole("region", { name: "Right pane" });
     expect(left).toHaveClass("browse-pane-active");
@@ -2101,7 +2081,7 @@ describe("New folder", () => {
     ["##. Important", "Folders can't be made in ##. Important"],
   ])("is off at %j with a reason", async (path, reason) => {
     const { user } = setup(path || null, { "GET /api/browse": { body: [] } });
-    await screen.findByRole("button", { name: "Two panes" });
+    await screen.findByRole("button", { name: "Split" });
     await waitFor(() => expect(newButton().closest(".icon-button-wrap")).toHaveAttribute("data-tip", reason));
     expect(newButton()).toBeDisabled();
     await user.keyboard("{Meta>}{Shift>}n{/Shift}{/Meta}");
@@ -2117,10 +2097,10 @@ describe("New folder", () => {
     });
     await screen.findByRole("list", { name: "Folder contents" });
     expect(newButton()).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Files" }));
+    await user.click(screen.getByRole("button", { name: "All files below" }));
     await waitFor(() => expect(newButton()).toBeDisabled());
     expect(newButton().closest(".icon-button-wrap")).toHaveAttribute("data-tip", "Switch to Folders to make a folder here");
-    await user.click(screen.getByRole("button", { name: "Folders" }));
+    await user.click(screen.getByRole("button", { name: "This folder" }));
     await waitFor(() => expect(newButton()).toBeEnabled());
     await user.type(screen.getByRole("combobox", { name: "Search" }), "zzz");
     await waitFor(() => expect(newButton()).toBeDisabled());
@@ -2141,7 +2121,7 @@ describe("Locked files in Browse", () => {
     const bin = screen.getByRole("button", { name: "Move to To Delete" });
     expect(bin).toBeDisabled();
     expect(bin.closest(".icon-button-wrap")).toHaveAttribute("data-tip", REASON);
-    expect(screen.getByRole("button", { name: "Move to…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move file to…" })).toBeDisabled();
   });
 
   it("a locked file dragged onto a folder is not moved", async () => {

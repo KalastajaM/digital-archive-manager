@@ -46,7 +46,7 @@ type Props = {
    * next (which only moves on: being related is computed, never stored). This mode handles
    * its own keys (Space, ←/→, j/k, N, Y, and + / - / 0 for the pane last clicked, or for
    * both while "Zoom together" is on), so the host adds none. */
-  /** Relatives of the shown file (New look; ``useQuickLook`` closes this and opens them). */
+  /** Relatives of the shown file (``useQuickLook`` closes this and opens them). */
   onRelatives?: () => void;
   compare?: {
     subject: QLFile;

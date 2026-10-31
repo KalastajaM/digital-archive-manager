@@ -1,4 +1,4 @@
-/** Browse's left pane in the New look: Folders | Collections | Tags. A collection or tag picked
+/** Browse's left pane: Folders | Collections | Tags. A collection or tag picked
  * in its tree is a search filter (a chip), so the list shows its files from the whole archive. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -74,11 +74,9 @@ const switcher = () => screen.getByRole("group", { name: "Tree" });
 
 beforeEach(() => {
   localStorage.clear();
-  document.documentElement.dataset.style = "new";
 });
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
 describe("Browse's tree switch", () => {

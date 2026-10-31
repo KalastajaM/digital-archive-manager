@@ -17,19 +17,11 @@ function Field({ initial = "" }: { initial?: string }) {
 const URL = "POST /api/system/choose-folder";
 
 beforeEach(() => {
-  document.documentElement.dataset.style = "new";
 });
 afterEach(() => {
-  delete document.documentElement.dataset.style;
 });
 
 describe("FolderPathInput", () => {
-  it("is not drawn in Classic, where the field stays a plain input", () => {
-    document.documentElement.dataset.style = "classic";
-    renderWithProviders(<Field initial="/keep" />);
-    expect(screen.getByLabelText("Folder path")).toHaveValue("/keep");
-    expect(screen.queryByRole("button", { name: /Choos/ })).toBeNull();
-  });
 
   it("fills the field with the chosen folder and opens the dialog where the field points", async () => {
     const user = userEvent.setup();

@@ -103,9 +103,6 @@ without ever deleting a file.
   </tr>
 </table>
 
-The screenshots show the New look, which dam opens in. The earlier Classic look is still in
-Settings, Appearance, for now (Relatives are in the New look only).
-
 ## Quick start
 
 You need [uv](https://docs.astral.sh/uv/) and [Node.js](https://nodejs.org/) 22 or newer.

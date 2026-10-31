@@ -167,11 +167,11 @@ describe("ReviewCard: Ask AI", () => {
     expect(screen.queryByText(/Turn on AI/)).not.toBeInTheDocument();
   });
 
-  it("Ask AI is the sparkle icon button with a tooltip", async () => {
+  it("Ask AI is a link in the panel header with a tooltip", async () => {
     await setup();
     const button = await screen.findByRole("button", { name: "Ask AI" });
-    expect(button).toHaveClass("icon-button");
-    expect(button).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
+    expect(button).toHaveClass("link-button");
+    expect(button).toHaveAttribute("title", expect.stringContaining("Ask AI to suggest"));
   });
 
   it("the answer becomes chips; the form stays as it was and nothing is filed", async () => {

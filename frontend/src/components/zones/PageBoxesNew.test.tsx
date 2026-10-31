@@ -1,7 +1,6 @@
-/** Draw a box in the New look as drawn on the board: the document bar leads with the file,
- * the hint sits beside the pressed button, and the panel numbers each box with its colour,
- * lists the words found as chips and ends with Back to filing and Make a rule. Classic keeps
- * its panel. */
+/** Draw a box as drawn on the board: the document bar leads with the file, the hint sits
+ * beside the pressed button, and the panel numbers each box with its colour, lists the words
+ * found as chips and ends with Back to filing and Make a rule. */
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -14,11 +13,9 @@ const FOUND = { read: true, lines: [{ text: "Pohjola Vakuutus Oy", box: [0.1, 0.
 
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
-function setup(look: "new" | "classic") {
-  if (look === "new") document.documentElement.dataset.style = "new";
+function setup() {
   mockFetch({
     "GET /api/files/d1/page1": { body: { read: true, lines: [], unavailable: null } },
     "POST /api/files/d1/page1/lines": { body: FOUND },
@@ -28,7 +25,7 @@ function setup(look: "new" | "classic") {
   } as never);
   renderWithProviders(
     <MemoryRouter>
-      <FilePreview file={pdf} bar={look === "new" ? <span>a.pdf</span> : undefined} boxTool={{ suggestion: { name_source: "scan", folder_source: null } }} />
+      <FilePreview file={pdf} bar={<span>a.pdf</span>} boxTool={{ suggestion: { name_source: "scan", folder_source: null } }} />
     </MemoryRouter>,
   );
   return userEvent.setup();
@@ -42,9 +39,9 @@ async function draw() {
   fireEvent.pointerUp(surface, { clientX: 100, clientY: 120 });
 }
 
-describe("Draw a box in the New look", () => {
+describe("Draw a box", () => {
   it("shows the tool as a button with words, and the hint in the document bar", async () => {
-    const user = setup("new");
+    const user = setup();
     const bar = screen.getByRole("toolbar", { name: "Document" });
     const button = within(bar).getByRole("button", { name: "Draw a box" });
     expect(button).toHaveTextContent("Draw a box");
@@ -54,7 +51,7 @@ describe("Draw a box in the New look", () => {
   });
 
   it("numbers the box, lists its words as chips, and ends with Back to filing and Make a rule", async () => {
-    const user = setup("new");
+    const user = setup();
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
     const panel = await screen.findByRole("region", { name: "The boxes" });
@@ -66,19 +63,5 @@ describe("Draw a box in the New look", () => {
     await user.click(within(panel).getByRole("button", { name: "Back to filing" }));
     expect(screen.queryByRole("region", { name: "The boxes" })).toBeNull();
     expect(screen.queryByTestId("kept-box")).toBeNull();
-  });
-});
-
-describe("Draw a box in Classic", () => {
-  it("has no bar, no words on the button and no Back to filing", async () => {
-    const user = setup("classic");
-    expect(screen.queryByRole("toolbar", { name: "Document" })).toBeNull();
-    const button = screen.getByRole("button", { name: "Draw a box" });
-    expect(button).not.toHaveTextContent("Draw a box");
-    await user.click(button);
-    await draw();
-    const panel = await screen.findByRole("region", { name: "The boxes" });
-    expect(within(panel).queryByRole("button", { name: "Back to filing" })).toBeNull();
-    expect(within(panel).queryByText("Words found in it")).toBeNull();
   });
 });

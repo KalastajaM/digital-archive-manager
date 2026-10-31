@@ -21,7 +21,7 @@ type Props = {
    * second (a narrow list column). The title is cut with an ellipsis only as a last resort,
    * and then it is whole in the tooltip. */
   stacked?: boolean;
-  /** Something before the title (the New look's "Inbox N" button that opens a folded list). */
+  /** Something before the title (the "Inbox N" button that opens a folded list). */
   lead?: ReactNode;
   /** The search before the actions instead of after them (the New Browse header). */
   searchFirst?: boolean;

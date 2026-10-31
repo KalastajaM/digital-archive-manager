@@ -216,6 +216,9 @@ function renderTrays(path = "/trays/to-pay", routes: Routes = {}) {
     "GET /api/files/f1/summary": { body: { ai: null, user: null } },
     "GET /api/files/f2/summary": { body: { ai: null, user: null } },
     "GET /api/files/f9/summary": { body: { ai: null, user: null } },
+    "GET /api/notes/file/f1": { body: { text: "" } },
+    "GET /api/notes/file/f2": { body: { text: "" } },
+    "GET /api/notes/file/f9": { body: { text: "" } },
     ...routes,
   });
   const user = userEvent.setup();
@@ -237,8 +240,20 @@ const row = (title: string) => screen.getByRole("article", { name: title });
 const detail = () => screen.getByRole("region", { name: "Item" });
 /** The header over the list and the item: the tray's list controls, and the file actions at the right. */
 const trayHeader = () => document.querySelector(".trays-toolbar") as HTMLElement;
-/** The one group of file actions (shared with Browse: ``FileActionBar``). */
-const fileBar = () => screen.getByRole("toolbar", { name: /file actions$/ });
+/** The file's icon rows in the item's pane (``FileActionIcons``). */
+const fileBar = () => detail().querySelector<HTMLElement>(".file-actions-icons")!;
+/** The item's list of files, one button each to show it. */
+const findFileBar = () =>
+  waitFor(() => {
+    const bar = fileBar();
+    if (!bar) throw new Error("no icon rows yet");
+    return bar;
+  });
+const filesList = async (inside: HTMLElement) => {
+  const list = await within(inside).findByRole("region", { name: "Files on this item" });
+  await waitFor(() => expect(list.querySelector(".item-file-pick")).not.toBeNull());
+  return list;
+};
 /** Opens the header title for editing (its pencil) and returns the text field. */
 const editTitle = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(await within(await screen.findByRole("region", { name: "Item" })).findByRole("button", { name: "Edit title" }));
@@ -347,7 +362,7 @@ describe("Trays", () => {
     expect(tag).toHaveAttribute("title", "Overdue · 15.10.2026");
     expect(bill).toHaveTextContent("Northpower Oy");
     expect(bill).toHaveTextContent("84,20 €");
-    expect(bill).not.toHaveTextContent("2 files");
+    expect(bill).toHaveTextContent("2 files · Checklist 3 of 5");
     expect(within(bill).getByRole("img", { name: "Note" })).toBeInTheDocument();
     expect(within(bill).getByRole("img", { name: "2 of 5 to-dos open" })).toBeInTheDocument();
     expect(within(bill).getByRole("img", { name: "AI summary" })).toBeInTheDocument();
@@ -430,7 +445,7 @@ describe("Trays", () => {
       "POST /api/items/9/reopen": { body: { ...PAID, state: "open" } },
     });
     await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Done" }));
+    await user.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: /^Done/ }));
     const paid = await screen.findByRole("article", { name: "Old bill" });
     expect(where()).toBe("/trays/to-pay?state=done");
     expect(paid).toHaveTextContent("Done 2 days ago");
@@ -444,7 +459,7 @@ describe("Trays", () => {
     expect(where()).toBe("/trays/to-pay?state=done&item=9");
     await user.click(screen.getByRole("link", { name: "To read in the sidebar" }));
     expect(where()).toBe("/trays/to-read");
-    expect(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Open" })).toHaveAttribute(
+    expect(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: /^Open/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -592,7 +607,7 @@ describe("Item detail", () => {
     expect(amount).toHaveValue("905");
   });
 
-  it("shows the files with tabs and badges; the × on a tab takes the file off (Undo puts it back in place) and Add another file… posts", async () => {
+  it("lists the files with badges; the × on a file takes it off (Undo puts it back in place) and Add another file… posts", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/search": {
         body: [
@@ -604,11 +619,11 @@ describe("Item detail", () => {
       "POST /api/items/1/files/remove": { body: { ...BILL, files: ["f1"] } },
     });
     const panel = await screen.findByRole("region", { name: "Item" });
-    const tabs = await within(panel).findByRole("tablist", { name: "Files" });
-    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(["northpower.pdf", "receipt.pngfile in ##. To Delete"]);
+    const tabs = await filesList(panel);
+    expect(Array.from(tabs.querySelectorAll(".item-file-pick")).map((t) => t.textContent)).toEqual(["northpower.pdf", "receipt.pngfile in ##. To Delete"]);
     expect(within(panel).getByText("file in ##. To Delete")).toBeInTheDocument();
-    await user.click(within(tabs).getByRole("tab", { name: /receipt\.png/ }));
-    // the old icon in the action row is gone: the × on each tab replaces it
+    await user.click(within(tabs).getByRole("button", { name: /^receipt\.png/ }));
+    // the × on each file takes it off the item
     expect(within(panel).queryByRole("button", { name: /^Take this file off the item/ })).not.toBeInTheDocument();
     const takeOff = within(tabs).getByRole("button", { name: "Remove receipt.png from this item" });
     expect(within(tabs).getByRole("button", { name: "Remove northpower.pdf from this item" })).toBeInTheDocument();
@@ -644,8 +659,8 @@ describe("Item detail", () => {
         body: { batch_id: "m1", dry_run: false, done: [op], failed: null, error: null, index_error: null, unchanged: [], folder: "##. Organize" },
       },
     });
-    await screen.findByRole("tablist", { name: "Files" });
-    const back = await within(fileBar()).findByRole("button", { name: "Back to inbox" });
+    await screen.findByRole("region", { name: "Files on this item" });
+    const back = await within(await findFileBar()).findByRole("button", { name: "Back to inbox" });
     await waitFor(() => expect(back).toBeEnabled());
     await user.click(back);
     const dialog = await screen.findByRole("dialog", { name: "Move 1 file to ##. Organize?" });
@@ -661,27 +676,27 @@ describe("Item detail", () => {
     renderTrays("/trays/to-pay?item=1", {
       "GET /api/status": { body: { special_folders: { inbox: "10. Financial", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } } },
     });
-    await screen.findByRole("tablist", { name: "Files" });
-    const back = await within(fileBar()).findByRole("button", { name: "Back to inbox" });
+    await screen.findByRole("region", { name: "Files on this item" });
+    const back = await within(await findFileBar()).findByRole("button", { name: "Back to inbox" });
     await waitFor(() => expect(back.closest(".icon-button-wrap")).toHaveAttribute("data-tip", "Already in the inbox"));
     expect(back).toBeDisabled();
   });
 
-  it("the header's bin keeps its reason as the tooltip for an Important file, and Star acts on the shown file", async () => {
+  it("the bin keeps its reason as the tooltip for an Important file, and Star acts on the shown file", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/items/1/files": { body: [{ ...FILES[0], marks: ["important"] }, FILES[1]] },
       "POST /api/marks/star": { body: { collection: { id: 1, members: [], groups: [] }, batch: null, problems: [], ongoing_status: null } },
     });
-    await screen.findByRole("tablist", { name: "Files" });
-    const bin = await within(fileBar()).findByRole("button", { name: "Move to To Delete" });
+    await screen.findByRole("region", { name: "Files on this item" });
+    const bin = await within(await findFileBar()).findByRole("button", { name: "Move to To Delete" });
     expect(bin).toBeDisabled();
     expect(bin.parentElement).toHaveAttribute("data-tip", expect.stringContaining("marked Important"));
-    await user.click(within(fileBar()).getByRole("button", { name: "Star" }));
+    await user.click(within(await findFileBar()).getByRole("button", { name: "Star" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/marks/star")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/marks/star")[0].body).toEqual({ drive_ids: ["f1"] });
   });
 
-  it("the item's file tabs and Add another file… hits show ★ / !; the toggles are in the shown file's toolbar", async () => {
+  it("the item's files and Add another file… hits show ★ / !; the toggles are in the file's icon rows", async () => {
     const { user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/items/1/files": { body: [{ ...FILES[0], marks: ["important"] }, FILES[1]] },
       "GET /api/search": {
@@ -689,10 +704,10 @@ describe("Item detail", () => {
       },
     });
     const panel = await screen.findByRole("region", { name: "Item" });
-    const tabs = await within(panel).findByRole("tablist", { name: "Files" });
-    expect(within(within(tabs).getAllByRole("tab")[0]).getByRole("img", { name: "Important" })).toBeInTheDocument();
-    // the toggle is in the header's file actions
-    expect(within(fileBar()).getByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
+    const tabs = await filesList(panel);
+    expect(within(tabs.querySelector<HTMLElement>(".item-file-pick")!).getByRole("img", { name: "Important" })).toBeInTheDocument();
+    // the toggle is in the file's icon rows
+    expect(within(await findFileBar()).getByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     await user.click(within(panel).getByRole("button", { name: "Add another file…" }));
     await user.type(within(panel).getByLabelText("Find a file"), "meter");
     const hit = (await within(panel).findByRole("button", { name: /meter\.pdf/ })).closest("li")!;
@@ -758,7 +773,7 @@ describe("Item detail", () => {
       "POST /api/items/1/undo-move": { body: BILL },
     });
     await screen.findByRole("region", { name: "Checklist" });
-    await user.click(await within(fileBar()).findByRole("button", { name: "Move to tray" }));
+    await user.click(await within(detail()).findByRole("button", { name: /^Move to tray/ }));
     const menu = await screen.findByRole("menu", { name: "Move to tray" });
     expect(within(menu).queryByRole("menuitem", { name: "To pay" })).not.toBeInTheDocument();
     await user.click(within(menu).getByRole("menuitem", { name: "To action" }));
@@ -770,27 +785,32 @@ describe("Item detail", () => {
     await waitFor(() => expect(where()).toBe("/trays/to-pay?item=1"));
   });
 
-  it("the file actions are one group in the header over the item (the same bar as Browse); Mark paid stays in the item; Quick Look is in the preview toolbar", async () => {
+  it("the file's actions are icon rows in the item's pane; Mark paid stays in the item; Move to tray and Remove from tray are in its header", async () => {
     renderTrays("/trays/to-pay?item=1");
     await screen.findByRole("region", { name: "Checklist" });
     await within(detail()).findByRole("img", { name: "Page 1" });
-    const group = await screen.findByRole("toolbar", { name: "To pay file actions" });
-    expect(trayHeader()).toContainElement(group);
-    expect(detail()).not.toContainElement(group);
+    const group = await findFileBar();
     expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
-      "Move to tray",
-      "Remove from tray",
-      "Back to inbox",
+      "Open",
+      "Quick Look",
+      "Show in Finder",
+      "Show in folder",
+      "Relatives",
       "Ask AI",
+      "From…",
+      "For…",
       "Star",
       "Mark Important",
+      "Back to inbox",
       "Move to To Delete",
     ]);
     expect(within(detail()).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
-    for (const name of ["Move to tray", "Remove from tray", "Back to inbox", "Ask AI", "Star", "Mark Important", "Move to To Delete"]) {
-      expect(within(detail()).queryByRole("button", { name })).toBeNull();
+    const head = detail().querySelector(".item-header") as HTMLElement;
+    expect(within(head).getByRole("button", { name: /^Move to tray/ })).toBeInTheDocument();
+    expect(within(head).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument();
+    for (const name of ["Move to tray", "Remove from tray"]) {
+      expect(within(group).queryByRole("button", { name })).toBeNull();
     }
-    expect(within(detail().querySelector(".item-header") as HTMLElement).queryByRole("button", { name: "Quick Look" })).toBeNull();
   });
 
   it("Remove from tray asks first, then deletes the item and closes the panel; Cancel does nothing", async () => {
@@ -798,11 +818,11 @@ describe("Item detail", () => {
       "POST /api/items/1/remove": { status: 204, body: null },
     });
     await screen.findByRole("region", { name: "Checklist" });
-    await user.click(await within(fileBar()).findByRole("button", { name: "Remove from tray" }));
+    await user.click(await within(detail()).findByRole("button", { name: "Remove from tray" }));
     let dialog = await screen.findByRole("dialog", { name: /^Remove .* from To pay\?/ });
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(sent(calls, "POST", "/api/items/1/remove")).toHaveLength(0);
-    await user.click(await within(fileBar()).findByRole("button", { name: "Remove from tray" }));
+    await user.click(await within(detail()).findByRole("button", { name: "Remove from tray" }));
     dialog = await screen.findByRole("dialog", { name: /^Remove .* from To pay\?/ });
     await user.click(within(dialog).getByRole("button", { name: "Remove from tray" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/remove")).toHaveLength(1));
@@ -917,24 +937,6 @@ describe("Item detail", () => {
     });
   });
 
-  it("the list header has the name with its count, Add file and Open / Done together in the lead (one row, left-aligned)", async () => {
-    renderTrays("/trays/to-pay");
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    const header = trayHeader();
-    const lead = header.querySelector(".toolbar-lead") as HTMLElement;
-    const heading = within(header).getByRole("heading", { name: "To pay" });
-    expect(lead.querySelector(".toolbar-title")).toContainElement(heading);
-    expect(header.querySelector(".toolbar-subtitle")?.textContent).toMatch(/\S/);
-    // the list controls are in the lead (over the list); the file actions are the other part
-    const actions = within(lead).getByRole("toolbar", { name: "To pay actions" });
-    expect(lead).not.toContainElement(within(header).getByRole("toolbar", { name: "To pay file actions" }));
-    expect(header.querySelector(".toolbar-title")).not.toContainElement(actions);
-    expect(within(actions).getByRole("button", { name: "Add file" })).toBeInTheDocument();
-    expect(within(actions).getByRole("button", { name: "Done" })).toBeInTheDocument();
-    // one row: the title, then the controls, as siblings in the lead (not stacked under it)
-    expect(Array.from(lead.children)).toEqual([lead.querySelector(".toolbar-title"), actions]);
-  });
-
   it("a done item in the panel shows its done date and Reopen", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=9", {
       "GET /api/items/9": { body: PAID },
@@ -955,7 +957,7 @@ describe("Item detail", () => {
 });
 
 describe("Bill view", () => {
-  it("has the title, a big amount, the summary box (with a file selector) and the file name", async () => {
+  it("has the title, a big amount and the summary box of the file shown (picked in the files list)", async () => {
     const { user } = renderTrays("/trays/to-pay?item=1", {
       "GET /api/files/f2/summary": {
         body: { ai: { summary: "A receipt", key_facts: [], outdated: false }, user: null },
@@ -965,14 +967,11 @@ describe("Bill view", () => {
     expect(await within(panel).findByRole("heading", { level: 2, name: "Northpower sähkö" })).toBeInTheDocument();
     expect(panel.querySelector(".bill-amount")).toHaveTextContent("84,20 €");
     const summary = await within(panel).findByRole("region", { name: "Summary" });
-    expect(await within(summary).findByText("No summary yet.")).toBeInTheDocument();
+    expect(await within(summary).findByRole("button", { name: "Add a summary…" })).toBeInTheDocument();
     expect(await within(summary).findByRole("button", { name: "Summarize with AI…" })).toBeInTheDocument();
-    // two files: the first is summarized, the selector picks another
-    const select = within(panel).getByLabelText("Summary of");
-    expect(select).toHaveValue("f1");
-    await user.selectOptions(select, "f2");
+    // two files: the first is summarized, picking another in the files list shows its summary
+    await user.click(within(await filesList(panel)).getByRole("button", { name: /^receipt\.png/ }));
     expect(await within(panel).findByText("A receipt")).toBeInTheDocument();
-    await waitFor(() => expect(panel.querySelector(".item-sub .item-file")).toHaveTextContent("northpower.pdf"));
   });
 
   it("an item with no file has no AI button", async () => {
@@ -1082,15 +1081,15 @@ describe("Bill view", () => {
     expect(within(panel).queryByRole("button", { name: /and file/ })).not.toBeInTheDocument();
   });
 
-  it("the selected file's actions are on the action row: Ask AI, Move to To Delete (the × is on the file tabs)", async () => {
+  it("the selected file's actions are in the icon rows: Ask AI, Move to To Delete (the × is on the files list)", async () => {
     renderTrays("/trays/to-pay?item=1");
     const panel = await screen.findByRole("region", { name: "Item" });
-    await within(panel).findByRole("tablist", { name: "Files" });
-    const mine = await screen.findByRole("toolbar", { name: "To pay file actions" });
+    await filesList(panel);
+    const mine = await findFileBar();
     expect(within(mine).getByRole("button", { name: "Ask AI" })).toBeInTheDocument();
     expect(within(mine).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
     expect(within(mine).queryByRole("button", { name: /^Take this file off the item/ })).not.toBeInTheDocument();
-    // the done buttons stay in the item's fields row, not in the header
+    // the done buttons stay in the item's fields row
     expect(mine).not.toContainElement(within(panel).getByRole("button", { name: "Mark paid" }));
     expect((within(panel).getByRole("button", { name: "Mark paid" }).closest(".item-fields"))).not.toBeNull();
   });
@@ -1196,13 +1195,12 @@ describe("Quick Look and the selection in a tray", () => {
     expect(quickLook()).toHaveAccessibleName("Quick Look: northpower.pdf");
   });
 
-  it("the file preview toolbar has the Quick Look eye with its tooltip, not a text link or a key hint", async () => {
+  it("the file's icon rows have the Quick Look eye with its tooltip, not a text link or a key hint", async () => {
     const { user } = renderTrays("/trays/to-pay?item=1");
-    const eye = await screen.findByRole("button", { name: "Quick Look" });
-    expect(eye.closest(".preview-tools, .zoom-controls")).not.toBeNull();
+    const eye = await within(await findFileBar()).findByRole("button", { name: "Quick Look" });
     expect(eye.closest(".item-actions")).toBeNull();
     expect(eye).toHaveClass("icon-button");
-    expect(eye).toHaveAttribute("data-tip", "Quick Look Space");
+    expect(eye).toHaveAttribute("data-tip", "Quick Look (Space)");
     expect(document.querySelector(".item-header kbd")).toBeNull();
     expect(screen.queryByText("Quick Look", { selector: ".link-button" })).toBeNull();
     await user.click(eye);
@@ -1394,7 +1392,7 @@ describe("Dragging a file from Browse onto an item", () => {
       "POST /api/items/1/files": { body: { ...BILL, files: ["f1", "f2", "f7"] } },
     });
     const panel = await screen.findByRole("region", { name: "Item" });
-    await within(panel).findByRole("tablist", { name: "Files" });
+    await filesList(panel);
     dragFile(panel.querySelector(".item-detail") as HTMLElement);
     await waitFor(() => expect(sent(calls, "POST", "/api/items/1/files")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/items/1/files")[0].body).toEqual({ drive_id: "f7" });
@@ -1694,18 +1692,18 @@ describe("Tray defaults update", () => {
 describe("Trash on a tray item's files", () => {
   const quarantines = (calls: Call[]) => sent(calls, "POST", "/api/quarantine").map((c) => c.body);
 
-  it("the action row's bin moves the shown file to ##. To Delete through the confirm; Undo restores; one in ##. To Delete has none", async () => {
+  it("the icon row's bin moves the shown file to ##. To Delete through the confirm; Undo restores; one in ##. To Delete has none", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/quarantine": quarantineRoute({ f1: NORTHPOWER_FILE.path! }),
       "POST /api/activity/q1/undo/preview": { body: [] },
       "POST /api/activity/q1/undo": { body: { batch_id: "u1", dry_run: false, done: [], failed: null, error: null, index_error: null } },
     });
     const panel = await screen.findByRole("region", { name: "Item" });
-    const tabs = await within(panel).findByRole("tablist", { name: "Files" });
-    await user.click(within(tabs).getByRole("tab", { name: /receipt\.png/ }));
+    const tabs = await filesList(panel);
+    await user.click(within(tabs).getByRole("button", { name: /^receipt\.png/ }));
     await waitFor(() => expect(within(fileBar()).queryByRole("button", { name: "Move to To Delete" })).toBeNull());
-    await user.click(within(tabs).getByRole("tab", { name: /northpower\.pdf/ }));
-    await user.click(await within(fileBar()).findByRole("button", { name: "Move to To Delete" }));
+    await user.click(within(tabs).getByRole("button", { name: /^northpower\.pdf/ }));
+    await user.click(await within(await findFileBar()).findByRole("button", { name: "Move to To Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Move to To Delete?" });
     await user.click(within(dialog).getByRole("button", { name: "Move to To Delete" }));
     await user.click(await screen.findByRole("button", { name: "Undo" }));
@@ -1717,13 +1715,13 @@ describe("Trash on a tray item's files", () => {
     ]);
   });
 
-  it("⌘⌫ with the focus on the action row trashes the shown file (a plain ⌫ does not); a file marked Important is refused with the reason", async () => {
+  it("⌘⌫ with the focus in the icon rows trashes the shown file (a plain ⌫ does not); a file marked Important is refused with the reason", async () => {
     const { calls, user } = renderTrays("/trays/to-pay?item=1", {
       "POST /api/quarantine": IMPORTANT_REFUSED(NORTHPOWER_FILE.path!),
     });
     const panel = await screen.findByRole("region", { name: "Item" });
-    await within(panel).findByRole("tablist", { name: "Files" });
-    (await within(fileBar()).findByRole("button", { name: "Remove from tray" })).focus();
+    await filesList(panel);
+    (await within(await findFileBar()).findByRole("button", { name: "Star" })).focus();
     await user.keyboard("{Backspace}");
     await new Promise((r) => setTimeout(r, 10));
     expect(quarantines(calls)).toHaveLength(0);
@@ -1803,35 +1801,27 @@ describe("The item view layout", () => {
     expect(within(detail()).queryByLabelText("Title")).not.toBeInTheDocument();
   });
 
-  it("the tags are under the title in the header", async () => {
-    renderTrays("/trays/to-pay?item=1");
-    await screen.findByRole("region", { name: "Item" });
-    const tags = await within(detail()).findByRole("region", { name: "Tags" });
-    const header = detail().querySelector(".item-header") as HTMLElement;
-    expect(header).toContainElement(tags);
-    const heading = within(header).getByRole("heading", { name: "Northpower sähkö" });
-    expect(heading.compareDocumentPosition(tags) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("the item view has the file view's block order, with the item's own block in the middle", async () => {
+  it("the item view has the file view's block order; the item's own parts are in its header and below the file panel", async () => {
     renderTrays("/trays/to-pay?item=1");
     await screen.findByRole("region", { name: "Item" });
     await within(detail()).findByRole("region", { name: "Tags" });
     await within(detail()).findByRole("img", { name: "Page 1" });
     const blocks = Array.from(detail().querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
-    // the tags sit under the title, inside the header block (the item view's earlier decision)
-    expect(blocks).toEqual(["header", "collections", "summary", "own", "preview", "notes"]);
+    expect(blocks).toEqual(["header", "actions", "tags", "collections", "summary", "relatives", "preview", "notes"]);
     const inBlock = (name: string) => detail().querySelector(`[data-block="${name}"]`) as HTMLElement;
-    expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "Northpower sähkö" })).toBeInTheDocument();
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "northpower.pdf" })).toBeInTheDocument();
-    expect(within(inBlock("header")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
+    expect(within(inBlock("tags")).getByRole("region", { name: "Tags" })).toBeInTheDocument();
     expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("summary")).getByRole("region", { name: "Summary" })).toBeInTheDocument();
-    expect(within(inBlock("own")).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
-    expect(within(fileBar()).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument(); // in the header
-    expect(within(inBlock("preview")).getByRole("button", { name: "Quick Look" })).toBeInTheDocument();
-    expect(within(inBlock("notes")).getByRole("region", { name: "Checklist" })).toBeInTheDocument();
-    expect(within(inBlock("notes")).getByRole("button", { name: "History" })).toBeInTheDocument();
+    expect(within(inBlock("actions")).getByRole("button", { name: "Quick Look" })).toBeInTheDocument();
+    // the item's own: its title, Mark paid and Remove from tray up top, the checklist and history under the file panel
+    const head = detail().querySelector(".item-header") as HTMLElement;
+    expect(within(head).getByRole("heading", { level: 2, name: "Northpower sähkö" })).toBeInTheDocument();
+    expect(within(head).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument();
+    expect(within(detail().querySelector(".item-fields") as HTMLElement).getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
+    const stack = detail().querySelector(".item-stack") as HTMLElement;
+    expect(within(stack).getByRole("region", { name: "Checklist" })).toBeInTheDocument();
+    expect(within(stack).getByRole("button", { name: "History" })).toBeInTheDocument();
   });
 
   it("the file's collections are chips in the item view: × removes, the field adds", async () => {
@@ -1868,7 +1858,8 @@ describe("The item view layout", () => {
     await screen.findByRole("region", { name: "Item" });
     await within(detail()).findByText("Check meter");
     for (const name of ["Summary", "Checklist", "Notes", "History"]) {
-      expect(within(detail()).getByRole("button", { name })).toHaveAttribute("aria-expanded", "true");
+      // (Notes: the file's and the item's)
+      for (const button of within(detail()).getAllByRole("button", { name })) expect(button).toHaveAttribute("aria-expanded", "true");
     }
     const checklist = within(detail()).getByRole("region", { name: "Checklist" });
     await first.user.click(within(detail()).getByRole("button", { name: "Checklist" }));
@@ -1885,7 +1876,7 @@ describe("The item view layout", () => {
     await screen.findByRole("region", { name: "Item" });
     await within(detail()).findByRole("region", { name: "Checklist" });
     expect(within(detail()).getByRole("button", { name: "Checklist" })).toHaveAttribute("aria-expanded", "false");
-    expect(within(detail()).getByRole("button", { name: "Summary" })).toHaveAttribute("aria-expanded", "true");
+    expect(await within(detail()).findByRole("button", { name: "Summary" })).toHaveAttribute("aria-expanded", "true");
     // and it opens again
     const again = userEvent.setup();
     await again.click(within(detail()).getByRole("button", { name: "Checklist" }));
@@ -1897,8 +1888,8 @@ describe("The item view layout", () => {
     const { user } = renderTrays("/trays/to-pay?item=1");
     await screen.findByRole("region", { name: "Item" });
     await within(detail()).findByLabelText("Note (optional)");
-    await user.click(within(detail()).getByRole("button", { name: "Notes" }));
-    expect(within(detail()).getByRole("region", { name: "Notes" })).toHaveTextContent("call first");
+    await user.click(within(detail()).getAllByRole("button", { name: "Notes" }).at(-1)!); // the item's, under the file's
+    expect(within(detail()).getAllByRole("region", { name: "Notes" }).at(-1)).toHaveTextContent("call first");
     await user.click(within(detail()).getByRole("button", { name: "Summary" }));
     expect(within(detail()).getByRole("region", { name: "Summary" })).toHaveTextContent("No summary yet.");
   });

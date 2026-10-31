@@ -1,13 +1,13 @@
-/** Today in the New look: the board's arrangement (headline, stat tiles, the To pay table,
- * compact tray lists, the Inbox summary on the right) built from the same data and the same
- * actions as Classic's Today, plus Customize (arrange mode). */
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+/** Today: the board's arrangement (headline, stat tiles, the To pay table, compact tray
+ * lists, the Inbox summary on the right), plus Customize (arrange mode). */
+import { cleanup, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttentionItem, Item, Today as TodayData, TrayDef } from "../api/client";
-import { LAYOUT_KEY, LAYOUT_KEY_NEW } from "../components/useCardLayout";
-import { type Call, mockFetch, renderWithProviders } from "../test-utils";
+import { setDragFiles } from "../dnd";
+import { CARD_DRAG_TYPE, LAYOUT_KEY } from "../components/useCardLayout";
+import { type Call, dataTransfer, mockFetch, renderWithProviders } from "../test-utils";
 import Today from "./Today";
 
 const DAY = "2026-10-19";
@@ -148,20 +148,16 @@ function renderToday(over: Partial<TodayData> = {}, routes: Parameters<typeof mo
   return { calls, user };
 }
 
-beforeEach(() => {
-  document.documentElement.dataset.style = "new";
-});
 afterEach(() => {
   cleanup();
   localStorage.clear();
-  delete document.documentElement.dataset.style;
 });
 
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 const section = (name: string) => screen.getByRole("region", { name });
 const order = () => screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
 
-describe("Today in the New look: header and tiles", () => {
+describe("Today: header and tiles", () => {
   it("has the date, a headline built from the counts, and Start filing with the inbox count", async () => {
     renderToday();
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("One bill is overdue, seven documents to file");
@@ -216,7 +212,7 @@ describe("Today in the New look: header and tiles", () => {
   });
 });
 
-describe("Today in the New look: To pay", () => {
+describe("Today: To pay", () => {
   it("is a table of the open bills by due date with the due tag, amount, Pay and Paid", async () => {
     renderToday();
     const table = await screen.findByRole("table");
@@ -316,7 +312,7 @@ describe("Today in the New look: To pay", () => {
   });
 });
 
-describe("Today in the New look: the other trays", () => {
+describe("Today: the other trays", () => {
   it("gives each a compact list with its count, a done checkbox, an urgency tag and Show all", async () => {
     const { calls, user } = renderToday({}, { "POST /api/items/4/done": { body: { ...SERVICE, state: "done" } } });
     const action = await screen.findByRole("region", { name: "To action" });
@@ -343,7 +339,7 @@ describe("Today in the New look: the other trays", () => {
   });
 });
 
-describe("Today in the New look: the right column", () => {
+describe("Today: the right column", () => {
   it("summarises the inbox: count, oldest, how many the rules recognised, and the age bar", async () => {
     renderToday();
     const inbox = await screen.findByRole("region", { name: "Inbox" });
@@ -372,7 +368,7 @@ describe("Today in the New look: the right column", () => {
   });
 
   it("has no Search card (the palette and Browse search), and a saved layout that still lists it is read without it", async () => {
-    localStorage.setItem(LAYOUT_KEY_NEW, JSON.stringify({ order: ["search", "pay", "|", "inbox", "search", "starred"], collapsed: { search: true } }));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ order: ["search", "pay", "|", "inbox", "search", "starred"], collapsed: { search: true } }));
     const { user } = renderToday();
     await screen.findByRole("table");
     expect(screen.queryByRole("region", { name: "Search" })).not.toBeInTheDocument();
@@ -380,11 +376,11 @@ describe("Today in the New look: the right column", () => {
     expect(order()).not.toContain("Search");
     await user.click(screen.getByRole("button", { name: "Customize" }));
     await user.click(screen.getByRole("button", { name: "Collapse Starred" }));
-    expect(localStorage.getItem(LAYOUT_KEY_NEW)).not.toContain("search"); // pruned when the layout is next saved
+    expect(localStorage.getItem(LAYOUT_KEY)).not.toContain("search"); // pruned when the layout is next saved
   });
 });
 
-describe("Today in the New look: Customize", () => {
+describe("Today: Customize", () => {
   it("starts calm: no fold chevrons, no Move buttons, no Reset layout", async () => {
     renderToday();
     await screen.findByRole("table");
@@ -407,7 +403,7 @@ describe("Today in the New look: Customize", () => {
     expect(screen.queryByRole("button", { name: /^Move / })).not.toBeInTheDocument();
   });
 
-  it("Move down reorders and is remembered apart from Classic's layout; Reset layout puts it back", async () => {
+  it("Move down reorders and is remembered; Reset layout puts it back", async () => {
     const { user } = renderToday();
     await screen.findByRole("table");
     const before = order();
@@ -415,11 +411,10 @@ describe("Today in the New look: Customize", () => {
     await user.click(screen.getByRole("button", { name: "Customize" }));
     await user.click(screen.getByRole("button", { name: "Move To pay down" }));
     expect(order().slice(0, 3)).toEqual(["To action", "To pay", "Follow up"]);
-    expect(localStorage.getItem(LAYOUT_KEY_NEW)).toContain('"order":["tray:to-action","pay"');
-    expect(localStorage.getItem(LAYOUT_KEY)).toBeNull(); // Classic's own arrangement is untouched
+    expect(localStorage.getItem(LAYOUT_KEY)).toContain('"order":["tray:to-action","pay"');
     await user.click(screen.getByRole("button", { name: "Reset layout" }));
     expect(order()).toEqual(before);
-    expect(localStorage.getItem(LAYOUT_KEY_NEW)).toBeNull();
+    expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
   });
 
   it("a folded section stays folded after arranging, and can be opened again from its chevron", async () => {
@@ -434,7 +429,7 @@ describe("Today in the New look: Customize", () => {
     expect(within(section("To action")).getByRole("link", { name: "Car service" })).toBeInTheDocument();
   });
 
-  it("Option-Down on a heading moves the section too, as in Classic", async () => {
+  it("Option-Down on a heading moves the section too", async () => {
     const { user } = renderToday();
     await screen.findByRole("table");
     await user.click(screen.getByRole("button", { name: "Customize" }));
@@ -444,13 +439,198 @@ describe("Today in the New look: Customize", () => {
   });
 });
 
-describe("Today in Classic is not changed", () => {
-  it("shows its cards, not the New sections", async () => {
-    delete document.documentElement.dataset.style;
+describe("Today: the small done form", () => {
+  // a tray whose done action needs a value the user must give (no default)
+  const ASKS = {
+    trays: [{ ...TO_PAY, done: { label: "Mark paid", fields: { paid_on: { type: "date", required: true, copy: false, default: null } } } }, TO_ACTION, FOLLOW_UP],
+    errors: [],
+  };
+
+  it("posts the value given on Enter; a failed done keeps the form open and shows the error", async () => {
+    const { calls, user } = renderToday({}, { "GET /api/trays": { body: ASKS }, "POST /api/items/3/done": { status: 400, body: { error: "paid_on: expected a date" } } });
+    await user.click(await screen.findByRole("button", { name: "Mark Water paid" }));
+    const form = await screen.findByRole("form", { name: "Mark paid" });
+    const paidOn = within(form).getByLabelText("Paid on");
+    expect(paidOn).toHaveFocus();
+    fireEvent.change(paidOn, { target: { value: DAY } });
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(posts(calls, "/api/items/3/done")).toHaveLength(1));
+    expect(posts(calls, "/api/items/3/done")[0].body).toEqual({ fields: { paid_on: DAY } });
+    expect(await within(form).findByRole("alert")).toHaveTextContent("paid_on: expected a date");
+    expect(screen.getByRole("form", { name: "Mark paid" })).toBeInTheDocument();
+  });
+
+  it("Esc closes the form without posting, also when the focus has left it", async () => {
+    const { calls, user } = renderToday({}, { "GET /api/trays": { body: ASKS } });
+    await user.click(await screen.findByRole("button", { name: "Mark Water paid" }));
+    const form = await screen.findByRole("form", { name: "Mark paid" });
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Mark Water paid" }));
+    await user.click(screen.getByRole("heading", { level: 1 }));
+    expect(within(screen.getByRole("form", { name: "Mark paid" })).getByLabelText("Paid on")).not.toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    expect(form).not.toBeInTheDocument();
+    expect(posts(calls, "/api/items/3/done")).toHaveLength(0);
+  });
+});
+
+describe("Today: copying from the overdue bill", () => {
+  it("the IBAN copy button writes the compact IBAN and shows Copied", async () => {
+    const { user } = renderToday();
+    const table = await screen.findByRole("table");
+    await within(table).findByText("Water");
+    await user.click(within(table).getByRole("button", { name: "Copy IBAN" }));
+    expect(await navigator.clipboard.readText()).toBe("FI2112345600000785");
+    expect(within(table).getByRole("status")).toHaveTextContent("Copied");
+  });
+});
+
+describe("Today: Inbox found files", () => {
+  const found = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ drive_id: `d${i}`, name: `scan ${i}.pdf`, tray: "to-pay", tray_name: "To pay", due_date: "2026-10-15", total: "84.20", overdue: true, marks: [] }));
+
+  it("lists the first five and offers the rest behind Show N more", async () => {
+    const { user } = renderToday({ found: found(7) });
+    const inbox = await screen.findByRole("region", { name: "Inbox" });
+    const list = await within(inbox).findByRole("list", { name: "Found in the inbox" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(5);
+    await user.click(within(inbox).getByRole("button", { name: "Show 2 more" }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(7);
+  });
+
+  it("with five or fewer found there is no Show more", async () => {
+    renderToday({ found: found(5) });
+    const list = await screen.findByRole("list", { name: "Found in the inbox" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.queryByRole("button", { name: /^Show \d+ more$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Today: arranging by drag and keyboard", () => {
+  const column = (i: number) => document.querySelectorAll<HTMLElement>(".today-col")[i];
+  const head = (name: string) => section(name).querySelector("header")!;
+  const arrange = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findByRole("table");
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+  };
+
+  it("a folded section is kept folded after a remount", async () => {
+    const { user } = renderToday();
+    await arrange(user);
+    await user.click(screen.getByRole("button", { name: "Collapse To action" }));
+    cleanup();
     renderToday();
-    expect(await screen.findByRole("heading", { name: /^Good (morning|afternoon|evening)$/ })).toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "At a glance" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Customize" })).not.toBeInTheDocument();
+    await screen.findByRole("table");
+    expect(within(section("To action")).queryByRole("link", { name: "Car service" })).not.toBeInTheDocument();
+    expect(within(section("To pay")).getAllByRole("link").length).toBeGreaterThan(0);
+  });
+
+  it("dragging a section by its heading drops it before another section or at the end of a column", async () => {
+    const { user } = renderToday();
+    await arrange(user);
+    const before = order();
+    expect(head("Starred")).toHaveAttribute("draggable", "true");
+
+    const dt = dataTransfer();
+    fireEvent.dragStart(head("Starred"), { dataTransfer: dt });
+    expect(dt.types).toEqual([CARD_DRAG_TYPE]); // never files: no application/x-dam-files
+    dt.protectedMode = true; // while hovering, a page sees the types only
+    expect(fireEvent.dragOver(section("Inbox"), { dataTransfer: dt })).toBe(false); // accepted
+    dt.protectedMode = false;
+    fireEvent.drop(section("Inbox"), { dataTransfer: dt });
+    fireEvent.dragEnd(head("Starred"), { dataTransfer: dt });
+    expect(order()).toEqual(["To pay", "To action", "Follow up", "Starred", "Inbox", "Collections to do", "Reminders"]);
+    expect(order()).not.toEqual(before);
+
+    const again = dataTransfer();
+    fireEvent.dragStart(head("Inbox"), { dataTransfer: again });
+    fireEvent.dragOver(column(0), { dataTransfer: again });
+    fireEvent.drop(column(0), { dataTransfer: again });
+    expect(order()).toEqual(["To pay", "To action", "Follow up", "Inbox", "Starred", "Collections to do", "Reminders"]);
+    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY)!).order).toEqual([
+      "pay",
+      "tray:to-action",
+      "tray:follow-up",
+      "inbox",
+      "|",
+      "starred",
+      "collections",
+      "reminders",
+    ]);
+  });
+
+  it("Option-Down past the bottom of a column puts the focus on the section's heading in the next column", async () => {
+    const { user } = renderToday();
+    await arrange(user);
+    screen.getByRole("button", { name: "Collapse Follow up" }).focus();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(column(1).contains(section("Follow up"))).toBe(true); // a new element in the other column
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Collapse Follow up" }));
+    expect(document.body).toHaveTextContent("Follow up moved down");
+    await user.keyboard("{Alt>}{ArrowUp}{/Alt}"); // the keys go on
+    expect(column(0).contains(section("Follow up"))).toBe(true);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Collapse Follow up" }));
+  });
+
+  it("a drop in the gap between two sections lands between them (the nearest slot by height)", async () => {
+    const { user } = renderToday();
+    await arrange(user);
+    // the second column's sections: 100 px tall with 10 px gaps
+    [...column(1).querySelectorAll<HTMLElement>(":scope > .today-slot")].forEach((slot, i) => {
+      const top = i * 110;
+      vi.spyOn(slot, "getBoundingClientRect").mockReturnValue({
+        top,
+        bottom: top + 100,
+        height: 100,
+        left: 0,
+        right: 300,
+        width: 300,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      } as DOMRect);
+    });
+    const at = (type: "dragOver" | "drop", clientY: number, dt: ReturnType<typeof dataTransfer>) => {
+      const event = createEvent[type](column(1), { dataTransfer: dt });
+      Object.defineProperty(event, "clientY", { value: clientY });
+      fireEvent(column(1), event);
+    };
+    const dt = dataTransfer();
+    fireEvent.dragStart(head("To action"), { dataTransfer: dt });
+    at("dragOver", 215, dt); // between Collections to do (110–210) and Starred (220–320)
+    expect(section("Starred").closest(".today-slot")).toHaveAttribute("data-drop", "before");
+    at("drop", 215, dt);
+    expect(order()).toEqual(["To pay", "Follow up", "Inbox", "Collections to do", "To action", "Starred", "Reminders"]);
+
+    const below = dataTransfer();
+    fireEvent.dragStart(head("Follow up"), { dataTransfer: below });
+    at("drop", 10_000, below); // under the last section: the end of the column
+    expect(order().at(-1)).toBe("Follow up");
+  });
+
+  it("files dragged over a section are not taken as a section", async () => {
+    const { user } = renderToday();
+    await arrange(user);
+    const before = order();
+    const dt = dataTransfer();
+    setDragFiles({ dataTransfer: dt } as unknown as DragEvent, ["d1"], "bill.pdf");
+    dt.setData(CARD_DRAG_TYPE, "reminders"); // even a forged id beside the files
+    expect(fireEvent.dragOver(section("To pay"), { dataTransfer: dt })).toBe(true); // not accepted
+    fireEvent.drop(section("To pay"), { dataTransfer: dt });
+    expect(order()).toEqual(before);
+    document.dispatchEvent(new Event("dragend"));
+  });
+
+  it("a saved layout naming a removed tray still shows every section; a new one goes to its default place", async () => {
+    localStorage.setItem(
+      LAYOUT_KEY,
+      JSON.stringify({ order: ["tray:gone", "tray:to-action", "|", "reminders", "inbox"], collapsed: { "tray:gone": true } }),
+    );
+    renderToday();
+    await screen.findByRole("table");
+    expect(order()).toEqual(["To action", "To pay", "Follow up", "Reminders", "Inbox", "Collections to do", "Starred"]);
   });
 });
 

@@ -1,4 +1,4 @@
-/** The file panel's row of icon buttons (the New look; one component for Browse, the Inbox,
+/** The file panel's row of icon buttons (one component for Browse, the Inbox,
  * the trays and a collection, so the icons, their order, tooltips and disabled reasons are the
  * same everywhere). Every tooltip carries the key where there is one: "Quick Look (Space)".
  * One row, right-aligned, in two parts that wrap as wholes when the panel is narrow:
@@ -12,8 +12,8 @@
  * screen leaves an action out (no Back to inbox for a file already in the inbox), and one
  * that cannot run now stays, disabled, with its reason as the tooltip. For several files the
  * look row is left out and the row holds what applies to many (Move to… and Add to collection
- * have no in-place way for a selection, so they are here). The screens' handlers are the ones
- * ``FileActionBar`` (Classic) gets; this only draws them. */
+ * have no in-place way for a selection, so they are here). The screens hand over their handlers
+ * as ``FileActionBarProps``; this only draws them. */
 import { ArchiveRestore, Eye, FolderInput, FolderOpen, FolderSearch, Library, Network, Sparkles, ExternalLink, CircleMinus, ArrowRightLeft, Building2, User, Inbox, Trash2 } from "lucide-react";
 import { Fragment, type ReactNode, useState } from "react";
 import { showInLabel } from "../fileManager";

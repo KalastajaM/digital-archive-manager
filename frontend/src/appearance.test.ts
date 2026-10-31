@@ -5,11 +5,8 @@ import {
   APPEARANCE_KEY,
   installAppearance,
   readAppearance,
-  readStyle,
   resolve,
   saveAppearance,
-  saveStyle,
-  STYLE_KEY,
 } from "./appearance";
 
 /** A system setting the test can flip, with the change listeners matchMedia would call. */
@@ -32,6 +29,7 @@ const theme = () => document.documentElement.dataset.theme;
 const themeColor = () => document.querySelector('meta[name="theme-color"]')?.getAttribute("content");
 
 const look = () => document.documentElement.dataset.style;
+const OLD_STYLE_KEY = "dam.style";
 
 beforeEach(() => {
   localStorage.clear();
@@ -57,10 +55,10 @@ describe("appearance", () => {
     expect(resolve("auto")).toBe("dark");
     saveAppearance("light");
     expect(theme()).toBe("light");
-    expect(themeColor()).toBe("#fbfbfd");
+    expect(themeColor()).toBe("#ffffff");
     saveAppearance("dark");
     expect(theme()).toBe("dark");
-    expect(themeColor()).toBe("#1e1e20");
+    expect(themeColor()).toBe("#1a1917");
   });
 
   it("on Auto it follows the system switching; a chosen theme stays", () => {
@@ -77,8 +75,6 @@ describe("appearance", () => {
 
   it("the script that runs before the first paint uses the same key and colours", () => {
     expect(earlyScript).toContain(`"${APPEARANCE_KEY}"`);
-    expect(earlyScript).toContain('"#1e1e20" : "#fbfbfd"');
-    expect(earlyScript).toContain(`"${STYLE_KEY}"`);
     expect(earlyScript).toContain('dark ? "#1a1917" : "#ffffff"');
     // A plain script in <head>, after the theme-color tag it sets (the CSP forbids inline ones).
     const head = indexHtml.slice(0, indexHtml.indexOf("</head>"));
@@ -86,56 +82,26 @@ describe("appearance", () => {
   });
 });
 
-describe("look (New or Classic)", () => {
-  it("is New until Classic is saved, and New is not stored", () => {
-    expect(readStyle()).toBe("new");
-    saveStyle("classic");
-    expect(localStorage.getItem(STYLE_KEY)).toBe("classic");
-    expect(look()).toBe("classic");
-    expect(readStyle()).toBe("classic");
-    saveStyle("new");
-    expect(localStorage.getItem(STYLE_KEY)).toBeNull();
-    expect(look()).toBe("new");
-    localStorage.setItem(STYLE_KEY, "purple");
-    expect(readStyle()).toBe("new");
-  });
-
-  it("someone who chose New when Classic was the default stays on New", () => {
-    localStorage.setItem(STYLE_KEY, "new");
-    expect(readStyle()).toBe("new");
-  });
-
-  it("is applied at start, and a change in another tab follows", () => {
+describe("look", () => {
+  it("is always New: installAppearance sets it and removes the retired Classic key", () => {
     stubSystem(false);
-    localStorage.setItem(STYLE_KEY, "classic");
+    localStorage.setItem(OLD_STYLE_KEY, "classic");
     installAppearance();
-    expect(look()).toBe("classic");
-    localStorage.removeItem(STYLE_KEY);
-    window.dispatchEvent(new StorageEvent("storage", { key: STYLE_KEY }));
     expect(look()).toBe("new");
+    expect(localStorage.getItem(OLD_STYLE_KEY)).toBeNull();
   });
 
-  it("the window colour follows look and theme", () => {
+  it("the early script sets New and the theme colour, whatever the old key says", () => {
+    localStorage.setItem(OLD_STYLE_KEY, "classic");
     stubSystem(false);
-    saveAppearance("light");
-    saveStyle("new");
+    new Function(earlyScript)();
+    expect(look()).toBe("new");
+    expect(theme()).toBe("light");
     expect(themeColor()).toBe("#ffffff");
-    saveAppearance("dark");
+    stubSystem(true);
+    new Function(earlyScript)();
+    expect(look()).toBe("new");
+    expect(theme()).toBe("dark");
     expect(themeColor()).toBe("#1a1917");
-    saveStyle("classic");
-    expect(themeColor()).toBe("#1e1e20");
-  });
-
-  it("the early script sets the look from the same key", () => {
-    localStorage.setItem(STYLE_KEY, "classic");
-    document.head.innerHTML = '<meta name="theme-color" content="#fbfbfd" />';
-    stubSystem(false);
-    new Function(earlyScript)();
-    expect(look()).toBe("classic");
-    expect(themeColor()).toBe("#fbfbfd");
-    localStorage.removeItem(STYLE_KEY);
-    new Function(earlyScript)();
-    expect(look()).toBe("new");
-    expect(themeColor()).toBe("#ffffff");
   });
 });

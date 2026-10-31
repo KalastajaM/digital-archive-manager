@@ -1,5 +1,5 @@
-/** Browse's file panel in the New look, in its other contexts: a file in To Delete, a file in
- * the inbox, a selection of several, and Classic (which has none of the icon rows). */
+/** Browse's file panel in its other contexts: a file in To Delete, a file in
+ * the inbox, a selection of several. */
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -47,14 +47,12 @@ const labels = (group: HTMLElement) => within(group).getAllByRole("button").map(
 
 beforeEach(() => {
   localStorage.clear();
-  document.documentElement.dataset.style = "new";
 });
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
-describe("Browse's file panel, other contexts (New)", () => {
+describe("Browse's file panel, other contexts", () => {
   it("a file in To Delete: Restore instead of the bin's work, no relatives", async () => {
     const user = setup("##. To Delete", [entry("old.pdf", "f9", "##. To Delete/old.pdf")]);
     await user.click(await screen.findByText("old.pdf"));
@@ -95,14 +93,5 @@ describe("Browse's file panel, other contexts (New)", () => {
       "Back to inbox",
       "Move 2 to To Delete",
     ]);
-  });
-
-  it("Classic keeps the old panel: no icon rows", async () => {
-    delete document.documentElement.dataset.style;
-    const user = setup("10. Financial", [entry("a.pdf", "f1", "10. Financial/a.pdf")]);
-    await user.click(await screen.findByText("a.pdf"));
-    await screen.findByRole("heading", { name: "a.pdf" });
-    expect(document.querySelector(".file-actions-icons")).toBeNull();
-    expect(document.querySelector(".file-skeleton")).toBeNull();
   });
 });

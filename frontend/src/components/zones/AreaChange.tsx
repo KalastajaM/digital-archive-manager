@@ -1,8 +1,7 @@
 /** What happens when an area drawn on page 1 is moved or resized: a rule's area opens the
  * rule sheet with the changed area (and the replay, with how the rule did before, so the
- * owner sees the effect on past documents before saving). The address area: the New look
- * moves it on this document only, at once and with Undo (the area for all letters is set in
- * Settings); Classic asks once and saves it for all letters. */
+ * owner sees the effect on past documents before saving). The address area moves on this
+ * document only, at once and with Undo (the area for all letters is set in Settings). */
 import { useEffect, useRef, useState } from "react";
 import {
   type Area,
@@ -10,16 +9,11 @@ import {
   type PageBox,
   type Rule,
   useAreaPicture,
-  usePeople,
   useRules,
-  useSavePeople,
   useSetAddressArea,
 } from "../../api/client";
-import { useStyle } from "../../appearance";
-import { visible } from "../../text";
 import { RuleSheet } from "../rules/RuleSheet";
 import { undoAction, useToast } from "../Toasts";
-import { Sheet } from "../ui/Sheet";
 
 /** ``rule`` with the box of the area changed. A picture area also gets ``image``, the crop
  * cut again for the new box. */
@@ -33,13 +27,8 @@ export function withChangedArea(rule: Rule, area: Area, box: PageBox, image?: st
 
 /** ``driveId``: the document the area was changed on (a picture area is cut again from it). */
 export function AreaChange({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
-  const [look] = useStyle();
   if (area.kind === "address" && area.rule_id === "")
-    return look === "new" ? (
-      <MoveDocumentArea driveId={driveId} area={area} box={box} onClose={onClose} />
-    ) : (
-      <AddressAreaSheet box={box} onClose={onClose} />
-    );
+    return <MoveDocumentArea driveId={driveId} area={area} box={box} onClose={onClose} />;
   return <RuleAreaSheet driveId={driveId} area={area} box={box} onClose={onClose} />;
 }
 
@@ -86,7 +75,7 @@ function RuleAreaSheet({ driveId, area, box, onClose }: { driveId: string; area:
   );
 }
 
-/** The address area was moved on ``driveId`` (New look): the new place is this document's
+/** The address area was moved on ``driveId``: the new place is this document's
  * own area, saved at once. Undo gives back what it had: its own earlier box, or the usual
  * area. */
 function MoveDocumentArea({ driveId, area, box, onClose }: { driveId: string; area: Area; box: PageBox; onClose: () => void }) {
@@ -111,46 +100,4 @@ function MoveDocumentArea({ driveId, area, box, onClose }: { driveId: string; ar
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
-}
-
-/** The address area was moved (Classic): asks before saving the new place for
- * every letter. */
-function AddressAreaSheet({ box, onClose }: { box: PageBox; onClose: () => void }) {
-  const people = usePeople();
-  const save = useSavePeople();
-  const toast = useToast();
-  const [problem, setProblem] = useState<string | null>(null);
-  const saveAll = async () => {
-    setProblem(null);
-    try {
-      await save.mutateAsync({ people: people.data?.people ?? [], address_zone: box });
-      toast({ kind: "info", text: "Address area saved for all letters." });
-      onClose();
-    } catch (e) {
-      setProblem(errorText(e));
-    }
-  };
-  return (
-    <Sheet
-      open
-      title="Change the address area"
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" onClick={onClose}>Cancel</button>
-          <button type="button" className="primary" disabled={!people.data || save.isPending} onClick={() => void saveAll()}>
-            Save
-          </button>
-        </>
-      }
-    >
-      <p>Look for the person a letter is for in this area on every letter?</p>
-      <p className="hint">It changes who is found on letters that are read from now on and on the ones in the Inbox.</p>
-      {problem && (
-        <p className="error" role="alert">
-          {visible(problem)}
-        </p>
-      )}
-    </Sheet>
-  );
 }

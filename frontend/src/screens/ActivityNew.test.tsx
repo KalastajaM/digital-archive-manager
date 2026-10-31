@@ -1,8 +1,8 @@
-/** Activity and Maintenance in the New look, as the boards draw them. Activity: the header
+/** Activity and Maintenance, as the boards draw them. Activity: the header
  * (title, count, Changes / AI calls), the filter row (search, four filters, Expand all and
  * the "Filters N" button that folds them in a narrow screen), who made each change as a chip
  * and Details or Review where there is no Undo. Maintenance: a row per check with its status
- * line and one button. Classic renders none of it. */
+ * line and one button. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -51,14 +51,10 @@ const activity = (url = "/activity") =>
   );
 
 beforeEach(() => localStorage.clear());
-afterEach(() => {
-  cleanup();
-  delete document.documentElement.dataset.style;
-});
+afterEach(cleanup);
 
-describe("Activity in New", () => {
+describe("Activity", () => {
   it("has a Filters N button that counts the filters in use and opens them", async () => {
-    document.documentElement.dataset.style = "new";
     api();
     const user = userEvent.setup();
     activity("/activity?kind=trash&when=today");
@@ -76,7 +72,6 @@ describe("Activity in New", () => {
   });
 
   it("names who made each change in a chip", async () => {
-    document.documentElement.dataset.style = "new";
     api();
     activity();
     await screen.findByRole("article", { name: "Batch b1" });
@@ -85,7 +80,6 @@ describe("Activity in New", () => {
   });
 
   it("puts the search and Expand all in the filter row, not in the header", async () => {
-    document.documentElement.dataset.style = "new";
     api();
     const user = userEvent.setup();
     activity();
@@ -103,7 +97,6 @@ describe("Activity in New", () => {
   });
 
   it("names the AI view AI calls", async () => {
-    document.documentElement.dataset.style = "new";
     api();
     activity();
     await screen.findByRole("article", { name: "Batch b1" });
@@ -111,7 +104,6 @@ describe("Activity in New", () => {
   });
 
   it("offers Undo on a done change, Details on an undone one and Review on an interrupted one", async () => {
-    document.documentElement.dataset.style = "new";
     const undone: BatchSummary = { ...B2, batch_id: "b3", undone: true, undoable: false, ops: [op("b3", { state: "undone" })] };
     const interrupted: BatchSummary = { ...B2, batch_id: "b4", undoable: false, ops: [op("b4", { state: "planned" })] };
     mockFetch({ "GET /api/activity": { body: [B1, undone, interrupted] }, "GET /api/recovery": { body: [] } });
@@ -130,24 +122,9 @@ describe("Activity in New", () => {
     expect(within(stopped).getByRole("button", { name: /^Review/ })).toHaveTextContent("Review");
     expect(within(stopped).getByText("Run recovery first")).toBeInTheDocument();
   });
-
-  it("has neither in Classic", async () => {
-    api();
-    activity();
-    await screen.findByRole("article", { name: "Batch b1" });
-    expect(screen.queryByRole("button", { name: /^Filters/ })).not.toBeInTheDocument();
-    expect(screen.queryByText("You")).not.toBeInTheDocument();
-    expect(screen.getByText("command line")).toBeInTheDocument();
-    // the search stays in the header, the filter row holds the filters alone
-    const header = document.querySelector(".activity-toolbar") as HTMLElement;
-    expect(within(header).getByRole("searchbox")).toBeInTheDocument();
-    expect(within(screen.getByRole("group", { name: "Filters" })).queryByRole("searchbox")).toBeNull();
-    expect(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "AI" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Details of/ })).toBeNull();
-  });
 });
 
-describe("Maintenance in New", () => {
+describe("Maintenance", () => {
   function maintenance() {
     mockFetch({ "GET /api/maintenance/jobs": { body: [] } });
     renderWithProviders(
@@ -158,7 +135,6 @@ describe("Maintenance in New", () => {
   }
 
   it("has Collapse all and Reset all as text buttons, and a longer subtitle", async () => {
-    document.documentElement.dataset.style = "new";
     maintenance();
     expect(await screen.findByRole("button", { name: "Collapse all" })).toHaveTextContent("Collapse all");
     expect(screen.getByRole("button", { name: "Reset all" })).toHaveTextContent("Reset all");
@@ -167,15 +143,7 @@ describe("Maintenance in New", () => {
     expect(screen.getByRole("button", { name: "Expand all" })).toBeInTheDocument();
   });
 
-  it("keeps the icon buttons in Classic", async () => {
-    maintenance();
-    const collapse = await screen.findByRole("button", { name: "Collapse all" });
-    expect(collapse).not.toHaveTextContent("Collapse all");
-    expect(screen.queryByText(/every fix is previewed/)).not.toBeInTheDocument();
-  });
-
   it("has no icon buttons in the header, and one status line and one button per check", async () => {
-    document.documentElement.dataset.style = "new";
     maintenance();
     await screen.findByRole("button", { name: "Collapse all" });
     const rows = document.querySelectorAll(".maintenance-body > .card");
@@ -192,7 +160,6 @@ describe("Maintenance in New", () => {
   });
 
   it("says what a check found and when, and Reset all forgets both", async () => {
-    document.documentElement.dataset.style = "new";
     maintenancePolling.ms = 5;
     const done = {
       job_id: "job-1",
@@ -235,13 +202,5 @@ describe("Maintenance in New", () => {
     await user.click(screen.getByRole("button", { name: "Reset all" }));
     await waitFor(() => expect(localStorage.getItem(archiveKey(RAN_KEY))).toBeNull());
     expect(within(await screen.findByRole("region", { name: "Empty folders" })).getByText("Not checked yet")).toBeInTheDocument();
-  });
-
-  it("keeps the old card in Classic: the button under the text, no status line", async () => {
-    maintenance();
-    const row = await screen.findByRole("region", { name: "Empty folders" });
-    expect(row.querySelector(".check-status")).toBeNull();
-    expect(row.querySelector(".card-body .check-actions button")).not.toBeNull();
-    expect(row.querySelector(".card-header")?.querySelector("button.primary")).toBeNull();
   });
 });

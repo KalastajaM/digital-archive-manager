@@ -1,4 +1,4 @@
-/** The file panel's icon row (the New look): what each context shows, the tooltips with their
+/** The file panel's icon row: what each context shows, the tooltips with their
  * keys, the groups apart by a rule, and what a disabled button says. */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

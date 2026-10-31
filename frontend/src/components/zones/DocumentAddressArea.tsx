@@ -1,4 +1,4 @@
-/** The address area of the document on show (New look): the usual one, its own, or none,
+/** The address area of the document on show: the usual one, its own, or none,
  * with the way to remove it or to go back to the usual one. Shown while the areas are shown
  * or Draw a box is on (``open``), and always when the document has none, so it can get one
  * back. A box drawn with Draw a box gives the document its own (``BoxPanel``); moving the

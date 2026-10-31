@@ -107,11 +107,11 @@ describe("Search results by folder", () => {
   it("Files is the flat list with the Folder column", async () => {
     const { user } = setup("/browse?q=pdf");
     await screen.findByRole("list", { name: "Search results" });
-    await user.click(within(view()).getByRole("button", { name: "Files" }));
+    await user.click(within(view()).getByRole("button", { name: "All files below" }));
     expect(outline()).toEqual(["c.pdf", "b.pdf", "a.pdf", "d.pdf"]);
     expect(results().querySelectorAll(".entry-folder")).toHaveLength(4);
     expect(within(screen.getByRole("group", { name: "Sort by" })).getByRole("button", { name: "Sort by folder" })).toBeInTheDocument();
-    await user.click(within(view()).getByRole("button", { name: "Folders" }));
+    await user.click(within(view()).getByRole("button", { name: "This folder" }));
     expect(outline()[0]).toBe("[10. Financial] 1 match");
   });
 

@@ -2,7 +2,6 @@ import { File as FileIcon, Folder, Layers, ListFilter, type LucideIcon, Search, 
 import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAllTags, useCollections, useFolders, useTrays } from "../api/client";
-import { useStyle } from "../appearance";
 import { useKeydown } from "../keyboard";
 import { baseName, parentOf } from "../paths";
 import { isSearchKey } from "../searchKey";
@@ -14,8 +13,8 @@ import { trayIcon } from "./ui/Sidebar";
 import { type Completion, useSearchCompletions } from "./useSearchCompletions";
 import { collectionHref } from "../collectionHref";
 
-/** The palette's open state, and the shortcut that toggles it. It works in both looks and
- * also while typing in a field; it stays out of the way of another open dialog. */
+/** The palette's open state, and the shortcut that toggles it. It works also while
+ * typing in a field; it stays out of the way of another open dialog. */
 export function useSearchPalette() {
   const [open, setOpen] = useState(false);
   useKeydown((e) => {
@@ -178,7 +177,6 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const [look] = useStyle();
   const id = useId();
   const [query, setQuery] = useState("");
   const [caret, setCaret] = useState(0);
@@ -281,7 +279,6 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       ref={dialog}
       className="palette"
       aria-label="Search and jump"
-      data-look={look}
       tabIndex={-1}
       onCancel={close}
       onKeyDown={onKeyDown}

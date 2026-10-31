@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, onTestFinished } from "vitest";
+import { describe, expect, it } from "vitest";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import { ArchiveFoldersSettings } from "./ArchiveFoldersSettings";
 
@@ -23,6 +23,12 @@ const detachRoute = (change: typeof CHANGE, forgets: number) => (call: Call) => 
   body: (call.body as { dry_run: boolean }).dry_run ? { ...change, files: forgets } : change,
 });
 
+/** The rows of the archive folders list (the special folders have a list of their own). */
+const archiveRows = async () => {
+  const list = await screen.findByRole("list", { name: "Archive folders" });
+  return waitFor(() => within(list).getAllByRole("listitem"));
+};
+
 function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
   const calls = mockFetch({ "GET /api/archive-folders": { body: FOLDERS }, ...extra });
   renderWithProviders(<ArchiveFoldersSettings />);
@@ -32,7 +38,7 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
 describe("Archive folders settings", () => {
   it("lists the main folder without actions, then each extra with its status", async () => {
     setup();
-    const [main, scans, vault, old] = await screen.findAllByRole("listitem");
+    const [main, scans, vault, old] = await archiveRows();
     expect(within(main).getByText("Main folder")).toBeInTheDocument();
     expect(within(main).getByText("/Archive")).toBeInTheDocument();
     expect(within(main).queryByRole("button")).toBeNull();
@@ -46,7 +52,7 @@ describe("Archive folders settings", () => {
 
   it("Detach asks first, with the file count, and can also forget tags, notes and places", async () => {
     const { calls, user } = setup({ "POST /api/archive-folders/Scans/detach": detachRoute(CHANGE, 40) });
-    const scans = (await screen.findAllByRole("listitem"))[1];
+    const scans = (await archiveRows())[1];
     await user.click(within(scans).getByRole("button", { name: "Detach" }));
     const dialog = await screen.findByRole("dialog");
     expect(
@@ -64,7 +70,7 @@ describe("Archive folders settings", () => {
 
   it("Forget on a detached folder asks first, then forgets it", async () => {
     const { calls, user } = setup({ "POST /api/archive-folders/Old/detach": detachRoute({ ...CHANGE, label: "Old" }, 3) });
-    const old = (await screen.findAllByRole("listitem"))[3];
+    const old = (await archiveRows())[3];
     await user.click(within(old).getByRole("button", { name: "Forget" }));
     const dialog = await screen.findByRole("dialog");
     // the count is the dry run's: the list counts none of a detached folder's files
@@ -83,7 +89,7 @@ describe("Archive folders settings", () => {
 
   it("Detach and forget says when it forgets more files than the list shows", async () => {
     const { user } = setup({ "POST /api/archive-folders/Scans/detach": detachRoute(CHANGE, 45) });
-    const scans = (await screen.findAllByRole("listitem"))[1];
+    const scans = (await archiveRows())[1];
     await user.click(within(scans).getByRole("button", { name: "Detach" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("checkbox", { name: "Also forget their tags, notes and collection places" }));
@@ -92,7 +98,7 @@ describe("Archive folders settings", () => {
 
   it("Attach again attaches the folder", async () => {
     const { calls, user } = setup({ "POST /api/archive-folders/Old/attach": { body: { ...CHANGE, label: "Old" } } });
-    const old = (await screen.findAllByRole("listitem"))[3];
+    const old = (await archiveRows())[3];
     await user.click(within(old).getByRole("button", { name: "Attach again" }));
     await waitFor(() => expect(posts(calls, "/api/archive-folders/Old/attach")).toHaveLength(1));
     expect(posts(calls, "/api/archive-folders/Old/attach")[0].body).toEqual({ dry_run: false });
@@ -116,10 +122,6 @@ describe("Archive folders settings", () => {
   });
 
   it("Add folder fills the path from the system folder dialog", async () => {
-    document.documentElement.dataset.style = "new";
-    onTestFinished(() => {
-      delete document.documentElement.dataset.style;
-    });
     const { user } = setup({
       "POST /api/system/choose-folder": { body: { path: "/Volumes/Chosen", cancelled: false, unavailable: null } },
     });
@@ -143,7 +145,7 @@ describe("Archive folders settings", () => {
 
   it("shows the restart notice when the server cannot reopen the archive itself", async () => {
     const { user } = setup({ "POST /api/archive-folders/Old/attach": { body: { ...CHANGE, label: "Old", restart_needed: true } } });
-    const old = (await screen.findAllByRole("listitem"))[3];
+    const old = (await archiveRows())[3];
     await user.click(within(old).getByRole("button", { name: "Attach again" }));
     expect(await screen.findByText(/stop dam \(Ctrl\+C in the terminal\) and run/)).toBeInTheDocument();
   });
@@ -164,7 +166,7 @@ describe("Changing a folder's label", () => {
 
   it("shows what changes before applying it", async () => {
     const { calls, user } = setup({ "POST /api/archive-folders/Scans/relabel": { body: RELABEL } });
-    const scans = (await screen.findAllByRole("listitem"))[1];
+    const scans = (await archiveRows())[1];
     await user.click(within(scans).getByRole("button", { name: "Change label" }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByRole("textbox", { name: "New label" }), "Scans 2020");
@@ -180,7 +182,7 @@ describe("Changing a folder's label", () => {
 
   it("is offered for extra folders only", async () => {
     setup();
-    const [main] = await screen.findAllByRole("listitem");
+    const [main] = await archiveRows();
     expect(within(main).queryByRole("button", { name: "Change label" })).toBeNull();
   });
 });

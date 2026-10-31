@@ -1,4 +1,4 @@
-/** Settings > Reading documents (New look): the address area drawn on a sample letter. The
+/** Settings > Reading documents: the address area drawn on a sample letter. The
  * owner picks a PDF or image from their computer; dam reads page 1 in a temporary file and
  * forgets it (nothing is added to the archive). Page 1 shows the area in use now, dashed; a
  * box dragged over it lists the lines it holds and can be saved as the area for all letters.

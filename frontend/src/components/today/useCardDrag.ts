@@ -1,4 +1,4 @@
-/** Drag and drop of Today's cards (Classic) and sections (New) by their headers. */
+/** Drag and drop of Today's sections by their headers. */
 import { type DragEvent, useState } from "react";
 import { DRAG_TYPE } from "../../dnd";
 import { CARD_DRAG_TYPE, type CardLayout, type Place } from "../useCardLayout";

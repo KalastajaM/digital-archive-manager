@@ -203,7 +203,7 @@ describe("ReviewCard", () => {
     const fileIt = await screen.findByRole("button", { name: "File it" });
     await waitFor(() => expect(fileIt).toBeDisabled());
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Move to To Delete" }).closest(".icon-button-wrap")).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Move to To Delete" }).closest(".button-wrap")).toHaveAttribute(
       "data-tip",
       "This file is locked. Unlock it to change it.",
     );
@@ -664,9 +664,9 @@ describe("ReviewCard", () => {
         <Inbox />
       </MemoryRouter>,
     );
-    // the list shows the file's own name, the suggestion marked as one
+    // the list shows the suggestion as the title and the file's own name under it
     expect((await screen.findAllByText("in⟨U+202E⟩fdp.exe")).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Suggested: x⟨U\+200B⟩y\.pdf/)).toBeInTheDocument();
+    expect(screen.getAllByText(/x⟨U\+200B⟩y/).length).toBeGreaterThan(0);
   });
 
   it("ignores auto-repeated keydowns", async () => {
@@ -1215,8 +1215,8 @@ describe("ReviewCard", () => {
 
     it("the card shows who a file is from and for, with the Draw a box tool", async () => {
       await setup();
-      expect(screen.getByRole("button", { name: "From: not set" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "For: not set" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "From Who sent it?" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "For Who is it for?" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Draw a box" })).toBeInTheDocument();
     });
 
@@ -1282,13 +1282,13 @@ describe("ReviewCard", () => {
     });
 
     it("the list rows show the suggested name, the file name and the scanned due date and amount", async () => {
-      const bill = { ...ENTRIES[0], prefill: { due_date: "2026-10-15", total: "84.20" } };
+      const bill = { ...ENTRIES[0], prefill: { due_date: "2099-10-15", total: "84.20" } };
       await setup({ "GET /api/inbox": { body: [bill, ENTRIES[1]] } });
       const first = row(/Kotihoito/);
-      expect(first).toHaveTextContent("2026-10-01 Kotihoito lasku.pdf");
+      expect(first).toHaveTextContent("Kotihoito lasku");
       expect(first).toHaveTextContent("scan001.pdf");
-      expect(first).toHaveTextContent("due 15.10.2026 · 84,20 €");
-      expect(row(/Sähkölasku/)).not.toHaveTextContent("due");
+      expect(first).toHaveTextContent(/Due .* · 84,20 €/);
+      expect(row(/Sähkölasku/)).not.toHaveTextContent(/Due|Overdue/);
     });
 
     it("shows hidden characters in the scanned chip", async () => {
@@ -1880,15 +1880,6 @@ describe("Trash in the inbox", () => {
       expect(screen.getByText(/Collection only\? Choose it/)).toBeInTheDocument();
     });
 
-    it("the preview pane can be shown or hidden with a toggle (narrow windows hide it)", async () => {
-      const { user } = await setup();
-      const toggle = screen.getByRole("button", { name: "Show preview" });
-      expect(toggle).toHaveAttribute("aria-pressed", "false");
-      await user.click(toggle);
-      expect(screen.getByRole("button", { name: "Hide preview" })).toHaveAttribute("aria-pressed", "true");
-      expect(document.querySelector(".review-body")).toHaveClass("show-preview");
-    });
-
     it("the planned changes come after the form fields", async () => {
       const { user } = await setup({ "POST /api/inbox/preview": { body: SIMPLE_MOVE } });
       await user.click(screen.getByRole("button", { name: "Preview" }));
@@ -2231,7 +2222,7 @@ describe("Filing says where it came from and offers a rule", () => {
     await user.click(await screen.findByRole("button", { name: "Update rule kotihoito…" }));
     const sheet = await screen.findByRole("dialog", { name: "Update rule kotihoito" });
     expect(within(sheet).getByText(/Filed as:/)).toHaveTextContent("20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf");
-    const save = await within(sheet).findByRole("button", { name: "Save" });
+    const save = await within(sheet).findByRole("button", { name: "Save rule" });
     await waitFor(() => expect(save).toBeEnabled());
     await user.click(save);
     await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
@@ -2265,9 +2256,9 @@ describe("review card header", () => {
       "GET /api/inbox": { body: [ENTRIES[0], inCode] },
     });
     const card = () => screen.getByRole("article");
-    await waitFor(() => expect(card().querySelector(".toolbar-subtitle")).toBeNull());
+    await waitFor(() => expect(card().querySelector(".doc-meta")).not.toHaveTextContent(/ in /));
     await user.click(screen.getAllByRole("button", { name: /scan002\.pdf/ })[0]);
-    await waitFor(() => expect(card().querySelector(".toolbar-subtitle")).toHaveTextContent(/^To pay$/));
+    await waitFor(() => expect(card().querySelector(".doc-meta")).toHaveTextContent(/ in To pay$/));
   });
 });
 

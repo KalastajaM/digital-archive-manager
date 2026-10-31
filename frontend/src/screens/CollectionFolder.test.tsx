@@ -107,7 +107,7 @@ describe("a folder member of a collection", () => {
     await user.click(await list.findByRole("button", { name: /^plan\.pdf/ }));
     const panel = screen.getByRole("complementary", { name: "Selected file" });
     expect(await within(panel).findByText("plan.pdf")).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Show in Finder" })).toBeInTheDocument();
+    expect(within(panel).getAllByRole("button", { name: "Show in Finder" }).length).toBeGreaterThan(0);
     expect(await within(panel).findByRole("button", { name: "Draw a box" })).toBeInTheDocument();
     // not a member: no way to remove it from the collection
     expect(within(panel).queryByRole("button", { name: /Remove/ })).not.toBeInTheDocument();

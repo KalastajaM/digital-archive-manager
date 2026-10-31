@@ -14,6 +14,8 @@ const COUNT = 2000;
 const ROW = 30;
 const VIEW = 600;
 const name = (k: number) => `file-${String(k).padStart(4, "0")}.pdf`;
+/** A row's button is named by its name, date and size. */
+const rowButton = (k: number) => new RegExp(`^${name(k).replace(".", "\\.")}`);
 const ROWS: DirEntry[] = Array.from({ length: COUNT }, (_, k) => ({
   name: name(k),
   path: `${PATH}/${name(k)}`,
@@ -71,7 +73,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("A folder of thousands of files", () => {
+// Two thousand rows through the whole Browse screen (tree, panes, details): a second or two
+// alone, more than vitest's default 5 s when every test file runs at once.
+describe("A folder of thousands of files", { timeout: 20_000 }, () => {
   it("renders only the rows near the view, with spacers for the rest, and shades every other row", async () => {
     setup();
     await screen.findByText(name(0));
@@ -110,26 +114,26 @@ describe("A folder of thousands of files", () => {
 
   it("j and k move the focus by row, also to a row that was scrolled out of view", async () => {
     const { user } = setup();
-    await user.click(await screen.findByRole("button", { name: name(0) }));
+    await user.click(await screen.findByRole("button", { name: rowButton(0) }));
     await user.keyboard("jjj");
-    expect(screen.getByRole("button", { name: name(3) })).toHaveFocus();
+    expect(screen.getByRole("button", { name: rowButton(3) })).toHaveFocus();
     // the current row stays rendered when the view scrolls away from it
     scrollTo(1500 * ROW);
     await waitFor(() => expect(rendered()).toContain(1510));
     expect(rendered()).toContain(3);
     await user.keyboard("j");
-    expect(screen.getByRole("button", { name: name(4) })).toHaveFocus();
+    expect(screen.getByRole("button", { name: rowButton(4) })).toHaveFocus();
     await user.keyboard("k");
-    expect(screen.getByRole("button", { name: name(3) })).toHaveFocus();
+    expect(screen.getByRole("button", { name: rowButton(3) })).toHaveFocus();
   });
 
   it("a shift-click selects the whole range, rows out of view included; checkboxes show for all", async () => {
     const { user } = setup();
-    await user.click(await screen.findByRole("button", { name: name(0) }));
+    await user.click(await screen.findByRole("button", { name: rowButton(0) }));
     scrollTo(1500 * ROW);
     await waitFor(() => expect(rendered()).toContain(1510));
     await user.keyboard("{Shift>}");
-    await user.click(screen.getByRole("button", { name: name(1500) }));
+    await user.click(screen.getByRole("button", { name: rowButton(1500) }));
     await user.keyboard("{/Shift}");
     expect(screen.getByText("1501 selected")).toBeInTheDocument();
     expect(list()).toHaveClass("entries-checking");
