@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from dam.trays.model import FIELD_TYPES, TrayDef, load_trays
+from dam.trays.model import FIELD_TYPES, TrayDef, lead_days_of, load_trays
 
 DEFAULTS = Path(__file__).resolve().parents[2] / "defaults" / "trays"
 
@@ -18,8 +18,8 @@ def tray(**overrides) -> TrayDef:
 def test_defaults_load_without_errors():
     trays, errors = load_trays(DEFAULTS)
     assert errors == []
-    assert [t.id for t in trays] == ["to-pay", "to-action", "to-read", "follow-up"]
-    pay, action, read, follow = trays
+    assert [t.id for t in trays] == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
+    pay, action, read, follow, _renew = trays
     assert pay.fields["amount"].prefill == "total"
     assert pay.fields["due_date"].required
     assert pay.fields["iban"].copyable and pay.fields["reference"].copyable
@@ -246,3 +246,78 @@ def test_oversized_tray_file_skipped_before_parsing(tmp_path):
     trays, errors = load_trays(tmp_path)
     assert trays == []
     assert "too large" in errors[0].message
+
+
+def shipped(tray_id: str) -> TrayDef:
+    trays, _ = load_trays(DEFAULTS)
+    return next(t for t in trays if t.id == tray_id)
+
+
+def write_tray(tmp_path, body: str) -> tuple[list[TrayDef], list]:
+    (tmp_path / "t.yaml").write_text("id: t\nname: T\norder: 1\n" + body, encoding="utf-8")
+    return load_trays(tmp_path)
+
+
+def test_shipped_trays_include_renew():
+    trays, errors = load_trays(DEFAULTS)
+    assert errors == []
+    assert [t.id for t in trays] == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
+    renew = next(t for t in trays if t.id == "renew")
+    assert renew.renew.label == "Renewed"
+    assert renew.fields["kind"].options[0] == "Passport"
+    assert renew.lead.days["Passport"] == 180
+
+
+def test_choice_refuses_unknown_option():
+    field = tray(fields={"k": {"type": "choice", "options": ["A", "B"]}}).fields["k"]
+    assert field.parse("A") == "A"
+    with pytest.raises(ValueError):
+        field.parse("C")
+
+
+def test_choice_needs_options():
+    with pytest.raises(ValidationError):
+        tray(fields={"k": {"type": "choice"}})
+
+
+def test_days_accepts_int_or_digits_and_dumps_int():
+    days = FIELD_TYPES["days"]
+    assert days.parse(90) == 90 and days.parse(" 90 ") == 90
+    assert days.dump(days.parse("90")) == 90
+    for bad in (-1, "-1", "1.5", "abc", True, None):
+        with pytest.raises(ValueError):
+            days.parse(bad)
+
+
+def test_options_only_on_choice(tmp_path):
+    _, errors = write_tray(tmp_path, "fields:\n  a: { type: text, options: [x] }\n")
+    assert len(errors) == 1 and "options" in errors[0].message and "fields.a" in errors[0].message
+
+
+def test_lead_reminder_needs_lead_block(tmp_path):
+    body = "fields:\n  d: { type: date }\ndate_field: d\nreminders:\n  - { lead: true }\n"
+    _, errors = write_tray(tmp_path, body)
+    assert len(errors) == 1 and "lead" in errors[0].message
+
+
+def test_lead_days_keys_must_be_options(tmp_path):
+    body = (
+        "fields:\n  d: { type: date }\n  k: { type: choice, options: [A] }\n"
+        "  n: { type: days }\ndate_field: d\n"
+        "lead: { field: n, by: k, days: { Boat: 10 } }\n"
+    )
+    _, errors = write_tray(tmp_path, body)
+    assert len(errors) == 1 and "Boat" in errors[0].message
+
+
+def test_renew_needs_date_field(tmp_path):
+    _, errors = write_tray(tmp_path, "renew: {}\n")
+    assert len(errors) == 1 and "date_field" in errors[0].message
+
+
+def test_lead_days_of():
+    renew = shipped("renew")
+    assert lead_days_of(renew, {"kind": "Passport"}) == 180
+    assert lead_days_of(renew, {"kind": "Passport", "lead_days": 400}) == 400
+    assert lead_days_of(renew, {}) == 30
+    assert lead_days_of(shipped("to-pay"), {}) is None

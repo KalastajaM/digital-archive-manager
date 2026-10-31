@@ -114,7 +114,13 @@ def test_today_reports_tray_errors_and_status_too(client, app):
 
 def test_trays_lists_defs_with_copy_key(client):
     body = client.get("/api/trays").json()
-    assert [t["id"] for t in body["trays"]] == ["to-pay", "to-action", "to-read", "follow-up"]
+    assert [t["id"] for t in body["trays"]] == [
+        "to-pay",
+        "to-action",
+        "to-read",
+        "follow-up",
+        "renew",
+    ]
     assert body["errors"] == []
     fields = body["trays"][0]["fields"]
     assert fields["iban"]["copy"] is True and fields["due_date"]["copy"] is False

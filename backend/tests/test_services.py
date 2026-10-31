@@ -734,14 +734,14 @@ def test_follow_up_failure_is_reported_and_files_stay_filed(app, fake_archive, m
 
 
 def test_app_wires_trays_collections_notes(app):
-    assert [t.id for t in app.tray_defs] == ["to-pay", "to-action", "to-read", "follow-up"]
+    assert [t.id for t in app.tray_defs] == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
     assert app.tray_errors == []
     assert app.publishers.all() == [app.ongoing]
     trays_dir = app.app_paths.config_dir / "trays"
     (trays_dir / "99-bad.yaml").write_text("id: ''\n", encoding="utf-8")
     app.reload_rules()
     assert [e.file for e in app.tray_errors] == ["99-bad.yaml"]
-    assert [t.id for t in app.tray_defs] == ["to-pay", "to-action", "to-read", "follow-up"]
+    assert [t.id for t in app.tray_defs] == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
 
 
 def test_note_without_tray_goes_on_the_file(app, fake_archive):

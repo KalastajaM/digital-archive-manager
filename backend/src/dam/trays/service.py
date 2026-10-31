@@ -117,7 +117,7 @@ def _parse_input(defs: dict[str, FieldDef], raw: dict) -> dict[str, object]:
             parsed[name] = None
             continue
         try:
-            parsed[name] = FIELD_TYPES[fdef.type].parse(value)
+            parsed[name] = fdef.parse(value)
         except ValueError as e:
             raise InvalidRequest(f"{name}: {e}") from e
     return parsed
@@ -148,7 +148,7 @@ def _load(defs: dict[str, FieldDef], stored: dict | None) -> tuple[dict, set[str
             values[name] = raw
             continue
         try:
-            values[name] = FIELD_TYPES[fdef.type].parse(raw)
+            values[name] = fdef.parse(raw)
         except ValueError:
             values[name] = raw
             invalid.add(name)
@@ -419,7 +419,7 @@ class TrayService:
             if name in out or raw is None:
                 continue
             try:
-                FIELD_TYPES[fdef.type].parse(raw)
+                fdef.parse(raw)
             except ValueError:
                 continue
             out[name] = raw

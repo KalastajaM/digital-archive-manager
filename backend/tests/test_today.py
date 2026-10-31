@@ -113,7 +113,7 @@ def test_overview_counts_sums_and_waiting(app, fake_archive):
     ov = app.today.overview(TODAY)
     assert ov.inbox == 1
     by_tray = {t.tray_id: t for t in ov.trays}
-    assert [t.tray_id for t in ov.trays] == ["to-pay", "to-action", "to-read", "follow-up"]
+    assert [t.tray_id for t in ov.trays] == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
     assert by_tray["to-pay"].name == "To pay"
     assert (by_tray["to-pay"].open, by_tray["to-pay"].overdue) == (3, 1)
     assert by_tray["to-pay"].sum == Decimal("94.20")
@@ -192,7 +192,7 @@ def test_open_items_per_tray_by_date_undated_last_capped(app, fake_archive):
     read = app.trays.create("to-read", ["r9"], {}, title=None)
 
     got = {t.tray_id: [i.id for i in t.items] for t in app.today.open_items()}
-    assert list(got) == ["to-pay", "to-action", "to-read", "follow-up"]
+    assert list(got) == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
     assert got["to-pay"] == [overdue.id, soon.id, later.id, undated.id]
     assert got["to-action"] == [] and got["to-read"] == [read.id]
 
@@ -208,7 +208,7 @@ def test_open_items_reads_no_files(app, fake_archive, monkeypatch):
     bill(app, fake_archive, "f1", TODAY)
     monkeypatch.setattr(app.today, "file_info", lambda item: (_ for _ in ()).throw(AssertionError))
     monkeypatch.setattr(app.today.repo, "get", lambda *a: (_ for _ in ()).throw(AssertionError))
-    assert [len(t.items) for t in app.today.open_items()] == [1, 0, 0, 0]
+    assert [len(t.items) for t in app.today.open_items()] == [1, 0, 0, 0, 0]
 
 
 def test_overview_counts_collection_members_still_in_the_inbox(app, fake_archive):
