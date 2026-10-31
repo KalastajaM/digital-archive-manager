@@ -1,9 +1,11 @@
 /** Renewed… on a Renew item: the new expiry date (required) and, optionally, the new file,
  * picked with the file picker. Without a file only the date changes and it applies at
  * once. With one, the old file's move into Expired is previewed first; a locked old file
- * is moved only with the deliberate "Unlock and move", which unlocks it for this move and
- * locks it again after. The toast's Undo is Activity's when the old file moved, else the
- * renewal's own. */
+ * needs the deliberate "Unlock and move", which unlocks it and previews the move again
+ * under that grant, so the move is shown before Renewed applies it. A lock this form
+ * took is given back whichever way the form ends (applied, failed, cancelled, closed) and
+ * when the preview is redone. The toast's Undo is Activity's when the old file moved,
+ * else the renewal's own. */
 import { useEffect, useId, useRef, useState } from "react";
 import {
   errorText,
@@ -53,18 +55,38 @@ export function RenewForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const sending = useRef(false); // synchronous: a second Enter never posts twice
+  // the old file was unlocked by this form (Unlock and move): only that lock is given back
+  const took = useRef(false);
+  const relock = useRef(lock.relock);
+  relock.current = lock.relock;
   const formRef = useRef<HTMLFormElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const { id, title } = item;
 
   useEffect(() => dateRef.current?.focus(), []);
+  const release = () => {
+    if (!took.current) return;
+    took.current = false;
+    relock.current();
+  };
+  // a form that goes away without applying locks the file again too
+  useEffect(() => () => release(), []);
+  const close = () => {
+    release();
+    onClose();
+  };
+  // a changed date or file needs a new preview, and a new Unlock and move
+  const resetPlan = () => {
+    setPlan(null);
+    release();
+  };
   // Esc cancels even after the focus has left the form, as in the done form.
   useKeydown((e) => {
     if (e.key !== "Escape" || e.metaKey || e.ctrlKey || e.altKey || dialogOpen()) return;
     const target = e.target instanceof Node ? e.target : null;
     if (target && formRef.current?.contains(target)) return;
     if (isTyping(e.target)) return;
-    onClose();
+    close();
   });
 
   const body = () => (picked ? { expires, drive_id: picked.drive_id } : { expires });
@@ -87,16 +109,34 @@ export function RenewForm({
     toast({ kind: skipped ? "warning" : "info", text: `Renewed: ${title}${skipped}`, action: undoAction(runUndo) });
   };
 
-  const apply = async (unlock: boolean) => {
-    // only a lock this form took is given back: one the owner unlocked before stays so
-    const unlocking = unlock && old !== undefined && !isUnlockedNow(old.drive_id);
+  const apply = async () => {
     try {
-      if (unlocking) await lock.unlock("now");
       const result = await renew.mutateAsync({ id, body: body() });
-      onClose();
+      close();
       announce(result);
-    } finally {
-      if (unlocking) lock.relock();
+    } catch (err) {
+      // the grant is given back, so the move is previewed again before it can apply
+      if (took.current) resetPlan();
+      throw err;
+    }
+  };
+
+  // Unlock and move: unlock the old file, then preview the move under that grant
+  const unlockAndPreview = async () => {
+    const notUnlocked = new Error(`${locked[0]?.name ?? "The old file"} could not be unlocked.`);
+    // one the owner unlocked before stays so: only a lock this form takes is given back
+    if (old !== undefined && !isUnlockedNow(old.drive_id)) {
+      await lock.unlock("now");
+      took.current = isUnlockedNow(old.drive_id);
+      if (!took.current) throw notUnlocked;
+    }
+    try {
+      const next = await preview.mutateAsync({ id, body: body() });
+      if (next.locked.length > 0) throw notUnlocked;
+      setPlan(next);
+    } catch (err) {
+      release();
+      throw err;
     }
   };
 
@@ -107,8 +147,9 @@ export function RenewForm({
     setBusy(true);
     setError(null);
     try {
-      if (needsPreview) setPlan(await preview.mutateAsync({ id, body: body() }));
-      else await apply(unlock);
+      if (unlock) await unlockAndPreview();
+      else if (needsPreview) setPlan(await preview.mutateAsync({ id, body: body() }));
+      else await apply();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -128,7 +169,7 @@ export function RenewForm({
         if (e.key === "Escape") {
           e.preventDefault();
           e.stopPropagation();
-          onClose();
+          close();
         }
       }}
     >
@@ -142,7 +183,7 @@ export function RenewForm({
           value={expires}
           onChange={(e) => {
             setExpires(e.target.value);
-            setPlan(null);
+            resetPlan();
           }}
         />
       </div>
@@ -156,7 +197,7 @@ export function RenewForm({
             className="link-button"
             onClick={() => {
               setPicked(null);
-              setPlan(null);
+              resetPlan();
             }}
           >
             Don’t attach
@@ -174,7 +215,7 @@ export function RenewForm({
           takenLabel="already on this item"
           choose={async (hit) => {
             setPicked(hit);
-            setPlan(null);
+            resetPlan();
           }}
           onDone={() => setPicking(false)}
         />
@@ -192,7 +233,7 @@ export function RenewForm({
         </p>
       )}
       <div className="actions">
-        <button type="button" onClick={onClose}>
+        <button type="button" onClick={close}>
           Cancel
         </button>
         {locked.length > 0 ? (

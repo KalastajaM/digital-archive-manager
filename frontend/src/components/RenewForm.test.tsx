@@ -93,17 +93,19 @@ describe("RenewForm", () => {
     expect(sent(calls, "POST", "/api/renewals/undo")).toHaveLength(0);
   });
 
-  it("a locked old file shows Unlock and move, posts unlock, renews with the X-Dam-Unlock header, then DELETE unlock", async () => {
-    const old = { ...OLD, marks: ["important" as const] };
-    const { calls, user } = setup(
-      {
-        "POST /api/items/7/renew/preview": { body: { ops: [], skipped: null, locked: [{ drive_id: "old", name: "passport-old.pdf" }] } },
-        "POST /api/files/old/unlock": { body: { token: "tok-1" } },
-        "DELETE /api/files/old/unlock": { status: 204, body: null },
-        "POST /api/items/7/renew": { body: { ...RENEWED, undo: "activity" } },
-      },
-      old,
-    );
+  const LOCKED_OLD = { ...OLD, marks: ["important" as const] };
+  const LOCKED_ROUTES = {
+    // locked without the grant; under it, the move
+    "POST /api/items/7/renew/preview": (call: { headers: Record<string, string> }) =>
+      call.headers["X-Dam-Unlock"] === "tok-1"
+        ? { body: { ops: MOVE_OPS, skipped: null, locked: [] } }
+        : { body: { ops: [], skipped: null, locked: [{ drive_id: "old", name: "passport-old.pdf" }] } },
+    "POST /api/files/old/unlock": { body: { token: "tok-1" } },
+    "DELETE /api/files/old/unlock": { status: 204, body: null },
+    "POST /api/items/7/renew": { body: { ...RENEWED, undo: "activity" } },
+  };
+
+  async function previewLocked(user: ReturnType<typeof userEvent.setup>) {
     await user.type(screen.getByLabelText("New expiry date"), "2036-10-31");
     await pickNewFile(user);
     await user.click(screen.getByRole("button", { name: "Preview…" }));
@@ -111,8 +113,23 @@ describe("RenewForm", () => {
     // without the deliberate click there is no way to apply
     expect(screen.queryByRole("button", { name: "Renewed" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Unlock and move" }));
-    await waitFor(() => expect(sent(calls, "DELETE", "/api/files/old/unlock")).toHaveLength(1));
+  }
+
+  it("Unlock and move shows the move under the grant, and Renewed applies it, then locks again", async () => {
+    const { calls, user } = setup(LOCKED_ROUTES, LOCKED_OLD);
+    await previewLocked(user);
+    const plan = await screen.findByRole("region", { name: "Planned changes" });
+    expect(plan).toHaveTextContent("10. Financial/Banks/Expired");
     expect(sent(calls, "POST", "/api/files/old/unlock")[0].body).toEqual({ mode: "now" });
+    const previews = sent(calls, "POST", "/api/items/7/renew/preview");
+    expect(previews).toHaveLength(2);
+    expect(previews[1].headers["X-Dam-Unlock"]).toBe("tok-1");
+    expect(screen.queryByText("passport-old.pdf is locked.")).toBeNull();
+    // shown, not applied: nothing is posted until the confirm
+    expect(sent(calls, "POST", "/api/items/7/renew")).toHaveLength(0);
+    expect(sent(calls, "DELETE", "/api/files/old/unlock")).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Renewed" }));
+    await waitFor(() => expect(sent(calls, "DELETE", "/api/files/old/unlock")).toHaveLength(1));
     const renew = sent(calls, "POST", "/api/items/7/renew");
     expect(renew).toHaveLength(1);
     expect(renew[0].headers["X-Dam-Unlock"]).toBe("tok-1");
@@ -120,6 +137,30 @@ describe("RenewForm", () => {
     expect(order.indexOf("POST /api/files/old/unlock")).toBeLessThan(order.indexOf("POST /api/items/7/renew"));
     expect(order.indexOf("POST /api/items/7/renew")).toBeLessThan(order.indexOf("DELETE /api/files/old/unlock"));
     expect(await screen.findByText("Renewed: Passport Michiel")).toBeInTheDocument();
+  });
+
+  it("Cancel after Unlock and move locks the file again and renews nothing", async () => {
+    const { calls, onClose, user } = setup(LOCKED_ROUTES, LOCKED_OLD);
+    await previewLocked(user);
+    await screen.findByRole("region", { name: "Planned changes" });
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => expect(sent(calls, "DELETE", "/api/files/old/unlock")).toHaveLength(1));
+    expect(sent(calls, "POST", "/api/items/7/renew")).toHaveLength(0);
+  });
+
+  it("a failed renewal after Unlock and move locks the file again", async () => {
+    const { calls, user } = setup(
+      { ...LOCKED_ROUTES, "POST /api/items/7/renew": { status: 400, body: { error: "Refused." } } },
+      LOCKED_OLD,
+    );
+    await previewLocked(user);
+    await screen.findByRole("region", { name: "Planned changes" });
+    await user.click(screen.getByRole("button", { name: "Renewed" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Refused.");
+    await waitFor(() => expect(sent(calls, "DELETE", "/api/files/old/unlock")).toHaveLength(1));
+    // the grant is gone, so the move is previewed again before it can apply
+    expect(screen.getByRole("button", { name: "Preview…" })).toBeInTheDocument();
   });
 
   it("skipped reason is shown and Renew still applies", async () => {
