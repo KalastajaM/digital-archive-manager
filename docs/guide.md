@@ -2019,7 +2019,8 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
 
 ## Rename a folder
 
-Select a folder in Browse (the cursor on its row shows its panel) and click **Rename…**.
+Select a folder in Browse (the cursor on its row shows its panel) and click **Rename…**, or
+right-click the folder in the list or the folder tree and choose **Rename…**.
 
 1. Type the new name and click **Preview**. The list shows every place that holds the
    folder's path and what happens there: the folder on your disk and the index, the rules
