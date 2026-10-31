@@ -13,8 +13,8 @@ export function ExpiredFolderSettings() {
     if (saved !== undefined) setName(saved);
   }, [saved]);
   return (
-    <section aria-label="Expired folder">
-      <h3>Expired folder</h3>
+    <section aria-labelledby="expired-folder-heading">
+      <h3 id="expired-folder-heading">Expired folder</h3>
       <p className="hint">When a renewal attaches a new file, the old one moves to this folder inside its own folder.</p>
       {current.isError && (
         <p className="error" role="alert">
@@ -28,7 +28,7 @@ export function ExpiredFolderSettings() {
           save.mutate(name.trim());
         }}
       >
-        <label htmlFor="expired-folder-name">Expired folder</label>
+        <label htmlFor="expired-folder-name">Folder name</label>
         <input
           id="expired-folder-name"
           type="text"
@@ -47,6 +47,11 @@ export function ExpiredFolderSettings() {
           </button>
         </div>
       </form>
+      {save.isSuccess && (
+        <p className="hint" role="status">
+          Saved
+        </p>
+      )}
       {save.isError && (
         <p className="error" role="alert">
           {visible(errorText(save.error))}
