@@ -247,7 +247,9 @@ describe("the card", () => {
     await user.hover(rowOf("20240928_Verohallinto.pdf"));
     const card = await screen.findByRole("group", { name: "What 20240928_Verohallinto.pdf shares" });
     const buttons = within(card).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["Quick look Space", "Its relatives Enter", "Show in folder", "Not related"]);
+    // two by two: Quick look and Show in folder above, Relatives and Not related below
+    expect(buttons.map((b) => b.textContent)).toEqual(["Quick look Space", "Show in folder", "Relatives Enter", "Not related"]);
+    expect(buttons[0].closest(".rel-card-actions")).toHaveClass("rel-card-grid");
     // it changes data (with Undo): a button like the others, not a link
     const notRelated = within(card).getByRole("button", { name: "Not related" });
     expect(notRelated).not.toHaveClass("link-button");
@@ -411,7 +413,7 @@ describe("walking the family tree", () => {
     expect(screen.queryByRole("button", { name: /^Back/ })).not.toBeInTheDocument();
   });
 
-  it("Enter on a row walks, the card offers Its relatives, and Backspace or a crumb goes back", async () => {
+  it("Enter on a row walks, the card offers Relatives, and Backspace or a crumb goes back", async () => {
     const { user } = setup(walkRoutes);
     await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
     rowOf("20240928_Verohallinto.pdf").focus();
@@ -421,7 +423,7 @@ describe("walking the family tree", () => {
     await user.keyboard("{Backspace}");
     await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
     fireEvent.mouseEnter(rowOf("20240928_Verohallinto.pdf"));
-    await user.click(screen.getByRole("button", { name: /Its relatives/ }));
+    await user.click(within(screen.getByRole("group", { name: /What .* shares/ })).getByRole("button", { name: /^Relatives/ }));
     await screen.findByRole("checkbox", { name: "Select 20230930_Verohallinto.pdf" });
     const trail = screen.getByRole("navigation", { name: "Files walked through" });
     await user.click(within(trail).getByRole("button", { name: "20250930_Verohallinto.pdf" }));

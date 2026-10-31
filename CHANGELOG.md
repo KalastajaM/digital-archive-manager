@@ -76,8 +76,9 @@ All notable changes are listed here. The format follows
 ### Changed
 
 - **Not related** on a relative's card in the Relatives window is a button like Quick look
-  and Its relatives, no longer a link, since it marks the pair. It comes last and stands
-  apart from the others, as it does in Quick Look's compare.
+  and Relatives, no longer a link, since it marks the pair. The card's four buttons sit two
+  by two in equal columns: Quick look and Show in folder, then Relatives (renamed from Its
+  relatives) and Not related. The window's side panel is a little wider so the keys fit.
 - **The Collections and Tags pages are now Browse's trees.** The sidebar's Collections and
   Tags captions open Browse with that tree, and old links (`/collections`, `/collections/7`,
   `/tags`, `/starred`) forward there. Important keeps its page.

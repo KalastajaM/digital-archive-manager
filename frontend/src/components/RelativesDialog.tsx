@@ -580,8 +580,8 @@ export function RelativesDialog({
 }
 
 /** What one relative shares with this file: each value exactly, the AI's reason for a
- * pick, and Quick Look, its own relatives, Show in folder and Not related (last, set
- * apart: it marks the pair). */
+ * pick, and Quick look, Show in folder, its own Relatives and Not related (last: it
+ * marks the pair). */
 function RelativeCard({
   relative: r,
   onLook,
@@ -616,15 +616,17 @@ function RelativeCard({
         ))}
       </dl>
       {r.same_month && <span className="rel-card-note">+ same month</span>}
-      <span className="rel-card-actions">
+      {/* two by two: the looks on the left, Show in folder and Not related on the right,
+          Not related last (it marks the pair) */}
+      <span className="rel-card-actions rel-card-grid">
         <button type="button" onClick={onLook}>
           Quick look <kbd>Space</kbd>
         </button>
-        <button type="button" onClick={onOpen}>
-          Its relatives <kbd>Enter</kbd>
-        </button>
         <button type="button" onClick={onShowInFolder}>
           Show in folder
+        </button>
+        <button type="button" onClick={onOpen}>
+          Relatives <kbd>Enter</kbd>
         </button>
         <button type="button" className="rel-not-related" onClick={onNotRelated}>
           Not related
