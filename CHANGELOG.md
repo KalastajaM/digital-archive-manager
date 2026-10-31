@@ -143,6 +143,11 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- A relative's right-click menu with several ticked offered Quick Look, Show in Browse and
+  Not related for the clicked file alone under a heading that named them all. It now leaves
+  out the one-file entries and has **Mark 2 as not related** (with the count), with one
+  Undo for all.
+
 - A new picture rule's areas no longer show on every other document in the Inbox. Only a
   picture rule that its picture alone held back (its words fit the document) is drawn there
   for diagnosis.

@@ -128,9 +128,14 @@ function RelativesList({
     const r = everyone.find((x) => x.drive_id === id);
     if (!r) return null;
     const entries: MenuEntry[] = [
-      { label: "Quick Look", onSelect: () => look.open(r.drive_id) },
-      { label: "Show in Browse", onSelect: () => navigate(browseTo(r.path, r.drive_id)) },
-      { label: "Not related", onSelect: () => notRelated(r) },
+      // several ticked: only what acts on all of them (the one-file looks drop out)
+      ...(ticked.length > 1
+        ? [{ label: `Mark ${ticked.length} as not related`, onSelect: () => void notRelated.many(ticked) }]
+        : [
+            { label: "Quick Look", onSelect: () => look.open(r.drive_id) },
+            { label: "Show in Browse", onSelect: () => navigate(browseTo(r.path, r.drive_id)) },
+            { label: "Not related", onSelect: () => notRelated(r) },
+          ]),
       "separator",
       ...actions.entries,
     ];

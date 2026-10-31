@@ -89,11 +89,12 @@ export const linkTip = (r: Relative) => r.links.map((l) => `${KIND_LABEL[l.kind]
 
 export type BlockFile = { drive_id: string; path: string; name: string | null; ext?: string | null };
 
-/** "Not related": marks the pair, takes the file out of the list and offers Undo. */
+/** "Not related": marks the pair, takes the file out of the list and offers Undo.
+ * ``.many(rs)``: the same for several at once, with one toast and one Undo for all. */
 export function useNotRelated(file: BlockFile, onMarked?: (r: Relative) => void) {
   const toast = useToast();
   const marks = useRelativeMark();
-  return (r: Relative) =>
+  const one = (r: Relative) =>
     marks.mutate(
       { driveId: file.drive_id, other: r.drive_id, mark: "dismiss" },
       {
@@ -108,6 +109,20 @@ export function useNotRelated(file: BlockFile, onMarked?: (r: Relative) => void)
         onError: (e) => toast({ kind: "error", text: `Could not mark it: ${visible(errorText(e))}` }),
       },
     );
+  const many = async (rs: Relative[]) => {
+    const results = await Promise.allSettled(rs.map((r) => marks.mutateAsync({ driveId: file.drive_id, other: r.drive_id, mark: "dismiss" })));
+    const done = rs.filter((_, i) => results[i].status === "fulfilled");
+    done.forEach((r) => onMarked?.(r));
+    if (done.length > 0)
+      toast({
+        kind: "info",
+        text: `${done.length === 1 ? visible(done[0].name) : `${done.length} files`} marked not related`,
+        action: undoAction(() => done.forEach((r) => marks.mutate({ driveId: file.drive_id, other: r.drive_id, mark: "restore" }))),
+      });
+    const failed = results.find((x): x is PromiseRejectedResult => x.status === "rejected");
+    if (failed) toast({ kind: "error", text: `Could not mark ${rs.length - done.length} of them: ${visible(errorText(failed.reason))}` });
+  };
+  return Object.assign(one, { many });
 }
 
 /** Quick Look in compare mode over a list of relatives: this file beside the shown one,

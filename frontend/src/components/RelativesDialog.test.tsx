@@ -452,4 +452,21 @@ describe("a relative's right-click menu in the dialog", () => {
     expect(names.slice(0, 4)).toEqual(["Quick Look", "Its relatives", "Show in folder", "Not related"]);
     expect(names).toContain("Tag it and this file…");
   });
+
+  it("with several ticked drops the one-file entries and marks them all not related", async () => {
+    const { calls, user } = setup({ "POST /api/files/d0/relatives/dismiss": { body: { dismissed: [] } } });
+    const [a, b] = RELATIVES;
+    await waitFor(() => rowOf(a.name));
+    await user.click(screen.getByRole("checkbox", { name: `Select ${a.name}` }));
+    await user.click(screen.getByRole("checkbox", { name: `Select ${b.name}` }));
+    await user.pointer({ keys: "[MouseRight]", target: rowOf(a.name) });
+    const menu = await screen.findByRole("menu", { name: "Actions for 2 related files" });
+    const names = Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((m) => m.querySelector(".menu-item-text")?.firstChild?.textContent);
+    expect(names).not.toContain("Quick Look");
+    expect(names).not.toContain("Its relatives");
+    expect(names).not.toContain("Show in folder");
+    expect(names).toContain("Tag them and this file…");
+    await user.click(within(menu).getByRole("menuitem", { name: "Mark 2 as not related" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST" && c.url.endsWith("/relatives/dismiss"))).toHaveLength(2));
+  });
 });

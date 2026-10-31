@@ -1504,7 +1504,9 @@ related** (in the block's list: Quick Look, Show in Browse and Not related), the
 files can do together with this file: **Tag it and this file…**, **Add it and this file to a
 collection…**, **Move it and this file to a folder…**, **Link it here** and **Link this file
 there** (greyed with the reason when no link is needed). A relative that is not ticked is
-ticked alone first; on a ticked one the entries say "them" and act on all ticked.
+ticked alone first; on a ticked one the entries say "them" and act on all ticked. With
+several ticked, the entries for one file drop out and **Mark 2 as not related** (with the
+count) marks them all, with one Undo.
 
 An arc runs from this file's row to each relative's row. A thicker arc means more in common,
 and an orange dashed one means the file is not filed yet. When another folder holds two or

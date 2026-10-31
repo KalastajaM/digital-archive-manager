@@ -405,4 +405,33 @@ describe("A relative's right-click menu", () => {
     expect(names(menu)).toContain("Tag them and this file…");
     expect(screen.getByRole("checkbox", { name: "Select 20250415_Veroilmoitus 2024.pdf" })).toBeChecked();
   });
+
+  it("with several ticked offers only what acts on all of them, Not related included", async () => {
+    let marked: string[] = [];
+    const { calls, user } = setup({
+      "GET /api/files/d0/relatives": () => ({ body: body(RELATIVES.filter((r) => !marked.includes(r.drive_id)), marked.length) }),
+      "POST /api/files/d0/relatives/dismiss": (call: Call) => {
+        marked = [...marked, (call.body as { drive_id: string }).drive_id];
+        return { body: { dismissed: [] } };
+      },
+      "POST /api/files/d0/relatives/restore": (call: Call) => {
+        marked = marked.filter((id) => id !== (call.body as { drive_id: string }).drive_id);
+        return { body: { dismissed: [] } };
+      },
+    });
+    await screen.findByText("20240928_Verohallinto.pdf");
+    await tick(user, "20240928_Verohallinto.pdf", "20250415_Veroilmoitus 2024.pdf");
+    await user.pointer({ keys: "[MouseRight]", target: row("20240928_Verohallinto.pdf") });
+    const menu = await screen.findByRole("menu", { name: "Actions for 2 related files" });
+    expect(names(menu)).not.toContain("Quick Look");
+    expect(names(menu)).not.toContain("Show in Browse");
+    await user.click(within(menu).getByRole("menuitem", { name: "Mark 2 as not related" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/files/d0/relatives/dismiss")).toHaveLength(2));
+    expect(sent(calls, "POST", "/api/files/d0/relatives/dismiss").map((c) => c.body)).toEqual([{ drive_id: "r2" }, { drive_id: "r3" }]);
+    expect(await screen.findByText("2 files marked not related")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("checkbox", { name: "Select 20240928_Verohallinto.pdf" })).toBeNull());
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(sent(calls, "POST", "/api/files/d0/relatives/restore")).toHaveLength(2));
+    expect(await screen.findByRole("checkbox", { name: "Select 20240928_Verohallinto.pdf" })).toBeInTheDocument();
+  });
 });
