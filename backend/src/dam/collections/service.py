@@ -1441,6 +1441,42 @@ class CollectionService:
                 is not None
             )
 
+    def holds_nothing(self, ids: Sequence[int]) -> bool:
+        """Whether none of these collections holds a file, a note, a checklist item or a
+        summary: deleting or merging them loses only names, so no snapshot is needed."""
+        targets = [str(i) for i in ids]
+        with self.engine.connect() as conn:
+            found = (
+                conn.execute(
+                    select(collection_members.c.drive_id)
+                    .where(collection_members.c.collection_id.in_(ids))
+                    .limit(1)
+                ).first()
+                or conn.execute(
+                    select(notes.c.id)
+                    .where(
+                        notes.c.target_kind == "collection",
+                        notes.c.target_id.in_(targets),
+                        func.trim(notes.c.text) != "",
+                    )
+                    .limit(1)
+                ).first()
+                or conn.execute(
+                    select(checklist_items.c.id)
+                    .where(
+                        checklist_items.c.target_kind == "collection",
+                        checklist_items.c.target_id.in_(targets),
+                    )
+                    .limit(1)
+                ).first()
+                or conn.execute(
+                    select(collections.c.id)
+                    .where(collections.c.id.in_(ids), func.trim(collections.c.summary) != "")
+                    .limit(1)
+                ).first()
+            )
+        return found is None
+
     def close_tree(self, collection_id: int) -> list[int]:
         """Mark the collection and everything inside it closed (DB only), so the Ongoing
         sync takes their links down before ``delete_tree``. Returns their ids."""

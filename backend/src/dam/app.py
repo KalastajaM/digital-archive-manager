@@ -546,9 +546,10 @@ class App:
     def delete_collection(
         self, collection_id: int, expect: list[int] | None = None
     ) -> tuple[int, object]:
-        """Delete the collection and everything inside it after a snapshot: first closed
-        and synced (its links in ##. Ongoing come down; a file of the user's there stays),
-        then the rows. Files are never touched. No Undo: the snapshot is the way back.
+        """Delete the collection and everything inside it after a snapshot (none when they
+        hold nothing, ``CollectionService.holds_nothing``): first closed and synced (its
+        links in ##. Ongoing come down; a file of the user's there stays), then the rows.
+        Files are never touched. No Undo: the snapshot is the way back.
         ``expect``: the collections the preview listed; refused if the tree differs now.
         Returns (how many collections went, the sync's result or None)."""
         name = self.collections.get(collection_id).name
@@ -563,7 +564,10 @@ class App:
                 f"The archive is not connected, so the links of {name} in ##. Ongoing "
                 "cannot be taken down now: delete it once the archive is back"
             )
-        create_snapshot(self.app_paths, kind=BEFORE_DELETE)
+        if self.collections.holds_nothing(ids):
+            log.info("collections: %s holds nothing, deleted without a snapshot", name)
+        else:
+            create_snapshot(self.app_paths, kind=BEFORE_DELETE)
         self.collections.close_tree(collection_id)
         result = self.sync_publishers(label=f"Deleted {name}") if self.archive_available else None
         if self.collections.published(ids):
@@ -575,9 +579,10 @@ class App:
         return self.collections.delete_tree(collection_id), result
 
     def merge_collections(self, from_id: int, to_id: int) -> object:
-        """Merge ``from_id`` into ``to_id`` (``CollectionService.merge``) after a snapshot,
-        let the Ongoing sync move the links (the emptied collection's folder comes down),
-        then delete the emptied collection. Returns the sync's result (None without the
+        """Merge ``from_id`` into ``to_id`` (``CollectionService.merge``) after a snapshot
+        (none when ``merge_needs_snapshot`` says it loses nothing), let the Ongoing sync
+        move the links (the emptied collection's folder comes down), then delete the
+        emptied collection. Returns the sync's result (None without the
         archive). No Undo: the snapshot is the way back."""
         problems = self.collections.merge_check(from_id, to_id)
         if problems:
@@ -588,7 +593,10 @@ class App:
                 f"The archive is not connected, so the links of {name} in ##. Ongoing "
                 "cannot be moved now: merge it once the archive is back"
             )
-        create_snapshot(self.app_paths, kind=BEFORE_MERGE)
+        if self.merge_needs_snapshot(from_id):
+            create_snapshot(self.app_paths, kind=BEFORE_MERGE)
+        else:
+            log.info("collections: %s holds nothing, merged without a snapshot", name)
         self.collections.merge(from_id, to_id)
         result = (
             self.sync_publishers(label=f"Merged {name} into {into}")
@@ -602,6 +610,12 @@ class App:
             )
         self.collections.remove_merged(from_id)
         return result
+
+    def merge_needs_snapshot(self, from_id: int) -> bool:
+        """Whether merging ``from_id`` changes anything a snapshot should keep: it holds
+        something (``holds_nothing``) or has collections inside it, which move."""
+        alone = len(self.collections.subtree(from_id)) == 1
+        return not (alone and self.collections.holds_nothing([from_id]))
 
     def sync_publishers(self, label: str | None = None) -> object:
         """Sync every registered publisher (failures logged); returns the Ongoing

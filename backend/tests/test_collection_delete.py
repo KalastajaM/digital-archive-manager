@@ -44,6 +44,7 @@ def test_the_preview_lists_the_whole_subtree_with_its_files(app, tree):
         "Wills": ("open", 1),
         "Old": ("closed", 1),
     }
+    assert r.json()["snapshot"] is True
 
 
 def test_delete_takes_the_subtree_and_its_links_and_never_a_file(app, tree, fake_archive):
@@ -68,6 +69,34 @@ def test_delete_takes_the_subtree_and_its_links_and_never_a_file(app, tree, fake
     # the links went, the user's file stayed
     assert sorted(os.listdir(root / "Legal")) == ["mine.txt"]
     assert [s.kind for s in list_snapshots(app.app_paths)] == [BEFORE_DELETE]
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        None,
+        lambda app, c: app.collections.add_members(c.id, ["id-a"]),
+        lambda app, c: app.notes.set("collection", str(c.id), "A note"),
+        lambda app, c: app.notes.add_check("collection", str(c.id), "A check"),
+        lambda app, c: app.collections.set_summary(c.id, "A summary"),
+    ],
+    ids=["empty", "file", "note", "check", "summary"],
+)
+def test_a_snapshot_is_taken_only_when_something_would_be_lost(app, tree, fill):
+    from dam.snapshots import BEFORE_DELETE, list_snapshots
+
+    top = app.collections.create("Empty")
+    inner = app.collections.create("Inner", parent_id=top.id)
+    app.notes.set("collection", str(top.id), "  ")  # blank: nothing to lose
+    if fill:
+        fill(app, inner)
+    with make_client(app) as client:
+        preview = client.get(f"/api/collections/{top.id}/delete/preview").json()
+        r = client.post(f"/api/collections/{top.id}/delete", json={}, headers=LOCAL_ORIGIN)
+    assert r.status_code == 200, r.text
+    assert preview["snapshot"] is (fill is not None)
+    kinds = [s.kind for s in list_snapshots(app.app_paths)]
+    assert kinds == ([BEFORE_DELETE] if fill else [])
 
 
 def test_built_in_collections_cannot_be_deleted(app, tree):

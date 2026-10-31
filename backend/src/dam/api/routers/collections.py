@@ -236,19 +236,22 @@ def move_members(app: AppDep, collection_id: int, body: MoveMembersBody) -> dict
 @router.get("/{collection_id}/delete/preview", response_model=DeletePreviewOut)
 def delete_preview(app: AppDep, collection_id: int) -> dict:
     """What a delete takes: the collection and every one inside it, each with its state
-    and how many files it holds. Reads only; 400 for a built-in."""
+    and how many files it holds, and whether a snapshot is taken first (not when they
+    hold no file, note, checklist or summary). Reads only; 400 for a built-in."""
+    tree = app.collections.subtree(collection_id)
     return {
         "collections": [
-            {"id": c.id, "name": c.name, "state": c.state, "files": len(c.members)}
-            for c in app.collections.subtree(collection_id)
-        ]
+            {"id": c.id, "name": c.name, "state": c.state, "files": len(c.members)} for c in tree
+        ],
+        "snapshot": not app.collections.holds_nothing([c.id for c in tree]),
     }
 
 
 @router.post("/{collection_id}/delete", response_model=DeleteOut)
 def delete_collection(app: AppDep, collection_id: int, body: DeleteBody | None = None) -> dict:
-    """Delete the collection and every one inside it (snapshot first, no Undo; files are
-    never touched). ``ids``: the collections the preview listed (refused if they differ)."""
+    """Delete the collection and every one inside it (snapshot first unless they hold
+    nothing, no Undo; files are never touched). ``ids``: the collections the preview
+    listed (refused if they differ)."""
     deleted, result = app.delete_collection(collection_id, expect=body.ids if body else None)
     batch = asdict(result.batch) if result is not None and result.batch is not None else None
     return {
@@ -261,14 +264,19 @@ def delete_collection(app: AppDep, collection_id: int, body: DeleteBody | None =
 @router.post("/{collection_id}/merge/preview", response_model=MergePreviewOut)
 def merge_preview(app: AppDep, collection_id: int, body: MergeBody) -> dict:
     """Whether the collection can be merged into ``into``: the reasons it cannot (empty:
-    it can). Reads only."""
-    return {"problems": app.collections.merge_check(collection_id, body.into)}
+    it can), and whether a snapshot is taken first. Reads only."""
+    problems = app.collections.merge_check(collection_id, body.into)
+    return {
+        "problems": problems,
+        "snapshot": not problems and app.merge_needs_snapshot(collection_id),
+    }
 
 
 @router.post("/{collection_id}/merge", response_model=CollectionChangeOut)
 def merge(app: AppDep, collection_id: int, body: MergeBody) -> dict:
-    """Merge the collection into ``into`` (snapshot first, no Undo); answers with ``into``
-    and what the Ongoing sync did. 400 with the reason when it cannot be merged."""
+    """Merge the collection into ``into`` (snapshot first unless it loses nothing, no
+    Undo); answers with ``into`` and what the Ongoing sync did. 400 with the reason when
+    it cannot be merged."""
     result = app.merge_collections(collection_id, body.into)
     c = app.collections.get(body.into)
     if result is None:

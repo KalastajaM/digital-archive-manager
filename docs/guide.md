@@ -1163,7 +1163,9 @@ files are never deleted or moved.** The sheet lists each collection that goes, c
 too, with its number of files. Starred and Important cannot be deleted.
 
 Merging and deleting cannot be undone: dam takes a snapshot first (Settings, Snapshots),
-and the sheet says so. Restoring that snapshot is the way back.
+and the sheet says so. Restoring that snapshot is the way back. A collection that holds no
+files, notes, checklists or summaries (and, for a merge, no collections inside) has
+nothing to lose, so no snapshot is taken and the sheet says that instead.
 
 Neither leaves links in `##. Ongoing` that dam no longer knows about. While the archive is
 not connected, a collection with links there is not merged or deleted. If the links cannot
@@ -1828,7 +1830,10 @@ and are not in a snapshot either.
   form `dam-snapshot-YYYYMMDD-HHMMSS.zip` (a browser may add `(1)` to a second download;
   rename it back, or use Import, which takes any name). It is then checked when you
   restore it rather than when it is added.
-- dam never removes a snapshot. Remove old ones from the folder yourself.
+- dam keeps only the newest five of the snapshots it takes by itself before a change
+  (before a delete, a merge, a folder rename or relabel); older ones are removed. Snapshots
+  you take, import or keep before a restore are never removed: remove old ones from the
+  folder yourself.
 - **Restore…** first asks **Take a snapshot of the current state first?** **Take
   snapshot and restore** keeps the state you have now as a snapshot (listed as "taken
   before a restore") and then restores; **Restore without snapshot** restores straight

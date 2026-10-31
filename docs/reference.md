@@ -507,13 +507,21 @@ holds:
   crops, `trays/`, `layouts/`);
 - the state files beside it: `ai-state.json`, `rules-state.json`,
   `tray-defaults-seeded.json`, `tray-defaults-dismissed.json`;
-- `manifest.json`: format, time, kind (`manual`, `before-restore`, `before-relabel` or `before-rename`), app version, the
+- `manifest.json`: format, time, kind (`manual`, `before-restore`, `before-relabel`,
+  `before-rename`, `before-groups`, `before-merge` or `before-delete`), app version, the
   database's migration revision, the archive folder and the file list.
 
 Left out: `cache/` (thumbnails, page-1 pictures, exports; rebuilt), `logs/`, the lock and
 server files, `archives.yaml` and the other archives' data folders, the archive's own
 files, and the Keychain entries. The zip is built in a temporary folder inside
-`snapshots/` and moved into place in one step. dam never removes a snapshot.
+`snapshots/` and moved into place in one step.
+
+dam takes the `before-relabel`, `before-rename`, `before-groups`, `before-merge` and
+`before-delete` snapshots by itself, and after each one keeps only the newest five of those
+kinds (told by the file name). A manual, `before-restore` or imported snapshot is never
+removed. Deleting or merging collections that hold no file, note, checklist item or
+summary (and, for a merge, have no collections inside) takes no snapshot; the delete and
+merge previews say whether one will be taken (`snapshot`).
 
 **Export** is `GET /api/snapshots/{name}/download`: the zip as it is, as a download.
 **Import** is `POST /api/snapshots/import` with the zip as the body

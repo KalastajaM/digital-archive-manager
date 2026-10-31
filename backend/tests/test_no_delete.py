@@ -26,6 +26,10 @@ ALLOWED = Counter(
         ("collections/export.py", "prune_exports", "shutil.rmtree"): 1,
         # dam's own page-1 picture cache (cache/page1), stale files only; never the archive
         ("extract/picture.py", "prune_page1_pictures", "Path.unlink"): 1,
+        # dam's own automatic snapshot zips (<data dir>/snapshots, before-* kinds only, all
+        # but the newest few; never manual, before-restore or imported ones, never the
+        # archive); owner's request 2026-10-31
+        ("snapshots.py", "prune_automatic", "Path.unlink"): 1,
         # dam's own rule picture crop (config/rules/areas, an app-made file, never an archive
         # file) after it was copied into To Delete across disks and the copy verified by
         # content hash; owner's statement 2026-10-24: the rule is for archive files

@@ -24,8 +24,9 @@ settings that keep documents safe.
 Only then, with the archive closed (``apply_restore`` runs inside
 ``Host.close_and_reopen``), the copy is written into the live ``dam.sqlite`` with the
 backup API and the current ``config/`` and state files are moved aside to
-``snapshots/replaced-<time>/`` (``rename_excl``) before the snapshot's are moved in. The
-app takes no snapshots by itself and removes none; old ones are the user's to remove.
+``snapshots/replaced-<time>/`` (``rename_excl``) before the snapshot's are moved in. dam
+takes a snapshot by itself before a change it cannot undo (``AUTOMATIC``) and keeps only
+the newest ``KEEP_AUTOMATIC`` of those; every other snapshot is the user's to remove.
 """
 
 import json
@@ -78,6 +79,11 @@ BEFORE_GROUPS = "before-groups"  # taken before collection groups become collect
 BEFORE_MERGE = "before-merge"  # taken before a collection is merged into another
 BEFORE_DELETE = "before-delete"  # taken before a collection is deleted
 IMPORTED_SUFFIX = "-imported"
+# taken by dam itself before a change; only the newest KEEP_AUTOMATIC of these are kept.
+# A before-restore snapshot is not among them: the user asked for it, and it is the way
+# back from a restore
+AUTOMATIC = (BEFORE_RELABEL, BEFORE_RENAME, BEFORE_GROUPS, BEFORE_MERGE, BEFORE_DELETE)
+KEEP_AUTOMATIC = 5
 MAX_IMPORT_BYTES = 2 * 1024**3
 # what one snapshot may unpack to (a zip bomb stops here): members, bytes in all, and how
 # much smaller than its content a large member may be packed (deflate tops out near 1000)
@@ -253,7 +259,41 @@ def create_snapshot(
         name = _free_name(folder, now.strftime("%Y%m%d-%H%M%S"), suffix)
         rename_excl(zip_path, folder / name)
     log.info("snapshot %s taken (%s, revision %s)", name, kind, revision)
+    if kind in AUTOMATIC:
+        try:  # the snapshot is taken: a failure here must not stop the change after it
+            prune_automatic(paths)
+        except OSError:
+            log.exception("old automatic snapshots could not be removed")
     return read_info(paths, name)
+
+
+_AUTOMATIC_NAME = re.compile(
+    r"dam-snapshot-(\d{8}-\d{6})(?:-(\d+))?-(?:" + "|".join(AUTOMATIC) + r")\.zip"
+)
+
+
+def prune_automatic(paths: AppPaths, keep: int = KEEP_AUTOMATIC) -> list[str]:
+    """Remove all but the newest ``keep`` automatic snapshots (``AUTOMATIC``, told by
+    their names; an imported one is the user's). Manual, before-restore and imported
+    snapshots are never removed. A file that cannot be removed is logged and left.
+    Returns the names removed."""
+    folder = snapshots_dir(paths)
+    found = []
+    for p in folder.iterdir():
+        m = _AUTOMATIC_NAME.fullmatch(p.name)
+        if m and p.is_file() and not p.is_symlink():
+            found.append(((m[1], int(m[2] or 1)), p))
+    found.sort(reverse=True)
+    removed = []
+    for _, p in found[keep:]:
+        try:
+            p.unlink()
+        except OSError:
+            log.exception("snapshot %s could not be removed", p.name)
+            continue
+        log.info("snapshot %s removed (only the newest %d automatic ones are kept)", p.name, keep)
+        removed.append(p.name)
+    return removed
 
 
 # -- reading snapshots --------------------------------------------------------------------

@@ -1,6 +1,7 @@
 /** Delete…: a collection goes with every collection inside it: their memberships, notes,
  * checklists, summaries and links in ##. Ongoing. Files are never deleted. There is no Undo;
- * the sheet lists what goes and says so before anything happens. */
+ * the sheet lists what goes and says so before anything happens. When they hold nothing but
+ * their names, no snapshot is taken and the sheet says that instead. */
 import { useEffect, useState } from "react";
 import { errorText, useDeleteCollection } from "../api/client";
 import { plural } from "../format";
@@ -24,9 +25,16 @@ export function DeleteCollectionSheet({
   const { remove, preview } = useDeleteCollection();
   const toast = useToast();
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [snapshot, setSnapshot] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    preview(c.id).then(setRows, (e) => setError(errorText(e)));
+    preview(c.id).then(
+      (r) => {
+        setRows(r.collections);
+        setSnapshot(r.snapshot);
+      },
+      (e) => setError(errorText(e)),
+    );
     // once per collection; ``preview`` is a new function each render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c.id]);
@@ -76,13 +84,23 @@ export function DeleteCollectionSheet({
               </li>
             ))}
           </ul>
-          <p>
-            Their memberships, notes, checklists and summaries go with them, and their links in ##. Ongoing. Your files are not deleted
-            or moved.
-          </p>
-          <p>
-            <b>This cannot be undone.</b> A snapshot is taken first (Settings, Snapshots), so restoring it is the way back.
-          </p>
+          {snapshot ? (
+            <>
+              <p>
+                Their memberships, notes, checklists and summaries go with them, and their links in ##. Ongoing. Your files are not
+                deleted or moved.
+              </p>
+              <p>
+                <b>This cannot be undone.</b> A snapshot is taken first (Settings, Snapshots), so restoring it is the way back.
+              </p>
+            </>
+          ) : (
+            <p>
+              {n === 1
+                ? "It holds no files, notes, checklists or summaries, so only its name goes and no snapshot is taken."
+                : "None of them holds files, notes, checklists or summaries, so only their names go and no snapshot is taken."}
+            </p>
+          )}
         </>
       )}
       {error && (

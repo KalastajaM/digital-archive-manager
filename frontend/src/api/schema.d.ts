@@ -2161,7 +2161,8 @@ export interface paths {
         /**
          * Delete Preview
          * @description What a delete takes: the collection and every one inside it, each with its state
-         *     and how many files it holds. Reads only; 400 for a built-in.
+         *     and how many files it holds, and whether a snapshot is taken first (not when they
+         *     hold no file, note, checklist or summary). Reads only; 400 for a built-in.
          */
         get: operations["delete_preview_api_collections__collection_id__delete_preview_get"];
         put?: never;
@@ -2183,8 +2184,9 @@ export interface paths {
         put?: never;
         /**
          * Delete Collection
-         * @description Delete the collection and every one inside it (snapshot first, no Undo; files are
-         *     never touched). ``ids``: the collections the preview listed (refused if they differ).
+         * @description Delete the collection and every one inside it (snapshot first unless they hold
+         *     nothing, no Undo; files are never touched). ``ids``: the collections the preview
+         *     listed (refused if they differ).
          */
         post: operations["delete_collection_api_collections__collection_id__delete_post"];
         delete?: never;
@@ -2205,7 +2207,7 @@ export interface paths {
         /**
          * Merge Preview
          * @description Whether the collection can be merged into ``into``: the reasons it cannot (empty:
-         *     it can). Reads only.
+         *     it can), and whether a snapshot is taken first. Reads only.
          */
         post: operations["merge_preview_api_collections__collection_id__merge_preview_post"];
         delete?: never;
@@ -2225,8 +2227,9 @@ export interface paths {
         put?: never;
         /**
          * Merge
-         * @description Merge the collection into ``into`` (snapshot first, no Undo); answers with ``into``
-         *     and what the Ongoing sync did. 400 with the reason when it cannot be merged.
+         * @description Merge the collection into ``into`` (snapshot first unless it loses nothing, no
+         *     Undo); answers with ``into`` and what the Ongoing sync did. 400 with the reason when
+         *     it cannot be merged.
          */
         post: operations["merge_api_collections__collection_id__merge_post"];
         delete?: never;
@@ -5432,6 +5435,8 @@ export interface components {
         DeletePreviewOut: {
             /** Collections */
             collections: components["schemas"]["DeleteRowOut"][];
+            /** Snapshot */
+            snapshot: boolean;
         };
         /** DeleteRowOut */
         DeleteRowOut: {
@@ -7040,6 +7045,8 @@ export interface components {
         MergePreviewOut: {
             /** Problems */
             problems: string[];
+            /** Snapshot */
+            snapshot: boolean;
         };
         /**
          * MoveBody
