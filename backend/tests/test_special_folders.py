@@ -553,6 +553,20 @@ def test_a_name_like_an_extra_folder_label_is_refused(extra, served):
     assert r.status_code == 400 and "is the name of an archive folder" in r.json()["error"]
 
 
+def test_the_expired_folder_name_is_refused_before_anything_moves(
+    served, app_paths, fake_archive
+):
+    _, c = served
+    before, text = names_on_disk(fake_archive.root), settings_text(app_paths)
+    r = rename(c, "ongoing", "expired")
+    assert r.status_code == 400, r.text
+    assert r.json()["error"] == (
+        "That name is the Expired folder's name. Choose another or rename the Expired "
+        "folder in Settings first."
+    )
+    assert names_on_disk(fake_archive.root) == before and settings_text(app_paths) == text
+
+
 def test_unknown_key_and_no_server(served, client_without_host):
     _, c = served
     assert rename(c, "bogus", "X", dry_run=True).status_code == 404
