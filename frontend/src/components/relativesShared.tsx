@@ -30,6 +30,7 @@ import { isAIPick } from "./relativesAI";
 import { TagInput } from "./TagInput";
 import { undoAction, useToast } from "./Toasts";
 import { useUndoConfirm } from "./UndoConfirm";
+import type { MenuEntry } from "./ui/Menu";
 import { Sheet } from "./ui/Sheet";
 
 export const KIND_LABEL: Record<RelativeKind, string> = {
@@ -218,7 +219,21 @@ function Off({ label, reason }: { label: string; reason: string }) {
 
 type Sheets = "tag" | "collection" | "move" | null;
 
-export function ActionBar({ file, ticked, onClear }: { file: BlockFile; ticked: Relative[]; onClear: () => void }) {
+/** The ticked files' actions with this file (the bar under the list). */
+export function ActionBar(props: { file: BlockFile; ticked: Relative[]; onClear: () => void }) {
+  const actions = useRelativeActions(props);
+  return (
+    <>
+      {actions.bar}
+      {actions.view}
+    </>
+  );
+}
+
+/** What the ticked files and this file can have done together: ``bar`` (the buttons),
+ * ``view`` (their sheets and confirms, always rendered) and ``entries`` (the same as a
+ * right-click menu, named for what they act on: "Tag it and this file…"). */
+export function useRelativeActions({ file, ticked, onClear }: { file: BlockFile; ticked: Relative[]; onClear: () => void }) {
   const toast = useToast();
   const status = useStatus();
   const linkThere = useLinkThere();
@@ -288,7 +303,7 @@ export function ActionBar({ file, ticked, onClear }: { file: BlockFile; ticked: 
     }
   };
 
-  return (
+  const bar = (
     <div className="relatives-actions" role="group" aria-label="Actions for the ticked files">
       <div className="relatives-actions-head">
         <strong>This file and {ticked.length} related</strong>
@@ -328,6 +343,10 @@ export function ActionBar({ file, ticked, onClear }: { file: BlockFile; ticked: 
           )}
         </div>
       )}
+    </div>
+  );
+  const view = (
+    <>
       {sheet === "tag" && (
         <TagSheet
           ids={everyone}
@@ -376,8 +395,27 @@ export function ActionBar({ file, ticked, onClear }: { file: BlockFile; ticked: 
           onCancel={() => setPending(null)}
         />
       )}
-    </div>
+    </>
   );
+  // the menu's entries: the bar's actions, named for the files they take
+  const them = ticked.length === 1 ? "it" : "them";
+  const busyWhy = busy || move.busy ? "Another change is under way" : null;
+  const entries: MenuEntry[] = [
+    { label: `Tag ${them} and this file…`, onSelect: () => setSheet("tag") },
+    { label: `Add ${them} and this file to a collection…`, onSelect: () => setSheet("collection") },
+    { label: `Move ${them} and this file to a folder…`, onSelect: () => setSheet("move"), disabled: !!busyWhy, reason: busyWhy ?? undefined },
+    ...(canLink
+      ? [
+          needLink.length > 0
+            ? { label: `Link ${needLink.length === ticked.length ? them : `${needLink.length} of them`} here`, onSelect: linkThemHere, disabled: !!busyWhy, reason: busyWhy ?? undefined }
+            : { label: `Link ${them} here`, onSelect: () => {}, disabled: true, reason: `Already in ${folderLabel(here)}` },
+          folders.length > 0
+            ? { label: "Link this file there", onSelect: () => void previewLinkThere(), disabled: !!busyWhy, reason: busyWhy ?? undefined }
+            : { label: "Link this file there", onSelect: () => {}, disabled: true, reason: "No links needed: the ticked files are in this file's folder or in the inbox" },
+        ]
+      : []),
+  ];
+  return { bar, view, entries };
 }
 
 const NAMES_SHOWN = 5;

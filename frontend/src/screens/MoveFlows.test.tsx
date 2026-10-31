@@ -293,6 +293,56 @@ describe("moving a folder in Browse", () => {
       LISTINGS[""] = top;
     }
   });
+
+  it("the folder's panel has Rename…: it previews what follows and renames the folder in place", async () => {
+    const renamed = {
+      old: "2009",
+      new: "2010",
+      path: "20. Home/2009",
+      new_path: "20. Home/2010",
+      places: [{ place: "Folder on disk", how: "renamed", what: "'2009' becomes '2010' in 20. Home, by a journaled rename." }],
+      warnings: [],
+      google_drive: false,
+      undo: "Undo in Activity puts every one of these back.",
+      batch_id: null,
+    };
+    const { calls, user } = open("/browse?path=20.%20Home", {
+      "POST /api/browse/folder-rename/preview": { body: renamed },
+      "POST /api/browse/folder-rename": { body: { ...renamed, batch_id: "b-r" } },
+    });
+    await screen.findByText("2009");
+    await user.keyboard("{ArrowDown}");
+    const panel = screen.getByRole("region", { name: "Preview" });
+    await user.click(await within(panel).findByRole("button", { name: "Rename…" }));
+    const sheet = await screen.findByRole("dialog", { name: "Rename folder 2009" });
+    const input = within(sheet).getByRole("textbox", { name: "New name" });
+    await user.clear(input);
+    await user.type(input, "2010");
+    await user.click(within(sheet).getByRole("button", { name: "Preview" }));
+    await within(sheet).findByRole("list", { name: "What changes" });
+    await user.click(within(sheet).getByRole("button", { name: "Rename folder" }));
+    await waitFor(() => expect(posts(calls, "/api/browse/folder-rename")).toHaveLength(1));
+    expect(posts(calls, "/api/browse/folder-rename")[0].body).toEqual({ drive_id: FOLDER, name: "2010" });
+    expect(await screen.findByText("Renamed the folder 2009 to 2010.")).toBeInTheDocument();
+  });
+
+  it("Rename… is off, with the reason, for a folder the app keeps", async () => {
+    const top = LISTINGS[""];
+    LISTINGS[""] = [dir("##. Organize")];
+    try {
+      const { user } = open("/browse?path=", {
+        [`GET /api/files/${encodeURIComponent("id-##. Organize")}/links`]: { body: { items: [], collections: [], note: "" } },
+      });
+      expect((await screen.findAllByText("##. Organize")).length).toBeGreaterThan(0); // in the tree and the list
+      await user.keyboard("{ArrowDown}");
+      const panel = screen.getByRole("region", { name: "Preview" });
+      const button = await within(panel).findByRole("button", { name: "Rename…" });
+      expect(button).toBeDisabled();
+      expect(button.closest(".button-wrap")).toHaveAttribute("data-tip", "The app keeps this folder in place");
+    } finally {
+      LISTINGS[""] = top;
+    }
+  });
 });
 
 describe("useBlockToastActions", () => {

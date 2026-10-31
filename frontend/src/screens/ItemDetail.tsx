@@ -24,8 +24,6 @@ import {
   useItemHistory,
   useItemReopen,
   useItemUpdate,
-  useMoveItem,
-  useUndoMoveItem,
 } from "../api/client";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { Barcode } from "../components/Barcode";
@@ -53,6 +51,7 @@ import { Tag } from "../components/ui/Tag";
 import { TipButton } from "../components/ui/TipButton";
 import { Menu, type MenuEntry } from "../components/ui/Menu";
 import { RemoveItemSheet } from "../components/RemoveItemSheet";
+import { useMoveItemFlow } from "../components/useTrayItemMenu";
 import { UrgencyTag } from "../components/UrgencyTag";
 import { useAutoSave } from "../components/useAutoSave";
 import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, groupIban, plural } from "../format";
@@ -458,8 +457,11 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const [fileAnchor, setFileAnchor] = useState<HTMLButtonElement | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
-  const moveItem = useMoveItem();
-  const undoMove = useUndoMoveItem();
+  // Move to tray: the page follows the item to its new tray (and back on Undo)
+  const mover = useMoveItemFlow({
+    moved: (_, to) => navigate(`/trays/${encodeURIComponent(to.id)}?item=${item.id}`),
+    back: (_, from) => navigate(`/trays/${encodeURIComponent(from)}?item=${item.id}`),
+  });
   const actionsRef = useRef<HTMLDivElement>(null);
   const [assigning, setAssigning] = useState<AssignKind | null>(null);
   const update = useItemUpdate();
@@ -484,27 +486,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
     trashFile(shown);
   });
   /** Move this item to another tray: it goes on being shown there, with an Undo. */
-  const moveTo = async (target: TrayDef) => {
-    const from = item.tray_id;
-    try {
-      const moved = await moveItem.mutateAsync({ id: item.id, tray: target.id });
-      navigate(`/trays/${encodeURIComponent(target.id)}?item=${item.id}`);
-      toast({
-        kind: "info",
-        text: `Moved to ${visible(target.name)}: ${visible(moved.title)}`,
-        action: {
-          label: "Undo",
-          run: () =>
-            void undoMove.mutateAsync(item.id).then(
-              () => navigate(`/trays/${encodeURIComponent(from)}?item=${item.id}`),
-              (e) => toast({ kind: "error", text: `Could not move it back: ${visible(errorText(e))}` }),
-            ),
-        },
-      });
-    } catch (e) {
-      toast({ kind: "error", text: `Could not move ${visible(item.title)}: ${visible(errorText(e))}` });
-    }
-  };
+  const moveTo = (target: TrayDef) => mover.move(item, target);
   /** Take a file off the item (DB only: the file stays where it is), with Undo: the
    * link holds nothing but the two ids and its place, so adding it back at that place
    * restores it. The item keeps at least one file (the server refuses otherwise). */
@@ -637,7 +619,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
 
   const moveEntries: MenuEntry[] = [...trays.values()]
     .filter((t) => t.id !== item.tray_id)
-    .map((t) => ({ label: visible(t.name), disabled: moveItem.isPending, onSelect: () => void moveTo(t) }));
+    .map((t) => ({ label: visible(t.name), disabled: mover.pending, onSelect: () => void moveTo(t) }));
   if (moveEntries.length === 0) moveEntries.push({ label: "No other trays", disabled: true, onSelect: () => {} });
   // The file actions are one group of icons in the screen's header (the same bar as Browse):
   // Move to tray / Remove from tray act on the item, the rest on the shown file.
@@ -665,7 +647,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const markable = hasFile && shown ? [{ drive_id: shown.drive_id, name: baseName(shown.path ?? ""), marks: shown.marks }] : [];
   const barProps: FileActionBarProps = {
     barRef: actionsRef,
-    removeFromTray: { run: () => setRemoving(true), disabled: moveItem.isPending },
+    removeFromTray: { run: () => setRemoving(true), disabled: mover.pending },
     backToInbox:
       hasFile && shown
         ? {
@@ -834,7 +816,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             icon={<CircleMinus />}
             label="Remove from tray"
             tip="Remove from this tray (the files stay where they are)"
-            disabled={moveItem.isPending}
+            disabled={mover.pending}
             onClick={() => setRemoving(true)}
           />
         </div>

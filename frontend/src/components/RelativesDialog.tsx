@@ -15,7 +15,6 @@ import { plural } from "../format";
 import { baseName, parentOf } from "../paths";
 import { visible } from "../text";
 import {
-  ActionBar,
   type BlockFile,
   DismissedList,
   EMPTY_TEXT,
@@ -26,7 +25,10 @@ import {
   kindsOf,
   useNotRelated,
   useRelativeLook,
+  useRelativeActions,
 } from "./relativesShared";
+import type { MenuEntry } from "./ui/Menu";
+import { useContextMenu } from "./ui/useContextMenu";
 import { browseHref } from "./GroupTree";
 import { AIMark, FindMoreButton, type Finder, FoundLine, isAIPick, useFindRelatives } from "./relativesAI";
 import { IconButton } from "./ui/IconButton";
@@ -221,6 +223,23 @@ export function RelativesDialog({
       if (!next.delete(id)) next.add(id);
       return next;
     });
+  const actions = useRelativeActions({ file, ticked, onClear: () => setSelected(new Set()) });
+  // a row's right-click (or Shift+F10 on it): the card's buttons, then the ticked files'
+  // actions; a row not ticked is ticked alone first
+  const menu = useContextMenu<string>();
+  const menuFor = (id: string) => {
+    const r = relatives.find((x) => x.drive_id === id);
+    if (!r) return null;
+    const entries: MenuEntry[] = [
+      { label: "Quick Look", onSelect: () => look.open(r.drive_id) },
+      { label: "Its relatives", onSelect: () => openRelatives(r) },
+      { label: "Show in folder", onSelect: () => showInFolder(r) },
+      { label: "Not related", onSelect: () => notRelated(r) },
+      "separator",
+      ...actions.entries,
+    ];
+    return { label: `Actions for ${ticked.length > 1 ? `${ticked.length} related files` : visible(r.name)}`, entries };
+  };
 
   // arcs: from this file's row to each relative's row. A folder (other than this file's
   // own) with two or more relatives gets one arc to its heading, thick as its best
@@ -429,6 +448,10 @@ export function RelativesDialog({
                           style={{ paddingLeft: 8 + row.depth * INDENT }}
                           onMouseEnter={() => setCarded(r.drive_id)}
                           onFocus={() => setCarded(r.drive_id)}
+                          onContextMenu={(e) => {
+                            if (!selected.has(r.drive_id)) setSelected(new Set([r.drive_id]));
+                            menu.open(r.drive_id, e);
+                          }}
                         >
                           <input
                             type="checkbox"
@@ -509,7 +532,7 @@ export function RelativesDialog({
                 <div className="rel-side-block">
                   <span className="rel-side-label">Selected</span>
                   {ticked.length > 0 ? (
-                    <ActionBar file={file} ticked={ticked} onClear={() => setSelected(new Set())} />
+                    actions.bar
                   ) : (
                     <p className="hint">Tick files to tag, collect, move or link them together with this file.</p>
                   )}
@@ -572,6 +595,8 @@ export function RelativesDialog({
             </div>
           </>
         )}
+        {actions.view}
+        {menu.view(menuFor)}
       </Sheet>
       {look.view}
       {given ? null : own.sheet}
@@ -580,8 +605,8 @@ export function RelativesDialog({
 }
 
 /** What one relative shares with this file: each value exactly, the AI's reason for a
- * pick, and Quick Look, its own relatives, Show in folder and Not related (last, set
- * apart: it marks the pair). */
+ * pick, and Quick look, Show in folder, its own Relatives and Not related (last: it
+ * marks the pair). */
 function RelativeCard({
   relative: r,
   onLook,
@@ -616,15 +641,17 @@ function RelativeCard({
         ))}
       </dl>
       {r.same_month && <span className="rel-card-note">+ same month</span>}
-      <span className="rel-card-actions">
+      {/* two by two: the looks on the left, Show in folder and Not related on the right,
+          Not related last (it marks the pair) */}
+      <span className="rel-card-actions rel-card-grid">
         <button type="button" onClick={onLook}>
           Quick look <kbd>Space</kbd>
         </button>
-        <button type="button" onClick={onOpen}>
-          Its relatives <kbd>Enter</kbd>
-        </button>
         <button type="button" onClick={onShowInFolder}>
           Show in folder
+        </button>
+        <button type="button" onClick={onOpen}>
+          Relatives <kbd>Enter</kbd>
         </button>
         <button type="button" className="rel-not-related" onClick={onNotRelated}>
           Not related

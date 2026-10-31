@@ -337,3 +337,44 @@ describe("The document bar", () => {
     expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.trim())).toEqual(["Open", "Print", "Open in window", expect.stringMatching(/^Show in /)]);
   });
 });
+
+describe("An inbox row's right-click menu", () => {
+  const names = (menu: HTMLElement) =>
+    Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+  const row = (name: string) => screen.getAllByText(name).map((n) => n.closest("li")).find((li) => li?.closest(".inbox-entries")) as HTMLElement;
+
+  it("selects the row it is on, then offers a look, the trays, a filing code, Skip, tags and collections, the marks and the bin", async () => {
+    const user = setup(ENTRIES, { "GET /api/trays": { body: { trays: [{ id: "pay", name: "To pay", order: 1, item_title: "{name}", fields: {}, date_field: null, done: { label: "Done", fields: {} } }], errors: [] } } });
+    await screen.findByLabelText("Name");
+    fireEvent.contextMenu(row("scan002.pdf"), { clientX: 30, clientY: 30 });
+    const menu = await screen.findByRole("menu", { name: "Actions for scan002.pdf" });
+    expect(row("scan002.pdf").querySelector("[data-inbox-entry]")).toHaveAttribute("aria-current", "true");
+    expect(names(menu)).toEqual([
+      "Quick Look",
+      "Open",
+      "Show in Finder",
+      "Skip",
+      "Assign a filing code…",
+      "Put in To pay",
+      "Add tag…",
+      "Add to collection…",
+      "Star",
+      "Mark Important",
+      "Move to To Delete",
+    ]);
+    await user.click(within(menu).getByRole("menuitem", { name: "Add tag…" }));
+    expect(await screen.findByRole("dialog", { name: "Add a tag to scan002.pdf" })).toBeInTheDocument();
+  });
+
+  it("on a row in a selection acts on all of it; Skip and the look need one file", async () => {
+    const user = setup();
+    await screen.findByLabelText("Name");
+    await user.click(screen.getByRole("checkbox", { name: "Select scan001.pdf" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select scan002.pdf" }));
+    fireEvent.contextMenu(row("scan001.pdf"));
+    const menu = await screen.findByRole("menu", { name: "Actions for 2 selected files" });
+    expect(names(menu)).not.toContain("Skip");
+    expect(names(menu)).not.toContain("Quick Look");
+    expect(names(menu)).toContain("Move 2 to To Delete");
+  });
+});

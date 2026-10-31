@@ -7,13 +7,12 @@
  * app uses. "Not related" takes a file out of the list for good (Show again brings it back). */
 import { Eye, EyeOff } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { errorText, type Relative, useRelatives } from "../api/client";
 import { visible } from "../text";
 import { Collapsible } from "./Collapsible";
 import { browseTo, ShowInBrowse } from "./maintenance/ShowInBrowse";
 import {
-  ActionBar,
   type BlockFile,
   DismissedList,
   EMPTY_TEXT,
@@ -23,8 +22,11 @@ import {
   kindsOf,
   linkTip,
   useNotRelated,
+  useRelativeActions,
   useRelativeLook,
 } from "./relativesShared";
+import type { MenuEntry } from "./ui/Menu";
+import { useContextMenu } from "./ui/useContextMenu";
 import { RelativesDialog } from "./RelativesDialog";
 import { AIMark, type AIPick, FindMoreButton, type Finder, FoundLine, isAIPick, useFindRelatives } from "./relativesAI";
 import { baseName } from "../paths";
@@ -113,6 +115,27 @@ function RelativesList({
     });
   });
   const look = useRelativeLook(file, everyone, notRelated);
+  const clear = () => setSelected(new Set());
+  const actions = useRelativeActions({ file, ticked, onClear: clear });
+  // a row's right-click: on a ticked row it acts on all ticked; another row is ticked alone first
+  const menu = useContextMenu<string>();
+  const navigate = useNavigate();
+  const onMenu = (r: Relative) => (e: React.MouseEvent) => {
+    if (!selected.has(r.drive_id)) setSelected(new Set([r.drive_id]));
+    menu.open(r.drive_id, e);
+  };
+  const menuFor = (id: string) => {
+    const r = everyone.find((x) => x.drive_id === id);
+    if (!r) return null;
+    const entries: MenuEntry[] = [
+      { label: "Quick Look", onSelect: () => look.open(r.drive_id) },
+      { label: "Show in Browse", onSelect: () => navigate(browseTo(r.path, r.drive_id)) },
+      { label: "Not related", onSelect: () => notRelated(r) },
+      "separator",
+      ...actions.entries,
+    ];
+    return { label: `Actions for ${ticked.length > 1 ? `${ticked.length} related files` : visible(r.name)}`, entries };
+  };
 
   if (relatives.length === 0 && hidden === 0 && picks.length === 0) {
     return (
@@ -135,6 +158,7 @@ function RelativesList({
             onToggle={() => toggle(r.drive_id)}
             onLook={() => look.open(r.drive_id)}
             onNotRelated={() => notRelated(r)}
+            onMenu={onMenu(r)}
           />
         ))}
       </ul>
@@ -153,13 +177,16 @@ function RelativesList({
               onToggle={() => toggle(r.drive_id)}
               onLook={() => look.open(r.drive_id)}
               onNotRelated={() => notRelated(r)}
+              onMenu={onMenu(r)}
             />
           ))}
         </ul>
       )}
       <FoundLine finder={finder} />
       <FindMoreButton finder={finder} />
-      {ticked.length > 0 && <ActionBar file={file} ticked={ticked} onClear={() => setSelected(new Set())} />}
+      {ticked.length > 0 && actions.bar}
+      {actions.view}
+      {menu.view(menuFor)}
       {hidden > 0 && (
         <div className="relatives-hidden">
           <button
@@ -184,12 +211,14 @@ function RelativeRow({
   onToggle,
   onLook,
   onNotRelated,
+  onMenu,
 }: {
   relative: Relative;
   checked: boolean;
   onToggle: () => void;
   onLook: () => void;
   onNotRelated: () => void;
+  onMenu: (e: React.MouseEvent) => void;
 }) {
   const name = visible(r.name);
   const pick: AIPick | null = isAIPick(r) ? r : null;
@@ -199,6 +228,7 @@ function RelativeRow({
     <li
       className={`relative-row${checked ? " checked" : ""}${unfiled ? " unfiled" : ""}${pick ? " ai" : ""}`}
       data-drive-id={r.drive_id}
+      onContextMenu={onMenu}
     >
       <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`Select ${name}`} />
       <div className="relative-main">

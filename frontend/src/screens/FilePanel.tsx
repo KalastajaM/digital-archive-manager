@@ -109,6 +109,7 @@ export function FolderPanel({
   refusal,
   restore,
   moveTo,
+  rename,
 }: {
   folder: { drive_id: string; name: string; path: string };
   refusal: string | null;
@@ -116,6 +117,8 @@ export function FolderPanel({
   restore?: (to: RestoreTo) => void;
   /** Move to… for this folder (Browse). */
   moveTo?: FolderMoveTo;
+  /** Rename… for this folder, in place (Browse). */
+  rename?: FolderMoveTo;
 }) {
   return (
     <div className="file-panel folder-panel">
@@ -138,6 +141,7 @@ export function FolderPanel({
         refusal={refusal}
         restore={inToDelete(folder.path) ? restore : undefined}
         moveTo={moveTo}
+        rename={rename}
       />
     </div>
   );

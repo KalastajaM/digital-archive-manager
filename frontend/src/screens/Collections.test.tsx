@@ -1531,3 +1531,32 @@ describe("The file's icon rows on a collection member", () => {
     expect(from.parentElement).toHaveAttribute("data-tip", "The file is missing");
   });
 });
+
+describe("Right-click menus on a collection's page", () => {
+  const names = (menu: HTMLElement) =>
+    Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+
+  it("a member's menu selects it and offers the header's file actions, with Quick Look, Open and Show in folder first", async () => {
+    const { user } = renderCollections("/collections/7");
+    const quote = await within(await screen.findByRole("tree", { name: "Members" })).findByText("quote.pdf");
+    fireEvent.contextMenu(quote, { clientX: 30, clientY: 30 });
+    const menu = await screen.findByRole("menu", { name: "Actions for quote.pdf" });
+    expect(quote.closest('[role="treeitem"]')).toHaveAttribute("aria-current", "true");
+    const all = names(menu);
+    expect(all.slice(0, 4)).toEqual(["Quick Look", "Open", "Show in folder", "Show in Finder"]);
+    expect(all).toEqual(expect.arrayContaining(["Move to…", "Back to inbox", "Remove from collection", "Star", "Move to To Delete"]));
+    await user.click(within(menu).getByRole("menuitem", { name: "Show in folder" }));
+    expect(where()).toContain("/browse");
+  });
+
+  it("a group's header opens its ⋯ menu on a right-click, and Move up says why it is off", async () => {
+    const { user } = renderCollections("/collections/7", { "GET /api/collections/7": { body: GROUPED } });
+    const quotes = await within(panel()).findByRole("treeitem", { name: "Quotes" });
+    fireEvent.contextMenu(within(quotes).getAllByRole("button", { name: "Quotes" })[0]);
+    const menu = await screen.findByRole("menu", { name: "Actions for Quotes" });
+    expect(names(menu)).toEqual(["Rename", "Edit summary", "New subgroup", "Move up", "Move down", "Remove group…"]);
+    expect(within(menu).getByRole("menuitem", { name: /Move up/ })).toHaveAccessibleDescription("Already first");
+    await user.click(within(menu).getByRole("menuitem", { name: "Remove group…" }));
+    expect(await screen.findByRole("dialog", { name: "Remove the group Quotes?" })).toBeInTheDocument();
+  });
+});

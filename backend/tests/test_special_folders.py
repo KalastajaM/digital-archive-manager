@@ -973,7 +973,7 @@ def test_a_reconcile_that_cannot_settle_does_not_block_for_ever(
     def broken(*args, **kwargs):
         raise GuardError("cannot plan the undo")
 
-    monkeypatch.setattr(special_folders, "_executor", broken)
+    monkeypatch.setattr(special_folders, "closed_executor", broken)
     assert special_folders.reconcile(closed) == 0
     assert _state(closed) == ["attention"]
 

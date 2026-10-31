@@ -23,6 +23,7 @@ import { StarredCard } from "../components/today/StarredCard";
 import { countsOf, headlineOf, openLine, tilesOf } from "../components/today/summary";
 import { waited } from "../components/today/time";
 import { amountField, doneName, TrayRow, trayCards, type TrayCardInfo, trayRows } from "../components/today/TrayCard";
+import { useTrayItemMenu } from "../components/useTrayItemMenu";
 import { SectionContext, TnSection } from "../components/today/TnSection";
 import { useCardDrag } from "../components/today/useCardDrag";
 import { useCardFrames } from "../components/today/useCardFrames";
@@ -77,6 +78,7 @@ function BillRow({
   traysUnknown,
   formOpen,
   setFormOpen,
+  onMenu,
 }: {
   bill: PayBill;
   entry: AttentionItem | undefined;
@@ -84,6 +86,8 @@ function BillRow({
   traysUnknown: boolean;
   formOpen: boolean;
   setFormOpen: (open: boolean) => void;
+  /** The bill's right-click menu (the tray item's). */
+  onMenu: (e: React.MouseEvent) => void;
 }) {
   const { item, tray } = bill;
   const payMode = usePayMode();
@@ -104,7 +108,7 @@ function BillRow({
   const details = open || formOpen;
   return (
     <>
-      <tr className="tn-bill" data-open={details || undefined} data-level={entry?.level}>
+      <tr className="tn-bill" data-open={details || undefined} data-level={entry?.level} onContextMenu={onMenu}>
         <td className="tn-bill-name">
           <Link to={`/trays/${enc(tray.id)}?item=${item.id}`} title={title}>
             {title}
@@ -177,6 +181,7 @@ function PaySection({
   formFor,
   setFormFor,
   frame,
+  onMenu,
 }: {
   data: TodayData;
   billTrays: TrayCardInfo[];
@@ -187,6 +192,7 @@ function PaySection({
   formFor: number | null;
   setFormFor: (id: number | null) => void;
   frame: { fold: { folded: boolean; onToggle: () => void }; headerProps: React.HTMLAttributes<HTMLElement> };
+  onMenu: (item: Item) => (e: React.MouseEvent) => void;
 }) {
   const payMode = usePayMode();
   const first = billTrays[0];
@@ -244,6 +250,7 @@ function PaySection({
                   traysUnknown={traysUnknown}
                   formOpen={formFor === b.item.id}
                   setFormOpen={(open) => setFormFor(open ? b.item.id : null)}
+                  onMenu={onMenu(b.item)}
                 />
               ))}
               {hidden > 0 && (
@@ -271,6 +278,7 @@ function TrayList({
   formFor,
   setFormFor,
   frame,
+  onMenu,
 }: {
   info: TrayCardInfo;
   data: TodayData;
@@ -279,6 +287,7 @@ function TrayList({
   formFor: number | null;
   setFormFor: (id: number | null) => void;
   frame: { fold: { folded: boolean; onToggle: () => void }; headerProps: React.HTMLAttributes<HTMLElement> };
+  onMenu: (item: Item) => (e: React.MouseEvent) => void;
 }) {
   const attention = data.attention.filter((a) => a.tray === info.id);
   const items: Item[] = data.open_items.find((t) => t.tray_id === info.id)?.items ?? [];
@@ -316,6 +325,7 @@ function TrayList({
               traysUnknown={traysUnknown}
               formOpen={formFor === entry.item.id}
               setFormOpen={(isOpen) => setFormFor(isOpen ? entry.item.id : null)}
+              onMenu={onMenu(entry.item)}
             />
           ))}
           {more > 0 && (
@@ -417,6 +427,8 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
   const open = useOpenBills();
   const [formFor, setFormFor] = useState<number | null>(null);
   const [arranging, setArranging] = useState(false);
+  // a tray item's right-click menu (the bill table's rows and the tray lists' rows)
+  const itemMenu = useTrayItemMenu({ trays: trays.data?.trays ?? [], today, openItem: true });
 
   const cards = data.data ? trayCards(data.data, trays.data?.trays ?? []) : [];
   const trayId = (info: TrayCardInfo) => `tray:${info.id}`;
@@ -474,6 +486,7 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
           formFor={formFor}
           setFormFor={setFormFor}
           frame={frame}
+          onMenu={itemMenu.open}
         />
       );
     }
@@ -492,6 +505,7 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
         formFor={formFor}
         setFormFor={setFormFor}
         frame={frame}
+        onMenu={itemMenu.open}
       />
     );
   };
@@ -590,6 +604,7 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
           </div>
         ))}
       </div>
+      {itemMenu.view}
     </div>
   );
 }

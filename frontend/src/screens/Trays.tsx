@@ -50,6 +50,7 @@ import { AddFile } from "../components/AddFile";
 import ItemDetail, { type DoneMode, doneFieldsText, itemKind, ReopenButton } from "./ItemDetail";
 import { type KeyHint, KeyHints } from "../components/KeyHints";
 import { MarkIcons } from "../components/MarkIcons";
+import { useTrayItemMenu } from "../components/useTrayItemMenu";
 
 /** Where the done form is open: the item, and which button opened it. */
 type DoneAt = { id: number; mode: DoneMode } | null;
@@ -74,6 +75,7 @@ function Row({
   selected,
   href,
   onOpen,
+  onMenu,
 }: {
   item: TrayItem;
   tray: TrayDef | undefined;
@@ -81,6 +83,8 @@ function Row({
   selected: boolean;
   href: string;
   onOpen: () => void;
+  /** The item's right-click menu (it opens the item first, as a click does). */
+  onMenu: (e: React.MouseEvent) => void;
 }) {
   const kind = itemKind(tray);
   const amount = amountField(tray);
@@ -99,7 +103,7 @@ function Row({
   ].filter((m): m is string => m !== null);
 
   return (
-    <article className={cls} aria-label={visible(item.title)}>
+    <article className={cls} aria-label={visible(item.title)} onContextMenu={onMenu}>
       <div className="tray-row-main">
         <p className="tray-row-title">
           <Link to={href} onClick={onOpen} aria-current={selected ? "true" : undefined}>
@@ -338,6 +342,20 @@ function TrayPage({ today: fixed }: { today?: string }) {
   }, [selectedFile]);
 
   /** The query string for this filter with ``item`` opened (none: the panel is empty). */
+  // a row's right-click menu: the item opens, as on a click, then Mark done, Move to tray,
+  // Remove from tray… and its file (Today's tray rows have the same menu)
+  const itemMenu = useTrayItemMenu({
+    trays: defs,
+    today,
+    onOpen: (item) => {
+      const i = list.findIndex((x) => x.id === item.id);
+      if (i >= 0) setCursor({ view, index: i });
+      setSearch(query(state, item.id));
+    },
+    onRemoved: (item) => {
+      if (item.id === opened) setSearch(query(state, null));
+    },
+  });
   const query = (filter: ItemState, item: number | null) => {
     const q = new URLSearchParams();
     if (filter === "done") q.set("state", "done");
@@ -515,6 +533,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
               selected={item.id === opened}
               href={`?${query(state, item.id)}`}
               onOpen={() => setCursor({ view, index: i })}
+              onMenu={itemMenu.open(item)}
             />
           </TrayListItem>
         ))}
@@ -646,6 +665,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
           }}
         />
       )}
+      {itemMenu.view}
     </div>
   );
 }

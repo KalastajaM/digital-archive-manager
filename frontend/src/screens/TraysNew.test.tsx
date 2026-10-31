@@ -2,7 +2,8 @@
  * Add file, Open and Done with their counts) and rows with a second line, the item pane with
  * its own header (Move to tray…, the file's actions, Close), the fields card with Mark done,
  * then the files, checklist, note and history beside the summary and the document. */
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ItemFile, TrayDef, TrayItem } from "../api/client";
@@ -155,3 +156,26 @@ async function waitForHeader(item: HTMLElement): Promise<HTMLElement> {
     return head;
   });
 }
+
+describe("a tray item's right-click menu", () => {
+  const names = (menu: HTMLElement) =>
+    Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+
+  it("opens the item it is on, then offers Mark done, Remove from tray… and the item's file", async () => {
+    setup();
+    const row = await screen.findByRole("article", { name: "Builder quote, sauna" });
+    fireEvent.contextMenu(row, { clientX: 20, clientY: 20 });
+    const menu = await screen.findByRole("menu", { name: "Actions for Builder quote, sauna" });
+    expect(names(menu)).toEqual(["Mark done", "Remove from tray…", "Open file", "Show in folder", "Show in Finder"]);
+    await userEvent.setup().click(within(menu).getByRole("menuitem", { name: "Remove from tray…" }));
+    expect(await screen.findByRole("dialog", { name: "Remove Builder quote, sauna from Follow up?" })).toBeInTheDocument();
+  });
+
+  it("a done item offers Reopen", async () => {
+    setup();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Done 2" }));
+    const rows = await screen.findAllByRole("article", { name: "Old quote" });
+    fireEvent.contextMenu(rows[0]);
+    expect(names(await screen.findByRole("menu", { name: "Actions for Old quote" }))[0]).toBe("Reopen");
+  });
+});

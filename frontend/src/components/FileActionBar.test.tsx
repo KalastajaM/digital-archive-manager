@@ -64,3 +64,20 @@ describe("fileMenuEntries", () => {
     expect(entries.at(-1)).toMatchObject({ disabled: true, reason: "Already in To Delete" });
   });
 });
+
+describe("fileMenuEntries for other screens", () => {
+  const label = (e: MenuEntry) => (e === "separator" ? "—" : e.label);
+  it("puts a screen's look entries first, and Remove from tray or collection with the moves; Add tag and Add to collection only when given", () => {
+    const entries = fileMenuEntries(
+      {
+        removeFromTray: { run: run() },
+        removeFromCollection: { run: run(), name: "a.pdf" },
+        moveTo: { run: run() },
+        star: { on: false, run: run() },
+      },
+      undefined,
+      [{ label: "Quick Look", onSelect: run() }, { label: "Open", onSelect: run() }],
+    );
+    expect(entries.map(label)).toEqual(["Quick Look", "Open", "—", "Move to…", "Remove from tray…", "Remove from collection", "—", "Star"]);
+  });
+});

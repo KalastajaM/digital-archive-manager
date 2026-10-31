@@ -57,6 +57,7 @@ import { isTrashKey, TRASH_BUSY, TRASH_LABEL, useTrash } from "../components/Tra
 import { undoAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { useNewFolder } from "../components/NewFolder";
+import { followRename, useRenameFolderSheet } from "../components/RenameFolder";
 import { useSetupFolders } from "../components/SetupFolders";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -762,6 +763,10 @@ export default function Browse() {
   const toast = useToast();
   const ids = useId();
   const newFolder = useNewFolder();
+  // Rename… for a folder; a pane in it follows the new path (also when Undo takes it back)
+  const renameFolder = useRenameFolderSheet((from, to) =>
+    setParams(urlFor({ left: { ...panes.left, path: followRename(panes.left.path, from, to) }, right: { ...panes.right, path: followRename(panes.right.path, from, to) } }, split)),
+  );
   const setupFolders = useSetupFolders();
   // a right-click menu: the active pane's files (the selection), or one folder (the list's or the tree's)
   const [menu, setMenu] = useState<{ x: number; y: number; folder: Item | null } | null>(null);
@@ -2187,8 +2192,8 @@ export default function Browse() {
     all: collections.data ?? [],
     onDone: () => update(act, { ids: [] }),
   });
-  /** A folder's right-click menu (the list's and the tree's): New folder inside, Move to…,
-   * Move to To Delete (in To Delete: Restore) and Show in Finder; an off entry says why.
+  /** A folder's right-click menu (the list's and the tree's): New folder inside, Rename…,
+   * Move to…, Move to To Delete (in To Delete: Restore) and Show in Finder; an off entry says why.
    * "Delete" is always Move to To Delete: nothing is deleted, and it has Undo. */
   const folderEntries = (it: Item): MenuEntry[] => {
     const away = it.connected === false ? "Not connected" : null;
@@ -2202,6 +2207,7 @@ export default function Browse() {
     return [
       { label: `New folder inside ${visible(it.name)}…`, onSelect: () => newFolder.open(it.path), disabled: !!newWhy, reason: newWhy ?? undefined },
       "separator",
+      { label: "Rename…", onSelect: () => renameFolder.open(it), disabled: !!moveWhy, reason: moveWhy ?? undefined },
       { label: "Move to…", onSelect: () => openFolderMoveTo(it), disabled: !!moveWhy, reason: moveWhy ?? undefined },
       ...(inToDelete(it.path) && !kept
         ? restoreEntries((to) => startRestore([it.drive_id], to), null)
@@ -2317,6 +2323,7 @@ export default function Browse() {
       refusal={folderCollectRefusal(folderShown.path, specialFolders)}
       restore={(to) => startRestore([folderShown.drive_id], to)}
       moveTo={{ run: () => openFolderMoveTo(folderShown), refusal: folderMoveWhy(folderShown) ?? (locked ? MOVE_BUSY : null) }}
+      rename={{ run: () => renameFolder.open(folderShown), refusal: folderMoveWhy(folderShown) ?? (locked ? MOVE_BUSY : null) }}
     />
   ) : (
     <EmptyState
@@ -2557,6 +2564,7 @@ export default function Browse() {
       {marking.view}
       {restoring.view}
       {newFolder.view}
+      {renameFolder.view}
       {setupFolders.view}
       {menu && (menu.folder || moveTargets.length > 0) && (
         <ContextMenu

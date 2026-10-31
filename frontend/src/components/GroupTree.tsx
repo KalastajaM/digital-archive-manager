@@ -12,7 +12,7 @@
  * is selected like a member (``onSelectEntry``), though it is not one: the page shows
  * its preview and Open / Show in Finder. The folder's ⋯ menu has "Show in Browse". */
 import { ChevronRight, Ellipsis, File, Folder } from "lucide-react";
-import { type CSSProperties, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AIProposal } from "./ai/AIProposal";
 import { type Collection, type CollectionChange, type DirEntry, errorText, type Group, type GroupChange, type Member, type MemberAttention, useBrowse } from "../api/client";
@@ -22,6 +22,7 @@ import { showInLabel } from "../fileManager";
 import { visible } from "../text";
 import { useFileLaunch } from "./FileLaunch";
 import { Menu, type MenuEntry } from "./ui/Menu";
+import { useContextMenu } from "./ui/useContextMenu";
 import { Tag, type TagTone } from "./ui/Tag";
 import { SaveState } from "./SavedNote";
 import { useAutoSave } from "./useAutoSave";
@@ -150,6 +151,8 @@ type Props = {
   /** The file inside a folder member that is selected (its drive id), if any. */
   entry?: string | null;
   onSelectEntry?: (entry: DirEntry) => void;
+  /** A member's right-click (or Shift+F10 on it): the page selects it and opens its menu. */
+  onMemberMenu?: (m: Member, e: ReactMouseEvent) => void;
 };
 
 /** The Browse address of a file: its folder, the file selected and previewed there. */
@@ -431,11 +434,13 @@ function MemberRow({
   attention,
   selected,
   onSelect,
+  onMenu,
   entry,
   onSelectEntry,
   base,
 }: EntryProps & {
   m: Member;
+  onMenu?: (e: ReactMouseEvent) => void;
   /** The collection the row is in: its drag says so (see ``setDragSource``). */
   from: number;
   attention: MemberAttention | undefined;
@@ -462,6 +467,7 @@ function MemberRow({
         aria-selected={selected}
         aria-current={selected ? "true" : undefined}
         style={folder ? ({ "--lvl": 0 } as CSSProperties) : undefined}
+        onContextMenu={onMenu}
         draggable={draggable || undefined}
         onDragStart={
           draggable
@@ -519,6 +525,7 @@ function Header({
   onRename,
   editing,
   menu,
+  onMenu,
 }: {
   label: string;
   /** What it holds, said by kind ("1 file, 1 folder"). */
@@ -530,12 +537,14 @@ function Header({
   onRename?: () => void;
   editing?: ReactNode;
   menu?: ReactNode;
+  /** A right-click on the header (or Shift+F10 on its name): the ⋯ menu's entries. */
+  onMenu?: (e: ReactMouseEvent) => void;
 }) {
   const drop = useDropTarget({ accept, onDrop });
   // One folder icon whatever the fold: swapping the <svg> under the pointer between the
   // two clicks of a double-click would keep the browser from firing dblclick.
   return (
-    <div className="group-header" {...drop.props}>
+    <div className="group-header" onContextMenu={onMenu} {...drop.props}>
       {editing ? (
         <span className="group-toggle group-toggle-editing">
           <ChevronRight className="group-chevron" size={14} aria-hidden="true" data-open={expanded || undefined} />
@@ -583,8 +592,12 @@ export function GroupTree({
   proposals,
   entry = null,
   onSelectEntry = () => {},
+  onMemberMenu,
 }: Props) {
   const tree = treeOf(c);
+  // a group header's right-click: the same entries as its ⋯ menu (gathered as the groups render)
+  const groupMenu = useContextMenu<number>();
+  const groupEntries = new Map<number, { name: string; entries: MenuEntry[] }>();
   const [editingSummary, setEditingSummary] = useState<number | null>(null);
   const groupName = new Map(c.groups.map((g) => [g.id, g.name]));
   const groupOf = new Map(c.members.map((m) => [m.drive_id, m.group_id !== null && groupName.has(m.group_id) ? m.group_id : null]));
@@ -615,6 +628,7 @@ export function GroupTree({
         attention={attention.get(m.drive_id)}
         selected={m.drive_id === selected}
         onSelect={() => onSelect(m.drive_id)}
+        onMenu={onMemberMenu && ((e) => onMemberMenu(m, e))}
         entry={entry}
         onSelectEntry={onSelectEntry}
         base={level}
@@ -646,11 +660,12 @@ export function GroupTree({
         onSelect: () => void actions.run({ op: "create", id: c.id, name: freeName(subgroups), parent_id: g.id }, `Added a group to ${g.name}`),
       },
       "separator",
-      { label: "Move up", disabled: index === 0, onSelect: () => move(-1) },
-      { label: "Move down", disabled: index === siblings.length - 1, onSelect: () => move(1) },
+      { label: "Move up", disabled: index === 0, reason: "Already first", onSelect: () => move(-1) },
+      { label: "Move down", disabled: index === siblings.length - 1, reason: "Already last", onSelect: () => move(1) },
       "separator",
       { label: "Remove group…", onSelect: () => actions.remove(g) },
     ];
+    groupEntries.set(g.id, { name, entries });
     return (
       <section
         key={g.id}
@@ -671,6 +686,7 @@ export function GroupTree({
           onRename={() => setRenaming(g.id)}
           editing={renaming === g.id ? <NameInput name={g.name} onSave={rename} onCancel={() => setRenaming(null)} /> : undefined}
           menu={<Menu label={`Actions for ${name}`} icon={<Ellipsis size={16} />} entries={entries} className="group-menu" />}
+          onMenu={(e) => groupMenu.open(g.id, e)}
         />
         <SummaryLine
           group={g}
@@ -742,6 +758,10 @@ export function GroupTree({
           )}
         </section>
       )}
+      {groupMenu.view((gid) => {
+        const g = groupEntries.get(gid);
+        return g ? { label: `Actions for ${g.name}`, entries: g.entries } : null;
+      })}
     </section>
     </OmitMark.Provider>
   );

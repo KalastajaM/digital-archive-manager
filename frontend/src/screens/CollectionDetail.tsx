@@ -92,7 +92,8 @@ import {
 } from "../components/GroupTree";
 import { LastChange } from "../components/LastChange";
 import { BUILTIN_LABEL } from "../components/MarkIcons";
-import { type FileActionBarProps, useAskAction } from "../components/FileActionBar";
+import { type FileActionBarProps, fileMenuEntries, useAskAction } from "../components/FileActionBar";
+import { useContextMenu } from "../components/ui/useContextMenu";
 import { FileActionIcons } from "../components/FileActionIcons";
 import { type FilingAI, useFilingAI } from "../components/ai/useFilingAI";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
@@ -130,6 +131,7 @@ import { dayOf, formatDate, formatSize, plural } from "../format";
 import { isShortcut, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
 import { inFileManager, showInLabel } from "../fileManager";
+import { LAUNCH_BUSY, useFileLaunch } from "../components/FileLaunch";
 import { visible } from "../text";
 import { baseName, extOf } from "../paths";
 import { collectionHref } from "../collectionHref";
@@ -486,7 +488,7 @@ function MoveSheet({
 /** The selected member. A file in the index gets the shared file panel (as in Browse),
  * with Quick Look in its preview's toolbar and, in its own block, its group (the keyboard
  * way to move it). What acts on the file (Put in tray, Remove from collection, Ask AI, ★,
- * !, the bin) is in the page's header (``FileActionBar``). A folder, a missing file, one in
+ * !, the bin) is in the panel's icon rows (``FileActionIcons``). A folder, a missing file, one in
  * To Delete or one not in the index has nothing to preview or edit: its details and the
  * same collection controls. */
 function Inspector({
@@ -731,6 +733,9 @@ export default function CollectionDetail({
   const openCollections = useMemo(() => (allCollections.data ?? []).filter((x) => x.state === "open"), [allCollections.data]);
   const reorder = useCollectionOrder(allCollections.data ?? []);
   const navigate = useNavigate();
+  // a member's right-click menu (built below, once the page knows the selected member)
+  const memberMenu = useContextMenu<string>();
+  const memberLaunch = useFileLaunch("");
   const status = useStatus();
   const [movingTo, setMovingTo] = useState(false);
   const [newChild, setNewChild] = useState(false);
@@ -1063,7 +1068,7 @@ export default function CollectionDetail({
     });
   };
 
-  // The header's file actions (``FileActionBar``) act on the file the side panel shows: the
+  // The file actions (the panel's icon rows) act on the file the side panel shows: the
   // selected member, or a file inside a folder member.
   const filingAI = useFilingAI();
   const batchMarks = useBatchMark();
@@ -1293,6 +1298,23 @@ export default function CollectionDetail({
         trash: { run: trashSelected, disabled: busy || trashWhy !== null, reason: trashWhy },
       }
     : null;
+  // A member's right-click: it is selected, then the header's actions for it, after the
+  // ways to look at it (Quick Look, Open, Show in folder, Show in Finder)
+  const memberEntries = (id: string) => {
+    if (!barProps || !shownFile || shownFile.drive_id !== id) return null;
+    const away = "connected" in shownFile && shownFile.connected === false ? "Not connected" : null;
+    const launchWhy = away ?? (memberLaunch.busy ? LAUNCH_BUSY : null);
+    const launchOff = { disabled: !!launchWhy, reason: launchWhy ?? undefined };
+    const look = [
+      ...(shownIsFile && selected && looks.includes(selected) ? [{ label: "Quick Look", onSelect: quickLook.open }] : []),
+      ...(shownIsFile ? [{ label: "Open", onSelect: () => void memberLaunch.run("open", id), ...launchOff }] : []),
+      ...(shownPath && shownIsFile ? [{ label: "Show in folder", onSelect: () => navigate(browseHref(shownPath, id)) }] : []),
+      ...(shownPath && shownFile.is_dir ? [{ label: "Show in Browse", onSelect: () => navigate(`/browse?path=${encodeURIComponent(shownPath)}`) }] : []),
+      ...(shownPath ? [{ label: showInLabel(), onSelect: () => void memberLaunch.run("reveal", id), ...launchOff }] : []),
+    ];
+    const name = browsed ? browsed.name : selected ? memberName(selected) : "";
+    return { label: `Actions for ${visible(name)}`, entries: fileMenuEntries(barProps, undefined, look) };
+  };
   // The file's icon row in its side panel, without Move to… (the folder in the panel's
   // header does it).
   const fileIcons =
@@ -1640,6 +1662,10 @@ export default function CollectionDetail({
             onSelect={select}
             entry={browsed?.drive_id ?? null}
             onSelectEntry={setBrowsed}
+            onMemberMenu={(m, e) => {
+              select(m.drive_id);
+              memberMenu.open(m.drive_id, e);
+            }}
             folded={folded}
             onToggle={toggle}
             busy={busy}
@@ -1681,6 +1707,7 @@ export default function CollectionDetail({
       </div>
       )}
       {quickLook.view}
+      {memberMenu.view(memberEntries)}
       {trash.view}
       {filingAI.sheet}
       {moveFlow.view}

@@ -30,6 +30,30 @@ const HOW: Record<SpecialFolderRename["places"][number]["how"], string> = {
   unchanged: "Stays",
 };
 
+/** A rename's preview: each place that stores the folder's name or path and what happens
+ * there, the warnings, and how Undo works (special folders here, any folder in Browse). */
+export function RenamePlaces({ checked }: { checked: Pick<SpecialFolderRename, "places" | "warnings" | "undo"> }) {
+  return (
+    <>
+      <ul className="rename-places" aria-label="What changes">
+        {checked.places.map((p) => (
+          <li key={p.place} data-how={p.how}>
+            <span className="rename-how">{HOW[p.how]}</span>
+            <span className="rename-place">{visible(p.place)}</span>
+            <span className="rename-what">{visible(p.what)}</span>
+          </li>
+        ))}
+      </ul>
+      {checked.warnings.map((w) => (
+        <p key={w} className="first-run-hint rename-warning">
+          {visible(w)}
+        </p>
+      ))}
+      <p className="first-run-hint">{visible(checked.undo)}</p>
+    </>
+  );
+}
+
 function RenameSheet({
   folderKey,
   title,
@@ -99,21 +123,7 @@ function RenameSheet({
           <p className="first-run-ok" role="status">
             {`'${visible(checked.old)}' becomes '${visible(checked.new)}'. This is what changes:`}
           </p>
-          <ul className="rename-places" aria-label="What changes">
-            {checked.places.map((p) => (
-              <li key={p.place} data-how={p.how}>
-                <span className="rename-how">{HOW[p.how]}</span>
-                <span className="rename-place">{visible(p.place)}</span>
-                <span className="rename-what">{visible(p.what)}</span>
-              </li>
-            ))}
-          </ul>
-          {checked.warnings.map((w) => (
-            <p key={w} className="first-run-hint rename-warning">
-              {visible(w)}
-            </p>
-          ))}
-          <p className="first-run-hint">{visible(checked.undo)}</p>
+          <RenamePlaces checked={checked} />
         </>
       )}
       {problem && (
