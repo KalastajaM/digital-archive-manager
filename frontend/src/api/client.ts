@@ -620,6 +620,24 @@ export type SpecialFolderKey = SpecialFolderRename["key"];
 export const renameSpecialFolder = (key: SpecialFolderKey, name: string, dry_run: boolean) =>
   apiPost("/api/special-folders/{key}/rename", { path: { key }, body: { name, dry_run } });
 
+export type FolderRename = Schemas["FolderRenameOut"];
+/** What renaming the folder ``driveId`` to ``name`` changes: the folder, every path that
+ * follows it and what stays with it. Changes nothing; a name that cannot be used is a 400. */
+export const previewFolderRename = (driveId: string, name: string) =>
+  apiPost("/api/browse/folder-rename/preview", { body: { drive_id: driveId, name } });
+
+/** Rename a folder in place: one batch (``batch_id``) that Undo in Activity reverses with
+ * every path that followed it. The server opens the archive again, which takes a few seconds,
+ * so everything is fetched again afterwards. */
+export const useRenameFolder = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveId, name }: { driveId: string; name: string }) =>
+      apiPost("/api/browse/folder-rename", { body: { drive_id: driveId, name } }),
+    onSettled: () => client.invalidateQueries(),
+  });
+};
+
 export const useSetupCandidates = () =>
   useQuery({
     queryKey: keys.setupCandidates,

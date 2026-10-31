@@ -271,7 +271,7 @@ class ActivityService:
         if special_folders.is_rename(self.executor.engine, batch_id):
             # the folder alone would go back, leaving the settings and rules on the new name
             raise Conflict(
-                "That is a rename of a special folder: undo it from Activity in the app, "
+                "That is a rename of a folder: undo it from Activity in the app, "
                 "which also puts the settings, rules and stored paths back."
             )
         lock = self.ongoing.sync_lock if self.ongoing is not None else nullcontext()

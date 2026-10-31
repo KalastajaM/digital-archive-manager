@@ -239,7 +239,7 @@ class BrowseService:
             records.append(rec)
         ops = [Op(OpKind.QUARANTINE, rec.path, None) for rec in records]
         with self.important_lock:
-            self._refuse_important(records)
+            self.refuse_important(records)
             what = records[0].name if len(records) == 1 else f"{len(records)} files"
             plan = Plan(ops, origin=origin, label=f"Moved {what} to To Delete")
             return self.executor.apply(plan, dry_run=dry_run)
@@ -407,7 +407,7 @@ class BrowseService:
         parts = PurePosixPath(path).parts[len(PurePosixPath(quarantine).parts) :]
         return PurePosixPath(*((label,) if label else ()), *parts).as_posix()
 
-    def _refuse_important(self, records: list[FileRecord]) -> None:
+    def refuse_important(self, records: list[FileRecord]) -> None:
         """One query for the Important entries; refuse if any record is one, is a
         folder with one below it, or lies under a marked folder (``IMPORTANT_FOLDER_
         REFUSAL``). No per-record queries: the marked set is read once."""
@@ -465,7 +465,7 @@ class BrowseService:
         if mode == "move":
             if area == self.special.important:
                 raise InvalidRequest(f"{IMPORTANT_REFUSAL}: {target.path}")
-            self._refuse_important([target])
+            self.refuse_important([target])
         return target
 
     # -- move -----------------------------------------------------------------

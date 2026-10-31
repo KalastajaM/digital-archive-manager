@@ -1,16 +1,20 @@
 """Browse the index, list filing targets, search, move files and quarantine."""
 
+from dataclasses import asdict
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
 
-from dam.api.deps import UI_ORIGIN, AppDep
+from dam import folder_rename
+from dam.api.deps import UI_ORIGIN, AppDep, SnapshotsDep
 from dam.api.marks import with_marks, with_open_items
 from dam.api.schemas import (
     BatchResultOut,
     CopyJobOut,
     DirEntryOut,
     FlatFilesOut,
+    FolderRenameIn,
+    FolderRenameOut,
     LinkThereBody,
     MoveBody,
     MoveResultOut,
@@ -21,7 +25,7 @@ from dam.api.schemas import (
     SearchHitOut,
 )
 from dam.core.jobs import Job
-from dam.errors import NotFound
+from dam.errors import Conflict, NotFound
 
 router = APIRouter(prefix="/api", tags=["browse"])
 
@@ -159,3 +163,40 @@ def rename_preview(app: AppDep, body: RenameBody) -> list:
 @router.post("/browse/rename", response_model=MoveResultOut)
 def rename(app: AppDep, body: RenameBody):
     return app.browse.rename_file(body.drive_id, body.name, body.folder, origin=UI_ORIGIN)
+
+
+def _folder_rename_preview(app, body: FolderRenameIn) -> folder_rename.FolderPreview:
+    return folder_rename.preview(
+        app.app_paths,
+        app.paths,
+        app.engine,
+        app.executor,
+        app.repo,
+        body.drive_id,
+        body.name,
+        refuse_important=app.browse.refuse_important,
+    )
+
+
+@router.post("/browse/folder-rename/preview", response_model=FolderRenameOut)
+def folder_rename_preview(app: AppDep, body: FolderRenameIn) -> dict:
+    """What renaming the folder would change: the folder on disk, the paths that follow it
+    (index, rules, filing codes, settings) and what stays with it; changes nothing. 400 for
+    a folder or name that cannot be used, 409 while a job runs or a disk is away."""
+    with app.held():
+        return asdict(_folder_rename_preview(app, body))
+
+
+@router.post("/browse/folder-rename", response_model=FolderRenameOut)
+def rename_folder(app: AppDep, snaps: SnapshotsDep, body: FolderRenameIn) -> dict:
+    """Rename the folder in place as one journaled batch (Undo in Activity puts the folder
+    and every path that followed it back). It closes the archive and opens it again, so it
+    needs ``dam serve`` (409 otherwise)."""
+    with app.held():  # 409 while a job or a batch of changes runs; none starts meanwhile
+        shown = _folder_rename_preview(app, body)
+        if snaps.reopener is None:
+            raise Conflict("This window cannot rename a folder. Start dam with `dam serve`.")
+        done = snaps.reopener.close_and_reopen(
+            lambda: folder_rename.rename_folder(app.app_paths, body.drive_id, body.name)
+        )
+        return {**asdict(shown), "batch_id": done.batch_id}

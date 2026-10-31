@@ -63,6 +63,7 @@
 - [AI (optional)](#ai-optional)
 - [Several archives](#several-archives)
 - [Several archive folders](#several-archive-folders)
+- [Rename a folder](#rename-a-folder)
 - [Rename a special folder](#rename-a-special-folder)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Drag and drop](#drag-and-drop)
@@ -1318,7 +1319,7 @@ list's width.
   selected file acts on the whole selection; right-clicking another file selects just
   that one first. A greyed entry says why, as a greyed icon does.
 - **Right-click a folder**, in the list or in the folder tree, for **New folder inside…**,
-  **Move to…**, **Move to To Delete** and **Show in Finder** (a folder in To Delete has
+  **Rename…** (see [Rename a folder](#rename-a-folder)), **Move to…**, **Move to To Delete** and **Show in Finder** (a folder in To Delete has
   Restore instead of Move to To Delete). Deleting is always Move to To Delete: nothing is
   deleted, the move shows its preview first and Activity can undo it. Folders cannot be
   renamed in dam yet.
@@ -1953,7 +1954,8 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   breadcrumb, or use **Move to…** in the folder's panel. One folder moves at a time, and a
   folder drop offers Move only (no Link or Copy). The top of an archive folder, `##. Ongoing`,
   `##. Important`, `##. To Delete`, the inbox and anything inside them stay where they
-  are, and a folder cannot go into itself.
+  are, and a folder cannot go into itself. To give a folder a new name where it is, see
+  [Rename a folder](#rename-a-folder).
   - On the same disk it is one rename, with its files, tags, notes and collections going
     along. A taken name gets `_2` (the preview says so). Links inside the folder move with
     it.
@@ -2014,6 +2016,37 @@ Maintenance treat them as one archive. (Several *archives* are separate; see abo
   crash or a power cut), it finishes the change the next time it opens the archive.
 - While a Maintenance check, a rule replay or a move to another disk runs, adding,
   detaching, attaching and changing a label are refused until it has finished.
+
+## Rename a folder
+
+Select a folder in Browse (the cursor on its row shows its panel) and click **Rename…**, or
+right-click the folder in the list or the folder tree and choose **Rename…**.
+
+1. Type the new name and click **Preview**. The list shows every place that holds the
+   folder's path and what happens there: the folder on your disk and the index, the rules
+   and filing codes that point at the folder or a folder inside it ("2 rules point here and
+   will follow"), the protected folders and folders kept from AI in the settings, ignored
+   Maintenance results, the collections and open tray items that hold the folder or files
+   in it (they stay with it), and the shortcuts dam keeps in Ongoing and Important, which
+   are made again for the new path.
+2. Click **Rename folder**. dam takes a snapshot, renames the folder on its disk, changes
+   the rule, filing code and settings values (comments and layout stay; the old settings
+   file is kept as `settings.yaml.bak-<time>`), and stops for a few seconds while it opens
+   the archive again.
+   A message offers **Undo**; the change is also one entry in Activity, and its Undo puts the
+   folder, the rules, the filing codes, the settings and the index paths back.
+
+The name follows the same rules as a new folder, and it cannot be a name already in that
+folder: a rename never adds `_2`. A change of letter case alone (`bills` for `Bills`) is a
+rename. A folder in the inbox that a filing code files into (its inbox folder) keeps that
+filing code pointing at it. dam refuses the rename for its own folders and what is inside
+`##. Ongoing`, `##. Important` and `##. To Delete` (rename a special folder in Settings
+instead), for the top of an archive folder, for a folder holding a file that is locked or
+marked Important (unlock or unmark it first), while a move or another job is running, when
+the folder's disk is not connected, and after an interrupted operation. Links elsewhere in
+the archive that point into the folder are named in the preview: dam leaves them alone, so
+they point to nothing until you remake them. If dam is stopped half way, it finishes or
+takes back the rename when it starts again.
 
 ## Rename a special folder
 

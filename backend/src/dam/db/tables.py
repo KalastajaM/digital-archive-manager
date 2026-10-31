@@ -609,7 +609,8 @@ readopted = Table(
     Index("ix_readopted_batch_id", "batch_id"),
 )
 
-# One row per rename of a special folder (``dam.special_folders``, migration 0042). The
+# One row per rename of a special folder (``dam.special_folders``, migration 0042) or of an
+# ordinary folder (``dam.folder_rename``: ``key`` folder, ``old``/``new`` its paths). The
 # folder itself is renamed by a journaled batch (``batch_id``); the row says which settings,
 # rules and stored paths followed it, and how far the rename got, so an interruption is
 # finished (or undone) at the next start. ``state``: planned (the rename started),

@@ -354,6 +354,8 @@ from dam.api.schemas.setup import (
     SpecialNamesIn,
 )
 from dam.api.schemas.special_folders import (
+    FolderRenameIn,
+    FolderRenameOut,
     SpecialFolderPlaceOut,
     SpecialFolderRenameIn,
     SpecialFolderRenameOut,
@@ -726,6 +728,8 @@ __all__ = [
     "RelativeOut",
     "RelativesDismissedOut",
     "RelativesOut",
+    "FolderRenameIn",
+    "FolderRenameOut",
     "SpecialFolderPlaceOut",
     "SpecialFolderRenameIn",
     "SpecialFolderRenameOut",
