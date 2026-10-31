@@ -1,6 +1,7 @@
 """The request models of the core screens: filing, moves, marks, tags and the like
 (dam.api.schemas)."""
 
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import Field
@@ -118,6 +119,18 @@ class ItemMergeBody(StrictIn):
     """The item to merge into the one in the path."""
 
     item_id: int
+
+
+class RenewBody(StrictIn):
+    """Renewed…: the new expiry date and, optionally, the new file that replaces the
+    item's first one (the old one moves into its folder's Expired subfolder)."""
+
+    expires: date
+    drive_id: str | None = None
+
+
+class RenewalUndoBody(StrictIn):
+    batch_id: str
 
 
 class DriveIdsBody(StrictIn):

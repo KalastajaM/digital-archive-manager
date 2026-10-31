@@ -326,8 +326,11 @@ def build_services(
         important_lock=cols.collections.important_lock,
         ongoing=cols.ongoing,
     )
-    # Renewed… on a Renew item: its date, its first file and the marks that follow it
-    renewals = RenewalService(trays, cols.marks)
+    # Renewed… on a Renew item: its date, its first file and the marks that follow it,
+    # and the old file's move into its folder's Expired subfolder
+    renewals = RenewalService(
+        trays, cols.marks, repo, executor, lambda: live.settings.expired_folder_name
+    )
     activity = ActivityService(
         executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing, renewals
     )

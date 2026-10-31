@@ -1,8 +1,10 @@
-"""Tray items: create (from Browse), edit, done/reopen, files; a file's links."""
+"""Tray items: create (from Browse), edit, done/reopen, renew, files; a file's links."""
+
+from dataclasses import asdict
 
 from fastapi import APIRouter, Response
 
-from dam.api.deps import AppDep, live_record, require_editable
+from dam.api.deps import UI_ORIGIN, AppDep, live_record, require_editable
 from dam.api.marks import collections_out, place_rows
 from dam.api.schemas import (
     DoneBody,
@@ -19,6 +21,10 @@ from dam.api.schemas import (
     ItemPatchBody,
     QuickBody,
     QuickOut,
+    RenewalUndoBody,
+    RenewBody,
+    RenewOut,
+    RenewPreviewOut,
 )
 from dam.app import App
 from dam.bills.barcode import item_barcode
@@ -138,6 +144,46 @@ def done(app: AppDep, item_id: int, body: DoneBody):
 @router.post("/items/{item_id}/reopen", response_model=ItemOut)
 def reopen(app: AppDep, item_id: int):
     return app.trays.reopen(item_id)
+
+
+def _new_file(app: App, body: RenewBody) -> None:
+    if body.drive_id is not None:
+        live_record(app, body.drive_id)
+        require_editable(app, [body.drive_id])
+
+
+@router.post("/items/{item_id}/renew/preview", response_model=RenewPreviewOut)
+def renew_preview(app: AppDep, item_id: int, body: RenewBody) -> dict:
+    """What Renewed… would do: the move of the old file into its folder's Expired
+    subfolder, why it is skipped, or the old file when it is locked and this request
+    carries no unlock for it (200 with ``locked`` set and no ops). Changes nothing."""
+    _new_file(app, body)
+    return asdict(app.renewals.preview(item_id, body.drive_id, origin=UI_ORIGIN))
+
+
+@router.post("/items/{item_id}/renew", response_model=RenewOut)
+def renew(app: AppDep, item_id: int, body: RenewBody) -> dict:
+    """Renewed…: the new date and, with ``drive_id``, the new first file; the old file
+    moves into Expired in the same batch (400 when it is locked without an unlock, or
+    the move fails: then nothing is renewed)."""
+    _new_file(app, body)
+    done = app.renewals.apply(item_id, body.expires, body.drive_id, origin=UI_ORIGIN)
+    return {
+        "item": done.item,
+        "batch_id": done.batch_id,
+        "undo": done.undo,
+        "skipped": done.skipped,
+    }
+
+
+@router.post("/renewals/undo", response_model=ItemOut)
+def undo_renewal(app: AppDep, body: RenewalUndoBody):
+    """Undo a renewal that moved no file (``undo: "renewal"``): the item's old file,
+    date and marks come back. 400 for one that moved a file (undo it in Activity), 409
+    once undone."""
+    item = app.renewals.undo(body.batch_id)
+    app.collections.changed()
+    return item
 
 
 @router.post("/items/{item_id}/files", response_model=ItemOut)

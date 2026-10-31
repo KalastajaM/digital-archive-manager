@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from dam.api.schemas.base import StrictIn
-from dam.api.schemas.responses import Mark
+from dam.api.schemas.responses import Mark, ResolvedOpOut
 from dam.api.schemas.rules import RuleErrorOut
 from dam.trays.model import TrayDef
 
@@ -111,3 +111,30 @@ class ItemEventOut(BaseModel):
         "created", "edited", "done", "reopened", "file_added", "file_removed", "moved", "merged_in"
     ]
     data: dict[str, Any]
+
+
+class RenewLockedOut(BaseModel):
+    drive_id: str
+    name: str
+
+
+class RenewPreviewOut(BaseModel):
+    """What Renewed… would do: the ops (a new Expired folder, the old file's move);
+    ``skipped``: why the old file is not moved (gone, in To Delete, its archive folder
+    not connected); ``locked``: the old file when it is locked and the request carries
+    no unlock for it (then ``ops`` is empty and the renewal cannot be applied)."""
+
+    ops: list[ResolvedOpOut]
+    skipped: str | None
+    locked: list[RenewLockedOut]
+
+
+class RenewOut(BaseModel):
+    """A renewal applied, under ``batch_id``. ``undo``: "activity" when it moved the old
+    file (undo the batch in Activity), "renewal" when it moved none (POST
+    /api/renewals/undo)."""
+
+    item: ItemOut
+    batch_id: str
+    undo: Literal["activity", "renewal"]
+    skipped: str | None
