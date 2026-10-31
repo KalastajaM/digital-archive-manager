@@ -46,6 +46,7 @@ class RenewalService:
             new_drive_id = _check_drive_id(new_drive_id)
         lock = self.collections.important_lock if new_drive_id else nullcontext()
         marks: MarkState | None = None
+        new_marks: MarkState | None = None
         with lock, write_tx(self.engine) as conn:
             row = self.trays._row(conn, item_id)
             tray = self.trays._find_tray(row.tray_id)
@@ -59,8 +60,9 @@ class RenewalService:
             if new_drive_id is not None:
                 if old_drive_id is None:
                     raise InvalidRequest("The item has no file to replace")
-                if new_drive_id == old_drive_id:
-                    raise InvalidRequest("That file is the item's current file already")
+                # the Undo takes the new file off the item, so it must not be on it yet
+                if new_drive_id in before.files:
+                    raise InvalidRequest("This file is already on the item")
                 other = conn.execute(
                     select(items.c.id)
                     .join(item_files, item_files.c.item_id == items.c.id)
@@ -75,6 +77,7 @@ class RenewalService:
                     raise InvalidRequest("That file belongs to another open item")
                 old_file = self.trays._file_data(conn, old_drive_id)
                 marks = self.marks.state_in(conn, old_drive_id)
+                new_marks = self.marks.state_in(conn, new_drive_id)
                 self.trays.replace_first_file(conn, item_id, old_drive_id, new_drive_id)
                 if marks.starred or marks.important:
                     self.marks.transfer_in(conn, old_drive_id, new_drive_id, marks)
@@ -91,6 +94,8 @@ class RenewalService:
                     "old_name": old_file["name"],
                     "old_path": old_file["path"],
                     "marks": asdict(marks) if marks is not None else None,
+                    # what the new file had before, so the Undo leaves those marks on it
+                    "new_marks": asdict(new_marks) if new_marks is not None else None,
                     "batch_id": batch_id,
                 },
             )
@@ -104,8 +109,9 @@ class RenewalService:
     def undo_batch(self, batch_id: str) -> int:
         """Undo the renewals of ``batch_id`` not undone yet; return how many. Each item
         gets its old first file back in front (the new one comes off) and the old file
-        its marks; the old date comes back only while the date is still the renewal's.
-        Other fields are not touched. No publisher sync here: the caller runs
+        its marks (the new file keeps the ones it had before, in its own group); the old
+        date comes back only while the date is still the renewal's. Other fields are
+        not touched. No publisher sync here: the caller runs
         ``collections.changed`` (``ActivityService.undo``)."""
         batch = func.json_extract(item_events.c.data, "$.batch_id")
         restored: list[int] = []
@@ -131,7 +137,10 @@ class RenewalService:
                     if data.get("marks"):
                         state = MarkState(**data["marks"])
                         if state.starred or state.important:
-                            self.marks.restore_in(conn, old, new, state)
+                            prior = data.get("new_marks")
+                            self.marks.restore_in(
+                                conn, old, new, state, MarkState(**prior) if prior else None
+                            )
                 current = self.trays._get(conn, ev.item_id).date
                 if current is not None and current.isoformat() == data["new_date"]:
                     old_date = data.get("old_date")

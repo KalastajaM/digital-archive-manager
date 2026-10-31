@@ -213,3 +213,41 @@ def test_the_link_name_stays_with_the_old_file(app, renew_item):
     assert app.marks.marks_state("new") == MarkState(False, True, ["Docs"], None)
     app.renewals.undo_batch("b1")
     assert app.marks.marks_state("old") == MarkState(False, True, ["Docs"], "Passport")
+
+
+def test_renew_refuses_file_already_on_item(app, renew_item):
+    with pytest.raises(InvalidRequest, match="This file is already on the item"):
+        app.renewals.record(renew_item.id, NEW_DATE, "terms", "b1")
+    assert app.trays.get(renew_item.id).files == ["old", "terms"]
+    assert _events(app, renew_item.id) == []
+
+
+def test_undo_keeps_a_star_the_new_file_had(app, renew_item_important):
+    app.marks.star(["new"])
+    app.renewals.record(renew_item_important.id, NEW_DATE, "new", "b1")
+    (ev,) = _events(app, renew_item_important.id)
+    assert ev.data["new_marks"] == {
+        "starred": True,
+        "important": False,
+        "group": None,
+        "link_name": None,
+    }
+    app.renewals.undo_batch("b1")
+    assert app.marks.marks_state("new") == MarkState(True, False, None, None)
+    assert app.marks.marks_state("old") == MarkState(True, True, ["Docs", "ID"], None)
+
+
+def test_undo_puts_the_new_file_back_in_its_own_group(app, renew_item_important):
+    app.marks.mark_important(["new"], "Travel")
+    app.renewals.record(renew_item_important.id, NEW_DATE, "new", "b1")
+    assert _important_group(app, "new") == ["Docs", "ID"]
+    app.renewals.undo_batch("b1")
+    assert app.marks.marks_state("new") == MarkState(False, True, ["Travel"], None)
+    assert app.marks.marks_state("old") == MarkState(True, True, ["Docs", "ID"], None)
+
+
+def test_undo_puts_an_ungrouped_new_file_back_ungrouped(app, renew_item_important):
+    app.marks.mark_important(["new"], None)
+    app.renewals.record(renew_item_important.id, NEW_DATE, "new", "b1")
+    app.renewals.undo_batch("b1")
+    assert app.marks.marks_state("new") == MarkState(False, True, None, None)

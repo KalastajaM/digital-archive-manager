@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, select, update
 
 from dam.collections.service import Collection, CollectionService
 from dam.core.paths import nfc
@@ -190,12 +190,20 @@ class MarkService:
             self.collections.changed()
 
     def restore_transfer(
-        self, old: str, new: str, state: MarkState, *, notify: bool = False
+        self,
+        old: str,
+        new: str,
+        state: MarkState,
+        new_state: MarkState | None = None,
+        *,
+        notify: bool = False,
     ) -> None:
         """Undo ``apply_transfer``: ``old`` gets back the marks in ``state`` (its group,
-        its link name) and ``new`` loses them."""
+        its link name) and ``new`` loses them, except the ones ``new_state`` (what
+        ``new`` had before the transfer) says it had: those stay, Important back in
+        its own group."""
         with self.collections.important_lock, write_tx(self.engine) as conn:
-            self.restore_in(conn, old, new, state)
+            self.restore_in(conn, old, new, state, new_state)
         if notify:
             self.collections.changed()
 
@@ -204,9 +212,17 @@ class MarkService:
         ``important_lock`` and runs ``collections.changed`` after the commit."""
         self._move_marks(conn, old, new, state, None)
 
-    def restore_in(self, conn: Connection, old: str, new: str, state: MarkState) -> None:
+    def restore_in(
+        self,
+        conn: Connection,
+        old: str,
+        new: str,
+        state: MarkState,
+        new_state: MarkState | None = None,
+    ) -> None:
         """``restore_transfer`` inside the caller's transaction (as ``transfer_in``)."""
-        self._move_marks(conn, new, old, state, state.link_name)
+        prior = new_state or MarkState(False, False, None, None)
+        self._move_marks(conn, new, old, state, state.link_name, prior)
 
     def _move_marks(
         self,
@@ -215,19 +231,42 @@ class MarkService:
         target: str,
         state: MarkState,
         link_name: str | None,
+        keep: MarkState | None = None,
     ) -> None:
         """Take the marks in ``state`` off ``source`` and put them on ``target``, which
-        keeps ``link_name`` for its link (None: its own name, or the one it had)."""
+        keeps ``link_name`` for its link (None: its own name, or the one it had).
+        ``keep``: the marks ``source`` had of its own, which stay on it (Important put
+        back in ``keep.group``)."""
         names = {target: link_name} if link_name is not None else None
         if state.starred:
             starred = self._id("starred")
-            self.collections.take_out(conn, starred, [source])
+            if not (keep and keep.starred):
+                self.collections.take_out(conn, starred, [source])
             self.collections.put_in_group_path(
                 conn, starred, [target], None, link_names=None if state.important else names
             )
         if state.important:
             important = self._id("important")
-            self.collections.take_out(conn, important, [source])
+            if keep and keep.important:
+                self._regroup(conn, important, source, keep.group)
+            else:
+                self.collections.take_out(conn, important, [source])
             self.collections.put_in_group_path(
                 conn, important, [target], state.group, link_names=names
             )
+
+    def _regroup(
+        self, conn: Connection, important: int, drive_id: str, group: list[str] | None
+    ) -> None:
+        """Put an Important member back in the group at ``group`` (None: ungrouped)."""
+        if group is not None:
+            self.collections.put_in_group_path(conn, important, [drive_id], group)
+            return
+        conn.execute(
+            update(collection_members)
+            .where(
+                collection_members.c.collection_id == important,
+                collection_members.c.drive_id == drive_id,
+            )
+            .values(group_id=None)
+        )
