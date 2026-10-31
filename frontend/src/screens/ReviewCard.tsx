@@ -234,7 +234,8 @@ function RenewsChoice({
   candidates: RenewCandidate[];
   matches: RenewCandidate[];
   value: Renewing | null;
-  onChange: (next: Renewing | null) => void;
+  /** ``viaChip``: taken from the suggestion chip, so it follows the folder and person. */
+  onChange: (next: Renewing | null, viaChip?: boolean) => void;
   disabled: boolean;
   /** The old file is locked and not unlocked here: unlock it for this filing. */
   locked: { run: () => void; error: string | null } | null;
@@ -280,11 +281,11 @@ function RenewsChoice({
     );
   }
   if (candidates.length === 0) return null;
-  const take = (id: string) => {
+  const take = (id: string, viaChip = false) => {
     const c = candidates.find((x) => String(x.item_id) === id);
     if (!c) return;
     setPicking(false);
-    onChange({ item_id: c.item_id, expires: "" });
+    onChange({ item_id: c.item_id, expires: "" }, viaChip);
   };
   const list = picking ? candidates : matches;
   const more = !picking && candidates.length > matches.length && (
@@ -300,7 +301,7 @@ function RenewsChoice({
           field="renewal"
           offer={{ value: `Renews "${only.title}"`, source: RENEW_SOURCE }}
           disabled={disabled}
-          onUse={() => take(String(only.item_id))}
+          onUse={() => take(String(only.item_id), true)}
         />
         {more}
       </div>
@@ -430,6 +431,8 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   // A QR sticker's tick boxes preselect these (an unclear box leaves it off and says so);
   // a mark the file already has is not sent again.
   const [renewing, setRenewing] = useState<Renewing | null>(null);
+  // the item a renewal was taken for from the suggestion chip (null: none, or picked by hand)
+  const [chipRenewal, setChipRenewal] = useState<number | null>(null);
   const [star, setStar] = useState(entry.suggestion.star === true);
   const [important, setImportant] = useState(entry.suggestion.important === true);
   // Set on the first Preview / File it: from then on a missing field is shown live.
@@ -554,6 +557,13 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   const candidates = useRenewCandidates().data ?? [];
   const person = filingPerson(entry, folder);
   const renewMatchList = renewMatches(candidates, folder, person);
+  // a renewal taken from the chip goes when another folder or person no longer matches it
+  const chipGone = chipRenewal !== null && !renewMatchList.some((c) => c.item_id === chipRenewal);
+  useEffect(() => {
+    if (!chipGone) return;
+    setRenewing((r) => (r?.item_id === chipRenewal ? null : r));
+    setChipRenewal(null);
+  }, [chipGone, chipRenewal]);
   const renewed = renewing ? (candidates.find((c) => c.item_id === renewing.item_id) ?? null) : null;
   const renewProblem = renewing && !renewing.expires ? "Enter the new expiry date." : null;
   const fieldProblem = missingField(name, folder);
@@ -627,7 +637,10 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     }
     void filing.fileIt(r);
   };
-  const oldLocked = renewed?.locked && oldId && !oldLock.unlockedNow ? { run: () => void unlockAndMove(), error: oldLock.error } : null;
+  // offered once a preview or File it reported the lock (the server's 400), not before
+  const lockMessage = filing.messageFor([entry.record.drive_id]);
+  const lockReported = lockMessage?.kind === "error" && /\bis locked\b/.test(lockMessage.text);
+  const oldLocked = renewed?.locked && oldId && lockReported && !oldLock.unlockedNow ? { run: () => void unlockAndMove(), error: oldLock.error } : null;
 
   const fileName = entry.record.name ?? entry.record.path;
   // every file here is in the inbox: name only a folder inside it (such as a code's folder)
@@ -710,7 +723,10 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
         candidates={candidates}
         matches={renewMatchList}
         value={renewing}
-        onChange={setRenewing}
+        onChange={(next, viaChip) => {
+          setRenewing(next);
+          setChipRenewal(next && viaChip ? next.item_id : null);
+        }}
         disabled={filing.busy}
         locked={oldLocked}
       />
