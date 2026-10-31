@@ -321,3 +321,9 @@ def test_lead_days_of():
     assert lead_days_of(renew, {"kind": "Passport", "lead_days": 400}) == 400
     assert lead_days_of(renew, {}) == 30
     assert lead_days_of(shipped("to-pay"), {}) is None
+
+
+def test_lead_days_of_ignores_an_own_value_that_is_not_an_int():
+    renew = shipped("renew")
+    assert lead_days_of(renew, {"kind": "Passport", "lead_days": "soon"}) == 180
+    assert lead_days_of(renew, {"kind": "Passport", "lead_days": True}) == 180

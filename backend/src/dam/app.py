@@ -246,7 +246,7 @@ def build_services(
     trays = TrayService(
         engine,
         lambda: live.tray_defs,
-        on_date_changed=lambda item_id: clear_unsent(engine, item_id),
+        on_date_changed=lambda item_id: clear_unsent(engine, item_id, live.tray_defs),
         # inbox is created below, with this TrayService
         prefill_for=lambda drive_id: inbox.prefill_for(drive_id),
     )

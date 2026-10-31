@@ -432,8 +432,9 @@ def lead_days_of(tray: TrayDef, values: dict[str, object]) -> int | None:
     if lead is None:
         return None
     own = values.get(lead.field)
-    if own is not None:
-        return int(own)  # type: ignore[call-overload]
+    # a stored value that failed to parse stays a str (service._load): not an own value
+    if isinstance(own, int) and not isinstance(own, bool):
+        return own
     kind = values.get(lead.by)
     if isinstance(kind, str) and kind in lead.days:
         return lead.days[kind]

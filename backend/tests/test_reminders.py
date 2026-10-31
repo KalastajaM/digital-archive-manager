@@ -1059,3 +1059,51 @@ def test_uninstall_refuses_a_symlink(home, tmp_path):
     with pytest.raises(launchd.LaunchdError):
         launchd.uninstall()
     assert path.is_symlink() and victim.read_text(encoding="utf-8") == "keep"
+
+
+# --- lead rule: the item's own lead time ----------------------------------------------
+
+
+def test_lead_reminder_uses_kind_default(engine, svc, trays):
+    item = svc.create("renew", ["p1"], {"expires": "2027-06-30", "kind": "Passport"}, None)
+    assert due(engine, trays, at(2026, 12, 31, 9)) == []
+    dues = due(engine, trays, at(2027, 1, 1, 9))  # 180 days before 2027-06-30
+    assert keys(dues) == [(item.id, "lead:180", date(2027, 1, 1))]
+
+
+def test_lead_reminder_uses_item_override(engine, svc, trays):
+    item = svc.create(
+        "renew", ["p1"], {"expires": "2027-06-30", "kind": "Passport", "lead_days": "10"}, None
+    )
+    assert due(engine, trays, at(2027, 1, 1, 9)) == []
+    dues = due(engine, trays, at(2027, 6, 20, 9))
+    assert keys(dues) == [(item.id, "lead:10", date(2027, 6, 20))]
+
+
+def test_lead_falls_back(engine, svc, trays):
+    item = svc.create("renew", ["p1"], {"expires": "2027-06-30"}, None)
+    assert keys(due(engine, trays, at(2027, 5, 31, 9))) == [(item.id, "lead:30", date(2027, 5, 31))]
+
+
+def test_lead_with_unparseable_own_value_uses_kind_default(engine, svc, trays):
+    item = svc.create("renew", ["p1"], {"expires": "2027-06-30", "kind": "Passport"}, None)
+    with engine.begin() as conn:  # a stored value the type cannot parse (a config change)
+        raw = dict(conn.execute(select(items.c.fields).where(items.c.id == item.id)).scalar_one())
+        raw["lead_days"] = "soon"
+        conn.execute(update(items).where(items.c.id == item.id).values(fields=raw))
+    assert keys(due(engine, trays, at(2027, 1, 1, 9))) == [(item.id, "lead:180", date(2027, 1, 1))]
+
+
+def test_lead_change_clears_silenced(engine, trays):
+    svc = TrayService(
+        engine, lambda: trays, on_date_changed=lambda i: clear_unsent(engine, i, trays)
+    )
+    item = svc.create("renew", ["p1"], {"expires": "2027-06-30", "kind": "Passport"}, None)
+    now = at(2027, 6, 30, 9)
+    dues = due(engine, trays, now)
+    assert {d.rule for d in dues} == {"lead:180", "before:0"}
+    mark_sent(engine, [d for d in dues if d.rule == "lead:180"], [], now)
+    assert [r[1] for r in sent_rows(engine)] == ["lead:180"]
+    svc.update(item.id, {"lead_days": "10"}, None)
+    assert sent_rows(engine) == []  # the silenced row of the old lead time is gone
+    assert "lead:10" in {d.rule for d in due(engine, trays, now)}

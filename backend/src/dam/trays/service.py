@@ -40,7 +40,7 @@ from dam.db.tables import (
 )
 from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.notes import NOTE_MAX, NotesService
-from dam.trays.model import FIELD_TYPES, FieldDef, TrayDef
+from dam.trays.model import FIELD_TYPES, FieldDef, TrayDef, lead_days_of
 
 log = logging.getLogger(__name__)
 
@@ -671,13 +671,14 @@ class TrayService:
 
         A stored value the field's current type cannot parse is kept as it is until the
         user sets a new value for that field. ``on_date_changed`` runs *after* the commit,
-        only when the item's date changed.
+        only when the item's date or its lead time changed.
         """
         with write_tx(self.engine) as conn:
             row = self._row(conn, item_id)
             tray = self._find_tray(row.tray_id)
             changes: dict[str, list] = {}
             patch: dict[str, object] = {}
+            lead_changed = False
             if fields and tray is None:
                 raise InvalidRequest("The item's tray was removed: fields cannot be edited")
             if tray is not None:
@@ -697,6 +698,8 @@ class TrayService:
                 if changes:
                     patch["fields"] = new
                 patch["date"] = _date_of(tray, values, still_invalid)
+                # a changed lead time moves the item's lead reminder like a changed date
+                lead_changed = lead_days_of(tray, current) != lead_days_of(tray, values)
             new_title = row.title if title is None else _clean_title(title)
             if new_title != row.title:
                 changes["title"] = [row.title, new_title]
@@ -707,7 +710,7 @@ class TrayService:
             if changes:
                 self._event(conn, item_id, "edited", {"changes": changes})
             item = self._get(conn, item_id)
-        if date_changed:
+        if date_changed or lead_changed:
             self._date_changed([item_id])
         return item
 

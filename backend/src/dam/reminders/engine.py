@@ -1,7 +1,8 @@
 """Which reminders are due, and the record that each one fired once.
 
 An item's rules give *occasions* (local dates): ``before:N`` is the item's date minus N
-days, ``overdue`` the day after the date, ``nudge`` the item's creation day plus the
+days, ``lead:N`` the same with N the item's own lead time (``lead_days_of``), ``overdue``
+the day after the date, ``nudge`` the item's creation day plus the
 tray's ``nudge_after_days``. An occasion is due from ``hour`` o'clock on its day (and
 any time after that day). ``reminders_sent`` holds one row per (item, rule, occasion)
 that fired, so a due occasion is reported until it is marked sent, and never again.
@@ -22,11 +23,13 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from dam.db.engine import write_tx
 from dam.db.tables import items, reminders_sent
-from dam.trays.model import FIELD_TYPES, ReminderRule, TrayDef
+from dam.trays.model import FIELD_TYPES, ReminderRule, TrayDef, lead_days_of
+from dam.trays.service import _load
 
 OVERDUE = "overdue"
 NUDGE = "nudge"
 _BEFORE = "before:"
+_LEAD = "lead:"
 
 
 @dataclass(frozen=True)
@@ -34,15 +37,25 @@ class Due:
     item_id: int
     tray_id: str
     title: str
-    rule: str  # "before:3", "before:0", "overdue", "nudge"
+    rule: str  # "before:3", "before:0", "lead:180", "overdue", "nudge"
     occasion: date
     date: date | None  # the item's date (None for undated items, e.g. a nudge)
     amount: Decimal | None
     tray_name: str = ""
 
 
-def rule_id(rule: ReminderRule) -> str:
-    return OVERDUE if rule.overdue else f"{_BEFORE}{rule.days_before}"
+def rule_id(rule: ReminderRule, lead_days: int | None = None) -> str | None:
+    """The rule's record id; None for a lead rule when the item has no lead time."""
+    if rule.overdue:
+        return OVERDUE
+    if rule.lead:
+        return None if lead_days is None else f"{_LEAD}{lead_days}"
+    return f"{_BEFORE}{rule.days_before}"
+
+
+def _lead_days(tray: TrayDef, stored: dict | None) -> int | None:
+    values, _ = _load(tray.fields, stored)
+    return lead_days_of(tray, values)
 
 
 def _occasion(rule: str, when: date | None) -> date | None:
@@ -51,8 +64,9 @@ def _occasion(rule: str, when: date | None) -> date | None:
         return None
     if rule == OVERDUE:
         return when + timedelta(days=1)
-    if rule.startswith(_BEFORE) and rule[len(_BEFORE) :].isdigit():
-        return when - timedelta(days=int(rule[len(_BEFORE) :]))
+    for prefix in (_BEFORE, _LEAD):
+        if rule.startswith(prefix) and rule[len(prefix) :].isdigit():
+            return when - timedelta(days=int(rule[len(prefix) :]))
     return None
 
 
@@ -84,9 +98,10 @@ def _amount(tray: TrayDef, stored: dict | None) -> Decimal | None:
 def _occasions(tray: TrayDef, row) -> list[tuple[str, date]]:
     """The item's current (rule, occasion) pairs under its tray's rules."""
     out: list[tuple[str, date]] = []
+    lead = _lead_days(tray, row.fields)
     for rule in tray.reminders:
-        rid = rule_id(rule)
-        occasion = _occasion(rid, row.date)
+        rid = rule_id(rule, lead)
+        occasion = _occasion(rid, row.date) if rid is not None else None
         if occasion is not None:
             out.append((rid, occasion))
     if tray.nudge_after_days is not None:
@@ -129,12 +144,13 @@ def due_reminders(
 
 
 def _priority(rule: str) -> tuple[int, int]:
-    """Tie-break on the same occasion: overdue > before:0 > before:N > nudge."""
+    """Tie-break on the same occasion: overdue > before:0 > before:N, lead:N > nudge."""
     if rule == OVERDUE:
         return (3, 0)
-    if rule.startswith(_BEFORE):
-        days = rule[len(_BEFORE) :]
-        return (2, -int(days) if days.isdigit() else 0)
+    for prefix in (_BEFORE, _LEAD):
+        if rule.startswith(prefix):
+            days = rule[len(prefix) :]
+            return (2, -int(days) if days.isdigit() else 0)
     return (0, 0)
 
 
@@ -228,17 +244,31 @@ def mark_sent(engine: Engine, dues: Iterable[Due], channels: list[str], now: dat
             conn.execute(sqlite_insert(reminders_sent).on_conflict_do_nothing(), rows)
 
 
-def clear_unsent(engine: Engine, item_id: int) -> int:
-    """After the item's date changed: forget *silenced* records of occasions the item no
-    longer has. Returns how many rows were removed.
+def clear_unsent(engine: Engine, item_id: int, trays: Sequence[TrayDef] = ()) -> int:
+    """After the item's date (or lead time) changed: forget *silenced* records of
+    occasions the item no longer has. Returns how many rows were removed.
 
     A delivered reminder's row is never deleted, so moving a date away and back (a
     typo, a briefly broken tray file) never sends it again. Silenced rows (``channels
     == []``) of date rules go when their occasion no longer matches the current date;
-    nudge rows depend on the creation day only and stay.
+    a ``lead:N`` row also goes when the item's lead time is no longer N (``trays`` tells
+    it, without them lead rows are judged by the date alone); nudge rows depend on the
+    creation day only and stay.
     """
+    by_id = {t.id: t for t in trays}
     with write_tx(engine) as conn:
-        when = conn.execute(select(items.c.date).where(items.c.id == item_id)).scalar_one_or_none()
+        row = conn.execute(
+            select(items.c.date, items.c.tray_id, items.c.fields).where(items.c.id == item_id)
+        ).first()
+        when = row.date if row else None
+        tray = by_id.get(row.tray_id) if row else None
+        lead = _lead_days(tray, row.fields) if tray is not None and tray.lead else None
+
+        def stale_rule(rule: str, occasion: date) -> bool:
+            if rule.startswith(_LEAD) and tray is not None and rule != f"{_LEAD}{lead}":
+                return True
+            return _occasion(rule, when) != occasion
+
         stale = [
             (r.rule, r.occasion)
             for r in conn.execute(
@@ -246,7 +276,7 @@ def clear_unsent(engine: Engine, item_id: int) -> int:
                     reminders_sent.c.rule, reminders_sent.c.occasion, reminders_sent.c.channels
                 ).where(reminders_sent.c.item_id == item_id)
             )
-            if not r.channels and r.rule != NUDGE and _occasion(r.rule, when) != r.occasion
+            if not r.channels and r.rule != NUDGE and stale_rule(r.rule, r.occasion)
         ]
         for rule, occasion in stale:
             conn.execute(
