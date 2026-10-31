@@ -851,7 +851,7 @@ the page. An invalid file is skipped (and logged), as if no custom sheet were sa
 
 ## Tray files
 
-A tray is a YAML file (one tray per file) in `config/trays/`. Four are seeded from
+A tray is a YAML file (one tray per file) in `config/trays/`. Five are seeded from
 `defaults/trays/`:
 
 | Tray | Fields | Reminders |
@@ -860,6 +860,7 @@ A tray is a YAML file (one tray per file) in `config/trays/`. Four are seeded fr
 | **To action** | `action_date` (required) | 1 day before and on the day |
 | **To read** | none | one nudge when an item has waited 30 days |
 | **Follow up** | `check_by` (optional date), `waiting_for`; "Done" asks for nothing more | on the check date and once when it is overdue |
+| **Renew** | `expires` (required date), `kind` (a choice), `lead_days` (optional); "Renewed…" asks for the new date and an optional new file; the done label is "No longer needed" | the lead time before `expires` (by kind), on the day, and once when overdue |
 
 **Add a tray**: put a file such as `config/trays/50-to-sign.yaml` in `config/trays/`. It
 is read when `dam serve` (or any `dam` command) starts: restart `dam serve` after changing
@@ -890,7 +891,10 @@ summary: { sum: fee }         # a money field; shown as the total on Today
 # nudge_after_days: 30        # alternative for undated trays: one reminder after N days
 ```
 
-Field types: `text`, `date`, `money`, `iban`, `reference`, `checkbox`. A file with a
+Field types: `text`, `date`, `money`, `iban`, `reference`, `checkbox`, `choice` and `days`.
+A `choice` field has `options: [..]` (a non-empty list of distinct, non-blank strings;
+`options` belongs to no other type) and holds one of them. A `days` field is a
+non-negative whole number of days, from a number or a string of digits. A file with a
 mistake is reported (file and line, in the UI and by `dam trays`) and skipped; the other
 trays keep working. If you remove a tray file, its items stay in the database and show as
 "tray removed".
@@ -924,6 +928,85 @@ cannot be checked to load back exactly (YAML anchors, unusual keys) is written o
 whole by PyYAML, without comments; the diff shows this first. New fields go after your
 existing ones; move the line if you want them elsewhere. Existing items simply have no
 value for a new field until you set one.
+
+**Lead times and Renewed….** Two optional keys make a tray like Renew (shipped as
+`defaults/trays/50-renew.yaml`, order 5):
+
+```yaml
+fields:
+  expires:   { type: date, required: true }
+  kind:      { type: choice, options: [Passport, ID card, Driving licence, Insurance, Warranty, Contract, Other] }
+  lead_days: { type: days }           # empty: the kind's lead time below
+date_field: expires
+lead:
+  field: lead_days                    # a days field: the item's own lead time, when set
+  by: kind                            # a choice field: else days[<its value>]
+  days: { Passport: 180, ID card: 90, Driving licence: 60, Insurance: 30, Warranty: 30, Contract: 60, Other: 30 }
+  default: 30                         # else this (30 when left out)
+renew:
+  label: Renewed                      # the name of the main action (default Renewed)
+done:
+  label: No longer needed
+reminders:
+  - { lead: true }                    # lead days before the date
+  - { days_before: 0 }
+  - { overdue: true }
+```
+
+`lead` needs a `days` field in `field`, a `choice` field in `by`, and `days` keys that are
+options of `by`. A reminder `{lead: true}` needs a `lead` block (and, like every reminder,
+a `date_field`); it is sent once, the item's lead time before the date, and as with every
+rule only the latest one that is already past is sent when an item is created or its date
+changes. `renew` needs a `date_field`; a tray with `renew` shows **Renewed…** as the main
+action of its items (in the item, its right-click menu and on Today) and **Done** with the
+tray's `done` label as the secondary one. A tray file with neither key behaves as before.
+
+**Renewing.** `POST /api/items/{id}/renew/preview {expires, drive_id?}` shows what
+Renewed… would do and changes nothing: `ops` (the resolved plan: a new Expired folder and
+the MOVE of the old file), `skipped` (why the move is left out: "The old file is no longer
+in the archive", "The old file is in To Delete" or "The old file's archive folder is not
+connected") and `locked` (`[{drive_id, name}]`: the old file is locked and the request
+carries no unlock for it; `ops` is then empty). `POST /api/items/{id}/renew
+{expires, drive_id?}` applies it and answers `{item, batch_id, undo, skipped}`. `drive_id`
+is the new file; it becomes the item's first file in place of the old one, the other
+files stay. The old file is moved to `<its folder>/<Expired>` (the `expired_folder_name`
+setting, default `Expired`; a taken name gets `_2`) as one journaled MOVE batch (origin
+`ui`), checked against the indexed file as for any move, and only when it has moved is the
+renewal recorded under the same `batch_id`; a move that fails records nothing (400). A
+locked old file without an unlock grant is refused (400 "locked", as for any move); the
+page unlocks it for the move and locks it again. A request without `drive_id` only
+changes the date, and so does one whose old file cannot be moved (`skipped` says why).
+400 as well for an item that is not open, is not in a tray with `renew`, has no file to
+replace, when the new file is already on the item or belongs to another open item, or is
+not a live, editable file.
+
+The renewal is a `renewed` item event holding what its Undo needs (old and new date, old
+and new file, the old file's marks, the marks the new file had before). When a file moved
+(`undo: "activity"`) it is undone with `POST /api/activity/{batch_id}/undo`; a renewal
+that moved nothing (`undo: "renewal"`) is undone with `POST /api/renewals/undo
+{batch_id}` (answers the item; 400 for a batch that moved a file, 409 once undone). Either
+way the old file comes back to the front of the item and gets its marks again, the new file
+is taken off and keeps only the marks it had, and the old date returns only while the date
+is still the renewal's. Undoing adds another `renewed` event; none is ever deleted.
+
+`GET /api/renewals/open` lists the open items of trays with `renew` for the Inbox:
+`item_id`, `title`, `drive_id` (the first file), `expires`, `kind`, `folder` (the first
+file's folder) and `person` (its For), and `locked` (the first file is locked as stored; an
+unlock grant does not count). The Inbox suggests "Renews …?" for the items whose `folder`
+equals the filing folder (case and Unicode form ignored) and whose `person` equals the For
+the filing records (both empty counts as equal).
+
+A filing request (an entry of the list that `POST /api/inbox/preview` and
+`POST /api/inbox/file` take) has `renews` (an item id) and `renew_expires` (a date): the
+filed file then becomes the item's new first file, no tray step is applied, and the old
+file's move into Expired joins the filing's batch. The result carries `renew_skipped` (why
+the old file was not moved), `renew_batch` (the batch the renewal was recorded under) and
+`renew_undo` (`"activity"` or `"renewal"`, as above).
+
+`GET /api/settings/expired-folder` answers `{name}` and `PUT` sets it. The name is a plain
+folder name: the usual folder-name rules, not starting with `##.`, not the name of a
+special folder (the Inbox, Ongoing, Important or To Delete). It is a setting only; no
+existing folder is renamed. 400 with the reason otherwise.
 
 The move of an item between trays is `POST /api/items/{id}/move`, and its undo
 `POST /api/items/{id}/undo-move` (only while the move is the item's latest change).
@@ -1564,6 +1647,18 @@ The user guide's "What dam never does" gives the short version. The details:
   the archive). It is a catch against mistakes, not a security boundary: whatever is
   signed in to the local API (your browser, or a program that has read the token file)
   can unlock.
+- **Renewals.** Renewed… on a Renew item moves the item's old file into
+  `<its folder>/<Expired>`: next to where it was, never deleted. It is an ordinary
+  journaled MOVE, so every guard above holds: a locked or Important old file is refused unless this request carries an unlock
+  grant for exactly that file, a file in To Delete or in a folder that is not connected is
+  not moved at all (the date and new file are still recorded, and the answer says why),
+  and the planner makes the Expired folder and gives a taken name `_2`. The marks move
+  with it as data, not as a copy of the file: `MarkService` passes the old file's star and
+  Important mark to the new file in one transaction with the item change, in the same
+  Important group, and the Undo (Activity's, or `POST /api/renewals/undo` when nothing
+  moved) takes them back, leaving the marks the new file already had. Tags and collection
+  memberships stay on the old file. The new file must be a live, editable file that is on
+  no other open item.
 - **`##. Ongoing` ownership.** The app owns an entry only if it still is the exact thing
   it created (the identity above). An entry you made yourself, or one that was replaced,
   is never touched, never adopted and never deleted. If a name is taken by something

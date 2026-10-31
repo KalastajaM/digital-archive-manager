@@ -38,6 +38,7 @@
   - [Row icons](#row-icons)
   - [Working on an item](#working-on-an-item)
   - [Files on an item](#files-on-an-item)
+  - [Renewing](#renewing)
 - [Paying a bill with the bank barcode](#paying-a-bill-with-the-bank-barcode)
 - [Collections](#collections)
   - [Parent collections](#parent-collections)
@@ -278,6 +279,15 @@ with a form beside it for name, folder, tags, tray, tray fields, collections and
    guessed, and the amount from a total line, else the largest amount.
 4. **Preview** (Enter) shows the planned changes below the form. **File it** (⌘Enter)
    applies exactly what was previewed; the toast has **Undo**.
+
+**Renews.** When you file a new passport, insurance letter or other paper into the folder
+of an open Renew item, and the item's file has the same **For** as the filing records (or
+neither has one), the form suggests **Renews "<title>"?** with **Use**. With several
+matching items there is a select instead. **Renews…** lets you pick any open Renew item by
+hand. Taken, the form asks for the **New expiry date** and hides the tray picker, since the
+document goes onto the item and not into a new one. The filing, the move of the old file
+into Expired and the item's new date are one batch with one **Undo**. A locked old file
+shows **Unlock and move** in the form. See [Renewing](#renewing).
 
 **Skip** (or `s`) leaves the file where it is and goes on to the next one; nothing in the
 archive changes. Right-click a file in the list for **Quick Look**, **Open**, **Show in
@@ -948,7 +958,7 @@ and photos at 30 a minute)".
 ## Trays
 
 A tray is a to-do list of documents: once a scanned paper is filed into a tray, the paper
-can go. Four trays come with dam:
+can go. Five trays come with dam:
 
 | Tray | For | Reminders |
 | --- | --- | --- |
@@ -956,6 +966,7 @@ can go. Four trays come with dam:
 | **To action** | things to do by a date | 1 day before and on the day |
 | **To read** | reading with no date | one nudge after 30 days |
 | **Follow up** | things you wait on from others (a delivery, a reply, a refund), with an optional check-by date | on the check date and once when overdue |
+| **Renew** | things that expire: a passport, an ID card, a driving licence, insurance, a warranty, a contract; an expiry date and a kind | the kind's lead time before the date, on the day, and once when overdue |
 
 A tray's screen has the list (Open / Done) and the selected item beside it; ↑/↓ move the
 highlight and open the item. An item has a title, one or more files, the tray's fields, a
@@ -1026,6 +1037,50 @@ written, otherwise any AI summary.
   other item since.
 - **Drag a file** from Browse or the search results onto an item in the list, or onto the
   open item's panel, to attach it. Nothing is moved or renamed.
+
+### Renewing
+
+The **Renew** tray is for papers that run out. An item has an **Expires** date
+(required), a **Kind** (Passport, ID card, Driving licence, Insurance, Warranty, Contract
+or Other) and an optional **Lead days**. Its first reminder comes the lead time before the
+date: empty Lead days means the kind's own time, which is 180 days for a passport, 90 for
+an ID card, 60 for a driving licence or a contract, and 30 for insurance, a warranty or
+Other (and for an item with no kind). The other two come on the day and once when overdue,
+as in the other trays. Its done button is **No longer needed**, for a paper you do not
+renew.
+
+**Renewed…** is the main action of a Renew item: in its card, in its right-click menu and
+on Today, with **No longer needed** beside it as the secondary one. It asks for:
+
+- **New expiry date** (typed; required). The item's date changes and its reminders are set
+  up again.
+- **Attach the new file** (optional), picked as in **Add another file…**. Without a file
+  only the date changes, at once.
+
+With a new file, **Preview…** first shows the move and **Renewed** applies it. The new file
+takes the old one's place as the item's first file, and the old file moves into an
+**Expired** folder inside its own folder. The folder is made if it is not there, and a name
+already taken there gets `_2`. The item's other files stay attached. The old file is
+taken off the item and stays in the item's history. The name of the Expired folder is a
+setting (see [Settings](#settings)).
+
+- **Marks.** If the old file was **Starred** or **Important**, the new file gets the same
+  marks (in the same Important group). Tags and collections stay on the old file; dam does
+  not copy them.
+- **Locks.** A locked or Important old file is not moved by surprise: the preview says it
+  is locked and the button reads **Unlock and move**. That unlocks it for this move only
+  and locks it again afterwards. If you had already unlocked it yourself, it stays
+  unlocked.
+- **A file that cannot move.** If the old file is gone from the archive, in To Delete, or
+  in a folder that is not connected, the move is skipped: the preview and the toast say
+  why, and the new file and date are still recorded.
+- **Undo** is in the toast and, when a file moved, in [Activity](#activity-and-undo): the
+  old file goes back, comes back onto the item in front, gets its marks back, and the old
+  date returns if it has not been changed since. The new file keeps the marks it had
+  before the renewal.
+
+Renewing can also start in the Inbox, see
+[Filing from the Inbox](#filing-from-the-inbox).
 
 You can add your own trays (for example "To sign") as small text files; see
 [Tray files](reference.md#tray-files) in the technical reference.
@@ -1772,7 +1827,11 @@ each area, grouped by what it applies to; one section shows at a time.
   - **Archive folders**: the main folder and any extra folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
     **Forget**. **Special folders** lists the Inbox, Ongoing, Important and
-    To Delete folders, each with **Rename**.
+    To Delete folders, each with **Rename**. **Expired folder** is the name of the folder
+    that **Renewed…** moves an old file into (`Expired` unless you change it); it applies
+    from the next renewal and renames nothing already made. It cannot start with `##.`,
+    cannot be the name of a special folder, and follows the usual folder name rules.
+    See [Renewing](#renewing).
     See [Several archive folders](#several-archive-folders) and
     [Rename a special folder](#rename-a-special-folder).
   - **Indexing**: whether page 1 of older documents is read in the background, and the
@@ -1857,7 +1916,9 @@ drag a row by its grip, or press ⌥↑ / ⌥↓, to reorder.
 ## Reminders
 
 dam reminds you of tray items by their date: a bill a few days before it is due, on the
-day and once when overdue; an undated item to read after 30 days. Each reminder is sent
+day and once when overdue; an undated item to read after 30 days. A Renew item is
+reminded its lead time before it expires (180 days for a passport; see
+[Renewing](#renewing)). Each reminder is sent
 once and never for done items. If several are already past when an item is created (an
 overdue bill), you get only the latest. Changing an item's date sets up its reminders
 again.
