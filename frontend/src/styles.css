@@ -1680,6 +1680,16 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 .suggestion-all .hint { margin: 0; }
 .suggestion-all button { min-height: 22px; font-size: var(--fs-sm); }
 .suggestion-tray-line { margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); }
+/* The Inbox's "Renews …?" beside the tray picker: the chip (or a short list) and Renews…;
+ * taken, the item's line, its new expiry date and Unlock and move. */
+.suggestion-renew-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; margin: 0 0 var(--sp-3); }
+.suggestion-renew-line .suggestion-chip { max-width: 100%; }
+.renews select { max-width: 100%; }
+.renews .link-button { margin-left: var(--sp-2); }
+.renews .renews-line { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; margin: 0 0 var(--sp-1); }
+.renews .renews-line .link-button { flex: none; margin-left: 0; }
+.renews-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.renews-locked { margin: var(--sp-2) 0 0; overflow-wrap: anywhere; }
 .ai-summary { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--blue-bg); color: var(--text); }
 .ai-summary h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); color: var(--blue-text); }
 .ai-summary p { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }

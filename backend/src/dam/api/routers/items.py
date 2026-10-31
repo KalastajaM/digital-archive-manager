@@ -180,10 +180,10 @@ def renew(app: AppDep, item_id: int, body: RenewBody) -> dict:
 
 @router.get("/renewals/open", response_model=list[RenewCandidateOut])
 def renewal_candidates(app: AppDep) -> list[dict]:
-    """The open items of trays with ``renew``, for the Inbox's "Renews …?": the folder
-    and For of each item's first file, and whether that file is locked as stored (an
-    unlock grant does not count). The Inbox matches them to the folder and person it
-    files into."""
+    """The open items of trays with ``renew``, for the Inbox's "Renews …?": the first
+    file of each item (``drive_id``, which the Inbox unlocks for the move), its folder
+    and For, and whether that file is locked as stored (an unlock grant does not
+    count). The Inbox matches them to the folder and person it files into."""
     renewable = {t.id for t in app.trays.defs() if t.renew is not None}
     out = []
     for item in app.trays.list():
@@ -196,6 +196,7 @@ def renewal_candidates(app: AppDep) -> list[dict]:
             {
                 "item_id": item.id,
                 "title": item.title,
+                "drive_id": first,
                 "expires": item.date,
                 "kind": item.fields.get("kind"),
                 "folder": parent(rec.path) if live else None,

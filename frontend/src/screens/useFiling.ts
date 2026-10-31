@@ -45,8 +45,9 @@ export function unexpectedDestinations(applied: ResolvedOp[], previewed: Resolve
   return destinations(applied).filter((dst) => !expected.has(dst));
 }
 
-/** What happens after the move: the tray item, collections, note, and the star and
- * Important marks (a sticker's tick boxes). */
+/** What happens after the move: the tray item, collections, note, the star and
+ * Important marks (a sticker's tick boxes), and the Renew item the file renews (its old
+ * file moves into Expired; the server then ignores the tray). */
 export type FollowUps = {
   tray: string | null;
   /** Every value the form shows for the tray's fields ("" = cleared); ``{}`` lets the
@@ -56,6 +57,7 @@ export type FollowUps = {
   note: string;
   star?: boolean;
   important?: boolean;
+  renews?: { item_id: number; expires: string } | null;
 };
 
 /** ``base`` plus its follow-ups; one left out means none (the server's default), so a
@@ -71,6 +73,10 @@ export function withFollowUps(base: FileRequest, follow: FollowUps): FileRequest
   if (note) request.note = note;
   if (follow.star) request.star = true;
   if (follow.important) request.important = true;
+  if (follow.renews) {
+    request.renews = follow.renews.item_id;
+    request.renew_expires = follow.renews.expires;
+  }
   return request;
 }
 
@@ -85,11 +91,13 @@ export const speaker = (requests: FileRequest[]): FileRequest | undefined =>
  * Both cards give every request of one filing the same tray (except files already in
  * it), collections and note, so one request speaks for all of them. ``prefill`` is that file's scan values:
  * a blank field is shown as "none (will be flagged)" if required, "cleared" if the
- * scan had a value for it, and left out otherwise. */
+ * scan had a value for it, and left out otherwise. ``renewals`` names the Renew item a
+ * request renews. */
 export function followUpLines(
   requests: FileRequest[],
   trays: TrayDef[],
   prefill: Record<string, string> = {},
+  renewals: { item_id: number; title: string }[] = [],
 ): string[] {
   const first = speaker(requests);
   if (!first) return [];
@@ -118,6 +126,10 @@ export function followUpLines(
   if (note) lines.push(`Note: ${note.length > NOTE_SHOWN ? `${note.slice(0, NOTE_SHOWN)}…` : note}`);
   if (first.star) lines.push("Star it");
   if (first.important) lines.push("Mark Important");
+  if (first.renews != null) {
+    const title = renewals.find((c) => c.item_id === first.renews)?.title ?? `item ${first.renews}`;
+    lines.push(`Renews ${title}, old file to Expired`);
+  }
   return lines;
 }
 

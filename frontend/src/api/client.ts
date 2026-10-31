@@ -1469,6 +1469,17 @@ export const useRenew = () => {
   });
 };
 
+/** An open item of a tray with ``renew``: its first file (``drive_id``), that file's
+ * folder and For, and whether it is locked (as stored). */
+export type RenewCandidate = Schemas["RenewCandidateOut"];
+
+/** The open Renew items, for the Inbox's "Renews …?" suggestion and picker. */
+export const useRenewCandidates = () =>
+  useQuery({
+    queryKey: [...keys.items, "renewals-open"],
+    queryFn: ({ signal }) => apiGet("/api/renewals/open", { signal }),
+  });
+
 /** The Undo of a renewal that moved no file (``undo: "renewal"``); one that moved a file
  * is undone from Activity. */
 export const useRenewalUndo = () => {

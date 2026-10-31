@@ -139,12 +139,13 @@ class RenewPreviewOut(BaseModel):
 
 class RenewCandidateOut(BaseModel):
     """An open item of a tray with ``renew``, for the Inbox's "Renews …?" suggestion:
-    ``folder`` holds its first file (None: no file, or it is gone), ``person`` is that
-    file's For, and ``locked`` says the file is locked as stored (an unlock grant is
-    not counted)."""
+    ``drive_id`` is its first file (None: no file), ``folder`` holds that file (None:
+    no file, or it is gone), ``person`` is that file's For, and ``locked`` says the
+    file is locked as stored (an unlock grant is not counted)."""
 
     item_id: int
     title: str
+    drive_id: str | None
     expires: date | None
     kind: str | None
     folder: str | None

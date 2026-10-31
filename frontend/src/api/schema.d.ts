@@ -1910,10 +1910,10 @@ export interface paths {
         };
         /**
          * Renewal Candidates
-         * @description The open items of trays with ``renew``, for the Inbox's "Renews …?": the folder
-         *     and For of each item's first file, and whether that file is locked as stored (an
-         *     unlock grant does not count). The Inbox matches them to the folder and person it
-         *     files into.
+         * @description The open items of trays with ``renew``, for the Inbox's "Renews …?": the first
+         *     file of each item (``drive_id``, which the Inbox unlocks for the move), its folder
+         *     and For, and whether that file is locked as stored (an unlock grant does not
+         *     count). The Inbox matches them to the folder and person it files into.
          */
         get: operations["renewal_candidates_api_renewals_open_get"];
         put?: never;
@@ -7991,15 +7991,17 @@ export interface components {
         /**
          * RenewCandidateOut
          * @description An open item of a tray with ``renew``, for the Inbox's "Renews …?" suggestion:
-         *     ``folder`` holds its first file (None: no file, or it is gone), ``person`` is that
-         *     file's For, and ``locked`` says the file is locked as stored (an unlock grant is
-         *     not counted).
+         *     ``drive_id`` is its first file (None: no file), ``folder`` holds that file (None:
+         *     no file, or it is gone), ``person`` is that file's For, and ``locked`` says the
+         *     file is locked as stored (an unlock grant is not counted).
          */
         RenewCandidateOut: {
             /** Item Id */
             item_id: number;
             /** Title */
             title: string;
+            /** Drive Id */
+            drive_id: string | null;
             /** Expires */
             expires: string | null;
             /** Kind */

@@ -69,6 +69,7 @@ def test_candidates_list_folder_person_locked(client, app, item):
         {
             "item_id": item.id,
             "title": item.title,
+            "drive_id": "old",
             "expires": OLD_DATE.isoformat(),
             "kind": "Passport",
             "folder": BANKS,

@@ -7,6 +7,7 @@ import {
   type FileItResult,
   type FileRequest,
   type InboxEntry,
+  type RenewCandidate,
   type ResolvedOp,
   type RuleOffer,
   type TrayDef,
@@ -14,6 +15,8 @@ import {
   useDeclineRule,
   useFilingCodes,
   useInbox,
+  useRenewalUndo,
+  useRenewCandidates,
   useStatus,
   useToday,
   useCollections,
@@ -89,6 +92,16 @@ function addedTo(result: FileItResult, requests: FileRequest[], trays: TrayDef[]
   return targets.size > 0 ? ` · added to ${[...targets].join(", ")}` : "";
 }
 
+/** The Renew item a filing renewed, by title, and why its old file did not move (if it
+ * did not), or null when the filing renewed nothing. */
+function renewedOf(result: FileItResult, requests: FileRequest[], renewals: RenewCandidate[]) {
+  const request = requests.find((r) => r.renews != null);
+  if (!request || !result.renew_undo || !result.renew_batch) return null;
+  const title = renewals.find((c) => c.item_id === request.renews)?.title ?? "the item";
+  const skipped = result.renew_skipped ? ` ${result.renew_skipped}, so it was not moved.` : "";
+  return { title, skipped, batch: result.renew_batch, own: result.renew_undo === "renewal" };
+}
+
 const uniqueTags = (requests: FileRequest[]) => [...new Set(requests.flatMap((r) => r.tags ?? []))];
 
 /** The list's key hints: keys, then what they do. */
@@ -147,6 +160,8 @@ export default function Inbox() {
   const queueButton = useRef<HTMLButtonElement>(null);
   const queueId = useId();
   const trayList = useTrays().data?.trays ?? [];
+  const renewals = useRenewCandidates().data ?? [];
+  const renewalUndo = useRenewalUndo();
   const toast = useToast();
   const status = useStatus();
   const addFiles = useAddFiles(status.data?.inbox_exists === false ? "The inbox folder does not exist yet" : null);
@@ -213,12 +228,31 @@ export default function Inbox() {
 
   const filing = useFiling((result, complete, requests) => {
     const added = addedTo(result, requests, trayList);
-    if (result.done.length > 0) {
+    const renewed = renewedOf(result, requests, renewals);
+    if (renewed?.own) {
+      // nothing journaled: the renewal has an Undo of its own
+      toast({
+        kind: renewed.skipped ? "warning" : "info",
+        text: `Renewed ${renewed.title}.${renewed.skipped}`,
+        action: {
+          label: "Undo",
+          run: () => {
+            if (filing.inFlight.current || undo.undoing.current || dialogOpen()) return;
+            renewalUndo
+              .mutateAsync(renewed.batch)
+              .then(() => toast({ kind: "info", text: "Undone." }))
+              .catch((e: unknown) =>
+                toast({ kind: "error", text: `Could not undo the renewal of ${visible(renewed.title)}: ${visible(errorText(e))}` }),
+              );
+          },
+        },
+      });
+    } else if (result.done.length > 0) {
       const target = { batchId: result.batch_id };
       setLastApplied(target);
-      const text = `${summary(result)}${added}`;
+      const text = `${summary(result)}${added}${renewed ? ` · renewed ${renewed.title}.${renewed.skipped}` : ""}`;
       toast({
-        kind: complete ? "info" : "warning",
+        kind: complete && !renewed?.skipped ? "info" : "warning",
         text: complete ? text : `Partly applied: ${text}`,
         action: {
           label: "Undo",
@@ -870,7 +904,7 @@ export default function Inbox() {
           followUps={
             markedOpen
               ? markedFollowUps(filing.confirm.requests, trayList)
-              : followUpLines(filing.confirm.requests, trayList, filing.confirm.prefill)
+              : followUpLines(filing.confirm.requests, trayList, filing.confirm.prefill, renewals)
           }
           busy={filing.busy}
           confirmLabel="File"
