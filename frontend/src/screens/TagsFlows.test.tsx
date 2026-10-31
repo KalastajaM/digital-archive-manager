@@ -1,12 +1,12 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SearchHit } from "../api/client";
+import { TagTree } from "../components/BrowseTagTree";
 import { Sidebar } from "../components/ui/Sidebar";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import Browse from "./Browse";
-import Tags from "./Tags";
 import Today from "./Today";
 
 afterEach(() => {
@@ -190,7 +190,7 @@ describe("Browse with tags", () => {
   });
 });
 
-describe("Tags screen", () => {
+describe("Tag management in Browse's tag tree", () => {
   function setup(extra: Parameters<typeof mockFetch>[0] = {}, tags = TAGS) {
     const calls = mockFetch({
       "GET /api/tags/all": { body: tags },
@@ -199,34 +199,19 @@ describe("Tags screen", () => {
     });
     const user = userEvent.setup();
     renderWithProviders(
-      <MemoryRouter initialEntries={["/tags"]}>
-        <Tags />
+      <MemoryRouter initialEntries={["/browse?tree=tags"]}>
+        <TagTree active={{ collections: [], tags: [], starred: false, important: false }} onPick={vi.fn()} />
         <Where />
       </MemoryRouter>,
     );
     return { calls, user };
   }
   const menu = async (user: ReturnType<typeof userEvent.setup>, name: string, item: string) => {
-    await user.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+    // the row's right-click menu (a group's too: ``name`` is then the group's name)
+    const row = (await screen.findByText(name)).closest(".tree-row") as HTMLElement;
+    await user.pointer({ keys: "[MouseRight]", target: row });
     await user.click(await screen.findByRole("menuitem", { name: item }));
   };
-
-  it("lists every tag with its count under its group, each linking to its files", async () => {
-    setup();
-    const care = await screen.findByRole("region", { name: "Group Care" });
-    expect(within(care).getByRole("link", { name: "health" })).toHaveAttribute("href", "/browse?q=tag%3Ahealth");
-    expect(within(care).getByText("1 file")).toBeInTheDocument();
-    const rest = screen.getByRole("region", { name: "Tags in no group" });
-    expect(within(rest).getAllByRole("link").map((a) => a.textContent)).toEqual(["Kela", "medical"]);
-    expect(within(rest).getByText("3 files")).toBeInTheDocument();
-  });
-
-  it("filters through the API", async () => {
-    const { calls, user } = setup();
-    await screen.findByRole("region", { name: "Group Care" });
-    await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "ke");
-    await waitFor(() => expect(calls.some((c) => c.url === "/api/tags/all?query=ke")).toBe(true));
-  });
 
   it("creates a tag; the toast offers Undo", async () => {
     const created = { message: "Created 'later'", undo: { ...UNDO, drop: ["later"] } };
@@ -279,19 +264,6 @@ describe("Tags screen", () => {
     expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 
-  it("merges the ticked tags after a preview", async () => {
-    const { calls, user } = setup({
-      "POST /api/tags/merge": { body: { into: "medical", gains: 1, removes: ["Kela", "health"], message: "1 file gets 'medical'; 'Kela', 'health' are removed", undo: UNDO } },
-    });
-    await user.click(await screen.findByRole("checkbox", { name: "Select Kela" }));
-    await user.click(screen.getByRole("checkbox", { name: "Select health" }));
-    await user.click(screen.getByRole("button", { name: "Merge selected" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Into" }), "medical");
-    expect(await screen.findByText("1 file gets 'medical'; 'Kela', 'health' are removed.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Merge" }));
-    await waitFor(() => expect(posts(calls, "/api/tags/merge").at(-1)?.body).toMatchObject({ sources: ["Kela", "health"], into: "medical", dry_run: false }));
-  });
-
   it("delete confirms with the count, then Undo puts it back", async () => {
     const undo = { ...UNDO, restore: [{ name: "medical", drive_ids: ["a"] }] };
     const { calls, user } = setup({ "POST /api/tags/delete": { body: { message: "Deleted 'medical' (on 3 files)", undo } } });
@@ -332,14 +304,14 @@ describe("Tags screen", () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(posts(calls, "/api/tags/groups")[0].body).toEqual({ name: "Money" });
 
-    await menu(user, "the group Care", "Rename group…");
+    await menu(user, "Care", "Rename group…");
     const name = screen.getByRole("textbox", { name: "Name" });
     await user.clear(name);
     await user.type(name, "Health");
     await user.click(screen.getByRole("button", { name: "Rename" }));
     expect(posts(calls, "/api/tags/groups/1/rename")[0].body).toEqual({ name: "Health" });
 
-    await menu(user, "the group Care", "Delete group");
+    await menu(user, "Care", "Delete group");
     expect(await screen.findByText(/its tags stay, ungrouped/)).toBeInTheDocument();
     const undo = screen.getAllByRole("button", { name: "Undo" }).at(-1)!;
     await user.click(undo);
@@ -375,7 +347,7 @@ describe("Sidebar Tags section", () => {
     { name: "Kela", files: 2, pinned: false },
   ];
 
-  it("lists the tags it is given in order, each opening its files; the caption opens the Tags screen", async () => {
+  it("lists the tags it is given in order, each opening its files; the caption opens the tag tree in Browse", async () => {
     const { user } = setup(SIDEBAR);
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = await within(nav).findByRole("link", { name: "health (1)" });
@@ -383,7 +355,7 @@ describe("Sidebar Tags section", () => {
     expect(within(nav).getByRole("link", { name: "Kela (2)" })).toHaveAttribute("href", "/browse?q=tag%3AKela");
     const all = within(nav).getAllByRole("link").map((a) => a.getAttribute("aria-label") ?? a.textContent);
     expect(all.indexOf("health (1)")).toBeLessThan(all.indexOf("Kela (2)"));
-    expect(within(nav).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/tags");
+    expect(within(nav).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/browse?tree=tags");
     await user.click(within(nav).getByRole("link", { name: "Kela (2)" }));
     expect(where()).toBe("/browse?q=tag%3AKela");
   });

@@ -157,5 +157,17 @@ describe("a collection above its files in Browse", () => {
     expect(within(bar).queryByRole("navigation", { name: /path|Breadcrumb|Folder/i })).toBeNull();
     expect(within(bar).queryByText("Archive")).toBeNull();
   });
+
+  it("ticking files shows their actions above the list, with Move to collection in a collection", async () => {
+    setup("/browse?tree=collections&q=collection:Legal");
+    const user = userEvent.setup();
+    expect(within(pane()).queryByRole("button", { name: /selected files/ })).toBeNull();
+    for (const name of ["will.pdf", "deed.pdf"]) {
+      const row = (await within(pane()).findByText(name)).closest("li") as HTMLElement;
+      await user.click(within(row).getByRole("checkbox"));
+    }
+    await user.click(within(pane()).getByRole("button", { name: "Actions for 2 selected files" }));
+    expect(await screen.findByRole("menuitem", { name: "Move to collection…" })).toBeInTheDocument();
+  });
 });
 

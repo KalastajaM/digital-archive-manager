@@ -183,3 +183,24 @@ class ExportOut(BaseModel):
     size: int
     needs_confirm: bool
     not_included: list[NotIncludedOut]
+
+
+class MergePreviewOut(BaseModel):
+    problems: list[str]  # why it cannot be merged; empty: it can
+
+
+class DeleteRowOut(BaseModel):
+    id: int
+    name: str
+    state: Literal["open", "closed"]
+    files: int  # members (files and folders) it holds itself
+
+
+class DeletePreviewOut(BaseModel):
+    collections: list[DeleteRowOut]  # the collection first, then those inside it
+
+
+class DeleteOut(BaseModel):
+    deleted: int  # how many collections went
+    batch: BatchResultOut | None
+    problems: list[str]

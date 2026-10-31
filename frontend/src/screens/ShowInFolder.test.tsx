@@ -1,6 +1,6 @@
 /** A click on a file in Today's Starred card shows it in Browse (its folder, the file
- * selected and previewed). A collection page, Starred and Important included, keeps its page
- * on a click and has "Show in folder" in the file panel. */
+ * selected and previewed). A collection's page keeps its page on a click and has "Show in
+ * folder" in the file panel. */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -8,8 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Collection, DirEntry } from "../api/client";
 import { mockFetch, renderWithProviders } from "../test-utils";
 import Browse from "./Browse";
-import Collections from "./Collections";
-import Starred from "./Starred";
+import CollectionDetail from "./CollectionDetail";
 import { StarredCard } from "../components/today/StarredCard";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -76,9 +75,8 @@ function setup(start: string, c: Collection, kind: "starred" | null) {
   renderWithProviders(
     <MemoryRouter initialEntries={[start]}>
       <Routes>
-        <Route path="/starred" element={<Starred today="2026-10-19" />} />
         <Route path="/today" element={<StarredCard frame={{ fold: { folded: false, onToggle: () => {} }, headerProps: {} }} />} />
-        <Route path="/collections/:id?" element={<Collections today="2026-10-19" />} />
+        <Route path="/collections/:id" element={<CollectionDetail id={7} today="2026-10-19" />} />
         <Route path="/browse" element={<Browse />} />
       </Routes>
       <Where />
@@ -112,18 +110,6 @@ describe("Today's Starred card", () => {
     setup("/today", collection({ ...STARRED, members: [member({ path: null, missing: true })] }), "starred");
     expect(await screen.findByText("missing")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /f1/ })).toBeNull();
-  });
-});
-
-describe("the Starred page", () => {
-  it("keeps its page on a click, like any collection, and has Show in folder", async () => {
-    const { user } = setup("/starred", STARRED, "starred");
-    await user.click(await screen.findByRole("button", { name: /^a\.pdf/ }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/starred");
-    const panel = screen.getByRole("complementary", { name: "Selected file" });
-    await user.click(await within(panel).findByRole("button", { name: "Show in folder" }));
-    await waitFor(() => expect(screen.getByTestId("where").textContent).toContain("/browse?path="));
-    await waitFor(() => expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true"));
   });
 });
 

@@ -1,13 +1,14 @@
 /** Browse's collection tree: Important and Starred first, then the open collections as
  * they nest; a click picks one, the picked one is current, and a long name stays in its row. */
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
 import type { ScopeState } from "../browseScope";
 import css from "../styles-new.css?raw";
 import { setDragFiles, setDragSource } from "../dnd";
-import { dataTransfer, mockFetch, renderWithProviders } from "../test-utils";
+import { dataTransfer, deferred, mockFetch, renderWithProviders } from "../test-utils";
 import { CollectionTree } from "./BrowseCollectionTree";
 
 const coll = (id: number, name: string, parent_id: number | null = null): CollectionRow => ({
@@ -35,7 +36,11 @@ const NONE: ScopeState = { collections: [], tags: [], starred: false, important:
 function setup(collections: CollectionRow[], active: ScopeState = NONE, routes: Parameters<typeof mockFetch>[0] = {}) {
   const calls = mockFetch({ "GET /api/collections": { body: collections }, ...routes });
   const onPick = vi.fn();
-  renderWithProviders(<CollectionTree active={active} onPick={onPick} />);
+  renderWithProviders(
+    <MemoryRouter>
+      <CollectionTree active={active} onPick={onPick} />
+    </MemoryRouter>,
+  );
   return { calls, onPick, user: userEvent.setup() };
 }
 
@@ -50,6 +55,22 @@ describe("CollectionTree", () => {
     expect(names()).toEqual(["Important", "Starred", "Legal", "Michiel", "Car"]);
     const level = (name: string) => Number(screen.getByText(name).closest('[role="treeitem"]')?.getAttribute("aria-level"));
     expect(level("Michiel")).toBe(level("Legal") + 1);
+  });
+
+  it("a row shows its files, its open checks and an Ongoing problem, with the counts in its tooltip", async () => {
+    const car = { ...coll(3, "Car"), files: 12, open_checks: 2, ongoing_status: "The name is taken in ##. Ongoing: using Car_2" };
+    setup([car, coll(4, "Tyres", 3)]);
+    const row = (await screen.findByRole("treeitem", { name: "Car" })).querySelector(".tree-row") as HTMLElement;
+    expect(within(row).getByText("12")).toHaveClass("tree-count");
+    expect(within(row).getByTitle("2 open checks")).toBeInTheDocument();
+    expect(within(row).getByTitle("The name is taken in ##. Ongoing: using Car_2")).toBeInTheDocument();
+    expect(row.querySelector(".tree-name")).toHaveAttribute("title", "Car\n12 files · 1 collection · 2 open checks");
+    expect(screen.getByRole("treeitem", { name: "Car" })).toHaveAccessibleDescription(
+      "12 files · 1 collection · 2 open checks. The name is taken in ##. Ongoing: using Car_2",
+    );
+    // an empty one shows no count
+    const tyres = screen.getByRole("treeitem", { name: "Tyres" }).querySelector(".tree-row") as HTMLElement;
+    expect(tyres.querySelector(".tree-count")).toBeNull();
   });
 
   it("a click picks, and the picked row is current", async () => {
@@ -72,7 +93,7 @@ describe("CollectionTree", () => {
     setup([coll(5, long)]);
     const name = await screen.findByText(long);
     expect(name).toHaveClass("tree-name");
-    expect(name).toHaveAttribute("title", long);
+    expect(name).toHaveAttribute("title", `${long}\n0 files`); // the full name, then its counts
     expect(css).toMatch(/\.tree-name\s*{[^}]*text-overflow:\s*ellipsis/);
   });
 
@@ -110,7 +131,7 @@ describe("CollectionTree", () => {
     const row = (await screen.findByText("Car")).closest(".tree-row") as HTMLElement;
     await user.pointer({ keys: "[MouseRight]", target: row });
     const menu = await screen.findByRole("menu");
-    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Open", "New collection inside…", "Move up", "Move down"]);
+    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Open", "New collection inside…", "Merge into…", "Delete…", "Move up", "Move down"]);
     await user.click(within(menu).getByRole("menuitem", { name: "New collection inside…" }));
     expect(await screen.findByRole("dialog", { name: /inside Car/ })).toBeInTheDocument();
     await user.keyboard("{Escape}");
@@ -124,5 +145,104 @@ describe("CollectionTree", () => {
     await user.click(await screen.findByRole("button", { name: "New collection" }));
     expect(await screen.findByRole("dialog", { name: "New collection" })).toBeInTheDocument();
   });
+
+  it("Show closed adds the closed collections, greyed", async () => {
+    mockFetch({
+      "GET /api/collections": (call) => ({
+        body: call.url.includes("state=all") ? [coll(1, "Legal"), { ...coll(5, "Old"), state: "closed" }] : [coll(1, "Legal")],
+      }),
+    });
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter>
+        <CollectionTree active={NONE} onPick={vi.fn()} />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Legal");
+    expect(screen.queryByText("Old")).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Show closed" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await user.click(toggle);
+    const old = (await screen.findByText("Old")).closest('[role="treeitem"]') as HTMLElement;
+    expect(old.querySelector(".tree-row")).toHaveClass("tree-closed");
+  });
+
+  it("lists the collections by position, not by name", async () => {
+    setup([{ ...coll(1, "Zed"), position: 0 }, { ...coll(2, "Alpha"), position: 1 }]);
+    await screen.findByText("Alpha");
+    expect(names()).toEqual(["Important", "Starred", "Zed", "Alpha"]);
+  });
+
+  it("the right-click menu moves a collection down", async () => {
+    const { calls, user } = setup([coll(1, "Car"), coll(2, "Attic")], NONE, {
+      "POST /api/collections/1/move": { body: { collection: coll(1, "Car"), batch: null, problems: [], ongoing_status: null } },
+    });
+    const row = (await screen.findByText("Car")).closest(".tree-row") as HTMLElement;
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    await user.click(await screen.findByRole("menuitem", { name: "Move down" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections/1/move")).toHaveLength(1));
+    expect(calls.find((c) => c.url === "/api/collections/1/move")!.body).toEqual({ after_id: 2 });
+  });
+
+  it("startClosed opens with the closed collections shown", async () => {
+    mockFetch({
+      "GET /api/collections": (call) => ({ body: call.url.includes("state=all") ? [coll(1, "Legal"), { ...coll(5, "Old"), state: "closed" }] : [coll(1, "Legal")] }),
+    });
+    renderWithProviders(
+      <MemoryRouter>
+        <CollectionTree active={NONE} onPick={vi.fn()} startClosed />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Old")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show closed" })).toHaveAttribute("aria-pressed", "true");
+  });
 });
 
+describe("CollectionTree's New collection", () => {
+  const created = { ...coll(7, "Sauna"), id: 7 };
+
+  it("startNew opens the New collection sheet at once (the sidebar's +)", async () => {
+    mockFetch({ "GET /api/collections": { body: [] } });
+    renderWithProviders(
+      <MemoryRouter>
+        <CollectionTree active={NONE} onPick={vi.fn()} startNew />
+      </MemoryRouter>,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("");
+    // outside the tree, so it stays when a narrow window folds the tree away
+    expect(dialog.closest("nav")).toBeNull();
+  });
+
+  it("creates it from the sheet and picks it", async () => {
+    const { calls, onPick, user } = setup([], NONE, { "POST /api/collections": { body: created } });
+    await user.click(await screen.findByRole("button", { name: "New collection" }));
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Name" }), "  Sauna {Enter}");
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith({ kind: "collection", name: "Sauna" }, false));
+    expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections").map((c) => c.body)).toEqual([{ name: "Sauna" }]);
+  });
+
+  it("a double Create makes one collection", async () => {
+    const pending = deferred<{ body: unknown }>();
+    const { calls, user } = setup([], NONE, { "POST /api/collections": () => pending.promise });
+    await user.click(await screen.findByRole("button", { name: "New collection" }));
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Name" }), "Car");
+    const create = within(dialog).getByRole("button", { name: "Create" });
+    act(() => {
+      create.click();
+      create.click();
+    });
+    await act(async () => pending.resolve({ body: created }));
+    expect(calls.filter((c) => c.method === "POST" && c.url === "/api/collections")).toHaveLength(1);
+  });
+
+  it("shows a refused name in the sheet", async () => {
+    const { user } = setup([], NONE, { "POST /api/collections": { status: 400, body: { error: "a collection named ‮Sauna exists" } } });
+    await user.click(await screen.findByRole("button", { name: "New collection" }));
+    const dialog = await screen.findByRole("dialog", { name: "New collection" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Name" }), "sauna{Enter}");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("⟨U+202E⟩Sauna exists");
+  });
+});

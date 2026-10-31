@@ -236,7 +236,7 @@ describe("the Important page and its sidebar row", () => {
     const link = await within(nav).findByRole("link", { name: "Important (1)" });
     expect(link).toHaveAttribute("href", "/important");
     const names = within(nav).getAllByRole("link").map((a) => a.getAttribute("href"));
-    expect(names.indexOf("/important")).toBe(names.indexOf("/collections") + 1); // first in Collections
+    expect(names.indexOf("/important")).toBe(names.indexOf("/browse?tree=collections") + 1); // first in Collections
     await user.click(link);
     const page = await screen.findByRole("region", { name: "Important" });
     expect(await within(page).findByRole("heading", { name: "! Important" })).toBeInTheDocument();

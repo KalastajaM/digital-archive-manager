@@ -146,6 +146,17 @@ class TagAdmin:
                 ).scalars()
             )
 
+    def carried(self, drive_ids: list[str]) -> list[str]:
+        """Every tag any of these files has, ordered by name (case and accents ignored)."""
+        with self.engine.connect() as conn:
+            names = conn.execute(
+                select(tags.c.name)
+                .distinct()
+                .join(file_tags, file_tags.c.tag_id == tags.c.id)
+                .where(file_tags.c.drive_id.in_(drive_ids))
+            ).scalars()
+            return sorted(names, key=fold)
+
     # -- helpers --------------------------------------------------------------
 
     def _id(self, conn: Connection, name: str) -> int:
@@ -379,6 +390,31 @@ class TagAdmin:
         return group_id
 
     # -- undo -----------------------------------------------------------------
+
+    def unapply(self, name: str, drive_ids: list[str]) -> TagUndo:
+        """Take the tag off these files (the ones that carry it; a tag that is the same but
+        for case and accents counts). One undo step: Undo puts it back on exactly those."""
+        ids = list(dict.fromkeys(drive_ids))
+        if not ids:
+            raise TagError("invalid", "No files given")
+        with write_tx(self.engine) as conn:
+            name = self._clash(conn, _clean(name)) or _clean(name)
+            tag_id = self._id(conn, name)
+            row = conn.execute(select(tags).where(tags.c.id == tag_id)).one()
+            had: list[str] = []
+            for part in _chunks(ids):
+                had += conn.execute(
+                    select(file_tags.c.drive_id).where(
+                        file_tags.c.tag_id == tag_id, file_tags.c.drive_id.in_(part)
+                    )
+                ).scalars()
+                conn.execute(
+                    delete(file_tags).where(
+                        file_tags.c.tag_id == tag_id, file_tags.c.drive_id.in_(part)
+                    )
+                )
+        snapshot = TagSnapshot(name, row.pinned_at, row.group_id, row.last_used_at, had)
+        return TagUndo(restore=[snapshot])
 
     def undo(self, undo: TagUndo) -> None:
         """Put things back as ``undo`` says: first the tags to remove, then the files to

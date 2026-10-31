@@ -30,12 +30,17 @@ from dam.api.schemas import (
     CollectionMoveBody,
     CollectionOut,
     CollectionRowOut,
+    DeleteBody,
+    DeleteOut,
+    DeletePreviewOut,
     DriveIdBody,
     DriveIdsBody,
     GroupCreateBody,
     GroupPatchBody,
     MemberAttentionOut,
     MemberGroupBody,
+    MergeBody,
+    MergePreviewOut,
     MoveMembersBody,
     NameBody,
     ParentBody,
@@ -208,6 +213,15 @@ def remove_member(app: AppDep, collection_id: int, body: DriveIdBody) -> dict:
     return synced(app, collection_id, f"Removed {what} from {c.name}")
 
 
+@router.post("/{collection_id}/members/remove-many", response_model=CollectionChangeOut)
+def remove_many(app: AppDep, collection_id: int, body: DriveIdsBody) -> dict:
+    """Several files out of the collection in one step (Browse's selection); a file that
+    is not a member is left alone. Adding them again reverses it."""
+    what = file_phrase(app, body.drive_ids)
+    c = app.collections.remove_members(collection_id, body.drive_ids, notify=False)
+    return synced(app, collection_id, f"Removed {what} from {c.name}")
+
+
 @router.post("/{collection_id}/members/move", response_model=CollectionChangeOut)
 def move_members(app: AppDep, collection_id: int, body: MoveMembersBody) -> dict:
     """Move files from this collection into ``to`` (a sibling, parent or child in the
@@ -217,6 +231,57 @@ def move_members(app: AppDep, collection_id: int, body: MoveMembersBody) -> dict
     source = app.collections.get(collection_id)
     c = app.collections.move_members(collection_id, body.to, body.drive_ids, notify=False)
     return synced(app, c.id, f"Moved {what} from {source.name} to {c.name}")
+
+
+@router.get("/{collection_id}/delete/preview", response_model=DeletePreviewOut)
+def delete_preview(app: AppDep, collection_id: int) -> dict:
+    """What a delete takes: the collection and every one inside it, each with its state
+    and how many files it holds. Reads only; 400 for a built-in."""
+    return {
+        "collections": [
+            {"id": c.id, "name": c.name, "state": c.state, "files": len(c.members)}
+            for c in app.collections.subtree(collection_id)
+        ]
+    }
+
+
+@router.post("/{collection_id}/delete", response_model=DeleteOut)
+def delete_collection(app: AppDep, collection_id: int, body: DeleteBody | None = None) -> dict:
+    """Delete the collection and every one inside it (snapshot first, no Undo; files are
+    never touched). ``ids``: the collections the preview listed (refused if they differ)."""
+    deleted, result = app.delete_collection(collection_id, expect=body.ids if body else None)
+    batch = asdict(result.batch) if result is not None and result.batch is not None else None
+    return {
+        "deleted": deleted,
+        "batch": batch,
+        "problems": list(result.problems) if result is not None else [],
+    }
+
+
+@router.post("/{collection_id}/merge/preview", response_model=MergePreviewOut)
+def merge_preview(app: AppDep, collection_id: int, body: MergeBody) -> dict:
+    """Whether the collection can be merged into ``into``: the reasons it cannot (empty:
+    it can). Reads only."""
+    return {"problems": app.collections.merge_check(collection_id, body.into)}
+
+
+@router.post("/{collection_id}/merge", response_model=CollectionChangeOut)
+def merge(app: AppDep, collection_id: int, body: MergeBody) -> dict:
+    """Merge the collection into ``into`` (snapshot first, no Undo); answers with ``into``
+    and what the Ongoing sync did. 400 with the reason when it cannot be merged."""
+    result = app.merge_collections(collection_id, body.into)
+    c = app.collections.get(body.into)
+    if result is None:
+        batch, problems = None, []
+    else:
+        batch = asdict(result.batch) if result.batch is not None else None
+        problems = list(result.problems)
+    return {
+        "collection": collection_out(app, c),
+        "batch": batch,
+        "problems": problems,
+        "ongoing_status": c.ongoing_status,
+    }
 
 
 @router.post("/{collection_id}/close/preview", response_model=list[ResolvedOpOut])

@@ -319,6 +319,10 @@ class TagListOut(BaseModel):
     groups: list[TagGroupOut]
 
 
+class CarriedTagsOut(BaseModel):
+    tags: list[str]  # every tag any of the files has, by name
+
+
 class SidebarTagOut(BaseModel):
     name: str
     files: int

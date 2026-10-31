@@ -89,12 +89,12 @@ describe("Sidebar", () => {
       ["To pay (3)", "/trays/to-pay"],
       ["To action (1)", "/trays/to-action"],
       ["To read (4)", "/trays/to-read"],
-      ["Collections", "/collections"],
+      ["Collections", "/browse?tree=collections"],
       ["Important", "/important"],
       ["Starred", "/browse?tree=collections&q=is%3Astarred"],
       ["Legal", "/browse?tree=collections&q=collection%3ALegal"],
       ["Tax 2026", "/browse?tree=collections&q=collection%3A%22Tax+2026%22"],
-      ["Tags", "/tags"],
+      ["Tags", "/browse?tree=tags"],
       ["Ask", "/ask"],
       ["Activity", "/activity"],
       ["Maintenance", "/maintenance"],
@@ -275,6 +275,21 @@ describe("Sheet", () => {
     fireEvent(screen.getByRole("dialog", { name: "Inner" }), new Event("cancel", { bubbles: true, cancelable: true }));
     expect(inner).toHaveBeenCalledTimes(1);
     expect(outer).not.toHaveBeenCalled();
+  });
+
+  it("a sheet opened from inside another is not inside it on the page, so the outer one's styles never reach it", () => {
+    // the rule sheet lays its own body out in two columns: a folder picker opened from it
+    // took that layout too (its tree squeezed into the left column)
+    renderWithProviders(
+      <Sheet open title="New rule" className="rule-sheet" onClose={() => {}}>
+        <Sheet open title="Choose a folder" onClose={() => {}}>
+          <p>folders</p>
+        </Sheet>
+      </Sheet>,
+    );
+    const inner = screen.getByRole("dialog", { name: "Choose a folder" });
+    expect(inner.closest(".rule-sheet")).toBeNull();
+    expect(inner.parentElement).toBe(document.body);
   });
 
   it("keeps the title and the footer outside the scrolling body, in that order", () => {

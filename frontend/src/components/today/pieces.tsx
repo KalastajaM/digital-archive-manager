@@ -31,7 +31,7 @@ export function CollectionsCard({ data, frame, Shell = Card }: { data: TodayData
       fold={frame.fold}
       headerProps={frame.headerProps}
       actions={
-        <Link className="card-link" to="/collections" aria-label="Show all collections">
+        <Link className="card-link" to="/browse?tree=collections" aria-label="Show all collections">
           Show all
         </Link>
       }

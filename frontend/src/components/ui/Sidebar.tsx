@@ -20,7 +20,7 @@ import {
   Sun,
   Tag as TagIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   archiveKey,
@@ -39,10 +39,9 @@ import {
   type DropTarget,
   draggedLabel,
   draggedPaths,
+  type Dragged,
   readDragCollection,
-  readDragFolder,
-  readDragFiles,
-  readDragSource,
+  readFilesOrCollection,
   setDragCollection,
   useDropTarget,
 } from "../../dnd";
@@ -127,13 +126,22 @@ type RowProps = {
   dropProps?: DropTarget["props"];
 };
 
+/** A link into Browse with a query (``/browse?tree=tags``) is current only on that exact
+ * address: a NavLink compares the path alone and would mark it on every Browse address. */
+function SidebarLink({ to, end, className, ...rest }: ComponentProps<typeof Link> & { to: string; end?: boolean; className: string }) {
+  const { pathname, search } = useLocation();
+  if (!to.includes("?")) return <NavLink to={to} end={end} className={className} {...rest} />;
+  const current = pathname + search === to;
+  return <Link to={to} className={current ? `${className} active` : className} aria-current={current ? "page" : undefined} {...rest} />;
+}
+
 /** One sidebar row: a NavLink named "Label (n)" so the count is read along with it. */
 function Row({ to, end, icon: Icon, label, count, badge, dropProps }: RowProps) {
   const n = badge || count || 0;
   const title = useRowTitle();
   return (
     <li>
-      <NavLink
+      <SidebarLink
         to={to}
         end={end}
         className="sidebar-row"
@@ -148,7 +156,7 @@ function Row({ to, end, icon: Icon, label, count, badge, dropProps }: RowProps) 
         ) : count ? (
           <span className="sidebar-count">{count}</span>
         ) : null}
-      </NavLink>
+      </SidebarLink>
     </li>
   );
 }
@@ -182,9 +190,9 @@ function Section({
     <li className="sidebar-section">
       <div className="sidebar-section-head">
         {to ? (
-          <NavLink to={to} end className="sidebar-section-title" {...dropProps}>
+          <SidebarLink to={to} end className="sidebar-section-title" {...dropProps}>
             {title}
-          </NavLink>
+          </SidebarLink>
         ) : (
           <h3 className="sidebar-section-title">{title}</h3>
         )}
@@ -245,18 +253,6 @@ function useDropBackToInbox() {
 
 /** What a collection row takes: files (added as members) or another collection (moved
  * inside it). A drag is one or the other, never both (see ``dnd``). */
-type Dragged = { kind: "files"; ids: string[]; from?: number | null } | { kind: "collection"; id: number };
-/** What a collection row takes: files, or a folder from Browse (as one member, so
- * everything in it belongs), or another collection. */
-const readFilesOrCollection = (e: Parameters<typeof readDragFiles>[0]): Dragged | null => {
-  const id = readDragCollection(e);
-  if (id !== null) return { kind: "collection", id };
-  const folder = readDragFolder(e);
-  if (folder !== null) return { kind: "files", ids: [folder] };
-  const ids = readDragFiles(e);
-  return ids === null ? null : { kind: "files", ids, from: readDragSource(e) };
-};
-
 const FOLD_KEY = "dam.sidebar.collections.folded.v1";
 /** The folded sections (Trays, Collections, Archive): the same in every archive. */
 const SECTION_FOLD_KEY = "dam.sidebar.sections.folded.v1";
@@ -406,12 +402,12 @@ function CollectionsSection({ list, sections }: { list: CollectionRow[]; section
   return (
     <Section
       title="Collections"
-      to="/collections"
+      to="/browse?tree=collections"
       dropProps={top.props}
       folded={sections.folded.has("collections")}
       onFold={() => sections.toggle("collections")}
       foldedCount={look === "new" ? (kids.get(null) ?? []).length + 2 : undefined}
-      add={{ to: "/collections?new=1", label: "New collection" }}
+      add={{ to: "/browse?tree=collections&new=1", label: "New collection" }}
     >
       <ImportantRow />
       <StarredRow />
@@ -526,7 +522,7 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
   return (
     <Section
       title="Tags"
-      to="/tags"
+      to="/browse?tree=tags"
       folded={sections.folded.has("tags")}
       onFold={() => sections.toggle("tags")}
     >
@@ -538,7 +534,7 @@ function TagsSection({ sections }: { sections: SectionFolds }) {
 /** New look: the Tags screen's row in the Archive section, counting every tag. */
 function TagsRow() {
   const all = useAllTags();
-  return <Row to="/tags" icon={TagIcon} label="Tags" count={all.data?.tags.length} />;
+  return <Row to="/browse?tree=tags" icon={TagIcon} label="Tags" count={all.data?.tags.length} />;
 }
 
 /** The tags a Browse address filters by, when it filters by tags alone (no words or

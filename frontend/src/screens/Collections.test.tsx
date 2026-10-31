@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import type { Collection, CollectionChange, CollectionRow, Group, MemberAttention, ResolvedOp } from "../api/client";
 import { type Call, dataTransfer, deferred, IMPORTANT_REFUSED, mockFetch, quarantineRoute, renderWithProviders, undoButton } from "../test-utils";
 import { prepared, STATUS_ON } from "../components/ai/testData";
-import Collections from "./Collections";
+import CollectionDetail from "./CollectionDetail";
 import { UNGROUPED, visibleMembers } from "../components/GroupTree";
 
 const DAY = "2026-10-19";
@@ -56,6 +56,17 @@ const changeOf = (c: Collection, overrides: Partial<CollectionChange> = {}): Col
   ...overrides,
 });
 
+/** The collection page as the app shows it: ``/collections/:id`` forwards to Browse now, but
+ * the detail is this component. */
+function Page() {
+  const id = Number(useParams().id);
+  return (
+    <section className="collection-page" aria-label="Collection">
+      <CollectionDetail key={id} id={id} today={DAY} />
+    </section>
+  );
+}
+
 function Where() {
   const location = useLocation();
   return <output data-testid="where">{location.pathname + location.search}</output>;
@@ -63,7 +74,7 @@ function Where() {
 
 type Routes = Parameters<typeof mockFetch>[0];
 
-function renderCollections(path = "/collections", routes: Routes = {}) {
+function renderCollections(path: string, routes: Routes = {}) {
   const calls = mockFetch({
     "GET /api/collections": (call) => ({
       body: call.url.includes("state=closed")
@@ -89,7 +100,7 @@ function renderCollections(path = "/collections", routes: Routes = {}) {
   const { client } = renderWithProviders(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/collections/:id?" element={<Collections today={DAY} />} />
+        <Route path="/collections/:id" element={<Page />} />
       </Routes>
       <Where />
     </MemoryRouter>,
@@ -124,60 +135,6 @@ const GROUPED: Collection = {
   groups: [QUOTES, PLANS, OLD],
   members: SAUNA.members.map((m) => (m.drive_id === "f1" ? { ...m, group_id: 1 } : m.drive_id === "d1" ? { ...m, group_id: 2 } : m)),
 };
-
-describe("Collections list", () => {
-  it("lists the open collections with file count, open checks and the Ongoing status", async () => {
-    const { calls, user } = renderCollections();
-    const r = await screen.findByRole("article", { name: "Sauna⟨U+202E⟩x" });
-    expect(within(r).getByRole("link", { name: "Sauna⟨U+202E⟩x" })).toHaveAttribute("href", "/browse?tree=collections&q=collection%3ASauna%E2%80%AEx");
-    expect(r).toHaveTextContent("3 files · 2 open checks");
-    expect(within(r).getByText("Not managed: a user file")).toHaveClass("tag-orange");
-    expect(calls.find((c) => c.url.startsWith("/api/collections?"))!.url).toBe("/api/collections?state=open");
-
-    await user.click(screen.getByRole("button", { name: "Closed" }));
-    expect(where()).toBe("/collections?state=closed");
-    const old = await screen.findByRole("article", { name: "Old car" });
-    expect(old).toHaveTextContent("1 file");
-    expect(within(old).getByRole("link")).toHaveAttribute("href", "/browse?tree=collections&q=collection%3A%22Old+car%22");
-    expect(screen.getByRole("button", { name: "Closed" })).toHaveAttribute("aria-pressed", "true");
-  });
-
-  it("New collection creates it and opens it", async () => {
-    const { calls, user } = renderCollections("/collections", {
-      "POST /api/collections": { body: { ...SAUNA, id: 7, members: [] } },
-    });
-    await user.type(await screen.findByRole("textbox", { name: "New collection" }), "  Sauna {Enter}");
-    await waitFor(() => expect(where()).toBe("/open-collection/7"));
-    expect(posts(calls, "/api/collections").map((c) => c.body)).toEqual([{ name: "Sauna" }]);
-  });
-
-  it("the sidebar's + (/collections?new=1) puts the focus in the name field", async () => {
-    renderCollections("/collections?new=1");
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "New collection" })).toHaveFocus());
-  });
-
-  it("a double Create makes one collection", async () => {
-    const created = deferred<{ body: unknown }>();
-    const { calls, user } = renderCollections("/collections", { "POST /api/collections": () => created.promise });
-    await user.type(await screen.findByRole("textbox", { name: "New collection" }), "Car");
-    const create = screen.getByRole("button", { name: "Create" });
-    act(() => {
-      create.click();
-      create.click();
-    });
-    await act(async () => created.resolve({ body: { ...SAUNA, id: 7 } }));
-    expect(posts(calls, "/api/collections")).toHaveLength(1);
-  });
-
-  it("shows a refused name inline", async () => {
-    const { user } = renderCollections("/collections", {
-      "POST /api/collections": { status: 400, body: { error: "a collection named ‮Sauna exists" } },
-    });
-    await user.type(await screen.findByRole("textbox", { name: "New collection" }), "sauna");
-    await user.click(screen.getByRole("button", { name: "Create" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("⟨U+202E⟩Sauna exists");
-  });
-});
 
 describe("Collection detail", () => {
   it("marks a member in an archive folder that is not connected", async () => {
@@ -1368,26 +1325,6 @@ describe("Parent collections", () => {
     const menu = await screen.findByRole("menu", { name: "More actions" });
     expect(within(menu).getByRole("menuitem", { name: "New collection inside…" })).toBeDisabled();
     expect(within(menu).getByRole("menuitem", { name: "Move to…" })).toBeEnabled();
-  });
-
-  it("the index shows the tree: children nested under their parent, A–Z", async () => {
-    renderCollections("/collections", { "GET /api/collections": lists });
-    const houses = await screen.findByRole("article", { name: "Houses" });
-    const item = houses.closest("li")!;
-    const nested = within(item).getAllByRole("article").map((a) => a.getAttribute("aria-label"));
-    expect(nested).toEqual(["Houses", "Sauna", "Deck", "Oven⟨U+202E⟩"]);
-    const top = within(screen.getByRole("list", { name: "Collections" }))
-      .getAllByRole("article")
-      .map((a) => a.getAttribute("aria-label"));
-    expect(top).toEqual(["Car", "Houses", "Sauna", "Deck", "Oven⟨U+202E⟩"]);
-    expect(within(houses).getByText("0 files · 1 collection")).toBeInTheDocument();
-  });
-
-  it("the closed list shows where a closed collection sits", async () => {
-    const { user } = renderCollections("/collections", { "GET /api/collections": lists });
-    await user.click(await screen.findByRole("button", { name: "Closed" }));
-    const shed = await screen.findByRole("article", { name: "Old shed" });
-    expect(shed).toHaveTextContent("In Houses › Sauna");
   });
 });
 

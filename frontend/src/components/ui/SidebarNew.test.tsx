@@ -13,7 +13,7 @@ const TAGS = [
   { name: "taxes", files: 3, pinned: false },
 ];
 
-function setup(onSearch?: () => void) {
+function setup(onSearch?: () => void, at = "/browse") {
   mockFetch({
     "GET /api/status": { body: { inbox_count: 7 } },
     "GET /api/today": { body: { attention: [], overview: { inbox: 0, trays: [], collections: [] } } },
@@ -23,7 +23,7 @@ function setup(onSearch?: () => void) {
     "GET /api/tags/all": { body: { tags: [...TAGS, { name: "a", files: 0, pinned: false }], groups: [] } },
   });
   renderWithProviders(
-    <MemoryRouter initialEntries={["/browse"]}>
+    <MemoryRouter initialEntries={[at]}>
       <Sidebar onSearch={onSearch} />
     </MemoryRouter>,
   );
@@ -75,7 +75,7 @@ describe("Sidebar layout in the New look", () => {
     const row = await within(nav()).findByRole("link", { name: "Sauna (6)" });
     expect(row.querySelector(".sidebar-grip")).not.toBeNull();
     expect(row).toHaveAttribute("draggable", "true");
-    expect(within(nav()).getByRole("link", { name: "New collection" })).toHaveAttribute("href", "/collections?new=1");
+    expect(within(nav()).getByRole("link", { name: "New collection" })).toHaveAttribute("href", "/browse?tree=collections&new=1");
   });
 
   it("splits the tags into Pinned and Recent tags and puts the Tags screen in Archive", async () => {
@@ -89,13 +89,25 @@ describe("Sidebar layout in the New look", () => {
     expect(archive).toEqual(["Tags (3)", "Activity", "Maintenance", "Ask", "Settings", "Help"]);
   });
 
+  it("marks Tags and Collections current only while Browse shows that tree, not on any Browse address", async () => {
+    document.documentElement.dataset.style = "new";
+    setup(() => {}, "/browse?tree=collections");
+    const tags = await within(nav()).findByRole("link", { name: "Tags (3)" });
+    expect(tags).not.toHaveAttribute("aria-current");
+    expect(within(nav()).getByRole("link", { name: "Collections" })).toHaveAttribute("aria-current", "page");
+    cleanup();
+    setup(() => {}, "/browse?tree=tags");
+    expect(await within(nav()).findByRole("link", { name: "Tags (3)" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav()).getByRole("link", { name: "Collections" })).not.toHaveAttribute("aria-current");
+  });
+
   it("keeps the Classic arrangement: no grips, no +, one Tags section, Ask first in Archive", async () => {
     setup();
     await within(nav()).findByRole("link", { name: "taxes (3)" });
     expect(nav().querySelector(".sidebar-grip")).toBeNull();
     expect(within(nav()).queryByRole("link", { name: "New collection" })).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Sauna" })).toBeInTheDocument(); // no count in the name
-    expect(within(nav()).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/tags");
+    expect(within(nav()).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/browse?tree=tags");
     const rows = within(nav()).getAllByRole("link").map((a) => a.getAttribute("aria-label") ?? a.textContent);
     expect(rows.slice(-5)).toEqual(["Ask", "Activity", "Maintenance", "Settings", "Help"]);
   });

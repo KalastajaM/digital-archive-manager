@@ -1,13 +1,12 @@
-/** Changing the order of collections: drag with a drop line (sidebar and collections page),
+/** Changing the order of collections: drag with a drop line (sidebar),
  * Alt+arrows and the context menu, Starred and Important pinned, files still dropped on a
  * sidebar collection. */
 import { createEvent, fireEvent as rtlFire, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
 import { setDragCollection, setDragFiles } from "../dnd";
-import Collections from "../screens/Collections";
 import { type Call, dataTransfer, mockFetch, renderWithProviders } from "../test-utils";
 import { Sidebar } from "./ui/Sidebar";
 
@@ -79,18 +78,6 @@ function sidebar(list = LIST, extra: Parameters<typeof mockFetch>[0] = {}) {
   renderWithProviders(
     <MemoryRouter initialEntries={["/browse"]}>
       <Sidebar />
-    </MemoryRouter>,
-  );
-  return { calls, user: userEvent.setup() };
-}
-
-function page(list = LIST, extra: Parameters<typeof mockFetch>[0] = {}) {
-  const calls = mockFetch({ ...BASE, ...extra, "GET /api/collections": { body: list } });
-  renderWithProviders(
-    <MemoryRouter initialEntries={["/collections"]}>
-      <Routes>
-        <Route path="/collections/:id?" element={<Collections today="2026-10-19" />} />
-      </Routes>
     </MemoryRouter>,
   );
   return { calls, user: userEvent.setup() };
@@ -303,103 +290,5 @@ describe("sidebar order", () => {
     await waitFor(() => expect(moves(calls)).toHaveLength(1));
     expect(moves(calls)[0].body).toEqual({ before_id: 2 });
     expect(await screen.findByText("Moved Boat up")).toBeInTheDocument();
-  });
-});
-
-describe("collections page order", () => {
-  const rowOf = async (name: string) => sized(await screen.findByRole("article", { name }));
-
-  it("lists the collections by position", async () => {
-    page([coll(1, "Zed", 0), coll(2, "Alpha", 1)]);
-    await screen.findByRole("article", { name: "Zed" });
-    const names = screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"));
-    expect(names).toEqual(["Zed", "Alpha"]);
-  });
-
-  it("dragging a row over the top third of a sibling shows a line and drops before it", async () => {
-    const { calls } = page();
-    const car = await rowOf("Car");
-    const dt = dragColl(3, "Boat");
-    fireEvent.dragOver(car, { dataTransfer: dt, clientY: 10 });
-    expect(car).toHaveAttribute("data-reorder", "before");
-    fireEvent.drop(car, { dataTransfer: dt, clientY: 10 });
-    await waitFor(() => expect(moves(calls)).toHaveLength(1));
-    expect(moves(calls)[0].url).toBe("/api/collections/3/move");
-    expect(moves(calls)[0].body).toEqual({ before_id: 1 });
-  });
-
-  it("the middle third highlights the row; dropping there moves it inside", async () => {
-    const { calls } = page();
-    const car = await rowOf("Car");
-    const dt = dragColl(3, "Boat");
-    fireEvent.dragEnter(car, { dataTransfer: dt, clientY: 20 });
-    fireEvent.dragOver(car, { dataTransfer: dt, clientY: 20 });
-    expect(car).toHaveAttribute("data-drop", "over");
-    expect(car).not.toHaveAttribute("data-reorder");
-    fireEvent.drop(car, { dataTransfer: dt, clientY: 20 });
-    await waitFor(() => expect(calls.filter((c) => c.url === "/api/collections/3/parent")).toHaveLength(1));
-    expect(calls.find((c) => c.url === "/api/collections/3/parent")!.body).toEqual({ parent_id: 1 });
-    expect(moves(calls)).toHaveLength(0);
-  });
-
-  it("a nested row dropped on another level's edge moves out; the top strip takes it to the top level", async () => {
-    const { calls } = page(NESTED);
-    const car = await rowOf("Car");
-    const dt = dragColl(4, "Sofa");
-    fireEvent.dragOver(car, { dataTransfer: dt, clientY: 2 });
-    fireEvent.drop(car, { dataTransfer: dt, clientY: 2 });
-    await waitFor(() => expect(moves(calls)).toHaveLength(1));
-    expect(moves(calls)[0].body).toEqual({ before_id: 1 });
-  });
-
-  it("while a collection is dragged a strip takes it to the top level", async () => {
-    const { calls } = page(NESTED);
-    const sofa = await rowOf("Sofa");
-    expect(screen.queryByText(/top level, last/)).toBeNull();
-    const dt = dragColl(4, "Sofa");
-    rtlFire(sofa, createEvent.dragStart(sofa, { dataTransfer: dt } as EventInit));
-    const strip = await screen.findByText(/top level, last/);
-    fireEvent.dragEnter(strip, { dataTransfer: dt });
-    expect(strip).toHaveAttribute("data-drop", "over");
-    fireEvent.drop(strip, { dataTransfer: dt });
-    await waitFor(() => expect(calls.filter((c) => c.url === "/api/collections/4/parent")).toHaveLength(1));
-  });
-
-  it("the bottom third drops after it", async () => {
-    const { calls } = page();
-    const boat = await rowOf("Boat");
-    const dt = dragColl(1, "Car");
-    fireEvent.dragOver(boat, { dataTransfer: dt, clientY: 30 });
-    expect(boat).toHaveAttribute("data-reorder", "after");
-    fireEvent.drop(boat, { dataTransfer: dt, clientY: 30 });
-    await waitFor(() => expect(moves(calls)).toHaveLength(1));
-    expect(moves(calls)[0].body).toEqual({ after_id: 3 });
-  });
-
-  it("a row is not its own drop place", async () => {
-    page();
-    const car = await rowOf("Car");
-    fireEvent.dragOver(car, { dataTransfer: dragColl(1, "Car"), clientY: 10 });
-    expect(car).not.toHaveAttribute("data-reorder");
-  });
-
-  it("Alt+ArrowUp on a row moves it up; the first row cannot", async () => {
-    const { calls, user } = page();
-    (await screen.findByRole("link", { name: "Attic" })).focus();
-    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
-    await waitFor(() => expect(moves(calls)).toHaveLength(1));
-    expect(moves(calls)[0].url).toBe("/api/collections/2/move");
-    expect(moves(calls)[0].body).toEqual({ before_id: 1 });
-    (await screen.findByRole("link", { name: "Car" })).focus();
-    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
-    expect(moves(calls)).toHaveLength(1);
-  });
-
-  it("the context menu moves a row down", async () => {
-    const { calls, user } = page();
-    await user.pointer({ keys: "[MouseRight]", target: await screen.findByRole("article", { name: "Car" }) });
-    await user.click(await screen.findByRole("menuitem", { name: "Move down" }));
-    await waitFor(() => expect(moves(calls)).toHaveLength(1));
-    expect(moves(calls)[0].body).toEqual({ after_id: 2 });
   });
 });

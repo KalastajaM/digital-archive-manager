@@ -9,7 +9,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Collection } from "../api/client";
 import { mockFetch, renderWithProviders } from "../test-utils";
-import Collections from "./Collections";
+import CollectionDetail from "./CollectionDetail";
 
 const SAUNA: Collection = {
   id: 7,
@@ -44,7 +44,7 @@ function setup(c: Collection = SAUNA) {
   renderWithProviders(
     <MemoryRouter initialEntries={["/collections/7"]}>
       <Routes>
-        <Route path="/collections/:id?" element={<Collections today="2026-10-19" />} />
+        <Route path="/collections/:id" element={<CollectionDetail id={7} today="2026-10-19" />} />
       </Routes>
     </MemoryRouter>,
   );

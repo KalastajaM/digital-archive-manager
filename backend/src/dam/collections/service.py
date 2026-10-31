@@ -49,11 +49,14 @@ from dam.core.paths import nfc
 from dam.core.text import fold_name
 from dam.db.engine import write_tx
 from dam.db.tables import (
+    checklist_items,
     collection_groups,
     collection_members,
     collections,
     files,
     member_link_names,
+    notes,
+    ongoing_entries,
 )
 from dam.errors import Conflict, InvalidRequest, NotFound
 from dam.index.repo import FileRecord, FileRepo
@@ -878,10 +881,18 @@ class CollectionService:
         with self._add_lock(to_id), write_tx(self.engine) as conn:
             self._require(conn, from_id)
             target = conn.execute(
-                select(collections.c.name, collections.c.state).where(collections.c.id == to_id)
+                select(collections.c.name, collections.c.state, collections.c.kind).where(
+                    collections.c.id == to_id
+                )
             ).first()
             if target is None:
                 raise NotFound(f"No collection {to_id}")
+            source_kind = conn.execute(
+                select(collections.c.kind).where(collections.c.id == from_id)
+            ).scalar()
+            # Starred and Important are marks on a file, set with the star and the !
+            if target.kind or source_kind:
+                raise InvalidRequest("Files are not moved into or out of Starred or Important")
             if target.state == "closed":
                 raise InvalidRequest(f"{target.name} is closed: reopen it to add files")
             moving = set(
@@ -1393,6 +1404,264 @@ class CollectionService:
             self._renumber(conn, order)
         if notify:
             self._changed()
+
+    # --- deleting -------------------------------------------------------------------
+
+    def subtree(self, collection_id: int) -> list[Collection]:
+        """The collection and every collection inside it (parents first); NotFound if
+        unknown, InvalidRequest for a built-in (they cannot be deleted)."""
+        with self.engine.connect() as conn:
+            if self._kind(conn, collection_id) is not None:
+                raise InvalidRequest("Important and Starred are built in: they cannot be deleted")
+        all_ = self.list(None)
+        out = [c for c in all_ if c.id == collection_id]
+        todo = [collection_id]
+        while todo:
+            pid = todo.pop(0)
+            for c in all_:
+                if c.parent_id == pid:
+                    out.append(c)
+                    todo.append(c.id)
+        return out
+
+    def published(self, ids: Sequence[int]) -> bool:
+        """Whether the Ongoing publisher still records a link for any of these
+        collections: deleting their rows would forget it, and the link would be left in
+        ##. Ongoing as if it were the user's own. (A folder left because the user's own
+        file is in it is theirs from then on, as when a collection is closed.)"""
+        with self.engine.connect() as conn:
+            return (
+                conn.execute(
+                    select(ongoing_entries.c.id)
+                    .where(
+                        ongoing_entries.c.collection_id.in_(ids), ongoing_entries.c.kind == "link"
+                    )
+                    .limit(1)
+                ).first()
+                is not None
+            )
+
+    def close_tree(self, collection_id: int) -> list[int]:
+        """Mark the collection and everything inside it closed (DB only), so the Ongoing
+        sync takes their links down before ``delete_tree``. Returns their ids."""
+        ids = [c.id for c in self.subtree(collection_id)]
+        with write_tx(self.engine) as conn:
+            conn.execute(
+                update(collections)
+                .where(collections.c.id.in_(ids), collections.c.state == "open")
+                .values(state="closed", closed_at=time.time())
+            )
+        return ids
+
+    def delete_tree(self, collection_id: int) -> int:
+        """Delete the collection and everything inside it: memberships, notes, checklists
+        and the collections themselves (deepest first). Files are not touched. Returns how
+        many collections went."""
+        ids = [c.id for c in self.subtree(collection_id)]
+        targets = [str(i) for i in ids]
+        with write_tx(self.engine) as conn:
+            conn.execute(
+                delete(notes).where(
+                    notes.c.target_kind == "collection", notes.c.target_id.in_(targets)
+                )
+            )
+            conn.execute(
+                delete(checklist_items).where(
+                    checklist_items.c.target_kind == "collection",
+                    checklist_items.c.target_id.in_(targets),
+                )
+            )
+            for cid in reversed(ids):
+                conn.execute(delete(collections).where(collections.c.id == cid))
+        return len(ids)
+
+    # --- merging --------------------------------------------------------------------
+
+    @staticmethod
+    def _note(conn: Connection, collection_id: int) -> str:
+        return (
+            conn.execute(
+                select(notes.c.text).where(
+                    notes.c.target_kind == "collection", notes.c.target_id == str(collection_id)
+                )
+            ).scalar()
+            or ""
+        )
+
+    @staticmethod
+    def _joined(first: str, second: str, heading: str | None = None) -> str:
+        """``second`` after ``first`` (a blank line between; ``heading`` above it)."""
+        if not second.strip():
+            return first
+        added = f"{heading}\n{second}" if heading and first.strip() else second
+        return f"{first.rstrip()}\n\n{added}" if first.strip() else added
+
+    def merge_check(self, from_id: int, to_id: int) -> list[str]:
+        """Why ``from_id`` cannot be merged into ``to_id`` (empty: it can)."""
+        from dam.notes import NOTE_MAX
+
+        with self.engine.connect() as conn:
+            rows = {r.id: r for r in conn.execute(select(collections))}
+            a, b = rows.get(from_id), rows.get(to_id)
+            if a is None or b is None:
+                raise NotFound(f"No collection {from_id if a is None else to_id}")
+            if a.kind or b.kind:
+                return ["Important and Starred are built in: they cannot be merged"]
+            if a.id == b.id:
+                return ["A collection cannot be merged into itself"]
+            up = b.parent_id
+            while up is not None:
+                if up == a.id:
+                    return [f"{b.name} is inside {a.name}: merge them the other way round"]
+                up = rows[up].parent_id if up in rows else None
+            if b.state == "closed":
+                return [f"{b.name} is closed: reopen it first"]
+            problems = []
+            note = self._joined(self._note(conn, b.id), self._note(conn, a.id), f"From {a.name}:")
+            if len(note) > NOTE_MAX:
+                over = len(note) - NOTE_MAX
+                problems.append(f"The note would be {over} characters too long: shorten one first")
+            summary = self._joined(b.summary, a.summary)
+            if len(summary) > SUMMARY_MAX:
+                over = len(summary) - SUMMARY_MAX
+                problems.append(
+                    f"The summary would be {over} characters too long: shorten one first"
+                )
+            return problems
+
+    def merge(self, from_id: int, to_id: int) -> Collection:
+        """Move everything of ``from_id`` into ``to_id`` in one transaction: its files
+        (keeping when each was added and its link name; one already there just leaves),
+        its collections (after ``to_id``'s own), its note under "From <name>:", its
+        checklist items after ``to_id``'s and its summary as a paragraph. ``from_id`` is
+        left empty, for ``remove_merged`` once the Ongoing sync has taken its folder down.
+        ``merge_check``'s first refusal is an InvalidRequest."""
+        problems = self.merge_check(from_id, to_id)
+        if problems:
+            raise InvalidRequest(problems[0])
+        with self._add_lock(to_id), write_tx(self.engine) as conn:
+            a = conn.execute(select(collections).where(collections.c.id == from_id)).one()
+            b = conn.execute(select(collections).where(collections.c.id == to_id)).one()
+            ids = list(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == from_id
+                    )
+                ).scalars()
+            )
+            there = set(
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == to_id,
+                        collection_members.c.drive_id.in_(ids),
+                    )
+                ).scalars()
+            )
+            if there:
+                conn.execute(
+                    delete(collection_members).where(
+                        collection_members.c.collection_id == from_id,
+                        collection_members.c.drive_id.in_(there),
+                    )
+                )
+            conn.execute(
+                update(collection_members)
+                .where(collection_members.c.collection_id == from_id)
+                .values(collection_id=to_id, group_id=None)
+            )
+            for r in conn.execute(
+                select(member_link_names).where(member_link_names.c.collection_id == from_id)
+            ).all():
+                conn.execute(
+                    sqlite_insert(member_link_names)
+                    .values(collection_id=to_id, drive_id=r.drive_id, link_name=r.link_name)
+                    .on_conflict_do_nothing()
+                )
+            conn.execute(
+                delete(member_link_names).where(member_link_names.c.collection_id == from_id)
+            )
+            for kid in (
+                conn.execute(
+                    select(collections.c.id)
+                    .where(collections.c.parent_id == from_id)
+                    .order_by(collections.c.position, collections.c.name)
+                )
+                .scalars()
+                .all()
+            ):
+                conn.execute(
+                    update(collections)
+                    .where(collections.c.id == kid)
+                    .values(parent_id=to_id, position=self._next_position(conn, to_id))
+                )
+            conn.execute(
+                update(collections)
+                .where(collections.c.id == to_id)
+                .values(summary=self._joined(b.summary, a.summary))
+            )
+            conn.execute(update(collections).where(collections.c.id == from_id).values(summary=""))
+            text = self._joined(
+                self._note(conn, to_id), self._note(conn, from_id), f"From {a.name}:"
+            )
+            mine = (notes.c.target_kind == "collection") & (notes.c.target_id == str(from_id))
+            if text:
+                conn.execute(
+                    sqlite_insert(notes)
+                    .values(
+                        target_kind="collection",
+                        target_id=str(to_id),
+                        text=text,
+                        updated=time.time(),
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["target_kind", "target_id"],
+                        set_={"text": text, "updated": time.time()},
+                    )
+                )
+            conn.execute(delete(notes).where(mine))
+            last = conn.execute(
+                select(func.max(checklist_items.c.position)).where(
+                    checklist_items.c.target_kind == "collection",
+                    checklist_items.c.target_id == str(to_id),
+                )
+            ).scalar()
+            start = 0 if last is None else last + 1
+            moving = (
+                conn.execute(
+                    select(checklist_items.c.id)
+                    .where(
+                        checklist_items.c.target_kind == "collection",
+                        checklist_items.c.target_id == str(from_id),
+                    )
+                    .order_by(checklist_items.c.position)
+                )
+                .scalars()
+                .all()
+            )
+            for i, check in enumerate(moving):
+                conn.execute(
+                    update(checklist_items)
+                    .where(checklist_items.c.id == check)
+                    .values(target_id=str(to_id), position=start + i)
+                )
+        return self.get(to_id)
+
+    def remove_merged(self, collection_id: int) -> None:
+        """Delete a collection that ``merge`` emptied (no files, no collections inside)."""
+        with write_tx(self.engine) as conn:
+            busy = (
+                conn.execute(
+                    select(collection_members.c.drive_id).where(
+                        collection_members.c.collection_id == collection_id
+                    )
+                ).first()
+                or conn.execute(
+                    select(collections.c.id).where(collections.c.parent_id == collection_id)
+                ).first()
+            )
+            if busy:
+                raise Conflict("The collection is not empty")
+            conn.execute(delete(collections).where(collections.c.id == collection_id))
 
     def ordinary_groups(self) -> list[int]:
         """The ordinary collections that still have groups (only Important keeps them)."""
