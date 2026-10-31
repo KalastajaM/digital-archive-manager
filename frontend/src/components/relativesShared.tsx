@@ -3,6 +3,7 @@
  * the flows the rest of the app uses), Not related with its way back, and the Quick Look
  * that compares a relative with this file. */
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   errorText,
   type Relative,
@@ -21,6 +22,7 @@ import { plural } from "../format";
 import { baseName, parentOf } from "../paths";
 import { visible } from "../text";
 import { CollectionPicker } from "./CollectionPicker";
+import { browseHref } from "./GroupTree";
 import { folderLabel, MoveToSheet, useMoveFlow } from "./MoveTo";
 import { ConfirmPlan, snapshotKey } from "./PlanPreview";
 import { QuickLook, type QLFile } from "./QuickLook";
@@ -109,8 +111,10 @@ export function useNotRelated(file: BlockFile, onMarked?: (r: Relative) => void)
 
 /** Quick Look in compare mode over a list of relatives: this file beside the shown one,
  * what they share, and the verdict keys. ``open(i)`` shows the i-th of ``list``; Not
- * related takes the file out of the stepping at once and moves on. */
-export function useRelativeLook(file: BlockFile, list: Relative[], notRelated: (r: Relative) => void) {
+ * related takes the file out of the stepping at once and moves on. Show in folder closes
+ * it (and runs ``onLeave``: the Relatives dialog closes too) and opens Browse there. */
+export function useRelativeLook(file: BlockFile, list: Relative[], notRelated: (r: Relative) => void, onLeave?: () => void) {
+  const navigate = useNavigate();
   const [at, setAt] = useState<number | null>(null);
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   const rows = useMemo(() => list.filter((r) => !gone.has(r.drive_id)), [list, gone]);
@@ -150,6 +154,11 @@ export function useRelativeLook(file: BlockFile, list: Relative[], notRelated: (
             setGone((prev) => new Set(prev).add(r.drive_id));
             if (rows.length <= 1) close();
             else setAt(Math.min(index, rows.length - 2));
+          },
+          showInFolder: (f) => {
+            close();
+            onLeave?.();
+            navigate(browseHref(f.path, f.drive_id));
           },
         }}
       />

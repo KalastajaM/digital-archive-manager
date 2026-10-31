@@ -2584,6 +2584,8 @@
 [data-style="new"] .rel-card-list dd { margin: 0; overflow-wrap: anywhere; }
 [data-style="new"] .rel-card-note { color: var(--muted); font-size: var(--fs-xs); }
 [data-style="new"] .rel-card-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 6px; border-top: 1px solid var(--hairline); }
+/* Not related marks the pair: last, at the far end, so it is not hit by accident */
+[data-style="new"] .rel-card-actions .rel-not-related { margin-left: auto; }
 [data-style="new"] .rel-side { flex: none; width: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); background: var(--panel-2); border-radius: var(--r-lg); }
 [data-style="new"] .rel-side > * { flex: none; }
 [data-style="new"] .rel-side-block { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -2607,6 +2609,7 @@
 [data-style="new"] .quicklook-zoom-together { display: inline-flex; align-items: center; gap: 6px; }
 [data-style="new"] .quicklook-zoom-together[aria-pressed="true"] { border-color: var(--accent); background: var(--selected); color: var(--accent-hover); }
 [data-style="new"] .quicklook-verdict { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); border-top: 1px solid var(--hairline); }
+[data-style="new"] .quicklook-verdict .rel-not-related { margin-right: var(--sp-3); }
 [data-style="new"] .quicklook-shared-label { font-size: var(--fs-sm); color: var(--muted); }
 [data-style="new"] .quicklook-shared { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1); list-style: none; margin: 0; padding: 0; }
 /* a long value ends in "…" (the full text on hover) instead of running under the buttons */

@@ -8013,6 +8013,11 @@ export interface components {
              * @default []
              */
             areas?: components["schemas"]["AreaOut"][];
+            /**
+             * Picture Miss
+             * @default false
+             */
+            picture_miss?: boolean;
         };
         /** RuleIn */
         RuleIn: {

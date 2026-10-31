@@ -199,15 +199,28 @@ setting. The sidebar, from the top:
 - **Trays**: one row per tray, each with its open count;
 - **Collections**: **Important** and **Starred** first, then the open collections as a
   tree (a parent's children nest under it; the chevron folds it). The caption opens the
-  list of all collections, with New collection and the closed ones;
+  list of all collections, with New collection and the closed ones. Right-click the
+  caption for **New collection**, and a collection for the same menu as in Browse's
+  Collections tree: **Open**, **New collection inside…**, **Merge into…**, **Delete…**,
+  then Move up / Move down / Move out one level;
 - **Tags**: the caption opens the [Tags](#tags) screen; below it your pinned tags, then
-  the tags you used most lately, eight at most, each opening its files in Browse;
+  the tags you used most lately, eight at most, each opening its files in Browse.
+  Right-click the caption (in the New look, Pinned tags or Recent tags) for **New tag**,
+  and a tag for **Rename…**, **Merge into…**, **Pin to the sidebar** (or Unpin) and
+  **Delete…**, as in Browse's Tags tree;
 - **Archive**: **Ask** (AI questions about the archive), **Activity**, **Maintenance**
   (checks you start yourself), **Settings** and **Help** (this guide).
 
 Trays, Collections, Tags and Archive fold: hold the pointer on the caption and click the chevron
 at its right. A folded Trays shows its open total next to the caption. dam remembers in
 this browser which sections you folded.
+
+**Right-click menus.** Rows in the sidebar and in Browse (the list and the trees) have a
+right-click menu with their actions. An entry that cannot run now is greyed, with the
+reason under it. With the keyboard, **⇧F10** (or the menu key) opens the menu of the row
+that has the focus. The browser's own right-click menu is off everywhere else, except in
+text fields, where copy, paste and spelling still work. The PDF preview keeps its
+viewer's own menu.
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray
@@ -733,9 +746,11 @@ Every path in the test result is a button. It opens the document in the preview 
 rule you are testing drawn on its first page: its areas, and for a picture area the place
 where it fits best with its score. When a picture rule finds nothing, open a letter you
 know it should match and read the score and the place the picture was found. In any
-preview with the box tool (Inbox, Browse, Quick Look, the viewer), the areas of picture
-rules that did not match are drawn dashed too, with the score they got on that document, or
-the reason there is none (for example that the picture of page 1 is not made yet).
+preview with the box tool (Inbox, Browse, Quick Look, the viewer), the areas of a picture
+rule that only its picture held back (its words and other conditions fit the document) are
+drawn dashed too, with the score they got on that document, or the reason there is none (for
+example that the picture of page 1 is not made yet). A picture rule whose words do not fit
+the document draws nothing there.
 
 The test runs in the background and fills in as it goes: "Checked 1 240 of 10 875
 documents…" with a **Stop** button. It looks at the likely documents first (the ones you
@@ -1298,6 +1313,16 @@ list's width.
   new group (see Tags). Files
   dropped on a collection in the tree are added to it, as in the sidebar. The choice of tree
   is kept in the address, so Back and a copied link keep it.
+- **Right-click a file** in the list for the header's file actions (Put in a tray by name,
+  Move to…, Back to inbox, From…, For…, Ask AI, Star, Important, Restore or Move to To
+  Delete), plus **Add tag…** and **Add to collection…**. As in Finder, right-clicking a
+  selected file acts on the whole selection; right-clicking another file selects just
+  that one first. A greyed entry says why, as a greyed icon does.
+- **Right-click a folder**, in the list or in the folder tree, for **New folder inside…**,
+  **Move to…**, **Move to To Delete** and **Show in Finder** (a folder in To Delete has
+  Restore instead of Move to To Delete). Deleting is always Move to To Delete: nothing is
+  deleted, the move shows its preview first and Activity can undo it. Folders cannot be
+  renamed in dam yet.
 - **Actions on several files.** With files ticked, the bar above the list has
   **Selected**, a menu of **Add tag…**, **Remove tag…**, **Add to collection…** and
   **Remove from collection…**, and, while Browse shows a collection, **Move to
@@ -1483,9 +1508,12 @@ down; there is no zoom or panning.
   (or another one) to change or clear it.
 - **What a row shares.** Point at a row, or move to it with the keyboard, and the card at
   the top of the panel on the right lists the exact values (Folder, Sender, Tag and so on)
-  with **Quick look**, **Its relatives** and **Not related**. The row and its arc are outlined. The card sits
-  beside the outline, never over it, and stays on the last row you pointed at, so you can
-  move over to its buttons.
+  with **Quick look**, **Its relatives**, **Show in folder** and, set apart at the end,
+  **Not related**. **Show in folder** closes the window and opens the relative's folder in
+  Browse with it selected; the browser's Back returns to the page you were on (the window
+  itself does not reopen). The row and its arc are outlined. The card sits beside the
+  outline, never over it, and stays on the last row you pointed at, so you can move over to
+  its buttons.
 - **Act on several at once.** The panel on the right has the same buttons as the block
   (**Tag…**, **Add to collection…**, **Move to folder…**, **Link them here**, **Link this
   file there**), with the same previews, Undo and reasons when a button is off. **2+
@@ -1504,6 +1532,8 @@ relative on the right, and below them what the two share. **N** (Not related) ma
 relative and moves to the next, **→** (Skip) moves on, and **Y** (Related, next) also moves
 on and stores nothing, since being related is worked out from what the files share, never
 saved. `←`/`→` still step through the relatives, and **Space** or **Esc** closes it.
+Each side's toolbar has **Show in folder** beside Show in Finder: it closes Quick Look (and
+the Relatives window) and opens that file's folder in Browse with the file selected.
 Each side zooms, scrolls and turns pages on its own, since the two documents are often of
 different sizes: `+`, `-` and `0` zoom the side you clicked last (a line along its top shows
 which). **Move together** below them makes both sides zoom, scroll and turn pages as one, so
@@ -2081,6 +2111,7 @@ Windows and Linux, read Ctrl for ⌘ and Alt for ⌥.
 | Confirm sheets | ⌘`Enter` | Confirm (only half a second after it opened) |
 | Confirm sheets | Esc | Cancel |
 | Menus | `↑` / `↓`, Home / End, Esc | Move, first / last, close |
+| A row with a right-click menu (sidebar, Browse's list and trees) | ⇧F10, the menu key | Open its menu |
 
 ## Drag and drop
 

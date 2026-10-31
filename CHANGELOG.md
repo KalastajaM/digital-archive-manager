@@ -14,6 +14,14 @@ All notable changes are listed here. The format follows
   shortcuts in Ongoing and Important, which are made again). It is one entry in Activity,
   and Undo puts the folder and every path back. A taken name is refused rather than given
   `_2`; a change of letter case alone works.
+- **Right-click menus.** The sidebar's collections have the same menu as Browse's
+  Collections tree (Open, New collection inside…, Merge into…, Delete…, the order), its
+  tags Rename…, Merge into…, Pin or Unpin and Delete…, and the Collections and Tags
+  captions New collection and New tag. In Browse, a file row has the header's file
+  actions plus Add tag… and Add to collection…, acting on the selection as Finder does,
+  and a folder (in the list or the folder tree) has New folder inside…, Move to…, Move to
+  To Delete and Show in Finder. A greyed entry says why. ⇧F10 or the menu key opens the
+  focused row's menu. The browser's own menu now shows only in text fields.
 - **Your own business ID.** In Found in this document, **Mine** marks a business ID as
   yours: it names no sender, links no files in Relatives and does not count for `id:*`.
   Settings, Senders shows it as Yours, with **Not mine** to undo it. This closes the
@@ -34,6 +42,9 @@ All notable changes are listed here. The format follows
   sheet lists what goes. Merge and delete have no Undo; a snapshot is taken first.
 - Browse's Collections tree has **Show closed**, and the Tags tree **New group**.
 - **`collection:`** finds a collection whose name has a quote mark in it.
+- **Show in folder** in Relatives: on the card of a relative in the Relatives window, and
+  on both sides of Quick Look's compare (**Is this related?**), beside Show in Finder. It
+  opens the file's folder in Browse with the file selected.
 - **Due dates in Browse.** A file with an open tray item shows the tray and its date on
   its row, in the folder view, Files and search results, coloured by urgency as on a
   collection's page.
@@ -70,6 +81,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Not related** on a relative's card in the Relatives window is a button like Quick look
+  and Its relatives, no longer a link, since it marks the pair. It comes last and stands
+  apart from the others, as it does in Quick Look's compare.
 - **The Collections and Tags pages are now Browse's trees.** The sidebar's Collections and
   Tags captions open Browse with that tree, and old links (`/collections`, `/collections/7`,
   `/tags`, `/starred`) forward there. Important keeps its page.
@@ -110,6 +124,10 @@ All notable changes are listed here. The format follows
   Netherlands pack is new.
 
 ### Fixed
+
+- A new picture rule's areas no longer show on every other document in the Inbox. Only a
+  picture rule that its picture alone held back (its words fit the document) is drawn there
+  for diagnosis.
 
 - An open search (such as `id:*` in Browse) looks again after you mark a business ID as
   yours or name a sender, instead of showing the old results.

@@ -273,19 +273,28 @@ export function useTagManager(tags: TagInfo[], onMerged?: () => void) {
     const other = tags.find((t) => t.name !== tag.name && same(t.name, name));
     return other ? { name: other.name, merge: () => setSheet({ kind: "merge", sources: [tag.name], into: other.name }) } : null;
   };
+  const rename = (tag: TagInfo): MenuEntry => ({ label: "Rename…", onSelect: () => setSheet({ kind: "rename", tag }) });
+  const mergeInto = (tag: TagInfo): MenuEntry => ({ label: "Merge into…", onSelect: () => setSheet({ kind: "merge", sources: [tag.name] }) });
+  const pin = (tag: TagInfo): MenuEntry => ({
+    label: tag.pinned ? "Unpin from the sidebar" : "Pin to the sidebar",
+    onSelect: () => void change(() => actions.pin([tag.name], !tag.pinned)),
+  });
+  const remove = (tag: TagInfo): MenuEntry => ({ label: "Delete…", onSelect: () => setSheet({ kind: "delete", tag }) });
   /** A tag's menu: Rename, Merge into, Pin, the groups, Delete. */
   const menuFor = (tag: TagInfo, groups: TagGroup[]): MenuEntry[] => [
-    { label: "Rename…", onSelect: () => setSheet({ kind: "rename", tag }) },
-    { label: "Merge into…", onSelect: () => setSheet({ kind: "merge", sources: [tag.name] }) },
-    { label: tag.pinned ? "Unpin from the sidebar" : "Pin to the sidebar", onSelect: () => void change(() => actions.pin([tag.name], !tag.pinned)) },
+    rename(tag),
+    mergeInto(tag),
+    pin(tag),
     "separator",
     ...groups
       .filter((g) => g.id !== tag.group_id)
       .map((g): MenuEntry => ({ label: `Move to ${visible(g.name)}`, onSelect: () => void move([tag.name], g.id) })),
     ...(tag.group_id !== null ? [{ label: "Move out of the group", onSelect: () => void move([tag.name], null) } as MenuEntry] : []),
     "separator",
-    { label: "Delete…", onSelect: () => setSheet({ kind: "delete", tag }) },
+    remove(tag),
   ];
+  /** A tag's menu where its group is not shown (the sidebar): Rename, Merge into, Pin, Delete. */
+  const shortMenu = (tag: TagInfo): MenuEntry[] => [rename(tag), mergeInto(tag), pin(tag), "separator", remove(tag)];
   /** A group's menu: Rename group, Delete group. */
   const groupMenu = (g: TagGroup): MenuEntry[] => [
     { label: "Rename group…", onSelect: () => setSheet({ kind: "rename-group", group: g }) },
@@ -380,5 +389,5 @@ export function useTagManager(tags: TagInfo[], onMerged?: () => void) {
       )}
     </>
   );
-  return { open: setSheet, change, move, menuFor, groupMenu, view };
+  return { open: setSheet, change, move, menuFor, shortMenu, groupMenu, view };
 }

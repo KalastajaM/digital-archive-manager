@@ -225,8 +225,9 @@ export function useOrderMenu(order: CollectionOrder, first?: (c: CollectionRow) 
       label={`Order of ${visible(menu.c.name)}`}
       entries={[
         ...(first?.(menu.c) ?? []),
-        { label: "Move up", disabled: !order.canStep(menu.c, -1), onSelect: () => order.step(menu.c, -1) },
-        { label: "Move down", disabled: !order.canStep(menu.c, 1), onSelect: () => order.step(menu.c, 1) },
+        "separator",
+        { label: "Move up", disabled: !order.canStep(menu.c, -1), reason: "Already first", onSelect: () => order.step(menu.c, -1) },
+        { label: "Move down", disabled: !order.canStep(menu.c, 1), reason: "Already last", onSelect: () => order.step(menu.c, 1) },
         ...(order.canOut(menu.c) ? [{ label: "Move out one level", onSelect: () => order.out(menu.c) }] : []),
       ]}
       onClose={() => setMenu(null)}
@@ -236,6 +237,7 @@ export function useOrderMenu(order: CollectionOrder, first?: (c: CollectionRow) 
     element,
     onContextMenu: (c: CollectionRow) => (e: React.MouseEvent) => {
       e.preventDefault();
+      e.stopPropagation(); // a nested row's menu, not its parent's
       setMenu({ x: e.clientX, y: e.clientY, c });
     },
   };

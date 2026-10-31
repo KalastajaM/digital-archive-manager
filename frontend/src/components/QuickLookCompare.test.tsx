@@ -16,6 +16,7 @@ function setup(compare: boolean, index = 0, reason: ((f: QLFile) => string | nul
   const onIndex = vi.fn();
   const onClose = vi.fn();
   const onNotRelated = vi.fn();
+  const showInFolder = vi.fn();
   renderWithProviders(
     <MemoryRouter>
       <QuickLook
@@ -23,11 +24,11 @@ function setup(compare: boolean, index = 0, reason: ((f: QLFile) => string | nul
         index={index}
         onIndex={onIndex}
         onClose={onClose}
-        compare={compare ? { subject: SUBJECT, shared: (f) => [`Tag: Taxes (${f.name})`, "+ same month"], reason, onNotRelated } : undefined}
+        compare={compare ? { subject: SUBJECT, shared: (f) => [`Tag: Taxes (${f.name})`, "+ same month"], reason, onNotRelated, showInFolder } : undefined}
       />
     </MemoryRouter>,
   );
-  return { onIndex, onClose, onNotRelated, user: userEvent.setup() };
+  return { onIndex, onClose, onNotRelated, showInFolder, user: userEvent.setup() };
 }
 const dialog = () => screen.getByRole("dialog", { name: /Quick Look/ });
 
@@ -130,6 +131,16 @@ describe("compare mode", () => {
     expect(onNotRelated).not.toHaveBeenCalled();
     fireEvent.keyDown(dialog(), { key: " " });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("each pane has Show in folder beside Show in Finder, for its own file", async () => {
+    const { user, showInFolder } = setup(true, 1);
+    const [subject, relative] = within(dialog()).getAllByRole("button", { name: "Show in folder" });
+    for (const b of [subject, relative]) expect(b.previousElementSibling).toHaveAccessibleName(/^Show in (?!folder)/);
+    await user.click(subject);
+    expect(showInFolder).toHaveBeenLastCalledWith(SUBJECT);
+    await user.click(relative);
+    expect(showInFolder).toHaveBeenLastCalledWith(FILES[1]);
   });
 
   it("the buttons do the same as the keys", async () => {

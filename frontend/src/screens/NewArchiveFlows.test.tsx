@@ -346,7 +346,7 @@ describe("Browse in a new archive", () => {
     renderBrowse([dir("13. Taxes")], { "POST /api/folders/new/preview": { body: [mkdir("13. Taxes/x")] } });
     const row = (await screen.findByText("13. Taxes")).closest("li")!;
     fireEvent.contextMenu(row, { clientX: 40, clientY: 40 });
-    const menu = await screen.findByRole("menu", { name: "13. Taxes actions" });
+    const menu = await screen.findByRole("menu", { name: "Actions for 13. Taxes" });
     await user.click(within(menu).getByRole("menuitem", { name: "New folder inside 13. Taxes…" }));
     const dialog = await screen.findByRole("dialog", { name: "New folder" });
     expect(within(dialog).getByText(/inside 13\. Taxes/)).toBeInTheDocument();

@@ -147,8 +147,7 @@ describe("Restore", () => {
     const dialog = await screen.findByRole("dialog", { name: "Restore from To Delete?" });
     expect(posts(calls, "/api/restore")[0].body).toEqual({ drive_ids: ["d1"], to: "original", dry_run: true });
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    // the folder under the cursor shows its panel with the same two buttons
-    await user.keyboard("j");
+    // the right-click put the cursor on the folder (as in Finder): its panel has the same two buttons
     const panel = await screen.findByRole("region", { name: "Preview" });
     await user.click(within(panel).getByRole("button", { name: "Restore to Inbox" }));
     await screen.findByRole("dialog", { name: "Restore from To Delete?" });

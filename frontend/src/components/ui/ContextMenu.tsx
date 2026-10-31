@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MenuEntry } from "./Menu";
 
@@ -8,14 +8,29 @@ type Props = {
   y: number;
   /** The menu's accessible name. */
   label: string;
-  entries: Exclude<MenuEntry, "separator">[];
+  /** "separator": a rule between groups (one at an end, or two in a row, is dropped). */
+  entries: MenuEntry[];
   onClose: () => void;
 };
 
+/** The entries with no rule at either end and none doubled. */
+function tidy(entries: MenuEntry[]): MenuEntry[] {
+  const out: MenuEntry[] = [];
+  for (const e of entries) {
+    if (e === "separator" && (out.length === 0 || out.at(-1) === "separator")) continue;
+    out.push(e);
+  }
+  if (out.at(-1) === "separator") out.pop();
+  return out;
+}
+
 /** A right-click menu at the pointer: ↑/↓ move, Enter picks, Esc or a click outside
- * closes. Keys pressed in it never reach the page's shortcuts. Kept inside the window. */
+ * closes. Keys pressed in it never reach the page's shortcuts. Kept inside the window.
+ * As the pull-down ``Menu``: a disabled entry says why under its label, a toggle shows
+ * its check. */
 export function ContextMenu({ x, y, label, entries, onClose }: Props) {
   const menu = useRef<HTMLDivElement>(null);
+  const id = useId();
   const close = useRef(onClose);
   close.current = onClose; // a new function each render must not re-run the effect below
   const [place, setPlace] = useState({ left: x, top: y });
@@ -58,24 +73,54 @@ export function ContextMenu({ x, y, label, entries, onClose }: Props) {
   };
 
   return createPortal(
-    <div ref={menu} role="menu" aria-label={label} className="menu menu-context" style={{ position: "fixed", ...place }} onKeyDown={onKeyDown}>
-      {entries.map((entry) => (
-        <button
-          key={entry.label}
-          type="button"
-          role="menuitem"
-          className="menu-item"
-          disabled={entry.disabled}
-          tabIndex={-1}
-          onClick={() => {
-            onClose();
-            entry.onSelect();
-          }}
-        >
-          <span className="menu-check" aria-hidden="true" />
-          <span className="menu-item-text">{entry.label}</span>
-        </button>
-      ))}
+    <div
+      ref={menu}
+      role="menu"
+      aria-label={label}
+      className="menu menu-context"
+      style={{ position: "fixed", ...place }}
+      onKeyDown={onKeyDown}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {tidy(entries).map((entry, i) =>
+        entry === "separator" ? (
+          <div key={i} role="separator" className="menu-separator" />
+        ) : (
+          <button
+            key={i}
+            type="button"
+            role={entry.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+            aria-checked={entry.checked}
+            className="menu-item"
+            data-tip={entry.tip}
+            disabled={entry.disabled}
+            aria-describedby={entry.disabled && entry.reason ? `${id}-why-${i}` : undefined}
+            tabIndex={-1}
+            style={entry.indent ? { paddingLeft: `calc(4px + ${entry.indent} * 14px)` } : undefined}
+            onClick={() => {
+              onClose();
+              entry.onSelect();
+            }}
+          >
+            <span className="menu-check" aria-hidden="true">
+              {entry.checked ? "✓" : ""}
+            </span>
+            {entry.icon && (
+              <span className="menu-item-icon" aria-hidden="true">
+                {entry.icon}
+              </span>
+            )}
+            <span className="menu-item-text">
+              {entry.label}
+              {entry.disabled && entry.reason && (
+                <span id={`${id}-why-${i}`} className="menu-reason" aria-hidden="true">
+                  {entry.reason}
+                </span>
+              )}
+            </span>
+          </button>
+        ),
+      )}
     </div>,
     document.body,
   );

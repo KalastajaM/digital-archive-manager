@@ -280,12 +280,13 @@ describe("sidebar order", () => {
     const car = await within(nav()).findByRole("link", { name: "Car" });
     await user.pointer({ keys: "[MouseRight]", target: car });
     const menu = await screen.findByRole("menu", { name: "Order of Car" });
-    expect(within(menu).getByRole("menuitem", { name: "Move up" })).toBeDisabled();
+    expect(within(menu).getByRole("menuitem", { name: /Move up/ })).toBeDisabled();
+    expect(within(menu).getByRole("menuitem", { name: /Move up/ })).toHaveAccessibleDescription("Already first");
     await user.keyboard("{Escape}");
     const boat = within(nav()).getByRole("link", { name: "Boat" });
     await user.pointer({ keys: "[MouseRight]", target: boat });
     const second = await screen.findByRole("menu", { name: "Order of Boat" });
-    expect(within(second).getByRole("menuitem", { name: "Move down" })).toBeDisabled();
+    expect(within(second).getByRole("menuitem", { name: /Move down/ })).toHaveAccessibleDescription("Already last");
     await user.click(within(second).getByRole("menuitem", { name: "Move up" }));
     await waitFor(() => expect(moves(calls)).toHaveLength(1));
     expect(moves(calls)[0].body).toEqual({ before_id: 2 });

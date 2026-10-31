@@ -20,7 +20,7 @@ import {
 import type { Ref } from "react";
 import { fileEditRefusal, type MetaFile } from "./FileMeta";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
-import { TrashButton } from "./Trash";
+import { TRASH_LABEL, TrashButton } from "./Trash";
 import { useAIState } from "./ai/useAI";
 import type { FilingAI } from "./ai/useFilingAI";
 import { IconButton } from "./ui/IconButton";
@@ -61,6 +61,53 @@ export type FileActionBarProps = {
 
 const off = (a: BarAction) => a.disabled === true || !!a.reason;
 const why = (a: BarAction) => a.reason ?? undefined;
+
+type Entry = Exclude<MenuEntry, "separator">;
+
+/** A right-click menu's entry for one of the bar's actions: off ones say why. */
+const entry = (label: string, a: BarAction): Entry => ({ label, onSelect: a.run, disabled: off(a), reason: why(a) });
+
+/** The bar's actions as a right-click menu (a file or selection in Browse's list), in
+ * groups: the trays (each named: "Put in To pay"), Move to… and Back to inbox, From…,
+ * For… and Ask AI, ``more``'s Add tag… and Add to collection… (``reason``: why they are
+ * off), the marks, then Restore and the bin. Same labels and reasons as the icons. */
+export function fileMenuEntries(
+  p: FileActionBarProps,
+  more: { addTag: () => void; addTo: () => void; reason: string | null },
+): MenuEntry[] {
+  const out: MenuEntry[] = [];
+  const group = (...entries: (Entry | Entry[] | false | undefined)[]) => {
+    const some = entries.flat().filter((e): e is Entry => !!e);
+    if (some.length > 0) out.push(...(out.length > 0 ? ["separator" as const] : []), ...some);
+  };
+  if (p.tray) {
+    const verb = p.tray.label === "Put in tray" ? "Put in" : "Move to";
+    group(
+      p.tray.disabled || p.tray.reason
+        ? { label: p.tray.label, onSelect: () => {}, disabled: true, reason: p.tray.reason ?? undefined }
+        : (() => {
+            // the trays (named with the verb), then the trays the file is in (Remove from …)
+            const at = p.tray.entries.indexOf("separator");
+            const trays = (at < 0 ? p.tray.entries : p.tray.entries.slice(0, at)).filter((e): e is Entry => e !== "separator");
+            const rest = at < 0 ? [] : p.tray.entries.slice(at + 1).filter((e): e is Entry => e !== "separator");
+            return [...trays.map((e) => (e.disabled ? { ...e, label: p.tray!.label, reason: e.reason ?? e.label } : { ...e, label: `${verb} ${e.label}` })), ...rest];
+          })(),
+    );
+  }
+  group(p.moveTo && entry("Move to…", p.moveTo), p.backToInbox && entry("Back to inbox", p.backToInbox));
+  group(p.sender && entry("From…", p.sender), p.person && entry("For…", p.person), p.ask && entry("Ask AI", p.ask));
+  const reason = more.reason ?? undefined;
+  group({ label: "Add tag…", onSelect: more.addTag, disabled: !!reason, reason }, { label: "Add to collection…", onSelect: more.addTo, disabled: !!reason, reason });
+  group(
+    p.star && entry(p.star.on ? "Remove the star" : "Star", p.star),
+    p.important && entry(p.important.on ? "Unmark Important" : "Mark Important", p.important),
+  );
+  group(
+    p.restore?.entries.filter((e): e is Entry => e !== "separator"),
+    p.trash && entry(p.trash.count !== undefined && p.trash.count > 1 ? `Move ${p.trash.count} to To Delete` : TRASH_LABEL, p.trash),
+  );
+  return out;
+}
 
 export function FileActionBar(p: FileActionBarProps) {
   return (
