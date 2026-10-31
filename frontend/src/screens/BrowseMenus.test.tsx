@@ -1,6 +1,6 @@
 /** Right-click menus in Browse: a file row has the header's file actions plus Add tag… and
  * Add to collection… and acts on the selection as Finder does; a folder (in the list or the
- * folder tree) has New folder inside, Move to…, Rename…, Move to To Delete and Show in Finder. */
+ * folder tree) has New folder inside, Rename…, Move to…, Move to To Delete and Show in Finder. */
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -140,12 +140,12 @@ describe("A file row's right-click menu", () => {
 });
 
 describe("A folder's right-click menu", () => {
-  it("in the list: New folder inside, Move to…, Rename…, Move to To Delete, Show in Finder", async () => {
+  it("in the list: New folder inside, Rename…, Move to…, Move to To Delete, Show in Finder", async () => {
     const { calls, user } = setup();
     await screen.findByRole("checkbox", { name: "Select a.pdf" });
     fireEvent.contextMenu(inList("Old"));
     const menu = await screen.findByRole("menu", { name: "Actions for Old" });
-    expect(names(menu)).toEqual(["New folder inside Old…", "Move to…", "Rename…", "Move to To Delete", "Show in Finder"]);
+    expect(names(menu)).toEqual(["New folder inside Old…", "Rename…", "Move to…", "Move to To Delete", "Show in Finder"]);
     await user.click(within(menu).getByRole("menuitem", { name: "Show in Finder" }));
     await waitFor(() => expect(posts(calls, "/api/files/d2/reveal")).toHaveLength(1));
     fireEvent.contextMenu(inList("Old"));
@@ -161,7 +161,7 @@ describe("A folder's right-click menu", () => {
     banks.focus();
     await user.keyboard("{Shift>}{F10}{/Shift}");
     const menu = await screen.findByRole("menu", { name: "Actions for Banks" });
-    expect(names(menu)).toEqual(["New folder inside Banks…", "Move to…", "Rename…", "Move to To Delete", "Show in Finder"]);
+    expect(names(menu)).toEqual(["New folder inside Banks…", "Rename…", "Move to…", "Move to To Delete", "Show in Finder"]);
     await user.click(within(menu).getByRole("menuitem", { name: "Move to…" }));
     expect(await screen.findByRole("dialog", { name: "Move Banks to…" })).toBeInTheDocument();
   });

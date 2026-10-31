@@ -1319,7 +1319,7 @@ list's width.
   selected file acts on the whole selection; right-clicking another file selects just
   that one first. A greyed entry says why, as a greyed icon does.
 - **Right-click a folder**, in the list or in the folder tree, for **New folder inside…**,
-  **Move to…**, **Move to To Delete** and **Show in Finder** (a folder in To Delete has
+  **Rename…** (see [Rename a folder](#rename-a-folder)), **Move to…**, **Move to To Delete** and **Show in Finder** (a folder in To Delete has
   Restore instead of Move to To Delete). Deleting is always Move to To Delete: nothing is
   deleted, the move shows its preview first and Activity can undo it. Folders cannot be
   renamed in dam yet.

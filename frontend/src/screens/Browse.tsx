@@ -2225,8 +2225,8 @@ export default function Browse() {
     all: collections.data ?? [],
     onDone: () => update(act, { ids: [] }),
   });
-  /** A folder's right-click menu (the list's and the tree's): New folder inside, Move to…,
-   * Rename…, Move to To Delete (in To Delete: Restore) and Show in Finder; an off entry says why.
+  /** A folder's right-click menu (the list's and the tree's): New folder inside, Rename…,
+   * Move to…, Move to To Delete (in To Delete: Restore) and Show in Finder; an off entry says why.
    * "Delete" is always Move to To Delete: nothing is deleted, and it has Undo. */
   const folderEntries = (it: Item): MenuEntry[] => {
     const away = it.connected === false ? "Not connected" : null;
@@ -2240,8 +2240,8 @@ export default function Browse() {
     return [
       { label: `New folder inside ${visible(it.name)}…`, onSelect: () => newFolder.open(it.path), disabled: !!newWhy, reason: newWhy ?? undefined },
       "separator",
-      { label: "Move to…", onSelect: () => openFolderMoveTo(it), disabled: !!moveWhy, reason: moveWhy ?? undefined },
       { label: "Rename…", onSelect: () => renameFolder.open(it), disabled: !!moveWhy, reason: moveWhy ?? undefined },
+      { label: "Move to…", onSelect: () => openFolderMoveTo(it), disabled: !!moveWhy, reason: moveWhy ?? undefined },
       ...(inToDelete(it.path) && !kept
         ? restoreEntries((to) => startRestore([it.drive_id], to), null)
         : [{ label: TRASH_LABEL, onSelect: () => trash([it]), disabled: !!trashOff, reason: trashOff ?? undefined }]),

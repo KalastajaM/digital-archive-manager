@@ -20,8 +20,8 @@ All notable changes are listed here. The format follows
   tags Rename…, Merge into…, Pin or Unpin and Delete…, and the Collections and Tags
   captions New collection and New tag. In Browse, a file row has the header's file
   actions plus Add tag… and Add to collection…, acting on the selection as Finder does,
-  and a folder (in the list or the folder tree) has New folder inside…, Move to…, Move to
-  To Delete and Show in Finder. A greyed entry says why. ⇧F10 or the menu key opens the
+  and a folder (in the list or the folder tree) has New folder inside…, Rename…, Move
+  to…, Move to To Delete and Show in Finder. A greyed entry says why. ⇧F10 or the menu key opens the
   focused row's menu. The browser's own menu now shows only in text fields.
 - **Your own business ID.** In Found in this document, **Mine** marks a business ID as
   yours: it names no sender, links no files in Relatives and does not count for `id:*`.
