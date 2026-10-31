@@ -57,6 +57,22 @@ describe("CollectionTree", () => {
     expect(level("Michiel")).toBe(level("Legal") + 1);
   });
 
+  it("a row shows its files, its open checks and an Ongoing problem, with the counts in its tooltip", async () => {
+    const car = { ...coll(3, "Car"), files: 12, open_checks: 2, ongoing_status: "The name is taken in ##. Ongoing: using Car_2" };
+    setup([car, coll(4, "Tyres", 3)]);
+    const row = (await screen.findByRole("treeitem", { name: "Car" })).querySelector(".tree-row") as HTMLElement;
+    expect(within(row).getByText("12")).toHaveClass("tree-count");
+    expect(within(row).getByTitle("2 open checks")).toBeInTheDocument();
+    expect(within(row).getByTitle("The name is taken in ##. Ongoing: using Car_2")).toBeInTheDocument();
+    expect(row.querySelector(".tree-name")).toHaveAttribute("title", "Car\n12 files · 1 collection · 2 open checks");
+    expect(screen.getByRole("treeitem", { name: "Car" })).toHaveAccessibleDescription(
+      "12 files · 1 collection · 2 open checks. The name is taken in ##. Ongoing: using Car_2",
+    );
+    // an empty one shows no count
+    const tyres = screen.getByRole("treeitem", { name: "Tyres" }).querySelector(".tree-row") as HTMLElement;
+    expect(tyres.querySelector(".tree-count")).toBeNull();
+  });
+
   it("a click picks, and the picked row is current", async () => {
     const { onPick, user } = setup([coll(3, "Car")], { ...NONE, collections: ["Car"] });
     await user.click(await screen.findByText("Car"));
@@ -77,7 +93,7 @@ describe("CollectionTree", () => {
     setup([coll(5, long)]);
     const name = await screen.findByText(long);
     expect(name).toHaveClass("tree-name");
-    expect(name).toHaveAttribute("title", long);
+    expect(name).toHaveAttribute("title", `${long}\n0 files`); // the full name, then its counts
     expect(css).toMatch(/\.tree-name\s*{[^}]*text-overflow:\s*ellipsis/);
   });
 

@@ -8,13 +8,14 @@
  * picks. A collection is ordered as in the sidebar: dragged onto a row's top or bottom third
  * (a line) it goes before or after it, onto the middle third inside it; a strip shown while
  * dragging takes it to the top level; Alt+↑ / Alt+↓ (Alt+← out one level) on a focused row. */
-import { Archive, ChevronRight, Layers, Plus } from "lucide-react";
+import { Archive, ChevronRight, CircleAlert, Layers, ListChecks, Plus } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
 import { type Dragged, readDragCollection, readFilesOrCollection, setDragCollection, useDropTarget } from "../dnd";
 import { visible } from "../text";
-import { childrenOf } from "./collectionTree";
+import { childrenOf, countsOf } from "./collectionTree";
+import { plural } from "../format";
 import { ImportantGlyph, StarGlyph } from "./MarkIcons";
 import { DeleteCollectionSheet } from "./DeleteCollectionSheet";
 import { MergeCollectionSheet } from "./MergeCollectionSheet";
@@ -62,6 +63,7 @@ function Row({
   closed,
   collectionId,
   onAltKey,
+  details,
   children,
 }: {
   rowKey: string;
@@ -83,6 +85,8 @@ function Row({
   collectionId?: { id: number; name: string };
   /** Alt+arrows on the focused row: its order. */
   onAltKey?: (e: KeyboardEvent<HTMLLIElement>) => void;
+  /** A collection's counts and status: in its tooltip and description, and as marks after the name. */
+  details?: { counts: string; status: string | null; marks: ReactNode };
   children?: ReactNode;
 }) {
   const go = (e: KeyboardEvent<HTMLLIElement>, key: string) =>
@@ -115,6 +119,7 @@ function Row({
       aria-label={name}
       aria-expanded={onToggle ? expanded : undefined}
       aria-current={current ? "true" : undefined}
+      aria-description={details ? [details.counts, details.status].filter(Boolean).join(". ") : undefined}
       data-key={rowKey}
       data-collection-id={collectionId?.id}
       className="tree-node"
@@ -145,9 +150,10 @@ function Row({
           <ChevronRight size={12} strokeWidth={2} />
         </span>
         {icon}
-        <span className="tree-name" title={name}>
+        <span className="tree-name" title={details ? `${name}\n${details.counts}` : name}>
           {name}
         </span>
+        {details?.marks}
       </div>
       {children}
     </li>
@@ -187,6 +193,30 @@ function CollectionNode({ c, level, parentKey, shared }: { c: CollectionRow; lev
       onContextMenu={shared.onMenu(c)}
       closed={c.state === "closed"}
       collectionId={{ id: c.id, name: c.name }}
+      details={{
+        counts: countsOf(c, kids.length),
+        status: c.ongoing_status ? visible(c.ongoing_status) : null,
+        marks: (
+          <>
+            {c.ongoing_status && (
+              <span className="tree-mark tree-warn" title={visible(c.ongoing_status)} aria-hidden="true">
+                <CircleAlert size={12} strokeWidth={2} />
+              </span>
+            )}
+            {c.open_checks > 0 && (
+              <span className="tree-mark" title={plural(c.open_checks, "open check")} aria-hidden="true">
+                <ListChecks size={12} strokeWidth={2} />
+                {c.open_checks}
+              </span>
+            )}
+            {c.files > 0 && (
+              <span className="tree-count" aria-hidden="true">
+                {c.files}
+              </span>
+            )}
+          </>
+        ),
+      }}
       onAltKey={orderKeys(shared.order, c) as (e: KeyboardEvent<HTMLLIElement>) => void}
     >
       {expanded && (
