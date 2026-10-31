@@ -5793,6 +5793,8 @@ export interface components {
             copy?: boolean;
             /** Default */
             default?: "today" | null;
+            /** Options */
+            options?: string[] | null;
         };
         /** FileBody */
         FileBody: {
@@ -6795,6 +6797,26 @@ export interface components {
             /** Special Folders */
             special_folders: components["schemas"]["SetupFolderOut"][];
         };
+        /**
+         * LeadDef
+         * @description How long before the date an item is due for attention: its own ``days`` field if
+         *     set, else ``days[<its kind>]``, else ``default``.
+         */
+        LeadDef: {
+            /** Field */
+            field: string;
+            /** By */
+            by: string;
+            /** Days */
+            days?: {
+                [key: string]: number;
+            };
+            /**
+             * Default
+             * @default 30
+             */
+            default?: number;
+        };
         /** LinkRemoveIn */
         LinkRemoveIn: {
             /** Drive Ids */
@@ -7732,13 +7754,16 @@ export interface components {
         };
         /**
          * ReminderRule
-         * @description Exactly one of ``days_before: N`` (N days before the date) or ``overdue: true``.
+         * @description Exactly one of ``days_before: N`` (N days before the date), ``overdue: true`` or
+         *     ``lead: true`` (the item's own lead time, see ``LeadDef``).
          */
         ReminderRule: {
             /** Days Before */
             days_before?: number | null;
             /** Overdue */
             overdue?: true | null;
+            /** Lead */
+            lead?: true | null;
         };
         /** RemindersStatusOut */
         RemindersStatusOut: {
@@ -7810,6 +7835,14 @@ export interface components {
             name: string;
             /** Folder */
             folder: string;
+        };
+        /** RenewDef */
+        RenewDef: {
+            /**
+             * Label
+             * @default Renewed
+             */
+            label?: string;
         };
         /** ReplayHitOut */
         ReplayHitOut: {
@@ -9049,6 +9082,8 @@ export interface components {
             /** Nudge After Days */
             nudge_after_days?: number | null;
             summary?: components["schemas"]["SummaryDef"] | null;
+            lead?: components["schemas"]["LeadDef"] | null;
+            renew?: components["schemas"]["RenewDef"] | null;
         };
         /** TrayDefaultAddedOut */
         TrayDefaultAddedOut: {
