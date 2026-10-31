@@ -12,6 +12,14 @@ export const markLabel = (doneLabel: string) => (doneLabel === "Done" ? "Mark do
 
 type Done = { id: number; title: string };
 
+/** A Renew tray's main action ("Renewed…": it opens a form), null for other trays. Every
+ * list offers it instead of the done label, which would finish the item for good. */
+export const renewLabel = (tray: TrayDef | undefined) => (tray?.renew ? `${tray.renew.label}…` : null);
+
+/** The item's page with its Renewed… form open. */
+export const renewHref = (item: { id: number; tray_id: string }) =>
+  `/trays/${encodeURIComponent(item.tray_id)}?item=${item.id}&do=renew`;
+
 /** What a tray's done step needs: its label and fields, whether a form must be filled
  * first, and the defaults sent without one. */
 export function doneOf(tray: TrayDef | undefined, today: string) {

@@ -210,7 +210,7 @@ const PASSPORT: TrayItem = {
   checklist_total: 0,
 };
 
-function setupRenew(item: TrayItem = PASSPORT) {
+function setupRenew(item: TrayItem = PASSPORT, at = "/trays/renew?item=9") {
   mockFetch({
     "GET /api/trays": { body: { trays: [RENEW], errors: [] } },
     "GET /api/trays/renew/items": { body: [item] },
@@ -247,7 +247,7 @@ function setupRenew(item: TrayItem = PASSPORT) {
     "GET /api/files/f1/links": { body: { items: [], collections: [], note: "" } },
   });
   renderWithProviders(
-    <MemoryRouter initialEntries={["/trays/renew?item=9"]}>
+    <MemoryRouter initialEntries={[at]}>
       <Routes>
         <Route path="/trays/:trayId?" element={<Trays today="2026-10-31" />} />
       </Routes>
@@ -261,6 +261,7 @@ describe("a Renew tray item", () => {
     const item = await screen.findByRole("region", { name: "Item" });
     const renewed = await within(item).findByRole("button", { name: /^Renewed/ });
     expect(renewed).toHaveClass("primary");
+    expect(renewed).toHaveTextContent(/^Renewed…/);
     expect(renewed.querySelector("kbd")).toHaveTextContent("d");
     expect(within(item).queryByRole("button", { name: /^Mark done/ })).toBeNull();
     // the list's key hint says what d does here
@@ -273,6 +274,21 @@ describe("a Renew tray item", () => {
     await user.click(within(item).getByRole("button", { name: "No longer needed" }));
     const done = await screen.findByRole("dialog", { name: "No longer needed" });
     expect(within(done).getByText(/as done\?/)).toBeInTheDocument();
+  });
+
+  it("opens the Renewed… form when the item is opened with do=renew (from Today or the menu)", async () => {
+    setupRenew(PASSPORT, "/trays/renew?item=9&do=renew");
+    const form = await screen.findByRole("dialog", { name: "Renewed" });
+    expect(within(form).getByLabelText("New expiry date")).toBeInTheDocument();
+  });
+
+  it("its right-click menu lists Renewed… first and No longer needed after", async () => {
+    setupRenew();
+    const row = await screen.findByRole("article", { name: "Passport Michiel" });
+    fireEvent.contextMenu(row, { clientX: 20, clientY: 20 });
+    const menu = await screen.findByRole("menu", { name: "Actions for Passport Michiel" });
+    const labels = Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+    expect(labels.slice(0, 2)).toEqual(["Renewed…", "No longer needed"]);
   });
 
   it("shows the kind as a choice and the lead time with the kind's default as its placeholder", async () => {

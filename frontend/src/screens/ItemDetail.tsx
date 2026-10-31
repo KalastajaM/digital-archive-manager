@@ -640,7 +640,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           disabledReason={TRAYS_LOADING}
           onClick={() => toggleDone("done")}
         >
-          {visible(renew ? renew.label : doneText)}
+          {visible(renew ? `${renew.label}…` : doneText)}
           <kbd aria-hidden="true">d</kbd>
         </TipButton>
         {renew && (

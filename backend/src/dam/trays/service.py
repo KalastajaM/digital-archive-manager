@@ -139,7 +139,7 @@ def _dump(
     }
 
 
-def _load(defs: dict[str, FieldDef], stored: dict | None) -> tuple[dict, set[str]]:
+def load_fields(defs: dict[str, FieldDef], stored: dict | None) -> tuple[dict, set[str]]:
     """JSON → ``(values, invalid)``. A field no longer defined keeps its raw value; one
     its current type cannot parse keeps its raw value too and is listed in ``invalid``."""
     values: dict[str, object] = {}
@@ -165,7 +165,7 @@ def _date_of(tray: TrayDef, values: dict, invalid: set[str]) -> date | None:
     return values.get(name)
 
 
-def _check_drive_id(drive_id: object) -> str:
+def check_drive_id(drive_id: object) -> str:
     if not isinstance(drive_id, str) or not drive_id:
         raise InvalidRequest("A file is given by its drive id")
     return drive_id
@@ -268,7 +268,7 @@ class TrayService:
     @staticmethod
     def _item(row, tray: TrayDef | None, drive_ids: list[str]) -> Item:
         defs = tray.fields if tray else {}
-        values, invalid = _load(defs, row.fields)
+        values, invalid = load_fields(defs, row.fields)
         missing = [
             n for n, f in defs.items() if f.required and (values.get(n) is None or n in invalid)
         ]
@@ -284,7 +284,7 @@ class TrayService:
             done_fields=(
                 None
                 if row.done_fields is None
-                else _load(tray.done.fields if tray else {}, row.done_fields)[0]
+                else load_fields(tray.done.fields if tray else {}, row.done_fields)[0]
             ),
             files=drive_ids,
             created_by_batch=row.created_by_batch,
@@ -447,7 +447,7 @@ class TrayService:
     def _drive_ids(drive_ids: object) -> list[str]:
         if isinstance(drive_ids, str | bytes) or not isinstance(drive_ids, list | tuple):
             raise InvalidRequest("drive_ids must be a list of drive ids")
-        out = list(dict.fromkeys(_check_drive_id(d) for d in drive_ids))
+        out = list(dict.fromkeys(check_drive_id(d) for d in drive_ids))
         if not out:
             raise InvalidRequest("An item needs at least one file")
         return out
@@ -587,7 +587,7 @@ class TrayService:
     def _move(self, conn: Connection, row, tray: TrayDef, batch_id: str | None, extra: dict):
         """Re-home ``row`` (an open item) in ``tray``; ``extra``: field values (parsed)
         that override the carried-over ones."""
-        values, invalid = _load(tray.fields, row.fields)
+        values, invalid = load_fields(tray.fields, row.fields)
         for name, value in extra.items():
             values[name] = value
             invalid.discard(name)
@@ -653,7 +653,7 @@ class TrayService:
         tray = self._find_tray(moved["from"])
         if tray is None:
             raise Conflict("The tray it came from no longer exists")
-        values, invalid = _load(tray.fields, row.fields)
+        values, invalid = load_fields(tray.fields, row.fields)
         conn.execute(
             update(items)
             .where(items.c.id == row.id)
@@ -684,7 +684,7 @@ class TrayService:
             if fields and tray is None:
                 raise InvalidRequest("The item's tray was removed: fields cannot be edited")
             if tray is not None:
-                current, invalid = _load(tray.fields, row.fields)
+                current, invalid = load_fields(tray.fields, row.fields)
                 values, still_invalid = dict(current), set(invalid)
                 for name, value in _parse_input(tray.fields, fields or {}).items():
                     still_invalid.discard(name)
@@ -720,7 +720,7 @@ class TrayService:
         tray = self._find_tray(row.tray_id)
         if tray is None:
             return row.date
-        values, invalid = _load(tray.fields, row.fields)
+        values, invalid = load_fields(tray.fields, row.fields)
         return _date_of(tray, values, invalid)
 
     def refresh_dates(self) -> int:
@@ -802,7 +802,7 @@ class TrayService:
     def add_file(self, item_id: int, drive_id: str, position: int | None = None) -> Item:
         """Attach a file at the end, or at ``position`` (0-based, clamped), which is how an
         Undo puts a taken-off file back where it was. A file already on the item stays."""
-        drive_id = _check_drive_id(drive_id)
+        drive_id = check_drive_id(drive_id)
         with write_tx(self.engine) as conn:
             self._row(conn, item_id)
             exists = conn.execute(
@@ -858,7 +858,7 @@ class TrayService:
         tray = self._find_tray(row.tray_id)
         if tray is None or tray.date_field is None:
             raise InvalidRequest("The item's tray has no date")
-        values, invalid = _load(tray.fields, row.fields)
+        values, invalid = load_fields(tray.fields, row.fields)
         invalid.discard(tray.date_field)
         if value is None:
             values.pop(tray.date_field, None)

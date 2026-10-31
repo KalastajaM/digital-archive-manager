@@ -24,7 +24,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from dam.db.engine import write_tx
 from dam.db.tables import items, reminders_sent
 from dam.trays.model import FIELD_TYPES, ReminderRule, TrayDef, lead_days_of
-from dam.trays.service import _load
+from dam.trays.service import load_fields
 
 OVERDUE = "overdue"
 NUDGE = "nudge"
@@ -54,7 +54,7 @@ def rule_id(rule: ReminderRule, lead_days: int | None = None) -> str | None:
 
 
 def _lead_days(tray: TrayDef, stored: dict | None) -> int | None:
-    values, _ = _load(tray.fields, stored)
+    values, _ = load_fields(tray.fields, stored)
     return lead_days_of(tray, values)
 
 

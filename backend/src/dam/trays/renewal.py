@@ -32,7 +32,7 @@ from dam.ops.executor import Executor
 from dam.ops.guards import parent
 from dam.ops.model import Op, OpKind, Plan, ResolvedOp
 from dam.services import check_destination_area, check_disk_identity, check_origin
-from dam.trays.service import Item, TrayService, _check_drive_id
+from dam.trays.service import Item, TrayService, check_drive_id
 
 RENEWED = "renewed"
 GONE = "The old file is no longer in the archive"
@@ -112,7 +112,7 @@ class RenewalService:
         """The item's first file, which ``new_drive_id`` would replace; refused
         (``InvalidRequest``) as ``record`` would refuse the renewal. Read only (a filing
         with ``renews`` checks it before anything moves)."""
-        new_drive_id = _check_drive_id(new_drive_id)
+        new_drive_id = check_drive_id(new_drive_id)
         with self.engine.connect() as conn:
             before = self._renewable(conn, item_id)
             self._check_new_file(conn, item_id, before, new_drive_id)
@@ -123,7 +123,7 @@ class RenewalService:
         refuse it. Read only."""
         check_origin(origin)
         if new_drive_id is not None:
-            new_drive_id = _check_drive_id(new_drive_id)
+            new_drive_id = check_drive_id(new_drive_id)
         with self.engine.connect() as conn:
             before = self._renewable(conn, item_id)
             if new_drive_id is None:
@@ -257,7 +257,7 @@ class RenewalService:
         if not isinstance(expires, date):
             raise InvalidRequest("The new expiry is a date")
         if new_drive_id is not None:
-            new_drive_id = _check_drive_id(new_drive_id)
+            new_drive_id = check_drive_id(new_drive_id)
         lock = self.collections.important_lock if new_drive_id else nullcontext()
         marks: MarkState | None = None
         new_marks: MarkState | None = None

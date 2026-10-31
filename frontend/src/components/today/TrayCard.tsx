@@ -1,13 +1,13 @@
 /** A tray's rows on Today: what needs attention in full (fields, copy buttons), later
  * items compact, each with a round checkbox that marks it done, with urgency tags and amounts. */
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { AttentionItem, Item, Today as TodayData, TrayCount, TrayDef } from "../../api/client";
 import { dayOf, fieldLabel, fieldWord, formatField } from "../../format";
 import { visible } from "../../text";
 import { CopyButton } from "../CopyButton";
 import { DoneForm } from "../DoneForm";
 import { ItemBadges } from "../ItemBadges";
-import { useMarkDone } from "../useMarkDone";
+import { renewHref, renewLabel, useMarkDone } from "../useMarkDone";
 import { urgency, UrgencyTag } from "../UrgencyTag";
 import { daysBetween, waited } from "./time";
 
@@ -106,8 +106,15 @@ export function TrayRow({
   const doneFields = tray?.done?.fields ?? {};
   const done = useMarkDone(item, tray, today);
   const title = visible(item.title);
-  const checkName = doneName(title, visible(doneLabel));
+  const navigate = useNavigate();
+  // a Renew item's check opens its Renewed… form: it is renewed, not finished
+  const renew = renewLabel(tray);
+  const checkName = renew ? `${visible(renew)} ${title}` : doneName(title, visible(doneLabel));
   const onCheck = async () => {
+    if (renew) {
+      navigate(renewHref(item));
+      return;
+    }
     if (done.needsForm) {
       setFormOpen(!formOpen);
       return;
