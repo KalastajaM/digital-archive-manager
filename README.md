@@ -10,10 +10,7 @@ plain folder. It reads every document (with OCR for scans), suggests a name and 
 for each new one, keeps your bills and to-dos in trays, and lets you search everything,
 without ever deleting a file.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/inbox-dark.png">
-  <img alt="The Inbox: a new bill with its suggested name, the scanned due date, amount and IBAN, ready to file" src="docs/images/inbox-light.png">
-</picture>
+<img alt="The Inbox: a new bill with its suggested name, the scanned due date, amount and IBAN, ready to file" src="docs/images/inbox.png">
 
 ## Why you might like it
 
@@ -42,9 +39,11 @@ without ever deleting a file.
   field, and for Finnish bills a bank barcode to scan with your banking app.
 - **Collections for things in progress.** Group the documents of a house sale, a
   renovation or a court case, with notes and a checklist, without moving them. Add a whole
-  folder and everything in it belongs, including what you put in it later.
-- **Tags and search.** Search by tag from the Search card on Today or in Browse. A Tags
-  screen lets you rename, merge and group tags, each change with Undo.
+  folder and everything in it belongs, including what you put in it later. Collections
+  nest, and each one opens in Browse beside your folders.
+- **Tags and search.** Search from anywhere with ⌘K, or in Browse, by words, tag, sender,
+  ID or IBAN. Browse's Tags tree lets you rename, merge and group tags, each change with
+  Undo.
 - **Relatives: a family tree for each document.** Every document shows the files it
   belongs with, and why: the same sender, reference number, IBAN, collection, tag, folder or
   person. Last year's bill, the contract behind it and the scan still in the inbox show up
@@ -54,48 +53,48 @@ without ever deleting a file.
 
 <table>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/relatives-dark.png"><img alt="Browse, a contract's file panel: its Relatives, best first, with the two bills still in the inbox on orange cards" src="docs/images/relatives-light.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/connections-dark.png"><img alt="Show connections: the contract's relatives by folder with lines to each, and what it has in common with the plan" src="docs/images/connections-light.png"></picture></td>
+    <td><img alt="Browse, a contract's file panel: its Relatives, best first, with the two bills still in the inbox on orange cards" src="docs/images/relatives.png"></td>
+    <td><img alt="Show connections: the contract's relatives by folder with lines to each, and what it has in common with the plan" src="docs/images/connections.png"></td>
   </tr>
   <tr>
     <td align="center"><b>Relatives</b>: the files a document belongs with, and why</td>
     <td align="center"><b>Show connections</b>: the whole family by folder</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png"><img alt="Today: what is due, what is waiting in the inbox, a search box and the reminders" src="docs/images/today-light.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/paymode-dark.png"><img alt="Pay mode: payee, IBAN, reference, amount and a bank barcode in large type" src="docs/images/paymode-light.png"></picture></td>
+    <td><img alt="Today: what is due, what is waiting in the inbox, the collections to do, starred files and the reminders" src="docs/images/today.png"></td>
+    <td><img alt="Pay mode: payee, IBAN, reference, amount and a bank barcode in large type" src="docs/images/paymode.png"></td>
   </tr>
   <tr>
     <td align="center"><b>Today</b>: what needs you, at a glance</td>
     <td align="center"><b>Pay mode</b>: check the details, scan, done</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/browse-dark.png"><img alt="Browse: folders on the left, and for the selected file its tags, collection, summary, a locked padlock and its Relatives" src="docs/images/browse-light.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/activity-dark.png"><img alt="Activity: every change in plain words, each with its own Undo" src="docs/images/activity-light.png"></picture></td>
+    <td><img alt="Browse: folders on the left, and for the selected file its tags, collection, summary, a locked padlock and its Relatives" src="docs/images/browse.png"></td>
+    <td><img alt="Activity: every change in plain words, each with its own Undo" src="docs/images/activity.png"></td>
   </tr>
   <tr>
     <td align="center"><b>Browse</b>: folders, tags, summaries, Quick Look</td>
     <td align="center"><b>Activity</b>: every change, each with Undo</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/collection-dark.png"><img alt="A collection: its summary, its groups, what needs attention, and the selected file with its tags, group and actions" src="docs/images/collection-light.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/tags-dark.png"><img alt="Tags: every tag with its file count, in groups, with pinned tags marked" src="docs/images/tags-light.png"></picture></td>
+    <td><img alt="A collection in Browse: the Collections tree with its nested collections, its summary, what needs attention, its notes and checklist, and its files" src="docs/images/collection.png"></td>
+    <td><img alt="Browse's Tags tree: every tag with its file count, in groups, and the files tagged home" src="docs/images/tags.png"></td>
   </tr>
   <tr>
-    <td align="center"><b>Collections</b>: a house sale in one place, nothing moved</td>
+    <td align="center"><b>Collections</b>: a house sale in one place, nested, nothing moved</td>
     <td align="center"><b>Tags</b>: rename, merge, group and pin, each with Undo</td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/boxes-dark.png"><img alt="The Inbox with Draw a box on: two boxes drawn on page 1 of a water bill, with the Boxes on page 1 panel below" src="docs/images/boxes-light.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/rule-sheet-dark.png"><img alt="Make a rule: the words in the area, the folder and tags to file with, and the test against the documents filed before" src="docs/images/rule-sheet-light.png"></picture></td>
+    <td><img alt="The Inbox with Draw a box on: two boxes drawn on page 1 of a water bill, with the Boxes on page 1 panel beside it" src="docs/images/boxes.png"></td>
+    <td><img alt="Make a rule: the words in the area, the folder and tags to file with, and the test against the documents filed before" src="docs/images/rule-sheet.png"></td>
   </tr>
   <tr>
     <td align="center"><b>Boxes on page 1</b>: draw over a letterhead to start a rule</td>
     <td align="center"><b>Rule sheet</b>: proven against your filed documents first</td>
   </tr>
   <tr>
-    <td><picture><img alt="A sheet of QR stickers for the filing codes P, A and R, each with star and Important tick boxes" src="docs/images/sticker-sheet.png"></picture></td>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/ai-settings-dark.png"><img alt="Activity, AI calls: this month's spend, the AI switch and the folders that are never sent" src="docs/images/ai-settings-light.png"></picture></td>
+    <td><img alt="A sheet of QR stickers for the filing codes P, A and R, each with star and Important tick boxes" src="docs/images/sticker-sheet.png"></td>
+    <td><img alt="Activity, AI calls: this month's spend, the AI switch and the folders that are never sent" src="docs/images/ai-settings.png"></td>
   </tr>
   <tr>
     <td align="center"><b>QR stickers</b>: decide on the paper before you scan</td>

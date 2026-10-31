@@ -90,6 +90,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- The README shows its screenshots in light mode only, retaken with collections and tags
+  in Browse and the nested collections; the dark copies are gone. The user guide gains the
+  search palette (⌘K) and says that a row's tray tag opens the item in its tray.
+
 - **Not related** on a relative's card in the Relatives window is a button like Quick look
   and Relatives, no longer a link, since it marks the pair. The card's four buttons sit two
   by two in equal columns: Quick look and Show in folder, then Relatives (renamed from Its
@@ -143,6 +147,8 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- In the sidebar, a collection with both a file count and collections inside it drew the
+  count over its fold chevron. The count now stops short of the chevron.
 - A relative's right-click menu with several ticked offered Quick Look, Show in Browse and
   Not related for the clicked file alone under a heading that named them all. It now leaves
   out the one-file entries and has **Mark 2 as not related** (with the count), with one
