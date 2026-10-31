@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CollectionRow } from "../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
-import css from "../styles-new.css?raw";
+import css from "../styles.css?raw";
 import Browse from "./Browse";
 
 const coll = (id: number, name: string): CollectionRow => ({

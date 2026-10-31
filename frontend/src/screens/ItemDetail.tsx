@@ -793,7 +793,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   // (as Browse): the files, the one file panel for the file shown, the checklist, note and history.
   const added = formatDate(dayOf(item.created));
   return (
-    <div className={`item-detail item-${kind} item-new`} {...fileDrop.props}>
+    <div className={`item-detail item-${kind}`} {...fileDrop.props}>
       <header className="item-header">
         <div className="item-heading">
           <EditableTitle key={item.id} value={item.title} save={saveTitle} headingId={headingId} />

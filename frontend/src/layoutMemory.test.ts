@@ -5,18 +5,18 @@ beforeEach(() => localStorage.clear());
 
 describe("layoutMemory", () => {
   it("forgets every width and the Today layout, in every archive, and nothing else", () => {
-    localStorage.setItem("dam.browse.listwidth", "60");
-    localStorage.setItem("dam.browse.listwidth.work", "55");
+    localStorage.setItem("dam.browse.panesplit", "60");
+    localStorage.setItem("dam.browse.panesplit.work", "55");
     localStorage.setItem("dam.today.layout.v1.work", "{}");
     localStorage.setItem("dam.browse.split", "1");
-    localStorage.setItem("dam.browse.listwidthy", "9"); // a different key that shares a prefix
+    localStorage.setItem("dam.browse.panesplity", "9"); // a different key that shares a prefix
     localStorage.setItem("dam.appearance", "dark");
     const removed = forgetLayout();
-    expect(Object.keys(removed).sort()).toEqual(["dam.browse.listwidth", "dam.browse.listwidth.work", "dam.today.layout.v1.work"]);
+    expect(Object.keys(removed).sort()).toEqual(["dam.browse.panesplit", "dam.browse.panesplit.work", "dam.today.layout.v1.work"]);
     expect(localStorage.length).toBe(3);
     expect(localStorage.getItem("dam.appearance")).toBe("dark");
     restoreLayout(removed);
-    expect(localStorage.getItem("dam.browse.listwidth.work")).toBe("55");
+    expect(localStorage.getItem("dam.browse.panesplit.work")).toBe("55");
     expect(localStorage.length).toBe(6);
   });
 

@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CollectionRow } from "../api/client";
 import type { ScopeState } from "../browseScope";
-import css from "../styles-new.css?raw";
+import css from "../styles.css?raw";
 import { setDragFiles, setDragSource } from "../dnd";
 import { dataTransfer, deferred, mockFetch, renderWithProviders } from "../test-utils";
 import { CollectionTree } from "./BrowseCollectionTree";

@@ -2,8 +2,6 @@
 import { describe, expect, it } from "vitest";
 import css from "./styles.css?raw";
 import theme from "./theme.css?raw";
-import newCss from "./styles-new.css?raw";
-import { balanceColumns } from "./components/today/balance";
 import { holdsText } from "./components/collectionTree";
 
 const strip = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -71,28 +69,28 @@ function over(fg: string, alpha: number, bg: string) {
 }
 
 describe("dark theme contrast on tinted surfaces", () => {
-  it("New dark: muted and grey text read on the open sidebar row, a selected row and a grey tag", () => {
-    const t = { ...block(':root[data-style="new"]'), ...block(':root[data-style="new"][data-theme="dark"]') };
+  it("muted and grey text read on the open sidebar row, a selected row and a grey tag", () => {
+    const t = { ...block(":root"), ...block(':root[data-theme="dark"]') };
     for (const surface of [t["--sidebar-sel"], t["--selected"], over("#ffffff", 0.08, t["--panel"]), over("#ffffff", 0.08, t["--panel-2"])]) {
       expect(contrast(t["--muted"], surface)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(t["--grey-text"], surface)).toBeGreaterThanOrEqual(4.5);
     }
   });
-  it("New: the number on a drawn box reads on every box colour, in both themes", () => {
-    const text = strip(newCss);
+  it("the number on a drawn box reads on every box colour, in both themes", () => {
+    const text = strip(css);
     const hexes = (from: string) => {
       const body = text.slice(text.indexOf(from), text.indexOf("}", text.indexOf(from)));
       return Object.fromEntries([...body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1], m[2]]));
     };
-    for (const from of ['[data-style="new"] {\n  --tone-0', '[data-style="new"][data-theme="dark"] {\n  --on-tone']) {
+    for (const from of [":root {\n  --tone-0", ':root[data-theme="dark"] {\n  --on-tone']) {
       const t = hexes(from);
       expect(t["--on-tone"]).toBeDefined();
       for (const n of [0, 1, 2, 3, 4]) expect(contrast(t["--on-tone"], t[`--tone-${n}`])).toBeGreaterThanOrEqual(4.5);
     }
   });
-  it("Classic dark: the red text reads on the red tag background over a panel", () => {
+  it("the red text reads on the red tag background over a panel", () => {
     const t = block(':root[data-theme="dark"]');
-    expect(contrast(t["--red-text"], over("#ff453a", 0.2, t["--panel"]))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(t["--red-text"], over(t["--red"], 0.18, t["--panel"]))).toBeGreaterThanOrEqual(4.5);
   });
 });
 
@@ -120,19 +118,6 @@ describe("the sidebar's fold chevron", () => {
     expect(rule).not.toMatch(/bottom:\s*0/);
     expect(rule).toMatch(/top:\s*calc\(\(var\(--sidebar-row-h\) - var\(--icon-button-sm\)\) \/ 2\)/);
     expect(declarations(".sidebar-row")).toMatch(/min-height:\s*var\(--sidebar-row-h\)/);
-  });
-});
-
-describe("Today's default layout", () => {
-  it("deals the cards out between the columns by their heights, the first to the shorter column", () => {
-    const columns = balanceColumns([
-      { id: "a", weight: 4 },
-      { id: "b", weight: 10 },
-      { id: "c", weight: 3 },
-      { id: "d", weight: 3 },
-      { id: "e", weight: 3 },
-    ]);
-    expect(columns).toEqual([["a", "c", "d", "e"], ["b"]]);
   });
 });
 

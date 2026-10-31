@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, onTestFinished } from "vitest";
+import { describe, expect, it } from "vitest";
 import App from "../App";
 import type { SetupCheck, SetupResult } from "../api/client";
 import { mockFetch, renderWithProviders } from "../test-utils";
@@ -108,10 +108,6 @@ describe("FirstRun", () => {
   });
 
   it("fills the path from the system folder dialog and checks it", async () => {
-    document.documentElement.dataset.style = "new";
-    onTestFinished(() => {
-      delete document.documentElement.dataset.style;
-    });
     const user = userEvent.setup();
     mockFetch({
       "GET /api/setup/candidates": { body: CANDIDATES },

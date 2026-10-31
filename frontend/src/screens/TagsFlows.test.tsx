@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SearchHit } from "../api/client";
 import { TagTree } from "../components/BrowseTagTree";
-import { browseSearchUrl } from "../components/today/SearchCard";
+import { browseSearchUrl } from "../components/SearchPalette";
 import { Sidebar } from "../components/ui/Sidebar";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
 import Browse from "./Browse";

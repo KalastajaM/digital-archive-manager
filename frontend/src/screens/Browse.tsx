@@ -200,7 +200,7 @@ function writeTreeShown(shown: boolean) {
     // storage blocked: the choice lasts for this page only
   }
 }
-/** Browse narrower than this (px): the folder tree gives way to an overlay (see styles-new.css). */
+/** Browse narrower than this (px): the folder tree gives way to an overlay (see styles.css). */
 const TREE_FOLDS_AT = 880;
 
 /** Where the two-pane choice is remembered (this browser only). */
@@ -220,9 +220,6 @@ function writeSplit(split: boolean) {
   }
 }
 
-/** The list's share of the width with one pane, in percent (this browser only). */
-export const LIST_WIDTH_KEY = "dam.browse.listwidth";
-const LIST_SPLIT = { min: 25, max: 75, initial: 45 };
 /** Two panes: the left pane's share, dragged on the divider between them. */
 export const PANES_WIDTH_KEY = "dam.browse.panesplit";
 const PANES_SPLIT = { min: 25, max: 75, initial: 50 };
@@ -792,8 +789,6 @@ export default function Browse() {
   // Files that just left (moved, marked): their row may linger until the folder reloads,
   // but the detail no longer shows them. The next click or step clears it.
   const [gone, setGone] = useState<Set<string>>(NONE);
-  // One pane: the list's share of the width, dragged on the splitter (remembered here).
-  const listSplit = useSplitWidth(archiveKey(LIST_WIDTH_KEY), LIST_SPLIT);
   // A remembered divider between the two panes, a "View" menu and an L / R tab pair that the
   // stylesheet shows when the room is short, and the details panel behind a button when it is
   // too narrow to sit beside the list.
@@ -2388,7 +2383,6 @@ export default function Browse() {
       <Toolbar
         title="Browse"
         className="browse-toolbar"
-        style={split ? undefined : listSplit.hostStyle}
         subtitle={checked.length > 0 ? `${checked.length} selected` : undefined}
         searchFirst
         lead={
