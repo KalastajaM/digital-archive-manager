@@ -180,6 +180,41 @@ class _Checkbox:
         return value
 
 
+class _Choice:
+    """One of the field's ``options``. The type alone has no options: ``FieldDef.parse``
+    does the membership check."""
+
+    def parse(self, raw: object) -> str:
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValueError("expected one of the options")
+        return raw.strip()
+
+    def dump(self, value: str) -> str:
+        return value
+
+
+class _Days:
+    """A non-negative whole number of days, from an int or a string of digits."""
+
+    def parse(self, raw: object) -> int:
+        if isinstance(raw, bool):
+            raise ValueError("expected a number of days")
+        if isinstance(raw, int):
+            value = raw
+        elif isinstance(raw, str) and raw.strip().isascii() and raw.strip().isdigit():
+            value = int(raw.strip())
+        else:
+            raise ValueError("expected a number of days")
+        if value < 0 or value > _MAX_DAYS:
+            raise ValueError("expected a number of days")
+        return value
+
+    def dump(self, value: int) -> int:
+        return value
+
+
+_MAX_DAYS = 36500
+
 FIELD_TYPES: dict[str, FieldType] = {
     "text": _Text(),
     "date": _Date(),
@@ -187,6 +222,8 @@ FIELD_TYPES: dict[str, FieldType] = {
     "iban": _Iban(),
     "reference": _Reference(),
     "checkbox": _Checkbox(),
+    "choice": _Choice(),
+    "days": _Days(),
 }
 
 # The field type each Phase 1 ``detect_fields`` value fits.
@@ -215,6 +252,7 @@ class FieldDef(BaseModel):
     prefill: Literal["due_date", "total", "iban", "reference", "payee"] | None = None
     copyable: bool = Field(default=False, alias="copy")
     default: Literal["today"] | None = None
+    options: list[str] | None = None
 
     @field_validator("type")
     @classmethod
@@ -225,6 +263,13 @@ class FieldDef(BaseModel):
 
     @model_validator(mode="after")
     def _consistent(self) -> "FieldDef":
+        if self.type == "choice":
+            if not self.options or any(not o.strip() for o in self.options):
+                raise ValueError("a choice field needs options")
+            if len(set(self.options)) != len(self.options):
+                raise ValueError("options must be distinct")
+        elif self.options is not None:
+            raise ValueError("options only belong on a choice field")
         if self.default == "today" and self.type != "date":
             raise ValueError("default 'today' needs a date field")
         if self.prefill is not None and _PREFILL_TYPES[self.prefill] != self.type:
@@ -232,6 +277,13 @@ class FieldDef(BaseModel):
                 f"prefill {self.prefill!r} needs a {_PREFILL_TYPES[self.prefill]} field"
             )
         return self
+
+    def parse(self, raw: object) -> object:
+        """The field type's ``parse``, plus the options check for a ``choice``."""
+        value = FIELD_TYPES[self.type].parse(raw)
+        if self.type == "choice" and value not in (self.options or []):
+            raise ValueError(f"expected one of: {', '.join(self.options or [])}")
+        return value
 
 
 def _check_field_names(fields: dict[str, FieldDef]) -> dict[str, FieldDef]:
@@ -259,18 +311,44 @@ class DoneDef(BaseModel):
 
 
 class ReminderRule(BaseModel):
-    """Exactly one of ``days_before: N`` (N days before the date) or ``overdue: true``."""
+    """Exactly one of ``days_before: N`` (N days before the date), ``overdue: true`` or
+    ``lead: true`` (the item's own lead time, see ``LeadDef``)."""
 
     model_config = ConfigDict(extra="forbid")
 
     days_before: NonNegativeInt | None = None
     overdue: Literal[True] | None = None
+    lead: Literal[True] | None = None
 
     @model_validator(mode="after")
     def _exactly_one(self) -> "ReminderRule":
-        if (self.days_before is None) == (self.overdue is None):
-            raise ValueError("a reminder is either days_before: N or overdue: true")
+        chosen = [v for v in (self.days_before, self.overdue, self.lead) if v is not None]
+        if len(chosen) != 1:
+            raise ValueError("a reminder is days_before: N, overdue: true or lead: true")
         return self
+
+
+class LeadDef(BaseModel):
+    """How long before the date an item is due for attention: its own ``days`` field if
+    set, else ``days[<its kind>]``, else ``default``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    by: str
+    days: dict[str, NonNegativeInt] = Field(default_factory=dict)
+    default: NonNegativeInt = 30
+
+    @field_validator("days", mode="before")
+    @classmethod
+    def _null_means_empty(cls, value):
+        return {} if value is None else value
+
+
+class RenewDef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(default="Renewed", min_length=1)
 
 
 class SummaryDef(BaseModel):
@@ -292,6 +370,8 @@ class TrayDef(BaseModel):
     reminders: list[ReminderRule] = Field(default_factory=list)
     nudge_after_days: PositiveInt | None = None
     summary: SummaryDef | None = None
+    lead: LeadDef | None = None
+    renew: RenewDef | None = None
 
     @field_validator("fields", "done", "reminders", mode="before")
     @classmethod
@@ -322,6 +402,27 @@ class TrayDef(BaseModel):
                 raise ValueError(f"date_field {self.date_field!r} must name a date field")
         if self.reminders and self.date_field is None:
             raise ValueError("reminders need a date_field")
+        if self.renew is not None and self.date_field is None:
+            raise ValueError("renew needs a date_field")
+        iban = next((k for k, f in self.fields.items() if f.type == "iban"), None)
+        if self.renew is not None and iban is not None:
+            # an IBAN field makes the tray a bills tray (Pay, not Renewed…)
+            raise ValueError(
+                f"renew cannot go with an iban field ({iban!r}): a tray with one is a "
+                "tray of bills to pay"
+            )
+        if any(r.lead for r in self.reminders) and self.lead is None:
+            raise ValueError("a lead reminder needs a lead block")
+        if self.lead is not None:
+            days_field = self.fields.get(self.lead.field)
+            if days_field is None or days_field.type != "days":
+                raise ValueError(f"lead field {self.lead.field!r} must name a days field")
+            by = self.fields.get(self.lead.by)
+            if by is None or by.type != "choice":
+                raise ValueError(f"lead by {self.lead.by!r} must name a choice field")
+            unknown = [k for k in self.lead.days if k not in (by.options or [])]
+            if unknown:
+                raise ValueError(f"lead days {unknown[0]!r} is not an option of {self.lead.by!r}")
         placeholders = {f for _, f, _, _ in string.Formatter().parse(self.item_title) if f}
         if self.date_field is None and "date" in placeholders:
             raise ValueError("item_title uses {date} but the tray has no date_field")
@@ -330,6 +431,21 @@ class TrayDef(BaseModel):
             if f is None or f.type != "money":
                 raise ValueError(f"summary sum {self.summary.sum!r} must name a money field")
         return self
+
+
+def lead_days_of(tray: TrayDef, values: dict[str, object]) -> int | None:
+    """The item's lead time in days, or ``None`` when the tray has no ``lead`` block."""
+    lead = tray.lead
+    if lead is None:
+        return None
+    own = values.get(lead.field)
+    # a stored value that failed to parse stays a str (service.load_fields): not an own value
+    if isinstance(own, int) and not isinstance(own, bool):
+        return own
+    kind = values.get(lead.by)
+    if isinstance(kind, str) and kind in lead.days:
+        return lead.days[kind]
+    return lead.default
 
 
 # --- loading -----------------------------------------------------------------------

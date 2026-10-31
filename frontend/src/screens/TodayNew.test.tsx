@@ -2,7 +2,7 @@
  * lists, the Inbox summary on the right), plus Customize (arrange mode). */
 import { cleanup, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttentionItem, Item, Today as TodayData, TrayDef } from "../api/client";
 import { setDragFiles } from "../dnd";
@@ -684,5 +684,69 @@ describe("Right-click menus on Today", () => {
     await user.pointer({ keys: "[MouseRight]", target: link });
     const menu = await screen.findByRole("menu", { name: "Actions for plan.pdf" });
     expect(names(menu)).toEqual(["Show in Browse", "Quick Look", "Open", "Show in Finder", "Remove the star", "Move to To Delete"]);
+  });
+});
+
+describe("Today: a Renew item", () => {
+  const RENEW: TrayDef = {
+    id: "renew",
+    name: "Renew",
+    order: 4,
+    item_title: "{name}",
+    fields: { expires: { type: "date", required: true, copy: false } },
+    date_field: "expires",
+    done: { label: "No longer needed", fields: {} },
+    renew: { label: "Renewed" },
+  };
+  const ID_CARD = item(9, "renew", "Passport Michiel", { date: "2026-10-25", fields: { expires: "2026-10-25" } });
+  function Where() {
+    const l = useLocation();
+    return <p data-testid="where">{l.pathname + l.search}</p>;
+  }
+  function renderRenew() {
+    const calls = mockFetch({
+      "GET /api/today": {
+        body: {
+          ...TODAY,
+          attention: [attention(ID_CARD, "soon")],
+          overview: { ...TODAY.overview, trays: [...TODAY.overview.trays, { tray_id: "renew", name: "Renew", open: 1, overdue: 0, sum: null, waiting_long: 0 }] },
+          open_items: [...TODAY.open_items, { tray_id: "renew", items: [ID_CARD] }],
+        },
+      },
+      "GET /api/trays": { body: { trays: [...TRAYS.trays, RENEW], errors: [] } },
+      "GET /api/trays/to-pay/items": { body: [POWER, INSURANCE, WATER] },
+      "GET /api/inbox": { body: [] },
+      "GET /api/builtin/starred": { body: { id: 1, members: [] } },
+    });
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter>
+        <Routes>
+          <Route path="/" element={<Today today={DAY} />} />
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    return { calls, user };
+  }
+
+  it("its card's action opens the item's Renewed… form and posts no done", async () => {
+    const { calls, user } = renderRenew();
+    const check = (await screen.findAllByRole("checkbox", { name: "Renewed… Passport Michiel" }))[0];
+    await user.click(check);
+    expect(await screen.findByTestId("where")).toHaveTextContent("/trays/renew?item=9&do=renew");
+    expect(calls.filter((c) => c.method === "POST" && c.url.endsWith("/done"))).toHaveLength(0);
+  });
+
+  it("its right-click menu lists Renewed… first and No longer needed after", async () => {
+    const { calls, user } = renderRenew();
+    const row = (await screen.findAllByRole("article", { name: "Passport Michiel" }))[0];
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    const menu = await screen.findByRole("menu", { name: "Actions for Passport Michiel" });
+    const labels = Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+    expect(labels.slice(0, 2)).toEqual(["Renewed…", "No longer needed"]);
+    await user.click(within(menu).getByRole("menuitem", { name: "Renewed…" }));
+    expect(await screen.findByTestId("where")).toHaveTextContent("/trays/renew?item=9&do=renew");
+    expect(calls.filter((c) => c.method === "POST" && c.url.endsWith("/done"))).toHaveLength(0);
   });
 });

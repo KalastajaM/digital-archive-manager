@@ -53,6 +53,7 @@ function entry(id: string, name: string, trayGuess: string | null): InboxEntry {
     open_trays: [],
     fields: [],
     fields_edited: false,
+    person_follows_folder: false,
   };
 }
 

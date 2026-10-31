@@ -438,7 +438,7 @@ dialog.palette .palette-field input:focus-visible { flex: 1; min-width: 0; heigh
 /* ---- Shared screen pieces --------------------------------------------------------- */
 .count { color: var(--muted); font-weight: normal; }
 .hint { color: var(--muted); font-size: var(--fs-sm); }
-.error { color: var(--red-text); background: var(--red-bg); padding: 6px 8px; }
+.error { color: var(--red-text); background: var(--red-bg); padding: 6px 8px; overflow-wrap: anywhere; }
 .notice { color: var(--orange-text); background: var(--orange-bg); padding: 6px 8px; }
 .actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin: var(--sp-3) 0; }
 .ongoing-preview-reason { margin: 0 auto 0 0; align-self: center; }
@@ -1200,6 +1200,10 @@ button[data-tip] { position: relative; }
 .item-fields .field-text { min-width: 8rem; }
 .item-fields .field-money { flex: 0 1 9rem; min-width: 6rem; }
 .item-fields .field-checkbox { flex: none; }
+/* a long kind name ends in an ellipsis; the select's title has it in full */
+.item-fields .field-choice { flex: 0 1 12rem; min-width: 7rem; }
+.item-fields .field-choice select { min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-fields .field-days { flex: 0 1 8rem; min-width: 6rem; }
 .item-fields .field-input { display: flex; align-items: center; gap: var(--sp-2); }
 .item-fields .field-input > input:not([type="checkbox"]):not([type="date"]) { min-width: 0; width: 100%; }
 .item-fields .hint, .item-fields .error { margin: 3px 0 0; }
@@ -1417,6 +1421,12 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
 .popover p { margin: 0 0 var(--sp-2); }
 .popover-fixed { position: fixed; z-index: 60; width: auto; max-width: min(380px, calc(100vw - 16px)); padding: var(--sp-2); }
 .popover-fixed .done-form { margin: 0; padding: 0; background: transparent; max-width: none; }
+/* Renewed…: room for the file picker and the move preview */
+.popover-fixed .renew-form { width: min(30rem, calc(100vw - 32px)); }
+.renew-form .renew-file { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; margin: var(--sp-1) 0; }
+.renew-form .renew-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 12.5px; }
+.renew-form .renew-file .link-button { flex: none; }
+.renew-form .plan-preview { margin: var(--sp-2) 0 0; }
 /* The filter button rows of Collections (Show) and the export (Format); the trays use a
  * Segmented control now. */
 .tray-filter { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-2); }
@@ -1670,6 +1680,16 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 .suggestion-all .hint { margin: 0; }
 .suggestion-all button { min-height: 22px; font-size: var(--fs-sm); }
 .suggestion-tray-line { margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); }
+/* The Inbox's "Renews …?" beside the tray picker: the chip (or a short list) and Renews…;
+ * taken, the item's line, its new expiry date and Unlock and move. */
+.suggestion-renew-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; margin: 0 0 var(--sp-3); }
+.suggestion-renew-line .suggestion-chip { max-width: 100%; }
+.renews select { max-width: 100%; }
+.renews .link-button { margin-left: var(--sp-2); }
+.renews .renews-line { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; margin: 0 0 var(--sp-1); }
+.renews .renews-line .link-button { flex: none; margin-left: 0; }
+.renews-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.renews-locked { margin: var(--sp-2) 0 0; overflow-wrap: anywhere; }
 .ai-summary { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-lg); background: var(--blue-bg); color: var(--text); }
 .ai-summary h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); color: var(--blue-text); }
 .ai-summary p { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }

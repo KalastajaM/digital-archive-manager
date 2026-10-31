@@ -222,7 +222,8 @@ item_events = Table(
     Column("id", Integer, primary_key=True),
     Column("item_id", Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False),
     Column("at", Float, nullable=False),
-    # created | edited | done | reopened | file_added | file_removed | moved
+    # created | edited | done | reopened | file_added | file_removed | moved | merged_in |
+    # renewed
     Column("kind", Text, nullable=False),
     Column("data", JSON, nullable=False),
 )

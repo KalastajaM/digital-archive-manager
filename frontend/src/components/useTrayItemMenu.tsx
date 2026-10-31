@@ -1,5 +1,5 @@
 /** A tray item's right-click menu: Mark done (the tray's own label; Reopen for a done
- * item), Move to each other tray, Remove from tray…, then Open item and the item's file
+ * item; a Renew item has Renewed… first, then its done label), Move to each other tray, Remove from tray…, then Open item and the item's file
  * (Open file, Show in folder, Show in Finder). One place for the Trays list and Today's
  * tray rows and bill table, so all say and do the same. Done and Move say what happened in
  * a toast with Undo; Remove asks first (it has no Undo). */
@@ -14,7 +14,7 @@ import { RemoveItemSheet } from "./RemoveItemSheet";
 import { useToast } from "./Toasts";
 import type { MenuEntry } from "./ui/Menu";
 import { useContextMenu } from "./ui/useContextMenu";
-import { doneOf, markLabel, useDoneFlow } from "./useMarkDone";
+import { doneOf, markLabel, renewHref, renewLabel, useDoneFlow } from "./useMarkDone";
 
 type AnyItem = Item | TrayItem;
 const itemHref = (item: AnyItem) => `/trays/${encodeURIComponent(item.tray_id)}?item=${item.id}`;
@@ -91,7 +91,9 @@ export function useTrayItemMenu({
     const away = fileWhy(first);
     const launchWhy = away ?? (launch.busy ? LAUNCH_BUSY : null);
     const launchOff = { disabled: !!launchWhy, reason: launchWhy ?? undefined };
+    const renew = renewLabel(tray);
     return [
+      ...(open && renew ? [{ label: renew, onSelect: () => navigate(renewHref(item)) }] : []),
       open
         ? {
             // a done field that must be filled first: the item's page has the form

@@ -219,6 +219,8 @@ class Settings(BaseModel):
     # name no sender, link no files in Relatives and do not count for ``id:*``
     own_business_ids: list[str] = Field(default_factory=list)
     reminders: RemindersSettings = Field(default_factory=RemindersSettings)
+    # the folder expired files are renewed from; a plain folder name, never a special one
+    expired_folder_name: str = "Expired"
     ai: AISettings = Field(default_factory=AISettings)
 
     @field_validator("address_zone")
@@ -230,6 +232,28 @@ class Settings(BaseModel):
                 "address_zone must be x0, y0, x1, y1 between 0 and 1 with x0 < x1 and y0 < y1"
             )
         return box
+
+    @field_validator("expired_folder_name")
+    @classmethod
+    def _expired_folder_name(cls, value: str) -> str:
+        from dam.core.foldernames import FolderNameError, check_folder_name
+
+        try:
+            return check_folder_name(value)
+        except FolderNameError as e:
+            raise ValueError(str(e)) from e
+
+    @model_validator(mode="after")
+    def _expired_is_not_special(self) -> "Settings":
+        from dam.core.text import fold_name
+
+        if fold_name(self.expired_folder_name) in {
+            fold_name(n) for n in self.special_folders.model_dump().values()
+        }:
+            raise ValueError(
+                f"{self.expired_folder_name!r} is the name of one of the app's own folders."
+            )
+        return self
 
     @field_validator("countries")
     @classmethod

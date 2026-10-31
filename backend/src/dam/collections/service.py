@@ -943,17 +943,22 @@ class CollectionService:
         alone (no-op)."""
         ids = _drive_ids(drive_ids)
         with write_tx(self.engine) as conn:
-            self._require(conn, collection_id)
-            if ids:
-                where = and_(
-                    collection_members.c.collection_id == collection_id,
-                    collection_members.c.drive_id.in_(ids),
-                )
-                self._remember_link_names(conn, where)
-                conn.execute(delete(collection_members).where(where))
+            self.take_out(conn, collection_id, ids)
         if notify:
             self._changed()
         return self.get(collection_id)
+
+    def take_out(self, conn: Connection, collection_id: int, ids: list[str]) -> None:
+        """``remove_members`` inside the caller's transaction (the caller runs
+        ``changed`` after the commit)."""
+        self._require(conn, collection_id)
+        if ids:
+            where = and_(
+                collection_members.c.collection_id == collection_id,
+                collection_members.c.drive_id.in_(ids),
+            )
+            self._remember_link_names(conn, where)
+            conn.execute(delete(collection_members).where(where))
 
     @staticmethod
     def _check_closable(conn: Connection, collection_id: int) -> None:
@@ -1242,39 +1247,52 @@ class CollectionService:
         and go again when it is undone (``remove_created_by``). ``link_names``: as
         for ``add_members`` (new rows only)."""
         ids = _drive_ids(drive_ids)
-        names = [check_name(n, "group") for n in path] if path is not None else None
         with self._add_lock(collection_id), write_tx(self.engine) as conn:
-            self._require(conn, collection_id)
-            have = self._members_of(conn, collection_id, ids)
-            self._add(conn, collection_id, [d for d in ids if d not in have], batch_id, link_names)
-            if names:
-                self._groups_allowed(conn, collection_id)
-                group_id: int | None = None
-                for name in names:
-                    fold = fold_name(name)
-                    match = next(
-                        (
-                            r.id
-                            for r in self._siblings(conn, collection_id, group_id)
-                            if r.name_fold == fold
-                        ),
-                        None,
-                    )
-                    if match is None:
-                        match = self._insert_group(conn, collection_id, group_id, name, batch_id)
-                    group_id = match
-                if ids:
-                    conn.execute(
-                        update(collection_members)
-                        .where(
-                            collection_members.c.collection_id == collection_id,
-                            collection_members.c.drive_id.in_(ids),
-                        )
-                        .values(group_id=group_id)
-                    )
+            self.put_in_group_path(conn, collection_id, ids, path, batch_id, link_names)
         if notify:
             self._changed()
         return self.get(collection_id)
+
+    def put_in_group_path(
+        self,
+        conn: Connection,
+        collection_id: int,
+        ids: list[str],
+        path: list[str] | None,
+        batch_id: str | None = None,
+        link_names: dict[str, str] | None = None,
+    ) -> None:
+        """``set_group_path`` inside the caller's transaction (the caller holds
+        ``add_lock(collection_id)`` and runs ``changed`` after the commit)."""
+        names = [check_name(n, "group") for n in path] if path is not None else None
+        self._require(conn, collection_id)
+        have = self._members_of(conn, collection_id, ids)
+        self._add(conn, collection_id, [d for d in ids if d not in have], batch_id, link_names)
+        if names:
+            self._groups_allowed(conn, collection_id)
+            group_id: int | None = None
+            for name in names:
+                fold = fold_name(name)
+                match = next(
+                    (
+                        r.id
+                        for r in self._siblings(conn, collection_id, group_id)
+                        if r.name_fold == fold
+                    ),
+                    None,
+                )
+                if match is None:
+                    match = self._insert_group(conn, collection_id, group_id, name, batch_id)
+                group_id = match
+            if ids:
+                conn.execute(
+                    update(collection_members)
+                    .where(
+                        collection_members.c.collection_id == collection_id,
+                        collection_members.c.drive_id.in_(ids),
+                    )
+                    .values(group_id=group_id)
+                )
 
     @staticmethod
     def _members_of(conn: Connection, collection_id: int, ids: list[str]) -> set[str]:

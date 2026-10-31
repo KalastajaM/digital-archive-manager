@@ -1857,6 +1857,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/items/{item_id}/renew/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew Preview
+         * @description What Renewed… would do: the move of the old file into its folder's Expired
+         *     subfolder, why it is skipped, or the old file when it is locked and this request
+         *     carries no unlock for it (200 with ``locked`` set and no ops). Changes nothing.
+         */
+        post: operations["renew_preview_api_items__item_id__renew_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/items/{item_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew
+         * @description Renewed…: the new date and, with ``drive_id``, the new first file; the old file
+         *     moves into Expired in the same batch (400 when it is locked without an unlock, or
+         *     the move fails: then nothing is renewed).
+         */
+        post: operations["renew_api_items__item_id__renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/renewals/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Renewal Candidates
+         * @description The open items of trays with ``renew``, for the Inbox's "Renews …?": the first
+         *     file of each item (``drive_id``, which the Inbox unlocks for the move), its folder
+         *     and For, and whether that file is locked as stored (an unlock grant does not
+         *     count). The Inbox matches them to the folder and person it files into.
+         */
+        get: operations["renewal_candidates_api_renewals_open_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/renewals/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Renewal
+         * @description Undo a renewal that moved no file (``undo: "renewal"``): the item's old file,
+         *     date and marks come back. 400 for one that moved a file (undo it in Activity), 409
+         *     once undone.
+         */
+        post: operations["undo_renewal_api_renewals_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/items/{item_id}/files/remove": {
         parameters: {
             query?: never;
@@ -3964,6 +4053,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/expired-folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Expired Folder
+         * @description The name of the Expired folder.
+         */
+        get: operations["get_expired_folder_api_settings_expired_folder_get"];
+        /**
+         * Put Expired Folder
+         * @description Rename the Expired folder (setting only; no folder is moved). 400 with the reason
+         *     for a name that cannot be a folder name, starts with ``##.`` or is one of the special
+         *     folders' names, or when settings.yaml could not be written.
+         */
+        put: operations["put_expired_folder_api_settings_expired_folder_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/people": {
         parameters: {
             query?: never;
@@ -5752,6 +5867,19 @@ export interface components {
             /** Error */
             error: string;
         };
+        /**
+         * ExpiredFolderIn
+         * @description The Expired folder's name: a plain folder name, not a special folder's.
+         */
+        ExpiredFolderIn: {
+            /** Name */
+            name: string;
+        };
+        /** ExpiredFolderOut */
+        ExpiredFolderOut: {
+            /** Name */
+            name: string;
+        };
         /** ExportBody */
         ExportBody: {
             /**
@@ -5798,6 +5926,8 @@ export interface components {
             copy?: boolean;
             /** Default */
             default?: "today" | null;
+            /** Options */
+            options?: string[] | null;
         };
         /** FileBody */
         FileBody: {
@@ -5860,6 +5990,12 @@ export interface components {
             /** Follow Up Error */
             follow_up_error: string | null;
             offer?: components["schemas"]["RuleOfferOut"] | null;
+            /** Renew Skipped */
+            renew_skipped?: string | null;
+            /** Renew Batch */
+            renew_batch?: string | null;
+            /** Renew Undo */
+            renew_undo?: ("activity" | "renewal") | null;
         };
         /** FileLinksOut */
         FileLinksOut: {
@@ -5975,6 +6111,10 @@ export interface components {
              * @default false
              */
             important?: boolean;
+            /** Renews */
+            renews?: number | null;
+            /** Renew Expires */
+            renew_expires?: string | null;
         };
         /**
          * FileRequestOut
@@ -6420,6 +6560,11 @@ export interface components {
             /** Open Trays */
             open_trays: string[];
             assignment?: components["schemas"]["AssignmentOut"] | null;
+            /**
+             * Person Follows Folder
+             * @default false
+             */
+            person_follows_folder?: boolean;
         };
         /** InboxStatsOut */
         InboxStatsOut: {
@@ -6527,7 +6672,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "created" | "edited" | "done" | "reopened" | "file_added" | "file_removed" | "moved" | "merged_in";
+            kind: "created" | "edited" | "done" | "reopened" | "file_added" | "file_removed" | "moved" | "merged_in" | "renewed";
             /** Data */
             data: {
                 [key: string]: unknown;
@@ -6799,6 +6944,26 @@ export interface components {
             templates: components["schemas"]["LayoutTemplateOut"][];
             /** Special Folders */
             special_folders: components["schemas"]["SetupFolderOut"][];
+        };
+        /**
+         * LeadDef
+         * @description How long before the date an item is due for attention: its own ``days`` field if
+         *     set, else ``days[<its kind>]``, else ``default``.
+         */
+        LeadDef: {
+            /** Field */
+            field: string;
+            /** By */
+            by: string;
+            /** Days */
+            days?: {
+                [key: string]: number;
+            };
+            /**
+             * Default
+             * @default 30
+             */
+            default?: number;
         };
         /** LinkRemoveIn */
         LinkRemoveIn: {
@@ -7739,13 +7904,16 @@ export interface components {
         };
         /**
          * ReminderRule
-         * @description Exactly one of ``days_before: N`` (N days before the date) or ``overdue: true``.
+         * @description Exactly one of ``days_before: N`` (N days before the date), ``overdue: true`` or
+         *     ``lead: true`` (the item's own lead time, see ``LeadDef``).
          */
         ReminderRule: {
             /** Days Before */
             days_before?: number | null;
             /** Overdue */
             overdue?: true | null;
+            /** Lead */
+            lead?: true | null;
         };
         /** RemindersStatusOut */
         RemindersStatusOut: {
@@ -7817,6 +7985,98 @@ export interface components {
             name: string;
             /** Folder */
             folder: string;
+        };
+        /**
+         * RenewBody
+         * @description Renewed…: the new expiry date and, optionally, the new file that replaces the
+         *     item's first one (the old one moves into its folder's Expired subfolder).
+         */
+        RenewBody: {
+            /**
+             * Expires
+             * Format: date
+             */
+            expires: string;
+            /** Drive Id */
+            drive_id?: string | null;
+        };
+        /**
+         * RenewCandidateOut
+         * @description An open item of a tray with ``renew``, for the Inbox's "Renews …?" suggestion:
+         *     ``drive_id`` is its first file (None: no file), ``folder`` holds that file (None:
+         *     no file, or it is gone), ``person`` is that file's For, and ``locked`` says the
+         *     file is locked as stored (an unlock grant is not counted).
+         */
+        RenewCandidateOut: {
+            /** Item Id */
+            item_id: number;
+            /** Title */
+            title: string;
+            /** Drive Id */
+            drive_id: string | null;
+            /** Expires */
+            expires: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Folder */
+            folder: string | null;
+            /** Person */
+            person: string | null;
+            /** Locked */
+            locked: boolean;
+        };
+        /** RenewDef */
+        RenewDef: {
+            /**
+             * Label
+             * @default Renewed
+             */
+            label?: string;
+        };
+        /** RenewLockedOut */
+        RenewLockedOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * RenewOut
+         * @description A renewal applied, under ``batch_id``. ``undo``: "activity" when it moved the old
+         *     file (undo the batch in Activity), "renewal" when it moved none (POST
+         *     /api/renewals/undo).
+         */
+        RenewOut: {
+            item: components["schemas"]["ItemOut"];
+            /** Batch Id */
+            batch_id: string;
+            /**
+             * Undo
+             * @enum {string}
+             */
+            undo: "activity" | "renewal";
+            /** Skipped */
+            skipped: string | null;
+        };
+        /**
+         * RenewPreviewOut
+         * @description What Renewed… would do: the ops (a new Expired folder, the old file's move);
+         *     ``skipped``: why the old file is not moved (gone, in To Delete, its archive folder
+         *     not connected); ``locked``: the old file when it is locked and the request carries
+         *     no unlock for it (then ``ops`` is empty and the renewal cannot be applied).
+         */
+        RenewPreviewOut: {
+            /** Ops */
+            ops: components["schemas"]["ResolvedOpOut"][];
+            /** Skipped */
+            skipped: string | null;
+            /** Locked */
+            locked: components["schemas"]["RenewLockedOut"][];
+        };
+        /** RenewalUndoBody */
+        RenewalUndoBody: {
+            /** Batch Id */
+            batch_id: string;
         };
         /** ReplayHitOut */
         ReplayHitOut: {
@@ -9056,6 +9316,8 @@ export interface components {
             /** Nudge After Days */
             nudge_after_days?: number | null;
             summary?: components["schemas"]["SummaryDef"] | null;
+            lead?: components["schemas"]["LeadDef"] | null;
+            renew?: components["schemas"]["RenewDef"] | null;
         };
         /** TrayDefaultAddedOut */
         TrayDefaultAddedOut: {
@@ -18978,6 +19240,390 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    renew_preview_api_items__item_id__renew_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenewBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenewPreviewOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    renew_api_items__item_id__renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenewBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenewOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    renewal_candidates_api_renewals_open_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenewCandidateOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    undo_renewal_api_renewals_undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenewalUndoBody"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -29877,6 +30523,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page1SpeedOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_expired_folder_api_settings_expired_folder_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpiredFolderOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_expired_folder_api_settings_expired_folder_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpiredFolderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpiredFolderOut"];
                 };
             };
             /** @description Bad Request */

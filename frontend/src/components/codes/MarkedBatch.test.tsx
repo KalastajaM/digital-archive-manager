@@ -51,6 +51,7 @@ function entry(id: string, name: string, suggested: string): InboxEntry {
     open_trays: [],
     fields: [],
     fields_edited: false,
+    person_follows_folder: false,
   };
 }
 

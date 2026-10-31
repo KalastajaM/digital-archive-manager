@@ -15,6 +15,7 @@ import {
   useArchiveFolders,
 } from "../api/client";
 import { visible } from "../text";
+import { ExpiredFolderSettings } from "./ExpiredFolderSettings";
 import { FolderPathInput } from "./FolderPathInput";
 import { RelabelSheet } from "./RelabelSheet";
 import { SpecialFoldersSettings } from "./SpecialFoldersSettings";
@@ -263,6 +264,7 @@ export function ArchiveFoldersSettings() {
       {detaching && <DetachSheet folder={detaching} onClose={() => setDetaching(null)} onDone={changed} />}
       {adding && <AddSheet onClose={() => setAdding(false)} onDone={changed} />}
       <SpecialFoldersSettings />
+      <ExpiredFolderSettings />
       {relabelling && (
         <RelabelSheet
           folder={relabelling}

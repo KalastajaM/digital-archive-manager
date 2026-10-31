@@ -466,6 +466,9 @@ class InboxEntryOut(BaseModel):
     open_trays: list[str]
     # From / For chips: what the owner (or a confirmed filing) said; null when nothing
     assignment: AssignmentOut | None = None
+    # filing into suggestion.folder records suggestion.person as the For (a rule's
+    # {person} folder), unless the owner set the assignment
+    person_follows_folder: bool = False
 
 
 class ResolvedOpOut(BaseModel):
@@ -515,6 +518,12 @@ class FileItResultOut(BatchResultOut):
     items: list[int]  # tray items created
     follow_up_error: str | None
     offer: RuleOfferOut | None = None
+    # with ``renews``: why the old file was not moved into Expired, the batch id the
+    # renewals were recorded under, and their Undo ("activity", or "renewal": POST
+    # /api/renewals/undo with ``renew_batch``)
+    renew_skipped: str | None = None
+    renew_batch: str | None = None
+    renew_undo: Literal["activity", "renewal"] | None = None
 
 
 class MoveResultOut(BatchResultOut):

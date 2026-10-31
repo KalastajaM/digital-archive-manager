@@ -1,0 +1,23 @@
+# A tray: one YAML mapping per file. Edit freely; an invalid file is reported and skipped.
+id: renew
+name: Renew
+order: 5
+item_title: "{name}"
+fields:
+  expires:   { type: date, required: true }
+  kind:      { type: choice, options: [Passport, ID card, Driving licence, Insurance, Warranty, Contract, Other] }
+  lead_days: { type: days }           # empty: the kind's lead time below
+date_field: expires                   # sorts the tray; drives reminders and "overdue"
+lead:
+  field: lead_days
+  by: kind
+  days: { Passport: 180, ID card: 90, Driving licence: 60, Insurance: 30, Warranty: 30, Contract: 60, Other: 30 }
+  default: 30
+renew:
+  label: Renewed
+done:
+  label: No longer needed
+reminders:
+  - { lead: true }                    # lead_days before the date
+  - { days_before: 0 }
+  - { overdue: true }

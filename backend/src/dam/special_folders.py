@@ -194,6 +194,12 @@ def check_name(key: str, raw: str, paths: ArchivePaths) -> str:
             )
     if any(fold_name(e.label) == fold_name(clean) for e in settings.extra_folders):
         raise InvalidRequest(f"'{clean}' is the name of an archive folder. Choose another name.")
+    if fold_name(clean) == fold_name(settings.expired_folder_name):
+        # settings.yaml would refuse it (``Settings._expired_is_not_special``) after the move
+        raise InvalidRequest(
+            "That name is the Expired folder's name. Choose another or rename the Expired "
+            "folder in Settings first."
+        )
     if fold_name(clean) != fold_name(old):  # a change of letter case alone is the same folder
         for root in _roots(key, paths):
             if _taken(root, clean):

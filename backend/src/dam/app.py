@@ -8,12 +8,13 @@ from contextlib import contextmanager
 from dataclasses import InitVar, dataclass, field, fields
 from pathlib import Path
 
+from pydantic import ValidationError
 from sqlalchemy import Engine, func, select
 
 from dam import packs, relabel
 from dam.address_areas import AddressAreas
 from dam.ai.service import AIService
-from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
+from dam.codes.model import CodeProblem, FilingCode, check_table, format_validation, load_codes
 from dam.codes.model import save_codes as write_codes
 from dam.collections.convert import OngoingConverter
 from dam.collections.convert_important import ImportantConverter
@@ -71,6 +72,7 @@ from dam.snapshots import BEFORE_DELETE, BEFORE_GROUPS, BEFORE_MERGE, create_sna
 from dam.tags import TagAdmin
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
+from dam.trays.renewal import RenewalService
 from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
@@ -208,6 +210,7 @@ class ServiceParts:
     """What the API and the commands use: one service per screen or task."""
 
     trays: TrayService
+    renewals: RenewalService
     scan_fields: ScanFieldService
     rule_record: RuleRecord
     tag_admin: TagAdmin
@@ -246,7 +249,7 @@ def build_services(
     trays = TrayService(
         engine,
         lambda: live.tray_defs,
-        on_date_changed=lambda item_id: clear_unsent(engine, item_id),
+        on_date_changed=lambda item_id: clear_unsent(engine, item_id, live.tray_defs),
         # inbox is created below, with this TrayService
         prefill_for=lambda drive_id: inbox.prefill_for(drive_id),
     )
@@ -323,8 +326,14 @@ def build_services(
         important_lock=cols.collections.important_lock,
         ongoing=cols.ongoing,
     )
+    # Renewed… on a Renew item: its date, its first file and the marks that follow it,
+    # and the old file's move into its folder's Expired subfolder
+    renewals = RenewalService(
+        trays, cols.marks, repo, executor, lambda: live.settings.expired_folder_name
+    )
+    inbox.renewals = renewals  # a filing can renew an item (``FileRequest.renews``)
     activity = ActivityService(
-        executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing
+        executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing, renewals
     )
     today = TodayService(
         trays,
@@ -346,6 +355,7 @@ def build_services(
         provider = FakeProvider(demo_reply, demo=True)
     return ServiceParts(
         trays=trays,
+        renewals=renewals,
         scan_fields=scan_fields,
         rule_record=rule_record,
         tag_admin=TagAdmin(engine),
@@ -408,6 +418,7 @@ class App:
     _packs: packs.PackProfile = field(init=False, repr=False)  # the packs this archive reads with
     _packs_before: packs.PackProfile = field(init=False, repr=False)
     trays: TrayService = field(init=False)
+    renewals: RenewalService = field(init=False)
     scan_fields: ScanFieldService = field(init=False)
     rule_record: RuleRecord = field(init=False)
     tag_admin: TagAdmin = field(init=False)
@@ -744,6 +755,31 @@ class App:
             raise InvalidRequest(f"the setting could not be saved: {e}") from e
         self.settings.page1_text_reads_per_minute = reads_per_minute
         self.wake_indexer()
+
+    def set_expired_folder(self, name: str) -> str:
+        """Set the Expired folder's name (``expired_folder_name`` in settings.yaml) and use
+        it from now on; returns the name as kept (NFC, trimmed). ``InvalidRequest`` for a
+        name that cannot be a folder name or is one of the special folders' names, or when
+        the file could not be written."""
+        try:
+            kept = Settings.model_validate(
+                {
+                    "special_folders": self.settings.special_folders.model_dump(),
+                    "expired_folder_name": name,
+                }
+            ).expired_folder_name
+        except ValidationError as e:
+            raise InvalidRequest(format_validation(e)) from e
+        try:
+            write_keys(
+                self.app_paths,
+                {"expired_folder_name": kept},
+                lambda s: s.expired_folder_name == kept,
+            )
+        except OSError as e:
+            raise InvalidRequest(f"the setting could not be saved: {e}") from e
+        self.settings.expired_folder_name = kept
+        return kept
 
     def set_countries(self, country_codes: list[str], language_codes: list[str]) -> None:
         """Save the countries and languages documents are read with (``countries`` and

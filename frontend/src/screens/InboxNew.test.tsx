@@ -61,6 +61,7 @@ function entry(id: string, name: string, over: { prefill?: Record<string, string
     open_trays: [],
     fields: [],
     fields_edited: false,
+    person_follows_folder: false,
   };
   return { ...base, prefill: over.prefill ?? {}, suggestion: { ...base.suggestion, ...over.suggestion } } as InboxEntry;
 }

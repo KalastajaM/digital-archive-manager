@@ -42,6 +42,7 @@ def test_ensure_seeds_trays(tmp_path):
         "20-to-action.yaml",
         "30-to-read.yaml",
         "40-follow-up.yaml",
+        "50-renew.yaml",
     ]
     # a new install has been offered every default tray
     assert "40-follow-up.yaml" in json.loads(
@@ -100,12 +101,15 @@ def test_ensure_offers_a_new_default_tray_once_to_an_existing_install(tmp_path):
     )  # to-action and to-read were removed on purpose
     paths.ensure()
     assert (trays / "40-follow-up.yaml").exists()
+    assert (trays / "50-renew.yaml").exists()
     assert not (trays / "20-to-action.yaml").exists()
     assert not (trays / "30-to-read.yaml").exists()
     # removed again: it is not offered a second time
     (trays / "40-follow-up.yaml").unlink()
+    (trays / "50-renew.yaml").unlink()
     paths.ensure()
     assert not (trays / "40-follow-up.yaml").exists()
+    assert not (trays / "50-renew.yaml").exists()
 
 
 def test_ensure_skips_a_default_tray_whose_id_the_user_already_has(tmp_path):

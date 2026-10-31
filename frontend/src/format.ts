@@ -45,6 +45,7 @@ export function formatField(type: string | undefined, value: unknown): string {
   if (type === "money") return formatMoney(text);
   if (type === "iban") return groupIban(text);
   if (type === "date") return formatDate(text);
+  if (type === "days" && /^\d+$/.test(text)) return plural(Number(text), "day");
   return text;
 }
 

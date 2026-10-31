@@ -8,6 +8,18 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **The Renew tray.** A fifth tray for papers that expire (passport, ID card, driving
+  licence, insurance, warranty, contract): an expiry date, a kind and an optional lead
+  time, with reminders at the kind's lead time (180 days for a passport, 90 for an ID card,
+  60 for a driving licence or a contract, 30 otherwise), on the day and once when overdue.
+  **Renewed…** asks for the new date and, optionally, the new file: the old file moves into
+  an **Expired** folder next to it, Starred and Important pass to the new file, and Undo
+  (in the toast or Activity) puts it all back. A locked old file shows **Unlock and move**.
+  The Inbox suggests **Renews "<title>"?** when a new document is filed into the folder of
+  an open Renew item for the same For, in one batch with one Undo. The Expired folder's
+  name is a setting in Archive folders. Tray files gain `choice` and `days` fields, a
+  `lead` block, `renew` and the reminder rule `{lead: true}` (see Tray files in the
+  reference).
 - **More right-click menus.** Inbox files (Quick Look, Open, Show in Finder, Skip, Assign a
   filing code, a tray by name, Add tag, Add to collection, the marks and Move to To
   Delete; on a selection, all of it), tray items in the Trays list and on Today (Mark done

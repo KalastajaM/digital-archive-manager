@@ -24,6 +24,7 @@ import {
   useItemHistory,
   useItemReopen,
   useItemUpdate,
+  useExpiredFolder,
 } from "../api/client";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { Barcode } from "../components/Barcode";
@@ -33,6 +34,7 @@ import { Checklist } from "../components/Checklist";
 import { Collapsible } from "../components/Collapsible";
 import { CopyButton } from "../components/CopyButton";
 import { DoneForm } from "../components/DoneForm";
+import { RenewForm } from "../components/RenewForm";
 import { EditableTitle } from "../components/EditableTitle";
 import { editText, FieldInput } from "../components/FieldInput";
 import { FILE_BADGE } from "../components/ItemBadges";
@@ -79,6 +81,7 @@ function EditableField({
   hint,
   after,
   size,
+  placeholder,
 }: {
   label: string;
   def: FieldDef;
@@ -88,11 +91,14 @@ function EditableField({
   /** Beside the input, such as a date's urgency tag. */
   after?: ReactNode;
   /** The width class on the fields row: each kind has its own width. */
-  size?: "date" | "text" | "money" | "checkbox";
+  size?: FieldSize;
+  /** What a blank input shows, such as the lead time the item gets without its own. */
+  placeholder?: string;
 }) {
   const id = useId();
   const auto = useAutoSave(server, save);
-  const checkbox = def.type === "checkbox";
+  // saved as soon as it changes: there is nothing to type
+  const instant = def.type === "checkbox" || def.type === "choice";
   return (
     <div className={size ? `field field-${size}` : "field"}>
       <label htmlFor={id}>{label}</label>
@@ -101,15 +107,16 @@ function EditableField({
           id={id}
           def={def}
           value={auto.shown}
+          placeholder={placeholder}
           onChange={(v) => {
             auto.change(v);
-            if (checkbox) void auto.commit(v);
+            if (instant) void auto.commit(v);
           }}
           onBlur={(e) => {
-            if (!checkbox) void auto.commit(e.currentTarget.value);
+            if (!instant) void auto.commit(e.currentTarget.value);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !checkbox) {
+            if (e.key === "Enter" && !instant) {
               e.preventDefault();
               void auto.commit(e.currentTarget.value);
             }
@@ -133,8 +140,20 @@ function fieldText(def: FieldDef, item: Item, name: string): string | boolean {
   return editText(def, raw) ?? raw;
 }
 
-const fieldSize = (type: string): "date" | "text" | "money" | "checkbox" =>
-  type === "date" ? "date" : type === "money" ? "money" : type === "checkbox" ? "checkbox" : "text";
+type FieldSize = "date" | "text" | "money" | "checkbox" | "choice" | "days";
+
+const fieldSize = (type: string): FieldSize =>
+  type === "date" || type === "money" || type === "checkbox" || type === "choice" || type === "days" ? type : "text";
+
+/** The lead time an item gets when its own is blank: its kind's ("180 (Passport)"), else
+ * the tray's default ("30 (default)"). Undefined for any field but the tray's lead field. */
+function leadPlaceholder(tray: TrayDef | undefined, item: Item, name: string): string | undefined {
+  const lead = tray?.lead;
+  if (!lead || lead.field !== name) return undefined;
+  const kind = item.fields[lead.by];
+  const days = typeof kind === "string" ? lead.days?.[kind] : undefined;
+  return days !== undefined ? `${days} (${visible(kind as string)})` : `${lead.default} (default)`;
+}
 
 /** The item's editable fields on one action row that wraps only when the panel is narrow:
  * the tray's fields in order (a date with its urgency tag after it), then ``trailing``
@@ -182,6 +201,7 @@ function Fields({
               label={def.required ? `${label} (required)` : label}
               def={inputDef}
               size={fieldSize(inputDef.type)}
+              placeholder={invalid ? undefined : leadPlaceholder(tray, item, name)}
               server={fieldText(def, item, name)}
               save={save}
               after={name === tray?.date_field ? tag : null}
@@ -260,7 +280,12 @@ function InCollection({ driveId }: { driveId: string }) {
 const valueText = (def: FieldDef | undefined, value: unknown) =>
   value === null || value === undefined ? "(none)" : formatField(def?.type, value);
 
-function eventText(event: ItemEvent, tray: TrayDef | undefined, names: Map<string, string>): string {
+function eventText(
+  event: ItemEvent,
+  tray: TrayDef | undefined,
+  names: Map<string, string>,
+  expired: string,
+): string {
   const data = event.data;
   // The name recorded with the event; older events have none: the item's current
   // files are the next best source.
@@ -304,12 +329,24 @@ function eventText(event: ItemEvent, tray: TrayDef | undefined, names: Map<strin
     }
     case "moved":
       return `Moved from ${String(data.from_name ?? "another tray")} to ${String(data.to_name ?? "another tray")}`;
+    case "renewed": {
+      if (data.undo === true) return "Renewal undone";
+      const to = `Renewed to ${formatDate(String(data.new_date ?? ""))}`;
+      if (!data.new_drive_id) return to;
+      const oldName = String(data.old_name ?? "the old file");
+      // an event from before "moved" was recorded: it moved, into the settings' folder
+      if (!("moved" in data)) return `${to}, ${oldName} moved to ${expired}`;
+      return data.moved === true ? `${to}, ${oldName} moved to ${String(data.expired ?? expired)}` : `${to}, ${oldName} replaced`;
+    }
   }
 }
 
 function History({ item, tray, today }: { item: Item; tray: TrayDef | undefined; today: string }) {
   const history = useItemHistory(item.id);
   const files = useItemFiles(item.id);
+  // the Expired folder's name, only for a renewal that moved a file without recording where
+  const moved = (history.data ?? []).some((e) => e.kind === "renewed" && !!e.data.new_drive_id && !("moved" in e.data));
+  const expired = useExpiredFolder(moved).data?.name ?? "Expired";
   const names = new Map((files.data ?? []).filter((f) => f.path).map((f) => [f.drive_id, baseName(f.path!)]));
   return (
     <Collapsible
@@ -326,7 +363,7 @@ function History({ item, tray, today }: { item: Item; tray: TrayDef | undefined;
       <ul>
         {(history.data ?? []).map((e) => (
           <li key={e.id}>
-            {visible(eventText(e, tray, names))} · <RelativeDate date={dayOf(e.at)} today={today} />
+            {visible(eventText(e, tray, names, expired))} · <RelativeDate date={dayOf(e.at)} today={today} />
           </li>
         ))}
       </ul>
@@ -370,8 +407,9 @@ export function itemKind(tray: TrayDef | undefined): ItemKind {
   return tray?.date_field ? "dated" : "waiting";
 }
 
-/** Done from the button (``done``) or "<done label> and file…" (``file``). */
-export type DoneMode = "done" | "file";
+/** Done from the button (``done``; Renewed… in a tray with ``renew``), "<done label> and
+ * file…" (``file``), or a Renew item's own done button (``finish``: "No longer needed"). */
+export type DoneMode = "done" | "file" | "finish";
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && v !== "";
 
@@ -455,6 +493,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const [adding, setAdding] = useState(false);
   const [doneAnchor, setDoneAnchor] = useState<HTMLButtonElement | null>(null);
   const [fileAnchor, setFileAnchor] = useState<HTMLButtonElement | null>(null);
+  const [finishAnchor, setFinishAnchor] = useState<HTMLButtonElement | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   // Move to tray: the page follows the item to its new tray (and back on Undo)
@@ -545,6 +584,8 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const tray = trays.get(item.tray_id);
   const kind = itemKind(tray);
   const doneLabel = tray?.done?.label ?? "Done";
+  // a Renew item leads with Renewed…; its done label ("No longer needed") sits beside it
+  const renew = tray?.renew ?? null;
   // the same words on the button and on the form's submit ("Mark paid and file…")
   const doneText = markLabel(doneLabel);
   const fileLabel = `${doneText} and file…`;
@@ -593,15 +634,29 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         <TipButton
           ref={setDoneAnchor}
           className="primary"
-          tip="Mark this item done; it moves to the Done list"
+          tip={
+            renew
+              ? "Give this item its new expiry date and, if you like, the new file"
+              : "Mark this item done; it moves to the Done list"
+          }
           aria-expanded={doneMode === "done"}
           disabled={tray === undefined}
           disabledReason={TRAYS_LOADING}
           onClick={() => toggleDone("done")}
         >
-          {visible(doneText)}
+          {visible(renew ? `${renew.label}…` : doneText)}
           <kbd aria-hidden="true">d</kbd>
         </TipButton>
+        {renew && (
+          <TipButton
+            ref={setFinishAnchor}
+            tip="Finish this item for good, such as a cancelled policy; it moves to the Done list"
+            aria-expanded={doneMode === "finish"}
+            onClick={() => toggleDone("finish")}
+          >
+            {visible(doneText)}
+          </TipButton>
+        )}
         {anyInInbox && (
           <TipButton
             ref={setFileAnchor}
@@ -750,22 +805,28 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
         <ReopenButton item={item} />
       </p>
     ) : null;
+  const popAnchor = doneMode === "file" ? fileAnchor : doneMode === "finish" ? finishAnchor : doneAnchor;
+  const renewing = doneMode === "done" && renew !== null;
   const donePopover =
-    open && doneMode && (doneMode === "file" ? fileAnchor : doneAnchor) ? (
+    open && doneMode && popAnchor ? (
       <Popover
-        anchor={doneMode === "file" ? fileAnchor : doneAnchor}
-        label={doneMode === "file" ? fileLabel : doneText}
+        anchor={popAnchor}
+        label={doneMode === "file" ? fileLabel : renewing ? renew.label : doneText}
         onClose={() => setDone(null)}
       >
-        <DoneForm
-          item={item}
-          label={doneText}
-          submitLabel={doneMode === "file" ? fileLabel : undefined}
-          fields={tray?.done?.fields ?? {}}
-          today={today}
-          onClose={() => setDone(null)}
-          onDone={doneMode === "file" ? () => void fileIt() : undefined}
-        />
+        {renewing ? (
+          <RenewForm item={item} files={list} label={renew.label} onClose={() => setDone(null)} />
+        ) : (
+          <DoneForm
+            item={item}
+            label={doneText}
+            submitLabel={doneMode === "file" ? fileLabel : undefined}
+            fields={tray?.done?.fields ?? {}}
+            today={today}
+            onClose={() => setDone(null)}
+            onDone={doneMode === "file" ? () => void fileIt() : undefined}
+          />
+        )}
       </Popover>
     ) : null;
   const billFacts = (

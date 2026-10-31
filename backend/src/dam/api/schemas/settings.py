@@ -25,6 +25,16 @@ class Page1SpeedOut(BaseModel):
     reads_per_minute: int
 
 
+class ExpiredFolderIn(StrictIn):
+    """The Expired folder's name: a plain folder name, not a special folder's."""
+
+    name: str
+
+
+class ExpiredFolderOut(BaseModel):
+    name: str
+
+
 class PersonIO(StrictIn):
     name: str
     match: list[str]

@@ -65,6 +65,12 @@ const KEYS: KeyHint[] = [
 /** A bill's tray also opens the barcode in Pay mode with one key. */
 const BILL_KEYS: KeyHint[] = [[["b"], "large barcode"]];
 
+/** The list's keys; in a Renew tray ``d`` opens Renewed…. */
+function keyHints(tray: TrayDef | undefined): KeyHint[] {
+  const keys = tray?.renew ? KEYS.map((k): KeyHint => (k[0][0] === "d" ? [["d"], "renewed"] : k)) : KEYS;
+  return tray && itemKind(tray) === "bill" ? [...keys, ...BILL_KEYS] : keys;
+}
+
 /** A list row, as Mail lists messages: title and payee, the urgency tag and amount (or
  * how long it has waited) on the right, then any badges. Copying and Done are in the
  * item panel. */
@@ -306,6 +312,21 @@ function TrayPage({ today: fixed }: { today?: string }) {
   const toast = useToast();
   const listRef = useRef<HTMLUListElement>(null);
   const focusRow = useRef(false);
+  // ?do=renew (Renewed… on Today or in a menu): the item opens with its Renewed… form, and
+  // the address drops the request so a reload or Back does not open it again. A request
+  // with no usable item, or for one the loaded list does not have, is dropped unopened.
+  const renewAsked = search.get("do") === "renew";
+  const loaded = items.isSuccess;
+  useEffect(() => {
+    if (!renewAsked) return;
+    if (opened !== null) {
+      if (!loaded) return;
+      if (list.some((i) => i.id === opened)) setDoneAt({ id: opened, mode: "done" });
+    }
+    const next = new URLSearchParams(search);
+    next.delete("do");
+    setSearch(next, { replace: true });
+  }, [renewAsked, opened, loaded, list, search, setSearch]);
   // A done form belongs to the item it was opened on: another item closes it, so coming
   // back never finds it still open. (``d`` sets both at once, so its form stays.)
   useEffect(() => {
@@ -611,7 +632,7 @@ function TrayPage({ today: fixed }: { today?: string }) {
         ))}
         {tray && <TrayDefaultsBanner key={tray.id} tray={tray} />}
         {body}
-        <KeyHints hints={tray && itemKind(tray) === "bill" ? [...KEYS, ...BILL_KEYS] : KEYS} />
+        <KeyHints hints={keyHints(tray)} />
       </section>
       <Splitter split={split} label="Resize the list" />
       <section className="trays-detail" aria-label="Item">

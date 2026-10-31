@@ -383,3 +383,23 @@ def test_migration_0029_adds_the_table(engine):
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(file_assignments)"))]
     assert cols == ["drive_id", "sender", "person", "set_by", "set_at"]
+
+
+def test_an_inbox_entry_says_whether_its_person_follows_the_folder(app, fake_archive):
+    # the person a filing records (``_record_person``) comes from a {person} rule's folder
+    app.settings.people = PEOPLE
+    app.settings.address_zone = ZONE
+    for r in list(app.rules):
+        app.delete_rule(r.id)
+    app.save_rule(person_rule())
+    fake_archive.add("Mail/Tiina/old.txt", content=b"old", drive_id="old")
+    page = Page1Layout([Line("Tiina Visser", (0.08, 0.15, 0.33, 0.17))], "text-layer")
+    add(app, fake_archive, f"{INBOX}/a.pdf", "a", "kela", page)
+    add(app, fake_archive, f"{INBOX}/b.pdf", "b", "other", page)  # no rule: address area only
+    entries = {e.record.drive_id: e for e in app.inbox.list()}
+    assert entries["a"].suggestion.person == "Tiina" and entries["a"].person_follows_folder
+    assert entries["b"].suggestion.person == "Tiina" and not entries["b"].person_follows_folder
+    with make_client(app) as c:
+        listed = {e["record"]["drive_id"]: e for e in c.get("/api/inbox").json()}
+    assert listed["a"]["person_follows_folder"] is True
+    assert listed["b"]["person_follows_folder"] is False

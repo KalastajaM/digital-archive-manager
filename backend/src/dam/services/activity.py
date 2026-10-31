@@ -17,6 +17,7 @@ from dam.ops.executor import Executor
 from dam.ops.model import BatchResult, ResolvedOp
 from dam.ops.undo import ACTED, SYNC_ORIGIN, JournalEntry, RecoveryResult, entries
 from dam.services.rule_record import RuleRecord
+from dam.trays.renewal import RenewalService
 from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ class ActivityService:
         notes: NotesService,
         rule_record: RuleRecord,
         ongoing: OngoingPublisher | None = None,
+        renewals: RenewalService | None = None,
     ) -> None:
         self.executor = executor
         self.trays = trays
@@ -77,6 +79,7 @@ class ActivityService:
         self.notes = notes
         self.rule_record = rule_record
         self.ongoing = ongoing
+        self.renewals = renewals
 
     def recent(self, limit: int = 50) -> list[BatchSummary]:
         """The ``limit`` most recent batches, newest first."""
@@ -297,11 +300,14 @@ class ActivityService:
         if (removed and removed.total) or forgotten:
             self.collections.changed()
         if ok:
-            for cleanup in (
-                self.trays.remove_created_by,
-                self.notes.remove_created_by,
-                self.rule_record.remove_created_by,
+            self._remove(outcome, batch_id, self.trays.remove_created_by)
+            # the batch's renewals: old files, dates and marks back; the re-sync puts the
+            # old file's links back in ##. Important and ##. Ongoing
+            if self.renewals is not None and self._remove(
+                outcome, batch_id, self.renewals.undo_batch
             ):
+                self.collections.changed()
+            for cleanup in (self.notes.remove_created_by, self.rule_record.remove_created_by):
                 self._remove(outcome, batch_id, cleanup)
         return outcome
 

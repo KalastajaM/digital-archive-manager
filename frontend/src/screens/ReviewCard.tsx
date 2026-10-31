@@ -1,7 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { EditRuleSheet } from "../components/rules/EditRule";
 import { TipButton } from "../components/ui/TipButton";
-import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   type CodeHit,
@@ -10,12 +10,15 @@ import {
   type FileRequest,
   type FilingSuggestion,
   type InboxEntry,
+  isUnlockedNow,
   LOCKED_REASON,
+  type RenewCandidate,
   type TrayDef,
   useFileLinks,
   useFileLock,
   useAssignCode,
   useFilingCodes,
+  useRenewCandidates,
   useRules,
   useTrays,
 } from "../api/client";
@@ -29,6 +32,7 @@ import { RelativesBlock } from "../components/RelativesBlock";
 import { FilePreview } from "../components/FilePreview";
 import { editText } from "../components/FieldInput";
 import { FolderPicker } from "../components/FolderPicker";
+import { filingPerson, renewMatches } from "../components/renewMatch";
 import { NoteEditor } from "../components/NoteEditor";
 import { TagInput } from "../components/TagInput";
 import { FromFor } from "../components/zones/FromFor";
@@ -41,7 +45,7 @@ import {
   type TrayValues,
 } from "../components/TrayPicker";
 import { useToast } from "../components/Toasts";
-import { fieldWord, shortDate } from "../format";
+import { fieldWord, formatDate, shortDate } from "../format";
 import { dialogOpen, isCmdEnter, isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
 import { visible } from "../text";
 import { LinkBadges } from "./FileActions";
@@ -207,6 +211,124 @@ function AlreadyIn({ tray, driveId }: { tray: TrayDef; driveId: string }) {
   );
 }
 
+/** The Renew item this filing renews, and its new expiry date (required). */
+type Renewing = { item_id: number; expires: string };
+
+const RENEW_SOURCE = "same folder and person";
+
+/** A Renew item in a list: its title, and when it expires. */
+const candidateText = (c: RenewCandidate) => (c.expires ? `${c.title} · expires ${formatDate(c.expires)}` : c.title);
+
+/** Beside the tray picker: the open Renew item the new document likely renews (one match:
+ * a chip; several: a short list), and "Renews…" to pick any open one. Taken, it shows the
+ * item with the new expiry date to type, and Unlock and move when its old file is locked
+ * (it moves into Expired). */
+function RenewsChoice({
+  candidates,
+  matches,
+  value,
+  onChange,
+  disabled,
+  locked,
+}: {
+  candidates: RenewCandidate[];
+  matches: RenewCandidate[];
+  value: Renewing | null;
+  /** ``viaChip``: taken from the suggestion chip, so it follows the folder and person. */
+  onChange: (next: Renewing | null, viaChip?: boolean) => void;
+  disabled: boolean;
+  /** The old file is locked and not unlocked here: unlock it for this filing. */
+  locked: { run: () => void; error: string | null } | null;
+}) {
+  const ids = useId();
+  const [picking, setPicking] = useState(false);
+  if (value) {
+    const title = candidates.find((c) => c.item_id === value.item_id)?.title ?? `item ${value.item_id}`;
+    const line = visible(`Renews "${title}"`);
+    return (
+      <div className="field renews">
+        <p className="renews-line">
+          <span className="renews-title" title={line}>
+            {line}
+          </span>{" "}
+          <button type="button" className="link-button" disabled={disabled} onClick={() => onChange(null)}>
+            Don’t renew
+          </button>
+        </p>
+        <label htmlFor={`${ids}-expires`}>New expiry date</label>
+        <input
+          id={`${ids}-expires`}
+          type="date"
+          required
+          value={value.expires}
+          disabled={disabled}
+          onChange={(e) => onChange({ ...value, expires: e.target.value })}
+        />
+        {locked && (
+          <p className="notice renews-locked">
+            The old file is locked.{" "}
+            <button type="button" disabled={disabled} onClick={locked.run}>
+              Unlock and move
+            </button>
+          </p>
+        )}
+        {locked?.error && (
+          <p className="error" role="alert">
+            {visible(locked.error)}
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (candidates.length === 0) return null;
+  const take = (id: string, viaChip = false) => {
+    const c = candidates.find((x) => String(x.item_id) === id);
+    if (!c) return;
+    setPicking(false);
+    onChange({ item_id: c.item_id, expires: "" }, viaChip);
+  };
+  const list = picking ? candidates : matches;
+  const more = !picking && candidates.length > matches.length && (
+    <button type="button" className="link-button" disabled={disabled} onClick={() => setPicking(true)}>
+      Renews…
+    </button>
+  );
+  if (list.length === 1 && !picking) {
+    const [only] = list;
+    return (
+      <div className="suggestion-renew-line">
+        <SuggestionChip
+          field="renewal"
+          offer={{ value: `Renews "${only.title}"`, source: RENEW_SOURCE }}
+          disabled={disabled}
+          onUse={() => take(String(only.item_id), true)}
+        />
+        {more}
+      </div>
+    );
+  }
+  if (list.length === 0) return <div className="suggestion-renew-line">{more}</div>;
+  return (
+    <div className="field renews">
+      <label htmlFor={`${ids}-renews`}>Renews</label>
+      <select id={`${ids}-renews`} value="" disabled={disabled} onChange={(e) => take(e.target.value)}>
+        <option value="">Nothing</option>
+        {list.map((c) => (
+          <option key={c.item_id} value={c.item_id}>
+            {visible(candidateText(c))}
+          </option>
+        ))}
+      </select>
+      {more}
+      {picking && (
+        <button type="button" className="link-button" onClick={() => setPicking(false)}>
+          Cancel
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** An AI tray field value as the form shows it (the API's text, like the scan's). */
 function shownValue(def: FieldDef, value: string): string | boolean {
   if (def.type === "checkbox") return /^(true|yes|1)$/i.test(value.trim());
@@ -308,6 +430,9 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   const [note, setNote] = useState("");
   // A QR sticker's tick boxes preselect these (an unclear box leaves it off and says so);
   // a mark the file already has is not sent again.
+  const [renewing, setRenewing] = useState<Renewing | null>(null);
+  // the item a renewal was taken for from the suggestion chip (null: none, or picked by hand)
+  const [chipRenewal, setChipRenewal] = useState<number | null>(null);
   const [star, setStar] = useState(entry.suggestion.star === true);
   const [important, setImportant] = useState(entry.suggestion.important === true);
   // Set on the first Preview / File it: from then on a missing field is shown live.
@@ -362,7 +487,8 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     ...rules.tags.map((t) => ({ value: t, source: rules.tag_sources[t] ?? "scan" })),
   ]).map(flagged);
   const aiTray = answer?.tray ? (trays.list.find((t) => t.id === answer.tray) ?? null) : null;
-  const trayOffer = aiTray && aiTray.id !== tray?.id ? aiTray : null;
+  // a renewal takes the place of the tray (the server ignores the tray then)
+  const trayOffer = !renewing && aiTray && aiTray.id !== tray?.id ? aiTray : null;
   /** The AI's values for ``t``'s fields that differ from what the form would show. */
   const aiTrayFields = (t: TrayDef): TrayValues => {
     if (!answer || answer.tray !== t.id) return {};
@@ -376,7 +502,7 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     }
     return out;
   };
-  const fieldOffers = tray && !alreadyIn ? aiTrayFields(tray) : {};
+  const fieldOffers = tray && !alreadyIn && !renewing ? aiTrayFields(tray) : {};
   const trayChips: Record<string, ReactNode> = {};
   for (const [field, value] of Object.entries(fieldOffers)) {
     trayChips[field] = (
@@ -390,7 +516,7 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   }
   // What Use all does with the AI's tray: picks it, and fills in its fields (none for
   // a tray the file already has an open item in: they would not be sent).
-  const allTray = trayOffer ?? (aiTray && aiTray.id === tray?.id ? aiTray : null);
+  const allTray = renewing ? null : (trayOffer ?? (aiTray && aiTray.id === tray?.id ? aiTray : null));
   const allFields = allTray && !entry.open_trays.includes(allTray.id) ? aiTrayFields(allTray) : {};
   const chipCount =
     Math.min(1, nameOffers.length) +
@@ -426,10 +552,27 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     entry.suggestion.star === true || entry.suggestion.important === true || entry.suggestion.marks_unclear;
   const hasStar = entry.record.marks.includes("starred");
   const hasImportant = entry.record.marks.includes("important");
+  // "Renews …?": the open Renew items whose file is in this folder for the For this
+  // filing leaves on the file
+  const candidates = useRenewCandidates().data ?? [];
+  const person = filingPerson(entry, folder);
+  const renewMatchList = renewMatches(candidates, folder, person);
+  // a renewal taken from the chip goes when another folder or person no longer matches it
+  // (not while an unlock is held or the confirm is open: the file to lock again must stay known)
+  const [holding, setHolding] = useState(false);
+  const heldId = useRef(""); // the drive id Unlock and move unlocked, whatever the card shows later
+  const chipGone = chipRenewal !== null && !holding && filing.confirm === null && !renewMatchList.some((c) => c.item_id === chipRenewal);
+  useEffect(() => {
+    if (!chipGone) return;
+    setRenewing((r) => (r?.item_id === chipRenewal ? null : r));
+    setChipRenewal(null);
+  }, [chipGone, chipRenewal]);
+  const renewed = renewing ? (candidates.find((c) => c.item_id === renewing.item_id) ?? null) : null;
+  const renewProblem = renewing && !renewing.expires ? "Enter the new expiry date." : null;
   const fieldProblem = missingField(name, folder);
-  // A missing name or folder is shown on its field; the rest (a half-typed collection)
-  // is the card's own message.
-  const otherProblem = pendingCollection(collectionText);
+  // A missing name or folder is shown on its field; the rest (a half-typed collection,
+  // a renewal without its date) is the card's own message.
+  const otherProblem = pendingCollection(collectionText) ?? renewProblem;
   const nameInvalid = tried && fieldProblem?.field === "name";
   const problem = fieldProblem?.message ?? otherProblem;
   const current: FileRequest[] | null = problem
@@ -438,12 +581,13 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
         withFollowUps(
           { drive_id: entry.record.drive_id, name, folder, tags: parseTags(tags) },
           {
-            tray: alreadyIn ? null : (tray?.id ?? null),
+            tray: alreadyIn || renewing ? null : (tray?.id ?? null),
             trayFields,
             collections,
             note,
             star: star && !hasStar,
             important: important && !hasImportant,
+            renews: renewing,
           },
         ),
       ];
@@ -470,6 +614,36 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     if (r) void filing.fileIt(r);
   };
   useCardKeys({ preview, fileIt }, { folder: folderRef, name: nameRef });
+
+  // A renewal moves the old file into Expired: a locked one only with "Unlock and move",
+  // which unlocks it for this filing and locks it again once the filing is done or its
+  // confirm cancelled (or the card goes away), as Renewed… does. Only a lock taken here
+  // is given back.
+  const oldId = holding ? heldId.current : (renewed?.drive_id ?? "");
+  const oldLock = useFileLock(oldId, [], null);
+  const relockOnLeave = useRef<(() => void) | null>(null);
+  relockOnLeave.current = holding ? oldLock.relock : null;
+  useEffect(() => () => relockOnLeave.current?.(), []);
+  useEffect(() => {
+    if (!holding || filing.busy || filing.confirm !== null) return;
+    oldLock.relock();
+    setHolding(false);
+  }, [holding, filing.busy, filing.confirm, oldLock]);
+  const unlockAndMove = async () => {
+    const r = requests();
+    if (!r || !oldId) return;
+    if (!isUnlockedNow(oldId)) {
+      await oldLock.unlock("now");
+      if (!isUnlockedNow(oldId)) return; // the lock's error says why
+      heldId.current = oldId;
+      setHolding(true);
+    }
+    void filing.fileIt(r);
+  };
+  // offered once a preview or File it reported the lock (the server's 400), not before
+  const lockMessage = filing.messageFor([entry.record.drive_id]);
+  const lockReported = lockMessage?.kind === "error" && /\bis locked\b/.test(lockMessage.text);
+  const oldLocked = renewed?.locked && oldId && lockReported && !oldLock.unlockedNow ? { run: () => void unlockAndMove(), error: oldLock.error } : null;
 
   const fileName = entry.record.name ?? entry.record.path;
   // every file here is in the inbox: name only a folder inside it (such as a code's folder)
@@ -547,8 +721,20 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
         {rejected("tags", "tags")}
       </div>
       <hr />
-      <TrayPicker trays={trays.list} value={tray?.id ?? null} onChange={trays.setTrayId} problem={trays.problem} />
-      {(trayOffer || answer?.rejected.tray) && (
+      {!renewing && <TrayPicker trays={trays.list} value={tray?.id ?? null} onChange={trays.setTrayId} problem={trays.problem} />}
+      <RenewsChoice
+        candidates={candidates}
+        matches={renewMatchList}
+        value={renewing}
+        onChange={(next, viaChip) => {
+          setRenewing(next);
+          // a date edit (viaChip unset) keeps how the renewal was taken
+          setChipRenewal((c) => (next === null ? null : viaChip === undefined ? (c === next.item_id ? c : null) : viaChip ? next.item_id : null));
+        }}
+        disabled={filing.busy}
+        locked={oldLocked}
+      />
+      {!renewing && (trayOffer || answer?.rejected.tray) && (
         <div className="suggestion-tray-line">
           {trayOffer && (
             <SuggestionChip
@@ -562,10 +748,11 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
           {rejected("tray", "tray")}
         </div>
       )}
-      {rejectedTrayFields.map(([key, reason]) => (
+      {!renewing && rejectedTrayFields.map(([key, reason]) => (
         <AIRejected key={key} field={fieldWord(key.slice("tray_fields.".length))} reason={reason} />
       ))}
       {tray &&
+        !renewing &&
         (alreadyIn ? (
           <AlreadyIn tray={tray} driveId={entry.record.drive_id} />
         ) : (
@@ -605,7 +792,7 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
       <PlanPreview
         ops={plan.ops}
         tags={parseTags(tags)}
-        followUps={followUpLines(plan.requests, trays.list, entry.prefill)}
+        followUps={followUpLines(plan.requests, trays.list, entry.prefill, candidates)}
         onClose={filing.clearPlan}
         action={
           <button type="button" className="primary" onClick={fileIt} disabled={filing.busy || lock.blocked}>
@@ -640,12 +827,12 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   const moves = folder.trim() !== "";
   const verb = renames && moves ? "Renames and moves 1 file" : renames ? "Renames 1 file" : moves ? "Moves 1 file" : "Keeps the file as it is";
   const adds = [
-    ...(tray && !alreadyIn ? [`adds it to ${tray.name}`] : []),
+    ...(renewing ? [`renews ${renewed?.title ?? "an item"}`] : tray && !alreadyIn ? [`adds it to ${tray.name}`] : []),
     ...(collections.length > 0 ? [`adds it to ${collections.join(", ")}`] : []),
   ];
   const summary = `${verb}${adds.length > 0 ? `, ${adds.join(", ")}` : ""}. Undo any time.`;
-  const blocked = filing.busy || lock.blocked;
-  const why = lock.blocked ? LOCKED_REASON : FILING_BUSY;
+  const blocked = filing.busy || lock.blocked || renewProblem !== null;
+  const why = lock.blocked ? LOCKED_REASON : renewProblem && !filing.busy ? renewProblem : FILING_BUSY;
   return (
     <article className="review-card" aria-label={`Review ${fileName}`}>
       <div className="review-body">

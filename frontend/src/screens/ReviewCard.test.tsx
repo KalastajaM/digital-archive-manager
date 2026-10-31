@@ -2,8 +2,8 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { Profiler } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
-import type { InboxEntry, ResolvedOp } from "../api/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { forgetUnlocks, type InboxEntry, type ResolvedOp } from "../api/client";
 import {
   type Call,
   dataTransfer,
@@ -72,6 +72,7 @@ function entry(id: string, name: string, suggested: string, folder: string | nul
       { kind: "reference", label: null, value: "RF18539007547034" },
     ],
     fields_edited: false,
+    person_follows_folder: false,
   };
 }
 
@@ -166,13 +167,13 @@ const posts = (calls: Call[], url: string) =>
 async function setup(extra: Parameters<typeof api>[0] = {}) {
   const calls = api(extra);
   const user = userEvent.setup();
-  renderWithProviders(
+  const { client } = renderWithProviders(
     <MemoryRouter>
       <Inbox />
     </MemoryRouter>,
   );
   const name = await screen.findByLabelText("Name");
-  return { calls, user, name: name as HTMLInputElement };
+  return { calls, user, client, name: name as HTMLInputElement };
 }
 
 async function setFolder(user: ReturnType<typeof userEvent.setup>, value: string) {
@@ -2269,5 +2270,326 @@ describe("the inline plan", () => {
     const shown = await screen.findByRole("region", { name: "Planned changes" });
     await user.click(within(shown).getByRole("button", { name: "Close the preview" }));
     expect(screen.queryByRole("region", { name: "Planned changes" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Renews …?", () => {
+  afterEach(() => forgetUnlocks());
+
+  const candidate = (item_id: number, title: string, folder: string | null, extra: Record<string, unknown> = {}) => ({
+    item_id,
+    title,
+    drive_id: `old${item_id}`,
+    expires: "2027-06-30",
+    kind: "Passport",
+    folder,
+    person: null,
+    locked: false,
+    ...extra,
+  });
+  const PASSPORT = candidate(7, "Passport Tiina", "20. Health/Kotihoito");
+  const ELSEWHERE = candidate(8, "Driving licence", "30. Home/Electricity");
+  const RENEW_PLAN: ResolvedOp[] = [
+    move("##. Organize/scan001.pdf", "20. Health/Kotihoito/2026-10-01 Kotihoito lasku.pdf"),
+    { kind: "mkdir", src: null, dst: "20. Health/Kotihoito/Expired", drive_id: null, note: null },
+    { kind: "move", src: "20. Health/Kotihoito/passport.pdf", dst: "20. Health/Kotihoito/Expired/passport.pdf", drive_id: "old7", note: null },
+  ];
+  const chipName = 'Suggested renewal: Renews "Passport Tiina" (same folder and person)';
+  const setDate = (value: string) => fireEvent.change(screen.getByLabelText("New expiry date"), { target: { value } });
+
+  it("one match shows the chip; taking it asks for a date; File it sends renews and renew_expires", async () => {
+    const { calls, user } = await setup({
+      "GET /api/renewals/open": { body: [PASSPORT, ELSEWHERE] },
+      "POST /api/inbox/preview": { body: RENEW_PLAN },
+      "POST /api/inbox/file": { body: fileResult({ done: RENEW_PLAN, renew_batch: "b1", renew_undo: "activity" }) },
+    });
+    const chip = await screen.findByRole("group", { name: chipName });
+    expect(screen.getByText("Then put it in")).toBeInTheDocument();
+    await user.click(within(chip).getByRole("button", { name: "Use" }));
+
+    // the tray is the renewal's: the picker is gone, and a date is asked for
+    expect(screen.queryByText("Then put it in")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: chipName })).not.toBeInTheDocument();
+    expect(screen.getByText(/Renews "Passport Tiina"/)).toBeInTheDocument();
+    const fileIt = () => screen.getByRole("button", { name: "File it" }); // a disabled one is wrapped
+    expect(screen.getByLabelText("New expiry date")).toBeRequired();
+    expect(fileIt()).toBeDisabled();
+    expect(fileIt().closest(".button-wrap")).toHaveAttribute("data-tip", "Enter the new expiry date.");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    expect(posts(calls, "/api/inbox/preview")).toHaveLength(0);
+
+    setDate("2037-06-30");
+    expect(fileIt()).toBeEnabled();
+    await user.click(fileIt());
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Renews Passport Tiina, old file to Expired")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "File" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
+    const [request] = (posts(calls, "/api/inbox/file")[0].body as { requests: Record<string, unknown>[] }).requests;
+    expect(request).toEqual({
+      drive_id: "d1",
+      name: "2026-10-01 Kotihoito lasku.pdf",
+      folder: "20. Health/Kotihoito",
+      tags: ["invoice"],
+      renews: 7,
+      renew_expires: "2037-06-30",
+    });
+  });
+
+  it("Don't renew puts the tray picker back and sends no renewal", async () => {
+    const { calls, user } = await setup({
+      "GET /api/renewals/open": { body: [PASSPORT] },
+      "POST /api/inbox/preview": { body: SIMPLE_MOVE },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    await user.click(screen.getByRole("button", { name: "Don’t renew" }));
+    expect(screen.getByText("Then put it in")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    expect((posts(calls, "/api/inbox/preview")[0].body as Record<string, unknown>[])[0]).not.toHaveProperty("renews");
+  });
+
+  it("folder changed: the chip disappears", async () => {
+    const { user } = await setup({ "GET /api/renewals/open": { body: [PASSPORT] } });
+    await screen.findByRole("group", { name: chipName });
+    await setFolder(user, "10. Financial/Banks");
+    expect(screen.queryByRole("group", { name: chipName })).not.toBeInTheDocument();
+  });
+
+  it("another person's item is no match", async () => {
+    await setup({ "GET /api/renewals/open": { body: [{ ...PASSPORT, person: "Tiina" }] } });
+    await screen.findByRole("button", { name: "Renews…" });
+    expect(screen.queryByRole("group", { name: chipName })).not.toBeInTheDocument();
+  });
+
+  /** The first entry with a rule's {person} folder for Tiina, and ``assignment``. */
+  const personEntries = (assignment: InboxEntry["assignment"] = null) => {
+    const [first, ...rest] = ENTRIES;
+    const withPerson: InboxEntry = {
+      ...first,
+      suggestion: { ...first.suggestion, person: "Tiina", person_source: "address area" },
+      person_follows_folder: true,
+      assignment,
+    };
+    return [withPerson, ...rest];
+  };
+  const assigned = (person: string, set_by: "owner" | "filing") => ({ drive_id: "d1", sender: null, person, set_by, set_at: 0 });
+  const tiina = candidate(7, "Passport Tiina", "20. Health/Kotihoito", { person: "Tiina" });
+
+  it("the person is the one the filing records: the rule's, only while its folder is kept", async () => {
+    const banks = candidate(10, "Bank card Tiina", "10. Financial/Banks", { person: "Tiina" });
+    const { user } = await setup({
+      "GET /api/inbox": { body: personEntries() },
+      "GET /api/renewals/open": { body: [tiina, banks] },
+    });
+    expect(await screen.findByRole("group", { name: chipName })).toBeInTheDocument();
+    // another folder: the rule's person is not recorded, so Tiina's items are no match
+    await setFolder(user, "10. Financial/Banks");
+    expect(screen.queryByRole("group", { name: /Suggested renewal/ })).not.toBeInTheDocument();
+  });
+
+  it("the owner's For wins over the rule's person", async () => {
+    const mikko = candidate(11, "Passport Mikko", "20. Health/Kotihoito", { person: "Mikko" });
+    await setup({
+      "GET /api/inbox": { body: personEntries(assigned("Mikko", "owner")) },
+      "GET /api/renewals/open": { body: [tiina, mikko] },
+    });
+    expect(await screen.findByRole("group", { name: 'Suggested renewal: Renews "Passport Mikko" (same folder and person)' })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: chipName })).not.toBeInTheDocument();
+  });
+
+  it("a For a filing set is replaced by the rule's person while its folder is kept", async () => {
+    const mikko = candidate(11, "Bank card Mikko", "10. Financial/Banks", { person: "Mikko" });
+    const { user } = await setup({
+      "GET /api/inbox": { body: personEntries(assigned("Mikko", "filing")) },
+      "GET /api/renewals/open": { body: [tiina, mikko] },
+    });
+    expect(await screen.findByRole("group", { name: chipName })).toBeInTheDocument();
+    await setFolder(user, "10. Financial/Banks");
+    expect(await screen.findByRole("group", { name: 'Suggested renewal: Renews "Bank card Mikko" (same folder and person)' })).toBeInTheDocument();
+  });
+
+  it("a renewal taken from the chip is dropped when the folder no longer matches", async () => {
+    const { user } = await setup({ "GET /api/renewals/open": { body: [PASSPORT, ELSEWHERE] } });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    expect(screen.getByLabelText("New expiry date")).toBeInTheDocument();
+    await setFolder(user, "10. Financial/Banks");
+    await waitFor(() => expect(screen.queryByLabelText("New expiry date")).not.toBeInTheDocument());
+    expect(screen.queryByText(/Renews "Passport Tiina"/)).not.toBeInTheDocument();
+  });
+
+  it("a chip renewal with its date typed is still dropped when the folder no longer matches", async () => {
+    const { user } = await setup({ "GET /api/renewals/open": { body: [PASSPORT, ELSEWHERE] } });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await setFolder(user, "10. Financial/Banks");
+    await waitFor(() => expect(screen.queryByLabelText("New expiry date")).not.toBeInTheDocument());
+  });
+
+  it("the old file is locked again by its own id when the candidates change under a held unlock", async () => {
+    let open = [{ ...PASSPORT, locked: true }];
+    const { calls, user, client } = await setup({
+      "GET /api/renewals/open": () => ({ body: open }),
+      "POST /api/inbox/preview": (call) =>
+        call.headers["X-Dam-Unlock"] === "tok-1"
+          ? { body: RENEW_PLAN }
+          : { status: 400, body: { error: "This file is locked: 20. Health/Kotihoito/passport.pdf" } },
+      "POST /api/files/old7/unlock": { body: { token: "tok-1" } },
+      "DELETE /api/files/old7/unlock": { status: 204 },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: "Unlock and move" }));
+    const dialog = await screen.findByRole("dialog");
+    // the candidates change while the confirm is open: the old item is gone
+    open = [];
+    await client.invalidateQueries();
+    await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url === "/api/renewals/open").length).toBeGreaterThan(1));
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "DELETE" && c.url === "/api/files/old7/unlock")).toHaveLength(1));
+  });
+
+  it("a renewal picked by hand stays when the folder changes", async () => {
+    const { user } = await setup({ "GET /api/renewals/open": { body: [PASSPORT, ELSEWHERE] } });
+    await screen.findByRole("group", { name: chipName });
+    await user.click(screen.getByRole("button", { name: "Renews…" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Renews" }), "7");
+    await setFolder(user, "10. Financial/Banks");
+    expect(screen.getByLabelText("New expiry date")).toBeInTheDocument();
+    expect(screen.getByText(/Renews "Passport Tiina"/)).toBeInTheDocument();
+  });
+
+  it("a renewal the server did not record gives no Renewed toast", async () => {
+    const { user } = await setup({
+      "GET /api/renewals/open": { body: [PASSPORT] },
+      "POST /api/inbox/preview": { body: RENEW_PLAN },
+      "POST /api/inbox/file": {
+        body: fileResult({ done: RENEW_PLAN, renew_batch: null, renew_undo: null, follow_up_error: "InvalidRequest: reopen it" }),
+      },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "File" }));
+    expect(await screen.findByText(/^Filed 2 files/)).toBeInTheDocument();
+    expect(screen.queryByText(/renewed/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/adding to tray\/collection failed/)).toBeInTheDocument();
+  });
+
+  it("several matches show a select", async () => {
+    const second = candidate(9, "Passport Mikko", "20. Health/Kotihoito");
+    const { calls, user } = await setup({
+      "GET /api/renewals/open": { body: [PASSPORT, second, ELSEWHERE] },
+      "POST /api/inbox/preview": { body: RENEW_PLAN },
+    });
+    const select = await screen.findByRole("combobox", { name: "Renews" });
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Nothing",
+      "Passport Tiina · expires 30.6.2027",
+      "Passport Mikko · expires 30.6.2027",
+    ]);
+    expect(screen.queryByRole("group", { name: chipName })).not.toBeInTheDocument();
+    await user.selectOptions(select, "9");
+    setDate("2037-01-31");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/preview")).toHaveLength(1));
+    expect((posts(calls, "/api/inbox/preview")[0].body as Record<string, unknown>[])[0]).toMatchObject({
+      renews: 9,
+      renew_expires: "2037-01-31",
+    });
+  });
+
+  it("Renews… opens the select over every candidate", async () => {
+    const { user } = await setup({ "GET /api/renewals/open": { body: [ELSEWHERE, PASSPORT] } });
+    await screen.findByRole("group", { name: chipName });
+    await user.click(screen.getByRole("button", { name: "Renews…" }));
+    const select = screen.getByRole("combobox", { name: "Renews" });
+    expect(within(select).getAllByRole("option")).toHaveLength(3);
+    await user.selectOptions(select, "8");
+    expect(screen.getByText(/Renews "Driving licence"/)).toBeInTheDocument();
+    expect(screen.getByLabelText("New expiry date")).toBeInTheDocument();
+  });
+
+  it("a locked old file: Unlock and move unlocks it for the filing and locks it again after", async () => {
+    const locked = { ...PASSPORT, locked: true };
+    const { calls, user } = await setup({
+      "GET /api/renewals/open": { body: [locked] },
+      "POST /api/inbox/preview": (call) =>
+        call.headers["X-Dam-Unlock"] === "tok-1"
+          ? { body: RENEW_PLAN }
+          : { status: 400, body: { error: "This file is locked: 20. Health/Kotihoito/passport.pdf" } },
+      "POST /api/inbox/file": { body: fileResult({ done: RENEW_PLAN, renew_batch: "b1", renew_undo: "activity" }) },
+      "POST /api/files/old7/unlock": { body: { token: "tok-1" } },
+      "DELETE /api/files/old7/unlock": { status: 204 },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This file is locked");
+    await user.click(screen.getByRole("button", { name: "Unlock and move" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(posts(calls, "/api/files/old7/unlock")[0].body).toEqual({ mode: "now" });
+    expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(0); // held while the confirm is open
+    await user.click(within(dialog).getByRole("button", { name: "File" }));
+    await waitFor(() => expect(posts(calls, "/api/inbox/file")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/file")[0].headers["X-Dam-Unlock"]).toBe("tok-1");
+    await waitFor(() => expect(calls.filter((c) => c.method === "DELETE" && c.url === "/api/files/old7/unlock")).toHaveLength(1));
+  });
+
+  it("Unlock and move waits for a preview that reported the lock", async () => {
+    const { user } = await setup({
+      "GET /api/renewals/open": { body: [{ ...PASSPORT, locked: true }] },
+      "POST /api/inbox/preview": { status: 400, body: { error: "This file is locked: 20. Health/Kotihoito/passport.pdf" } },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    expect(screen.queryByRole("button", { name: "Unlock and move" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This file is locked");
+    expect(screen.getByRole("button", { name: "Unlock and move" })).toBeInTheDocument();
+  });
+
+  it("cancelling the confirm after Unlock and move locks the old file again", async () => {
+    let unlocked = false;
+    const { calls, user } = await setup({
+      "GET /api/renewals/open": { body: [{ ...PASSPORT, locked: true }] },
+      "POST /api/inbox/preview": (call) =>
+        call.headers["X-Dam-Unlock"] === "tok-1"
+          ? { body: RENEW_PLAN }
+          : { status: 400, body: { error: "This file is locked: 20. Health/Kotihoito/passport.pdf" } },
+      "POST /api/files/old7/unlock": () => ((unlocked = true), { body: { token: "tok-1" } }),
+      "DELETE /api/files/old7/unlock": { status: 204 },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: "Unlock and move" }));
+    expect(unlocked).toBe(true);
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(calls.filter((c) => c.method === "DELETE" && c.url === "/api/files/old7/unlock")).toHaveLength(1));
+    expect(posts(calls, "/api/inbox/file")).toHaveLength(0);
+  });
+
+  it("a renewal with its own Undo, and a skipped move, say so in the toast", async () => {
+    const { calls, user } = await setup({
+      "GET /api/renewals/open": { body: [PASSPORT] },
+      "POST /api/inbox/preview": { body: [] },
+      "POST /api/inbox/file": {
+        body: fileResult({ done: [], renew_batch: "r1", renew_undo: "renewal", renew_skipped: "The old file is already in Expired" }),
+      },
+      "POST /api/renewals/undo": { body: {} },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "File" }));
+    expect(await screen.findByText(/Renewed Passport Tiina\. The old file is already in Expired, so it was not moved\./)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/renewals/undo")).toHaveLength(1));
+    expect(posts(calls, "/api/renewals/undo")[0].body).toEqual({ batch_id: "r1" });
   });
 });

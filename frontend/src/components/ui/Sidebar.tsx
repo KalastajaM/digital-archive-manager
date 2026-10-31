@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CalendarClock,
   ChevronRight,
   CircleCheck,
   CircleHelp,
@@ -578,6 +579,7 @@ function browseTags(search: string): string[] {
 export function trayIcon(tray: TrayDef): LucideIcon {
   const key = `${tray.id} ${tray.name}`.toLowerCase();
   if (/follow|waiting|odota|seuranta/.test(key)) return Hourglass;
+  if (/renew|expir/.test(key)) return CalendarClock;
   if (/pay|bill|invoice|lasku|maksu/.test(key)) return Euro;
   if (/read|lue|luettava/.test(key)) return BookOpen;
   if (/action|task|todo|tee|hoida/.test(key)) return CircleCheck;
