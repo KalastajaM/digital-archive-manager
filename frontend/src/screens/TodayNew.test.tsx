@@ -453,3 +453,56 @@ describe("Today in Classic is not changed", () => {
     expect(screen.queryByRole("button", { name: "Customize" })).not.toBeInTheDocument();
   });
 });
+
+describe("Right-click menus on Today", () => {
+  const names = (menu: HTMLElement) =>
+    Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.querySelector(".menu-item-text")?.firstChild?.textContent);
+  const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
+
+  it("a To action row: Mark done, Move to another tray, Remove from tray…, Open item and its file", async () => {
+    const { calls, user } = renderToday({}, { "POST /api/items/4/done": { body: { ...SERVICE, state: "done" } } });
+    const row = await screen.findByRole("article", { name: "Car service" });
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    const menu = await screen.findByRole("menu", { name: "Actions for Car service" });
+    expect(names(menu)).toEqual(["Mark done", "Move to To pay", "Move to Follow up", "Remove from tray…", "Open item", "Open file", "Show in Finder"]);
+    await user.click(within(menu).getByRole("menuitem", { name: "Mark done" }));
+    await waitFor(() => expect(posts(calls, "/api/items/4/done")).toHaveLength(1));
+    expect(await screen.findByText("Marked done: Car service")).toBeInTheDocument();
+  });
+
+  it("Move to another tray moves the item, with Undo; Remove from tray… asks first", async () => {
+    const { calls, user } = renderToday({}, { "POST /api/items/5/move": { body: { ...PASSPORT, tray_id: "follow-up" } } });
+    const row = await screen.findByRole("article", { name: "Renew passport" });
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    await user.click(await screen.findByRole("menuitem", { name: "Move to Follow up" }));
+    await waitFor(() => expect(posts(calls, "/api/items/5/move")).toHaveLength(1));
+    expect(posts(calls, "/api/items/5/move")[0].body).toEqual({ tray: "follow-up" });
+    expect(await screen.findByText(/Moved to Follow up/)).toBeInTheDocument();
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("article", { name: "Renew passport" }) });
+    await user.click(await screen.findByRole("menuitem", { name: "Remove from tray…" }));
+    expect(await screen.findByRole("dialog", { name: /Remove Renew passport from/ })).toBeInTheDocument();
+  });
+
+  it("a bill in the To pay table has the same menu, with the tray's own done label", async () => {
+    const { user } = renderToday();
+    const cell = await screen.findByRole("link", { name: "Water" });
+    await user.pointer({ keys: "[MouseRight]", target: cell });
+    const menu = await screen.findByRole("menu", { name: "Actions for Water" });
+    expect(names(menu)[0]).toBe("Mark paid");
+  });
+
+  it("a starred file: Show in Browse, Quick Look, Open, Show in Finder, Remove the star", async () => {
+    const { user } = renderToday(
+      {},
+      {
+        "GET /api/marks/collection/starred": {
+          body: { id: 1, name: "Starred", members: [{ drive_id: "s1", path: "30. Home/plan.pdf", is_dir: false, missing: false, quarantined: false, is_link: false, group_id: null, connected: true, marks: ["starred"] }] },
+        },
+      },
+    );
+    const link = await screen.findByRole("link", { name: /plan\.pdf/ });
+    await user.pointer({ keys: "[MouseRight]", target: link });
+    const menu = await screen.findByRole("menu", { name: "Actions for plan.pdf" });
+    expect(names(menu)).toEqual(["Show in Browse", "Quick Look", "Open", "Show in Finder", "Remove the star", "Move to To Delete"]);
+  });
+});

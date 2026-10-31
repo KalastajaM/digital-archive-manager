@@ -67,19 +67,22 @@ type Entry = Exclude<MenuEntry, "separator">;
 /** A right-click menu's entry for one of the bar's actions: off ones say why. */
 const entry = (label: string, a: BarAction): Entry => ({ label, onSelect: a.run, disabled: off(a), reason: why(a) });
 
-/** The bar's actions as a right-click menu (a file or selection in Browse's list), in
- * groups: the trays (each named: "Put in To pay"), Move to… and Back to inbox, From…,
- * For… and Ask AI, ``more``'s Add tag… and Add to collection… (``reason``: why they are
- * off), the marks, then Restore and the bin. Same labels and reasons as the icons. */
+/** The bar's actions as a right-click menu (a file or selection in a list), in groups:
+ * the screen's ``look`` entries (Quick Look, Open, Show in Finder…), the trays (each
+ * named: "Put in To pay"), Move to…, Back to inbox and Remove from tray or collection,
+ * From…, For… and Ask AI, ``more``'s Add tag… and Add to collection… (``reason``: why they
+ * are off), the marks, then Restore and the bin. Same labels and reasons as the icons. */
 export function fileMenuEntries(
   p: FileActionBarProps,
-  more: { addTag: () => void; addTo: () => void; reason: string | null },
+  more?: { addTag: () => void; addTo: () => void; reason: string | null },
+  look: Entry[] = [],
 ): MenuEntry[] {
   const out: MenuEntry[] = [];
   const group = (...entries: (Entry | Entry[] | false | undefined)[]) => {
     const some = entries.flat().filter((e): e is Entry => !!e);
     if (some.length > 0) out.push(...(out.length > 0 ? ["separator" as const] : []), ...some);
   };
+  group(look);
   if (p.tray) {
     const verb = p.tray.label === "Put in tray" ? "Put in" : "Move to";
     group(
@@ -94,10 +97,17 @@ export function fileMenuEntries(
           })(),
     );
   }
-  group(p.moveTo && entry("Move to…", p.moveTo), p.backToInbox && entry("Back to inbox", p.backToInbox));
+  group(
+    p.moveTo && entry("Move to…", p.moveTo),
+    p.backToInbox && entry("Back to inbox", p.backToInbox),
+    p.removeFromTray && entry("Remove from tray…", p.removeFromTray),
+    p.removeFromCollection && entry("Remove from collection", p.removeFromCollection),
+  );
   group(p.sender && entry("From…", p.sender), p.person && entry("For…", p.person), p.ask && entry("Ask AI", p.ask));
-  const reason = more.reason ?? undefined;
-  group({ label: "Add tag…", onSelect: more.addTag, disabled: !!reason, reason }, { label: "Add to collection…", onSelect: more.addTo, disabled: !!reason, reason });
+  if (more) {
+    const reason = more.reason ?? undefined;
+    group({ label: "Add tag…", onSelect: more.addTag, disabled: !!reason, reason }, { label: "Add to collection…", onSelect: more.addTo, disabled: !!reason, reason });
+  }
   group(
     p.star && entry(p.star.on ? "Remove the star" : "Star", p.star),
     p.important && entry(p.important.on ? "Unmark Important" : "Mark Important", p.important),
