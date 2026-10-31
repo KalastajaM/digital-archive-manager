@@ -416,8 +416,10 @@ folder names** check lists main-folder entries that share a folder's label.
 Settings, **Archive folders**, **Special folders** (New look) renames the Inbox, Ongoing,
 Important or To Delete folder (`dam.special_folders`). The new name follows the folder-name
 rules, except that a `##.` start is fine, and it must not be the name of another special
-folder, of an archive folder (an extra folder's label) or of anything already in the folder
-it lives in (a change of letter case alone is allowed).
+folder, of an archive folder (an extra folder's label), of the Expired folder
+(`expired_folder_name`, refused before anything moves: rename the Expired folder in Settings
+first) or of anything already in the folder it lives in (a change of letter case alone is
+allowed).
 
 | Call | Does |
 |---|---|
@@ -957,15 +959,17 @@ reminders:
 options of `by`. A reminder `{lead: true}` needs a `lead` block (and, like every reminder,
 a `date_field`); it is sent once, the item's lead time before the date, and as with every
 rule only the latest one that is already past is sent when an item is created or its date
-changes. `renew` needs a `date_field`; a tray with `renew` shows **Renewed…** as the main
+changes. `renew` needs a `date_field` and cannot go with a field of type `iban` (a tray
+with one is a tray of bills to pay); a tray with `renew` shows **Renewed…** as the main
 action of its items (in the item, its right-click menu and on Today) and **Done** with the
 tray's `done` label as the secondary one. A tray file with neither key behaves as before.
 
 **Renewing.** `POST /api/items/{id}/renew/preview {expires, drive_id?}` shows what
 Renewed… would do and changes nothing: `ops` (the resolved plan: a new Expired folder and
 the MOVE of the old file), `skipped` (why the move is left out: "The old file is no longer
-in the archive", "The old file is in To Delete" or "The old file's archive folder is not
-connected") and `locked` (`[{drive_id, name}]`: the old file is locked and the request
+in the archive", "The old file is in To Delete", "The old file's archive folder is not
+connected" or "The old file is at the top of the archive", since no Expired folder is made
+at the top level) and `locked` (`[{drive_id, name}]`: the old file is locked and the request
 carries no unlock for it; `ops` is then empty). `POST /api/items/{id}/renew
 {expires, drive_id?}` applies it and answers `{item, batch_id, undo, skipped}`. `drive_id`
 is the new file; it becomes the item's first file in place of the old one, the other
@@ -973,15 +977,20 @@ files stay. The old file is moved to `<its folder>/<Expired>` (the `expired_fold
 setting, default `Expired`; a taken name gets `_2`) as one journaled MOVE batch (origin
 `ui`), checked against the indexed file as for any move, and only when it has moved is the
 renewal recorded under the same `batch_id`; a move that fails records nothing (400). A
-locked old file without an unlock grant is refused (400 "locked", as for any move); the
-page unlocks it for the move and locks it again. A request without `drive_id` only
-changes the date, and so does one whose old file cannot be moved (`skipped` says why).
-400 as well for an item that is not open, is not in a tray with `renew`, has no file to
-replace, when the new file is already on the item or belongs to another open item, or is
-not a live, editable file.
+locked old file without an unlock grant is refused (400 "locked", as for any move). The
+page's **Unlock and move** unlocks it, runs the preview again under that grant (so the
+move is shown), applies it only on **Renewed**, and locks the file again however the form
+ends (applied, refused, cancelled or closed) when the form took that lock. A request
+without `drive_id` only changes the date, and so does one whose old file cannot be moved
+(`skipped` says why). A new file that is unknown, missing or parked is 404, and one in To
+Delete is 400. 400 as well for an item that is not open, is not in a tray with `renew`,
+has no file to replace, or when the new file is already on the item or belongs to another
+open item.
 
 The renewal is a `renewed` item event holding what its Undo needs (old and new date, old
-and new file, the old file's marks, the marks the new file had before). When a file moved
+and new file, the old file's marks, the marks the new file had before), and for History
+`moved` (whether the old file was moved) and `expired` (the name of the folder it moved
+into, or null). An event from before these keys has neither. When a file moved
 (`undo: "activity"`) it is undone with `POST /api/activity/{batch_id}/undo`; a renewal
 that moved nothing (`undo: "renewal"`) is undone with `POST /api/renewals/undo
 {batch_id}` (answers the item; 400 for a batch that moved a file, 409 once undone). Either
@@ -999,7 +1008,8 @@ the filing records (both empty counts as equal).
 A filing request (an entry of the list that `POST /api/inbox/preview` and
 `POST /api/inbox/file` take) has `renews` (an item id) and `renew_expires` (a date): the
 filed file then becomes the item's new first file, no tray step is applied, and the old
-file's move into Expired joins the filing's batch. The result carries `renew_skipped` (why
+file's move into Expired joins the filing's batch, before the filed file's own op, so a
+filed file named as the old file in the same folder takes that name rather than `_2`. The result carries `renew_skipped` (why
 the old file was not moved), `renew_batch` (the batch the renewal was recorded under) and
 `renew_undo` (`"activity"` or `"renewal"`, as above).
 
@@ -1650,8 +1660,8 @@ The user guide's "What dam never does" gives the short version. The details:
 - **Renewals.** Renewed… on a Renew item moves the item's old file into
   `<its folder>/<Expired>`: next to where it was, never deleted. It is an ordinary
   journaled MOVE, so every guard above holds: a locked or Important old file is refused unless this request carries an unlock
-  grant for exactly that file, a file in To Delete or in a folder that is not connected is
-  not moved at all (the date and new file are still recorded, and the answer says why),
+  grant for exactly that file, a file in To Delete, in a folder that is not connected or
+  at the top of the archive is not moved at all (the date and new file are still recorded, and the answer says why),
   and the planner makes the Expired folder and gives a taken name `_2`. The marks move
   with it as data, not as a copy of the file: `MarkService` passes the old file's star and
   Important mark to the new file in one transaction with the item change, in the same
