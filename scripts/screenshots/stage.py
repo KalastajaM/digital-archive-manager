@@ -11,6 +11,8 @@ It talks only to the demo server on localhost:8766, never to a real archive.
     uv run --no-project --with playwright python scripts/screenshots/shoot.py docs/images
     uv run --no-project --with playwright python scripts/screenshots/social.py docs/images
 
+The screenshots are taken in light mode.
+
 ``shoot.py`` uses the installed Google Chrome (``channel="chrome"``).
 """
 

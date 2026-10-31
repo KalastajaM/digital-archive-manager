@@ -1,6 +1,6 @@
-"""The social preview images (1280x640, light and dark): the headline and pills on the left,
+"""The social preview image (1280x640, light): the headline and pills on the left,
 the Inbox shot as an app window on the right, cut off by the edge. Run it after shoot.py
-has written ``inbox-light.png`` and ``inbox-dark.png`` to the folder given:
+has written ``inbox.png`` to the folder given:
 
     uv run --no-project --with playwright python scripts/screenshots/social.py docs/images
 """
@@ -14,12 +14,8 @@ from playwright.sync_api import sync_playwright
 FOLDER = Path(sys.argv[1])
 ICON = Path(__file__).resolve().parents[2] / "frontend" / "public" / "icon.svg"
 
-THEMES = {
-    "light": dict(bg="#f5f6fa", glow="#e2e6f0", text="#1d1d1f", muted="#515154", blue="#0071e3",
-                  pill_bg="#ffffff", pill_line="rgba(0,0,0,.12)", shadow="0 24px 70px rgba(30,40,80,.28)"),
-    "dark": dict(bg="#141518", glow="#14161d", text="#f5f5f7", muted="#b4b4ba", blue="#4aa2ff",
-                 pill_bg="#26272c", pill_line="rgba(255,255,255,.12)", shadow="0 24px 70px rgba(0,0,0,.6)"),
-}
+COLORS = dict(bg="#f5f6fa", glow="#e2e6f0", text="#1d1d1f", muted="#515154", blue="#0071e3",
+              pill_bg="#ffffff", pill_line="rgba(0,0,0,.12)", shadow="0 24px 70px rgba(30,40,80,.28)")
 
 PAGE = """<!doctype html><meta charset="utf-8"><style>
 * { box-sizing: border-box; margin: 0; }
@@ -54,17 +50,16 @@ def data_uri(path: Path, mime: str) -> str:
 
 with sync_playwright() as p:
     browser = p.chromium.launch(channel="chrome")
-    for scheme, colors in THEMES.items():
-        page = browser.new_page(viewport={"width": 1280, "height": 640})
-        html = PAGE % {
-            **colors,
-            "icon": data_uri(ICON, "image/svg+xml"),
-            "shot": data_uri(FOLDER / f"inbox-{scheme}.png", "image/png"),
-        }
-        page.set_content(html)
-        page.evaluate("document.fonts.ready")
-        page.wait_for_function("[...document.images].every((i) => i.complete)")
-        page.screenshot(path=str(FOLDER / f"social-preview-{scheme}.png"))
-        print(f"social-preview-{scheme}.png")
-        page.close()
+    page = browser.new_page(viewport={"width": 1280, "height": 640})
+    html = PAGE % {
+        **COLORS,
+        "icon": data_uri(ICON, "image/svg+xml"),
+        "shot": data_uri(FOLDER / "inbox.png", "image/png"),
+    }
+    page.set_content(html)
+    page.evaluate("document.fonts.ready")
+    page.wait_for_function("[...document.images].every((i) => i.complete)")
+    page.screenshot(path=str(FOLDER / "social-preview.png"))
+    print("social-preview.png")
+    page.close()
     browser.close()

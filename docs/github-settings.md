@@ -7,7 +7,7 @@ Do these in the GitHub UI after the first push (repository owner).
 - [ ] **Topics** (same place):
   > document-management, personal-archive, paperwork, digital-archive, file-organizer, ocr, full-text-search, local-first, privacy, self-hosted, google-drive, onedrive, dropbox, bills, fastapi, react, sqlite, python, typescript, cross-platform
 
-- [ ] **Social preview**: Settings -> General -> Social preview -> upload a 1280x640 PNG: `docs/images/social-preview-light.png` (or `-dark.png`)
+- [ ] **Social preview**: Settings -> General -> Social preview -> upload a 1280x640 PNG: `docs/images/social-preview.png`
 - [ ] **Private vulnerability reporting**: Settings -> Code security -> enable
   (SECURITY.md and the Code of Conduct point to it)
 - [ ] **Dependabot alerts** and **Dependabot security updates**: Settings -> Code

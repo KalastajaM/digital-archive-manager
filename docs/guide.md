@@ -1300,7 +1300,8 @@ list's width.
 - **Due and follow-up dates.** A file with an open tray item shows it on its row as on a
   collection's page: the tray and the item's date (`To pay · 30.10.2026`), red when
   overdue, orange when due today or within 3 days, grey otherwise. Hover it for the item's
-  title. The same tag shows in **Files** and in search results.
+  title; click it to open the item in its tray. The same tag shows in **Files** and in
+  search results, and the file panel's tray tag opens the item the same way.
 - **Folders, Collections, Tags** at the top of the tree beside the panes choose
   what the tree shows. **Folders** is the folder tree. **Collections** lists Important and
   Starred, then the open collections as they nest. After a collection's name come an orange
@@ -1355,6 +1356,12 @@ list's width.
   **Go to target**. A link to something outside the archive only has Show in Finder.
 
 ## Searching
+
+**⌘K** (or **Search** at the top of the sidebar) opens the search palette from any
+screen, also while typing in a field. One box finds files, folders, collections, trays and
+tags as you type; ↑ / ↓ move, Enter opens, Esc closes. Typing a filter such as `tag:` lists
+its values to take with Enter or Tab. The last row searches the archive for the text as
+typed, which opens Browse with that search.
 
 The search box in Browse takes plain
 words, which search file names, paths and the text of the files, and **filters** of the
@@ -1504,7 +1511,9 @@ related** (in the block's list: Quick Look, Show in Browse and Not related), the
 files can do together with this file: **Tag it and this file…**, **Add it and this file to a
 collection…**, **Move it and this file to a folder…**, **Link it here** and **Link this file
 there** (greyed with the reason when no link is needed). A relative that is not ticked is
-ticked alone first; on a ticked one the entries say "them" and act on all ticked.
+ticked alone first; on a ticked one the entries say "them" and act on all ticked. With
+several ticked, the entries for one file drop out and **Mark 2 as not related** (with the
+count) marks them all, with one Undo.
 
 An arc runs from this file's row to each relative's row. A thicker arc means more in common,
 and an orange dashed one means the file is not filed yet. When another folder holds two or
@@ -2095,6 +2104,7 @@ Windows and Linux, read Ctrl for ⌘ and Alt for ⌥.
 
 | Where | Key | Does |
 | --- | --- | --- |
+| Anywhere | ⌘K | Open the search palette |
 | Lists (Inbox, trays, a collection, Browse) | `j` / `k` or `↓` / `↑` | Next / previous |
 | Lists | **Space** | Quick Look of the selected document |
 | Quick Look | `→` / `←`, `j` / `k` | Next / previous document |
@@ -2123,7 +2133,7 @@ Windows and Linux, read Ctrl for ⌘ and Alt for ⌥.
 | Confirm sheets | ⌘`Enter` | Confirm (only half a second after it opened) |
 | Confirm sheets | Esc | Cancel |
 | Menus | `↑` / `↓`, Home / End, Esc | Move, first / last, close |
-| A row with a right-click menu (sidebar, Browse's list and trees) | ⇧F10, the menu key | Open its menu |
+| A row with a right-click menu (sidebar, Browse, the Inbox, trays, Today, a collection, Relatives) | ⇧F10, the menu key | Open its menu |
 
 ## Drag and drop
 
