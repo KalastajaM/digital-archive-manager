@@ -29,9 +29,9 @@ const coll = (id: number, name: string, parent_id: number | null = null, state: 
 const OLD = coll(1, "Old house");
 const ALL = [OLD, coll(2, "Garden", 1), coll(3, "House"), coll(4, "Shut", null, "closed")];
 
-function setup(problems: string[] = [], all = ALL) {
+function setup(problems: string[] = [], all = ALL, snapshot = true) {
   const calls = mockFetch({
-    "POST /api/collections/1/merge/preview": { body: { problems } },
+    "POST /api/collections/1/merge/preview": { body: { problems, snapshot } },
     "POST /api/collections/1/merge": { body: { collection: ALL[2], batch: null, problems: ["Could not remove Old house/a.pdf"], ongoing_status: null } },
   });
   const onDone = vi.fn();
@@ -55,6 +55,14 @@ describe("MergeCollectionSheet", () => {
     expect(await screen.findByText("Merged Old house into House, but: Could not remove Old house/a.pdf")).toBeInTheDocument();
   });
 
+  it("says no snapshot is taken when the collection holds nothing", async () => {
+    const { user } = setup([], [OLD, coll(3, "House")], false);
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("option", { name: "House" }));
+    expect(await within(sheet).findByText("Old house holds no files, notes, checklists or summaries, so no snapshot is taken.")).toBeInTheDocument();
+    expect(within(sheet).queryByText(/cannot be undone/)).toBeNull();
+  });
+
   it("says what happens in ##. Ongoing by whether the target is in it", async () => {
     const { user } = setup();
     let sheet = await screen.findByRole("dialog");
@@ -72,7 +80,7 @@ describe("MergeCollectionSheet", () => {
   it("a late check for an earlier pick never shows under the newer one", async () => {
     const slow = deferred<{ body: unknown }>();
     mockFetch({
-      "POST /api/collections/1/merge/preview": (call) => ((call.body as { into: number }).into === 3 ? slow.promise : { body: { problems: [] } }),
+      "POST /api/collections/1/merge/preview": (call) => ((call.body as { into: number }).into === 3 ? slow.promise : { body: { problems: [], snapshot: true } }),
     });
     renderWithProviders(<MergeCollectionSheet c={OLD} all={[...ALL, coll(5, "Barn")]} onDone={vi.fn()} onCancel={() => {}} />);
     const user = userEvent.setup();
@@ -80,7 +88,7 @@ describe("MergeCollectionSheet", () => {
     await user.click(within(sheet).getByRole("option", { name: "House" }));
     await user.click(within(sheet).getByRole("option", { name: "Barn" }));
     expect(await within(sheet).findByRole("button", { name: "Merge" })).toBeInTheDocument();
-    await act(async () => slow.resolve({ body: { problems: ["House is closed: reopen it first"] } }));
+    await act(async () => slow.resolve({ body: { problems: ["House is closed: reopen it first"], snapshot: true } }));
     expect(within(sheet).queryByRole("alert")).toBeNull();
     expect(within(sheet).getByRole("button", { name: "Merge" })).toBeInTheDocument();
   });

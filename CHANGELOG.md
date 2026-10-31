@@ -90,6 +90,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Fewer snapshots.** Deleting or merging a collection that holds no files, notes,
+  checklists or summaries no longer takes a snapshot (the sheet says so), and dam keeps
+  only the newest five of the snapshots it takes by itself before a change. Snapshots you
+  take, import or keep before a restore are never removed.
 - The README shows its screenshots in light mode only, retaken with collections and tags
   in Browse and the nested collections; the dark copies are gone. The user guide gains the
   search palette (⌘K) and says that a row's tray tag opens the item in its tray.

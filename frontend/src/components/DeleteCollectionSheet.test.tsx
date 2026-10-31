@@ -17,6 +17,7 @@ describe("DeleteCollectionSheet", () => {
             { id: 2, name: "Michiel", state: "open", files: 1 },
             { id: 3, name: "Old", state: "closed", files: 0 },
           ],
+          snapshot: true,
         },
       },
       "POST /api/collections/1/delete": { body: { deleted: 3, batch: null, problems: ["Legal/notes.txt is yours, so the folder Legal stays"] } },
@@ -37,5 +38,16 @@ describe("DeleteCollectionSheet", () => {
     expect(onDone).toHaveBeenCalledWith(3, ["Legal", "Michiel", "Old"]);
     // the toast says what went, and what the Ongoing sync could not do
     expect(await screen.findByText("Deleted Legal and the 2 inside it, but: Legal/notes.txt is yours, so the folder Legal stays")).toBeInTheDocument();
+  });
+
+  it("says no snapshot is taken when nothing but the name goes", async () => {
+    mockFetch({
+      "GET /api/collections/1/delete/preview": { body: { collections: [{ id: 1, name: "test2", state: "open", files: 0 }], snapshot: false } },
+    });
+    renderWithProviders(<DeleteCollectionSheet c={{ id: 1, name: "test2" }} onDone={() => {}} onCancel={() => {}} />);
+    const sheet = await screen.findByRole("dialog", { name: "Delete test2?" });
+    expect(await within(sheet).findByText(/so only its name goes and no snapshot is taken/)).toBeInTheDocument();
+    expect(within(sheet).queryByText(/A snapshot is taken first/)).toBeNull();
+    expect(within(sheet).queryByText(/This cannot be undone/)).toBeNull();
   });
 });

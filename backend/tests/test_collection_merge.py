@@ -95,12 +95,37 @@ def test_merge_moves_the_links_in_ongoing_and_takes_a_snapshot_first(app, files,
             f"/api/collections/{a.id}/merge/preview", json={"into": b.id}, headers=LOCAL_ORIGIN
         )
         assert preview.status_code == 200, preview.text
-        assert preview.json()["problems"] == []
+        assert preview.json() == {"problems": [], "snapshot": True}
         r = client.post(f"/api/collections/{a.id}/merge", json={"into": b.id}, headers=LOCAL_ORIGIN)
     assert r.status_code == 200, r.text
     assert r.json()["collection"]["id"] == b.id
     assert sorted(os.listdir(root / "House")) == ["a.pdf", "b.pdf", "c.pdf", "d.pdf"]
     assert not (root / "Old house").exists()
+    assert [s.kind for s in list_snapshots(app.app_paths)] == [BEFORE_MERGE]
+
+
+def test_merging_a_collection_that_holds_nothing_takes_no_snapshot(app, files):
+    from dam.snapshots import BEFORE_MERGE, list_snapshots
+
+    empty = app.collections.create("Empty")
+    parent = app.collections.create("Parent")
+    app.collections.create("Inner", parent_id=parent.id)  # it would move: a snapshot
+    b = app.collections.create("House")
+    with make_client(app) as client:
+        for c, wanted in ((empty, False), (parent, True)):
+            preview = client.post(
+                f"/api/collections/{c.id}/merge/preview", json={"into": b.id}, headers=LOCAL_ORIGIN
+            )
+            assert preview.json() == {"problems": [], "snapshot": wanted}
+        r = client.post(
+            f"/api/collections/{empty.id}/merge", json={"into": b.id}, headers=LOCAL_ORIGIN
+        )
+        assert r.status_code == 200, r.text
+        assert list_snapshots(app.app_paths) == []
+        r = client.post(
+            f"/api/collections/{parent.id}/merge", json={"into": b.id}, headers=LOCAL_ORIGIN
+        )
+        assert r.status_code == 200, r.text
     assert [s.kind for s in list_snapshots(app.app_paths)] == [BEFORE_MERGE]
 
 

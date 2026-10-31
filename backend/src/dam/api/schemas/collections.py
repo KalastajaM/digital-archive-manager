@@ -187,6 +187,7 @@ class ExportOut(BaseModel):
 
 class MergePreviewOut(BaseModel):
     problems: list[str]  # why it cannot be merged; empty: it can
+    snapshot: bool  # a snapshot is taken first (not when the merge loses nothing)
 
 
 class DeleteRowOut(BaseModel):
@@ -198,6 +199,7 @@ class DeleteRowOut(BaseModel):
 
 class DeletePreviewOut(BaseModel):
     collections: list[DeleteRowOut]  # the collection first, then those inside it
+    snapshot: bool  # a snapshot is taken first (not when they hold nothing)
 
 
 class DeleteOut(BaseModel):

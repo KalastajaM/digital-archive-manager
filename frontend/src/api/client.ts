@@ -1702,9 +1702,10 @@ export const useSetCollectionParent = () => {
   });
 };
 
-/** Delete a collection with everything inside it (no Undo: a snapshot is taken first;
- * files are never touched). ``preview`` lists what goes; ``ids``, the ones it listed, make
- * the server refuse if the tree changed since. */
+/** Delete a collection with everything inside it (no Undo: a snapshot is taken first
+ * unless they hold nothing; files are never touched). ``preview`` lists what goes and
+ * whether a snapshot is taken; ``ids``, the ones it listed, make the server refuse if the
+ * tree changed since. */
 export const useDeleteCollection = () => {
   const refresh = useRefresh(); // takes links down in ##. Ongoing: Activity and Browse too
   const remove = useMutation({
@@ -1712,12 +1713,13 @@ export const useDeleteCollection = () => {
       apiPost("/api/collections/{collection_id}/delete", { path: { collection_id: id }, body: { ids } }),
     onSettled: refresh,
   });
-  const preview = (id: number) => apiGet("/api/collections/{collection_id}/delete/preview", { path: { collection_id: id } }).then((r) => r.collections);
+  const preview = (id: number) => apiGet("/api/collections/{collection_id}/delete/preview", { path: { collection_id: id } });
   return { remove, preview };
 };
 
-/** Merge a collection into another (no Undo: a snapshot is taken first). ``check`` says
- * why it cannot be (empty: it can); ``merge`` does it and answers with the target. */
+/** Merge a collection into another (no Undo: a snapshot is taken first unless it loses
+ * nothing). ``check`` says why it cannot be (empty: it can) and whether a snapshot is
+ * taken; ``merge`` does it and answers with the target. */
 export const useMergeCollection = () => {
   const refresh = useRefresh(); // moves links in ##. Ongoing: Activity and Browse too
   const merge = useMutation({
@@ -1726,7 +1728,7 @@ export const useMergeCollection = () => {
     onSettled: refresh,
   });
   const check = (id: number, into: number) =>
-    apiPost("/api/collections/{collection_id}/merge/preview", { path: { collection_id: id }, body: { into } }).then((r) => r.problems);
+    apiPost("/api/collections/{collection_id}/merge/preview", { path: { collection_id: id }, body: { into } });
   return { merge, check };
 };
 

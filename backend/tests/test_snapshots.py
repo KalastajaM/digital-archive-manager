@@ -704,3 +704,26 @@ def test_a_snapshot_another_build_of_dam_made_is_refused(served, tmp_path):
     assert r.status_code == 409, r.text
     assert "made by another build of dam" in r.text and "made_folders" in r.text
     assert host.current.app is app  # never closed
+
+
+def test_only_the_newest_automatic_snapshots_are_kept(served):
+    from datetime import datetime
+
+    _, _, paths = served
+
+    def at(minute, kind=snapshots.MANUAL):
+        when = datetime(2026, 10, 31, 12, minute).astimezone()
+        return snapshots.create_snapshot(paths, kind, now=when).name
+
+    manual = at(0)
+    restore = at(1, snapshots.BEFORE_RESTORE)
+    folder = snapshots.snapshots_dir(paths)
+    imported = "dam-snapshot-20261031-115900-before-delete-imported.zip"
+    (folder / imported).write_bytes((folder / manual).read_bytes())
+    kinds = [snapshots.BEFORE_DELETE, snapshots.BEFORE_MERGE, snapshots.BEFORE_RENAME]
+    auto = [at(10 + i, kinds[i % 3]) for i in range(snapshots.KEEP_AUTOMATIC + 2)]
+    same_second = at(10 + len(auto) - 1, snapshots.BEFORE_DELETE)  # gets a -2 name
+
+    left = {s.name for s in snapshots.list_snapshots(paths)}
+    kept = auto[-(snapshots.KEEP_AUTOMATIC - 1) :] + [same_second]
+    assert left == {manual, restore, imported, *kept}

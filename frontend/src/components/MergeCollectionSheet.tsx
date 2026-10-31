@@ -1,6 +1,7 @@
 /** Merge into…: a collection goes into another. Its files and the collections inside it join
  * that one, its note, checklist and summary are added to that one's, and it goes. There is
- * no Undo: a snapshot is taken first, and the sheet says so before anything happens. */
+ * no Undo: a snapshot is taken first, and the sheet says so before anything happens (when it
+ * holds nothing and has no collections inside, there is nothing to lose and no snapshot). */
 import { useRef, useState } from "react";
 import { type CollectionRow, errorText, useMergeCollection } from "../api/client";
 import { visible } from "../text";
@@ -25,6 +26,7 @@ export function MergeCollectionSheet({
   const toast = useToast();
   const [into, setInto] = useState<CollectionRow | null>(null);
   const [problems, setProblems] = useState<string[] | null>(null);
+  const [snapshot, setSnapshot] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // the open ordinary collections, not this one nor any inside it (that would be a cycle)
   const kids = childrenOf(all);
@@ -47,7 +49,11 @@ export function MergeCollectionSheet({
     setError(null);
     asked.current = x.id;
     check(c.id, x.id).then(
-      (p) => asked.current === x.id && setProblems(p),
+      (r) => {
+        if (asked.current !== x.id) return;
+        setProblems(r.problems);
+        setSnapshot(r.snapshot);
+      },
       (e) => asked.current === x.id && setError(errorText(e)),
     );
   };
@@ -106,9 +112,13 @@ export function MergeCollectionSheet({
                 ? ` In ##. Ongoing its links move into ${visible(into.name)}'s folder.`
                 : ` ${visible(into.name)} is not in ##. Ongoing, so the links of ${name} there come down.`)}
           </p>
-          <p>
-            <b>This cannot be undone.</b> A snapshot is taken first (Settings, Snapshots), so restoring it is the way back.
-          </p>
+          {snapshot ? (
+            <p>
+              <b>This cannot be undone.</b> A snapshot is taken first (Settings, Snapshots), so restoring it is the way back.
+            </p>
+          ) : (
+            <p>{name} holds no files, notes, checklists or summaries, so no snapshot is taken.</p>
+          )}
         </div>
       )}
       {error && (
