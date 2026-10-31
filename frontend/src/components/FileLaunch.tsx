@@ -3,7 +3,7 @@
  * that is gone, not macOS) is a toast with the server's reason, except inside a modal
  * dialog (a toast would sit under it): there the dialog provides ``InlineResults`` and
  * shows every outcome on its own ``DialogStatus`` line. */
-import { ExternalLink, FolderSearch } from "lucide-react";
+import { ExternalLink, FolderOpen, FolderSearch } from "lucide-react";
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { ApiError, errorText, launchFile } from "../api/client";
 import { inFileManager, showInLabel } from "../fileManager";
@@ -116,5 +116,20 @@ export function LaunchButtons({ launch, tipSide, only, offline = false }: Props)
         onClick={() => void launch.run("reveal")}
       />
     </>
+  );
+}
+
+/** Show in folder: the file's own folder in Browse, with the file selected (beside Show in
+ * Finder in a preview's toolbar; the caller closes what is open and navigates). */
+export function ShowInFolderButton({ onClick, tipSide }: { onClick: () => void; tipSide?: "below" | "above" }) {
+  return (
+    <IconButton
+      icon={<FolderOpen {...ICON} />}
+      label="Show in folder"
+      tip="Show in folder: its folder in Browse"
+      className="doc-wide"
+      tipSide={tipSide}
+      onClick={onClick}
+    />
   );
 }

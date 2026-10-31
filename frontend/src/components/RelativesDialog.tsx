@@ -9,6 +9,7 @@
  * the block's "Show connections". */
 import { ArrowLeft, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { type Relative, useRelatives } from "../api/client";
 import { plural } from "../format";
 import { baseName, parentOf } from "../paths";
@@ -26,6 +27,7 @@ import {
   useNotRelated,
   useRelativeLook,
 } from "./relativesShared";
+import { browseHref } from "./GroupTree";
 import { AIMark, FindMoreButton, type Finder, FoundLine, isAIPick, useFindRelatives } from "./relativesAI";
 import { IconButton } from "./ui/IconButton";
 import { Sheet } from "./ui/Sheet";
@@ -203,7 +205,13 @@ export function RelativesDialog({
       return next;
     });
   });
-  const look = useRelativeLook(file, lookList, notRelated);
+  const look = useRelativeLook(file, lookList, notRelated, onClose);
+  const navigate = useNavigate();
+  // its folder in Browse, the file selected (Back returns to where the dialog was opened)
+  const showInFolder = (r: Relative) => {
+    onClose();
+    navigate(browseHref(r.path, r.drive_id));
+  };
 
   const here = parentOf(file.path);
   const ticked = relatives.filter((r) => selected.has(r.drive_id));
@@ -491,6 +499,7 @@ export function RelativesDialog({
                       relative={card}
                       onLook={() => look.open(card.drive_id)}
                       onOpen={() => openRelatives(card)}
+                      onShowInFolder={() => showInFolder(card)}
                       onNotRelated={() => notRelated(card)}
                     />
                   ) : (
@@ -571,16 +580,19 @@ export function RelativesDialog({
 }
 
 /** What one relative shares with this file: each value exactly, the AI's reason for a
- * pick, and Quick Look, its own relatives and Not related. */
+ * pick, and Quick Look, its own relatives, Show in folder and Not related (last, set
+ * apart: it marks the pair). */
 function RelativeCard({
   relative: r,
   onLook,
   onOpen,
+  onShowInFolder,
   onNotRelated,
 }: {
   relative: Relative;
   onLook: () => void;
   onOpen: () => void;
+  onShowInFolder: () => void;
   onNotRelated: () => void;
 }) {
   const rname = visible(r.name);
@@ -611,7 +623,10 @@ function RelativeCard({
         <button type="button" onClick={onOpen}>
           Its relatives <kbd>Enter</kbd>
         </button>
-        <button type="button" className="link-button" onClick={onNotRelated}>
+        <button type="button" onClick={onShowInFolder}>
+          Show in folder
+        </button>
+        <button type="button" className="rel-not-related" onClick={onNotRelated}>
           Not related
         </button>
       </span>
