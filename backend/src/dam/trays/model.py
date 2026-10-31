@@ -404,6 +404,13 @@ class TrayDef(BaseModel):
             raise ValueError("reminders need a date_field")
         if self.renew is not None and self.date_field is None:
             raise ValueError("renew needs a date_field")
+        iban = next((k for k, f in self.fields.items() if f.type == "iban"), None)
+        if self.renew is not None and iban is not None:
+            # an IBAN field makes the tray a bills tray (Pay, not Renewed…)
+            raise ValueError(
+                f"renew cannot go with an iban field ({iban!r}): a tray with one is a "
+                "tray of bills to pay"
+            )
         if any(r.lead for r in self.reminders) and self.lead is None:
             raise ValueError("a lead reminder needs a lead block")
         if self.lead is not None:

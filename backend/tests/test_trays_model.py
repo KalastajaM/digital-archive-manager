@@ -315,6 +315,13 @@ def test_renew_needs_date_field(tmp_path):
     assert len(errors) == 1 and "date_field" in errors[0].message
 
 
+def test_renew_refuses_an_iban_field(tmp_path):
+    body = "fields:\n  d: { type: date }\n  i: { type: iban }\ndate_field: d\nrenew: {}\n"
+    _, errors = write_tray(tmp_path, body)
+    assert len(errors) == 1
+    assert "renew cannot go with an iban field" in errors[0].message and "'i'" in errors[0].message
+
+
 def test_lead_days_of():
     renew = shipped("renew")
     assert lead_days_of(renew, {"kind": "Passport"}) == 180
