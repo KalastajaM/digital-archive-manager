@@ -31,6 +31,8 @@ describe("DeleteCollectionSheet", () => {
     expect(within(sheet).getByText(/A snapshot is taken first/)).toBeInTheDocument();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Delete 3 collections" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/api/collections/1/delete")).toBe(true));
+    // the ones it listed, so a collection made inside since is not deleted unseen
+    expect(calls.find((c) => c.url === "/api/collections/1/delete")!.body).toEqual({ ids: [1, 2, 3] });
     // every name that went, so Browse can leave a search on any of them
     expect(onDone).toHaveBeenCalledWith(3, ["Legal", "Michiel", "Old"]);
     // the toast says what went, and what the Ongoing sync could not do

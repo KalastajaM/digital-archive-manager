@@ -102,3 +102,15 @@ def test_merge_moves_the_links_in_ongoing_and_takes_a_snapshot_first(app, files,
     assert sorted(os.listdir(root / "House")) == ["a.pdf", "b.pdf", "c.pdf", "d.pdf"]
     assert not (root / "Old house").exists()
     assert [s.kind for s in list_snapshots(app.app_paths)] == [BEFORE_MERGE]
+
+
+def test_merge_is_refused_when_the_summary_would_be_too_long(app, files):
+    a = app.collections.create("A")
+    b = app.collections.create("B")
+    app.collections.set_summary(a.id, "x" * 2500)
+    app.collections.set_summary(b.id, "y" * 2500)
+    [problem] = app.collections.merge_check(a.id, b.id)
+    assert problem.startswith("The summary would be ") and problem.endswith(
+        " characters too long: shorten one first"
+    )
+    assert app.collections.get(b.id).summary == "y" * 2500

@@ -32,7 +32,7 @@ export function DeleteCollectionSheet({
   }, [c.id]);
   const go = async () => {
     try {
-      const r = await remove.mutateAsync(c.id);
+      const r = await remove.mutateAsync({ id: c.id, ids: (rows ?? []).map((x) => x.id) });
       const done = r.deleted === 1 ? `Deleted ${visible(c.name)}` : `Deleted ${visible(c.name)} and the ${r.deleted - 1} inside it`;
       toast(changeToast(done, { ...r, ongoing_status: null }));
       onDone(r.deleted, (rows ?? []).map((x) => x.name));

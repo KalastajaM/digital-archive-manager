@@ -2140,7 +2140,7 @@ export interface paths {
         /**
          * Delete Collection
          * @description Delete the collection and every one inside it (snapshot first, no Undo; files are
-         *     never touched).
+         *     never touched). ``ids``: the collections the preview listed (refused if they differ).
          */
         post: operations["delete_collection_api_collections__collection_id__delete_post"];
         delete?: never;
@@ -5345,6 +5345,11 @@ export interface components {
             adds: string[];
             /** Languages */
             languages: string[];
+        };
+        /** DeleteBody */
+        DeleteBody: {
+            /** Ids */
+            ids?: number[] | null;
         };
         /** DeleteOut */
         DeleteOut: {
@@ -20398,7 +20403,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DeleteBody"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

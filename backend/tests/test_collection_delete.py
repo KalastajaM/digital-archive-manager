@@ -91,3 +91,20 @@ def test_merge_leaves_the_emptied_collection_when_its_folder_stays(app, tree, mo
     names = [c.name for c in app.collections.list(None)]
     assert "Michiel" in names  # its Ongoing record stays with it
     assert "id-b" in [m.drive_id for m in app.collections.get(tree["other"].id).members]
+
+
+def test_delete_is_refused_when_the_tree_changed_since_its_preview(app, tree):
+    with make_client(app) as client:
+        shown = [
+            c["id"]
+            for c in client.get(f"/api/collections/{tree['top'].id}/delete/preview").json()[
+                "collections"
+            ]
+        ]
+        app.collections.create("New since", parent_id=tree["kid"].id)
+        r = client.post(
+            f"/api/collections/{tree['top'].id}/delete", json={"ids": shown}, headers=LOCAL_ORIGIN
+        )
+    assert r.status_code == 400, r.text
+    assert "changed" in r.json()["error"]
+    assert "Legal" in [c.name for c in app.collections.list(None)]

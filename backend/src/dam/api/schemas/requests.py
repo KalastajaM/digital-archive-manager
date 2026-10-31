@@ -166,6 +166,11 @@ class MergeBody(StrictIn):
     into: int
 
 
+class DeleteBody(StrictIn):
+    # the collections the preview listed: the delete is refused if the tree differs now
+    ids: list[int] | None = None
+
+
 class MoveMembersBody(StrictIn):
     to: int
     drive_ids: list[str]

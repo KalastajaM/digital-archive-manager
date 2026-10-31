@@ -30,6 +30,7 @@ from dam.api.schemas import (
     CollectionMoveBody,
     CollectionOut,
     CollectionRowOut,
+    DeleteBody,
     DeleteOut,
     DeletePreviewOut,
     DriveIdBody,
@@ -245,10 +246,10 @@ def delete_preview(app: AppDep, collection_id: int) -> dict:
 
 
 @router.post("/{collection_id}/delete", response_model=DeleteOut)
-def delete_collection(app: AppDep, collection_id: int) -> dict:
+def delete_collection(app: AppDep, collection_id: int, body: DeleteBody | None = None) -> dict:
     """Delete the collection and every one inside it (snapshot first, no Undo; files are
-    never touched)."""
-    deleted, result = app.delete_collection(collection_id)
+    never touched). ``ids``: the collections the preview listed (refused if they differ)."""
+    deleted, result = app.delete_collection(collection_id, expect=body.ids if body else None)
     batch = asdict(result.batch) if result is not None and result.batch is not None else None
     return {
         "deleted": deleted,

@@ -543,14 +543,21 @@ class App:
             self.sync_publishers(label=label)
         return done
 
-    def delete_collection(self, collection_id: int) -> tuple[int, object]:
+    def delete_collection(
+        self, collection_id: int, expect: list[int] | None = None
+    ) -> tuple[int, object]:
         """Delete the collection and everything inside it after a snapshot: first closed
         and synced (its links in ##. Ongoing come down; a file of the user's there stays),
         then the rows. Files are never touched. No Undo: the snapshot is the way back.
+        ``expect``: the collections the preview listed; refused if the tree differs now.
         Returns (how many collections went, the sync's result or None)."""
         name = self.collections.get(collection_id).name
         # a built-in is refused before anything
         ids = [c.id for c in self.collections.subtree(collection_id)]
+        if expect is not None and sorted(expect) != sorted(ids):
+            raise InvalidRequest(
+                f"The collections inside {name} changed since the list was shown: look again"
+            )
         if not self.archive_available and self.collections.published(ids):
             raise InvalidRequest(
                 f"The archive is not connected, so the links of {name} in ##. Ongoing "

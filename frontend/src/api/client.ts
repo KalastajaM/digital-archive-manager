@@ -1684,11 +1684,13 @@ export const useSetCollectionParent = () => {
 };
 
 /** Delete a collection with everything inside it (no Undo: a snapshot is taken first;
- * files are never touched). ``preview`` lists what goes. */
+ * files are never touched). ``preview`` lists what goes; ``ids``, the ones it listed, make
+ * the server refuse if the tree changed since. */
 export const useDeleteCollection = () => {
   const refresh = useRefresh(); // takes links down in ##. Ongoing: Activity and Browse too
   const remove = useMutation({
-    mutationFn: (id: number) => apiPost("/api/collections/{collection_id}/delete", { path: { collection_id: id } }),
+    mutationFn: ({ id, ids }: { id: number; ids: number[] }) =>
+      apiPost("/api/collections/{collection_id}/delete", { path: { collection_id: id }, body: { ids } }),
     onSettled: refresh,
   });
   const preview = (id: number) => apiGet("/api/collections/{collection_id}/delete/preview", { path: { collection_id: id } }).then((r) => r.collections);
