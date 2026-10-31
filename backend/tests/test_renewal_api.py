@@ -92,6 +92,7 @@ def test_apply_moves_old_into_expired(client, app, item, fake_archive):
     assert at(fake_archive, f"{BANKS}/passport-new.pdf")
     (ev,) = [e for e in app.trays.history(item.id) if e.kind == "renewed"]
     assert ev.data["batch_id"] == out["batch_id"]
+    assert ev.data["moved"] is True and ev.data["expired"] == "Expired"
     batch = app.activity.get(out["batch_id"])
     assert batch.label == f"Renewed {item.title}: moved passport-old.pdf to Expired"
 
@@ -132,6 +133,8 @@ def test_renew_old_file_missing_skips_move(client, app, item, fake_archive):
     assert out["skipped"] == "The old file is no longer in the archive"
     assert out["undo"] == "renewal" and out["batch_id"]
     assert out["item"]["files"] == ["new", "terms"]
+    (ev,) = [e for e in app.trays.history(item.id) if e.kind == "renewed"]
+    assert ev.data["moved"] is False and ev.data["expired"] is None
     r = send(client, "/api/renewals/undo", {"batch_id": out["batch_id"]})
     assert r.status_code == 200, r.text
     assert r.json()["files"] == ["old", "terms"]
@@ -161,6 +164,20 @@ def test_renew_old_file_not_connected_skips_move(extra_folder, app, client, fake
     r = renew(client, item)
     assert r.status_code == 200, r.text
     assert r.json()["item"]["files"] == ["new"]
+
+
+def test_renew_old_file_at_the_top_skips_move(client, app, fake_archive):
+    fake_archive.add("passport-old.pdf", drive_id="old")
+    fake_archive.add(f"{BANKS}/passport-new.pdf", drive_id="new")
+    app.scan()
+    item = app.trays.create("renew", ["old"], {"expires": OLD_DATE.isoformat()}, None)
+    out = preview(client, item)
+    assert out["ops"] == [] and out["skipped"] == "The old file is at the top of the archive"
+    r = renew(client, item)
+    assert r.status_code == 200, r.text
+    assert r.json()["skipped"] == "The old file is at the top of the archive"
+    assert r.json()["item"]["files"] == ["new"]
+    assert at(fake_archive, "passport-old.pdf") and not at(fake_archive, "Expired")
 
 
 def test_locked_preview_reports_locked(client, app, item, fake_archive):

@@ -218,6 +218,19 @@ function setupRenew(item: TrayItem = PASSPORT, at = "/trays/renew?item=9") {
     "GET /api/items/9/files": { body: [F1] },
     "GET /api/items/9/history": {
       body: [
+        // recorded whether the old file moved, and into which folder
+        {
+          id: 5,
+          at: 1_760_400_000,
+          kind: "renewed",
+          data: { new_date: "2047-06-30", new_drive_id: "f3", old_name: "passport-2037.pdf", moved: false, expired: null, batch_id: "b3" },
+        },
+        {
+          id: 4,
+          at: 1_760_300_000,
+          kind: "renewed",
+          data: { new_date: "2045-06-30", new_drive_id: "f2", old_name: "passport-2035.pdf", moved: true, expired: "Old ones", batch_id: "b2" },
+        },
         { id: 3, at: 1_760_200_000, kind: "renewed", data: { undo: true, batch_id: "b1" } },
         {
           id: 2,
@@ -321,7 +334,10 @@ describe("a Renew tray item", () => {
     const item = await screen.findByRole("region", { name: "Item" });
     const history = await within(item).findByText("History");
     await userEvent.setup().click(history);
+    // an event from before "moved" was recorded: the Expired folder of the settings
     expect(await within(item).findByText(/Renewed to 30\.6\.2037, passport-old\.pdf moved to Vanhentuneet/)).toBeInTheDocument();
+    expect(within(item).getByText(/Renewed to 30\.6\.2045, passport-2035\.pdf moved to Old ones/)).toBeInTheDocument();
+    expect(within(item).getByText(/Renewed to 30\.6\.2047, passport-2037\.pdf replaced/)).toBeInTheDocument();
     expect(within(item).getByText(/Renewal undone/)).toBeInTheDocument();
     expect(within(item).getByText(/^Renewed to 30\.6\.2027 ·/)).toBeInTheDocument();
   });

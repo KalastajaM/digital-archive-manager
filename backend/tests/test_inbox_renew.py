@@ -87,9 +87,9 @@ def test_candidates_list_folder_person_locked(client, app, item):
 def test_filing_with_renews_moves_old_and_records(app, item, fake_archive):
     ops = app.inbox.preview([req(item)])
     assert [(o.kind.value, o.src, o.dst) for o in ops] == [
-        ("move", f"{INBOX}/scan.pdf", f"{BANKS}/passport-2037.pdf"),
         ("mkdir", None, f"{BANKS}/Expired"),
         ("move", OLD, EXPIRED),
+        ("move", f"{INBOX}/scan.pdf", f"{BANKS}/passport-2037.pdf"),
     ]
     out = app.inbox.file_it([req(item)])
     assert out.batch.error is None and out.follow_up_error is None
@@ -101,6 +101,7 @@ def test_filing_with_renews_moves_old_and_records(app, item, fake_archive):
     assert after.files == ["new", "terms"] and after.date == NEW_DATE
     (ev,) = [e for e in app.trays.history(item.id) if e.kind == "renewed"]
     assert ev.data["batch_id"] == out.batch.batch_id
+    assert ev.data["moved"] is True and ev.data["expired"] == "Expired"
     assert out.items == []
 
 
@@ -176,6 +177,8 @@ def test_old_file_gone_files_and_records(app, item, fake_archive):
     assert out.renew_batch == out.batch.batch_id and out.renew_undo == "activity"
     assert at(fake_archive, f"{BANKS}/passport-2037.pdf")
     assert app.trays.get(item.id).files == ["new", "terms"]
+    (ev,) = [e for e in app.trays.history(item.id) if e.kind == "renewed"]
+    assert ev.data["moved"] is False and ev.data["expired"] is None
     app.activity.undo(out.batch.batch_id)
     assert app.trays.get(item.id).files == ["old", "terms"]
 
@@ -236,3 +239,28 @@ def test_a_failed_renewal_reports_no_renew_undo(app, item, fake_archive, monkeyp
     assert out.follow_up_error is not None
     assert out.renew_undo is None and out.renew_batch is None and out.renew_skipped is None
     assert [e for e in app.trays.history(item.id) if e.kind == "renewed"] == []
+
+
+def test_new_file_takes_the_old_files_name(app, fake_archive):
+    # the old file moves out first, so the new one gets the name the owner chose
+    old = f"{BANKS}/Passport.pdf"
+    fake_archive.add(old, drive_id="old")
+    add_scan(app, fake_archive, "scan.pdf", "new", "passport")
+    item = app.trays.create("renew", ["old"], {"expires": OLD_DATE.isoformat()}, None)
+    request = FileRequest("new", "Passport.pdf", BANKS, **_renew(item))
+    ops = app.inbox.preview([request])
+    assert [(o.kind.value, o.src, o.dst) for o in ops] == [
+        ("mkdir", None, f"{BANKS}/Expired"),
+        ("move", old, f"{BANKS}/Expired/Passport.pdf"),
+        ("move", f"{INBOX}/scan.pdf", old),
+    ]
+    out = app.inbox.file_it([request])
+    assert out.batch.error is None and out.follow_up_error is None
+    assert at(fake_archive, f"{BANKS}/Expired/Passport.pdf") and at(fake_archive, old)
+    assert app.repo.get("new").path == old
+    assert app.trays.get(item.id).files == ["new"]
+    undone = app.activity.undo(out.batch.batch_id)
+    assert undone.batch.error is None
+    assert app.repo.get("old").path == old and at(fake_archive, f"{INBOX}/scan.pdf")
+    assert not at(fake_archive, f"{BANKS}/Expired/Passport.pdf")
+    assert app.trays.get(item.id).files == ["old"]

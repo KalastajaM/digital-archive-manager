@@ -1,6 +1,7 @@
 """Inbox: list incoming files with suggestions, and file them (rename + move + tag), then
 put them in a tray, in collections and give them a note."""
 
+import dataclasses
 import logging
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
@@ -388,7 +389,7 @@ class InboxService:
         """The plan ``file_it`` would apply. The follow-ups are validated the same way
         first, so a request that ``file_it`` would refuse (``InvalidRequest``: tray,
         tray field, collection name, note or renewal) is refused here too. A renewal's
-        move of the old file into Expired follows the filed file's own op; a locked old
+        move of the old file into Expired comes before the filed file's own op; a locked old
         file without an unlock is the planner's ``GuardError``."""
         pairs = self._ops(reqs)
         moves = self._renew_moves(self._follow_ups(pairs))
@@ -452,7 +453,7 @@ class InboxService:
         if dry_run:
             return outcome
         batch_id = result.batch_id if result.done else None
-        done = {fold_parts(r.src) for r in result.done if r.kind in (OpKind.RENAME, OpKind.MOVE)}
+        done = {fold_parts(r.src): r for r in result.done if r.kind in (OpKind.RENAME, OpKind.MOVE)}
         for (req, op), follow, move in zip(pairs, follow_ups, moves, strict=True):
             if not (op is None or fold_parts(op.src) in done):
                 continue
@@ -468,8 +469,13 @@ class InboxService:
                     outcome.tag_error = outcome.tag_error or f"{type(e).__name__}: {e}"
             if move is not None:
                 # the old file's move ran too (or none was planned): only then renew
-                moved = move.op is None or fold_parts(move.op.src) in done
-                self._renew(req.drive_id, follow, move, moved, batch_id, outcome)
+                ran = None if move.op is None else done.get(fold_parts(move.op.src))
+                if move.op is None or ran is not None:
+                    self._renew(req.drive_id, follow, move, ran, batch_id, outcome)
+                else:
+                    outcome.follow_up_error = outcome.follow_up_error or (
+                        "not renewed: the old file was not moved into Expired"
+                    )
             self._run_follow_up(req.drive_id, follow, batch_id, outcome)
             if req.drive_id in suggested:
                 self._learn(req, suggested[req.drive_id], batch_id, via, len(reqs), outcome)
@@ -868,23 +874,26 @@ class InboxService:
         drive_id: str,
         follow: _FollowUp,
         move: _RenewMove,
-        moved: bool,
+        ran: ResolvedOp | None,
         batch_id: str | None,
         outcome: FileItResult,
     ) -> None:
         """Record the renewal of a filed file (``RenewalService.record``), under the
         filing's batch, or a batch id of its own when the filing journaled nothing.
-        Not when the old file's planned move did not run (the batch stopped)."""
+        ``ran``: the old file's move into Expired as it ran (None: none was planned,
+        ``move.skipped`` says why)."""
         assert self.renewals is not None and follow.renews is not None
-        if not moved:
-            outcome.follow_up_error = outcome.follow_up_error or (
-                "not renewed: the old file was not moved into Expired"
-            )
-            return
         # nothing journaled: the renewal's own Undo, under a batch id of its own
         batch = batch_id if batch_id is not None else (outcome.renew_batch or uuid4().hex)
         try:
-            self.renewals.record(follow.renews, follow.renew_expires, drive_id, batch)
+            self.renewals.record(
+                follow.renews,
+                follow.renew_expires,
+                drive_id,
+                batch,
+                moved=ran is not None,
+                expired=self.renewals.expired_of(ran) if ran is not None else None,
+            )
         except Exception as e:
             log.warning("renewing item %s with %s failed", follow.renews, drive_id, exc_info=True)
             outcome.follow_up_error = outcome.follow_up_error or f"{type(e).__name__}: {e}"
@@ -1024,10 +1033,11 @@ class InboxService:
         regular file on disk (``check_disk_identity``): catches an index that is stale."""
         ids: list[str] = []
         for (req, op), move in zip(pairs, moves or [None] * len(pairs), strict=True):
-            if op is not None:
-                ids.append(req.drive_id)
+            # in plan order (``_plan``): the old file's move first
             if move is not None and move.op is not None:
                 ids.append(move.old)
+            if op is not None:
+                ids.append(req.drive_id)
         check_disk_identity(self.paths, self.repo, ids, resolved)
 
     @staticmethod
@@ -1037,7 +1047,8 @@ class InboxService:
         moves: Sequence[_RenewMove | None] = (),
     ) -> Plan:
         """The filing ops in request order, each renewal's move of its old file into
-        Expired right after the filed file's own op."""
+        Expired right before the filed file's own op (so a new file named as the old one
+        gets that name, not ``_2``)."""
         acting = [req for req, op in pairs if op is not None]
         label = None
         if len(acting) == 1:
@@ -1048,8 +1059,19 @@ class InboxService:
             label = f"Filed {len(acting)} files{where}"
         ops: list[Op] = []
         for (_, op), move in zip(pairs, moves or [None] * len(pairs), strict=True):
-            if op is not None:
-                ops.append(op)
             if move is not None and move.op is not None:
                 ops.append(move.op)
+                if op is not None and fold_parts(_target(op)) == fold_parts(move.op.src):
+                    # the old file's path, freed by its move: exactly that name (the
+                    # planner keeps a name vacated in the batch taken and gives ``_2``)
+                    op = dataclasses.replace(op, exact=True)
+            if op is not None:
+                ops.append(op)
         return Plan(ops, origin=check_origin(origin), label=label)
+
+
+def _target(op: Op) -> str:
+    """Where a filing's RENAME or MOVE (``_ops``) puts its file."""
+    if op.kind is OpKind.RENAME:
+        return f"{parent(op.src)}/{op.dst}"
+    return f"{op.dst}/{op.name}"

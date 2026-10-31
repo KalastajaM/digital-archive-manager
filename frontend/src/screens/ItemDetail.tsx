@@ -332,7 +332,11 @@ function eventText(
     case "renewed": {
       if (data.undo === true) return "Renewal undone";
       const to = `Renewed to ${formatDate(String(data.new_date ?? ""))}`;
-      return data.new_drive_id ? `${to}, ${String(data.old_name ?? "the old file")} moved to ${expired}` : to;
+      if (!data.new_drive_id) return to;
+      const oldName = String(data.old_name ?? "the old file");
+      // an event from before "moved" was recorded: it moved, into the settings' folder
+      if (!("moved" in data)) return `${to}, ${oldName} moved to ${expired}`;
+      return data.moved === true ? `${to}, ${oldName} moved to ${String(data.expired ?? expired)}` : `${to}, ${oldName} replaced`;
     }
   }
 }
@@ -340,8 +344,8 @@ function eventText(
 function History({ item, tray, today }: { item: Item; tray: TrayDef | undefined; today: string }) {
   const history = useItemHistory(item.id);
   const files = useItemFiles(item.id);
-  // the Expired folder's name, only when a renewal in the history moved a file
-  const moved = (history.data ?? []).some((e) => e.kind === "renewed" && !!e.data.new_drive_id);
+  // the Expired folder's name, only for a renewal that moved a file without recording where
+  const moved = (history.data ?? []).some((e) => e.kind === "renewed" && !!e.data.new_drive_id && !("moved" in e.data));
   const expired = useExpiredFolder(moved).data?.name ?? "Expired";
   const names = new Map((files.data ?? []).filter((f) => f.path).map((f) => [f.drive_id, baseName(f.path!)]));
   return (

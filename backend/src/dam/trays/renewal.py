@@ -17,6 +17,7 @@ from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from datetime import date
+from pathlib import PurePosixPath
 from typing import Literal
 from uuid import uuid4
 
@@ -38,6 +39,7 @@ RENEWED = "renewed"
 GONE = "The old file is no longer in the archive"
 IN_TO_DELETE = "The old file is in To Delete"
 NOT_CONNECTED = "The old file's archive folder is not connected"
+AT_THE_TOP = "The old file is at the top of the archive"
 
 
 @dataclass
@@ -94,7 +96,8 @@ class RenewalService:
     def move_op(self, old_drive_id: str) -> tuple[Op | None, str | None]:
         """The MOVE of the old file into ``<its folder>/<Expired>`` (the planner makes
         the folder and gives a taken name ``_2``), or None and why it is skipped: the
-        file is gone, in To Delete, or in an archive folder that is not connected."""
+        file is gone, in To Delete, in an archive folder that is not connected, or at the
+        top of the archive (no folder for an Expired subfolder: never a top-level one)."""
         rec = self.repo.get(old_drive_id)
         if rec is None or rec.missing or rec.parked_at is not None:
             return None, GONE
@@ -104,9 +107,17 @@ class RenewalService:
         label = paths.label_of(rec.path)
         if label and not paths.is_connected(label):
             return None, NOT_CONNECTED
+        if not parent(rec.path):
+            return None, AT_THE_TOP
         dest = f"{parent(rec.path)}/{self.expired_name()}"
         check_destination_area(dest, paths)
         return Op(OpKind.MOVE, rec.path, dest), None
+
+    @staticmethod
+    def expired_of(move: ResolvedOp) -> str:
+        """The name of the folder the old file's MOVE put it in (the Expired subfolder,
+        as spelled on disk)."""
+        return PurePosixPath(parent(move.dst)).name
 
     def old_file(self, item_id: int, new_drive_id: str) -> str:
         """The item's first file, which ``new_drive_id`` would replace; refused
@@ -180,16 +191,14 @@ class RenewalService:
             item = self.record(item_id, expires, new_drive_id, batch_id)
             return Renewal(item, batch_id, "renewal", p.skipped)
         result = self.executor.apply(p.plan, check=self._check(p), batch_id=batch_id)
-        moved = (
-            result.failed is None
-            and result.error is None
-            and any(op.kind is OpKind.MOVE for op in result.done)
-        )
-        if not moved:
+        move = next((op for op in result.done if op.kind is OpKind.MOVE), None)
+        if result.failed is not None or result.error is not None or move is None:
             raise InvalidRequest(
                 f"The old file could not be moved, so nothing was renewed: {result.error}"
             )
-        item = self.record(item_id, expires, new_drive_id, batch_id)
+        item = self.record(
+            item_id, expires, new_drive_id, batch_id, moved=True, expired=self.expired_of(move)
+        )
         return Renewal(item, batch_id, "activity", None)
 
     def undo(self, batch_id: str) -> Item:
@@ -248,12 +257,20 @@ class RenewalService:
             raise InvalidRequest("That file belongs to another open item")
 
     def record(
-        self, item_id: int, expires: date, new_drive_id: str | None, batch_id: str | None
+        self,
+        item_id: int,
+        expires: date,
+        new_drive_id: str | None,
+        batch_id: str | None,
+        *,
+        moved: bool = False,
+        expired: str | None = None,
     ) -> Item:
         """Renew the item: ``expires`` is its new date; ``new_drive_id`` (None: the
         files stay) becomes its first file in place of the old one, and takes the old
-        file's marks. One transaction; ``on_date_changed`` and, when marks moved, the
-        publisher sync run after the commit."""
+        file's marks. ``moved``: the old file was moved into the folder named ``expired``
+        (both kept on the event for History). One transaction; ``on_date_changed`` and,
+        when marks moved, the publisher sync run after the commit."""
         if not isinstance(expires, date):
             raise InvalidRequest("The new expiry is a date")
         if new_drive_id is not None:
@@ -289,6 +306,8 @@ class RenewalService:
                     # what the new file had before, so the Undo leaves those marks on it
                     "new_marks": asdict(new_marks) if new_marks is not None else None,
                     "batch_id": batch_id,
+                    "moved": moved,
+                    "expired": expired if moved else None,
                 },
             )
             item = self.trays._get(conn, item_id)
