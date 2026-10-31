@@ -1,6 +1,7 @@
 # ruff: noqa: E402
 import inspect
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -226,10 +227,23 @@ def extra_folder(tmp_path: Path, app_paths: AppPaths) -> FakeArchive:
     return extra
 
 
-@pytest.fixture
-def engine(tmp_path: Path) -> Engine:
-    eng = make_engine(tmp_path / "dam.sqlite")
+@pytest.fixture(scope="session")
+def _migrated_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A database migrated to head once per test process: tests copy it instead of running
+    every migration again (a fresh migrate is ~125 ms, a copy under 1 ms)."""
+    path = tmp_path_factory.mktemp("template") / "dam.sqlite"
+    eng = make_engine(path)
     migrate(eng)
+    eng.dispose()  # the last connection closing folds the WAL into the file
+    return path
+
+
+@pytest.fixture
+def engine(tmp_path: Path, _migrated_db: Path) -> Engine:
+    path = tmp_path / "dam.sqlite"
+    shutil.copyfile(_migrated_db, path)
+    eng = make_engine(path)
+    migrate(eng)  # at head already: only the identity and table checks run
     yield eng
     eng.dispose()
 
@@ -252,9 +266,11 @@ def new_engine():
 
 
 @pytest.fixture
-def app(app_paths: AppPaths):
+def app(app_paths: AppPaths, _migrated_db: Path):
     from dam.app import App
 
+    if not app_paths.db_path.exists():
+        shutil.copyfile(_migrated_db, app_paths.db_path)
     application = App.create(app_paths.data_dir)
     yield application
     application.close()

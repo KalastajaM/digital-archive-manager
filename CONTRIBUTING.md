@@ -82,11 +82,14 @@ CI runs these on macOS, Windows and Ubuntu (backend) and Ubuntu (frontend); run 
 before opening a pull request.
 
 ```sh
-cd backend && uv run ruff check . && uv run pytest -q -W error
+cd backend && uv run ruff check . && uv run pytest -q -W error -n auto
 cd frontend && npm test -- --run && npm run build
 cd frontend && npm run gen:api     # after API changes, commit the regenerated schema
 cd frontend && npm run lint        # react-hooks rules; CI fails on errors, not warnings
 ```
+
+`-n auto` runs the backend tests in one process per CPU core (pytest-xdist); leave it out
+for a single test or to debug with `--pdb`.
 
 Coverage (not run in CI, no thresholds): `cd backend && uv run pytest --cov=dam --cov-report=term-missing`
 and `cd frontend && npm run coverage`.

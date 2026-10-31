@@ -1931,7 +1931,7 @@ be tested against a fake archive:
 ## Development
 
 ```sh
-cd backend && uv run pytest -q -W error && uv run ruff check .
+cd backend && uv run pytest -q -W error -n auto && uv run ruff check .
 cd frontend && npm test -- --run
 cd frontend && npm run gen:api     # regenerate src/api/schema.d.ts and schema-input.d.ts after API changes
 ```

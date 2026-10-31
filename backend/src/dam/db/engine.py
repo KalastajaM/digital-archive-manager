@@ -309,8 +309,9 @@ def migrate(engine: Engine, backup: bool = True) -> list:
             target = backup_name(Path(db), current, head)
             _backup(Path(db), target)
             log.info("database backed up to %s before updating it to %s", target, head)
-        config.attributes["connection"] = connection
-        command.upgrade(config, "head")
+        if current != head:  # at head the upgrade would only load every migration script
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
         if adopt:
             connection.execute(
                 text("INSERT OR IGNORE INTO dam_meta(key, value) VALUES ('app', :app)"),

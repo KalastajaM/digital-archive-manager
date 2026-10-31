@@ -127,9 +127,13 @@ def test_starting_another_test_for_a_sheet_ends_the_first(fake, jobs):
 
 def test_only_a_few_tests_are_kept(fake, jobs):
     rule = bigfake.rules()["a_word"]
-    started = [jobs.start(f"s{i}", make_run(fake, rule)) for i in range(jobs_module.MAX_JOBS + 2)]
-    for job in started:
+    # one after the other: the oldest finished job goes first, and jobs running side by
+    # side may finish in any order
+    started = []
+    for i in range(jobs_module.MAX_JOBS + 2):
+        job = jobs.start(f"s{i}", make_run(fake, rule))
         assert wait_for(lambda job=job: job.view(False).state != "running")
+        started.append(job)
     kept = [j for j in started if jobs.get(j.job_id) is not None]
     assert len(kept) == jobs_module.MAX_JOBS
     assert kept == started[-jobs_module.MAX_JOBS :]  # the oldest went first
