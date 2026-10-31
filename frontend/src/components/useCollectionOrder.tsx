@@ -236,6 +236,7 @@ export function useOrderMenu(order: CollectionOrder, first?: (c: CollectionRow) 
     element,
     onContextMenu: (c: CollectionRow) => (e: React.MouseEvent) => {
       e.preventDefault();
+      e.stopPropagation(); // a nested row's menu, not its parent's
       setMenu({ x: e.clientX, y: e.clientY, c });
     },
   };
