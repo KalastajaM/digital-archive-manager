@@ -56,6 +56,10 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **A collection in Browse puts its name and actions in the pane's bar**, as icons with
+  tooltips, instead of a header of its own; folded details take one line. The collection
+  and tag trees have right-click menus (new collection inside, order; rename, merge, pin,
+  group, delete for tags) and a **+** for a new collection or tag.
 - **A collection opens in Browse.** Its header and details (summary, Needs attention, note
   and checklist) sit above its files, and **Hide details** folds them to one line that each
   collection remembers. A file from an inner collection says which. Important keeps its

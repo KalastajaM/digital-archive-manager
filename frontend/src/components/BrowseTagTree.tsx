@@ -5,14 +5,18 @@
  *
  * Keyboard (the tree view pattern): ↑ and ↓ move, → opens a group, ← closes it (or steps
  * out to it), Home and End go to the first and last, Enter picks (with Cmd: adds). */
-import { ChevronRight, Tag as TagIcon } from "lucide-react";
+import { ChevronRight, Plus, Tag as TagIcon } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useState } from "react";
-import { useAllTags } from "../api/client";
+import { type TagInfo as Tag, useAllTags } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
 import { visible } from "../text";
+import { ContextMenu } from "./ui/ContextMenu";
+import { IconButton } from "./ui/IconButton";
+import type { MenuEntry } from "./ui/Menu";
+import { useTagManager } from "./useTagManager";
 
 type Pick = (pick: ScopePick, add: boolean) => void;
-type TagInfo = { name: string; files: number; group_id: number | null };
+type TagInfo = Tag;
 
 const byName = (a: TagInfo, b: TagInfo) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
 const ICON = { size: 14, strokeWidth: 1.75, "aria-hidden": true } as const;
@@ -29,6 +33,16 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
   const [folded, setFolded] = useState<Set<number>>(() => new Set());
   const [focused, setFocused] = useState<string | null>(null);
   const tags = list.data?.tags ?? [];
+  // rename, merge, pin, group and delete, as on the Tags screen (right-click a row)
+  const manager = useTagManager(tags);
+  type Item = Exclude<MenuEntry, "separator">;
+  const [menu, setMenu] = useState<{ x: number; y: number; label: string; entries: Item[] } | null>(null);
+  const menuAt = (label: string, entries: MenuEntry[]) => (e: MouseEvent) => {
+    e.preventDefault();
+    // a right-click menu has no separators
+    setMenu({ x: e.clientX, y: e.clientY, label, entries: entries.filter((x): x is Item => x !== "separator") });
+  };
+  const allGroups = list.data?.groups ?? [];
   const groups = (list.data?.groups ?? []).map((g) => ({ ...g, tags: tags.filter((t) => t.group_id === g.id).sort(byName) })).filter((g) => g.tags.length > 0);
   const loose = tags.filter((t) => t.group_id === null || !groups.some((g) => g.id === t.group_id)).sort(byName);
   const sections = [...groups.map((g) => ({ key: `g${g.id}`, id: g.id as number | null, name: g.name, tags: g.tags })), ...(loose.length > 0 ? [{ key: "g-none", id: null, name: "No group", tags: loose }] : [])];
@@ -97,6 +111,7 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
           className={picked(t.name) ? "tree-row tree-current" : "tree-row"}
           style={{ paddingLeft: 8 + (level - 1) * 16 }}
           onClick={(e: MouseEvent) => pick(e.metaKey || e.ctrlKey)}
+          onContextMenu={menuAt(`Actions for ${name}`, manager.menuFor(t, allGroups))}
         >
           <span className="tree-chevron is-none" aria-hidden="true" />
           <TagIcon className="tree-icon" {...ICON} />
@@ -113,14 +128,17 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
   return (
     <nav className="tree" aria-label="Tags">
       {head}
-      <input
-        type="search"
-        className="tree-filter"
-        aria-label="Filter tags"
-        placeholder="Filter tags"
-        value={typed}
-        onChange={(e) => setTyped(e.target.value)}
-      />
+      <div className="tree-filter-row">
+        <input
+          type="search"
+          className="tree-filter"
+          aria-label="Filter tags"
+          placeholder="Filter tags"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+        />
+        <IconButton icon={<Plus />} label="New tag" onClick={() => manager.open({ kind: "create" })} />
+      </div>
       <ul role="tree" aria-label="Tag tree" className="tree-list" onKeyDown={onTreeKeys}>
         {flat
           ? loose.map((t) => tagItem(t, 1))
@@ -152,7 +170,15 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
                   }}
                   onKeyDown={onKeyDown}
                 >
-                  <div className="tree-row tree-group-row" style={{ paddingLeft: 8 }} onClick={() => toggle(groupId(s.key))}>
+                  <div
+                    className="tree-row tree-group-row"
+                    style={{ paddingLeft: 8 }}
+                    onClick={() => toggle(groupId(s.key))}
+                    onContextMenu={(() => {
+                      const g = allGroups.find((x) => x.id === s.id);
+                      return g ? menuAt(`Actions for the group ${visible(g.name)}`, manager.groupMenu(g)) : undefined;
+                    })()}
+                  >
                     <span className={open ? "tree-chevron is-open" : "tree-chevron"} aria-hidden="true">
                       <ChevronRight size={12} strokeWidth={2} />
                     </span>
@@ -184,6 +210,8 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
           </li>
         )}
       </ul>
+      {menu && <ContextMenu x={menu.x} y={menu.y} label={menu.label} entries={menu.entries} onClose={() => setMenu(null)} />}
+      {manager.view}
     </nav>
   );
 }

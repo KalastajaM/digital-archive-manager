@@ -15,7 +15,8 @@
  * own collections above its members. "Move to…" (the keyboard way of a sidebar drag)
  * and "New collection inside…" are in the ⋯ menu; a move runs at once, as group
  * changes do, and shows the batch that ran. */
-import { Ellipsis, Eye, FolderOpen, FolderPlus, Layers, Share, Sparkles } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Ellipsis, Eye, FilePlus, FolderOpen, FolderPlus, Layers, Share, Sparkles } from "lucide-react";
+import { createPortal } from "react-dom";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useStyle } from "../appearance";
@@ -41,7 +42,6 @@ import {
   useCollectionMembers,
   useCollectionPreview,
   useCollections,
-  useCreateCollection,
   useExport,
   useGroupChange,
   useSetCollectionParent,
@@ -53,6 +53,7 @@ import {
 import { AIProposal } from "../components/ai/AIProposal";
 import { AIHint, useAISend, useAIState } from "../components/ai/useAI";
 import { AddFile } from "../components/AddFile";
+import { NewCollectionSheet } from "../components/NewCollectionSheet";
 import { Banner } from "../components/Banner";
 import { Checklist } from "../components/Checklist";
 import { Collapsible, firstLine } from "../components/Collapsible";
@@ -558,79 +559,6 @@ function MoveSheet({
 }
 
 /** "New collection inside…": a name; Enter or Create makes it and opens it. */
-function NewChildSheet({
-  parent,
-  onCreated,
-  onCancel,
-}: {
-  parent: { id: number; name: string };
-  onCreated: (child: { id: number; name: string }) => void;
-  onCancel: () => void;
-}) {
-  const ids = useId();
-  const create = useCreateCollection();
-  const [text, setText] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  const inFlight = useRef(false); // Enter and a click (or two clicks) create one collection
-  const submit = async () => {
-    const name = text.trim();
-    if (!name || inFlight.current) return;
-    inFlight.current = true;
-    setProblem(null);
-    try {
-      onCreated(await create.mutateAsync({ name, parent_id: parent.id }));
-    } catch (e) {
-      setProblem(errorText(e));
-    } finally {
-      inFlight.current = false;
-    }
-  };
-  return (
-    <Sheet
-      open
-      title={`New collection inside ${visible(parent.name)}`}
-      onClose={onCancel}
-      onKeyDown={(e) => e.stopPropagation()}
-      footer={
-        <>
-          <button type="button" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit" form={`${ids}-form`} className="primary" disabled={!text.trim() || create.isPending}>
-            Create
-          </button>
-        </>
-      }
-    >
-      <form
-        id={`${ids}-form`}
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        <div className="field">
-          <label htmlFor={`${ids}-name`}>Name</label>
-          <input
-            id={`${ids}-name`}
-            value={text}
-            autoFocus
-            maxLength={COLLECTION_NAME_MAX}
-            spellCheck={false}
-            placeholder="e.g. Stove"
-            onChange={(e) => setText(e.target.value)}
-          />
-        </div>
-        {problem && (
-          <p className="error" role="alert">
-            {visible(problem)}
-          </p>
-        )}
-      </form>
-    </Sheet>
-  );
-}
-
 /** The selected member. A file in the index gets the shared file panel (as in Browse),
  * with Quick Look in its preview's toolbar and, in its own block, its group (the keyboard
  * way to move it). What acts on the file (Put in tray, Remove from collection, Ask AI, ★,
@@ -846,6 +774,7 @@ export default function CollectionDetail({
   subtitleExtra,
   variant = "page",
   onSelectFile,
+  headerSlot,
 }: {
   id: number;
   today?: string;
@@ -858,6 +787,9 @@ export default function CollectionDetail({
   variant?: "page" | "scope";
   /** In "scope": a Needs attention entry selects that file in Browse's list. */
   onSelectFile?: (driveId: string) => void;
+  /** In "scope": where the header goes (Browse's pane bar); null while that slot is not
+   * there yet; left out, the header is drawn above the details. */
+  headerSlot?: HTMLElement | null;
 }) {
   const scope = variant === "scope";
   // In Browse the details fold to one line; each collection remembers it.
@@ -1561,11 +1493,58 @@ export default function CollectionDetail({
   // folder members: their files show in Browse's list; the folders themselves open from here
   const folders = c.members.filter((m) => m.is_dir && m.path && !m.missing && !m.quarantined);
 
+  // In Browse: the collection's name and state, and its actions as icons, in the pane's bar
+  const scopeHead = (
+    <div className="scope-head" role="toolbar" aria-label={`${name} actions`}>
+      {renaming ? (
+        <RenameField name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} />
+      ) : (
+        <h2 className="scope-name">
+          {builtin ? (
+            <span title={name}>{name}</span>
+          ) : (
+            <ClickToEdit label={`Rename ${name}`} tip={`${name}\nClick to rename`} onClick={() => !busy && setRenaming(true)}>
+              {name}
+            </ClickToEdit>
+          )}
+        </h2>
+      )}
+      <span className={`collection-state is-${builtin ? "built" : isOpen ? "open" : "closed"}`}>{builtin ? "Built in" : isOpen ? "Open" : "Closed"}</span>
+      <span className="scope-actions">
+        <IconButton
+          icon={detailsHidden ? <ChevronsUpDown {...ICON} /> : <ChevronsDownUp {...ICON} />}
+          label={detailsHidden ? "Show details" : "Hide details"}
+          tip={detailsHidden ? "Show the details: summary, Needs attention, note, checklist" : "Hide the details (this collection remembers it)"}
+          expanded={!detailsHidden}
+          onClick={() => hideDetails(!detailsHidden)}
+        />
+        {!builtin && (
+          <IconButton
+            icon={<FilePlus {...ICON} />}
+            label="Add files"
+            tip="Put more files of the archive in this collection"
+            disabled={busy || !isOpen}
+            disabledReason={isOpen ? undefined : "A closed collection takes no new files"}
+            onClick={() => setAddingFiles(true)}
+          />
+        )}
+        <span className="menu-wrap" ref={finderRef}>
+          <IconButton icon={<FolderOpen {...ICON} />} label="Show folder" tip={showInLabel()} pressed={finder} onClick={() => setFinder((f) => !f)} />
+          {finderPopover}
+        </span>
+        <IconButton icon={<Share {...ICON} />} label="Export…" onClick={() => setExporting(true)} />
+        {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={more} align="end" />}
+      </span>
+    </div>
+  );
+
   const parentName = (g: Group) => (g.parent_id === null ? null : c.groups.find((x) => x.id === g.parent_id)?.name ?? null);
 
   return (
     <div className={scope ? "collection collection-scope" : "collection"}>
-        {isNew ? (
+        {scope ? (
+          headerSlot === undefined ? scopeHead : headerSlot && createPortal(scopeHead, headerSlot)
+        ) : isNew ? (
           <header className="collection-head">
             <div className="collection-head-main">
               <span className="collection-head-parent">
@@ -1618,15 +1597,9 @@ export default function CollectionDetail({
               </div>
             </div>
             <div className="toolbar-actions" role="toolbar" aria-label={`${name} actions`}>
-              {scope ? (
-                <button type="button" aria-expanded={!detailsHidden} onClick={() => hideDetails(!detailsHidden)}>
-                  {detailsHidden ? "Show details" : "Hide details"}
-                </button>
-              ) : (
-                <button type="button" className="details-button" aria-expanded={detailsOpen} title="Show the selected file" onClick={() => setDetailsOpen((o) => !o)}>
-                  File details
-                </button>
-              )}
+              <button type="button" className="details-button" aria-expanded={detailsOpen} title="Show the selected file" onClick={() => setDetailsOpen((o) => !o)}>
+                File details
+              </button>
               {!builtin && (
                 <button type="button" disabled={busy || !isOpen} title={isOpen ? "Put more files of the archive in this collection" : "A closed collection takes no new files"} onClick={() => setAddingFiles(true)}>
                   Add files
@@ -1648,7 +1621,7 @@ export default function CollectionDetail({
         <Toolbar
           className="collection-toolbar"
           style={split.hostStyle}
-          trailing={scope ? undefined : fileBar}
+          trailing={fileBar}
           title={name}
           titleEditor={renaming ? <RenameField name={c.name} busy={busy} onSave={rename} onCancel={() => setRenaming(false)} /> : undefined}
           subtitle={subtitle}
@@ -1664,11 +1637,6 @@ export default function CollectionDetail({
               </span>
               <IconButton icon={<Share {...ICON} />} label="Export…" className={foldable} onClick={() => setExporting(true)} />
               {!builtin && <Menu label="More actions" icon={<Ellipsis {...ICON} />} entries={moreEntries} align="end" />}
-              {scope && (
-                <button type="button" aria-expanded={!detailsHidden} onClick={() => hideDetails(!detailsHidden)}>
-                  {detailsHidden ? "Show details" : "Hide details"}
-                </button>
-              )}
             </>
           }
         />
@@ -1692,6 +1660,7 @@ export default function CollectionDetail({
             </nav>
           )}
           {detailsHidden ? (
+            foldedParts.length > 0 && (
             <p className="collection-folded">
               {foldedParts.map((part, i) => (
                 <span key={part}>
@@ -1702,6 +1671,7 @@ export default function CollectionDetail({
                 </span>
               ))}
             </p>
+            )
           ) : (
             <div className="collection-details">
               <Summary
@@ -1925,7 +1895,7 @@ export default function CollectionDetail({
         />
       )}
       {newChild && (
-        <NewChildSheet
+        <NewCollectionSheet
           parent={c}
           onCancel={() => setNewChild(false)}
           onCreated={(child) => {

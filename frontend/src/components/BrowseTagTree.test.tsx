@@ -1,6 +1,6 @@
 /** Browse's tag tree: tags by group with their counts, a filter box, a click picks a tag and
  * a Cmd-click adds one. */
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ScopeState } from "../browseScope";
@@ -73,6 +73,28 @@ describe("TagTree", () => {
     await user.type(screen.getByRole("searchbox", { name: "Filter tags" }), "den");
     await waitFor(() => expect(screen.queryByText("medical")).not.toBeInTheDocument());
     expect(screen.getAllByRole("treeitem").filter((li) => li.tabIndex === 0)).toHaveLength(1);
+  });
+
+  it("a tag's right-click menu has the Tags screen's actions; Pin works from it", async () => {
+    const { calls, user } = setup(() => HEALTH);
+    const row = (await screen.findByText("medical")).closest(".tree-row") as HTMLElement;
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    const menu = await screen.findByRole("menu");
+    const labels = within(menu).getAllByRole("menuitem").map((m) => m.textContent);
+    expect(labels).toEqual(expect.arrayContaining(["Rename…", "Merge into…", "Pin to the sidebar", "Move out of the group", "Delete…"]));
+    await user.click(within(menu).getByRole("menuitem", { name: "Pin to the sidebar" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/api/tags/pin")).toBe(true));
+  });
+
+  it("a group's right-click menu renames or deletes it; New tag opens its sheet", async () => {
+    const { user } = setup(() => HEALTH);
+    const group = (await screen.findByText("Health")).closest(".tree-row") as HTMLElement;
+    await user.pointer({ keys: "[MouseRight]", target: group });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Rename group…", "Delete group"]);
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "New tag" }));
+    expect(await screen.findByRole("dialog", { name: "New tag" })).toBeInTheDocument();
   });
 });
 

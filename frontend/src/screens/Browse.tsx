@@ -1648,6 +1648,8 @@ export default function Browse() {
   // a search of one collection (the collection tree's pick): shown above its files
   // (nothing until the collections are known: an empty list would call every one missing)
   const scoped = searching && collections.data ? scopedCollection(filters, collections.data) : null;
+  // where that collection's header goes: the search pane's bar (set once it is drawn)
+  const [scopeSlot, setScopeSlot] = useState<HTMLElement | null>(null);
   /** A Needs attention entry of that collection: its file is the current row. */
   const selectInSearch = (driveId: string) => {
     const i = items[sp].findIndex((it) => it.drive_id === driveId);
@@ -1746,12 +1748,17 @@ export default function Browse() {
             disabled={history[pane].forward.length === 0}
             onClick={() => goForward(pane)}
           />
-          <Breadcrumb
-            path={paths[pane]}
-            href={(to) => hrefFor(pane, to)}
-            go={(to) => go(pane, to)}
-            drop={dropTo}
-          />
+          {isSearch && scoped && "c" in scoped ? (
+            // a search of one collection: its name and actions here, not a folder path
+            <span className="pane-scope" ref={setScopeSlot} />
+          ) : (
+            <Breadcrumb
+              path={paths[pane]}
+              href={(to) => hrefFor(pane, to)}
+              go={(to) => go(pane, to)}
+              drop={dropTo}
+            />
+          )}
           {isNew && split && act !== pane && (
             // the pane you are not in shows what it holds; its tools come back when you click into it
             <span className="pane-count">{countText}</span>
@@ -1802,7 +1809,7 @@ export default function Browse() {
         {isSearch && scoped && (
           // one collection: the collection itself above its files (its header and details)
           "c" in scoped ? (
-            <CollectionDetail key={scoped.c.id} id={scoped.c.id} variant="scope" onSelectFile={(driveId) => selectInSearch(driveId)} />
+            <CollectionDetail key={scoped.c.id} id={scoped.c.id} variant="scope" headerSlot={scopeSlot} onSelectFile={(driveId) => selectInSearch(driveId)} />
           ) : (
             <p className="notice collection-missing">
               No collection named {visible(scoped.missing)}. <Link to="/collections">See the collections</Link>
