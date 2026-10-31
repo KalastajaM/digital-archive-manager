@@ -28,7 +28,7 @@ import { isShortcutIn, useKeydown } from "../keyboard";
 import { openViewer } from "../selection";
 import { inFileManager, showInLabel } from "../fileManager";
 import { visible, visibleText } from "../text";
-import { InlineResults, LaunchButtons, notConnected, useFileLaunch } from "./FileLaunch";
+import { InlineResults, LaunchButtons, notConnected, ShowInFolderButton, useFileLaunch } from "./FileLaunch";
 import { pageSrcs, printImages } from "./print";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
@@ -688,6 +688,8 @@ type PreviewProps = {
   zoomControl?: ZoomControl;
   /** More buttons at the right end of the toolbar (the ★ and ! toggles). */
   extraTools?: ReactNode;
+  /** Show in folder (its folder in Browse), beside Show in Finder; left out without it. */
+  showInFolder?: () => void;
   /** The "Draw a box" tool on page 1 of a PDF or an image (off when left out). */
   boxTool?: BoxTool;
   /** The New Inbox's document bar: this leads the row of tools (the file's name and what is
@@ -712,7 +714,7 @@ type Stage = "doc" | "text" | "thumb" | "none";
 const firstStage = (kind: string): Stage =>
   kind === "pdf" || IMAGE_EXTS.has(kind) ? "doc" : TEXT_EXTS.has(kind) ? "text" : "thumb";
 
-function Preview({ file, windowButton, zoomControl, extraTools, boxTool }: PreviewProps & { windowButton: boolean }) {
+function Preview({ file, windowButton, zoomControl, extraTools, showInFolder, boxTool }: PreviewProps & { windowButton: boolean }) {
   const { drive_id: driveId, path, ext } = file;
   const kind = ext?.toLowerCase() ?? "";
   const [stage, setStage] = useState<Stage>(() => firstStage(kind));
@@ -730,6 +732,7 @@ function Preview({ file, windowButton, zoomControl, extraTools, boxTool }: Previ
   ) : (
     <>
       <LaunchButtons launch={launch} offline={offline} />
+      {showInFolder && <ShowInFolderButton onClick={showInFolder} />}
       {windowButton && <OpenInWindow driveId={driveId} />}
       {extraTools}
     </>
@@ -784,6 +787,7 @@ function LinkPreview({
   beforeGoToTarget,
   zoomControl,
   extraTools,
+  showInFolder,
   boxTool,
 }: PreviewProps & { windowButton: boolean } & LinkProps & { goToTarget: boolean }) {
   const detail = useFileDetail(file.drive_id);
@@ -831,6 +835,7 @@ function LinkPreview({
           windowButton={windowButton}
           zoomControl={zoomControl}
           extraTools={extraTools}
+          showInFolder={showInFolder}
           boxTool={boxTool}
         />
       </>
@@ -866,6 +871,7 @@ function PreviewOf({
   beforeGoToTarget,
   zoomControl,
   extraTools,
+  showInFolder,
   boxTool,
 }: PreviewProps & LinkProps) {
   // key: a different file starts again at its first step, page 1 and "fit"
@@ -879,6 +885,7 @@ function PreviewOf({
         beforeGoToTarget={beforeGoToTarget}
         zoomControl={zoomControl}
         extraTools={extraTools}
+        showInFolder={showInFolder}
         boxTool={boxTool}
       />
     );
@@ -890,6 +897,7 @@ function PreviewOf({
       windowButton={windowButton}
       zoomControl={zoomControl}
       extraTools={extraTools}
+      showInFolder={showInFolder}
       boxTool={boxTool}
     />
   );

@@ -28,6 +28,9 @@ All notable changes are listed here. The format follows
   sheet lists what goes. Merge and delete have no Undo; a snapshot is taken first.
 - Browse's Collections tree has **Show closed**, and the Tags tree **New group**.
 - **`collection:`** finds a collection whose name has a quote mark in it.
+- **Show in folder** in Relatives: on the card of a relative in the Relatives window, and
+  on both sides of Quick Look's compare (**Is this related?**), beside Show in Finder. It
+  opens the file's folder in Browse with the file selected.
 - **Due dates in Browse.** A file with an open tray item shows the tray and its date on
   its row, in the folder view, Files and search results, coloured by urgency as on a
   collection's page.
@@ -64,6 +67,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Not related** on a relative's card in the Relatives window is a button like Quick look
+  and Its relatives, no longer a link, since it marks the pair. It comes last and stands
+  apart from the others, as it does in Quick Look's compare.
 - **The Collections and Tags pages are now Browse's trees.** The sidebar's Collections and
   Tags captions open Browse with that tree, and old links (`/collections`, `/collections/7`,
   `/tags`, `/starred`) forward there. Important keeps its page.

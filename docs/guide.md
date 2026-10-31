@@ -1484,9 +1484,12 @@ down; there is no zoom or panning.
   (or another one) to change or clear it.
 - **What a row shares.** Point at a row, or move to it with the keyboard, and the card at
   the top of the panel on the right lists the exact values (Folder, Sender, Tag and so on)
-  with **Quick look**, **Its relatives** and **Not related**. The row and its arc are outlined. The card sits
-  beside the outline, never over it, and stays on the last row you pointed at, so you can
-  move over to its buttons.
+  with **Quick look**, **Its relatives**, **Show in folder** and, set apart at the end,
+  **Not related**. **Show in folder** closes the window and opens the relative's folder in
+  Browse with it selected; the browser's Back returns to the page you were on (the window
+  itself does not reopen). The row and its arc are outlined. The card sits beside the
+  outline, never over it, and stays on the last row you pointed at, so you can move over to
+  its buttons.
 - **Act on several at once.** The panel on the right has the same buttons as the block
   (**Tag…**, **Add to collection…**, **Move to folder…**, **Link them here**, **Link this
   file there**), with the same previews, Undo and reasons when a button is off. **2+
@@ -1505,6 +1508,8 @@ relative on the right, and below them what the two share. **N** (Not related) ma
 relative and moves to the next, **→** (Skip) moves on, and **Y** (Related, next) also moves
 on and stores nothing, since being related is worked out from what the files share, never
 saved. `←`/`→` still step through the relatives, and **Space** or **Esc** closes it.
+Each side's toolbar has **Show in folder** beside Show in Finder: it closes Quick Look (and
+the Relatives window) and opens that file's folder in Browse with the file selected.
 Each side zooms, scrolls and turns pages on its own, since the two documents are often of
 different sizes: `+`, `-` and `0` zoom the side you clicked last (a line along its top shows
 which). **Move together** below them makes both sides zoom, scroll and turn pages as one, so

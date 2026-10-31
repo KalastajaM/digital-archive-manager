@@ -54,6 +54,8 @@ type Props = {
     /** Why the AI picked the shown file (a sentence), on its own line above the verdict. */
     reason?: (file: QLFile) => string | null;
     onNotRelated: (file: QLFile) => void;
+    /** Show in folder for either pane's file (the caller closes Quick Look and navigates). */
+    showInFolder?: (file: QLFile) => void;
   };
 };
 
@@ -195,7 +197,11 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
               </p>
               <div className="quicklook-preview preview-fill">
                 <MoveLink.Provider value={subjectLink}>
-                  <FilePreview file={compare.subject} zoomControl={together ? zoomControl : subjectZoom} />
+                  <FilePreview
+                    file={compare.subject}
+                    zoomControl={together ? zoomControl : subjectZoom}
+                    showInFolder={compare.showInFolder && (() => compare.showInFolder?.(compare.subject))}
+                  />
                 </MoveLink.Provider>
               </div>
             </div>
@@ -206,7 +212,13 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
               <div className="quicklook-preview preview-fill">
                 <InlineResults.Provider value={status.report}>
                   <MoveLink.Provider value={fileLink}>
-                    <FilePreview file={file} beforeGoToTarget={onClose} zoomControl={zoomControl} boxTool={boxTool} />
+                    <FilePreview
+                      file={file}
+                      beforeGoToTarget={onClose}
+                      zoomControl={zoomControl}
+                      boxTool={boxTool}
+                      showInFolder={compare.showInFolder && (() => compare.showInFolder?.(file))}
+                    />
                   </MoveLink.Provider>
                 </InlineResults.Provider>
               </div>
@@ -240,7 +252,8 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
                 </li>
               ))}
             </ul>
-            <button type="button" onClick={() => compare.onNotRelated(file)}>
+            {/* it marks the pair (with Undo): kept away from Related, next */}
+            <button type="button" className="rel-not-related" onClick={() => compare.onNotRelated(file)}>
               Not related <kbd>N</kbd>
             </button>
             <button type="button" disabled={last} onClick={() => onIndex(index + 1)}>

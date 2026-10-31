@@ -2,7 +2,7 @@
  * and focus card, the quick selections, the shared actions, the keys and the folding. */
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Relative } from "../api/client";
 import { type Call, mockFetch, renderWithProviders } from "../test-utils";
@@ -49,6 +49,11 @@ const body = (relatives: Relative[], hidden = 0) => ({
 });
 const sent = (calls: Call[], method: string, url: string) => calls.filter((c) => c.method === method && c.url === url);
 
+function Where() {
+  const location = useLocation();
+  return <output data-testid="where">{location.pathname + location.search}</output>;
+}
+
 let closed = 0;
 function setup(routes: Parameters<typeof mockFetch>[0] = {}, relatives = RELATIVES, hidden = 0) {
   closed = 0;
@@ -61,6 +66,7 @@ function setup(routes: Parameters<typeof mockFetch>[0] = {}, relatives = RELATIV
   renderWithProviders(
     <MemoryRouter>
       <RelativesDialog file={FILE} onClose={() => (closed += 1)} />
+      <Where />
     </MemoryRouter>,
   );
   return { calls, user: userEvent.setup() };
@@ -233,6 +239,47 @@ describe("the card", () => {
     await user.click(within(card).getByRole("button", { name: "Not related" }));
     await waitFor(() => expect(sent(calls, "POST", "/api/files/d0/relatives/dismiss")).toHaveLength(1));
     expect(sent(calls, "POST", "/api/files/d0/relatives/dismiss")[0].body).toEqual({ drive_id: "r6" });
+  });
+
+  it("has Show in folder, and Not related as a button of its own, last and set apart", async () => {
+    const { user } = setup();
+    await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
+    await user.hover(rowOf("20240928_Verohallinto.pdf"));
+    const card = await screen.findByRole("group", { name: "What 20240928_Verohallinto.pdf shares" });
+    const buttons = within(card).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["Quick look Space", "Its relatives Enter", "Show in folder", "Not related"]);
+    // it changes data (with Undo): a button like the others, not a link
+    const notRelated = within(card).getByRole("button", { name: "Not related" });
+    expect(notRelated).not.toHaveClass("link-button");
+    expect(notRelated).toHaveClass("rel-not-related");
+  });
+
+  it("Show in folder closes the dialog and opens the file's folder in Browse with it selected", async () => {
+    const { user } = setup();
+    await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
+    await user.hover(rowOf("20250926_Vuokratulot.pdf"));
+    const card = await screen.findByRole("group", { name: "What 20250926_Vuokratulot.pdf shares" });
+    await user.click(within(card).getByRole("button", { name: "Show in folder" }));
+    expect(closed).toBe(1);
+    expect(screen.getByTestId("where")).toHaveTextContent(
+      `/browse?${new URLSearchParams({ path: "30. Home/Property", select: "r5" })}`,
+    );
+  });
+
+  it("Show in folder in its Quick Look closes both and opens that pane's file in Browse", async () => {
+    const { user } = setup({ "GET /api/files/r2": { status: 404, body: { error: "x" } } });
+    await screen.findByRole("checkbox", { name: "Select receipt.pdf" });
+    rowOf("20240928_Verohallinto.pdf").focus();
+    await user.keyboard(" ");
+    const ql = await screen.findByRole("dialog", { name: "Quick Look: 20240928_Verohallinto.pdf" });
+    const [subject, relative] = within(ql).getAllByRole("button", { name: "Show in folder" });
+    expect(subject).toBeDefined();
+    await user.click(relative);
+    expect(screen.queryByRole("dialog", { name: /Quick Look/ })).toBeNull();
+    expect(closed).toBe(1);
+    expect(screen.getByTestId("where")).toHaveTextContent(
+      `/browse?${new URLSearchParams({ path: "13. Taxes", select: "r2" })}`,
+    );
   });
 });
 
