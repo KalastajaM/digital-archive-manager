@@ -42,3 +42,9 @@ def test_remove_from_an_unknown_tag_is_refused(client):
     assert r.status_code == 404 and "nope" in r.text, (
         r.text
     )  # the tag is named: not a missing route
+
+
+def test_carried_lists_the_tags_any_of_the_files_has_in_one_call(client):
+    r = post(client, "/api/tags/carried", {"drive_ids": ["id-1", "id-2", "id-3", "id-9"]})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"tags": ["house", "Kela"]}

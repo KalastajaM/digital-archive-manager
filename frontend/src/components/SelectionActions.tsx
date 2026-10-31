@@ -3,7 +3,7 @@
  * Undo in its toast. Splitting a tag or a collection is these steps on a selection. */
 import { EllipsisVertical } from "lucide-react";
 import { type KeyboardEvent, useId, useMemo, useState } from "react";
-import { apiGet, type CollectionRow, errorText, useAllTags, useCollectionMembers, useCreateCollection, useTagActions } from "../api/client";
+import { apiPost, type CollectionRow, errorText, useAllTags, useCollectionMembers, useCreateCollection, useTagActions } from "../api/client";
 import { childrenOf } from "./collectionTree";
 import { visible } from "../text";
 import { undoAction, useToast } from "./Toasts";
@@ -258,13 +258,9 @@ export function SelectionActions({
   const openRemoveTag = () => {
     setCarried(null);
     setSheet("remove-tag");
-    // the tags any selected file carries, read when the sheet opens
-    void Promise.all(ids.map((id) => apiGet("/api/files/{drive_id}", { path: { drive_id: id } })))
-      .then((details) => {
-        const seen = new Map<string, string>();
-        for (const d of details) for (const t of d.tags) if (!seen.has(fold(t))) seen.set(fold(t), t);
-        setCarried([...seen.values()]);
-      })
+    // the tags any selected file carries, read in one call when the sheet opens
+    void apiPost("/api/tags/carried", { body: { drive_ids: ids } })
+      .then((r) => setCarried(r.tags))
       .catch((e) => {
         close();
         fail(e);

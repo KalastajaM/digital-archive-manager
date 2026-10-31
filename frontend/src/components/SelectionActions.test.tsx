@@ -42,8 +42,7 @@ const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "
 function setup(scope: CollectionRow | null = null, extra: Parameters<typeof mockFetch>[0] = {}) {
   const calls = mockFetch({
     "GET /api/tags/all": { body: { tags: [{ name: "house", files: 2, pinned: false, group_id: null }], groups: [] } },
-    "GET /api/files/a": { body: { record: { drive_id: "a" }, tags: ["house"] } },
-    "GET /api/files/b": { body: { record: { drive_id: "b" }, tags: ["house", "Kela"] } },
+    "POST /api/tags/carried": { body: { tags: ["house", "Kela"] } },
     "POST /api/tags/apply": { body: { message: "Tagged 2 files 'house 1'", undo: { drop: ["house 1"], detach: [], restore: [] } } },
     "POST /api/tags/remove-from": { body: { message: "Removed 'house' from 2 files", undo: { drop: [], detach: [], restore: [] } } },
     "POST /api/tags/undo": { body: { message: "Undone", undo: null } },
@@ -86,6 +85,8 @@ describe("SelectionActions", () => {
     const sheet = await open(user, "Remove tag…");
     const options = await within(sheet).findAllByRole("option");
     expect(options.map((o) => o.textContent)).toEqual(["house", "Kela"]);
+    // one call for the whole selection, not one per file
+    expect(posts(calls, "/api/tags/carried")).toEqual([{ drive_ids: ["a", "b"] }]);
     await user.click(options[0]);
     await waitFor(() => expect(posts(calls, "/api/tags/remove-from")).toEqual([{ tag: "house", drive_ids: ["a", "b"] }]));
   });

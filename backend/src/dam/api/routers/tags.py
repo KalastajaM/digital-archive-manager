@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from dam.api.deps import AppDep, live_record, require_editable
 from dam.api.schemas import (
+    CarriedTagsOut,
+    DriveIdsBody,
     FileTagApplyIn,
     SidebarTagOut,
     TagChangeOut,
@@ -103,6 +105,12 @@ def apply_tag(app: AppDep, body: FileTagApplyIn) -> dict:
         "message": f"Tagged {_files(n)} '{' '.join(body.tag.split())}'",
         "undo": _undo_out(undo),
     }
+
+
+@router.post("/carried", response_model=CarriedTagsOut)
+def carried(app: AppDep, body: DriveIdsBody) -> dict:
+    """The tags any of these files has (Remove tag… for a selection), in one call."""
+    return {"tags": app.tag_admin.carried(body.drive_ids)}
 
 
 @router.post("/remove-from", response_model=TagChangeOut)

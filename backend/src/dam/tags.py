@@ -146,6 +146,17 @@ class TagAdmin:
                 ).scalars()
             )
 
+    def carried(self, drive_ids: list[str]) -> list[str]:
+        """Every tag any of these files has, ordered by name (case and accents ignored)."""
+        with self.engine.connect() as conn:
+            names = conn.execute(
+                select(tags.c.name)
+                .distinct()
+                .join(file_tags, file_tags.c.tag_id == tags.c.id)
+                .where(file_tags.c.drive_id.in_(drive_ids))
+            ).scalars()
+            return sorted(names, key=fold)
+
     # -- helpers --------------------------------------------------------------
 
     def _id(self, conn: Connection, name: str) -> int:
