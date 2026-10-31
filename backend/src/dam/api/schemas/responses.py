@@ -466,6 +466,9 @@ class InboxEntryOut(BaseModel):
     open_trays: list[str]
     # From / For chips: what the owner (or a confirmed filing) said; null when nothing
     assignment: AssignmentOut | None = None
+    # filing into suggestion.folder records suggestion.person as the For (a rule's
+    # {person} folder), unless the owner set the assignment
+    person_follows_folder: bool = False
 
 
 class ResolvedOpOut(BaseModel):

@@ -6555,6 +6555,11 @@ export interface components {
             /** Open Trays */
             open_trays: string[];
             assignment?: components["schemas"]["AssignmentOut"] | null;
+            /**
+             * Person Follows Folder
+             * @default false
+             */
+            person_follows_folder?: boolean;
         };
         /** InboxStatsOut */
         InboxStatsOut: {

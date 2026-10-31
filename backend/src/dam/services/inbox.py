@@ -160,6 +160,9 @@ class InboxEntry:
     fields_edited: bool = False
     # who the owner says the document is from and for (None: nothing set)
     assignment: Assignment | None = None
+    # filing into ``suggestion.folder`` records ``suggestion.person`` as the For (it came
+    # from a rule's ``{person}`` folder; ``_record_person``), unless the owner set one
+    person_follows_folder: bool = False
 
 
 @dataclass
@@ -341,6 +344,7 @@ class InboxService:
                     detected if saved is None else saved,
                     saved is not None,
                     assigned.get(rec.drive_id),
+                    self._person_follows_folder(found),
                 )
             )
         return entries
@@ -511,18 +515,22 @@ class InboxService:
         except Exception:
             log.warning("offering a rule for %s failed", req.drive_id, exc_info=True)
 
+    def _person_follows_folder(self, found: Suggestion) -> bool:
+        """The suggested folder came from a rule whose template has ``{person}``, with a
+        person: filing into it records that person (``_record_person``)."""
+        rule_id = rule_id_of(found.folder_source)
+        if self._assignments is None or rule_id is None or found.person is None:
+            return False
+        rule = next((r for r in self._rules() if r.id == rule_id), None)
+        return rule is not None and template_uses_person(rule.then.folder)
+
     def _record_person(self, req: FileRequest, found: Suggestion) -> None:
         """The folder came from a rule whose template has ``{person}`` and the owner kept
         it: that person is who the document is for (unless the owner said otherwise).
         Never fails the filing."""
         try:
-            rule_id = rule_id_of(found.folder_source)
-            if self._assignments is None or rule_id is None or found.person is None:
-                return
-            rule = next((r for r in self._rules() if r.id == rule_id), None)
-            if rule is None or not template_uses_person(rule.then.folder):
-                return
-            if same(found.folder, req.folder):
+            if self._person_follows_folder(found) and same(found.folder, req.folder):
+                assert self._assignments is not None and found.person is not None
                 self._assignments.record_filing(req.drive_id, found.person)
         except Exception:
             log.warning("recording the person of %s failed", req.drive_id, exc_info=True)
@@ -873,17 +881,17 @@ class InboxService:
                 "not renewed: the old file was not moved into Expired"
             )
             return
-        if batch_id is None:  # nothing journaled: the renewal's own Undo
-            outcome.renew_batch = outcome.renew_batch or uuid4().hex
-            outcome.renew_undo = "renewal"
-        else:
-            outcome.renew_batch, outcome.renew_undo = batch_id, "activity"
+        # nothing journaled: the renewal's own Undo, under a batch id of its own
+        batch = batch_id if batch_id is not None else (outcome.renew_batch or uuid4().hex)
         try:
-            self.renewals.record(follow.renews, follow.renew_expires, drive_id, outcome.renew_batch)
+            self.renewals.record(follow.renews, follow.renew_expires, drive_id, batch)
         except Exception as e:
             log.warning("renewing item %s with %s failed", follow.renews, drive_id, exc_info=True)
             outcome.follow_up_error = outcome.follow_up_error or f"{type(e).__name__}: {e}"
             return
+        # only a renewal that was recorded is reported (and so undone)
+        outcome.renew_batch = batch
+        outcome.renew_undo = "renewal" if batch_id is None else "activity"
         outcome.renew_skipped = outcome.renew_skipped or move.skipped
 
     # -- helpers ------------------------------------------------------------

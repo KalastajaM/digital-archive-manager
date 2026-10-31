@@ -1,5 +1,5 @@
 /** The Inbox's "Renews …?": which open Renew items a new document likely renews. */
-import type { RenewCandidate } from "../api/client";
+import type { InboxEntry, RenewCandidate } from "../api/client";
 
 const fold = (s: string) => s.normalize("NFC").toLocaleLowerCase();
 
@@ -10,4 +10,19 @@ export function renewMatches(candidates: RenewCandidate[], folder: string, perso
   const here = fold(folder.trim());
   if (!here) return [];
   return candidates.filter((c) => c.folder !== null && fold(c.folder) === here && (c.person ?? null) === (person ?? null));
+}
+
+/** The For that filing ``entry`` into ``folder`` leaves on it, as the server records it
+ * (``InboxService._record_person`` and ``AssignmentService.record_filing`` in the backend):
+ * the owner's assignment stays as it is; else a rule's ``{person}`` folder that is kept
+ * (compared as ``same``: NFC, case kept) records the suggested person; else a For an
+ * earlier filing recorded stays. */
+export function filingPerson(entry: InboxEntry, folder: string): string | null {
+  const assigned = entry.assignment ?? null;
+  if (assigned?.set_by === "owner") return assigned.person ?? null;
+  const { person, folder: suggested } = entry.suggestion;
+  if (entry.person_follows_folder && person && suggested != null && suggested.normalize("NFC") === folder.normalize("NFC")) {
+    return person;
+  }
+  return assigned?.person ?? null;
 }

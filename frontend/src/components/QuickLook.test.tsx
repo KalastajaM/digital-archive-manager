@@ -54,6 +54,7 @@ function entry(id: string, name: string, suggested: string): InboxEntry {
     open_trays: [],
     fields: [{ kind: "amount", label: null, value: "84.20" }],
     fields_edited: false,
+    person_follows_folder: false,
   };
 }
 

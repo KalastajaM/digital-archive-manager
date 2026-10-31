@@ -32,7 +32,7 @@ import { RelativesBlock } from "../components/RelativesBlock";
 import { FilePreview } from "../components/FilePreview";
 import { editText } from "../components/FieldInput";
 import { FolderPicker } from "../components/FolderPicker";
-import { renewMatches } from "../components/renewMatch";
+import { filingPerson, renewMatches } from "../components/renewMatch";
 import { NoteEditor } from "../components/NoteEditor";
 import { TagInput } from "../components/TagInput";
 import { FromFor } from "../components/zones/FromFor";
@@ -549,10 +549,10 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     entry.suggestion.star === true || entry.suggestion.important === true || entry.suggestion.marks_unclear;
   const hasStar = entry.record.marks.includes("starred");
   const hasImportant = entry.record.marks.includes("important");
-  // "Renews …?": the open Renew items whose file is in this folder for the person the
-  // filing records (the owner's For, else the suggested one)
+  // "Renews …?": the open Renew items whose file is in this folder for the For this
+  // filing leaves on the file
   const candidates = useRenewCandidates().data ?? [];
-  const person = entry.assignment?.person ?? entry.suggestion.person ?? null;
+  const person = filingPerson(entry, folder);
   const renewMatchList = renewMatches(candidates, folder, person);
   const renewed = renewing ? (candidates.find((c) => c.item_id === renewing.item_id) ?? null) : null;
   const renewProblem = renewing && !renewing.expires ? "Enter the new expiry date." : null;

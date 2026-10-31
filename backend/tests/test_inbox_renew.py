@@ -219,3 +219,20 @@ def test_wire_format(client, app, item, fake_archive):
 
 def _renew(item):
     return {"renews": item.id, "renew_expires": NEW_DATE}
+
+
+def test_a_failed_renewal_reports_no_renew_undo(app, item, fake_archive, monkeypatch):
+    # the item is marked done after the filing's checks, so the renewal itself refuses it
+    renewals = app.inbox.renewals
+    original = renewals.record
+
+    def done_first(*args, **kwargs):
+        app.trays.done(item.id, {})
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(renewals, "record", done_first)
+    out = app.inbox.file_it([req(item)])
+    assert out.batch.error is None
+    assert out.follow_up_error is not None
+    assert out.renew_undo is None and out.renew_batch is None and out.renew_skipped is None
+    assert [e for e in app.trays.history(item.id) if e.kind == "renewed"] == []

@@ -72,6 +72,7 @@ function entry(id: string, name: string, suggested: string, folder: string | nul
       { kind: "reference", label: null, value: "RF18539007547034" },
     ],
     fields_edited: false,
+    person_follows_folder: false,
   };
 }
 
@@ -2359,6 +2360,70 @@ describe("Renews …?", () => {
     await setup({ "GET /api/renewals/open": { body: [{ ...PASSPORT, person: "Tiina" }] } });
     await screen.findByRole("button", { name: "Renews…" });
     expect(screen.queryByRole("group", { name: chipName })).not.toBeInTheDocument();
+  });
+
+  /** The first entry with a rule's {person} folder for Tiina, and ``assignment``. */
+  const personEntries = (assignment: InboxEntry["assignment"] = null) => {
+    const [first, ...rest] = ENTRIES;
+    const withPerson: InboxEntry = {
+      ...first,
+      suggestion: { ...first.suggestion, person: "Tiina", person_source: "address area" },
+      person_follows_folder: true,
+      assignment,
+    };
+    return [withPerson, ...rest];
+  };
+  const assigned = (person: string, set_by: "owner" | "filing") => ({ drive_id: "d1", sender: null, person, set_by, set_at: 0 });
+  const tiina = candidate(7, "Passport Tiina", "20. Health/Kotihoito", { person: "Tiina" });
+
+  it("the person is the one the filing records: the rule's, only while its folder is kept", async () => {
+    const banks = candidate(10, "Bank card Tiina", "10. Financial/Banks", { person: "Tiina" });
+    const { user } = await setup({
+      "GET /api/inbox": { body: personEntries() },
+      "GET /api/renewals/open": { body: [tiina, banks] },
+    });
+    expect(await screen.findByRole("group", { name: chipName })).toBeInTheDocument();
+    // another folder: the rule's person is not recorded, so Tiina's items are no match
+    await setFolder(user, "10. Financial/Banks");
+    expect(screen.queryByRole("group", { name: /Suggested renewal/ })).not.toBeInTheDocument();
+  });
+
+  it("the owner's For wins over the rule's person", async () => {
+    const mikko = candidate(11, "Passport Mikko", "20. Health/Kotihoito", { person: "Mikko" });
+    await setup({
+      "GET /api/inbox": { body: personEntries(assigned("Mikko", "owner")) },
+      "GET /api/renewals/open": { body: [tiina, mikko] },
+    });
+    expect(await screen.findByRole("group", { name: 'Suggested renewal: Renews "Passport Mikko" (same folder and person)' })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: chipName })).not.toBeInTheDocument();
+  });
+
+  it("a For a filing set is replaced by the rule's person while its folder is kept", async () => {
+    const mikko = candidate(11, "Bank card Mikko", "10. Financial/Banks", { person: "Mikko" });
+    const { user } = await setup({
+      "GET /api/inbox": { body: personEntries(assigned("Mikko", "filing")) },
+      "GET /api/renewals/open": { body: [tiina, mikko] },
+    });
+    expect(await screen.findByRole("group", { name: chipName })).toBeInTheDocument();
+    await setFolder(user, "10. Financial/Banks");
+    expect(await screen.findByRole("group", { name: 'Suggested renewal: Renews "Bank card Mikko" (same folder and person)' })).toBeInTheDocument();
+  });
+
+  it("a renewal the server did not record gives no Renewed toast", async () => {
+    const { user } = await setup({
+      "GET /api/renewals/open": { body: [PASSPORT] },
+      "POST /api/inbox/preview": { body: RENEW_PLAN },
+      "POST /api/inbox/file": {
+        body: fileResult({ done: RENEW_PLAN, renew_batch: null, renew_undo: null, follow_up_error: "InvalidRequest: reopen it" }),
+      },
+    });
+    await user.click(within(await screen.findByRole("group", { name: chipName })).getByRole("button", { name: "Use" }));
+    setDate("2037-06-30");
+    await user.click(screen.getByRole("button", { name: "File it" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "File" }));
+    expect(await screen.findByText(/^Filed 2 files/)).toBeInTheDocument();
+    expect(screen.queryByText(/renewed/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/adding to tray\/collection failed/)).toBeInTheDocument();
   });
 
   it("several matches show a select", async () => {
