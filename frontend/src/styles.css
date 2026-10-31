@@ -4283,7 +4283,7 @@ li[aria-current="true"] .tray-row-done { color: var(--muted); opacity: 1; }
 .item-file { font-family: var(--font-mono); font-size: 12.5px; }
 .bill-amount { font-size: var(--fs-2xl); font-weight: 500; }
 /* Check by / Waiting for, and Mark done: one panel */
-.item-fields { align-items: flex-end; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-xl); background: var(--panel-2); }
+.item-fields { align-items: flex-start; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-xl); background: var(--panel-2); }
 .item-fields .field-date input[type="date"],
 .item-fields .field-money input { font-family: var(--font-mono); font-size: 12.5px; }
 .item-done-buttons { margin-top: 0; }
@@ -4309,7 +4309,9 @@ li[aria-current="true"] .tray-row-done { color: var(--muted); opacity: 1; }
 .item-detail .item-sub a { color: var(--accent); }
 .item-detail .item-actions > .menu-wrap > button { min-height: 32px; padding: 0 12px; }
 .item-detail .item-fields { flex-wrap: wrap; }
-.item-detail .item-done-buttons { align-self: flex-end; }
+/* tops aligned, so a hint under one field (Saved) does not lift the other inputs; the buttons
+   after a field drop by one label line to sit level with the inputs */
+.item-detail .item-fields > .field ~ .item-done-buttons { margin-top: calc(var(--fs-xs) * var(--lh) + 3px); }
 .item-detail .item-done-buttons .primary kbd { margin-left: 8px; padding: 0 5px; border: 0; background: rgb(255 255 255 / 0.16); color: inherit; font-size: 11px; line-height: 18px; }
 /* one column, as Browse: the files, the file panel at the full width, then checklist, note, history */
 .item-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
