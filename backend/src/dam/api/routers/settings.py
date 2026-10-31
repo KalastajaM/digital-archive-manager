@@ -15,6 +15,8 @@ from dam.api.sample_letter import read_sample, sample_ext
 from dam.api.schemas import (
     CountriesIn,
     CountriesOut,
+    ExpiredFolderIn,
+    ExpiredFolderOut,
     Page1BackfillIn,
     Page1BackfillOut,
     Page1SpeedIn,
@@ -48,6 +50,20 @@ def put_page1_speed(app: AppDep, body: Page1SpeedIn) -> dict:
     settings.yaml could not be written (it is left as it was)."""
     app.set_page1_speed(body.reads_per_minute)
     return {"reads_per_minute": app.settings.page1_text_reads_per_minute}
+
+
+@router.get("/expired-folder", response_model=ExpiredFolderOut)
+def get_expired_folder(app: AppDep) -> dict:
+    """The name of the Expired folder."""
+    return {"name": app.settings.expired_folder_name}
+
+
+@router.put("/expired-folder", response_model=ExpiredFolderOut)
+def put_expired_folder(app: AppDep, body: ExpiredFolderIn) -> dict:
+    """Rename the Expired folder (setting only; no folder is moved). 400 with the reason
+    for a name that cannot be a folder name, starts with ``##.`` or is one of the special
+    folders' names, or when settings.yaml could not be written."""
+    return {"name": app.set_expired_folder(body.name)}
 
 
 def _people_out(app) -> dict:

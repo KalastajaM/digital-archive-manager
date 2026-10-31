@@ -8,12 +8,13 @@ from contextlib import contextmanager
 from dataclasses import InitVar, dataclass, field, fields
 from pathlib import Path
 
+from pydantic import ValidationError
 from sqlalchemy import Engine, func, select
 
 from dam import packs, relabel
 from dam.address_areas import AddressAreas
 from dam.ai.service import AIService
-from dam.codes.model import CodeProblem, FilingCode, check_table, load_codes
+from dam.codes.model import CodeProblem, FilingCode, check_table, format_validation, load_codes
 from dam.codes.model import save_codes as write_codes
 from dam.collections.convert import OngoingConverter
 from dam.collections.convert_important import ImportantConverter
@@ -730,6 +731,31 @@ class App:
             raise InvalidRequest(f"the setting could not be saved: {e}") from e
         self.settings.page1_text_reads_per_minute = reads_per_minute
         self.wake_indexer()
+
+    def set_expired_folder(self, name: str) -> str:
+        """Set the Expired folder's name (``expired_folder_name`` in settings.yaml) and use
+        it from now on; returns the name as kept (NFC, trimmed). ``InvalidRequest`` for a
+        name that cannot be a folder name or is one of the special folders' names, or when
+        the file could not be written."""
+        try:
+            kept = Settings.model_validate(
+                {
+                    "special_folders": self.settings.special_folders.model_dump(),
+                    "expired_folder_name": name,
+                }
+            ).expired_folder_name
+        except ValidationError as e:
+            raise InvalidRequest(format_validation(e)) from e
+        try:
+            write_keys(
+                self.app_paths,
+                {"expired_folder_name": kept},
+                lambda s: s.expired_folder_name == kept,
+            )
+        except OSError as e:
+            raise InvalidRequest(f"the setting could not be saved: {e}") from e
+        self.settings.expired_folder_name = kept
+        return kept
 
     def set_countries(self, country_codes: list[str], language_codes: list[str]) -> None:
         """Save the countries and languages documents are read with (``countries`` and
