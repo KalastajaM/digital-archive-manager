@@ -286,35 +286,39 @@ function RestoreButtons({ restore }: { restore: (to: RestoreTo) => void }) {
 export type FolderMoveTo = { refusal: string | null; run: () => void };
 
 /** A selected folder's actions: add it to a collection (everything in it then belongs),
- * and Move to… (the folder with everything in it). */
+ * Move to… (the folder with everything in it) and Rename… (in place). */
 export function FolderActions({
   driveId,
   refusal,
   restore,
   moveTo,
+  rename,
 }: {
   driveId: string;
   refusal: string | null;
   restore?: (to: RestoreTo) => void;
   moveTo?: FolderMoveTo;
+  rename?: FolderMoveTo;
 }) {
+  const action = (label: string, act: FolderMoveTo) =>
+    act.refusal ? (
+      <span className="button-wrap" data-tip={act.refusal}>
+        <button type="button" disabled>
+          {label}
+        </button>
+      </span>
+    ) : (
+      <button type="button" onClick={act.run}>
+        {label}
+      </button>
+    );
   return (
     <div className="file-actions">
       <CollectionsField driveId={driveId} refusal={refusal} />
-      {(moveTo || restore) && (
+      {(moveTo || rename || restore) && (
         <div className="actions">
-          {moveTo &&
-            (moveTo.refusal ? (
-              <span className="button-wrap" data-tip={moveTo.refusal}>
-                <button type="button" disabled>
-                  Move to…
-                </button>
-              </span>
-            ) : (
-              <button type="button" onClick={moveTo.run}>
-                Move to…
-              </button>
-            ))}
+          {moveTo && action("Move to…", moveTo)}
+          {rename && action("Rename…", rename)}
           {restore && <RestoreButtons restore={restore} />}
         </div>
       )}

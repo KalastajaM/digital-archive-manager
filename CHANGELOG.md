@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Rename a folder.** A folder's panel in Browse has **Rename…**: the preview lists every
+  place that holds its path (index, rules, filing codes, protected and AI-excluded folders,
+  ignored Maintenance results) and what stays with it (collections, open tray items, the
+  shortcuts in Ongoing and Important, which are made again). It is one entry in Activity,
+  and Undo puts the folder and every path back. A taken name is refused rather than given
+  `_2`; a change of letter case alone works.
 - **Your own business ID.** In Found in this document, **Mine** marks a business ID as
   yours: it names no sender, links no files in Relatives and does not count for `id:*`.
   Settings, Senders shows it as Yours, with **Not mine** to undo it. This closes the

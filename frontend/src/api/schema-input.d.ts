@@ -1357,6 +1357,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browse/folder-rename/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Folder Rename Preview
+         * @description What renaming the folder would change: the folder on disk, the paths that follow it
+         *     (index, rules, filing codes, settings) and what stays with it; changes nothing. 400 for
+         *     a folder or name that cannot be used, 409 while a job runs or a disk is away.
+         */
+        post: operations["folder_rename_preview_api_browse_folder_rename_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browse/folder-rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename Folder
+         * @description Rename the folder in place as one journaled batch (Undo in Activity puts the folder
+         *     and every path that followed it back). It closes the archive and opens it again, so it
+         *     needs ``dam serve`` (409 otherwise).
+         */
+        post: operations["rename_folder_api_browse_folder_rename_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activity": {
         parameters: {
             query?: never;
@@ -5950,6 +5994,42 @@ export interface components {
              * @default
              */
             path?: string;
+        };
+        /**
+         * FolderRenameIn
+         * @description Rename an ordinary folder in place (Browse): its id and the new name.
+         */
+        FolderRenameIn: {
+            /** Drive Id */
+            drive_id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * FolderRenameOut
+         * @description What renaming a folder changes (in a preview: would change). ``old``/``new`` are its
+         *     names, ``path``/``new_path`` its archive paths. ``batch_id``: the Activity batch to undo
+         *     it with; None for a preview.
+         */
+        FolderRenameOut: {
+            /** Old */
+            old: string;
+            /** New */
+            new: string;
+            /** Path */
+            path: string;
+            /** New Path */
+            new_path: string;
+            /** Places */
+            places: components["schemas"]["SpecialFolderPlaceOut"][];
+            /** Warnings */
+            warnings: string[];
+            /** Google Drive */
+            google_drive: boolean;
+            /** Undo */
+            undo: string;
+            /** Batch Id */
+            batch_id?: string | null;
         };
         /**
          * FoundOut
@@ -16026,6 +16106,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MoveResultOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    folder_rename_preview_api_browse_folder_rename_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderRenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderRenameOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    rename_folder_api_browse_folder_rename_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderRenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderRenameOut"];
                 };
             };
             /** @description Bad Request */

@@ -59,6 +59,7 @@ import { isTrashKey, TRASH_BUSY, useTrash } from "../components/Trash";
 import { undoAction, useBlockToastActions, useToast } from "../components/Toasts";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { useNewFolder } from "../components/NewFolder";
+import { followRename, useRenameFolderSheet } from "../components/RenameFolder";
 import { useSetupFolders } from "../components/SetupFolders";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -757,6 +758,10 @@ export default function Browse() {
   const toast = useToast();
   const ids = useId();
   const newFolder = useNewFolder();
+  // Rename… for a folder; a pane in it follows the new path (also when Undo takes it back)
+  const renameFolder = useRenameFolderSheet((from, to) =>
+    setParams(urlFor({ left: { ...panes.left, path: followRename(panes.left.path, from, to) }, right: { ...panes.right, path: followRename(panes.right.path, from, to) } }, split)),
+  );
   const setupFolders = useSetupFolders();
   const [menu, setMenu] = useState<{ x: number; y: number; path: string; name: string; driveId: string } | null>(null);
 
@@ -2269,6 +2274,7 @@ export default function Browse() {
       refusal={folderCollectRefusal(folderShown.path, specialFolders)}
       restore={(to) => startRestore([folderShown.drive_id], to)}
       moveTo={{ run: () => openFolderMoveTo(folderShown), refusal: folderMoveWhy(folderShown) ?? (locked ? MOVE_BUSY : null) }}
+      rename={{ run: () => renameFolder.open(folderShown), refusal: folderMoveWhy(folderShown) ?? (locked ? MOVE_BUSY : null) }}
     />
   ) : (
     <EmptyState
@@ -2528,6 +2534,7 @@ export default function Browse() {
       {marking.view}
       {restoring.view}
       {newFolder.view}
+      {renameFolder.view}
       {setupFolders.view}
       {menu && (
         <ContextMenu
