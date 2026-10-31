@@ -28,12 +28,10 @@ function stubSystem(dark: boolean) {
 const theme = () => document.documentElement.dataset.theme;
 const themeColor = () => document.querySelector('meta[name="theme-color"]')?.getAttribute("content");
 
-const look = () => document.documentElement.dataset.style;
 const OLD_STYLE_KEY = "dam.style";
 
 beforeEach(() => {
   localStorage.clear();
-  delete document.documentElement.dataset.style;
   document.head.innerHTML = '<meta name="theme-color" content="#fbfbfd" />';
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -82,25 +80,24 @@ describe("appearance", () => {
   });
 });
 
-describe("look", () => {
-  it("is always New: installAppearance sets it and removes the retired Classic key", () => {
+describe("the retired Classic look", () => {
+  it("installAppearance removes its key and sets no look on <html>", () => {
     stubSystem(false);
     localStorage.setItem(OLD_STYLE_KEY, "classic");
     installAppearance();
-    expect(look()).toBe("new");
+    expect(document.documentElement.hasAttribute("data-style")).toBe(false);
     expect(localStorage.getItem(OLD_STYLE_KEY)).toBeNull();
   });
 
-  it("the early script sets New and the theme colour, whatever the old key says", () => {
+  it("the early script sets only the theme and its colour, whatever the old key says", () => {
     localStorage.setItem(OLD_STYLE_KEY, "classic");
     stubSystem(false);
     new Function(earlyScript)();
-    expect(look()).toBe("new");
+    expect(document.documentElement.hasAttribute("data-style")).toBe(false);
     expect(theme()).toBe("light");
     expect(themeColor()).toBe("#ffffff");
     stubSystem(true);
     new Function(earlyScript)();
-    expect(look()).toBe("new");
     expect(theme()).toBe("dark");
     expect(themeColor()).toBe("#1a1917");
   });

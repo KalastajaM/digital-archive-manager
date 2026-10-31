@@ -1,4 +1,4 @@
-"""The README screenshots, light and dark, in the New look, from the staged demo server
+"""The README screenshots, light and dark, from the staged demo server
 (see stage.py): 1600x1000 PNGs written to the folder given; more arguments take only those
 shots (``sticker-sheet`` is taken only when named). ``DAM_TOKEN`` is the demo's api-token.
 

@@ -13,7 +13,6 @@ import { installTooltips } from "./tooltips";
 import "./fonts.css";
 import "./theme.css";
 import "./styles.css";
-import "./styles-new.css";
 
 const client = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },

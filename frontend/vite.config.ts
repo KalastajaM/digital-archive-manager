@@ -39,7 +39,7 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
     restoreMocks: true,
     unstubGlobals: true,
-    // styles.test.ts, styles-new.test.ts and shell.test.ts read the sheets as text (no component test imports them)
-    css: { include: [/(styles|styles-new|theme)\.css/] },
+    // styles.test.ts and shell.test.ts read the sheets as text (no component test imports them)
+    css: { include: [/(styles|theme)\.css/] },
   },
 });

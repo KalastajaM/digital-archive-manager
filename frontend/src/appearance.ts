@@ -45,11 +45,8 @@ export function saveAppearance(choice: Appearance): void {
   applyAppearance(choice);
 }
 
-/** Once, at start: follow the system while on Auto, and a choice made in another tab.
- * ``<html data-style="new">`` stays set (public/appearance.js sets it too): the styles
- * written for the redesign are scoped to it. */
+/** Once, at start: follow the system while on Auto, and a choice made in another tab. */
 export function installAppearance(): void {
-  document.documentElement.dataset.style = "new";
   try {
     localStorage.removeItem(OLD_STYLE_KEY);
   } catch {

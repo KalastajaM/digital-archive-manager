@@ -144,7 +144,7 @@ describe("a tray", () => {
     expect(within(filing).getByRole("button", { name: "Move to To Delete" })).toBeInTheDocument();
     expect(within(item.querySelector(".item-header") as HTMLElement).getByRole("button", { name: "Remove from tray" })).toBeInTheDocument();
     // the fields card comes before the column
-    const kids = [...(item.querySelector(".item-new") as HTMLElement).children].map((c) => c.className);
+    const kids = [...(item.querySelector(".item-detail") as HTMLElement).children].map((c) => c.className);
     expect(kids.findIndex((c) => c.includes("item-fields"))).toBeLessThan(kids.findIndex((c) => c.includes("item-stack")));
   });
 });

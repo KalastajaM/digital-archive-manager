@@ -2,14 +2,16 @@
  * Screens use classes and these custom properties, never literal values.
  * Light first; dark applies under <html data-theme="dark">, which public/appearance.js
  * sets before the first paint and src/appearance.ts keeps up to date (Settings →
- * Appearance: Light, Dark, or Auto to follow the system). */
+ * Appearance: Light, Dark, or Auto to follow the system). The dark block comes second
+ * and sets every colour that differs (it is more specific), so no light value leaks into
+ * dark. Contrast of the text tokens on their surfaces is checked at 4.5:1 or better.
+ * IBM Plex is bundled (src/fonts.css). */
 :root {
   color-scheme: light;
 
   /* Type */
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
-    Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --fs-xs: 11px;   /* section captions, tags */
   --fs-sm: 12px;   /* secondary text, counts */
   --fs-md: 13px;   /* body */
@@ -31,12 +33,12 @@
   /* Radii */
   --r-sm: 4px;
   --r-md: 6px;
-  --r-lg: 10px;
-  --r-xl: 12px;
+  --r-lg: 8px;
+  --r-xl: 10px;
   --r-pill: 999px;
 
   /* Layout */
-  --sidebar-w: 220px;
+  --sidebar-w: 232px; /* 60px icon rail in a narrow window, see styles.css */
   --sidebar-row-h: 28px;
   --toolbar-h: 52px;
   --icon-button-sm: 26px; /* small icon buttons in dense rows */
@@ -46,156 +48,6 @@
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   /* Surfaces */
-  --bg: #fbfbfd;
-  --panel: #ffffff;
-  --panel-2: #f5f5f7;
-  --field: #ffffff;
-  --sidebar-bg: rgb(236 236 240 / 0.86);
-  --sidebar-sel: rgb(0 0 0 / 0.08);
-  --hover: rgb(0 0 0 / 0.045);
-  --selected: #e8f1ff;
-  --selected-strong: #0071e3;
-  --selected-strong-text: #ffffff;
-  --selected-strong-muted: rgb(255 255 255 / 0.78); /* dimmed text on the strong selection */
-
-  /* Text */
-  --text: #1d1d1f;
-  --text-2: #3a3a3c;
-  --muted: #68686d; /* 4.5:1 or better on every light surface */
-  --muted-2: #515154;
-
-  /* Lines */
-  --border: rgb(0 0 0 / 0.14);
-  --border-strong: rgb(0 0 0 / 0.22);
-  --hairline: rgb(0 0 0 / 0.08);
-  --separator: #e5e5ea;
-  --meter-track: #e5e5ea; /* an empty bar (the AI budget) on a panel */
-
-  /* Accent */
-  --accent: #0066cc; /* accent text, icons and lines: 4.5:1 on the light surfaces */
-  --accent-fill: #0071e3; /* solid accent fills under --on-accent text (4.7:1) */
-  --accent-hover: #0058b0;
-  --on-accent: #ffffff; /* text on a solid accent or red fill, both schemes */
-  --paper: #ffffff; /* document previews stay white in dark mode */
-  --barcode-ink: #000000; /* bars stay black on --paper in both schemes, for scanners */
-  --accent-soft: rgb(10 132 255 / 0.12);
-  --focus-ring: rgb(10 132 255 / 0.45);
-
-  /* Semantic colours and their tag backgrounds */
-  --red: #ff3b30;
-  --red-text: #c4271c;
-  --red-bg: #ffe5e3;
-  --orange: #ff9500;
-  --orange-text: #a65b00;
-  --orange-bg: #fff0db;
-  --green: #34c759;
-  --green-text: #1f7a35;
-  --green-bg: #e3f6e8;
-  --blue-text: #0a64d6;
-  --blue-bg: #e8f1ff;
-  --grey-text: #6e6e73;
-  --grey-bg: #f2f2f7;
-
-  /* Legacy aliases used by the screen styles until each screen is redone */
-  --warn: var(--orange-text);
-  --warn-bg: var(--orange-bg);
-  --error: var(--red-text);
-  --error-bg: var(--red-bg);
-
-  /* Shadows */
-  --shadow-card: 0 0 0 0.5px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.06);
-  --shadow-button: 0 0.5px 1px rgb(0 0 0 / 0.08);
-  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.12);
-  --shadow-sheet: 0 24px 64px rgb(0 0 0 / 0.28), 0 0 0 0.5px rgb(0 0 0 / 0.15);
-  --shadow-toast: 0 10px 30px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.1);
-  --shadow-field: inset 0 0.5px 1px rgb(0 0 0 / 0.04);
-  --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.15), 0 0 0 0.5px rgb(0 0 0 / 0.08);
-  --highlight: rgb(255 255 255 / 0.3); /* the inner top edge of a glossy mark */
-  --backdrop: rgb(0 0 0 / 0.22);
-  --desk: var(--panel-2); /* behind a document preview */
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  --bg: #1e1e20;
-  --panel: #2a2a2d;
-  --panel-2: #323236;
-  --field: #1c1c1e;
-  --sidebar-bg: rgb(40 40 44 / 0.86);
-  --sidebar-sel: rgb(255 255 255 / 0.12);
-  --hover: rgb(255 255 255 / 0.06);
-  --selected: #1f3350;
-  --selected-strong: #0071e3;
-  --selected-strong-text: #ffffff;
-  --selected-strong-muted: rgb(255 255 255 / 0.78);
-
-  --text: #f5f5f7;
-  --text-2: #d1d1d6;
-  --muted: #b4b4b8; /* 4.5:1 or better on the tinted surfaces too (open sidebar row, tags, chips) */
-  --muted-2: #c0c0c5;
-
-  --border: rgb(255 255 255 / 0.16);
-  --border-strong: rgb(255 255 255 / 0.26);
-  --hairline: rgb(255 255 255 / 0.09);
-  --separator: #3a3a3c;
-  --meter-track: rgb(255 255 255 / 0.14);
-
-  --accent: #4aa2ff;
-  --accent-fill: #0071e3;
-  --accent-hover: #70b4ff;
-  --accent-soft: rgb(10 132 255 / 0.22);
-  --focus-ring: rgb(10 132 255 / 0.55);
-
-  --red: #ff453a;
-  --red-text: #ff857d; /* 4.8:1 on its tag background (the old #ff6961 gave 4.0) */
-  --red-bg: rgb(255 69 58 / 0.2);
-  --orange: #ff9f0a;
-  --orange-text: #ffb340;
-  --orange-bg: rgb(255 159 10 / 0.2);
-  --green: #30d158;
-  --green-text: #5ee082;
-  --green-bg: rgb(48 209 88 / 0.2);
-  --blue-text: #6cb4ff;
-  --blue-bg: rgb(10 132 255 / 0.22);
-  --grey-text: #bcbcc1;
-  --grey-bg: rgb(255 255 255 / 0.1);
-
-  --shadow-card: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 1px 3px rgb(0 0 0 / 0.4);
-  --shadow-button: 0 0.5px 1px rgb(0 0 0 / 0.4);
-  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5), 0 0 0 0.5px rgb(255 255 255 / 0.12);
-  --shadow-sheet: 0 24px 64px rgb(0 0 0 / 0.6), 0 0 0 0.5px rgb(255 255 255 / 0.14);
-  --shadow-toast: 0 10px 30px rgb(0 0 0 / 0.5), 0 0 0 0.5px rgb(255 255 255 / 0.12);
-  --shadow-field: inset 0 0.5px 1px rgb(0 0 0 / 0.3);
-  --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 0.5px rgb(255 255 255 / 0.1);
-  --highlight: rgb(255 255 255 / 0.2);
-  --backdrop: rgb(0 0 0 / 0.45);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --motion: 0ms;
-  }
-}
-
-/* ---- The New look --------------------------------------------------------------------
- * <html data-style="new"> (Settings → Appearance → Look; public/appearance.js sets it
- * before the first paint). Every token above gets a value here; Classic is untouched.
- * The dark block comes second and sets every token again (it is more specific), so no
- * light value leaks into dark. Contrast of the text tokens on their surfaces is
- * checked at 4.5:1 or better (numbers in the pull request that added this).
- * IBM Plex is bundled (src/fonts.css) and only referenced here, so Classic never loads it. */
-:root[data-style="new"] {
-  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 8px;
-  --r-xl: 10px;
-
-  --sidebar-w: 232px; /* 60px icon rail in a narrow window, see styles-new.css */
-
   --bg: #ffffff;
   --panel: #ffffff;
   --panel-2: #f4f3ef; /* Shelf */
@@ -206,29 +58,33 @@
   --selected: #e4e9f1;
   --selected-strong: #234a7a;
   --selected-strong-text: #ffffff;
-  --selected-strong-muted: rgb(255 255 255 / 0.8);
+  --selected-strong-muted: rgb(255 255 255 / 0.8); /* dimmed text on the strong selection */
   --desk: #e9e7e1;
 
+  /* Text */
   --text: #17191e;
   --text-2: #2f333a;
   --muted: #5f646d;
   --muted-2: #474c55;
 
+  /* Lines */
   --border: #d4d1c8;
   --border-strong: #b6b2a6;
   --hairline: #e3e1da;
   --separator: #e3e1da;
-  --meter-track: #e3e1da;
+  --meter-track: #e3e1da; /* an empty bar (the AI budget) on a panel */
 
-  --accent: #234a7a;
-  --accent-fill: #234a7a;
+  /* Accent */
+  --accent: #234a7a; /* accent text, icons and lines */
+  --accent-fill: #234a7a; /* solid accent fills under --on-accent text */
   --accent-hover: #1a3a63;
-  --on-accent: #ffffff;
-  --paper: #ffffff;
-  --barcode-ink: #000000;
+  --on-accent: #ffffff; /* text on a solid accent or red fill, both schemes */
+  --paper: #ffffff; /* document previews stay white in dark mode */
+  --barcode-ink: #000000; /* bars stay black on --paper in both schemes, for scanners */
   --accent-soft: rgb(35 74 122 / 0.1);
   --focus-ring: rgb(35 74 122 / 0.4);
 
+  /* Semantic colours and their tag backgrounds */
   --red: #c8372d;
   --red-text: #9b2318;
   --red-bg: #fae3df;
@@ -243,6 +99,13 @@
   --grey-text: #5f646d;
   --grey-bg: #eeece6;
 
+  /* Legacy aliases used by the screen styles until each screen is redone */
+  --warn: var(--orange-text);
+  --warn-bg: var(--orange-bg);
+  --error: var(--red-text);
+  --error-bg: var(--red-bg);
+
+  /* Shadows */
   --shadow-card: 0 0 0 1px #e3e1da;
   --shadow-button: none;
   --shadow-pop: 0 6px 18px rgb(23 25 30 / 0.12), 0 0 0 1px #d4d1c8;
@@ -250,11 +113,14 @@
   --shadow-toast: 0 6px 18px rgb(23 25 30 / 0.14), 0 0 0 1px #d4d1c8;
   --shadow-field: none;
   --shadow-segment: 0 1px 2px rgb(23 25 30 / 0.08);
-  --highlight: rgb(255 255 255 / 0.2);
-  --backdrop: rgb(23 25 30 / 0.28);
+  --highlight: rgb(255 255 255 / 0.2); /* the inner top edge of a glossy mark */
+  --backdrop: rgb(23 25 30 / 0.28); /* behind a sheet */
 }
 
-:root[data-style="new"][data-theme="dark"] {
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces */
   --bg: #1a1917;
   --panel: #232220;
   --panel-2: #2b2a27;
@@ -268,23 +134,27 @@
   --selected-strong-muted: rgb(255 255 255 / 0.82);
   --desk: #141311;
 
+  /* Text */
   --text: #ecebe4;
   --text-2: #cfccc3;
   --muted: #aeaaa0; /* 4.9:1 or better on every dark surface, selected rows and tags included */
   --muted-2: #b8b4a9;
 
+  /* Lines */
   --border: #3d3b37;
   --border-strong: #55524c;
   --hairline: #34322f;
   --separator: #34322f;
   --meter-track: #3d3b37;
 
+  /* Accent */
   --accent: #8db0e3;
   --accent-fill: #3a68a5;
   --accent-hover: #aac5ee;
   --accent-soft: rgb(141 176 227 / 0.16);
   --focus-ring: rgb(141 176 227 / 0.55);
 
+  /* Semantic colours and their tag backgrounds */
   --red: #e5675a;
   --red-text: #ff9086;
   --red-bg: rgb(229 103 90 / 0.18);
@@ -299,6 +169,7 @@
   --grey-text: #aeaaa0;
   --grey-bg: rgb(255 255 255 / 0.08);
 
+  /* Shadows */
   --shadow-card: 0 0 0 1px #34322f;
   --shadow-pop: 0 6px 18px rgb(0 0 0 / 0.5), 0 0 0 1px #3d3b37;
   --shadow-sheet: 0 16px 48px rgb(0 0 0 / 0.6), 0 0 0 1px #3d3b37;
@@ -306,4 +177,10 @@
   --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.5);
   --highlight: rgb(255 255 255 / 0.14);
   --backdrop: rgb(0 0 0 / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0ms;
+  }
 }

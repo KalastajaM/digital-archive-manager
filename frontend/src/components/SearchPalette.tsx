@@ -8,10 +8,19 @@ import { isSearchKey } from "../searchKey";
 import { useSearch } from "../screens/useSearch";
 import { filterToken, readQuery, serializeQuery, splitSearch, tagFilter } from "../searchFilters";
 import { visible } from "../text";
-import { browseSearchUrl } from "./today/SearchCard";
 import { trayIcon } from "./ui/Sidebar";
 import { type Completion, useSearchCompletions } from "./useSearchCompletions";
 import { collectionHref } from "../collectionHref";
+
+/** The Browse address for what was typed: the whole query in ?q= (a trailing filter
+ * counts as finished). */
+export function browseSearchUrl(text: string): string {
+  const { words, filters } = readQuery(text);
+  const p = new URLSearchParams();
+  const whole = serializeQuery(words, filters);
+  if (whole) p.set("q", whole);
+  return `/browse?${p}`;
+}
 
 /** The palette's open state, and the shortcut that toggles it. It works also while
  * typing in a field; it stays out of the way of another open dialog. */
